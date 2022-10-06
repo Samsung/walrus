@@ -1,0 +1,5 @@
+;;; TOOL: wat2wasm
+;;; ARGS: --enable-exceptions
+(module
+  (tag $e1)
+  (func throw $e1))

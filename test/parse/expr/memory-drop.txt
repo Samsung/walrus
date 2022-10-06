@@ -1,0 +1,8 @@
+;;; TOOL: wat2wasm
+(module
+  (memory 0)
+
+  (func
+    data.drop 0)
+
+  (data "hi"))

@@ -1,0 +1,9 @@
+;;; TOOL: run-gen-wasm-bad
+magic
+version
+section(CODE) { count[0] }
+section(DATACOUNT) { count[0] }
+(;; STDERR ;;;
+000000d: error: section DataCount out of order
+000000d: error: section DataCount out of order
+;;; STDERR ;;)

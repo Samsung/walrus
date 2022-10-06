@@ -1,0 +1,11 @@
+;;; TOOL: wat2wasm
+(module
+  (memory 0)
+
+  (func
+    elem.drop 0)
+
+  (func)
+
+  (table 0 funcref)
+  (elem func 1))

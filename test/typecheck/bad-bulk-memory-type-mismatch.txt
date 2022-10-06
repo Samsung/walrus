@@ -1,0 +1,39 @@
+;;; TOOL: wat2wasm
+;;; ERROR: 1
+
+(module
+  (memory 1)
+  (data "a")
+  (table 1 funcref)
+  (elem funcref 0)
+
+  (func
+    ;; Mismatch first operand.
+    f32.const 0 i32.const 0 i32.const 0 memory.init 0
+    f32.const 0 i32.const 0 i32.const 0 memory.copy
+    f32.const 0 i32.const 0 i32.const 0 memory.fill
+    f32.const 0 i32.const 0 i32.const 0 table.init 0
+    f32.const 0 i32.const 0 i32.const 0 table.copy
+
+    ;; Mismatch second operand.
+    i32.const 0 f32.const 0 i32.const 0 memory.init 0
+    i32.const 0 f32.const 0 i32.const 0 memory.copy
+    i32.const 0 f32.const 0 i32.const 0 memory.fill
+    i32.const 0 f32.const 0 i32.const 0 table.init 0
+    i32.const 0 f32.const 0 i32.const 0 table.copy
+
+    ;; Mismatch third operand.
+    i32.const 0 i32.const 0 i64.const 0 memory.init 0
+    i32.const 0 i32.const 0 i64.const 0 memory.copy
+    i32.const 0 i32.const 0 i64.const 0 memory.fill
+    i32.const 0 i32.const 0 i64.const 0 table.init 0
+    i32.const 0 i32.const 0 i64.const 0 table.copy
+  )
+)
+
+
+(;; STDERR ;;;
+out/test/typecheck/bad-bulk-memory-type-mismatch.txt:8:17: error: unexpected token 0, expected ).
+  (elem funcref 0)
+                ^
+;;; STDERR ;;)

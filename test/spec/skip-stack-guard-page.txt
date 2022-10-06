@@ -1,0 +1,5 @@
+;;; TOOL: run-interp-spec
+;;; STDIN_FILE: third_party/testsuite/skip-stack-guard-page.wast
+(;; STDOUT ;;;
+11/11 tests passed.
+;;; STDOUT ;;)

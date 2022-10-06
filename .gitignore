@@ -1,0 +1,11 @@
+/bin
+/build
+/out
+/fuzz-out
+/emscripten
+*.pyc
+.idea/
+.vscode/
+/cmake-build-debug/
+tags
+cscope.out

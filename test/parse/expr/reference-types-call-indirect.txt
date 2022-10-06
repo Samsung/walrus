@@ -1,0 +1,17 @@
+;;; TOOL: wat2wasm
+
+(module
+  (table $foo 1 funcref)
+  (table $bar 1 funcref)
+
+  (func (result i32) i32.const 0)
+  (func (result i32) i32.const 1)
+
+  (func (result i32)
+    i32.const 0
+    call_indirect $foo (type 0))
+
+  (func (result i32)
+    i32.const 0
+    call_indirect $bar (type 0))
+)

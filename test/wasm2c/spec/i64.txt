@@ -1,0 +1,5 @@
+;;; TOOL: run-spec-wasm2c
+;;; STDIN_FILE: third_party/testsuite/i64.wast
+(;; STDOUT ;;;
+384/384 tests passed.
+;;; STDOUT ;;)

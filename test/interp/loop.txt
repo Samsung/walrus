@@ -1,0 +1,25 @@
+;;; TOOL: run-interp
+(module
+  (func (export "loop") (result i32)
+    (local i32 i32)
+    ;; loop statements now require an explicit branch to the top
+    loop $cont
+      local.get 1
+      local.get 0
+      i32.add
+      local.set 1
+      local.get 0
+      i32.const 1
+      i32.add 
+      local.set 0
+      local.get 0
+      i32.const 5
+      i32.lt_s
+      if
+        br $cont
+      end
+    end
+    local.get 1))
+(;; STDOUT ;;;
+loop() => i32:10
+;;; STDOUT ;;)

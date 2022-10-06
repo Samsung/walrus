@@ -1,0 +1,7 @@
+;;; TOOL: wat2wasm
+(module
+  (func (result externref)
+    i32.const 0
+    table.get 0)
+
+  (table 1 externref))

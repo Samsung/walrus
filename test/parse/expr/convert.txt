@@ -1,0 +1,67 @@
+;;; TOOL: wat2wasm
+(module
+  (func
+    i64.const 0
+    i32.wrap_i64
+    drop
+    i32.const 0
+    i64.extend_i32_u
+    drop
+    i32.const 0
+    i64.extend_i32_s
+    drop
+    f32.const 0
+    i32.trunc_f32_s
+    drop
+    f32.const 0
+    i32.trunc_f32_u
+    drop
+    f64.const 0
+    i32.trunc_f64_s
+    drop
+    f64.const 0
+    i32.trunc_f64_u
+    drop
+    f32.const 0
+    i64.trunc_f32_s
+    drop
+    f32.const 0
+    i64.trunc_f32_u
+    drop
+    f64.const 0
+    i64.trunc_f64_s
+    drop
+    f64.const 0
+    i64.trunc_f64_u
+    drop
+    i32.const 0
+    f32.convert_i32_s
+    drop
+    i32.const 0
+    f32.convert_i32_u
+    drop
+    i64.const 0
+    f32.convert_i64_s
+    drop
+    i64.const 0
+    f32.convert_i64_u
+    drop
+    i32.const 0
+    f64.convert_i32_s
+    drop
+    i32.const 0
+    f64.convert_i32_u
+    drop
+    i64.const 0
+    f64.convert_i64_s
+    drop
+    i64.const 0
+    f64.convert_i64_u
+    drop
+    f64.const 0
+    f32.demote_f64
+    drop
+    f32.const 0
+    f64.promote_f32
+    drop))
+

@@ -1,0 +1,19 @@
+;;; TOOL: run-gen-wasm-bad
+magic
+version
+section(TYPE) { count[1] function params[0] results[1] i32 }
+section(FUNCTION) { count[1] type[0] }
+section(CODE) {
+  count[1]
+  func {
+    locals[0]
+    end
+    end
+  }
+}
+(;; STDERR ;;;
+error: popping empty label stack
+000001a: error: OnEndExpr callback failed
+error: popping empty label stack
+000001a: error: OnEndExpr callback failed
+;;; STDERR ;;)

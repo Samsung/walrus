@@ -1,0 +1,173 @@
+;;; TOOL: run-objdump-gen-wasm
+;;; ARGS: -x
+;;; RUN: %(wasm-validate)s %(temp_file)s.wasm --enable-all
+magic
+version
+section(TYPE) {
+  count[1]
+  function params[0] results[0]
+}
+section(FUNCTION) {
+  count[1]
+  type[0]
+}
+section(TABLE) {
+  count[1]
+  funcref
+  has_max[0]
+  initial[0]
+}
+section(MEMORY) {
+  count[1]
+  has_max[0]
+  initial[0]
+}
+section(TAG) {
+  count[1]
+  attr[0]
+  sig[0]
+}
+section(GLOBAL) {
+  count[1]
+  type[i32] met[0] init_expr[i32.const 0 end]
+}
+section(CODE) {
+  count[1]
+  func {
+    locals[0]
+    return
+  }
+}
+section(DATA) {
+  count[2]
+  memory_index[0]
+  offset[i32.const 0 end]
+  data[str("foo")]
+  memory_index[0]
+  offset[i32.const 10 end]
+  data[str("bar")]
+}
+section("linking") {
+  metadata_version[2]
+
+  section(LINKING_SEGMENT_INFO) {
+    count[2]
+    str("data1")
+    p2align[2]
+    flags[1]
+    str("data2")
+    p2align[3]
+    flags[10]
+  }
+
+  section(LINKING_INIT_FUNCTIONS) {
+    count[2]
+    priority[5]
+    func[1]
+    priority[6]
+    func[0]
+  }
+
+  section(LINKING_SYMBOL_TABLE) {
+    num_symbols[5]
+
+    type[0]
+    flags[1]
+    index[0]
+    str("func_sym")
+
+    type[2]
+    flags[2]
+    index[0]
+    str("global_sym")
+
+    type[1]
+    flags[leb_i32(260)]
+    str("data_sym")
+    segment[1]
+    offset[2]
+    size[1]
+
+    type[0]
+    flags[0x10]
+    index[0]
+
+    type[5]
+    flags[1]
+    index[0]
+    str("table_sym")
+  }
+
+  section(LINKING_COMDAT_INFO) {
+    num_comdats[2]
+
+    str("comdat1")
+    flags[0]
+    num_entries[1]
+
+    kind[0]
+    index[1]
+
+    str("comdat2")
+    flags[0]
+    num_entries[2]
+
+    kind[1]
+    index[2]
+
+    kind[1]
+    index[3]
+  }
+}
+(;; STDOUT ;;;
+
+linking-section.wasm:	file format wasm 0x1
+
+Section Details:
+
+Type[1]:
+ - type[0] () -> nil
+Function[1]:
+ - func[0] sig=0 <func_sym>
+Table[1]:
+ - table[0] type=funcref initial=0 <table_sym>
+Memory[1]:
+ - memory[0] pages: initial=0
+Tag[1]:
+ - tag[0] sig=0
+Global[1]:
+ - global[0] i32 mutable=0 <global_sym> - init i32=0
+Code[1]:
+ - func[0] size=3 <func_sym>
+Data[2]:
+ - segment[0] <data1> memory=0 size=3 - init i32=0
+  - 0000000: 666f 6f                                  foo
+ - segment[1] <data2> memory=0 size=3 - init i32=10
+  - 000000a: 6261 72                                  bar
+Custom:
+ - name: "linking"
+  - segment info [count=2]
+   - 0: data1 p2align=2 [ STRINGS ]
+   - 1: data2 p2align=3 [ TLS unknown_flags=0x8 ]
+  - init functions [count=2]
+   - 1: priority=5
+   - 0: priority=6
+  - symbol table [count=5]
+   - 0: F <func_sym> func=0 [ binding=weak vis=default ]
+   - 1: G <global_sym> global=0 [ binding=local vis=default ]
+   - 2: D <data_sym> segment=1 offset=2 size=1 [ tls binding=global vis=hidden ]
+   - 3: F <func_sym> func=0 [ undefined binding=global vis=default ]
+   - 4: T <table_sym> table=0 [ binding=weak vis=default ]
+  - comdat groups [count=2]
+   - comdat1: [count=1]
+    - segment[1] <data2>
+   - comdat2: [count=2]
+    - func[2]
+    - func[3]
+
+Code Disassembly:
+
+00002e func[0] <func_sym>:
+ 00002f: 0f                         | return
+ 000030: 0b                         | end
+;;; STDOUT ;;)

@@ -1,0 +1,28 @@
+;;; TOOL: wat2wasm
+;;; ARGS: --enable-exceptions
+(module
+  (tag (param i32))
+
+  ;; try w/ multiple results
+  (func
+    try (result f32 f32)
+      f32.const 0
+      f32.const 1
+    catch 0
+      drop
+      f32.const 2
+      f32.const 3
+    end
+    return)
+
+  ;; try w/ params
+  (func
+    i32.const 0
+    try (param i32) (result i32)
+      i32.eqz
+    catch 0
+      drop
+      i32.const 0
+    end
+    return)
+)
