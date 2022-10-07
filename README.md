@@ -1,48 +1,16 @@
-[![Github CI Status](https://github.com/WebAssembly/wabt/workflows/CI/badge.svg)](https://github.com/WebAssembly/wabt)
+# WALRUS: WebAssembly Lightweight RUntime
 
-# WABT: The WebAssembly Binary Toolkit
-
-WABT (we pronounce it "wabbit") is a suite of tools for WebAssembly, including:
-
- - [**wat2wasm**](https://webassembly.github.io/wabt/doc/wat2wasm.1.html): translate from [WebAssembly text format](https://webassembly.github.io/spec/core/text/index.html) to the [WebAssembly binary format](https://webassembly.github.io/spec/core/binary/index.html)
- - [**wasm2wat**](https://webassembly.github.io/wabt/doc/wasm2wat.1.html): the inverse of wat2wasm, translate from the binary format back to the text format (also known as a .wat)
- - [**wasm-objdump**](https://webassembly.github.io/wabt/doc/wasm-objdump.1.html): print information about a wasm binary. Similiar to objdump.
- - [**wasm-interp**](https://webassembly.github.io/wabt/doc/wasm-interp.1.html): decode and run a WebAssembly binary file using a stack-based interpreter
- - [**wasm-decompile**](https://webassembly.github.io/wabt/doc/wasm-decompile.1.html): decompile a wasm binary into readable C-like syntax.
- - [**wat-desugar**](https://webassembly.github.io/wabt/doc/wat-desugar.1.html): parse .wat text form as supported by the spec interpreter (s-expressions, flat syntax, or mixed) and print "canonical" flat format
- - [**wasm2c**](https://webassembly.github.io/wabt/doc/wasm2c.1.html): convert a WebAssembly binary file to a C source and header
- - [**wasm-strip**](https://webassembly.github.io/wabt/doc/wasm-strip.1.html): remove sections of a WebAssembly binary file
- - [**wasm-validate**](https://webassembly.github.io/wabt/doc/wasm-validate.1.html): validate a file in the WebAssembly binary format
- - [**wast2json**](https://webassembly.github.io/wabt/doc/wast2json.1.html): convert a file in the wasm spec test format to a JSON file and associated wasm binary files
- - [**wasm-opcodecnt**](https://webassembly.github.io/wabt/doc/wasm-opcodecnt.1.html): count opcode usage for instructions
- - [**spectest-interp**](https://webassembly.github.io/wabt/doc/spectest-interp.1.html): read a Spectest JSON file, and run its tests in the interpreter
-
-These tools are intended for use in (or for development of) toolchains or other
-systems that want to manipulate WebAssembly files. Unlike the WebAssembly spec
-interpreter (which is written to be as simple, declarative and "speccy" as
-possible), they are written in C/C++ and designed for easier integration into
-other systems. Unlike [Binaryen](https://github.com/WebAssembly/binaryen) these
-tools do not aim to provide an optimization platform or a higher-level compiler
-target; instead they aim for full fidelity and compliance with the spec (e.g.
-1:1 round-trips with no changes to instructions).
-
-## Online Demos
-
-Wabt has been compiled to JavaScript via emscripten. Some of the functionality is available in the following demos:
-
-- [index](https://webassembly.github.io/wabt/demo/)
-- [wat2wasm](https://webassembly.github.io/wabt/demo/wat2wasm/)
-- [wasm2wat](https://webassembly.github.io/wabt/demo/wasm2wat/)
+This project aims to provide a lightweight WebAssembly runtime engine. It now fully supports WebAssembly specs with an simple interpter, but we plan to optimize interpreting as well as adopting JIT compiler for better performance.
 
 ## Supported Proposals
 
 * Proposal: Name and link to the WebAssembly proposal repo
 * flag: Flag to pass to the tool to enable/disable support for the feature
 * default: Whether the feature is enabled by default
-* binary: Whether wabt can read/write the binary format
-* text: Whether wabt can read/write the text format
-* validate: Whether wabt can validate the syntax
-* interpret: Whether wabt can execute these operations in `wasm-interp` or `spectest-interp`
+* binary: Whether walrus can read/write the binary format
+* text: Whether walrus can read/write the text format
+* validate: Whether walrus can validate the syntax
+* interpret: Whether walrus can execute these operations in `wasm-interp` or `spectest-interp`
 * wasm2c: Whether wasm2c supports these operations
 
 | Proposal   | flag | default | binary | text | validate | interpret | wasm2c |
@@ -82,8 +50,8 @@ Wabt has been compiled to JavaScript via emscripten. Some of the functionality i
 Clone as normal, but don't forget to get the submodules as well:
 
 ```console
-$ git clone --recursive https://github.com/WebAssembly/wabt
-$ cd wabt
+$ git clone --recursive https://github.com/Samsung/walrus
+$ cd walrus
 $ git submodule update --init
 ```
 
@@ -163,7 +131,7 @@ artifacts, then run cmake from this directory:
 
 ```console
 > cd [build dir]
-> cmake [wabt project root] -DCMAKE_BUILD_TYPE=[config] -DCMAKE_INSTALL_PREFIX=[install directory] -G [generator]
+> cmake [walrus project root] -DCMAKE_BUILD_TYPE=[config] -DCMAKE_INSTALL_PREFIX=[install directory] -G [generator]
 ```
 
 The `[config]` parameter should be a CMake build type, typically `DEBUG` or `RELEASE`.
@@ -175,7 +143,7 @@ generators by running `cmake --help`.
 To build the project, you can use Visual Studio, or you can tell CMake to do it:
 
 ```console
-> cmake --build [wabt project root] --config [config] --target install
+> cmake --build [walrus project root] --config [config] --target install
 ```
 
 This will build and install to the installation directory you provided above.
@@ -217,28 +185,6 @@ You can use `--help` to get additional help:
 $ bin/wat2wasm --help
 ```
 
-Or try the [online demo](https://webassembly.github.io/wabt/demo/wat2wasm/).
-
-## Running wasm2wat
-
-Some examples:
-
-```sh
-# parse binary file test.wasm and write text file test.wat
-$ bin/wasm2wat test.wasm -o test.wat
-
-# parse test.wasm and write test.wat
-$ bin/wasm2wat test.wasm -o test.wat
-```
-
-You can use `--help` to get additional help:
-
-```console
-$ bin/wasm2wat --help
-```
-
-Or try the [online demo](https://webassembly.github.io/wabt/demo/wasm2wat/).
-
 ## Running wasm-interp
 
 Some examples:
@@ -266,32 +212,6 @@ You can use `--help` to get additional help:
 ```console
 $ bin/wasm-interp --help
 ```
-
-## Running wast2json
-
-See [wast2json.md](docs/wast2json.md).
-
-## Running wasm-decompile
-
-For example:
-
-```sh
-# parse binary file test.wasm and write text file test.dcmp
-$ bin/wasm-decompile test.wasm -o test.dcmp
-```
-
-You can use `--help` to get additional help:
-
-```console
-$ bin/wasm-decompile --help
-```
-
-See [decompiler.md](docs/decompiler.md) for more information on the language
-being generated.
-
-## Running wasm2c
-
-See [wasm2c.md](wasm2c/README.md)
 
 ## Running the test suite
 
@@ -329,30 +249,3 @@ You can also run the tests for a release build:
 $ make test-clang-release-asan
 ...
 ```
-
-The GitHub actions bots run all of these tests (and more). Before you land a change,
-you should run them too. One easy way is to use the `test-everything` target:
-
-```console
-$ make test-everything
-```
-
-## Fuzzing
-
-To build using the [LLVM fuzzer support](https://llvm.org/docs/LibFuzzer.html),
-append `fuzz` to the target:
-
-```console
-$ make clang-debug-fuzz
-```
-
-This will produce a `wasm2wat_fuzz` binary. It can be used to fuzz the binary
-reader, as well as reproduce fuzzer errors found by
-[oss-fuzz](https://github.com/google/oss-fuzz/tree/master/projects/wabt).
-
-```console
-$ out/clang/Debug/fuzz/wasm2wat_fuzz ...
-```
-
-See the [libFuzzer documentation](https://llvm.org/docs/LibFuzzer.html) for
-more information about how to use this tool.
