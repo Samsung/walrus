@@ -13,3 +13,6 @@
 [submodule "third_party/uvwasi"]
 	path = third_party/wabt/uvwasi
 	url = https://github.com/nodejs/uvwasi
+[submodule "third_party/GCutil"]
+	path = third_party/GCutil
+	url = https://github.com/Samsung/gcutil.git
