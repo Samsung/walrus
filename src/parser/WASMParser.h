@@ -22,10 +22,12 @@
 namespace Walrus {
 
 class Module;
+class Store;
+
 class WASMParser {
 public:
     // may return null when there is error on data
-    static Optional<Module*> parseBinary(const uint8_t* data, size_t len);
+    static Optional<Module*> parseBinary(Store* store, const uint8_t* data, size_t len);
 };
 
 } // namespace Walrus

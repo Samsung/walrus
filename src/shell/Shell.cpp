@@ -4,9 +4,16 @@
 #include <iomanip>
 
 #include "Walrus.h"
+#include "runtime/Engine.h"
+#include "runtime/Store.h"
 #include "runtime/Module.h"
 #include "runtime/Function.h"
+#include "runtime/Instance.h"
 #include "parser/WASMParser.h"
+
+#include "wabt/wast-lexer.h"
+#include "wabt/wast-parser.h"
+#include "wabt/binary-writer.h"
 
 struct spectestseps : std::numpunct<char> {
     char do_thousands_sep() const { return '_'; }
@@ -83,6 +90,178 @@ static void printF64(double v)
     printf("%s : f64\n", formatDecmialString(ss.str()).c_str());
 }
 
+static void executeWASM(Store* store, const std::vector<uint8_t>& src, Instance::InstanceVector& instances)
+{
+    auto module = WASMParser::parseBinary(store, src.data(), src.size());
+    const auto& moduleImportData = module->moduleImport();
+
+    ValueVector importValues;
+    importValues.resize(moduleImportData.size());
+    /*
+        (module ;; spectest host module(https://github.com/WebAssembly/spec/tree/main/interpreter)
+          (global (export "global_i32") i32) ;; TODO
+          (global (export "global_i64") i64) ;; TODO
+          (global (export "global_f32") f32) ;; TODO
+          (global (export "global_f64") f64) ;; TODO
+
+          (table (export "table") 10 20 funcref) ;; TODO
+
+          (memory (export "memory") 1 2) ;; TODO
+
+          (func (export "print"))
+          (func (export "print_i32") (param i32))
+          (func (export "print_i64") (param i64))
+          (func (export "print_f32") (param f32))
+          (func (export "print_f64") (param f64))
+          (func (export "print_i32_f32") (param i32 f32))
+          (func (export "print_f64_f64") (param f64 f64))
+        )
+    */
+
+    for (size_t i = 0; i < moduleImportData.size(); i++) {
+        auto import = moduleImportData[i];
+        if (import->moduleName()->equals("spectest")) {
+            if (import->fieldName()->equals("print_i32")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::I32);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        printI32(argv[0].asI32());
+                    },
+                    nullptr));
+            } else if (import->fieldName()->equals("print_i64")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::I64);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        printI64(argv[0].asI64());
+                    },
+                    nullptr));
+            } else if (import->fieldName()->equals("print_f32")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::F32);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        printF32(argv[0].asF32());
+                    },
+                    nullptr));
+            } else if (import->fieldName()->equals("print_f64")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::F64);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        printF64(argv[0].asF64());
+                    },
+                    nullptr));
+            } else if (import->fieldName()->equals("print_i32_f32")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::I32 && ft->param()[1] == Value::Type::F32);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        printI32(argv[0].asI32());
+                        printF32(argv[1].asF32());
+                    },
+                    nullptr));
+            } else if (import->fieldName()->equals("print_f64_f64")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::F64 && ft->param()[1] == Value::Type::F64);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        printF64(argv[0].asF64());
+                        printF64(argv[1].asF64());
+                    },
+                    nullptr));
+            }
+        }
+    }
+
+    instances.pushBack(module->instantiate(importValues));
+}
+
+static bool endsWith(const std::string& str, const std::string& suffix)
+{
+    return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
+}
+
+static Walrus::Value toWalrusValue(wabt::Const& c)
+{
+    if (c.type() == wabt::Type::I32) {
+        return Walrus::Value(static_cast<int32_t>(c.u32()));
+    } else if (c.type() == wabt::Type::I64) {
+        return Walrus::Value(static_cast<int32_t>(c.u64()));
+    } else if (c.type() == wabt::Type::F32) {
+        return Walrus::Value(static_cast<float>(c.f32_bits()));
+    } else if (c.type() == wabt::Type::F64) {
+        return Walrus::Value(static_cast<double>(c.f64_bits()));
+    } else {
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
+static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance::InstanceVector& instances)
+{
+    auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
+    if (!lexer) {
+        return;
+    }
+
+    wabt::Errors errors;
+    std::unique_ptr<wabt::Script> script;
+    wabt::Features features;
+    features.EnableAll();
+    wabt::WastParseOptions parse_wast_options(features);
+    auto result = wabt::ParseWastScript(lexer.get(), &script, &errors, &parse_wast_options);
+    if (!wabt::Succeeded(result)) {
+        return;
+    }
+
+    for (const std::unique_ptr<wabt::Command>& command : script->commands) {
+        if (auto* moduleCommand = dynamic_cast<wabt::ModuleCommand*>(command.get())) {
+            auto module = &moduleCommand->module;
+            wabt::MemoryStream stream;
+            wabt::WriteBinaryOptions options;
+            options.features = features;
+            wabt::WriteBinaryModule(&stream, module, options);
+            stream.Flush();
+            auto buf = stream.ReleaseOutputBuffer();
+            executeWASM(store, buf->data, instances);
+        } else if (auto* assertReturn = dynamic_cast<wabt::AssertReturnCommand*>(command.get())) {
+            auto value = instances[assertReturn->action->module_var.index()]->resolveExport(new Walrus::String(assertReturn->action->name));
+            if (assertReturn->action->type() == wabt::ActionType::Invoke) {
+                auto action = dynamic_cast<wabt::InvokeAction*>(assertReturn->action.get());
+                RELEASE_ASSERT(value.type() == Walrus::Value::FuncRef);
+                auto fn = instances[action->module_var.index()]->resolveExport(new Walrus::String(action->name)).asFunction();
+                RELEASE_ASSERT(fn->functionType()->param().size() == action->args.size());
+                RELEASE_ASSERT(fn->functionType()->result().size() == assertReturn->expected.size());
+                Walrus::ValueVector args;
+                for (auto& a : action->args) {
+                    args.pushBack(toWalrusValue(a));
+                }
+                Walrus::ExecutionState state;
+                Walrus::ValueVector result;
+                result.resize(assertReturn->expected.size());
+                fn->call(state, args.size(), args.data(), result.data());
+                // compare result
+                for (size_t i = 0; i < result.size(); i++) {
+                    RELEASE_ASSERT(result[i] == toWalrusValue(assertReturn->expected[i]));
+                }
+            }
+        }
+    }
+}
+
 int main(int argc, char* argv[])
 {
 #ifndef NDEBUG
@@ -99,106 +278,28 @@ int main(int argc, char* argv[])
 
     GC_INIT();
 
+    Engine* engine = new Engine;
+    Store* store = new Store(engine);
+
+    Instance::InstanceVector instances;
+
     for (int i = 1; i < argc; i++) {
-        FILE* fp = fopen(argv[i], "r");
+        std::string filePath = argv[i];
+        FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
             fseek(fp, 0, SEEK_END);
             auto sz = ftell(fp);
             fseek(fp, 0, SEEK_SET);
-            uint8_t* buf = new uint8_t[sz];
-            fread(buf, sz, 1, fp);
+            std::vector<uint8_t> buf;
+            buf.resize(sz);
+            fread(buf.data(), sz, 1, fp);
             fclose(fp);
-            auto module = WASMParser::parseBinary(buf, sz);
-            delete[] buf;
-            const auto& moduleImportData = module->import();
 
-            ValueVector importValues;
-            importValues.resize(moduleImportData.size());
-            /*
-                (module ;; spectest host module(https://github.com/WebAssembly/spec/tree/main/interpreter)
-                  (global (export "global_i32") i32) ;; TODO
-                  (global (export "global_i64") i64) ;; TODO
-                  (global (export "global_f32") f32) ;; TODO
-                  (global (export "global_f64") f64) ;; TODO
-
-                  (table (export "table") 10 20 funcref) ;; TODO
-
-                  (memory (export "memory") 1 2) ;; TODO
-
-                  (func (export "print"))
-                  (func (export "print_i32") (param i32))
-                  (func (export "print_i64") (param i64))
-                  (func (export "print_f32") (param f32))
-                  (func (export "print_f64") (param f64))
-                  (func (export "print_i32_f32") (param i32 f32))
-                  (func (export "print_f64_f64") (param f64 f64))
-                )
-            */
-
-            for (size_t i = 0; i < moduleImportData.size(); i++) {
-                auto import = moduleImportData[i];
-                if (import->moduleName()->equals("spectest")) {
-                    if (import->fieldName()->equals("print_i32")) {
-                        auto ft = module->functionType(import->functionTypeIndex());
-                        ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::I32);
-                        importValues[i] = Value(new ImportedFunction(
-                            ft,
-                            [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                                printI32(argv[0].asI32());
-                            },
-                            nullptr));
-                    } else if (import->fieldName()->equals("print_i64")) {
-                        auto ft = module->functionType(import->functionTypeIndex());
-                        ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::I64);
-                        importValues[i] = Value(new ImportedFunction(
-                            ft,
-                            [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                                printI64(argv[0].asI64());
-                            },
-                            nullptr));
-                    } else if (import->fieldName()->equals("print_f32")) {
-                        auto ft = module->functionType(import->functionTypeIndex());
-                        ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::F32);
-                        importValues[i] = Value(new ImportedFunction(
-                            ft,
-                            [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                                printF32(argv[0].asF32());
-                            },
-                            nullptr));
-                    } else if (import->fieldName()->equals("print_f64")) {
-                        auto ft = module->functionType(import->functionTypeIndex());
-                        ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::F64);
-                        importValues[i] = Value(new ImportedFunction(
-                            ft,
-                            [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                                printF64(argv[0].asF64());
-                            },
-                            nullptr));
-                    } else if (import->fieldName()->equals("print_i32_f32")) {
-                        auto ft = module->functionType(import->functionTypeIndex());
-                        ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::I32 && ft->param()[1] == Value::Type::F32);
-                        importValues[i] = Value(new ImportedFunction(
-                            ft,
-                            [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                                printI32(argv[0].asI32());
-                                printF32(argv[1].asF32());
-                            },
-                            nullptr));
-                    } else if (import->fieldName()->equals("print_f64_f64")) {
-                        auto ft = module->functionType(import->functionTypeIndex());
-                        ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::F64 && ft->param()[1] == Value::Type::F64);
-                        importValues[i] = Value(new ImportedFunction(
-                            ft,
-                            [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                                printF64(argv[0].asF64());
-                                printF64(argv[1].asF64());
-                            },
-                            nullptr));
-                    }
-                }
+            if (endsWith(filePath, "wasm")) {
+                executeWASM(store, buf, instances);
+            } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
+                executeWAST(store, buf, instances);
             }
-
-            module->instantiate(importValues);
         } else {
             printf("Cannot open file %s\n", argv[i]);
             return -1;

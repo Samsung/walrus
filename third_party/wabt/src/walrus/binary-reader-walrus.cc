@@ -205,19 +205,20 @@ public:
 
     /* Exports section */
     Result BeginExportSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnExportCount(Index count) override {
-        abort();
+        m_externalDelegate->OnExportCount(count);
         return Result::Ok;
     }
     Result OnExport(Index index, ExternalKind kind, Index item_index, std::string_view name) override {
-        abort();
+        if (kind != ExternalKind::Func) {
+            abort();
+        }
+        m_externalDelegate->OnExport(static_cast<int>(kind), index, std::string(name), item_index);
         return Result::Ok;
     }
     Result EndExportSection() override {
-        abort();
         return Result::Ok;
     }
 
@@ -245,10 +246,11 @@ public:
         return Result::Ok;
     }
     Result OnLocalDeclCount(Index count) override {
+        m_externalDelegate->OnLocalDeclCount(count);
         return Result::Ok;
     }
     Result OnLocalDecl(Index decl_index, Index count, Type type) override {
-        abort();
+        m_externalDelegate->OnLocalDecl(decl_index, count, type);
         return Result::Ok;
     }
 
@@ -260,7 +262,6 @@ public:
         return Result::Ok;
     }
     Result OnOpcodeBare() override {
-        abort();
         return Result::Ok;
     }
     Result OnOpcodeIndex(Index value) override {
@@ -335,7 +336,7 @@ public:
         return Result::Ok;
     }
     Result OnBinaryExpr(Opcode opcode) override {
-        abort();
+        m_externalDelegate->OnBinaryExpr(opcode);
         return Result::Ok;
     }
     Result OnBlockExpr(Type sig_type) override {
@@ -387,7 +388,7 @@ public:
         return Result::Ok;
     }
     Result OnDropExpr() override {
-        abort();
+        m_externalDelegate->OnDropExpr();
         return Result::Ok;
     }
     Result OnElseExpr() override {
@@ -437,11 +438,11 @@ public:
         return Result::Ok;
     }
     Result OnLocalGetExpr(Index local_index) override {
-        abort();
+        m_externalDelegate->OnLocalGetExpr(local_index);
         return Result::Ok;
     }
     Result OnLocalSetExpr(Index local_index) override {
-        abort();
+        m_externalDelegate->OnLocalSetExpr(local_index);
         return Result::Ok;
     }
     Result OnLocalTeeExpr(Index local_index) override {

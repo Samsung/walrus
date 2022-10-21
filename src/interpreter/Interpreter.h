@@ -25,9 +25,11 @@ class Interpreter {
 public:
     static void interpret(ExecutionState& state,
                           size_t programCounter,
+                          uint8_t* bp,
                           uint8_t*& sp);
     static void callOperation(ExecutionState& state,
                               size_t programCounter,
+                              uint8_t* bp,
                               uint8_t*& sp);
 };
 

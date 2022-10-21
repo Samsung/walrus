@@ -27,6 +27,7 @@ class WASMBinaryReader;
 
 namespace Walrus {
 
+class Store;
 class Module;
 class Instance;
 
@@ -128,15 +129,56 @@ private:
     };
 };
 
+class ModuleExport : public gc {
+public:
+    // matches binary format, do not change
+    enum Type { Function,
+                Table,
+                Memory,
+                Global };
+
+    ModuleExport(Type type,
+                 String* name,
+                 uint32_t exportIndex,
+                 uint32_t itemIndex)
+        : m_type(type)
+        , m_name(name)
+        , m_exportIndex(exportIndex)
+        , m_itemIndex(itemIndex)
+    {
+    }
+
+    Type type() const { return m_type; }
+
+    uint32_t exportIndex() const { return m_exportIndex; }
+
+    String* name() const { return m_name; }
+
+    uint32_t itemIndex() const
+    {
+        return m_itemIndex;
+    }
+
+private:
+    Type m_type;
+    String* m_name;
+    uint32_t m_exportIndex;
+    uint32_t m_itemIndex;
+};
+
 class ModuleFunction : public gc {
     friend class wabt::WASMBinaryReader;
 
 public:
+    typedef Vector<Value::Type, GCUtil::gc_malloc_atomic_allocator<Value::Type>>
+        LocalValueVector;
+
     ModuleFunction(Module* module, uint32_t functionIndex, uint32_t functionTypeIndex)
         : m_module(module)
         , m_functionIndex(functionIndex)
         , m_functionTypeIndex(functionTypeIndex)
         , m_requiredStackSize(0)
+        , m_requiredStackSizeDueToLocal(0)
     {
     }
 
@@ -147,6 +189,7 @@ public:
     uint32_t functionTypeIndex() const { return m_functionTypeIndex; }
 
     uint32_t requiredStackSize() const { return m_requiredStackSize; }
+    uint32_t requiredStackSizeDueToLocal() const { return m_requiredStackSizeDueToLocal; }
 
     template <typename CodeType>
     void pushByteCode(const CodeType& code)
@@ -168,6 +211,8 @@ private:
     uint32_t m_functionIndex;
     uint32_t m_functionTypeIndex;
     uint32_t m_requiredStackSize;
+    uint32_t m_requiredStackSizeDueToLocal;
+    LocalValueVector m_local;
     Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_byteCode;
 };
 
@@ -175,8 +220,9 @@ class Module : public gc {
     friend class wabt::WASMBinaryReader;
 
 public:
-    Module()
-        : m_seenStartAttribute(false)
+    Module(Store* store)
+        : m_store(store)
+        , m_seenStartAttribute(false)
         , m_version(0)
         , m_start(0)
     {
@@ -204,18 +250,25 @@ public:
         return nullptr;
     }
 
-    const Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>>& import() const
+    const Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>>& moduleImport() const
     {
         return m_import;
+    }
+
+    const Vector<ModuleExport*, GCUtil::gc_malloc_allocator<ModuleExport*>>& moduleExport() const
+    {
+        return m_export;
     }
 
     Instance* instantiate(const ValueVector& imports);
 
 private:
+    Store* m_store;
     bool m_seenStartAttribute;
     uint32_t m_version;
     uint32_t m_start;
     Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>> m_import;
+    Vector<ModuleExport*, GCUtil::gc_malloc_allocator<ModuleExport*>> m_export;
     Vector<FunctionType*, GCUtil::gc_malloc_allocator<FunctionType*>>
         m_functionType;
     Vector<ModuleFunction*, GCUtil::gc_malloc_allocator<ModuleFunction*>>

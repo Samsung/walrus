@@ -34,13 +34,14 @@ ALWAYS_INLINE void writeValue(uint8_t*& sp, const T& v)
 template <typename T>
 ALWAYS_INLINE T readValue(uint8_t*& sp)
 {
-    T v = *reinterpret_cast<T*>(sp);
     sp -= stackAllocatedSize<T>();
+    T v = *reinterpret_cast<T*>(sp);
     return v;
 }
 
 void Interpreter::interpret(ExecutionState& state,
                             size_t programCounter,
+                            uint8_t* bp,
                             uint8_t*& sp)
 {
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
@@ -92,10 +93,49 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(LocalGet)
+            :
+        {
+            LocalGet* code = (LocalGet*)programCounter;
+            memcpy(sp, &bp[code->offset()], code->size());
+            sp += code->size();
+            ADD_PROGRAM_COUNTER(LocalGet);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(LocalSet)
+            :
+        {
+            LocalSet* code = (LocalSet*)programCounter;
+            sp -= code->size();
+            memcpy(&bp[code->offset()], sp, code->size());
+            ADD_PROGRAM_COUNTER(LocalSet);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(I32Add)
+            :
+        {
+            int32_t a = readValue<int32_t>(sp);
+            int32_t b = readValue<int32_t>(sp);
+            writeValue<int32_t>(sp, a + b);
+            ADD_PROGRAM_COUNTER(BinaryOperation);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(Drop)
+            :
+        {
+            Drop* code = (Drop*)programCounter;
+            sp -= code->size();
+            ADD_PROGRAM_COUNTER(Drop);
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(Call)
             :
         {
-            callOperation(state, programCounter, sp);
+            callOperation(state, programCounter, bp, sp);
             ADD_PROGRAM_COUNTER(Call);
             NEXT_INSTRUCTION();
         }
@@ -115,6 +155,7 @@ NextInstruction:
 NEVER_INLINE void Interpreter::callOperation(
     ExecutionState& state,
     size_t programCounter,
+    uint8_t* bp,
     uint8_t*& sp)
 {
     Call* code = (Call*)programCounter;
@@ -137,7 +178,6 @@ NEVER_INLINE void Interpreter::callOperation(
 
     for (size_t i = 0; i < result.size(); i++) {
         resultVector[i].writeToStack(sp);
-        sp += valueSizeInStack(result[i]);
     }
 }
 
