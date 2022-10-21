@@ -51,6 +51,14 @@ protected:
     int32_t m_value;
 };
 
+class BinaryOperation : public ByteCode {
+public:
+    BinaryOperation(OpcodeKind opcode)
+        : ByteCode(opcode)
+    {
+    }
+};
+
 class I64Const : public ByteCode {
 public:
     I64Const(int64_t value)
@@ -105,6 +113,54 @@ public:
 
 protected:
     uint32_t m_index;
+};
+
+class LocalGet : public ByteCode {
+public:
+    LocalGet(uint32_t offset, uint32_t size)
+        : ByteCode(OpcodeKind::LocalGetOpcode)
+        , m_offset(offset)
+        , m_size(size)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    uint32_t size() const { return m_size; }
+
+protected:
+    uint32_t m_offset;
+    uint32_t m_size;
+};
+
+class LocalSet : public ByteCode {
+public:
+    LocalSet(uint32_t offset, uint32_t size)
+        : ByteCode(OpcodeKind::LocalSetOpcode)
+        , m_offset(offset)
+        , m_size(size)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    uint32_t size() const { return m_size; }
+
+protected:
+    uint32_t m_offset;
+    uint32_t m_size;
+};
+
+class Drop : public ByteCode {
+public:
+    Drop(uint32_t size)
+        : ByteCode(OpcodeKind::DropOpcode)
+        , m_size(size)
+    {
+    }
+
+    uint32_t size() const { return m_size; }
+
+protected:
+    uint32_t m_size;
 };
 
 class End : public ByteCode {

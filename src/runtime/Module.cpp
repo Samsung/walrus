@@ -18,6 +18,7 @@
 #include "runtime/Module.h"
 #include "runtime/Function.h"
 #include "runtime/Instance.h"
+#include "runtime/Store.h"
 
 namespace Walrus {
 
@@ -41,11 +42,12 @@ Instance* Module::instantiate(const ValueVector& imports)
         }
     }
 
+    // init defined function
     for (size_t i = 0; i < m_function.size(); i++) {
         auto idx = m_function[i]->functionIndex();
         if (!instance->m_function[idx]) {
             // TODO if there is no function at function(idx), throw exception
-            instance->m_function[idx] = new DefinedFunction(functionType(idx), instance, function(idx));
+            instance->m_function[idx] = new DefinedFunction(m_store, functionType(idx), instance, function(idx));
         }
     }
 

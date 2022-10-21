@@ -14,35 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef __WalrusInstance__
-#define __WalrusInstance__
-
-#include "util/Vector.h"
-#include "runtime/Value.h"
+#ifndef __WalrusEngine__
+#define __WalrusEngine__
 
 namespace Walrus {
 
-class Module;
-class Function;
-
-class Instance : public gc {
-    friend class Module;
-    Instance(Module* module)
-        : m_module(module)
-    {
-    }
-
-public:
-    typedef Vector<Instance*, GCUtil::gc_malloc_allocator<Instance*>> InstanceVector;
-
-    Module* module() const { return m_module; }
-
-    Function* function(uint32_t index) const { return m_function[index]; }
-    Value resolveExport(String* name);
-
-private:
-    Module* m_module;
-    Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
+class Engine : public gc {
 };
 
 } // namespace Walrus

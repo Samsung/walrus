@@ -192,8 +192,20 @@ set(WABT_LIBRARY_SRC
   src/stream.cc
   src/utf8.cc
   src/validator.cc
-  
+ 
   src/walrus/binary-reader-walrus.cc
+
+  # files for testing
+  src/wast-lexer.cc
+  src/wast-parser.cc
+  src/ir.cc
+  src/literal.cc
+  src/token.cc
+  src/resolve-names.cc
+  src/binary-reader-ir.cc
+  src/lexer-source.cc
+  src/lexer-source-line-finder.cc
+  src/binary-writer.cc
 )
 
 if (WABT_ARCH STREQUAL "x86")

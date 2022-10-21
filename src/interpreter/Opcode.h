@@ -17,6 +17,8 @@
 #ifndef __WalrusOpcode__
 #define __WalrusOpcode__
 
+#include "runtime/Value.h"
+
 namespace Walrus {
 
 enum OpcodeKind : size_t {
@@ -56,15 +58,13 @@ struct ByteCodeInfo {
     {
         switch (tp) {
         case I32:
+            return stackAllocatedSize<int32_t>();
         case F32:
-#if defined(ESCARGOT_32)
-            return 4;
-#else
-            return 8; // for stack align
-#endif
+            return stackAllocatedSize<float>();
         case I64:
+            return stackAllocatedSize<int64_t>();
         case F64:
-            return 8;
+            return stackAllocatedSize<double>();
         case V128:
             return 16;
         default:

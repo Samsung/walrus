@@ -29,6 +29,18 @@ public:
     uint8_t m_data[16];
 };
 
+template <typename T>
+size_t stackAllocatedSize()
+{
+    if (sizeof(T) < sizeof(size_t) && sizeof(T) % sizeof(size_t)) {
+        return sizeof(size_t);
+    } else if (sizeof(T) > sizeof(size_t) && sizeof(T) % sizeof(size_t)) {
+        return sizeof(size_t) * ((sizeof(T) / sizeof(size_t)) + 1);
+    } else {
+        return sizeof(T);
+    }
+}
+
 class Value {
 public:
     // https://webassembly.github.io/spec/core/syntax/types.html
@@ -136,27 +148,32 @@ public:
         return reinterpret_cast<Function*>(m_ref);
     }
 
-    void writeToStack(uint8_t* ptr)
+    void writeToStack(uint8_t*& ptr)
     {
         switch (m_type) {
         case I32: {
             *reinterpret_cast<int32_t*>(ptr) = m_i32;
+            ptr += stackAllocatedSize<int32_t>();
             break;
         }
         case F32: {
             *reinterpret_cast<float*>(ptr) = m_f32;
+            ptr += stackAllocatedSize<float>();
             break;
         }
         case F64: {
             *reinterpret_cast<double*>(ptr) = m_f64;
+            ptr += stackAllocatedSize<double>();
             break;
         }
         case I64: {
             *reinterpret_cast<int64_t*>(ptr) = m_i64;
+            ptr += stackAllocatedSize<int64_t>();
             break;
         }
         case FuncRef: {
             *reinterpret_cast<void**>(ptr) = m_ref;
+            ptr += stackAllocatedSize<void*>();
             break;
         }
         default: {
@@ -164,6 +181,26 @@ public:
             break;
         }
         }
+    }
+
+    bool operator==(const Value& v) const
+    {
+        if (m_type == v.m_type) {
+            switch (m_type) {
+            case I32:
+            case F32:
+                return m_i32 == v.m_i32;
+            case F64:
+            case I64:
+                return m_i64 == v.m_i64;
+            case FuncRef:
+                return m_ref == v.m_ref;
+            default:
+                ASSERT_NOT_REACHED();
+                break;
+            }
+        }
+        return false;
     }
 
 private:
@@ -178,27 +215,17 @@ private:
     Type m_type;
 };
 
-template <typename T>
-size_t stackAllocatedSize()
-{
-    if (sizeof(T) < sizeof(size_t) && sizeof(T) % sizeof(size_t)) {
-        return sizeof(size_t);
-    } else if (sizeof(T) > sizeof(size_t) && sizeof(T) % sizeof(size_t)) {
-        return sizeof(size_t) * ((sizeof(T) / sizeof(size_t)) + 1);
-    } else {
-        return sizeof(T);
-    }
-}
-
 inline size_t valueSizeInStack(Value::Type type)
 {
     switch (type) {
     case Value::I32:
-    case Value::F32:
         return stackAllocatedSize<int32_t>();
+    case Value::F32:
+        return stackAllocatedSize<float>();
     case Value::I64:
+        return stackAllocatedSize<int64_t>();
     case Value::F64:
-        return 8;
+        return stackAllocatedSize<double>();
     case Value::V128:
         return 16;
     default:

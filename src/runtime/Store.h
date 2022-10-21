@@ -14,37 +14,36 @@
  * limitations under the License.
  */
 
-#ifndef __WalrusInstance__
-#define __WalrusInstance__
+#ifndef __WalrusStore__
+#define __WalrusStore__
 
-#include "util/Vector.h"
+#include "util/String.h"
 #include "runtime/Value.h"
+#include "runtime/Engine.h"
 
 namespace Walrus {
 
-class Module;
-class Function;
+class Engine;
 
-class Instance : public gc {
-    friend class Module;
-    Instance(Module* module)
-        : m_module(module)
+class Store : public gc {
+public:
+    typedef Vector<std::pair<String*, Value>, GCUtil::gc_malloc_allocator<std::pair<String*, Value>>> GlobalVariableVector;
+
+    Store(Engine* engine)
+        : m_engine(engine)
     {
     }
 
-public:
-    typedef Vector<Instance*, GCUtil::gc_malloc_allocator<Instance*>> InstanceVector;
-
-    Module* module() const { return m_module; }
-
-    Function* function(uint32_t index) const { return m_function[index]; }
-    Value resolveExport(String* name);
+    GlobalVariableVector& global()
+    {
+        return m_global;
+    }
 
 private:
-    Module* m_module;
-    Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
+    Engine* m_engine;
+    GlobalVariableVector m_global;
 };
 
 } // namespace Walrus
 
-#endif // __WalrusInstance__
+#endif // __WalrusStore__

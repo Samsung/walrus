@@ -26,14 +26,25 @@ namespace Walrus {
 void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
 {
     ExecutionState newState(state, this);
-    uint8_t* sp = ALLOCA(m_moduleFunction->requiredStackSize(), uint8_t);
-    Interpreter::interpret(newState, reinterpret_cast<size_t>(m_moduleFunction->byteCode()), sp);
+    uint8_t* functionStackBase = ALLOCA(m_moduleFunction->requiredStackSize(), uint8_t);
+    uint8_t* functionStackPointer = functionStackBase;
+
+    // init parameter space
+    for (size_t i = 0; i < argc; i++) {
+        argv[i].writeToStack(functionStackPointer);
+    }
+    // init local space
+    auto localSize = m_moduleFunction->requiredStackSizeDueToLocal();
+    memset(functionStackPointer, 0, localSize);
+    functionStackPointer += localSize;
+
+    Interpreter::interpret(newState, reinterpret_cast<size_t>(m_moduleFunction->byteCode()), functionStackBase, functionStackPointer);
 
     FunctionType* ft = functionType();
     const FunctionType::FunctionTypeVector& resultTypeInfo = ft->result();
 
-    sp = sp - ft->resultStackSize();
-    uint8_t* resultStackPointer = sp;
+    functionStackPointer = functionStackPointer - ft->resultStackSize();
+    uint8_t* resultStackPointer = functionStackPointer;
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {
         result[i] = Value(resultTypeInfo[i], resultStackPointer);
         resultStackPointer += valueSizeInStack(resultTypeInfo[i]);

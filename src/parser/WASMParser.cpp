@@ -42,11 +42,28 @@ static Walrus::Value::Type toValueKindForFunctionType(Type type)
     }
 }
 
+static Walrus::Value::Type toValueKindForLocalType(Type type)
+{
+    switch (type) {
+    case Type::I32:
+        return Walrus::Value::Type::I32;
+    case Type::I64:
+        return Walrus::Value::Type::I64;
+    case Type::F32:
+        return Walrus::Value::Type::F32;
+    case Type::F64:
+        return Walrus::Value::Type::F64;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
 class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
 public:
     WASMBinaryReader(Walrus::Module* module)
         : m_module(module)
         , m_currentFunction(nullptr)
+        , m_currentFunctionType(nullptr)
         , m_functionStackSizeSoFar(0)
     {
     }
@@ -100,6 +117,16 @@ public:
             new Walrus::String(fieldName), funcIndex, sigIndex));
     }
 
+    virtual void OnExportCount(Index count)
+    {
+        m_module->m_export.reserve(count);
+    }
+
+    virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex)
+    {
+        m_module->m_export.pushBack(new Walrus::ModuleExport(static_cast<Walrus::ModuleExport::Type>(kind), new Walrus::String(name), exportIndex, itemIndex));
+    }
+
     virtual void OnFunctionCount(Index count) override
     {
         m_module->m_function.reserve(count);
@@ -108,6 +135,7 @@ public:
     virtual void OnFunction(Index index, Index sigIndex) override
     {
         ASSERT(m_currentFunction == nullptr);
+        ASSERT(m_currentFunctionType == nullptr);
         m_module->m_function.push_back(new Walrus::ModuleFunction(m_module, index, sigIndex));
     }
 
@@ -121,7 +149,25 @@ public:
     {
         ASSERT(m_currentFunction == nullptr);
         m_currentFunction = m_module->function(index);
-        m_functionStackSizeSoFar = 0;
+        m_currentFunctionType = m_module->functionType(index);
+        m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
+    }
+
+    virtual void OnLocalDeclCount(Index count) override
+    {
+        m_currentFunction->m_local.reserve(count);
+    }
+
+    virtual void OnLocalDecl(Index decl_index, Index count, Type type) override
+    {
+        while (count) {
+            auto wType = toValueKindForLocalType(type);
+            m_currentFunction->m_local.pushBack(wType);
+            auto sz = Walrus::valueSizeInStack(wType);
+            m_functionStackSizeSoFar += sz;
+            m_currentFunction->m_requiredStackSizeDueToLocal += sz;
+            count--;
+        }
     }
 
     void computeStackSizePerOpcode(size_t stackGrowSize, size_t stackShrinkSize)
@@ -144,38 +190,81 @@ public:
     {
         auto functionType = m_module->functionType(m_module->function(index)->functionIndex());
 
-        size_t stackShrinkSize = 0;
-        for (size_t i = 0; i < functionType->param().size(); i++) {
-            stackShrinkSize += valueSizeInStack(functionType->param()[i]);
-        }
-
-        size_t stackGrowSize = 0;
-        for (size_t i = 0; i < functionType->result().size(); i++) {
-            stackGrowSize += valueSizeInStack(functionType->result()[i]);
-        }
+        size_t stackShrinkSize = functionType->paramStackSize();
+        size_t stackGrowSize = functionType->resultStackSize();
 
         m_currentFunction->pushByteCode(Walrus::Call(index));
         computeStackSizePerOpcode(stackGrowSize, stackShrinkSize);
+        m_lastStackTreatSize = stackGrowSize;
     }
 
     virtual void OnI32ConstExpr(uint32_t value) override
     {
         m_currentFunction->pushByteCode(Walrus::I32Const(value));
+        m_lastStackTreatSize = Walrus::valueSizeInStack(Walrus::Value::Type::I32);
     }
 
     virtual void OnI64ConstExpr(uint64_t value) override
     {
         m_currentFunction->pushByteCode(Walrus::I64Const(value));
+        m_lastStackTreatSize = Walrus::valueSizeInStack(Walrus::Value::Type::I64);
     }
 
     virtual void OnF32ConstExpr(float value) override
     {
         m_currentFunction->pushByteCode(Walrus::F32Const(value));
+        m_lastStackTreatSize = Walrus::valueSizeInStack(Walrus::Value::Type::F32);
     }
 
     virtual void OnF64ConstExpr(double value) override
     {
         m_currentFunction->pushByteCode(Walrus::F64Const(value));
+        m_lastStackTreatSize = Walrus::valueSizeInStack(Walrus::Value::Type::F64);
+    }
+
+    std::pair<uint32_t, uint32_t> resolveLocalOffsetAndSize(Index localIndex)
+    {
+        if (localIndex < m_currentFunctionType->param().size()) {
+            size_t offset = 0;
+            for (Index i = 0; i < localIndex; i++) {
+                offset += Walrus::valueSizeInStack(m_currentFunctionType->param()[i]);
+            }
+            return std::make_pair(offset, Walrus::valueSizeInStack(m_currentFunctionType->param()[localIndex]));
+        } else {
+            localIndex -= m_currentFunctionType->param().size();
+            size_t offset = m_currentFunctionType->paramStackSize();
+            for (Index i = 0; i < localIndex; i++) {
+                offset += Walrus::valueSizeInStack(m_currentFunction->m_local[i]);
+            }
+            return std::make_pair(offset, Walrus::valueSizeInStack(m_currentFunction->m_local[localIndex]));
+        }
+    }
+
+    virtual void OnLocalGetExpr(Index localIndex) override
+    {
+        auto r = resolveLocalOffsetAndSize(localIndex);
+        m_currentFunction->pushByteCode(Walrus::LocalGet(r.first, r.second));
+        m_lastStackTreatSize = r.second;
+    }
+
+    virtual void OnLocalSetExpr(Index localIndex) override
+    {
+        auto r = resolveLocalOffsetAndSize(localIndex);
+        m_currentFunction->pushByteCode(Walrus::LocalSet(r.first, r.second));
+        m_lastStackTreatSize = r.second;
+    }
+
+    virtual void OnDropExpr() override
+    {
+        m_currentFunction->pushByteCode(Walrus::Drop(m_lastStackTreatSize));
+        m_lastStackTreatSize = 0;
+    }
+
+    virtual void OnBinaryExpr(uint32_t opcode) override
+    {
+        auto code = static_cast<Walrus::OpcodeKind>(opcode);
+        m_currentFunction->pushByteCode(Walrus::BinaryOperation(code));
+        m_lastStackTreatSize = Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType);
     }
 
     virtual void OnEndExpr() override
@@ -187,20 +276,23 @@ public:
     {
         ASSERT(m_currentFunction == m_module->function(index));
         m_currentFunction = nullptr;
+        m_currentFunctionType = nullptr;
     }
 
     Walrus::Module* m_module;
     Walrus::ModuleFunction* m_currentFunction;
+    Walrus::FunctionType* m_currentFunctionType;
     uint32_t m_functionStackSizeSoFar;
+    uint32_t m_lastStackTreatSize;
 };
 
 } // namespace wabt
 
 namespace Walrus {
 
-Optional<Module*> WASMParser::parseBinary(const uint8_t* data, size_t len)
+Optional<Module*> WASMParser::parseBinary(Store* store, const uint8_t* data, size_t len)
 {
-    Module* module = new Module();
+    Module* module = new Module(store);
     wabt::WASMBinaryReader delegate(module);
 
     ReadWasmBinary(data, len, &delegate);

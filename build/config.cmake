@@ -104,7 +104,7 @@ SET (WALRUS_CXXFLAGS_STATICLIB -fPIC -DWALRUS_EXPORT=)
 SET (WALRUS_LDFLAGS_STATICLIB -Wl,--gc-sections)
 
 # SHELL FLAGS
-SET (WALRUS_CXXFLAGS_SHELL -DWALRUS_EXPORT= -frtti)
+SET (WALRUS_CXXFLAGS_SHELL -DWALRUS_EXPORT= -frtti -std=c++17)
 SET (WALRUS_LDFLAGS_SHELL -Wl,--gc-sections)
 
 #######################################################

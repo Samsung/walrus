@@ -40,12 +40,18 @@ public:
     virtual void OnImportCount(Index count) = 0;
     virtual void OnImportFunc(Index importIndex, std::string moduleName, std::string fieldName, Index funcIndex, Index sigIndex) = 0;
 
+    virtual void OnExportCount(Index count) = 0;
+    virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) = 0;
+
     virtual void OnFunctionCount(Index count) = 0;
     virtual void OnFunction(Index index, Index sigIndex) = 0;
 
     virtual void OnStartFunction(Index funcIndex) = 0;
 
     virtual void BeginFunctionBody(Index index, Offset size) = 0;
+
+    virtual void OnLocalDeclCount(Index count) = 0;
+    virtual void OnLocalDecl(Index decl_index, Index count, Type type) = 0;
 
     virtual void OnOpcode(uint32_t opcode) = 0;
 
@@ -54,6 +60,10 @@ public:
     virtual void OnI64ConstExpr(uint64_t value) = 0;
     virtual void OnF32ConstExpr(float value) = 0;
     virtual void OnF64ConstExpr(double value) = 0;
+    virtual void OnLocalGetExpr(Index localIndex) = 0;
+    virtual void OnLocalSetExpr(Index localIndex) = 0;
+    virtual void OnDropExpr() = 0;
+    virtual void OnBinaryExpr(uint32_t opcode) = 0;
     virtual void OnEndExpr() = 0;
 
     virtual void EndFunctionBody(Index index) = 0;
