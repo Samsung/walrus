@@ -59,6 +59,14 @@ public:
     }
 };
 
+class UnaryOperation : public ByteCode {
+public:
+    UnaryOperation(OpcodeKind opcode)
+        : ByteCode(opcode)
+    {
+    }
+};
+
 class I64Const : public ByteCode {
 public:
     I64Const(int64_t value)

@@ -14,44 +14,34 @@
  * limitations under the License.
  */
 
-#ifndef __WalrusExecutionState__
-#define __WalrusExecutionState__
-
-#include "util/Optional.h"
+#ifndef __WalrusException__
+#define __WalrusException__
 
 namespace Walrus {
 
-class Function;
-
-class ExecutionState {
+class String;
+class Exception : public gc {
 public:
-    friend class Trap;
-
-    ExecutionState(ExecutionState& parent)
-        : m_parent(&parent)
+    // we should use exception value as NoGC since bdwgc cannot find thrown value
+    static std::unique_ptr<Exception> create(String* m)
     {
+        return std::unique_ptr<Exception>(new (NoGC) Exception(m));
     }
 
-    ExecutionState(ExecutionState& parent, Function* currentFunction)
-        : m_parent(&parent)
-        , m_currentFunction(currentFunction)
+    String* message() const
     {
-    }
-
-    Optional<Function*> currentFunction() const
-    {
-        return m_currentFunction;
+        return m_message;
     }
 
 private:
-    ExecutionState()
+    Exception(String* message)
+        : m_message(message)
     {
     }
 
-    Optional<ExecutionState*> m_parent;
-    Optional<Function*> m_currentFunction;
+    String* m_message;
 };
 
 } // namespace Walrus
 
-#endif // __WalrusFunction__
+#endif // __WalrusException__

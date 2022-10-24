@@ -13,45 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "Walrus.h"
 
-#ifndef __WalrusExecutionState__
-#define __WalrusExecutionState__
-
-#include "util/Optional.h"
+#include "Trap.h"
 
 namespace Walrus {
 
-class Function;
-
-class ExecutionState {
-public:
-    friend class Trap;
-
-    ExecutionState(ExecutionState& parent)
-        : m_parent(&parent)
-    {
+Trap::TrapResult Trap::run(void (*runner)(ExecutionState&, void*), void* data)
+{
+    Trap::TrapResult r;
+    try {
+        ExecutionState state;
+        runner(state, data);
+    } catch (std::unique_ptr<Exception>& e) {
+        r.exception = std::move(e);
     }
 
-    ExecutionState(ExecutionState& parent, Function* currentFunction)
-        : m_parent(&parent)
-        , m_currentFunction(currentFunction)
-    {
-    }
+    return r;
+}
 
-    Optional<Function*> currentFunction() const
-    {
-        return m_currentFunction;
-    }
-
-private:
-    ExecutionState()
-    {
-    }
-
-    Optional<ExecutionState*> m_parent;
-    Optional<Function*> m_currentFunction;
-};
+void Trap::throwException(String* message)
+{
+    throw Exception::create(message);
+}
 
 } // namespace Walrus
-
-#endif // __WalrusFunction__

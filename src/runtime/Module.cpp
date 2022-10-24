@@ -19,6 +19,7 @@
 #include "runtime/Function.h"
 #include "runtime/Instance.h"
 #include "runtime/Store.h"
+#include "runtime/Trap.h"
 
 namespace Walrus {
 
@@ -47,15 +48,23 @@ Instance* Module::instantiate(const ValueVector& imports)
         auto idx = m_function[i]->functionIndex();
         if (!instance->m_function[idx]) {
             // TODO if there is no function at function(idx), throw exception
-            instance->m_function[idx] = new DefinedFunction(m_store, functionType(idx), instance, function(idx));
+            instance->m_function[idx] = new DefinedFunction(m_store, functionType(m_function[i]->functionTypeIndex()), instance, function(idx));
         }
     }
 
     if (m_seenStartAttribute) {
         ASSERT(instance->m_function[m_start]->functionType()->param().size() == 0);
         ASSERT(instance->m_function[m_start]->functionType()->result().size() == 0);
-        ExecutionState state;
-        instance->m_function[m_start]->call(state, 0, nullptr, nullptr);
+        struct RunData {
+            Instance* instance;
+            Module* module;
+        } data = { instance, this };
+        Walrus::Trap trap;
+        trap.run([](Walrus::ExecutionState& state, void* d) {
+            RunData* data = reinterpret_cast<RunData*>(d);
+            data->instance->m_function[data->module->m_start]->call(state, 0, nullptr, nullptr);
+        },
+                 &data);
     }
 
     return instance;

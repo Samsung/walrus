@@ -149,7 +149,7 @@ public:
     {
         ASSERT(m_currentFunction == nullptr);
         m_currentFunction = m_module->function(index);
-        m_currentFunctionType = m_module->functionType(index);
+        m_currentFunctionType = m_module->functionType(m_currentFunction->functionTypeIndex());
         m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
     }
 
@@ -264,6 +264,13 @@ public:
     {
         auto code = static_cast<Walrus::OpcodeKind>(opcode);
         m_currentFunction->pushByteCode(Walrus::BinaryOperation(code));
+        m_lastStackTreatSize = Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType);
+    }
+
+    virtual void OnUnaryExpr(uint32_t opcode) override
+    {
+        auto code = static_cast<Walrus::OpcodeKind>(opcode);
+        m_currentFunction->pushByteCode(Walrus::UnaryOperation(code));
         m_lastStackTreatSize = Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType);
     }
 

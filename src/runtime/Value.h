@@ -19,6 +19,7 @@
 
 #include "util/Vector.h"
 #include "runtime/ExecutionState.h"
+#include "runtime/Exception.h"
 
 namespace Walrus {
 
@@ -56,7 +57,7 @@ public:
     };
 
     Value()
-        : m_i32(0)
+        : m_ref(nullptr)
         , m_type(Void)
     {
     }
