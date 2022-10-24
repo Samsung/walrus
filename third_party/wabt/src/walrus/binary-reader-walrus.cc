@@ -376,11 +376,11 @@ public:
         return Result::Ok;
     }
     Result OnCompareExpr(Opcode opcode) override {
-        abort();
+        m_externalDelegate->OnBinaryExpr(opcode);
         return Result::Ok;
     }
     Result OnConvertExpr(Opcode opcode) override {
-        abort();
+        m_externalDelegate->OnUnaryExpr(opcode);
         return Result::Ok;
     }
     Result OnDelegateExpr(Index depth) override {
@@ -558,7 +558,7 @@ public:
         return Result::Ok;
     }
     Result OnUnaryExpr(Opcode opcode) override {
-        abort();
+        m_externalDelegate->OnUnaryExpr(opcode);
         return Result::Ok;
     }
     Result OnTernaryExpr(Opcode opcode) override {

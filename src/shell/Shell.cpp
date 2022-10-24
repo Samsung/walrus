@@ -2,6 +2,7 @@
 #include <locale>
 #include <sstream>
 #include <iomanip>
+#include <inttypes.h>
 
 #include "Walrus.h"
 #include "runtime/Engine.h"
@@ -9,6 +10,7 @@
 #include "runtime/Module.h"
 #include "runtime/Function.h"
 #include "runtime/Instance.h"
+#include "runtime/Trap.h"
 #include "parser/WASMParser.h"
 
 #include "wabt/wast-lexer.h"
@@ -200,13 +202,79 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
     if (c.type() == wabt::Type::I32) {
         return Walrus::Value(static_cast<int32_t>(c.u32()));
     } else if (c.type() == wabt::Type::I64) {
-        return Walrus::Value(static_cast<int32_t>(c.u64()));
+        return Walrus::Value(static_cast<int64_t>(c.u64()));
     } else if (c.type() == wabt::Type::F32) {
         return Walrus::Value(static_cast<float>(c.f32_bits()));
     } else if (c.type() == wabt::Type::F64) {
         return Walrus::Value(static_cast<double>(c.f64_bits()));
     } else {
         RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
+static void printConstVector(wabt::ConstVector& v)
+{
+    for (size_t i = 0; i < v.size(); i++) {
+        auto c = v[i];
+        if (c.type() == wabt::Type::I32) {
+            printf("%" PRIu32, c.u32());
+        } else if (c.type() == wabt::Type::I64) {
+            printf("%" PRIu64, c.u64());
+        } else if (c.type() == wabt::Type::F32) {
+            printf(PRIu64, c.u64());
+            printf("%f", static_cast<float>(c.f32_bits()));
+        } else if (c.type() == wabt::Type::F64) {
+            printf("%lf", static_cast<double>(c.f64_bits()));
+        } else {
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+        if (i + 1 != v.size()) {
+            printf(", ");
+        }
+    }
+}
+
+static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn, wabt::ConstVector expectedResult, const char* expectedException)
+{
+    RELEASE_ASSERT(fn->functionType()->param().size() == action->args.size());
+    Walrus::ValueVector args;
+    for (auto& a : action->args) {
+        args.pushBack(toWalrusValue(a));
+    }
+
+    struct RunData {
+        Walrus::Function* fn;
+        wabt::ConstVector& expectedResult;
+        Walrus::ValueVector& args;
+    } data = { fn, expectedResult, args };
+    Walrus::Trap trap;
+    auto trapResult = trap.run([](Walrus::ExecutionState& state, void* d) {
+        RunData* data = reinterpret_cast<RunData*>(d);
+        Walrus::ValueVector result;
+        result.resize(data->expectedResult.size());
+        data->fn->call(state, data->args.size(), data->args.data(), result.data());
+        RELEASE_ASSERT(data->fn->functionType()->result().size() == data->expectedResult.size());
+        // compare result
+        for (size_t i = 0; i < result.size(); i++) {
+            RELEASE_ASSERT(result[i] == toWalrusValue(data->expectedResult[i]));
+        }
+    },
+                               &data);
+    if (expectedResult.size()) {
+        RELEASE_ASSERT(!trapResult.exception);
+    }
+    if (expectedException) {
+        RELEASE_ASSERT(trapResult.exception);
+        RELEASE_ASSERT(trapResult.exception->message()->equals(expectedException, strlen(expectedException)));
+        printf("invoke %s(", action->name.data());
+        printConstVector(action->args);
+        printf("), expect exception: %s (line: %d) : OK\n", expectedException, action->loc.line);
+    } else {
+        printf("invoke %s(", action->name.data());
+        printConstVector(action->args);
+        printf(") expect value(");
+        printConstVector(expectedResult);
+        printf(") (line: %d) : OK\n", action->loc.line);
     }
 }
 
@@ -243,20 +311,15 @@ static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance:
                 auto action = dynamic_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 RELEASE_ASSERT(value.type() == Walrus::Value::FuncRef);
                 auto fn = instances[action->module_var.index()]->resolveExport(new Walrus::String(action->name)).asFunction();
-                RELEASE_ASSERT(fn->functionType()->param().size() == action->args.size());
-                RELEASE_ASSERT(fn->functionType()->result().size() == assertReturn->expected.size());
-                Walrus::ValueVector args;
-                for (auto& a : action->args) {
-                    args.pushBack(toWalrusValue(a));
-                }
-                Walrus::ExecutionState state;
-                Walrus::ValueVector result;
-                result.resize(assertReturn->expected.size());
-                fn->call(state, args.size(), args.data(), result.data());
-                // compare result
-                for (size_t i = 0; i < result.size(); i++) {
-                    RELEASE_ASSERT(result[i] == toWalrusValue(assertReturn->expected[i]));
-                }
+                executeInvokeAction(action, fn, assertReturn->expected, nullptr);
+            }
+        } else if (auto* assertTrap = dynamic_cast<wabt::AssertTrapCommand*>(command.get())) {
+            auto value = instances[assertTrap->action->module_var.index()]->resolveExport(new Walrus::String(assertTrap->action->name));
+            if (assertTrap->action->type() == wabt::ActionType::Invoke) {
+                auto action = dynamic_cast<wabt::InvokeAction*>(assertTrap->action.get());
+                RELEASE_ASSERT(value.type() == Walrus::Value::FuncRef);
+                auto fn = instances[action->module_var.index()]->resolveExport(new Walrus::String(action->name)).asFunction();
+                executeInvokeAction(action, fn, wabt::ConstVector(), assertTrap->text.data());
             }
         }
     }

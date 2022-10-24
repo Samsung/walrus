@@ -14,44 +14,33 @@
  * limitations under the License.
  */
 
-#ifndef __WalrusExecutionState__
-#define __WalrusExecutionState__
+#ifndef __WalrusTrap__
+#define __WalrusTrap__
 
-#include "util/Optional.h"
+#include "runtime/Value.h"
+#include "runtime/Exception.h"
+#include "runtime/ExecutionState.h"
 
 namespace Walrus {
 
-class Function;
+class Trap {
+    MAKE_STACK_ALLOCATED();
 
-class ExecutionState {
 public:
-    friend class Trap;
+    struct TrapResult {
+        std::unique_ptr<Exception> exception;
 
-    ExecutionState(ExecutionState& parent)
-        : m_parent(&parent)
-    {
-    }
+        TrapResult()
+        {
+        }
+    };
 
-    ExecutionState(ExecutionState& parent, Function* currentFunction)
-        : m_parent(&parent)
-        , m_currentFunction(currentFunction)
-    {
-    }
-
-    Optional<Function*> currentFunction() const
-    {
-        return m_currentFunction;
-    }
+    TrapResult run(void (*runner)(ExecutionState&, void*), void* data);
+    static void throwException(String* message);
 
 private:
-    ExecutionState()
-    {
-    }
-
-    Optional<ExecutionState*> m_parent;
-    Optional<Function*> m_currentFunction;
 };
 
 } // namespace Walrus
 
-#endif // __WalrusFunction__
+#endif // __WalrusTrap__

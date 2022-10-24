@@ -100,7 +100,7 @@ def readfile(filename):
     with open(filename, 'r') as f:
         return f.readlines()
     
-def _run_basic_tests(engine, files, is_fail):
+def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
         proc = Popen([engine, file], stdout=PIPE)
@@ -123,7 +123,7 @@ def run_basic_tests(engine, arch):
 
     print('Running basic tests:')
     xpass = glob(join(TEST_DIR, '*'))
-    xpass_result = _run_basic_tests(engine, xpass, False)
+    xpass_result = _run_wast_tests(engine, xpass, False)
 
     tests_total = len(xpass)
     fail_total = xpass_result
@@ -133,6 +133,23 @@ def run_basic_tests(engine, arch):
 
     if fail_total > 0:
         raise Exception("basic tests failed")
+
+@runner('wasm-test-core', default=True)
+def run_basic_tests(engine, arch):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-spec', 'core')
+
+    print('Running wasm-test-core tests:')
+    xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("basic wasm-test-core failed")
 
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
