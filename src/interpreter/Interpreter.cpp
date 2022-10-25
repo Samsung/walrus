@@ -139,22 +139,22 @@ void Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                                                                                  \
     }
 
-#define UNARY_OPERATION(nativeTypeName, wasmTypeName, operationName, byteCodeOperationName) \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                      \
-        :                                                                                   \
-    {                                                                                       \
-        writeValue<nativeTypeName>(sp, operationName(readValue<nativeTypeName>(sp)));       \
-        ADD_PROGRAM_COUNTER(UnaryOperation);                                                \
-        NEXT_INSTRUCTION();                                                                 \
+#define UNARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                     \
+        :                                                                                                                  \
+    {                                                                                                                      \
+        writeValue<nativeReturnTypeName>(sp, operationName(readValue<nativeParameterTypeName>(sp)));                       \
+        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                               \
+        NEXT_INSTRUCTION();                                                                                                \
     }
 
-#define UNARY_OPERATION_OPERATION_TEMPLATE_2(nativeTypeName, wasmTypeName, operationName, T1, T2, byteCodeOperationName) \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                   \
-        :                                                                                                                \
-    {                                                                                                                    \
-        writeValue<nativeTypeName>(sp, operationName<T1, T2>(readValue<nativeTypeName>(sp)));                            \
-        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                             \
-        NEXT_INSTRUCTION();                                                                                              \
+#define UNARY_OPERATION_OPERATION_TEMPLATE_2(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, T1, T2, byteCodeOperationName) \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                                  \
+        :                                                                                                                                               \
+    {                                                                                                                                                   \
+        writeValue<nativeReturnTypeName>(sp, operationName<T1, T2>(readValue<nativeParameterTypeName>(sp)));                                            \
+        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                                            \
+        NEXT_INSTRUCTION();                                                                                                                             \
     }
 
 NextInstruction:
@@ -243,12 +243,12 @@ NextInstruction:
         BINARY_OPERATION(int32_t, int32_t, I32, ge, GeS)
         BINARY_OPERATION(uint32_t, uint32_t, I32, ge, GeU)
 
-        UNARY_OPERATION(uint32_t, I32, clz, Clz)
-        UNARY_OPERATION(uint32_t, I32, ctz, Ctz)
-        UNARY_OPERATION(uint32_t, I32, popCount, Popcnt)
-        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, I32, intExtend, uint32_t, 7, Extend8S)
-        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, I32, intExtend, uint32_t, 15, Extend16S)
-        UNARY_OPERATION(uint32_t, I32, intEqz, Eqz)
+        UNARY_OPERATION(uint32_t, uint32_t, I32, clz, Clz)
+        UNARY_OPERATION(uint32_t, uint32_t, I32, ctz, Ctz)
+        UNARY_OPERATION(uint32_t, uint32_t, I32, popCount, Popcnt)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, uint32_t, I32, intExtend, uint32_t, 7, Extend8S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, uint32_t, I32, intExtend, uint32_t, 15, Extend16S)
+        UNARY_OPERATION(uint32_t, uint32_t, I32, intEqz, Eqz)
 
         BINARY_OPERATION(float, float, F32, add, Add)
         BINARY_OPERATION(float, float, F32, sub, Sub)
@@ -264,13 +264,47 @@ NextInstruction:
         BINARY_OPERATION(float, int32_t, F32, gt, Gt)
         BINARY_OPERATION(float, int32_t, F32, ge, Ge)
 
-        UNARY_OPERATION(float, F32, floatSqrt, Sqrt)
-        UNARY_OPERATION(float, F32, floatCeil, Ceil)
-        UNARY_OPERATION(float, F32, floatFloor, Floor)
-        UNARY_OPERATION(float, F32, floatTrunc, Trunc)
-        UNARY_OPERATION(float, F32, floatNearest, Nearest)
-        UNARY_OPERATION(float, F32, floatAbs, Abs)
-        UNARY_OPERATION(float, F32, floatNeg, Neg)
+        UNARY_OPERATION(float, float, F32, floatSqrt, Sqrt)
+        UNARY_OPERATION(float, float, F32, floatCeil, Ceil)
+        UNARY_OPERATION(float, float, F32, floatFloor, Floor)
+        UNARY_OPERATION(float, float, F32, floatTrunc, Trunc)
+        UNARY_OPERATION(float, float, F32, floatNearest, Nearest)
+        UNARY_OPERATION(float, float, F32, floatAbs, Abs)
+        UNARY_OPERATION(float, float, F32, floatNeg, Neg)
+
+        BINARY_OPERATION(int64_t, int64_t, I64, add, Add)
+        BINARY_OPERATION(int64_t, int64_t, I64, sub, Sub)
+        BINARY_OPERATION(int64_t, int64_t, I64, mul, Mul)
+        BINARY_OPERATION(int64_t, int64_t, I64, intDiv, DivS)
+        BINARY_OPERATION(uint64_t, uint64_t, I64, intDiv, DivU)
+        BINARY_OPERATION(int64_t, int64_t, I64, intRem, RemS)
+        BINARY_OPERATION(uint64_t, uint64_t, I64, intRem, RemU)
+        BINARY_OPERATION(int64_t, int64_t, I64, intAnd, And)
+        BINARY_OPERATION(int64_t, int64_t, I64, intOr, Or)
+        BINARY_OPERATION(int64_t, int64_t, I64, intXor, Xor)
+        BINARY_OPERATION(int64_t, int64_t, I64, intShl, Shl)
+        BINARY_OPERATION(int64_t, int64_t, I64, intShr, ShrS)
+        BINARY_OPERATION(uint64_t, uint64_t, I64, intShr, ShrU)
+        BINARY_OPERATION(uint64_t, uint64_t, I64, intRotl, Rotl)
+        BINARY_OPERATION(uint64_t, uint64_t, I64, intRotr, Rotr)
+        BINARY_OPERATION(int64_t, int32_t, I64, eq, Eq)
+        BINARY_OPERATION(int64_t, int32_t, I64, ne, Ne)
+        BINARY_OPERATION(int64_t, int32_t, I64, lt, LtS)
+        BINARY_OPERATION(uint64_t, uint32_t, I64, lt, LtU)
+        BINARY_OPERATION(int64_t, int32_t, I64, le, LeS)
+        BINARY_OPERATION(uint64_t, uint32_t, I64, le, LeU)
+        BINARY_OPERATION(int64_t, int32_t, I64, gt, GtS)
+        BINARY_OPERATION(uint64_t, uint32_t, I64, gt, GtU)
+        BINARY_OPERATION(int64_t, int32_t, I64, ge, GeS)
+        BINARY_OPERATION(uint64_t, uint32_t, I64, ge, GeU)
+
+        UNARY_OPERATION(uint64_t, uint64_t, I64, clz, Clz)
+        UNARY_OPERATION(uint64_t, uint64_t, I64, ctz, Ctz)
+        UNARY_OPERATION(uint64_t, uint64_t, I64, popCount, Popcnt)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint64_t, I64, intExtend, uint64_t, 7, Extend8S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint64_t, I64, intExtend, uint64_t, 15, Extend16S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint64_t, I64, intExtend, uint64_t, 31, Extend32S)
+        UNARY_OPERATION(uint64_t, uint32_t, I64, intEqz, Eqz)
 
         DEFINE_OPCODE(Drop)
             :
