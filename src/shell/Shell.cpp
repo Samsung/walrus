@@ -204,9 +204,21 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
     } else if (c.type() == wabt::Type::I64) {
         return Walrus::Value(static_cast<int64_t>(c.u64()));
     } else if (c.type() == wabt::Type::F32) {
-        return Walrus::Value(static_cast<float>(c.f32_bits()));
+        if (c.is_expected_nan(0)) {
+            return Walrus::Value(std::numeric_limits<float>::quiet_NaN());
+        }
+        float s;
+        auto bits = c.f32_bits();
+        memcpy(&s, &bits, sizeof(float));
+        return Walrus::Value(s);
     } else if (c.type() == wabt::Type::F64) {
-        return Walrus::Value(static_cast<double>(c.f64_bits()));
+        if (c.is_expected_nan(0)) {
+            return Walrus::Value(std::numeric_limits<double>::quiet_NaN());
+        }
+        double s;
+        auto bits = c.f64_bits();
+        memcpy(&s, &bits, sizeof(double));
+        return Walrus::Value(s);
     } else {
         RELEASE_ASSERT_NOT_REACHED();
     }
@@ -221,10 +233,23 @@ static void printConstVector(wabt::ConstVector& v)
         } else if (c.type() == wabt::Type::I64) {
             printf("%" PRIu64, c.u64());
         } else if (c.type() == wabt::Type::F32) {
-            printf(PRIu64, c.u64());
-            printf("%f", static_cast<float>(c.f32_bits()));
+            if (c.is_expected_nan(0)) {
+                printf("nan");
+                return;
+            }
+            float s;
+            auto bits = c.f32_bits();
+            memcpy(&s, &bits, sizeof(float));
+            printf("%f", s);
         } else if (c.type() == wabt::Type::F64) {
-            printf("%lf", static_cast<double>(c.f64_bits()));
+            if (c.is_expected_nan(0)) {
+                printf("nan");
+                return;
+            }
+            double s;
+            auto bits = c.f64_bits();
+            memcpy(&s, &bits, sizeof(double));
+            printf("%lf", s);
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
