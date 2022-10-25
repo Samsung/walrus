@@ -35,21 +35,6 @@ bool isNaN(T val)
 }
 
 template <typename T, typename std::enable_if<!std::is_floating_point<T>::value, int>::type = 0>
-T toQuietNaN(T val)
-{
-    return val;
-}
-
-template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
-T toQuietNaN(T val)
-{
-    if (UNLIKELY(isNaN(val))) {
-        return std::numeric_limits<T>::quiet_NaN();
-    }
-    return val;
-}
-
-template <typename T, typename std::enable_if<!std::is_floating_point<T>::value, int>::type = 0>
 T canonNaN(T val)
 {
     return val;

@@ -57,9 +57,9 @@ bool gt(T lhs, T rhs) { return lhs > rhs; }
 template <typename T>
 bool ge(T lhs, T rhs) { return lhs >= rhs; }
 template <typename T>
-T add(T lhs, T rhs) { return toQuietNaN(lhs + rhs); }
+T add(T lhs, T rhs) { return canonNaN(lhs + rhs); }
 template <typename T>
-T sub(T lhs, T rhs) { return toQuietNaN(lhs - rhs); }
+T sub(T lhs, T rhs) { return canonNaN(lhs - rhs); }
 template <typename T>
 T xchg(T lhs, T rhs) { return rhs; }
 template <typename T>
@@ -130,13 +130,13 @@ void Interpreter::interpret(ExecutionState& state,
         }
 #define NEXT_INSTRUCTION() goto NextInstruction;
 
-#define BINARY_OPERATION(nativeTypeName, wasmTypeName, operationName, byteCodeOperationName)                         \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                               \
-        :                                                                                                            \
-    {                                                                                                                \
-        writeValue<nativeTypeName>(sp, operationName(readValue<nativeTypeName>(sp), readValue<nativeTypeName>(sp))); \
-        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                        \
-        NEXT_INSTRUCTION();                                                                                          \
+#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)                  \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                       \
+        :                                                                                                                                    \
+    {                                                                                                                                        \
+        writeValue<nativeReturnTypeName>(sp, operationName(readValue<nativeParameterTypeName>(sp), readValue<nativeParameterTypeName>(sp))); \
+        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                                                \
+        NEXT_INSTRUCTION();                                                                                                                  \
     }
 
 #define UNARY_OPERATION(nativeTypeName, wasmTypeName, operationName, byteCodeOperationName) \
@@ -217,31 +217,31 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
-        BINARY_OPERATION(int32_t, I32, add, Add)
-        BINARY_OPERATION(int32_t, I32, sub, Sub)
-        BINARY_OPERATION(int32_t, I32, mul, Mul)
-        BINARY_OPERATION(int32_t, I32, intDiv, DivS)
-        BINARY_OPERATION(uint32_t, I32, intDiv, DivU)
-        BINARY_OPERATION(int32_t, I32, intRem, RemS)
-        BINARY_OPERATION(uint32_t, I32, intRem, RemU)
-        BINARY_OPERATION(int32_t, I32, intAnd, And)
-        BINARY_OPERATION(int32_t, I32, intOr, Or)
-        BINARY_OPERATION(int32_t, I32, intXor, Xor)
-        BINARY_OPERATION(int32_t, I32, intShl, Shl)
-        BINARY_OPERATION(int32_t, I32, intShr, ShrS)
-        BINARY_OPERATION(uint32_t, I32, intShr, ShrU)
-        BINARY_OPERATION(uint32_t, I32, intRotl, Rotl)
-        BINARY_OPERATION(uint32_t, I32, intRotr, Rotr)
-        BINARY_OPERATION(int32_t, I32, eq, Eq)
-        BINARY_OPERATION(int32_t, I32, ne, Ne)
-        BINARY_OPERATION(int32_t, I32, lt, LtS)
-        BINARY_OPERATION(uint32_t, I32, lt, LtU)
-        BINARY_OPERATION(int32_t, I32, le, LeS)
-        BINARY_OPERATION(uint32_t, I32, le, LeU)
-        BINARY_OPERATION(int32_t, I32, gt, GtS)
-        BINARY_OPERATION(uint32_t, I32, gt, GtU)
-        BINARY_OPERATION(int32_t, I32, ge, GeS)
-        BINARY_OPERATION(uint32_t, I32, ge, GeU)
+        BINARY_OPERATION(int32_t, int32_t, I32, add, Add)
+        BINARY_OPERATION(int32_t, int32_t, I32, sub, Sub)
+        BINARY_OPERATION(int32_t, int32_t, I32, mul, Mul)
+        BINARY_OPERATION(int32_t, int32_t, I32, intDiv, DivS)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, intDiv, DivU)
+        BINARY_OPERATION(int32_t, int32_t, I32, intRem, RemS)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, intRem, RemU)
+        BINARY_OPERATION(int32_t, int32_t, I32, intAnd, And)
+        BINARY_OPERATION(int32_t, int32_t, I32, intOr, Or)
+        BINARY_OPERATION(int32_t, int32_t, I32, intXor, Xor)
+        BINARY_OPERATION(int32_t, int32_t, I32, intShl, Shl)
+        BINARY_OPERATION(int32_t, int32_t, I32, intShr, ShrS)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, intShr, ShrU)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, intRotl, Rotl)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, intRotr, Rotr)
+        BINARY_OPERATION(int32_t, int32_t, I32, eq, Eq)
+        BINARY_OPERATION(int32_t, int32_t, I32, ne, Ne)
+        BINARY_OPERATION(int32_t, int32_t, I32, lt, LtS)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, lt, LtU)
+        BINARY_OPERATION(int32_t, int32_t, I32, le, LeS)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, le, LeU)
+        BINARY_OPERATION(int32_t, int32_t, I32, gt, GtS)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, gt, GtU)
+        BINARY_OPERATION(int32_t, int32_t, I32, ge, GeS)
+        BINARY_OPERATION(uint32_t, uint32_t, I32, ge, GeU)
 
         UNARY_OPERATION(uint32_t, I32, clz, Clz)
         UNARY_OPERATION(uint32_t, I32, ctz, Ctz)
@@ -249,6 +249,28 @@ NextInstruction:
         UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, I32, intExtend, uint32_t, 7, Extend8S)
         UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, I32, intExtend, uint32_t, 15, Extend16S)
         UNARY_OPERATION(uint32_t, I32, intEqz, Eqz)
+
+        BINARY_OPERATION(float, float, F32, add, Add)
+        BINARY_OPERATION(float, float, F32, sub, Sub)
+        BINARY_OPERATION(float, float, F32, mul, Mul)
+        BINARY_OPERATION(float, float, F32, floatDiv, Div)
+        BINARY_OPERATION(float, float, F32, floatMax, Max)
+        BINARY_OPERATION(float, float, F32, floatMin, Min)
+        BINARY_OPERATION(float, float, F32, floatCopysign, Copysign)
+        BINARY_OPERATION(float, int32_t, F32, eq, Eq)
+        BINARY_OPERATION(float, int32_t, F32, ne, Ne)
+        BINARY_OPERATION(float, int32_t, F32, lt, Lt)
+        BINARY_OPERATION(float, int32_t, F32, le, Le)
+        BINARY_OPERATION(float, int32_t, F32, gt, Gt)
+        BINARY_OPERATION(float, int32_t, F32, ge, Ge)
+
+        UNARY_OPERATION(float, F32, floatSqrt, Sqrt)
+        UNARY_OPERATION(float, F32, floatCeil, Ceil)
+        UNARY_OPERATION(float, F32, floatFloor, Floor)
+        UNARY_OPERATION(float, F32, floatTrunc, Trunc)
+        UNARY_OPERATION(float, F32, floatNearest, Nearest)
+        UNARY_OPERATION(float, F32, floatAbs, Abs)
+        UNARY_OPERATION(float, F32, floatNeg, Neg)
 
         DEFINE_OPCODE(Drop)
             :
