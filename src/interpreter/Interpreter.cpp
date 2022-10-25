@@ -306,6 +306,28 @@ NextInstruction:
         UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint64_t, I64, intExtend, uint64_t, 31, Extend32S)
         UNARY_OPERATION(uint64_t, uint32_t, I64, intEqz, Eqz)
 
+        BINARY_OPERATION(double, double, F64, add, Add)
+        BINARY_OPERATION(double, double, F64, sub, Sub)
+        BINARY_OPERATION(double, double, F64, mul, Mul)
+        BINARY_OPERATION(double, double, F64, floatDiv, Div)
+        BINARY_OPERATION(double, double, F64, floatMax, Max)
+        BINARY_OPERATION(double, double, F64, floatMin, Min)
+        BINARY_OPERATION(double, double, F64, floatCopysign, Copysign)
+        BINARY_OPERATION(double, int32_t, F64, eq, Eq)
+        BINARY_OPERATION(double, int32_t, F64, ne, Ne)
+        BINARY_OPERATION(double, int32_t, F64, lt, Lt)
+        BINARY_OPERATION(double, int32_t, F64, le, Le)
+        BINARY_OPERATION(double, int32_t, F64, gt, Gt)
+        BINARY_OPERATION(double, int32_t, F64, ge, Ge)
+
+        UNARY_OPERATION(double, double, F64, floatSqrt, Sqrt)
+        UNARY_OPERATION(double, double, F64, floatCeil, Ceil)
+        UNARY_OPERATION(double, double, F64, floatFloor, Floor)
+        UNARY_OPERATION(double, double, F64, floatTrunc, Trunc)
+        UNARY_OPERATION(double, double, F64, floatNearest, Nearest)
+        UNARY_OPERATION(double, double, F64, floatAbs, Abs)
+        UNARY_OPERATION(double, double, F64, floatNeg, Neg)
+
         DEFINE_OPCODE(Drop)
             :
         {
