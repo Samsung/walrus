@@ -224,6 +224,62 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
     }
 }
 
+static bool isCanonicalNan(float val)
+{
+    uint32_t s;
+    memcpy(&s, &val, sizeof(float));
+    return s == 0x7fc00000U || s == 0xffc00000U;
+}
+
+static bool isCanonicalNan(double val)
+{
+    uint64_t s;
+    memcpy(&s, &val, sizeof(double));
+    return s == 0x7ff8000000000000ULL || s == 0xfff8000000000000ULL;
+}
+
+static bool isArithmeticNan(float val)
+{
+    uint32_t s;
+    memcpy(&s, &val, sizeof(float));
+    return (s & 0x7fc00000U) == 0x7fc00000U;
+}
+
+static bool isArithmeticNan(double val)
+{
+    uint64_t s;
+    memcpy(&s, &val, sizeof(double));
+    return (s & 0x7ff8000000000000ULL) == 0x7ff8000000000000ULL;
+}
+
+static bool equals(Walrus::Value& v, wabt::Const& c)
+{
+    if (c.type() == wabt::Type::I32 && v.type() == Walrus::Value::I32) {
+        return v.asI32() == static_cast<int32_t>(c.u32());
+    } else if (c.type() == wabt::Type::I64 && v.type() == Walrus::Value::I64) {
+        return v.asI64() == static_cast<int64_t>(c.u64());
+    } else if (c.type() == wabt::Type::F32 && v.type() == Walrus::Value::F32) {
+        if (c.is_expected_nan(0)) {
+            if (c.expected_nan() == wabt::ExpectedNan::Arithmetic) {
+                return isArithmeticNan(v.asF32());
+            } else {
+                return isCanonicalNan(v.asF32());
+            }
+        }
+        return c.f32_bits() == v.asF32Bits();
+    } else if (c.type() == wabt::Type::F64 && v.type() == Walrus::Value::F64) {
+        if (c.is_expected_nan(0)) {
+            if (c.expected_nan() == wabt::ExpectedNan::Arithmetic) {
+                return isArithmeticNan(v.asF64());
+            } else {
+                return isCanonicalNan(v.asF64());
+            }
+        }
+        return c.f64_bits() == v.asF64Bits();
+    }
+    return false;
+}
+
 static void printConstVector(wabt::ConstVector& v)
 {
     for (size_t i = 0; i < v.size(); i++) {
@@ -281,7 +337,7 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         RELEASE_ASSERT(data->fn->functionType()->result().size() == data->expectedResult.size());
         // compare result
         for (size_t i = 0; i < result.size(); i++) {
-            RELEASE_ASSERT(result[i] == toWalrusValue(data->expectedResult[i]));
+            RELEASE_ASSERT(equals(result[i], data->expectedResult[i]));
         }
     },
                                &data);
