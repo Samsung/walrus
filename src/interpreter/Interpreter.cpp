@@ -116,6 +116,21 @@ T intRem(T lhs, T rhs)
     }
 }
 
+template <typename R, typename T>
+R doConvert(T val)
+{
+    if (std::is_integral<R>::value && std::is_floating_point<T>::value) {
+        // Don't use std::isnan here because T may be a non-floating-point type.
+        if (UNLIKELY(isNaN(val))) {
+            Trap::throwException(new String("invalid conversion to integer"));
+        }
+    }
+    if (UNLIKELY(!canConvert<R>(val))) {
+        Trap::throwException(new String("integer overflow"));
+    }
+    return convert<R>(val);
+}
+
 void Interpreter::interpret(ExecutionState& state,
                             size_t programCounter,
                             uint8_t* bp,
@@ -155,6 +170,14 @@ void Interpreter::interpret(ExecutionState& state,
         writeValue<nativeReturnTypeName>(sp, operationName<T1, T2>(readValue<nativeParameterTypeName>(sp)));                                            \
         ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                                            \
         NEXT_INSTRUCTION();                                                                                                                             \
+    }
+
+#define UNARY_OPERATION_NOOP(wasmTypeName, byteCodeOperationName) \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)            \
+        :                                                         \
+    {                                                             \
+        ADD_PROGRAM_COUNTER(UnaryOperation);                      \
+        NEXT_INSTRUCTION();                                       \
     }
 
 NextInstruction:
@@ -327,6 +350,45 @@ NextInstruction:
         UNARY_OPERATION(double, double, F64, floatNearest, Nearest)
         UNARY_OPERATION(double, double, F64, floatAbs, Abs)
         UNARY_OPERATION(double, double, F64, floatNeg, Neg)
+
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(int32_t, int64_t, I64, doConvert, int64_t, int32_t, ExtendI32S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, uint64_t, I64, doConvert, uint64_t, uint32_t, ExtendI32U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint32_t, I32, doConvert, uint32_t, uint64_t, WrapI64)
+
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int32_t, I32, doConvert, int32_t, float, TruncF32S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint32_t, I32, doConvert, uint32_t, float, TruncF32U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int32_t, I32, doConvert, int32_t, double, TruncF64S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint32_t, I32, doConvert, uint32_t, double, TruncF64U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int64_t, I64, doConvert, int64_t, float, TruncF32S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint64_t, I64, doConvert, uint64_t, float, TruncF32U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int64_t, I64, doConvert, int64_t, double, TruncF64S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint64_t, I64, doConvert, uint64_t, double, TruncF64U)
+
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(int32_t, float, F32, doConvert, float, int32_t, ConvertI32S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, float, F32, doConvert, float, uint32_t, ConvertI32U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(int64_t, float, F32, doConvert, float, int64_t, ConvertI64S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, float, F32, doConvert, float, uint64_t, ConvertI64U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(int32_t, double, F64, doConvert, double, int32_t, ConvertI32S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, double, F64, doConvert, double, uint32_t, ConvertI32U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(int64_t, double, F64, doConvert, double, int64_t, ConvertI64S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, double, F64, doConvert, double, uint64_t, ConvertI64U)
+
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int32_t, I32, intTruncSat, int32_t, float, TruncSatF32S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint32_t, I32, intTruncSat, uint32_t, float, TruncSatF32U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int32_t, I32, intTruncSat, int32_t, double, TruncSatF64S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint32_t, I32, intTruncSat, uint32_t, double, TruncSatF64U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int64_t, I64, intTruncSat, int64_t, float, TruncSatF32S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint64_t, I64, intTruncSat, uint64_t, float, TruncSatF32U)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int64_t, I64, intTruncSat, int64_t, double, TruncSatF64S)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint64_t, I64, intTruncSat, uint64_t, double, TruncSatF64U)
+
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(float, double, F64, doConvert, double, float, PromoteF32)
+        UNARY_OPERATION_OPERATION_TEMPLATE_2(double, float, F32, doConvert, float, double, DemoteF64)
+
+        UNARY_OPERATION_NOOP(I32, ReinterpretF32)
+        UNARY_OPERATION_NOOP(F32, ReinterpretI32)
+        UNARY_OPERATION_NOOP(I64, ReinterpretF64)
+        UNARY_OPERATION_NOOP(F64, ReinterpretI64)
 
         DEFINE_OPCODE(Drop)
             :

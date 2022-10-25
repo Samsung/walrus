@@ -137,10 +137,22 @@ public:
         return m_f32;
     }
 
+    uint32_t asF32Bits() const
+    {
+        ASSERT(type() == F32);
+        return m_i32;
+    }
+
     double asF64() const
     {
         ASSERT(type() == F64);
         return m_f64;
+    }
+
+    uint64_t asF64Bits() const
+    {
+        ASSERT(type() == F64);
+        return m_i64;
     }
 
     Function* asFunction() const
