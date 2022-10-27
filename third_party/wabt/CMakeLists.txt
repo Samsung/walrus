@@ -392,7 +392,7 @@ endif ()
 if (BUILD_LIBWASM)
   add_library(wasm SHARED ${WABT_LIBRARY_SRC} src/interp/interp-wasm-c-api.cc)
   target_link_libraries(wasm PUBLIC wabt)
-  target_include_directories(wasm PUBLIC third_party/wasm-c-api/include)
+  target_include_directories(wasm PUBLIC wasm-c-api/include)
   if (COMPILER_IS_MSVC)
     target_compile_definitions(wasm PRIVATE "WASM_API_EXTERN=__declspec(dllexport)")
   else ()
@@ -521,8 +521,8 @@ if (BUILD_TOOLS)
   )
 
   if(WITH_WASI)
-    add_subdirectory("third_party/uvwasi" EXCLUDE_FROM_ALL)
-    include_directories(third_party/uvwasi/include)
+    add_subdirectory("uvwasi" EXCLUDE_FROM_ALL)
+    include_directories(uvwasi/include)
     add_definitions(-DWITH_WASI)
     set(INTERP_LIBS uvwasi_a)
     set(EXTRA_INTERP_SRC src/interp/interp-wasi.cc)
@@ -593,22 +593,22 @@ if (BUILD_TESTS)
   find_package(PythonInterp 3.5 REQUIRED)
 
   if (NOT USE_SYSTEM_GTEST)
-    if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/gtest/googletest)
-      message(FATAL_ERROR "Can't find third_party/gtest. Run git submodule update --init, or disable with CMake -DBUILD_TESTS=OFF.")
+    if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gtest/googletest)
+      message(FATAL_ERROR "Can't find gtest. Run git submodule update --init, or disable with CMake -DBUILD_TESTS=OFF.")
     endif ()
 
     include_directories(
-      third_party/gtest/googletest
-      third_party/gtest/googletest/include
+      gtest/googletest
+      gtest/googletest/include
     )
 
     # gtest
     add_library(gtest STATIC
-      third_party/gtest/googletest/src/gtest-all.cc
+      gtest/googletest/src/gtest-all.cc
     )
 
     add_library(gtest_main STATIC
-      third_party/gtest/googletest/src/gtest_main.cc
+      gtest/googletest/src/gtest_main.cc
     )
   endif ()
 
@@ -668,7 +668,7 @@ if (BUILD_TESTS)
 
   function(c_api_example NAME)
     set(EXENAME wasm-c-api-${NAME})
-    add_executable(${EXENAME} third_party/wasm-c-api/example/${NAME}.c)
+    add_executable(${EXENAME} wasm-c-api/example/${NAME}.c)
     if (COMPILER_IS_MSVC)
       set_target_properties(${EXENAME} PROPERTIES COMPILE_FLAGS "-wd4311")
     else ()
@@ -679,8 +679,8 @@ if (BUILD_TESTS)
     add_custom_target(${EXENAME}-copy-to-bin ALL
       COMMAND ${CMAKE_COMMAND} -E make_directory ${WABT_SOURCE_DIR}/bin
       COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${EXENAME}> ${WABT_SOURCE_DIR}/bin/
-      COMMAND ${CMAKE_COMMAND} -E copy ${WABT_SOURCE_DIR}/third_party/wasm-c-api/example/${NAME}.wasm $<TARGET_FILE_DIR:${EXENAME}>/
-      COMMAND ${CMAKE_COMMAND} -E copy ${WABT_SOURCE_DIR}/third_party/wasm-c-api/example/${NAME}.wasm ${WABT_SOURCE_DIR}/bin/
+      COMMAND ${CMAKE_COMMAND} -E copy ${WABT_SOURCE_DIR}/wasm-c-api/example/${NAME}.wasm $<TARGET_FILE_DIR:${EXENAME}>/
+      COMMAND ${CMAKE_COMMAND} -E copy ${WABT_SOURCE_DIR}/wasm-c-api/example/${NAME}.wasm ${WABT_SOURCE_DIR}/bin/
       DEPENDS ${EXENAME}
     )
     add_dependencies(run-c-api-tests ${EXENAME})

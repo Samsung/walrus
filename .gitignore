@@ -1,5 +1,5 @@
-/bin
-/build
+third_party/wabt/bin
+third_party/wabt/build
 /out
 /fuzz-out
 /emscripten
