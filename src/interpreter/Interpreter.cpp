@@ -220,23 +220,43 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
-        DEFINE_OPCODE(LocalGet)
+        DEFINE_OPCODE(LocalGet4)
             :
         {
-            LocalGet* code = (LocalGet*)programCounter;
-            memcpy(sp, &bp[code->offset()], code->size());
-            sp += code->size();
-            ADD_PROGRAM_COUNTER(LocalGet);
+            LocalGet4* code = (LocalGet4*)programCounter;
+            *reinterpret_cast<uint32_t*>(sp) =  *reinterpret_cast<uint32_t*>(&bp[code->offset()]);
+            sp += 4;
+            ADD_PROGRAM_COUNTER(LocalGet4);
             NEXT_INSTRUCTION();
         }
 
-        DEFINE_OPCODE(LocalSet)
+        DEFINE_OPCODE(LocalGet8)
             :
         {
-            LocalSet* code = (LocalSet*)programCounter;
-            sp -= code->size();
-            memcpy(&bp[code->offset()], sp, code->size());
-            ADD_PROGRAM_COUNTER(LocalSet);
+            LocalGet8* code = (LocalGet8*)programCounter;
+            *reinterpret_cast<uint64_t*>(sp) =  *reinterpret_cast<uint64_t*>(&bp[code->offset()]);
+            sp += 8;
+            ADD_PROGRAM_COUNTER(LocalGet8);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(LocalSet4)
+            :
+        {
+            LocalSet4* code = (LocalSet4*)programCounter;
+            sp -= 4;
+            *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(sp);
+            ADD_PROGRAM_COUNTER(LocalSet4);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(LocalSet8)
+            :
+        {
+            LocalSet4* code = (LocalSet4*)programCounter;
+            sp -= 8;
+            *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp);
+            ADD_PROGRAM_COUNTER(LocalSet4);
             NEXT_INSTRUCTION();
         }
 

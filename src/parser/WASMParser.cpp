@@ -269,7 +269,14 @@ public:
     virtual void OnLocalGetExpr(Index localIndex) override
     {
         auto r = resolveLocalOffsetAndSize(localIndex);
-        m_currentFunction->pushByteCode(Walrus::LocalGet(r.first, r.second));
+        if (r.second == 4) {
+            m_currentFunction->pushByteCode(Walrus::LocalGet4(r.first));
+        } else if (r.second == 8) {
+            m_currentFunction->pushByteCode(Walrus::LocalGet8(r.first));
+        } else {
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+
         m_lastStackTreatSize = r.second;
         computeStackSizePerOpcode(r.second, 0);
     }
@@ -277,7 +284,13 @@ public:
     virtual void OnLocalSetExpr(Index localIndex) override
     {
         auto r = resolveLocalOffsetAndSize(localIndex);
-        m_currentFunction->pushByteCode(Walrus::LocalSet(r.first, r.second));
+        if (r.second == 4) {
+            m_currentFunction->pushByteCode(Walrus::LocalSet4(r.first));
+        } else if (r.second == 8) {
+            m_currentFunction->pushByteCode(Walrus::LocalSet8(r.first));
+        } else {
+            RELEASE_ASSERT_NOT_REACHED();
+        }
         m_lastStackTreatSize = r.second;
         computeStackSizePerOpcode(0, r.second);
     }
