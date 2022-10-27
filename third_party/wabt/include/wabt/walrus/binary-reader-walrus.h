@@ -58,8 +58,8 @@ public:
     virtual void OnCallExpr(Index index) = 0;
     virtual void OnI32ConstExpr(uint32_t value) = 0;
     virtual void OnI64ConstExpr(uint64_t value) = 0;
-    virtual void OnF32ConstExpr(float value) = 0;
-    virtual void OnF64ConstExpr(double value) = 0;
+    virtual void OnF32ConstExpr(uint32_t value) = 0;
+    virtual void OnF64ConstExpr(uint64_t value) = 0;
     virtual void OnLocalGetExpr(Index localIndex) = 0;
     virtual void OnLocalSetExpr(Index localIndex) = 0;
     virtual void OnDropExpr() = 0;
@@ -67,6 +67,9 @@ public:
     virtual void OnUnaryExpr(uint32_t opcode) = 0;
     virtual void OnIfExpr(Type sigType) = 0;
     virtual void OnElseExpr() = 0;
+    virtual void OnLoopExpr(Type sigType) = 0;
+    virtual void OnBrExpr(Index depth) = 0;
+    virtual void OnBrIfExpr(Index depth) = 0;
     virtual void OnEndExpr() = 0;
 
     virtual void EndFunctionBody(Index index) = 0;

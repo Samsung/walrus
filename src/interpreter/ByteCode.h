@@ -19,11 +19,29 @@
 
 #include "interpreter/Opcode.h"
 
+#if !defined(NDEBUG)
+#include <cinttypes>
+#endif
+
 namespace Walrus {
 
 class ByteCode {
 public:
     OpcodeKind opcode() const { return m_opcode; }
+#if !defined(NDEBUG)
+    virtual ~ByteCode()
+    {
+    }
+
+    virtual void dump(size_t pos)
+    {
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(ByteCode);
+    }
+#endif
 
 protected:
     ByteCode(OpcodeKind opcode)
@@ -46,6 +64,18 @@ public:
     }
 
     int32_t value() const { return m_value; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("value: %" PRId32, m_value);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(I32Const);
+    }
+#endif
 
 protected:
     int32_t m_value;
@@ -77,6 +107,18 @@ public:
 
     int64_t value() const { return m_value; }
 
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("value: %" PRId64, m_value);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(I64Const);
+    }
+#endif
+
 protected:
     int64_t m_value;
 };
@@ -90,6 +132,18 @@ public:
     }
 
     float value() const { return m_value; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("value: %f", m_value);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(F32Const);
+    }
+#endif
 
 protected:
     float m_value;
@@ -105,6 +159,18 @@ public:
 
     double value() const { return m_value; }
 
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("value: %lf", m_value);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(F64Const);
+    }
+#endif
+
 protected:
     double m_value;
 };
@@ -118,6 +184,18 @@ public:
     }
 
     uint32_t index() const { return m_index; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("index: %" PRId32, m_index);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Call);
+    }
+#endif
 
 protected:
     uint32_t m_index;
@@ -134,6 +212,20 @@ public:
 
     uint32_t offset() const { return m_offset; }
     uint32_t size() const { return m_size; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRId32 " "
+               "size: %" PRId32,
+               m_offset, m_size);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(LocalGet);
+    }
+#endif
 
 protected:
     uint32_t m_offset;
@@ -152,6 +244,20 @@ public:
     uint32_t offset() const { return m_offset; }
     uint32_t size() const { return m_size; }
 
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRId32 " "
+               "size: %" PRId32,
+               m_offset, m_size);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(LocalSet);
+    }
+#endif
+
 protected:
     uint32_t m_offset;
     uint32_t m_size;
@@ -166,6 +272,18 @@ public:
     }
 
     uint32_t size() const { return m_size; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("size: %" PRId32, m_size);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Drop);
+    }
+#endif
 
 protected:
     uint32_t m_size;
@@ -185,6 +303,48 @@ public:
         m_offset = offset;
     }
 
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("dst: %" PRId32, (int32_t)pos + m_offset);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Jump);
+    }
+#endif
+
+protected:
+    int32_t m_offset;
+};
+
+class JumpIfTrue : public ByteCode {
+public:
+    JumpIfTrue(int32_t offset = 0)
+        : ByteCode(OpcodeKind::JumpIfTrueOpcode)
+        , m_offset(offset)
+    {
+    }
+
+    int32_t offset() const { return m_offset; }
+    void setOffset(int32_t offset)
+    {
+        m_offset = offset;
+    }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("dst: %" PRId32, (int32_t)pos + m_offset);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(JumpIfTrue);
+    }
+#endif
+
 protected:
     int32_t m_offset;
 };
@@ -202,6 +362,18 @@ public:
     {
         m_offset = offset;
     }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("dst: %" PRId32, (int32_t)pos + m_offset);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(JumpIfFalse);
+    }
+#endif
 
 protected:
     int32_t m_offset;
