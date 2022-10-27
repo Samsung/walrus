@@ -300,7 +300,6 @@ public:
         return Result::Ok;
     }
     Result OnOpcodeBlockSig(Type sig_type) override {
-        abort();
         return Result::Ok;
     }
     Result OnOpcodeType(Type type) override {
@@ -392,7 +391,7 @@ public:
         return Result::Ok;
     }
     Result OnElseExpr() override {
-        abort();
+        m_externalDelegate->OnElseExpr();
         return Result::Ok;
     }
     Result OnEndExpr() override {
@@ -430,7 +429,7 @@ public:
         return Result::Ok;
     }
     Result OnIfExpr(Type sig_type) override {
-        abort();
+        m_externalDelegate->OnIfExpr(sig_type);
         return Result::Ok;
     }
     Result OnLoadExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {

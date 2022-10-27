@@ -204,6 +204,17 @@ public:
         }
     }
 
+    template <typename CodeType>
+    CodeType* peekByteCode(size_t position)
+    {
+        return reinterpret_cast<CodeType*>(&m_byteCode[position]);
+    }
+
+    size_t currentByteCodeSize() const
+    {
+        return m_byteCode.size();
+    }
+
     uint8_t* byteCode() { return m_byteCode.data(); }
 
 private:
