@@ -201,66 +201,112 @@ protected:
     uint32_t m_index;
 };
 
-class LocalGet : public ByteCode {
+class LocalGet4 : public ByteCode {
 public:
-    LocalGet(uint32_t offset, uint32_t size)
-        : ByteCode(OpcodeKind::LocalGetOpcode)
+    LocalGet4(uint32_t offset)
+        : ByteCode(OpcodeKind::LocalGet4Opcode)
         , m_offset(offset)
-        , m_size(size)
     {
     }
 
     uint32_t offset() const { return m_offset; }
-    uint32_t size() const { return m_size; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("offset: %" PRId32 " "
-               "size: %" PRId32,
-               m_offset, m_size);
+        printf("offset: %" PRId32,
+               m_offset);
     }
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalGet);
+        return sizeof(LocalGet4);
     }
 #endif
 
 protected:
     uint32_t m_offset;
-    uint32_t m_size;
 };
 
-class LocalSet : public ByteCode {
+class LocalGet8 : public ByteCode {
 public:
-    LocalSet(uint32_t offset, uint32_t size)
-        : ByteCode(OpcodeKind::LocalSetOpcode)
+    LocalGet8(uint32_t offset)
+        : ByteCode(OpcodeKind::LocalGet8Opcode)
         , m_offset(offset)
-        , m_size(size)
     {
     }
 
     uint32_t offset() const { return m_offset; }
-    uint32_t size() const { return m_size; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("offset: %" PRId32 " "
-               "size: %" PRId32,
-               m_offset, m_size);
+        printf("offset: %" PRId32,
+               m_offset);
     }
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalSet);
+        return sizeof(LocalGet8);
     }
 #endif
 
 protected:
     uint32_t m_offset;
-    uint32_t m_size;
+};
+
+class LocalSet4 : public ByteCode {
+public:
+    LocalSet4(uint32_t offset)
+        : ByteCode(OpcodeKind::LocalSet4Opcode)
+        , m_offset(offset)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRId32,
+               m_offset);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(LocalSet4);
+    }
+#endif
+
+protected:
+    uint32_t m_offset;
+};
+
+class LocalSet8 : public ByteCode {
+public:
+    LocalSet8(uint32_t offset)
+        : ByteCode(OpcodeKind::LocalSet8Opcode)
+        , m_offset(offset)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRId32,
+               m_offset);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(LocalSet8);
+    }
+#endif
+
+protected:
+    uint32_t m_offset;
 };
 
 class Drop : public ByteCode {

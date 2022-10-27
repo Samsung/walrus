@@ -568,7 +568,11 @@ WABT_OPCODE(I64,  I32,  I64,  I64,  4,  0xfe, 0x4e, I64AtomicRmw32CmpxchgU, "i64
 
 
 /* Walrus interpreter only opcodes */
-WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe7, Jump, "jump", "")
-WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xe8, JumpIfTrue, "jump_if_true", "")
-WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xe9, JumpIfFalse, "jump_if_false", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe7, LocalGet4, "local_get_4", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe8, LocalGet8, "local_get_8", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe9, LocalSet4, "local_set_4", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe0, LocalSet8, "local_set_8", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xea, Jump, "jump", "")
+WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xeb, JumpIfTrue, "jump_if_true", "")
+WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xec, JumpIfFalse, "jump_if_false", "")
 
