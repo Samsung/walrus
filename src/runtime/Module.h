@@ -216,6 +216,9 @@ public:
     }
 
     uint8_t* byteCode() { return m_byteCode.data(); }
+#if !defined(NDEBUG)
+    void dumpByteCode();
+#endif
 
 private:
     Module* m_module;

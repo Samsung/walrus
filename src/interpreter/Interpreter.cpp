@@ -407,14 +407,26 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(JumpIfTrue)
+            :
+        {
+            JumpIfTrue* code = (JumpIfTrue*)programCounter;
+            if (readValue<int32_t>(sp)) {
+                programCounter += code->offset();
+            } else {
+                ADD_PROGRAM_COUNTER(JumpIfTrue);
+            }
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(JumpIfFalse)
             :
         {
             JumpIfFalse* code = (JumpIfFalse*)programCounter;
-            if (!readValue<int32_t>(sp)) {
-                programCounter += code->offset();
+            if (readValue<int32_t>(sp)) {
+                ADD_PROGRAM_COUNTER(JumpIfTrue);
             } else {
-                ADD_PROGRAM_COUNTER(JumpIfFalse);
+                programCounter += code->offset();
             }
             NEXT_INSTRUCTION();
         }

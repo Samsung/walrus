@@ -343,11 +343,11 @@ public:
         return Result::Ok;
     }
     Result OnBrExpr(Index depth) override {
-        abort();
+        m_externalDelegate->OnBrExpr(depth);
         return Result::Ok;
     }
     Result OnBrIfExpr(Index depth) override {
-        abort();
+        m_externalDelegate->OnBrIfExpr(depth);
         return Result::Ok;
     }
     Result OnBrTableExpr(Index num_targets, Index *target_depths, Index default_target_depth) override {
@@ -399,13 +399,11 @@ public:
         return Result::Ok;
     }
     Result OnF32ConstExpr(uint32_t value_bits) override {
-        float* f = reinterpret_cast<float*>(&value_bits);
-        m_externalDelegate->OnF32ConstExpr(*f);
+        m_externalDelegate->OnF32ConstExpr(value_bits);
         return Result::Ok;
     }
     Result OnF64ConstExpr(uint64_t value_bits) override {
-        double* f = reinterpret_cast<double*>(&value_bits);
-        m_externalDelegate->OnF64ConstExpr(*f);
+        m_externalDelegate->OnF64ConstExpr(value_bits);
         return Result::Ok;
     }
     Result OnV128ConstExpr(v128 value_bits) override {
@@ -449,7 +447,7 @@ public:
         return Result::Ok;
     }
     Result OnLoopExpr(Type sig_type) override {
-        abort();
+        m_externalDelegate->OnLoopExpr(sig_type);
         return Result::Ok;
     }
     Result OnMemoryCopyExpr(Index srcmemidx, Index destmemidx) override {

@@ -60,11 +60,35 @@ static Walrus::Value::Type toValueKindForLocalType(Type type)
 
 class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
 public:
+    struct BlockInfo {
+        enum BlockType {
+            IfElse,
+            Loop
+        };
+        BlockType m_blockType;
+        Type m_returnValueType;
+        size_t m_position;
+        union {
+            struct {
+                size_t m_elsePosition;
+            };
+        };
+
+        BlockInfo(BlockType type, Type returnValueType)
+            : m_blockType(type)
+            , m_returnValueType(returnValueType)
+            , m_position(0)
+            , m_elsePosition(0)
+        {
+        }
+    };
+
     WASMBinaryReader(Walrus::Module* module)
         : m_module(module)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
         , m_functionStackSizeSoFar(0)
+        , m_lastStackTreatSize(0)
     {
     }
 
@@ -210,15 +234,17 @@ public:
         m_lastStackTreatSize = Walrus::valueSizeInStack(Walrus::Value::Type::I64);
     }
 
-    virtual void OnF32ConstExpr(float value) override
+    virtual void OnF32ConstExpr(uint32_t value) override
     {
-        m_currentFunction->pushByteCode(Walrus::F32Const(value));
+        float* f = reinterpret_cast<float*>(&value);
+        m_currentFunction->pushByteCode(Walrus::F32Const(*f));
         m_lastStackTreatSize = Walrus::valueSizeInStack(Walrus::Value::Type::F32);
     }
 
-    virtual void OnF64ConstExpr(double value) override
+    virtual void OnF64ConstExpr(uint64_t value) override
     {
-        m_currentFunction->pushByteCode(Walrus::F64Const(value));
+        double* f = reinterpret_cast<double*>(&value);
+        m_currentFunction->pushByteCode(Walrus::F64Const(*f));
         m_lastStackTreatSize = Walrus::valueSizeInStack(Walrus::Value::Type::F64);
     }
 
@@ -245,6 +271,7 @@ public:
         auto r = resolveLocalOffsetAndSize(localIndex);
         m_currentFunction->pushByteCode(Walrus::LocalGet(r.first, r.second));
         m_lastStackTreatSize = r.second;
+        computeStackSizePerOpcode(r.second, 0);
     }
 
     virtual void OnLocalSetExpr(Index localIndex) override
@@ -252,6 +279,7 @@ public:
         auto r = resolveLocalOffsetAndSize(localIndex);
         m_currentFunction->pushByteCode(Walrus::LocalSet(r.first, r.second));
         m_lastStackTreatSize = r.second;
+        computeStackSizePerOpcode(0, r.second);
     }
 
     virtual void OnDropExpr() override
@@ -276,8 +304,7 @@ public:
 
     virtual void OnIfExpr(Type sigType) override
     {
-        BlockInfo b;
-        b.m_type = BlockInfo::IfElse;
+        BlockInfo b(BlockInfo::IfElse, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
         b.m_elsePosition = 0;
         m_blockInfo.push_back(b);
@@ -293,13 +320,81 @@ public:
             ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
     }
 
+    virtual void OnLoopExpr(Type sigType) override
+    {
+        BlockInfo b(BlockInfo::Loop, sigType);
+        b.m_position = m_currentFunction->currentByteCodeSize();
+        m_blockInfo.push_back(b);
+    }
+
+    BlockInfo& findBlockInfoInBr(Index depth)
+    {
+        ASSERT(m_blockInfo.size());
+        auto iter = m_blockInfo.rbegin();
+        while (depth) {
+            iter++;
+            depth--;
+        }
+        return *iter;
+    }
+
+    size_t dropStackValuesBeforeBrIfNeeds(Index depth)
+    {
+        size_t dropValueSize = 0;
+        auto iter = m_blockInfo.rbegin();
+        while (depth) {
+            if (iter->m_returnValueType != Type::Void) {
+                dropValueSize += Walrus::valueSizeInStack(toValueKindForLocalType(iter->m_returnValueType));
+            }
+            iter++;
+            depth--;
+        }
+
+        return dropValueSize;
+    }
+
+    virtual void OnBrExpr(Index depth)
+    {
+        auto& blockInfo = findBlockInfoInBr(depth);
+        auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+        auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
+        if (dropSize) {
+            m_currentFunction->pushByteCode(Walrus::Drop(dropSize));
+        }
+        m_currentFunction->pushByteCode(Walrus::Jump(offset));
+    }
+
+    virtual void OnBrIfExpr(Index depth)
+    {
+        auto& blockInfo = findBlockInfoInBr(depth);
+        auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
+        if (dropSize) {
+            size_t pos = m_currentFunction->currentByteCodeSize();
+            m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
+            m_currentFunction->pushByteCode(Walrus::Drop(dropSize));
+            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+            m_currentFunction->pushByteCode(Walrus::Jump(offset));
+            m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(pos)
+                ->setOffset(m_currentFunction->currentByteCodeSize() - pos);
+        } else {
+            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+            m_currentFunction->pushByteCode(Walrus::JumpIfTrue(offset));
+        }
+    }
+
     virtual void OnEndExpr() override
     {
         if (m_blockInfo.size()) {
             auto blockInfo = m_blockInfo.back();
             m_blockInfo.pop_back();
 
-            if (blockInfo.m_type == BlockInfo::Type::IfElse) {
+            if (blockInfo.m_returnValueType != Type::Void) {
+                m_lastStackTreatSize = Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType));
+            } else {
+                m_lastStackTreatSize = 0;
+            }
+
+            if (blockInfo.m_blockType == BlockInfo::BlockType::IfElse) {
                 if (blockInfo.m_elsePosition) {
                     size_t jumpPos = blockInfo.m_elsePosition - sizeof(Walrus::Jump);
                     m_currentFunction->peekByteCode<Walrus::Jump>(jumpPos)->setOffset(
@@ -316,6 +411,12 @@ public:
 
     void EndFunctionBody(Index index) override
     {
+#if !defined(NDEBUG)
+        if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
+            m_currentFunction->dumpByteCode();
+        }
+#endif
+
         ASSERT(m_currentFunction == m_module->function(index));
         m_currentFunction = nullptr;
         m_currentFunctionType = nullptr;
@@ -326,23 +427,6 @@ public:
     Walrus::FunctionType* m_currentFunctionType;
     uint32_t m_functionStackSizeSoFar;
     uint32_t m_lastStackTreatSize;
-    struct BlockInfo {
-        enum Type {
-            IfElse
-        };
-        Type m_type;
-        size_t m_position;
-        union {
-            struct {
-                size_t m_elsePosition;
-            };
-        };
-
-        BlockInfo()
-        {
-            memset(this, 0, sizeof(BlockInfo));
-        }
-    };
     std::vector<BlockInfo> m_blockInfo;
 };
 

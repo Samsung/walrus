@@ -20,6 +20,7 @@
 #include "runtime/Instance.h"
 #include "runtime/Store.h"
 #include "runtime/Trap.h"
+#include "interpreter/ByteCode.h"
 
 namespace Walrus {
 
@@ -69,5 +70,23 @@ Instance* Module::instantiate(const ValueVector& imports)
 
     return instance;
 }
+
+#if !defined(NDEBUG)
+void ModuleFunction::dumpByteCode()
+{
+    printf("module %p, function index %u, function type index %u\n", m_module, m_functionIndex, m_functionTypeIndex);
+    printf("requiredStackSize %u, requiredStackSizeDueToLocal %u\n", m_requiredStackSize, m_requiredStackSizeDueToLocal);
+
+    size_t idx = 0;
+    while (idx < m_byteCode.size()) {
+        ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
+        printf("%zu: ", idx);
+        printf("%s ", g_byteCodeInfo[code->opcode()].m_name);
+        code->dump(idx);
+        printf("\n");
+        idx += code->byteCodeSize();
+    }
+}
+#endif
 
 } // namespace Walrus
