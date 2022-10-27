@@ -27,7 +27,7 @@ ByteCodeInfo g_byteCodeInfo[OpcodeKind::InvalidOpcode] = {
       ByteCodeInfo::rtype,                                                   \
       { ByteCodeInfo::type1, ByteCodeInfo::type2, ByteCodeInfo::type3 },     \
       text },
-#include "wabt/opcode.def"
+#include "interpreter/opcode.def"
 #undef WABT_OPCODE
 };
 

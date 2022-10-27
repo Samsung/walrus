@@ -399,6 +399,26 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(Jump)
+            :
+        {
+            Jump* code = (Jump*)programCounter;
+            programCounter += code->offset();
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(JumpIfFalse)
+            :
+        {
+            JumpIfFalse* code = (JumpIfFalse*)programCounter;
+            if (!readValue<int32_t>(sp)) {
+                programCounter += code->offset();
+            } else {
+                ADD_PROGRAM_COUNTER(JumpIfFalse);
+            }
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(Call)
             :
         {

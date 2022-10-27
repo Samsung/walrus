@@ -171,6 +171,42 @@ protected:
     uint32_t m_size;
 };
 
+class Jump : public ByteCode {
+public:
+    Jump(int32_t offset = 0)
+        : ByteCode(OpcodeKind::JumpOpcode)
+        , m_offset(offset)
+    {
+    }
+
+    int32_t offset() const { return m_offset; }
+    void setOffset(int32_t offset)
+    {
+        m_offset = offset;
+    }
+
+protected:
+    int32_t m_offset;
+};
+
+class JumpIfFalse : public ByteCode {
+public:
+    JumpIfFalse(int32_t offset = 0)
+        : ByteCode(OpcodeKind::JumpIfFalseOpcode)
+        , m_offset(offset)
+    {
+    }
+
+    int32_t offset() const { return m_offset; }
+    void setOffset(int32_t offset)
+    {
+        m_offset = offset;
+    }
+
+protected:
+    int32_t m_offset;
+};
+
 class End : public ByteCode {
 public:
     End()

@@ -25,7 +25,7 @@ enum OpcodeKind : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
                     text, decomp)                                            \
     name##Opcode,
-#include "wabt/opcode.def"
+#include "interpreter/opcode.def"
 #undef WABT_OPCODE
     InvalidOpcode,
 };

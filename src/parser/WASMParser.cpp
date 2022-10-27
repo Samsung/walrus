@@ -274,9 +274,44 @@ public:
         m_lastStackTreatSize = Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType);
     }
 
+    virtual void OnIfExpr(Type sigType) override
+    {
+        BlockInfo b;
+        b.m_type = BlockInfo::IfElse;
+        b.m_position = m_currentFunction->currentByteCodeSize();
+        b.m_elsePosition = 0;
+        m_blockInfo.push_back(b);
+        m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
+    }
+
+    virtual void OnElseExpr() override
+    {
+        m_currentFunction->pushByteCode(Walrus::Jump());
+        BlockInfo& blockInfo = m_blockInfo.back();
+        blockInfo.m_elsePosition = m_currentFunction->currentByteCodeSize();
+        m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
+            ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
+    }
+
     virtual void OnEndExpr() override
     {
-        m_currentFunction->pushByteCode(Walrus::End());
+        if (m_blockInfo.size()) {
+            auto blockInfo = m_blockInfo.back();
+            m_blockInfo.pop_back();
+
+            if (blockInfo.m_type == BlockInfo::Type::IfElse) {
+                if (blockInfo.m_elsePosition) {
+                    size_t jumpPos = blockInfo.m_elsePosition - sizeof(Walrus::Jump);
+                    m_currentFunction->peekByteCode<Walrus::Jump>(jumpPos)->setOffset(
+                        m_currentFunction->currentByteCodeSize() - jumpPos);
+                } else {
+                    m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
+                        ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
+                }
+            }
+        } else {
+            m_currentFunction->pushByteCode(Walrus::End());
+        }
     }
 
     void EndFunctionBody(Index index) override
@@ -291,6 +326,24 @@ public:
     Walrus::FunctionType* m_currentFunctionType;
     uint32_t m_functionStackSizeSoFar;
     uint32_t m_lastStackTreatSize;
+    struct BlockInfo {
+        enum Type {
+            IfElse
+        };
+        Type m_type;
+        size_t m_position;
+        union {
+            struct {
+                size_t m_elsePosition;
+            };
+        };
+
+        BlockInfo()
+        {
+            memset(this, 0, sizeof(BlockInfo));
+        }
+    };
+    std::vector<BlockInfo> m_blockInfo;
 };
 
 } // namespace wabt
