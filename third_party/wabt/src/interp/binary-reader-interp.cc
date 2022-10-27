@@ -583,7 +583,8 @@ Result BinaryReaderInterp::OnFunction(Index index, Index sig_index) {
   CHECK_RESULT(
       validator_.OnFunction(GetLocation(), Var(sig_index, GetLocation())));
   FuncType& func_type = module_.func_types[sig_index];
-  module_.funcs.push_back(FuncDesc{func_type, {}, Istream::kInvalidOffset, {}});
+  module_.funcs.push_back(
+      FuncDesc{func_type, {}, Istream::kInvalidOffset, {}, {}});
   func_types_.push_back(func_type);
   return Result::Ok;
 }
@@ -624,7 +625,7 @@ Result BinaryReaderInterp::OnGlobalCount(Index count) {
 Result BinaryReaderInterp::BeginGlobal(Index index, Type type, bool mutable_) {
   CHECK_RESULT(validator_.OnGlobal(GetLocation(), type, mutable_));
   GlobalType global_type{type, ToMutability(mutable_)};
-  FuncDesc init_func{FuncType{{}, {type}}, {}, Istream::kInvalidOffset, {}};
+  FuncDesc init_func{FuncType{{}, {type}}, {}, Istream::kInvalidOffset, {}, {}};
   module_.globals.push_back(GlobalDesc{global_type, init_func});
   global_types_.push_back(global_type);
   return Result::Ok;
@@ -711,7 +712,7 @@ Result BinaryReaderInterp::BeginElemSegment(Index index,
                                         Var(table_index, GetLocation()), mode));
 
   FuncDesc init_func{
-      FuncType{{}, {ValueType::I32}}, {}, Istream::kInvalidOffset, {}};
+      FuncType{{}, {ValueType::I32}}, {}, Istream::kInvalidOffset, {}, {}};
   ElemDesc desc{{}, ValueType::Void, mode, table_index, init_func};
   module_.elems.push_back(desc);
   return Result::Ok;
@@ -781,7 +782,7 @@ Result BinaryReaderInterp::BeginDataSegment(Index index,
       GetLocation(), Var(memory_index, GetLocation()), mode));
 
   FuncDesc init_func{
-      FuncType{{}, {ValueType::I32}}, {}, Istream::kInvalidOffset, {}};
+      FuncType{{}, {ValueType::I32}}, {}, Istream::kInvalidOffset, {}, {}};
   DataDesc desc{{}, mode, memory_index, init_func};
   module_.datas.push_back(desc);
   return Result::Ok;
