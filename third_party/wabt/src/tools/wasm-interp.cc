@@ -29,6 +29,7 @@
 #include "wabt/interp/interp-util.h"
 #include "wabt/interp/interp-wasi.h"
 #include "wabt/interp/interp.h"
+#include "wabt/interp/jit/binary-reader-jit.h"
 #include "wabt/option-parser.h"
 #include "wabt/stream.h"
 
@@ -44,6 +45,8 @@ static const char* s_infile;
 static Thread::Options s_thread_options;
 static Stream* s_trace_stream;
 static bool s_run_all_exports;
+static bool s_jit;
+static int s_jit_verbose;
 static bool s_host_print;
 static bool s_dummy_import_func;
 static Features s_features;
@@ -114,6 +117,13 @@ static void ParseOptions(int argc, char** argv) {
       "run-all-exports",
       "Run all the exported functions, in order. Useful for testing",
       []() { s_run_all_exports = true; });
+  parser.AddOption("jit", "Enable just-in-time compilation support",
+                   []() { s_jit = true; });
+  parser.AddOption("jit-verbose", "Enable verbose of just-in-time compilation",
+                   []() { s_jit_verbose = 1; });
+  parser.AddOption("jit-verbose-color",
+                   "Enable coloring the verbose of just-in-time compilation",
+                   []() { s_jit_verbose = 2; });
   parser.AddOption("host-print",
                    "Include an importable function named \"host.print\" for "
                    "printing to stdout",
@@ -204,9 +214,15 @@ static Result ReadModule(const char* module_filename,
   const bool kFailOnCustomSectionError = true;
   ReadBinaryOptions options(s_features, s_log_stream.get(), kReadDebugNames,
                             kStopOnFirstError, kFailOnCustomSectionError);
-  CHECK_RESULT(ReadBinaryInterp(module_filename, file_data.data(),
-                                file_data.size(), options, errors,
-                                &module_desc));
+  if (s_jit) {
+    CHECK_RESULT(ReadBinaryJIT(module_filename, file_data.data(),
+                               file_data.size(), options, errors, &module_desc,
+                               s_jit_verbose));
+  } else {
+    CHECK_RESULT(ReadBinaryInterp(module_filename, file_data.data(),
+                                  file_data.size(), options, errors,
+                                  &module_desc));
+  }
 
   if (s_verbose) {
     module_desc.istream.Disassemble(stream);

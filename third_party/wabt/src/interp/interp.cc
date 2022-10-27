@@ -419,6 +419,10 @@ Result DefinedFunc::DoCall(Thread& thread,
                            Values& results,
                            Trap::Ptr* out_trap) {
   assert(params.size() == type_.params.size());
+  if (desc().jit_func.isCompiled()) {
+    desc().jit_func.call();
+    return Result::Ok;
+  }
   thread.PushValues(type_.params, params);
   RunResult result = thread.PushCall(*this, out_trap);
   if (result == RunResult::Trap) {

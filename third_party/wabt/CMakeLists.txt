@@ -275,6 +275,12 @@ set(WABT_LIBRARY_CC
   src/interp/interp.cc
   src/interp/interp-util.cc
   src/interp/istream.cc
+  src/interp/jit/binary-reader-jit.cc
+  src/interp/jit/jit-analysis.cc
+  src/interp/jit/jit-backend.cc
+  src/interp/jit/jit-inst-elimination.cc
+  src/interp/jit/jit-inst-list.cc
+  src/interp/jit/jit.cc
 )
 
 set(WABT_LIBRARY_H
@@ -329,6 +335,10 @@ set(WABT_LIBRARY_H
   include/wabt/interp/interp-util.h
   include/wabt/interp/interp.h
   include/wabt/interp/istream.h
+  include/wabt/interp/jit/binary-reader-jit.h
+  include/wabt/interp/jit/jit-backend.h
+  include/wabt/interp/jit/jit-compiler.h
+  include/wabt/interp/jit/jit.h
 )
 
 set(WABT_LIBRARY_SRC ${WABT_LIBRARY_CC} ${WABT_LIBRARY_H})
