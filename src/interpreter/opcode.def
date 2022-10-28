@@ -566,13 +566,13 @@ WABT_OPCODE(I64,  I32,  I64,  I64,  1,  0xfe, 0x4c, I64AtomicRmw8CmpxchgU, "i64.
 WABT_OPCODE(I64,  I32,  I64,  I64,  2,  0xfe, 0x4d, I64AtomicRmw16CmpxchgU, "i64.atomic.rmw16.cmpxchg_u", "")
 WABT_OPCODE(I64,  I32,  I64,  I64,  4,  0xfe, 0x4e, I64AtomicRmw32CmpxchgU, "i64.atomic.rmw32.cmpxchg_u", "")
 
-
 /* Walrus interpreter only opcodes */
 WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe7, LocalGet4, "local_get_4", "")
 WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe8, LocalGet8, "local_get_8", "")
 WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe9, LocalSet4, "local_set_4", "")
 WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xe0, LocalSet8, "local_set_8", "")
-WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xea, Jump, "jump", "")
-WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xeb, JumpIfTrue, "jump_if_true", "")
-WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xec, JumpIfFalse, "jump_if_false", "")
-
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xea, LocalTee4, "local_tee_4", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xeb, LocalTee8, "local_tee_8", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xec, Jump, "jump", "")
+WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xed, JumpIfTrue, "jump_if_true", "")
+WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xee, JumpIfFalse, "jump_if_false", "")

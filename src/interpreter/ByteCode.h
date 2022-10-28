@@ -309,6 +309,60 @@ protected:
     uint32_t m_offset;
 };
 
+class LocalTee4 : public ByteCode {
+public:
+    LocalTee4(uint32_t offset)
+        : ByteCode(OpcodeKind::LocalTee4Opcode)
+        , m_offset(offset)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRId32,
+               m_offset);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(LocalTee4);
+    }
+#endif
+
+protected:
+    uint32_t m_offset;
+};
+
+class LocalTee8 : public ByteCode {
+public:
+    LocalTee8(uint32_t offset)
+        : ByteCode(OpcodeKind::LocalTee8Opcode)
+        , m_offset(offset)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRId32,
+               m_offset);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(LocalTee8);
+    }
+#endif
+
+protected:
+    uint32_t m_offset;
+};
+
 class Drop : public ByteCode {
 public:
     Drop(uint32_t size)

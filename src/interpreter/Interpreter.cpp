@@ -224,7 +224,7 @@ NextInstruction:
             :
         {
             LocalGet4* code = (LocalGet4*)programCounter;
-            *reinterpret_cast<uint32_t*>(sp) =  *reinterpret_cast<uint32_t*>(&bp[code->offset()]);
+            *reinterpret_cast<uint32_t*>(sp) = *reinterpret_cast<uint32_t*>(&bp[code->offset()]);
             sp += 4;
             ADD_PROGRAM_COUNTER(LocalGet4);
             NEXT_INSTRUCTION();
@@ -234,7 +234,7 @@ NextInstruction:
             :
         {
             LocalGet8* code = (LocalGet8*)programCounter;
-            *reinterpret_cast<uint64_t*>(sp) =  *reinterpret_cast<uint64_t*>(&bp[code->offset()]);
+            *reinterpret_cast<uint64_t*>(sp) = *reinterpret_cast<uint64_t*>(&bp[code->offset()]);
             sp += 8;
             ADD_PROGRAM_COUNTER(LocalGet8);
             NEXT_INSTRUCTION();
@@ -256,7 +256,25 @@ NextInstruction:
             LocalSet4* code = (LocalSet4*)programCounter;
             sp -= 8;
             *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp);
-            ADD_PROGRAM_COUNTER(LocalSet4);
+            ADD_PROGRAM_COUNTER(LocalSet8);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(LocalTee4)
+            :
+        {
+            LocalSet4* code = (LocalSet4*)programCounter;
+            *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(sp);
+            ADD_PROGRAM_COUNTER(LocalTee4);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(LocalTee8)
+            :
+        {
+            LocalSet4* code = (LocalSet4*)programCounter;
+            *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp);
+            ADD_PROGRAM_COUNTER(LocalTee8);
             NEXT_INSTRUCTION();
         }
 

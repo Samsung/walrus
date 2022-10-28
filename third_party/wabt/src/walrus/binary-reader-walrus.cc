@@ -443,7 +443,7 @@ public:
         return Result::Ok;
     }
     Result OnLocalTeeExpr(Index local_index) override {
-        abort();
+        m_externalDelegate->OnLocalTeeExpr(local_index);
         return Result::Ok;
     }
     Result OnLoopExpr(Type sig_type) override {
