@@ -62,6 +62,7 @@ public:
     virtual void OnF64ConstExpr(uint64_t value) = 0;
     virtual void OnLocalGetExpr(Index localIndex) = 0;
     virtual void OnLocalSetExpr(Index localIndex) = 0;
+    virtual void OnLocalTeeExpr(Index localIndex) = 0;
     virtual void OnDropExpr() = 0;
     virtual void OnBinaryExpr(uint32_t opcode) = 0;
     virtual void OnUnaryExpr(uint32_t opcode) = 0;

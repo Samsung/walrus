@@ -7,6 +7,15 @@
       (local.get 1)
       (i32.add)
   )
+
+  (func $local_test (export "local_test2")(param i32)(result i32)
+      (local i32)
+      (i32.const 444)
+      (local.tee 1)
+      (local.get 0)
+      (i32.add)
+  )
 )
 
 (assert_return (invoke "local_test" (i32.const 222)) (i32.const 666))
+(assert_return (invoke "local_test2" (i32.const 222)) (i32.const 666))
