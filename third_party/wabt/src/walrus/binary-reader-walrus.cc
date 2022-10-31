@@ -519,7 +519,6 @@ public:
         return Result::Ok;
     }
     Result OnNopExpr() override {
-        abort();
         return Result::Ok;
     }
     Result OnRethrowExpr(Index depth) override {
