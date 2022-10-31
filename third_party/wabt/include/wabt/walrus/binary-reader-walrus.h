@@ -72,6 +72,7 @@ public:
     virtual void OnBlockExpr(Type sigType) = 0;
     virtual void OnBrExpr(Index depth) = 0;
     virtual void OnBrIfExpr(Index depth) = 0;
+    virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
 
     virtual void EndFunctionBody(Index index) = 0;

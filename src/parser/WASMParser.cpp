@@ -447,6 +447,10 @@ public:
         popVMStack();
     }
 
+    virtual void OnNopExpr() override
+    {
+    }
+
     virtual void OnEndExpr() override
     {
         if (m_blockInfo.size()) {
