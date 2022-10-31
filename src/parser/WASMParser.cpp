@@ -153,6 +153,17 @@ public:
         m_module->m_export.pushBack(new Walrus::ModuleExport(static_cast<Walrus::ModuleExport::Type>(kind), new Walrus::String(name), exportIndex, itemIndex));
     }
 
+    virtual void OnMemoryCount(Index count)
+    {
+        m_module->m_memory.reserve(count);
+    }
+
+    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize)
+    {
+        ASSERT(index == m_module->m_memory.size());
+        m_module->m_memory.pushBack(std::make_pair(initialSize, maximumSize));
+    }
+
     virtual void OnFunctionCount(Index count) override
     {
         m_module->m_function.reserve(count);
@@ -460,6 +471,20 @@ public:
 
         m_currentFunction->pushByteCode(Walrus::Select(size));
         pushVMStack(size);
+    }
+
+    virtual void OnMemoryGrowExpr(Index memidx) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        m_currentFunction->pushByteCode(Walrus::MemoryGrow(memidx));
+        pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
+    }
+
+    virtual void OnMemorySizeExpr(Index memidx) override
+    {
+        m_currentFunction->pushByteCode(Walrus::MemorySize(memidx));
+        pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
     }
 
     virtual void OnNopExpr() override

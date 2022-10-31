@@ -505,6 +505,44 @@ protected:
     uint32_t m_size;
 };
 
+class MemorySize : public ByteCode {
+public:
+    MemorySize(uint32_t index)
+        : ByteCode(OpcodeKind::MemorySizeOpcode)
+    {
+        ASSERT(index == 0);
+    }
+
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(MemorySize);
+    }
+#endif
+
+protected:
+};
+
+class MemoryGrow : public ByteCode {
+public:
+    MemoryGrow(uint32_t index)
+        : ByteCode(OpcodeKind::MemoryGrowOpcode)
+    {
+        ASSERT(index == 0);
+    }
+
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(MemoryGrow);
+    }
+#endif
+
+protected:
+};
+
 class End : public ByteCode {
 public:
     End()
