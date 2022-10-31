@@ -69,6 +69,7 @@ public:
     virtual void OnIfExpr(Type sigType) = 0;
     virtual void OnElseExpr() = 0;
     virtual void OnLoopExpr(Type sigType) = 0;
+    virtual void OnBlockExpr(Type sigType) = 0;
     virtual void OnBrExpr(Index depth) = 0;
     virtual void OnBrIfExpr(Index depth) = 0;
     virtual void OnEndExpr() = 0;

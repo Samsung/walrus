@@ -339,7 +339,7 @@ public:
         return Result::Ok;
     }
     Result OnBlockExpr(Type sig_type) override {
-        abort();
+        m_externalDelegate->OnBlockExpr(sig_type);
         return Result::Ok;
     }
     Result OnBrExpr(Index depth) override {
