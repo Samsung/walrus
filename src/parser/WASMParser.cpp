@@ -63,22 +63,25 @@ public:
     struct BlockInfo {
         enum BlockType {
             IfElse,
-            Loop
+            Loop,
+            Block
         };
         BlockType m_blockType;
         Type m_returnValueType;
         size_t m_position;
-        union {
-            struct {
-                size_t m_elsePosition;
-            };
+
+        static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
+        struct JumpToEndBrInfo {
+            bool m_isJumpIf;
+            size_t m_position;
         };
+
+        std::vector<JumpToEndBrInfo> m_jumpToEndBrInfo;
 
         BlockInfo(BlockType type, Type returnValueType)
             : m_blockType(type)
             , m_returnValueType(returnValueType)
             , m_position(0)
-            , m_elsePosition(0)
         {
         }
     };
@@ -328,7 +331,7 @@ public:
     {
         BlockInfo b(BlockInfo::IfElse, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
-        b.m_elsePosition = 0;
+        b.m_jumpToEndBrInfo.push_back({ true, b.m_position });
         m_blockInfo.push_back(b);
         m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
 
@@ -342,14 +345,15 @@ public:
 
     virtual void OnElseExpr() override
     {
-        m_currentFunction->pushByteCode(Walrus::Jump());
         BlockInfo& blockInfo = m_blockInfo.back();
+        blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
+        blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+        m_currentFunction->pushByteCode(Walrus::Jump());
         ASSERT(blockInfo.m_blockType == BlockInfo::IfElse);
         if (blockInfo.m_returnValueType != Type::Void) {
             ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
             popVMStack();
         }
-        blockInfo.m_elsePosition = m_currentFunction->currentByteCodeSize();
         m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
             ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
     }
@@ -357,6 +361,17 @@ public:
     virtual void OnLoopExpr(Type sigType) override
     {
         BlockInfo b(BlockInfo::Loop, sigType);
+        b.m_position = m_currentFunction->currentByteCodeSize();
+        m_blockInfo.push_back(b);
+
+        if (sigType != Type::Void) {
+            pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(sigType)));
+        }
+    }
+
+    virtual void OnBlockExpr(Type sigType) override
+    {
+        BlockInfo b(BlockInfo::Block, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
         m_blockInfo.push_back(b);
 
@@ -399,6 +414,9 @@ public:
         if (dropSize) {
             m_currentFunction->pushByteCode(Walrus::Drop(dropSize));
         }
+        if (blockInfo.m_blockType == BlockInfo::Block) {
+            blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+        }
         m_currentFunction->pushByteCode(Walrus::Jump(offset));
     }
 
@@ -411,11 +429,17 @@ public:
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
             m_currentFunction->pushByteCode(Walrus::Drop(dropSize));
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+            if (blockInfo.m_blockType == BlockInfo::Block) {
+                blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+            }
             m_currentFunction->pushByteCode(Walrus::Jump(offset));
             m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(pos)
                 ->setOffset(m_currentFunction->currentByteCodeSize() - pos);
         } else {
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+            if (blockInfo.m_blockType == BlockInfo::Block) {
+                blockInfo.m_jumpToEndBrInfo.push_back({ true, m_currentFunction->currentByteCodeSize() });
+            }
             m_currentFunction->pushByteCode(Walrus::JumpIfTrue(offset));
         }
 
@@ -434,16 +458,15 @@ public:
                 popVMStack();
             }
 
-            if (blockInfo.m_blockType == BlockInfo::BlockType::IfElse) {
-                if (blockInfo.m_elsePosition) {
-                    size_t jumpPos = blockInfo.m_elsePosition - sizeof(Walrus::Jump);
-                    m_currentFunction->peekByteCode<Walrus::Jump>(jumpPos)->setOffset(
-                        m_currentFunction->currentByteCodeSize() - jumpPos);
+            for (size_t i = 0; i < blockInfo.m_jumpToEndBrInfo.size(); i++) {
+                if (blockInfo.m_jumpToEndBrInfo[i].m_isJumpIf) {
+                    m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_jumpToEndBrInfo[i].m_position)
+                        ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
                 } else {
-                    m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
-                        ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
+                    m_currentFunction->peekByteCode<Walrus::Jump>(blockInfo.m_jumpToEndBrInfo[i].m_position)->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
                 }
             }
+
         } else {
             m_currentFunction->pushByteCode(Walrus::End());
         }
