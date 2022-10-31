@@ -1,0 +1,47 @@
+name: Actions
+
+on:
+  push:
+    branches: [ interp ]
+  pull_request:
+    branches: [ interp ]
+
+jobs:
+  check_tidy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '2.7'
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y clang-format-6.0
+    - name: Test
+      run: tools/check_tidy.py
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Build x86
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        cmake -H. -Bout/x86 $BUILD_OPTIONS
+        ninja -Cout/x86
+    - name: Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        cmake -H. -Bout/x64 $BUILD_OPTIONS
+        ninja -Cout/x64
