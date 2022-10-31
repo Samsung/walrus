@@ -479,6 +479,32 @@ protected:
     int32_t m_offset;
 };
 
+class Select : public ByteCode {
+public:
+    Select(uint32_t size)
+        : ByteCode(OpcodeKind::SelectOpcode)
+        , m_size(size)
+    {
+    }
+
+    uint32_t size() const { return m_size; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("size: %" PRIu32, m_size);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Select);
+    }
+#endif
+
+protected:
+    uint32_t m_size;
+};
+
 class End : public ByteCode {
 public:
     End()

@@ -278,6 +278,33 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(Select)
+            :
+        {
+            Select* code = (Select*)programCounter;
+            auto cond = readValue<int32_t>(sp);
+            if (code->size() == 4) {
+                uint32_t falseValue = readValue<int32_t>(sp);
+                uint32_t trueValue = readValue<int32_t>(sp);
+                if (cond) {
+                    writeValue(sp, trueValue);
+                } else {
+                    writeValue(sp, falseValue);
+                }
+            } else {
+                ASSERT(code->size() == 8);
+                uint64_t falseValue = readValue<int64_t>(sp);
+                uint64_t trueValue = readValue<int64_t>(sp);
+                if (cond) {
+                    writeValue(sp, trueValue);
+                } else {
+                    writeValue(sp, falseValue);
+                }
+            }
+            ADD_PROGRAM_COUNTER(Select);
+            NEXT_INSTRUCTION();
+        }
+
         BINARY_OPERATION(int32_t, int32_t, I32, add, Add)
         BINARY_OPERATION(int32_t, int32_t, I32, sub, Sub)
         BINARY_OPERATION(int32_t, int32_t, I32, mul, Mul)
