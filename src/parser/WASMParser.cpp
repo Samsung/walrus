@@ -447,6 +447,21 @@ public:
         popVMStack();
     }
 
+    virtual void OnSelectExpr(Index resultCount, Type* resultTypes)
+    {
+        // TODO implement selectT
+        ASSERT(resultCount == 0);
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
+        ASSERT(m_vmStack.back() == *(m_vmStack.rbegin() + 1));
+        size_t size = popVMStack();
+        popVMStack();
+
+        m_currentFunction->pushByteCode(Walrus::Select(size));
+        pushVMStack(size);
+    }
+
     virtual void OnNopExpr() override
     {
     }
