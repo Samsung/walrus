@@ -264,7 +264,7 @@ NextInstruction:
             :
         {
             LocalSet4* code = (LocalSet4*)programCounter;
-            *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(sp);
+            *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(sp - 4);
             ADD_PROGRAM_COUNTER(LocalTee4);
             NEXT_INSTRUCTION();
         }
@@ -273,7 +273,7 @@ NextInstruction:
             :
         {
             LocalSet4* code = (LocalSet4*)programCounter;
-            *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp);
+            *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp - 8);
             ADD_PROGRAM_COUNTER(LocalTee8);
             NEXT_INSTRUCTION();
         }
@@ -501,6 +501,28 @@ NextInstruction:
         {
             callOperation(state, programCounter, bp, sp);
             ADD_PROGRAM_COUNTER(Call);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(MemorySize)
+            :
+        {
+            writeValue<int32_t>(sp, state.currentFunction()->asDefinedFunction()->instance()->memory(0)->sizeInPageSize());
+            ADD_PROGRAM_COUNTER(MemorySize);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(MemoryGrow)
+            :
+        {
+            Memory* m = state.currentFunction()->asDefinedFunction()->instance()->memory(0);
+            auto oldSize = m->sizeInPageSize();
+            if (m->grow(readValue<int32_t>(sp) * Memory::s_memoryPageSize)) {
+                writeValue<int32_t>(sp, oldSize);
+            } else {
+                writeValue<int32_t>(sp, -1);
+            }
+            ADD_PROGRAM_COUNTER(MemoryGrow);
             NEXT_INSTRUCTION();
         }
 

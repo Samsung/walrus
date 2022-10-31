@@ -287,6 +287,9 @@ private:
         m_functionType;
     Vector<ModuleFunction*, GCUtil::gc_malloc_allocator<ModuleFunction*>>
         m_function;
+    /* initialSize, maximumSize */
+    Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
+        m_memory;
 };
 
 } // namespace Walrus

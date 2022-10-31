@@ -157,19 +157,17 @@ public:
 
     /* Memory section */
     Result BeginMemorySection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnMemoryCount(Index count) override {
-        abort();
+        m_externalDelegate->OnMemoryCount(count);
         return Result::Ok;
     }
     Result OnMemory(Index index, const Limits *limits) override {
-        abort();
+        m_externalDelegate->OnMemory(index, limits->initial, limits->has_max ? limits->max : (std::numeric_limits<size_t>::max() / (1024 * 64)));
         return Result::Ok;
     }
     Result EndMemorySection() override {
-        abort();
         return Result::Ok;
     }
 
@@ -463,7 +461,7 @@ public:
         return Result::Ok;
     }
     Result OnMemoryGrowExpr(Index memidx) override {
-        abort();
+        m_externalDelegate->OnMemoryGrowExpr(memidx);
         return Result::Ok;
     }
     Result OnMemoryInitExpr(Index segment_index, Index memidx) override {
@@ -471,7 +469,7 @@ public:
         return Result::Ok;
     }
     Result OnMemorySizeExpr(Index memidx) override {
-        abort();
+        m_externalDelegate->OnMemorySizeExpr(memidx);
         return Result::Ok;
     }
     Result OnTableCopyExpr(Index dst_index, Index src_index) override {
@@ -538,7 +536,7 @@ public:
         return Result::Ok;
     }
     Result OnSelectExpr(Index result_count, Type *result_types) override {
-        abort();
+        m_externalDelegate->OnSelectExpr(result_count, result_types);
         return Result::Ok;
     }
     Result OnStoreExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
