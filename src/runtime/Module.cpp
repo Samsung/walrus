@@ -20,6 +20,7 @@
 #include "runtime/Instance.h"
 #include "runtime/Store.h"
 #include "runtime/Trap.h"
+#include "runtime/Memory.h"
 #include "interpreter/ByteCode.h"
 
 namespace Walrus {
@@ -51,6 +52,11 @@ Instance* Module::instantiate(const ValueVector& imports)
             // TODO if there is no function at function(idx), throw exception
             instance->m_function[idx] = new DefinedFunction(m_store, functionType(m_function[i]->functionTypeIndex()), instance, function(idx));
         }
+    }
+
+    // init memory
+    for (size_t i = 0; i < m_memory.size(); i++) {
+        instance->m_memory.pushBack(new Memory(m_memory[i].first * Memory::s_memoryPageSize, m_memory[i].second * Memory::s_memoryPageSize));
     }
 
     if (m_seenStartAttribute) {

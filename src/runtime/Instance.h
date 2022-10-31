@@ -19,6 +19,7 @@
 
 #include "util/Vector.h"
 #include "runtime/Value.h"
+#include "runtime/Memory.h"
 
 namespace Walrus {
 
@@ -38,11 +39,13 @@ public:
     Module* module() const { return m_module; }
 
     Function* function(uint32_t index) const { return m_function[index]; }
+    Memory* memory(uint32_t index) const { return m_memory[index]; }
     Value resolveExport(String* name);
 
 private:
     Module* m_module;
     Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
+    Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
 };
 
 } // namespace Walrus

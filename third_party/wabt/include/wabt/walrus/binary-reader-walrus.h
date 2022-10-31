@@ -43,6 +43,9 @@ public:
     virtual void OnExportCount(Index count) = 0;
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) = 0;
 
+    virtual void OnMemoryCount(Index count) = 0;
+    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) = 0;
+
     virtual void OnFunctionCount(Index count) = 0;
     virtual void OnFunction(Index index, Index sigIndex) = 0;
 
@@ -72,6 +75,9 @@ public:
     virtual void OnBlockExpr(Type sigType) = 0;
     virtual void OnBrExpr(Index depth) = 0;
     virtual void OnBrIfExpr(Index depth) = 0;
+    virtual void OnSelectExpr(Index resultCount, Type *resultTypes) = 0;
+    virtual void OnMemoryGrowExpr(Index memidx) = 0;
+    virtual void OnMemorySizeExpr(Index memidx) = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
 
