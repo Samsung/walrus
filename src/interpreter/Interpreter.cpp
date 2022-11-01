@@ -145,13 +145,15 @@ void Interpreter::interpret(ExecutionState& state,
         }
 #define NEXT_INSTRUCTION() goto NextInstruction;
 
-#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)                  \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                       \
-        :                                                                                                                                    \
-    {                                                                                                                                        \
-        writeValue<nativeReturnTypeName>(sp, operationName(readValue<nativeParameterTypeName>(sp), readValue<nativeParameterTypeName>(sp))); \
-        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                                                \
-        NEXT_INSTRUCTION();                                                                                                                  \
+#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                      \
+        :                                                                                                                   \
+    {                                                                                                                       \
+        auto rhs = readValue<nativeParameterTypeName>(sp);                                                                  \
+        auto lhs = readValue<nativeParameterTypeName>(sp);                                                                  \
+        writeValue<nativeReturnTypeName>(sp, operationName(lhs, rhs));                                                      \
+        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                               \
+        NEXT_INSTRUCTION();                                                                                                 \
     }
 
 #define UNARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
