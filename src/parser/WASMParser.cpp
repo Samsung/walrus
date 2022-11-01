@@ -69,6 +69,7 @@ public:
         BlockType m_blockType;
         Type m_returnValueType;
         size_t m_position;
+        size_t m_stackPushCount;
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
         struct JumpToEndBrInfo {
@@ -82,6 +83,7 @@ public:
             : m_blockType(type)
             , m_returnValueType(returnValueType)
             , m_position(0)
+            , m_stackPushCount(0)
         {
         }
     };
@@ -143,22 +145,22 @@ public:
             new Walrus::String(fieldName), funcIndex, sigIndex));
     }
 
-    virtual void OnExportCount(Index count)
+    virtual void OnExportCount(Index count) override
     {
         m_module->m_export.reserve(count);
     }
 
-    virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex)
+    virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) override
     {
         m_module->m_export.pushBack(new Walrus::ModuleExport(static_cast<Walrus::ModuleExport::Type>(kind), new Walrus::String(name), exportIndex, itemIndex));
     }
 
-    virtual void OnMemoryCount(Index count)
+    virtual void OnMemoryCount(Index count) override
     {
         m_module->m_memory.reserve(count);
     }
 
-    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize)
+    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) override
     {
         ASSERT(index == m_module->m_memory.size());
         m_module->m_memory.pushBack(std::make_pair(initialSize, maximumSize));
@@ -185,6 +187,7 @@ public:
     virtual void BeginFunctionBody(Index index, Offset size) override
     {
         ASSERT(m_currentFunction == nullptr);
+        m_shouldContinueToGenerateByteCode = true;
         m_currentFunction = m_module->function(index);
         m_currentFunctionType = m_module->functionType(m_currentFunction->functionTypeIndex());
         m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
@@ -340,14 +343,15 @@ public:
 
     virtual void OnIfExpr(Type sigType) override
     {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
         BlockInfo b(BlockInfo::IfElse, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
         b.m_jumpToEndBrInfo.push_back({ true, b.m_position });
+        b.m_stackPushCount = m_vmStack.size();
         m_blockInfo.push_back(b);
         m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
-
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
-        popVMStack();
 
         if (sigType != Type::Void) {
             pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(sigType)));
@@ -373,6 +377,7 @@ public:
     {
         BlockInfo b(BlockInfo::Loop, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
+        b.m_stackPushCount = m_vmStack.size();
         m_blockInfo.push_back(b);
 
         if (sigType != Type::Void) {
@@ -384,6 +389,7 @@ public:
     {
         BlockInfo b(BlockInfo::Block, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
+        b.m_stackPushCount = m_vmStack.size();
         m_blockInfo.push_back(b);
 
         if (sigType != Type::Void) {
@@ -405,20 +411,46 @@ public:
     size_t dropStackValuesBeforeBrIfNeeds(Index depth)
     {
         size_t dropValueSize = 0;
-        auto iter = m_blockInfo.rbegin();
-        while (depth) {
-            if (iter->m_returnValueType != Type::Void) {
-                dropValueSize += Walrus::valueSizeInStack(toValueKindForLocalType(iter->m_returnValueType));
-            }
-            iter++;
-            depth--;
-        }
+        if (depth < m_blockInfo.size()) {
+            auto iter = m_blockInfo.rbegin() + depth;
 
+            size_t start = iter->m_stackPushCount;
+            for (size_t i = start; i < m_vmStack.size(); i++) {
+                dropValueSize += m_vmStack[i];
+            }
+
+            if (iter->m_returnValueType != Type::Void) {
+                dropValueSize -= Walrus::valueSizeInStack(toValueKindForLocalType(iter->m_returnValueType));
+            }
+        } else if (m_blockInfo.size()) {
+            auto iter = m_blockInfo.begin();
+            size_t start = iter->m_stackPushCount;
+            for (size_t i = start; i < m_vmStack.size(); i++) {
+                dropValueSize += m_vmStack[i];
+            }
+        }
         return dropValueSize;
     }
 
-    virtual void OnBrExpr(Index depth)
+    virtual void OnBrExpr(Index depth) override
     {
+        if (m_blockInfo.size() == depth) {
+            // this case acts like return
+            for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
+                ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+            }
+            m_currentFunction->pushByteCode(Walrus::End());
+            auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
+            while (dropSize) {
+                dropSize -= popVMStack();
+            }
+
+            if (!m_blockInfo.size()) {
+                // stop to generate bytecode from here!
+                m_shouldContinueToGenerateByteCode = false;
+            }
+            return;
+        }
         auto& blockInfo = findBlockInfoInBr(depth);
         auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
@@ -431,8 +463,24 @@ public:
         m_currentFunction->pushByteCode(Walrus::Jump(offset));
     }
 
-    virtual void OnBrIfExpr(Index depth)
+    virtual void OnBrIfExpr(Index depth) override
     {
+        if (m_blockInfo.size() == depth) {
+            // this case acts like return
+            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+            size_t pos = m_currentFunction->currentByteCodeSize();
+            m_currentFunction->pushByteCode(Walrus::JumpIfFalse(sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End)));
+            m_currentFunction->pushByteCode(Walrus::End());
+            for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
+                ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+            }
+            popVMStack();
+            return;
+        }
+
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
         auto& blockInfo = findBlockInfoInBr(depth);
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
         if (dropSize) {
@@ -453,12 +501,37 @@ public:
             }
             m_currentFunction->pushByteCode(Walrus::JumpIfTrue(offset));
         }
-
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
-        popVMStack();
     }
 
-    virtual void OnSelectExpr(Index resultCount, Type* resultTypes)
+    virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
+        size_t brTableCode = m_currentFunction->currentByteCodeSize();
+        m_currentFunction->pushByteCode(Walrus::BrTable(numTargets));
+
+        if (numTargets) {
+            m_currentFunction->expandByteCode(sizeof(int32_t) * numTargets);
+            std::vector<size_t> offsets;
+
+            for (Index i = 0; i < numTargets; i++) {
+                offsets.push_back(m_currentFunction->currentByteCodeSize() - brTableCode);
+                OnBrExpr(targetDepths[i]);
+            }
+
+            for (Index i = 0; i < numTargets; i++) {
+                m_currentFunction->peekByteCode<Walrus::BrTable>(brTableCode)->jumpOffsets()[i] = offsets[i];
+            }
+        }
+
+        // generate default
+        size_t pos = m_currentFunction->currentByteCodeSize();
+        OnBrExpr(defaultTargetDepth);
+        m_currentFunction->peekByteCode<Walrus::BrTable>(brTableCode)->setDefaultOffset(pos - brTableCode);
+    }
+
+    virtual void OnSelectExpr(Index resultCount, Type* resultTypes) override
     {
         // TODO implement selectT
         ASSERT(resultCount == 0);
@@ -489,6 +562,11 @@ public:
 
     virtual void OnNopExpr() override
     {
+    }
+
+    virtual void OnReturnExpr() override
+    {
+        OnBrExpr(m_blockInfo.size());
     }
 
     virtual void OnEndExpr() override

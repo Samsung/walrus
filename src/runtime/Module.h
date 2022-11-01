@@ -210,6 +210,11 @@ public:
         return reinterpret_cast<CodeType*>(&m_byteCode[position]);
     }
 
+    void expandByteCode(size_t s)
+    {
+        m_byteCode.resizeWithUninitializedValues(m_byteCode.size() + s);
+    }
+
     size_t currentByteCodeSize() const
     {
         return m_byteCode.size();
