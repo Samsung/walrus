@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: [ interp ]
 
+env:
+  RUNNER: tools/run-tests.py
+
 jobs:
   check_tidy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '2.7'
     - name: Install Packages
@@ -23,10 +26,10 @@ jobs:
     - name: Test
       run: tools/check_tidy.py
 
-  build:
+  Linux_x86_test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Install Packages
@@ -37,11 +40,60 @@ jobs:
       env:
         BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
-        cmake -H. -Bout/x86 $BUILD_OPTIONS
-        ninja -Cout/x86
+        cmake -H. -Bout/linux/x86 $BUILD_OPTIONS
+        ninja -Cout/linux/x86
+    - name: Run Tests
+      run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
+
+  Linux_x64_test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
     - name: Build x64
       env:
         BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
-        cmake -H. -Bout/x64 $BUILD_OPTIONS
-        ninja -Cout/x64
+        cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
+        ninja -Cout/linux/x64
+    - name: Run Tests
+      run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
+
+  Linux_armv7l_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: pguyot/arm-runner-action@v2
+      with:
+        base_image: raspios_lite:latest
+        cpu: cortex-a7
+        cpu_info: cpuinfo/raspberrypi_3b
+        commands: |
+          apt-get update
+          apt-get install -y cmake build-essential ninja-build
+          cmake -H. -Bout/linux/arm -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          ninja -Cout/linux/arm
+
+  Linux_aarch64_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: pguyot/arm-runner-action@v2
+      with:
+        base_image: raspios_lite_arm64:latest
+        cpu: cortex-a53
+        cpu_info: cpuinfo/raspberrypi_zero2_w_arm64
+        commands: |
+          apt-get update
+          apt-get install -y cmake build-essential ninja-build
