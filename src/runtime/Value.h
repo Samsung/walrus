@@ -92,24 +92,24 @@ public:
     {
     }
 
-    Value(Type type, const uint8_t* const memory)
+    Value(Type type, const uint8_t* memory)
         : m_type(type)
     {
         switch (m_type) {
         case I32:
-            m_i32 = *reinterpret_cast<const int32_t* const>(memory);
+            m_i32 = *reinterpret_cast<const int32_t*>(memory);
             break;
         case F32:
-            m_f32 = *reinterpret_cast<const float* const>(memory);
+            m_f32 = *reinterpret_cast<const float*>(memory);
             break;
         case F64:
-            m_f64 = *reinterpret_cast<const double* const>(memory);
+            m_f64 = *reinterpret_cast<const double*>(memory);
             break;
         case I64:
-            m_i64 = *reinterpret_cast<const int64_t* const>(memory);
+            m_i64 = *reinterpret_cast<const int64_t*>(memory);
             break;
         case FuncRef:
-            m_ref = const_cast<Function*>(reinterpret_cast<const Function* const>(memory));
+            m_ref = const_cast<Function*>(reinterpret_cast<const Function*>(memory));
             break;
         default:
             ASSERT_NOT_REACHED();
