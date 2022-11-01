@@ -101,3 +101,42 @@ jobs:
           cmake -H. -Bout/linux/aarch64 -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
           ninja -Cout/linux/aarch64
           ./tools/run-tests.py --engine="./out/linux/aarch64/walrus"
+
+  coverity_scan:
+    if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Download Coverity Tool
+      env:
+        TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+      run: |
+        wget -q https://scan.coverity.com/download/cxx/linux64 --post-data "token=$TOKEN&project=Samsung-walrus" -O cov-analysis-linux64.tar.gz
+        mkdir cov-analysis-linux64
+        tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
+    - name: Build
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        export PATH=$GITHUB_WORKSPACE/cov-analysis-linux64/bin:$PATH
+        cmake -H. -Bout/coverity_scan $BUILD_OPTIONS
+        cov-build --dir cov-int ninja -Cout/coverity_scan
+    - name: Submit
+      env:
+        TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+        NOTI_MAIL: ${{ secrets.COVERITY_SCAN_MAIL }}
+      run: |
+        tar czvf walrus.tgz cov-int
+        curl \
+          --form token=$TOKEN \
+          --form email=$NOTI_MAIL \
+          --form file=@walrus.tgz \
+          --form version="0.0.1" \
+          --form description="walrus coverity scan" \
+          https://scan.coverity.com/builds?project=Samsung-walrus
