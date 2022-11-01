@@ -505,6 +505,48 @@ protected:
     uint32_t m_size;
 };
 
+class BrTable : public ByteCode {
+public:
+    BrTable(uint32_t m_tableSize)
+        : ByteCode(OpcodeKind::BrTableOpcode)
+        , m_defaultOffset(0)
+        , m_tableSize(m_tableSize)
+    {
+    }
+
+    int32_t defaultOffset() const { return m_defaultOffset; }
+    void setDefaultOffset(int32_t offset)
+    {
+        m_defaultOffset = offset;
+    }
+
+    uint32_t tableSize() const { return m_tableSize; }
+    int32_t* jumpOffsets() const
+    {
+        return reinterpret_cast<int32_t*>(reinterpret_cast<size_t>(this) + sizeof(BrTable));
+    }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableSize: %" PRIu32 ", defaultOffset: %" PRId32, m_tableSize, m_defaultOffset);
+        printf(" table contents: ");
+        for (size_t i = 0; i < m_tableSize; i++) {
+            printf("%zu->%" PRId32 " ", i, jumpOffsets()[i]);
+        }
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(BrTable) + sizeof(int32_t) * m_tableSize;
+    }
+#endif
+
+protected:
+    int32_t m_defaultOffset;
+    uint32_t m_tableSize;
+};
+
 class MemorySize : public ByteCode {
 public:
     MemorySize(uint32_t index)

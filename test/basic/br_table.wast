@@ -1,0 +1,56 @@
+(module
+  (memory 7)
+  (func (export "check")(result i32)
+    memory.size
+  )
+
+  (func (export "nop")
+    (i32.const 1)
+    (br_table 0)
+    (i32.const 3)
+    (memory.grow)
+    (drop)
+  )
+
+  (func (export "early_exit") (result i32)
+    (i32.const 21)
+    (i32.const 0)
+    (br_table 0)
+    (drop)
+    (drop)
+    (drop)
+    (i32.const 42)
+   )
+
+  (func (export "switch_like") (param $p i32) (result i32)
+    (block
+      (block
+        (block
+          (block (local.get $p)
+               (br_table
+                         2   ;; p == 0 => (br 2)
+                         1   ;; p == 1 => (br 1)
+                         0   ;; p == 2 => (br 0)
+                         3)) ;; else => (br 3)
+        ;; Target for (br 0)
+          (i32.const 100)
+          (return))
+        ;; Target for (br 1)
+        (i32.const 101)
+        (return))
+      ;; Target for (br 2)
+      (i32.const 102)
+      (return))
+    ;; Target for (br 3)
+    (i32.const 103)
+    (return)
+  )
+)
+
+(assert_return (invoke "nop"))
+(assert_return (invoke "check") (i32.const 7))
+(assert_return (invoke "early_exit") (i32.const 21))
+(assert_return (invoke "switch_like"(i32.const 0)) (i32.const 102))
+(assert_return (invoke "switch_like"(i32.const 1)) (i32.const 101))
+(assert_return (invoke "switch_like"(i32.const 2)) (i32.const 100))
+(assert_return (invoke "switch_like"(i32.const 3)) (i32.const 103))
