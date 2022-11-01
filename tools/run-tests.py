@@ -118,7 +118,7 @@ def _run_wast_tests(engine, files, is_fail):
 
 
 @runner('basic-tests', default=True)
-def run_basic_tests(engine, arch):
+def run_basic_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'basic')
 
     print('Running basic tests:')
@@ -135,7 +135,7 @@ def run_basic_tests(engine, arch):
         raise Exception("basic tests failed")
 
 @runner('wasm-test-core', default=True)
-def run_basic_tests(engine, arch):
+def run_basic_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-spec', 'core')
 
     print('Running wasm-test-core tests:')
@@ -155,8 +155,6 @@ def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
                         help='path to the engine to be tested (default: %(default)s)')
-    parser.add_argument('--arch', metavar='NAME', choices=['x86', 'x86_64'], default='x86_64',
-                        help='architecture the engine was built for (%(choices)s; default: %(default)s)')
     parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
     args = parser.parse_args()
@@ -170,7 +168,7 @@ def main():
     for suite in args.suite:
         print(COLOR_PURPLE + 'running test suite: ' + suite + COLOR_RESET)
         try:
-            RUNNERS[suite](args.engine, args.arch)
+            RUNNERS[suite](args.engine)
             success += [suite]
         except Exception as e:
             print('\n'.join(COLOR_YELLOW + line + COLOR_RESET for line in traceback.format_exc().splitlines()))
