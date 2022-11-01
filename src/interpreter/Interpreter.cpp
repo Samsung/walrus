@@ -491,7 +491,7 @@ NextInstruction:
         {
             JumpIfFalse* code = (JumpIfFalse*)programCounter;
             if (readValue<int32_t>(sp)) {
-                ADD_PROGRAM_COUNTER(JumpIfTrue);
+                ADD_PROGRAM_COUNTER(JumpIfFalse);
             } else {
                 programCounter += code->offset();
             }
@@ -503,6 +503,21 @@ NextInstruction:
         {
             callOperation(state, programCounter, bp, sp);
             ADD_PROGRAM_COUNTER(Call);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(BrTable)
+            :
+        {
+            BrTable* code = (BrTable*)programCounter;
+            uint32_t value = readValue<uint32_t>(sp);
+
+            if (value >= code->tableSize()) {
+                // default case
+                programCounter += code->defaultOffset();
+            } else {
+                programCounter += code->jumpOffsets()[value];
+            }
             NEXT_INSTRUCTION();
         }
 

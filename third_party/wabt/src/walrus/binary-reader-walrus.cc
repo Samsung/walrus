@@ -24,6 +24,8 @@
 
 #include "wabt/walrus/binary-reader-walrus.h"
 
+#define SHOULD_GENERATE_BYTECODE if (WABT_UNLIKELY(!m_externalDelegate->shouldContinueToGenerateByteCode())) { return Result::Ok; }
+
 namespace wabt {
 
 class BinaryReaderDelegateWalrus : public BinaryReaderDelegate {
@@ -255,6 +257,7 @@ public:
     /* Function expressions; called between BeginFunctionBody and
      EndFunctionBody */
     Result OnOpcode(Opcode opcode) override {
+        SHOULD_GENERATE_BYTECODE;
         Opcode::Enum e = opcode;
         m_externalDelegate->OnOpcode(e);
         return Result::Ok;
@@ -333,26 +336,32 @@ public:
         return Result::Ok;
     }
     Result OnBinaryExpr(Opcode opcode) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnBinaryExpr(opcode);
         return Result::Ok;
     }
     Result OnBlockExpr(Type sig_type) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnBlockExpr(sig_type);
         return Result::Ok;
     }
     Result OnBrExpr(Index depth) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnBrExpr(depth);
         return Result::Ok;
     }
     Result OnBrIfExpr(Index depth) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnBrIfExpr(depth);
         return Result::Ok;
     }
     Result OnBrTableExpr(Index num_targets, Index *target_depths, Index default_target_depth) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnBrTableExpr(num_targets, target_depths, default_target_depth);
         return Result::Ok;
     }
     Result OnCallExpr(Index func_index) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnCallExpr(func_index);
         return Result::Ok;
     }
@@ -373,10 +382,12 @@ public:
         return Result::Ok;
     }
     Result OnCompareExpr(Opcode opcode) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnBinaryExpr(opcode);
         return Result::Ok;
     }
     Result OnConvertExpr(Opcode opcode) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnUnaryExpr(opcode);
         return Result::Ok;
     }
@@ -385,22 +396,27 @@ public:
         return Result::Ok;
     }
     Result OnDropExpr() override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnDropExpr();
         return Result::Ok;
     }
     Result OnElseExpr() override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnElseExpr();
         return Result::Ok;
     }
     Result OnEndExpr() override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnEndExpr();
         return Result::Ok;
     }
     Result OnF32ConstExpr(uint32_t value_bits) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnF32ConstExpr(value_bits);
         return Result::Ok;
     }
     Result OnF64ConstExpr(uint64_t value_bits) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnF64ConstExpr(value_bits);
         return Result::Ok;
     }
@@ -417,14 +433,17 @@ public:
         return Result::Ok;
     }
     Result OnI32ConstExpr(uint32_t value) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnI32ConstExpr(value);
         return Result::Ok;
     }
     Result OnI64ConstExpr(uint64_t value) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnI64ConstExpr(value);
         return Result::Ok;
     }
     Result OnIfExpr(Type sig_type) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnIfExpr(sig_type);
         return Result::Ok;
     }
@@ -433,18 +452,22 @@ public:
         return Result::Ok;
     }
     Result OnLocalGetExpr(Index local_index) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLocalGetExpr(local_index);
         return Result::Ok;
     }
     Result OnLocalSetExpr(Index local_index) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLocalSetExpr(local_index);
         return Result::Ok;
     }
     Result OnLocalTeeExpr(Index local_index) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLocalTeeExpr(local_index);
         return Result::Ok;
     }
     Result OnLoopExpr(Type sig_type) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLoopExpr(sig_type);
         return Result::Ok;
     }
@@ -461,6 +484,7 @@ public:
         return Result::Ok;
     }
     Result OnMemoryGrowExpr(Index memidx) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnMemoryGrowExpr(memidx);
         return Result::Ok;
     }
@@ -469,6 +493,7 @@ public:
         return Result::Ok;
     }
     Result OnMemorySizeExpr(Index memidx) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnMemorySizeExpr(memidx);
         return Result::Ok;
     }
@@ -532,10 +557,12 @@ public:
         return Result::Ok;
     }
     Result OnReturnExpr() override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnReturnExpr();
         return Result::Ok;
     }
     Result OnSelectExpr(Index result_count, Type *result_types) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnSelectExpr(result_count, result_types);
         return Result::Ok;
     }
@@ -552,6 +579,7 @@ public:
         return Result::Ok;
     }
     Result OnUnaryExpr(Opcode opcode) override {
+        SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnUnaryExpr(opcode);
         return Result::Ok;
     }

@@ -29,6 +29,10 @@ namespace wabt {
 
 class WASMBinaryReaderDelegate {
 public:
+    WASMBinaryReaderDelegate()
+        : m_shouldContinueToGenerateByteCode(true)
+    {
+    }
     virtual ~WASMBinaryReaderDelegate() { }
     /* Module */
     virtual void BeginModule(uint32_t version) = 0;
@@ -75,13 +79,23 @@ public:
     virtual void OnBlockExpr(Type sigType) = 0;
     virtual void OnBrExpr(Index depth) = 0;
     virtual void OnBrIfExpr(Index depth) = 0;
+    virtual void OnBrTableExpr(Index numTargets, Index *targetDepths, Index defaultTargetDepth) = 0;
     virtual void OnSelectExpr(Index resultCount, Type *resultTypes) = 0;
     virtual void OnMemoryGrowExpr(Index memidx) = 0;
     virtual void OnMemorySizeExpr(Index memidx) = 0;
+    virtual void OnReturnExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
 
     virtual void EndFunctionBody(Index index) = 0;
+
+    bool shouldContinueToGenerateByteCode() const
+    {
+        return m_shouldContinueToGenerateByteCode;
+    }
+
+protected:
+    bool m_shouldContinueToGenerateByteCode;
 };
 
 bool ReadWasmBinary(const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate);
