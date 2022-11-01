@@ -81,6 +81,7 @@ jobs:
           apt-get install -y cmake build-essential ninja-build
           cmake -H. -Bout/linux/arm -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
           ninja -Cout/linux/arm
+          ./tools/run-tests.py --engine="./out/linux/arm/walrus"
 
   Linux_aarch64_test:
     runs-on: ubuntu-latest
