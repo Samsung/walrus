@@ -86,7 +86,7 @@ public:
     {
         return true;
     }
-    virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result);
+    virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) override;
 
 protected:
     Instance* m_instance;

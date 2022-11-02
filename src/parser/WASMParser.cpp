@@ -103,7 +103,7 @@ public:
 
     virtual void EndModule() override {}
 
-    virtual void OnTypeCount(Index count)
+    virtual void OnTypeCount(Index count) override
     {
         // TODO reserve vector if possible
     }
@@ -594,7 +594,7 @@ public:
         }
     }
 
-    void EndFunctionBody(Index index) override
+    virtual void EndFunctionBody(Index index) override
     {
 #if !defined(NDEBUG)
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
