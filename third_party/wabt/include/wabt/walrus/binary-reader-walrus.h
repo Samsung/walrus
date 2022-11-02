@@ -50,6 +50,9 @@ public:
     virtual void OnMemoryCount(Index count) = 0;
     virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) = 0;
 
+    virtual void OnTableCount(Index count) = 0;
+    virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) = 0;
+
     virtual void OnFunctionCount(Index count) = 0;
     virtual void OnFunction(Index index, Index sigIndex) = 0;
 

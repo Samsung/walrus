@@ -155,6 +155,20 @@ public:
         m_module->m_export.pushBack(new Walrus::ModuleExport(static_cast<Walrus::ModuleExport::Type>(kind), new Walrus::String(name), exportIndex, itemIndex));
     }
 
+    /* Table section */
+    virtual void OnTableCount(Index count) override
+    {
+        m_module->m_table.reserve(count);
+    }
+
+    virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) override
+    {
+        ASSERT(index == m_module->m_table.size());
+        ASSERT(type == Type::FuncRef || type == Type::ExternRef);
+        m_module->m_table.pushBack(std::make_tuple(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
+    }
+
+    /* Memory section */
     virtual void OnMemoryCount(Index count) override
     {
         m_module->m_memory.reserve(count);
@@ -166,6 +180,7 @@ public:
         m_module->m_memory.pushBack(std::make_pair(initialSize, maximumSize));
     }
 
+    /* Function section */
     virtual void OnFunctionCount(Index count) override
     {
         m_module->m_function.reserve(count);
@@ -612,6 +627,7 @@ public:
         m_vmStack.clear();
     }
 
+private:
     void pushVMStack(size_t s)
     {
         m_vmStack.push_back(s);

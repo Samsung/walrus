@@ -19,12 +19,13 @@
 
 #include "util/Vector.h"
 #include "runtime/Value.h"
-#include "runtime/Memory.h"
 
 namespace Walrus {
 
 class Module;
 class Function;
+class Memory;
+class Table;
 
 class Instance : public gc {
     friend class Module;
@@ -40,12 +41,14 @@ public:
 
     Function* function(uint32_t index) const { return m_function[index]; }
     Memory* memory(uint32_t index) const { return m_memory[index]; }
+    Table* table(uint32_t index) const { return m_table[index]; }
     Value resolveExport(String* name);
 
 private:
     Module* m_module;
     Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
     Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
+    Vector<Table*, GCUtil::gc_malloc_allocator<Table*>> m_table;
 };
 
 } // namespace Walrus

@@ -19,8 +19,10 @@
 
 #include "interpreter/Interpreter.h"
 #include "interpreter/ByteCode.h"
-#include "runtime/Function.h"
 #include "runtime/Instance.h"
+#include "runtime/Function.h"
+#include "runtime/Memory.h"
+#include "runtime/Table.h"
 #include "runtime/Module.h"
 #include "runtime/Trap.h"
 #include "util/MathOperation.h"
