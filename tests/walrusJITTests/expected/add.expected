@@ -1,0 +1,25 @@
+BeginModule(version: 1)
+  BeginTypeSection(4)
+    OnTypeCount(1)
+    OnFuncType(index: 0, params: [], results: [])
+  EndTypeSection
+  BeginFunctionSection(2)
+    OnFunctionCount(1)
+    OnFunction(index: 0, sig_index: 0)
+  EndFunctionSection
+  BeginExportSection(9)
+    OnExportCount(1)
+    OnExport(index: 0, kind: func, item_index: 0, name: "func1")
+  EndExportSection
+  BeginCodeSection(12)
+    OnFunctionBodyCount(1)
+    BeginFunctionBody(0, size:10)
+    OnLocalDeclCount(1)
+    OnLocalDecl(index: 0, count: 2, type: i32)
+    OnI32ConstExpr(1 (0x1))
+    OnI32ConstExpr(1 (0x1))
+    OnBinaryExpr("i32.add" (106))
+    OnDropExpr
+    OnEndExpr
+    EndFunctionBody(0)
+EndModule
