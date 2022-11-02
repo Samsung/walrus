@@ -10,7 +10,7 @@ env:
   RUNNER: tools/run-tests.py
 
 jobs:
-  check_tidy:
+  Check_tidy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -25,6 +25,29 @@ jobs:
         sudo apt install -y clang-format-6.0
     - name: Test
       run: tools/check_tidy.py
+
+  Clang_build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Build x86
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        CC=clang CXX=clang++ cmake -H. -Bout/clang/x86 $BUILD_OPTIONS
+        ninja -Cout/clang/x86
+    - name: Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        CC=clang CXX=clang++ cmake -H. -Bout/clang/x64 $BUILD_OPTIONS
+        ninja -Cout/clang/x64
 
   Linux_x86_test:
     runs-on: ubuntu-latest
@@ -102,7 +125,7 @@ jobs:
           ninja -Cout/linux/aarch64
           ./tools/run-tests.py --engine="./out/linux/aarch64/walrus"
 
-  coverity_scan:
+  Coverity_scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
