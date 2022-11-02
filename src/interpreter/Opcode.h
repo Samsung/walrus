@@ -45,7 +45,7 @@ struct ByteCodeInfo {
     size_t stackShrinkSize() const
     {
         ASSERT(m_code != OpcodeKind::InvalidOpcode);
-        return byteCodeTypeToMemorySize(m_paramTypes[0]) + byteCodeTypeToMemorySize(m_paramTypes[1]) + byteCodeTypeToMemorySize(m_paramTypes[2]) + byteCodeTypeToMemorySize(m_paramTypes[3]);
+        return byteCodeTypeToMemorySize(m_paramTypes[0]) + byteCodeTypeToMemorySize(m_paramTypes[1]) + byteCodeTypeToMemorySize(m_paramTypes[2]);
     }
 
     size_t stackGrowSize() const
