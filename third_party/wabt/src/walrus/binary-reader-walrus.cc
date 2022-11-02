@@ -141,19 +141,17 @@ public:
 
     /* Table section */
     Result BeginTableSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnTableCount(Index count) override {
-        abort();
+        m_externalDelegate->OnTableCount(count);
         return Result::Ok;
     }
     Result OnTable(Index index, Type elem_type, const Limits *elem_limits) override {
-        abort();
+        m_externalDelegate->OnTable(index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
     }
     Result EndTableSection() override {
-        abort();
         return Result::Ok;
     }
 
@@ -968,8 +966,8 @@ bool ReadWasmBinary(const uint8_t* data, size_t size, WASMBinaryReaderDelegate* 
     features.EnableAll();
     ReadBinaryOptions options(features, nullptr, kReadDebugNames,
                              kStopOnFirstError, kFailOnCustomSectionError);
-    BinaryReaderDelegateWalrus binaryReaderDelegateEscargot(delegate);
-    ReadBinary(data, size, &binaryReaderDelegateEscargot, options);
+    BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate);
+    ReadBinary(data, size, &binaryReaderDelegateWalrus, options);
 
     return true;
 }
