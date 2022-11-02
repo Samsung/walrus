@@ -295,6 +295,8 @@ private:
     /* initialSize, maximumSize */
     Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
         m_memory;
+    Vector<std::tuple<Value::Type, size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, size_t, size_t>>>
+        m_table;
 };
 
 } // namespace Walrus

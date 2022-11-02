@@ -227,6 +227,7 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <tuple>
 
 #if defined(COMPILER_MSVC)
 #include <stddef.h>

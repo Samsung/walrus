@@ -21,6 +21,7 @@
 #include "runtime/Store.h"
 #include "runtime/Trap.h"
 #include "runtime/Memory.h"
+#include "runtime/Table.h"
 #include "interpreter/ByteCode.h"
 
 namespace Walrus {
@@ -57,6 +58,11 @@ Instance* Module::instantiate(const ValueVector& imports)
     // init memory
     for (size_t i = 0; i < m_memory.size(); i++) {
         instance->m_memory.pushBack(new Memory(m_memory[i].first * Memory::s_memoryPageSize, m_memory[i].second * Memory::s_memoryPageSize));
+    }
+
+    // init table
+    for (size_t i = 0; i < m_table.size(); i++) {
+        instance->m_table.pushBack(new Table(std::get<0>(m_table[i]), std::get<1>(m_table[i]), std::get<2>(m_table[i])));
     }
 
     if (m_seenStartAttribute) {
