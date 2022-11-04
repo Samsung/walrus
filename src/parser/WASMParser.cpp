@@ -608,6 +608,26 @@ public:
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
     }
 
+    virtual void OnTableCopyExpr(Index dst_index, Index src_index) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+    }
+
+    virtual void OnTableFillExpr(Index table_index) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::FuncRef)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+    }
+
     virtual void OnNopExpr() override
     {
     }

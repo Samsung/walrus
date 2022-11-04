@@ -90,6 +90,8 @@ public:
     virtual void OnTableSetExpr(Index table_index) = 0;
     virtual void OnTableGrowExpr(Index table_index) = 0;
     virtual void OnTableSizeExpr(Index table_index) = 0;
+    virtual void OnTableCopyExpr(Index dst_index, Index src_index) = 0;
+    virtual void OnTableFillExpr(Index table_index) = 0;
     virtual void OnReturnExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
