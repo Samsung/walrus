@@ -585,6 +585,48 @@ public:
 protected:
 };
 
+class TableGet : public ByteCode {
+public:
+    TableGet(uint32_t index)
+        : ByteCode(OpcodeKind::TableGetOpcode)
+        , m_tableIndex(index)
+    {
+    }
+
+    uint32_t tableIndex() const { return m_tableIndex; }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(TableGet);
+    }
+#endif
+
+protected:
+    uint32_t m_tableIndex;
+};
+
+class TableSet : public ByteCode {
+public:
+    TableSet(uint32_t index)
+        : ByteCode(OpcodeKind::TableSetOpcode)
+        , m_tableIndex(index)
+    {
+    }
+
+    uint32_t tableIndex() const { return m_tableIndex; }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(TableSet);
+    }
+#endif
+
+protected:
+    uint32_t m_tableIndex;
+};
+
 class End : public ByteCode {
 public:
     End()

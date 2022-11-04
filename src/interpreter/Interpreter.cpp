@@ -545,6 +545,43 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(TableGet)
+            :
+        {
+            TableGet* code = (TableGet*)programCounter;
+            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+            uint32_t index = readValue<uint32_t>(sp);
+            if (index >= table->size()) {
+                // TODO Trap
+            }
+
+            Value val = table->getElement(index);
+            val.writeToStack(sp);
+
+            ADD_PROGRAM_COUNTER(MemoryGrow);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(TableSet)
+            :
+        {
+            TableSet* code = (TableSet*)programCounter;
+            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+
+            // FIXME read reference
+            Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
+            uint32_t index = readValue<uint32_t>(sp);
+
+            if (index >= table->size()) {
+                // TODO Trap
+            }
+
+            table->setElement(index, val);
+
+            ADD_PROGRAM_COUNTER(MemoryGrow);
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(End)
             :
         {

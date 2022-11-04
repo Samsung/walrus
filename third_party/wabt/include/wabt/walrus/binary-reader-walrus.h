@@ -86,6 +86,8 @@ public:
     virtual void OnSelectExpr(Index resultCount, Type *resultTypes) = 0;
     virtual void OnMemoryGrowExpr(Index memidx) = 0;
     virtual void OnMemorySizeExpr(Index memidx) = 0;
+    virtual void OnTableGetExpr(Index table_index) = 0;
+    virtual void OnTableSetExpr(Index table_index) = 0;
     virtual void OnReturnExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;

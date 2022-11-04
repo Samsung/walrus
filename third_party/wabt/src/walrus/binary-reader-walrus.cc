@@ -508,11 +508,13 @@ public:
         return Result::Ok;
     }
     Result OnTableGetExpr(Index table_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTableGetExpr(table_index);
         return Result::Ok;
     }
     Result OnTableSetExpr(Index table_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTableSetExpr(table_index);
         return Result::Ok;
     }
     Result OnTableGrowExpr(Index table_index) override {

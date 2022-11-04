@@ -31,11 +31,6 @@ public:
         m_elements.resizeWithUninitializedValues(initialSize);
     }
 
-    ValueVector& elements()
-    {
-        return m_elements;
-    }
-
     Value::Type type() const
     {
         return m_type;
@@ -49,6 +44,19 @@ public:
     size_t maximumSize() const
     {
         return m_maximumSize;
+    }
+
+    Value getElement(uint32_t elemIndex) const
+    {
+        ASSERT(elemIndex < m_size);
+        return m_elements[elemIndex];
+    }
+
+    void setElement(uint32_t elemIndex, const Value& val)
+    {
+        ASSERT(elemIndex < m_size);
+        ASSERT(val.type() == m_type);
+        m_elements[elemIndex] = val;
     }
 
 private:
