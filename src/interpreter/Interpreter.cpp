@@ -620,6 +620,65 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(TableCopy)
+            :
+        {
+            TableCopy* code = (TableCopy*)programCounter;
+            Table* dstTable = state.currentFunction()->asDefinedFunction()->instance()->table(code->dstIndex());
+            Table* srcTable = state.currentFunction()->asDefinedFunction()->instance()->table(code->srcIndex());
+
+            int32_t dstSize = dstTable->size();
+            int32_t srcSize = srcTable->size();
+
+            int32_t n = readValue<int32_t>(sp);
+            int32_t s = readValue<int32_t>(sp);
+            int32_t d = readValue<int32_t>(sp);
+
+            if ((s + n > srcSize) || (d + n > dstSize)) {
+                // Trap
+            }
+
+            while (n > 0) {
+                if (d <= s) {
+                    dstTable->setElement(d, srcTable->getElement(s));
+                    d++;
+                    s++;
+                } else {
+                    dstTable->setElement(d + n - 1, srcTable->getElement(s + n - 1));
+                }
+                n--;
+            }
+
+            ADD_PROGRAM_COUNTER(TableCopy);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(TableFill)
+            :
+        {
+            TableFill* code = (TableFill*)programCounter;
+            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+
+            int32_t size = table->size();
+
+            int32_t n = readValue<int32_t>(sp);
+            Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
+            int32_t i = readValue<int32_t>(sp);
+
+            if (i + n > size) {
+                // Trap
+            }
+
+            while (n > 0) {
+                table->setElement(i, val);
+                n--;
+                i++;
+            }
+
+            ADD_PROGRAM_COUNTER(TableFill);
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(End)
             :
         {
