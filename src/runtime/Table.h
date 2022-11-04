@@ -46,6 +46,12 @@ public:
         return m_maximumSize;
     }
 
+    void grow(size_t newSize, const Value& val)
+    {
+        ASSERT(newSize <= m_maximumSize);
+        m_elements.resize(newSize, val);
+    }
+
     Value getElement(uint32_t elemIndex) const
     {
         ASSERT(elemIndex < m_size);
