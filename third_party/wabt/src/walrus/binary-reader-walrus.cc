@@ -496,7 +496,8 @@ public:
         return Result::Ok;
     }
     Result OnTableCopyExpr(Index dst_index, Index src_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTableCopyExpr(dst_index, src_index);
         return Result::Ok;
     }
     Result OnElemDropExpr(Index segment_index) override {
@@ -528,7 +529,8 @@ public:
         return Result::Ok;
     }
     Result OnTableFillExpr(Index table_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTableFillExpr(table_index);
         return Result::Ok;
     }
     Result OnRefFuncExpr(Index func_index) override {

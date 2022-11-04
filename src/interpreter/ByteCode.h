@@ -669,6 +669,51 @@ protected:
     uint32_t m_tableIndex;
 };
 
+class TableCopy : public ByteCode {
+public:
+    TableCopy(uint32_t dstIndex, uint32_t srcIndex)
+        : ByteCode(OpcodeKind::TableCopyOpcode)
+        , m_dstIndex(dstIndex)
+        , m_srcIndex(srcIndex)
+    {
+    }
+
+    uint32_t dstIndex() const { return m_dstIndex; }
+    uint32_t srcIndex() const { return m_srcIndex; }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(TableCopy);
+    }
+#endif
+
+protected:
+    uint32_t m_dstIndex;
+    uint32_t m_srcIndex;
+};
+
+class TableFill : public ByteCode {
+public:
+    TableFill(uint32_t index)
+        : ByteCode(OpcodeKind::TableFillOpcode)
+        , m_tableIndex(index)
+    {
+    }
+
+    uint32_t tableIndex() const { return m_tableIndex; }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(TableFill);
+    }
+#endif
+
+protected:
+    uint32_t m_tableIndex;
+};
+
 class End : public ByteCode {
 public:
     End()
