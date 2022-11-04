@@ -558,7 +558,7 @@ NextInstruction:
             Value val = table->getElement(index);
             val.writeToStack(sp);
 
-            ADD_PROGRAM_COUNTER(MemoryGrow);
+            ADD_PROGRAM_COUNTER(TableGet);
             NEXT_INSTRUCTION();
         }
 
@@ -578,7 +578,45 @@ NextInstruction:
 
             table->setElement(index, val);
 
-            ADD_PROGRAM_COUNTER(MemoryGrow);
+            ADD_PROGRAM_COUNTER(TableSet);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(TableGrow)
+            :
+        {
+            TableGrow* code = (TableGrow*)programCounter;
+            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+
+            size_t size = table->size();
+
+            int32_t n = readValue<int32_t>(sp);
+            size_t newSize = n + size;
+
+            // FIXME read reference
+            Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
+
+            if (newSize <= table->maximumSize()) {
+                table->grow(newSize, val);
+                writeValue<int32_t>(sp, size);
+            } else {
+                writeValue<int32_t>(sp, -1);
+            }
+
+            ADD_PROGRAM_COUNTER(TableGrow);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(TableSize)
+            :
+        {
+            TableSize* code = (TableSize*)programCounter;
+            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+
+            size_t size = table->size();
+            writeValue<int32_t>(sp, size);
+
+            ADD_PROGRAM_COUNTER(TableSize);
             NEXT_INSTRUCTION();
         }
 

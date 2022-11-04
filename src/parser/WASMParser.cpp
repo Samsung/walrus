@@ -592,6 +592,22 @@ public:
         m_currentFunction->pushByteCode(Walrus::TableSet(table_index));
     }
 
+    virtual void OnTableGrowExpr(Index table_index) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::FuncRef)));
+        popVMStack();
+        m_currentFunction->pushByteCode(Walrus::TableGrow(table_index));
+        pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
+    }
+
+    virtual void OnTableSizeExpr(Index table_index) override
+    {
+        m_currentFunction->pushByteCode(Walrus::TableSize(table_index));
+        pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
+    }
+
     virtual void OnNopExpr() override
     {
     }

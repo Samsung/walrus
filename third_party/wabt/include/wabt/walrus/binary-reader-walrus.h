@@ -88,6 +88,8 @@ public:
     virtual void OnMemorySizeExpr(Index memidx) = 0;
     virtual void OnTableGetExpr(Index table_index) = 0;
     virtual void OnTableSetExpr(Index table_index) = 0;
+    virtual void OnTableGrowExpr(Index table_index) = 0;
+    virtual void OnTableSizeExpr(Index table_index) = 0;
     virtual void OnReturnExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;

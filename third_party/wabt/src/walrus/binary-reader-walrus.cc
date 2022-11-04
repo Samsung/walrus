@@ -518,11 +518,13 @@ public:
         return Result::Ok;
     }
     Result OnTableGrowExpr(Index table_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTableGrowExpr(table_index);
         return Result::Ok;
     }
     Result OnTableSizeExpr(Index table_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTableSizeExpr(table_index);
         return Result::Ok;
     }
     Result OnTableFillExpr(Index table_index) override {
