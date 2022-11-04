@@ -1,0 +1,198 @@
+++++++++++++++++++++++++++++++
+Function: 0
+0: Opcode: local.get
+  Index: 0
+  Result[0]: i32
+1: Opcode: local.set
+  Index: 1
+  Param[0]: ref:0(0)
+2: Opcode: i32.const
+  Result[0]: i32
+3: Opcode: local.set
+  Index: 0
+  Param[0]: ref:2(0)
+4: Opcode: local.get
+  Index: 1
+  Result[0]: i32
+5: Opcode: i32.const
+  Result[0]: i32
+6: Opcode: i32.add
+  Param[0]: ref:4(0)
+  Param[1]: ref:5(0)
+  Result[0]: i32
+7: Opcode: local.set
+  Index: 0
+  Param[0]: ref:6(0)
+8: Opcode: return
+------------------------------
+0: Opcode: local.get
+  Index: 0
+  Result[0]: i32 unused
+1: Opcode: local.set
+  Index: 4
+  Param[0]: i32 sp[0]
+2: Opcode: i32.const
+  Result[0]: i32 unused
+3: Opcode: local.set
+  Index: 0
+  Param[0]: i32 const:2
+4: Opcode: local.get
+  Index: 4
+  Result[0]: i32 unused
+5: Opcode: i32.const
+  Result[0]: i32 unused
+6: Opcode: i32.add
+  Param[0]: i32 sp[4]
+  Param[1]: i32 const:5
+  Result[0]: i32 sp[0]
+7: Opcode: local.set
+  Index: 0
+  Param[0]: i32 unused
+8: Opcode: return
+++++++++++++++++++++++++++++++
+Function: 1
+0: Opcode: i32.const
+  Result[0]: i32
+1: Opcode: br_unless
+  Jump to: 4
+  Param[0]: ref:0(0)
+2: Opcode: local.get
+  Index: 0
+  Result[0]: i32
+3: Opcode: br
+  Jump to: 6
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 1
+5: Opcode: local.get
+  Index: 0
+  Result[0]: i32
+6: Label: result_count: 1 preserved_count: 0
+  Jump from: 3
+  Param[0]
+    2(0) instruction
+    5(0) instruction
+7: Opcode: local.set
+  Index: 0
+  Param[0]: ref:6(0)
+8: Opcode: return
+------------------------------
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Opcode: br_unless
+  Jump to: 4
+  Param[0]: i32 const:0
+2: Opcode: local.get
+  Index: 0
+  Result[0]: i32 unused
+3: Opcode: br
+  Jump to: 6
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 1
+5: Opcode: local.get
+  Index: 0
+  Result[0]: i32 unused
+6: Label: result_count: 1 preserved_count: 0
+  Jump from: 3
+  Param[0]
+    2(0) instruction
+    5(0) instruction
+7: Opcode: local.set
+  Index: 0
+  Param[0]: i32 sp[0]
+8: Opcode: return
+++++++++++++++++++++++++++++++
+Function: 2
+0: Opcode: i32.const
+  Result[0]: i32
+1: Opcode: br_unless
+  Jump to: 4
+  Param[0]: ref:0(0)
+2: Opcode: i32.const
+  Result[0]: i32
+3: Opcode: br
+  Jump to: 6
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 1
+5: Opcode: i32.const
+  Result[0]: i32
+6: Label: result_count: 1 preserved_count: 0
+  Jump from: 3
+  Param[0]
+    2(0) instruction
+    5(0) instruction
+7: Opcode: local.set
+  Index: 0
+  Param[0]: ref:6(0)
+8: Opcode: return
+------------------------------
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Opcode: br_unless
+  Jump to: 4
+  Param[0]: i32 const:0
+2: Opcode: i32.const
+  Result[0]: i32 unused
+3: Opcode: br
+  Jump to: 6
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 1
+5: Opcode: i32.const
+  Result[0]: i32 unused
+6: Label: result_count: 1 preserved_count: 0
+  Jump from: 3
+  Param[0]
+    2(0) instruction
+    5(0) instruction
+7: Opcode: local.set
+  Index: 0
+  Param[0]: i32 const:2
+8: Opcode: return
+++++++++++++++++++++++++++++++
+Function: 3
+0: Opcode: i32.const
+  Result[0]: i32
+1: Opcode: br_unless
+  Jump to: 4
+  Param[0]: ref:0(0)
+2: Opcode: local.get
+  Index: 0
+  Result[0]: i32
+3: Opcode: br
+  Jump to: 6
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 1
+5: Opcode: i32.const
+  Result[0]: i32
+6: Label: result_count: 1 preserved_count: 0
+  Jump from: 3
+  Param[0]
+    2(0) instruction
+    5(0) instruction
+7: Opcode: local.set
+  Index: 0
+  Param[0]: ref:6(0)
+8: Opcode: return
+------------------------------
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Opcode: br_unless
+  Jump to: 4
+  Param[0]: i32 const:0
+2: Opcode: local.get
+  Index: 0
+  Result[0]: i32 sp[0]
+3: Opcode: br
+  Jump to: 6
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 1
+5: Opcode: i32.const
+  Result[0]: i32 sp[0]
+6: Label: result_count: 1 preserved_count: 0
+  Jump from: 3
+  Param[0]
+    2(0) instruction
+    5(0) instruction
+7: Opcode: local.set
+  Index: 0
+  Param[0]: i32 unused
+8: Opcode: return

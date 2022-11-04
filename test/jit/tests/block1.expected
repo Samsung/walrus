@@ -1,0 +1,42 @@
+++++++++++++++++++++++++++++++
+Function: 0
+0: Opcode: i32.const
+  Result[0]: i32
+1: Opcode: i32.const
+  Result[0]: i32
+2: Opcode: i32.const
+  Result[0]: i32
+3: Opcode: br
+  Jump to: 4
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 3
+5: Opcode: return
+------------------------------
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Opcode: i32.const
+  Result[0]: i32 unused
+2: Opcode: i32.const
+  Result[0]: i32 unused
+3: Opcode: br
+  Jump to: 4
+4: Label: result_count: 0 preserved_count: 0
+  Jump from: 3
+5: Opcode: return
+++++++++++++++++++++++++++++++
+Function: 1
+0: Opcode: i32.const
+  Result[0]: i32
+1: Label: result_count: 1 preserved_count: 0
+  Jump from: 2
+  Param[0]
+2: Opcode: br
+  Jump to: 1
+------------------------------
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Label: result_count: 1 preserved_count: 0
+  Jump from: 2
+  Param[0]
+2: Opcode: br
+  Jump to: 1
