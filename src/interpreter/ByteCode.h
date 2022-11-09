@@ -714,6 +714,114 @@ protected:
     uint32_t m_tableIndex;
 };
 
+class GlobalGet4 : public ByteCode {
+public:
+    GlobalGet4(uint32_t index)
+        : ByteCode(OpcodeKind::GlobalGet4Opcode)
+        , m_index(index)
+    {
+    }
+
+    uint32_t index() const { return m_index; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("index: %" PRId32,
+               m_index);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(GlobalGet4);
+    }
+#endif
+
+protected:
+    uint32_t m_index;
+};
+
+class GlobalGet8 : public ByteCode {
+public:
+    GlobalGet8(uint32_t index)
+        : ByteCode(OpcodeKind::GlobalGet8Opcode)
+        , m_index(index)
+    {
+    }
+
+    uint32_t index() const { return m_index; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("index: %" PRId32,
+               m_index);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(GlobalGet8);
+    }
+#endif
+
+protected:
+    uint32_t m_index;
+};
+
+class GlobalSet4 : public ByteCode {
+public:
+    GlobalSet4(uint32_t index)
+        : ByteCode(OpcodeKind::GlobalSet4Opcode)
+        , m_index(index)
+    {
+    }
+
+    uint32_t index() const { return m_index; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("index: %" PRId32,
+               m_index);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(GlobalSet4);
+    }
+#endif
+
+protected:
+    uint32_t m_index;
+};
+
+class GlobalSet8 : public ByteCode {
+public:
+    GlobalSet8(uint32_t index)
+        : ByteCode(OpcodeKind::GlobalSet8Opcode)
+        , m_index(index)
+    {
+    }
+
+    uint32_t index() const { return m_index; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("index: %" PRId32,
+               m_index);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(GlobalSet8);
+    }
+#endif
+
+protected:
+    uint32_t m_index;
+};
+
 class End : public ByteCode {
 public:
     End()

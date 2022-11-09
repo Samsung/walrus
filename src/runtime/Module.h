@@ -95,6 +95,18 @@ public:
     {
     }
 
+    ModuleImport(uint32_t importIndex,
+                 String* moduleName,
+                 String* fieldName,
+                 uint32_t globalIndex)
+        : m_type(Type::Global)
+        , m_importIndex(importIndex)
+        , m_moduleName(std::move(moduleName))
+        , m_fieldName(std::move(fieldName))
+        , m_globalIndex(globalIndex)
+    {
+    }
+
     Type type() const { return m_type; }
 
     uint32_t importIndex() const { return m_importIndex; }
@@ -115,6 +127,12 @@ public:
         return m_functionTypeIndex;
     }
 
+    uint32_t globalIndex() const
+    {
+        ASSERT(type() == Type::Global);
+        return m_globalIndex;
+    }
+
 private:
     Type m_type;
     uint32_t m_importIndex;
@@ -125,6 +143,9 @@ private:
         struct {
             uint32_t m_functionIndex;
             uint32_t m_functionTypeIndex;
+        };
+        struct {
+            uint32_t m_globalIndex;
         };
     };
 };
@@ -215,6 +236,11 @@ public:
         m_byteCode.resizeWithUninitializedValues(m_byteCode.size() + s);
     }
 
+    void shrinkByteCode(size_t s)
+    {
+        m_byteCode.resize(m_byteCode.size() - s);
+    }
+
     size_t currentByteCodeSize() const
     {
         return m_byteCode.size();
@@ -297,6 +323,9 @@ private:
         m_memory;
     Vector<std::tuple<Value::Type, size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, size_t, size_t>>>
         m_table;
+    Vector<std::tuple<Value::Type, bool>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, bool>>>
+        m_global;
+    Optional<ModuleFunction*> m_globalInitBlock;
 };
 
 } // namespace Walrus

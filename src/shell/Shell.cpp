@@ -174,17 +174,14 @@ static void executeWASM(Store* store, const std::vector<uint8_t>& src, Instance:
                         printF32(argv[1].asF32());
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("print_f64_f64")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::F64 && ft->param()[1] == Value::Type::F64);
-                importValues[i] = Value(new ImportedFunction(
-                    store,
-                    ft,
-                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                        printF64(argv[0].asF64());
-                        printF64(argv[1].asF64());
-                    },
-                    nullptr));
+            } else if (import->fieldName()->equals("global_i32")) {
+                importValues[i] = Value(int32_t(666));
+            } else if (import->fieldName()->equals("global_i64")) {
+                importValues[i] = Value(int64_t(666));
+            } else if (import->fieldName()->equals("global_f32")) {
+                importValues[i] = Value(float(0x44268000));
+            } else if (import->fieldName()->equals("global_f64")) {
+                importValues[i] = Value(double(0x4084d00000000000));
             }
         }
     }

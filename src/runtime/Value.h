@@ -92,6 +92,12 @@ public:
     {
     }
 
+    Value(Type type)
+        : m_i64(0)
+        , m_type(type)
+    {
+    }
+
     Value(Type type, const uint8_t* memory)
         : m_type(type)
     {
@@ -161,7 +167,7 @@ public:
         return reinterpret_cast<Function*>(m_ref);
     }
 
-    void writeToStack(uint8_t*& ptr)
+    inline void writeToStack(uint8_t*& ptr)
     {
         switch (m_type) {
         case I32: {
@@ -195,6 +201,12 @@ public:
         }
         }
     }
+
+    template <const size_t size>
+    void writeToStack(uint8_t*& ptr);
+
+    template <const size_t size>
+    void readFromStack(uint8_t*& ptr);
 
     bool operator==(const Value& v) const
     {
@@ -243,6 +255,34 @@ inline size_t valueSizeInStack(Value::Type type)
         return 16;
     default:
         return sizeof(size_t);
+    }
+}
+
+template <const size_t size>
+inline void Value::writeToStack(uint8_t*& ptr)
+{
+    ASSERT(valueSizeInStack(m_type) == size);
+    if (size == 4) {
+        *reinterpret_cast<int32_t*>(ptr) = m_i32;
+        ptr += stackAllocatedSize<int32_t>();
+    } else {
+        ASSERT(size == 8);
+        *reinterpret_cast<int64_t*>(ptr) = m_i64;
+        ptr += stackAllocatedSize<int64_t>();
+    }
+}
+
+template <const size_t size>
+inline void Value::readFromStack(uint8_t*& ptr)
+{
+    ASSERT(valueSizeInStack(m_type) == size);
+    if (size == 4) {
+        ptr -= stackAllocatedSize<int32_t>();
+        m_i32 = *reinterpret_cast<int32_t*>(ptr);
+    } else {
+        ASSERT(size == 8);
+        ptr -= stackAllocatedSize<int64_t>();
+        m_i64 = *reinterpret_cast<int64_t*>(ptr);
     }
 }
 

@@ -43,6 +43,7 @@ public:
 
     virtual void OnImportCount(Index count) = 0;
     virtual void OnImportFunc(Index importIndex, std::string moduleName, std::string fieldName, Index funcIndex, Index sigIndex) = 0;
+    virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) = 0;
 
     virtual void OnExportCount(Index count) = 0;
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) = 0;
@@ -55,6 +56,13 @@ public:
 
     virtual void OnFunctionCount(Index count) = 0;
     virtual void OnFunction(Index index, Index sigIndex) = 0;
+
+    virtual void OnGlobalCount(Index count) = 0;
+    virtual void BeginGlobal(Index index, Type type, bool mutable_) = 0;
+    virtual void BeginGlobalInitExpr(Index index) = 0;
+    virtual void EndGlobalInitExpr(Index index) = 0;
+    virtual void EndGlobal(Index index) = 0;
+    virtual void EndGlobalSection() = 0;
 
     virtual void OnStartFunction(Index funcIndex) = 0;
 
@@ -73,6 +81,8 @@ public:
     virtual void OnLocalGetExpr(Index localIndex) = 0;
     virtual void OnLocalSetExpr(Index localIndex) = 0;
     virtual void OnLocalTeeExpr(Index localIndex) = 0;
+    virtual void OnGlobalGetExpr(Index globalIndex) = 0;
+    virtual void OnGlobalSetExpr(Index globalIndex) = 0;
     virtual void OnDropExpr() = 0;
     virtual void OnBinaryExpr(uint32_t opcode) = 0;
     virtual void OnUnaryExpr(uint32_t opcode) = 0;

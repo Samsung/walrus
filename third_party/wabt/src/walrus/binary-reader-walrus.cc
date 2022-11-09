@@ -112,7 +112,7 @@ public:
         return Result::Ok;
     }
     Result OnImportGlobal(Index import_index, std::string_view module_name, std::string_view field_name, Index global_index, Type type, bool mutable_) override {
-        abort();
+        m_externalDelegate->OnImportGlobal(import_index, std::string(module_name), std::string(field_name), global_index, type, mutable_);
         return Result::Ok;
     }
     Result OnImportTag(Index import_index, std::string_view module_name, std::string_view field_name, Index tag_index, Index sig_index) override {
@@ -173,31 +173,30 @@ public:
 
     /* Global section */
     Result BeginGlobalSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnGlobalCount(Index count) override {
-        abort();
+        m_externalDelegate->OnGlobalCount(count);
         return Result::Ok;
     }
     Result BeginGlobal(Index index, Type type, bool mutable_) override {
-        abort();
+        m_externalDelegate->BeginGlobal(index, type, mutable_);
         return Result::Ok;
     }
     Result BeginGlobalInitExpr(Index index) override {
-        abort();
+        m_externalDelegate->BeginGlobalInitExpr(index);
         return Result::Ok;
     }
     Result EndGlobalInitExpr(Index index) override {
-        abort();
+        m_externalDelegate->EndGlobalInitExpr(index);
         return Result::Ok;
     }
     Result EndGlobal(Index index) override {
-        abort();
+        m_externalDelegate->EndGlobal(index);
         return Result::Ok;
     }
     Result EndGlobalSection() override {
-        abort();
+        m_externalDelegate->EndGlobalSection();
         return Result::Ok;
     }
 
@@ -423,11 +422,13 @@ public:
         return Result::Ok;
     }
     Result OnGlobalGetExpr(Index global_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnGlobalGetExpr(global_index);
         return Result::Ok;
     }
     Result OnGlobalSetExpr(Index global_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnGlobalSetExpr(global_index);
         return Result::Ok;
     }
     Result OnI32ConstExpr(uint32_t value) override {
