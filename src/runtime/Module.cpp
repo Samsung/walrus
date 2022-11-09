@@ -23,6 +23,7 @@
 #include "runtime/Memory.h"
 #include "runtime/Table.h"
 #include "interpreter/ByteCode.h"
+#include "interpreter/Interpreter.h"
 
 namespace Walrus {
 
@@ -30,6 +31,10 @@ Instance* Module::instantiate(const ValueVector& imports)
 {
     Instance* instance = new Instance(this);
     instance->m_function.resize(m_function.size(), nullptr);
+    instance->m_global.reserve(m_global.size());
+    for (size_t i = 0; i < m_global.size(); i++) {
+        instance->m_global.pushBack(Value(std::get<0>(m_global[i])));
+    }
 
     for (size_t i = 0; i < m_import.size(); i++) {
         auto type = m_import[i]->type();
@@ -37,6 +42,10 @@ Instance* Module::instantiate(const ValueVector& imports)
         switch (type) {
         case ModuleImport::Function: {
             instance->m_function[m_import[i]->functionIndex()] = imports[i].asFunction();
+            break;
+        }
+        case ModuleImport::Global: {
+            instance->m_global[m_import[i]->globalIndex()] = imports[i];
             break;
         }
         default: {
@@ -63,6 +72,28 @@ Instance* Module::instantiate(const ValueVector& imports)
     // init table
     for (size_t i = 0; i < m_table.size(); i++) {
         instance->m_table.pushBack(new Table(std::get<0>(m_table[i]), std::get<1>(m_table[i]), std::get<2>(m_table[i])));
+    }
+
+    // init global
+    if (m_globalInitBlock) {
+        struct RunData {
+            Instance* instance;
+            Module* module;
+        } data = { instance, this };
+        Walrus::Trap trap;
+        trap.run([](Walrus::ExecutionState& state, void* d) {
+            RunData* data = reinterpret_cast<RunData*>(d);
+            uint8_t* functionStackBase = ALLOCA(data->module->m_globalInitBlock->requiredStackSize(), uint8_t);
+            uint8_t* functionStackPointer = functionStackBase;
+
+            FunctionType fakeFunctionType(0, FunctionType::FunctionTypeVector(), FunctionType::FunctionTypeVector());
+            DefinedFunction fakeFunction(data->module->m_store, &fakeFunctionType, data->instance,
+                                         data->module->m_globalInitBlock.value());
+            ExecutionState newState(state, &fakeFunction);
+
+            Interpreter::interpret(newState, reinterpret_cast<size_t>(data->module->m_globalInitBlock->byteCode()), functionStackBase, functionStackPointer);
+        },
+                 &data);
     }
 
     if (m_seenStartAttribute) {

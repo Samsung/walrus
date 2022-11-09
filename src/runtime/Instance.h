@@ -42,6 +42,7 @@ public:
     Function* function(uint32_t index) const { return m_function[index]; }
     Memory* memory(uint32_t index) const { return m_memory[index]; }
     Table* table(uint32_t index) const { return m_table[index]; }
+    Value& global(uint32_t index) { return m_global[index]; }
     Value resolveExport(String* name);
 
 private:
@@ -49,6 +50,7 @@ private:
     Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
     Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
     Vector<Table*, GCUtil::gc_malloc_allocator<Table*>> m_table;
+    ValueVector m_global;
 };
 
 } // namespace Walrus

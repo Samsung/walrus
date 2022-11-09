@@ -27,7 +27,8 @@ class Engine;
 
 class Store : public gc {
 public:
-    typedef Vector<std::pair<String*, Value>, GCUtil::gc_malloc_allocator<std::pair<String*, Value>>> GlobalVariableVector;
+    // <Value, mutable>
+    typedef Vector<std::pair<Value, bool>, GCUtil::gc_malloc_allocator<std::pair<Value, bool>>> GlobalVariableVector;
 
     Store(Engine* engine)
         : m_engine(engine)
