@@ -145,6 +145,15 @@ public:
             new Walrus::String(fieldName), funcIndex, sigIndex));
     }
 
+    virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) override
+    {
+        ASSERT(m_module->m_global.size() == globalIndex);
+        m_module->m_global.pushBack(std::make_tuple(toValueKindForLocalType(type), mutable_));
+        m_module->m_import.push_back(new Walrus::ModuleImport(
+            importIndex, new Walrus::String(moduleName),
+            new Walrus::String(fieldName), globalIndex));
+    }
+
     virtual void OnExportCount(Index count) override
     {
         m_module->m_export.reserve(count);
@@ -193,6 +202,55 @@ public:
         m_module->m_function.push_back(new Walrus::ModuleFunction(m_module, index, sigIndex));
     }
 
+    virtual void OnGlobalCount(Index count) override
+    {
+        m_module->m_global.reserve(count);
+        m_module->m_globalInitBlock = new Walrus::ModuleFunction(m_module,
+                                                                 std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max());
+    }
+
+    virtual void BeginGlobal(Index index, Type type, bool mutable_) override
+    {
+        ASSERT(m_module->m_global.size() == index);
+        m_module->m_global.pushBack(std::make_tuple(toValueKindForLocalType(type), mutable_));
+        m_currentFunction = m_module->m_globalInitBlock.value();
+    }
+
+    virtual void BeginGlobalInitExpr(Index index) override
+    {
+    }
+
+    virtual void EndGlobalInitExpr(Index index) override
+    {
+        ASSERT(m_currentFunction->peekByteCode<Walrus::End>(
+                                    m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
+                   ->opcode()
+               == Walrus::OpcodeKind::EndOpcode);
+
+        m_currentFunction->shrinkByteCode(sizeof(Walrus::End));
+
+        auto sz = Walrus::valueSizeInStack(std::get<0>(m_module->m_global[index]));
+        if (sz == 4) {
+            ASSERT(peekVMStack() == 4);
+            m_currentFunction->pushByteCode(Walrus::GlobalSet4(index));
+        } else {
+            ASSERT(sz == 8);
+            ASSERT(peekVMStack() == 8);
+            m_currentFunction->pushByteCode(Walrus::GlobalSet8(index));
+        }
+        popVMStack();
+    }
+
+    virtual void EndGlobal(Index index) override
+    {
+        m_currentFunction = nullptr;
+    }
+
+    virtual void EndGlobalSection() override
+    {
+        m_module->m_globalInitBlock->pushByteCode(Walrus::End());
+    }
+
     virtual void OnStartFunction(Index funcIndex) override
     {
         m_module->m_seenStartAttribute = true;
@@ -231,7 +289,7 @@ public:
 
     virtual void OnCallExpr(uint32_t index) override
     {
-        auto functionType = m_module->functionType(m_module->function(index)->functionIndex());
+        auto functionType = m_module->functionType(m_module->function(index)->functionTypeIndex());
 
         size_t stackShrinkSize = functionType->paramStackSize();
         size_t stackGrowSize = functionType->resultStackSize();
@@ -330,6 +388,32 @@ public:
         }
     }
 
+    virtual void OnGlobalGetExpr(Index index) override
+    {
+        auto sz = Walrus::valueSizeInStack(std::get<0>(m_module->m_global[index]));
+        pushVMStack(sz);
+        if (sz == 4) {
+            m_currentFunction->pushByteCode(Walrus::GlobalGet4(index));
+        } else {
+            ASSERT(sz == 8);
+            m_currentFunction->pushByteCode(Walrus::GlobalGet8(index));
+        }
+    }
+
+    virtual void OnGlobalSetExpr(Index index) override
+    {
+        auto sz = Walrus::valueSizeInStack(std::get<0>(m_module->m_global[index]));
+        if (sz == 4) {
+            ASSERT(peekVMStack() == 4);
+            m_currentFunction->pushByteCode(Walrus::GlobalSet4(index));
+        } else {
+            ASSERT(sz == 8);
+            ASSERT(peekVMStack() == 8);
+            m_currentFunction->pushByteCode(Walrus::GlobalSet8(index));
+        }
+        popVMStack();
+    }
+
     virtual void OnDropExpr() override
     {
         m_currentFunction->pushByteCode(Walrus::Drop(popVMStack()));
@@ -367,10 +451,6 @@ public:
         b.m_stackPushCount = m_vmStack.size();
         m_blockInfo.push_back(b);
         m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
-
-        if (sigType != Type::Void) {
-            pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(sigType)));
-        }
     }
 
     virtual void OnElseExpr() override
@@ -394,10 +474,6 @@ public:
         b.m_position = m_currentFunction->currentByteCodeSize();
         b.m_stackPushCount = m_vmStack.size();
         m_blockInfo.push_back(b);
-
-        if (sigType != Type::Void) {
-            pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(sigType)));
-        }
     }
 
     virtual void OnBlockExpr(Type sigType) override
@@ -406,10 +482,6 @@ public:
         b.m_position = m_currentFunction->currentByteCodeSize();
         b.m_stackPushCount = m_vmStack.size();
         m_blockInfo.push_back(b);
-
-        if (sigType != Type::Void) {
-            pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(sigType)));
-        }
     }
 
     BlockInfo& findBlockInfoInBr(Index depth)
@@ -433,8 +505,7 @@ public:
             for (size_t i = start; i < m_vmStack.size(); i++) {
                 dropValueSize += m_vmStack[i];
             }
-
-            if (iter->m_returnValueType != Type::Void) {
+            if (iter->m_returnValueType != Type::Void && iter->m_blockType != BlockInfo::Loop) {
                 dropValueSize -= Walrus::valueSizeInStack(toValueKindForLocalType(iter->m_returnValueType));
             }
         } else if (m_blockInfo.size()) {
@@ -447,23 +518,34 @@ public:
         return dropValueSize;
     }
 
+    void generateFunctionReturnCode(bool shouldClearVMStack = false)
+    {
+        for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
+            ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+        }
+        m_currentFunction->pushByteCode(Walrus::End());
+        if (shouldClearVMStack) {
+            auto dropSize = dropStackValuesBeforeBrIfNeeds(m_blockInfo.size());
+            while (dropSize) {
+                dropSize -= popVMStack();
+            }
+        } else {
+            for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
+                popVMStack();
+            }
+        }
+
+        if (!m_blockInfo.size()) {
+            // stop to generate bytecode from here!
+            m_shouldContinueToGenerateByteCode = false;
+        }
+    }
+
     virtual void OnBrExpr(Index depth) override
     {
         if (m_blockInfo.size() == depth) {
             // this case acts like return
-            for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-                ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
-            }
-            m_currentFunction->pushByteCode(Walrus::End());
-            auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
-            while (dropSize) {
-                dropSize -= popVMStack();
-            }
-
-            if (!m_blockInfo.size()) {
-                // stop to generate bytecode from here!
-                m_shouldContinueToGenerateByteCode = false;
-            }
+            generateFunctionReturnCode(true);
             return;
         }
         auto& blockInfo = findBlockInfoInBr(depth);
@@ -634,7 +716,7 @@ public:
 
     virtual void OnReturnExpr() override
     {
-        OnBrExpr(m_blockInfo.size());
+        generateFunctionReturnCode();
     }
 
     virtual void OnEndExpr() override
@@ -645,7 +727,7 @@ public:
 
             if (blockInfo.m_returnValueType != Type::Void) {
                 ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
-                popVMStack();
+                // popVMStack();
             }
 
             for (size_t i = 0; i < blockInfo.m_jumpToEndBrInfo.size(); i++) {
@@ -668,7 +750,7 @@ public:
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
             m_currentFunction->dumpByteCode();
         }
-        for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
+        for (size_t i = 0; i < m_currentFunctionType->result().size() && m_vmStack.size(); i++) {
             ASSERT(popVMStack() == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
         }
         ASSERT(m_vmStack.empty());

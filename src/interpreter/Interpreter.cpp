@@ -523,6 +523,42 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(GlobalGet4)
+            :
+        {
+            GlobalGet4* code = (GlobalGet4*)programCounter;
+            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).writeToStack<4>(sp);
+            ADD_PROGRAM_COUNTER(GlobalGet4);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(GlobalGet8)
+            :
+        {
+            GlobalGet8* code = (GlobalGet8*)programCounter;
+            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).writeToStack<8>(sp);
+            ADD_PROGRAM_COUNTER(GlobalGet8);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(GlobalSet4)
+            :
+        {
+            GlobalSet4* code = (GlobalSet4*)programCounter;
+            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).readFromStack<4>(sp);
+            ADD_PROGRAM_COUNTER(GlobalSet4);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(GlobalSet8)
+            :
+        {
+            GlobalSet4* code = (GlobalSet4*)programCounter;
+            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).readFromStack<8>(sp);
+            ADD_PROGRAM_COUNTER(GlobalSet8);
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(MemorySize)
             :
         {

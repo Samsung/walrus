@@ -576,3 +576,7 @@ WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xeb, LocalTee8, "local_tee_8", ""
 WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xec, Jump, "jump", "")
 WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xed, JumpIfTrue, "jump_if_true", "")
 WABT_OPCODE(___,  I32,  ___,  ___,  0,  0,    0xee, JumpIfFalse, "jump_if_false", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xef, GlobalGet4, "global_get_4", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xf0, GlobalGet8, "global_get_8", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xf1, GlobalSet4, "global_set_4", "")
+WABT_OPCODE(___,  ___,  ___,  ___,  0,  0,    0xf2, GlobalSet8, "global_set_8", "")
