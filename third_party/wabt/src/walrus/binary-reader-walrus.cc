@@ -116,7 +116,7 @@ public:
         return Result::Ok;
     }
     Result OnImportTag(Index import_index, std::string_view module_name, std::string_view field_name, Index tag_index, Index sig_index) override {
-        abort();
+        m_externalDelegate->OnImportTag(import_index, std::string(module_name), std::string(field_name), tag_index, sig_index);
         return Result::Ok;
     }
     Result EndImportSection() override {
@@ -209,9 +209,6 @@ public:
         return Result::Ok;
     }
     Result OnExport(Index index, ExternalKind kind, Index item_index, std::string_view name) override {
-        if (kind != ExternalKind::Func) {
-            abort();
-        }
         m_externalDelegate->OnExport(static_cast<int>(kind), index, std::string(name), item_index);
         return Result::Ok;
     }
@@ -371,11 +368,13 @@ public:
         return Result::Ok;
     }
     Result OnCatchExpr(Index tag_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnCatchExpr(tag_index);
         return Result::Ok;
     }
     Result OnCatchAllExpr() override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnCatchAllExpr();
         return Result::Ok;
     }
     Result OnCompareExpr(Opcode opcode) override {
@@ -575,12 +574,14 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnThrowExpr(Index depth) override {
-        abort();
+    Result OnThrowExpr(Index tag_index) override {
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnThrowExpr(tag_index);
         return Result::Ok;
     }
     Result OnTryExpr(Type sig_type) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTryExpr(sig_type);
         return Result::Ok;
     }
     Result OnUnaryExpr(Opcode opcode) override {
@@ -593,7 +594,8 @@ public:
         return Result::Ok;
     }
     Result OnUnreachableExpr() override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnUnreachableExpr();
         return Result::Ok;
     }
     Result EndFunctionBody(Index index) override {
@@ -801,19 +803,17 @@ public:
 
     /* Tag section */
     Result BeginTagSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnTagCount(Index count) override {
-        abort();
+        m_externalDelegate->OnTagCount(count);
         return Result::Ok;
     }
     Result OnTagType(Index index, Index sig_index) override {
-        abort();
+        m_externalDelegate->OnTagType(index, sig_index);
         return Result::Ok;
     }
     Result EndTagSection() override {
-        abort();
         return Result::Ok;
     }
 

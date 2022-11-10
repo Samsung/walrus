@@ -14,37 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef __WalrusTrap__
-#define __WalrusTrap__
-
-#include "runtime/Value.h"
-#include "runtime/Exception.h"
-#include "runtime/ExecutionState.h"
+#ifndef __WalrusTag__
+#define __WalrusTag__
 
 namespace Walrus {
 
-class Module;
-class Tag;
+class FunctionType;
 
-class Trap {
-    MAKE_STACK_ALLOCATED();
-
+class Tag : public gc {
 public:
-    struct TrapResult {
-        std::unique_ptr<Exception> exception;
+    Tag(FunctionType* functionType)
+        : m_functionType(functionType)
+    {
+    }
 
-        TrapResult()
-        {
-        }
-    };
-
-    TrapResult run(void (*runner)(ExecutionState&, void*), void* data);
-    static void throwException(String* message);
-    static void throwException(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData);
+    FunctionType* functionType()
+    {
+        return m_functionType;
+    }
 
 private:
+    FunctionType* m_functionType;
 };
 
 } // namespace Walrus
 
-#endif // __WalrusTrap__
+#endif // __WalrusTag__

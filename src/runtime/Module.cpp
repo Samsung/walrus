@@ -35,6 +35,7 @@ Instance* Module::instantiate(const ValueVector& imports)
     for (size_t i = 0; i < m_global.size(); i++) {
         instance->m_global.pushBack(Value(std::get<0>(m_global[i])));
     }
+    instance->m_tag.resize(m_tag.size(), nullptr);
 
     for (size_t i = 0; i < m_import.size(); i++) {
         auto type = m_import[i]->type();
@@ -46,6 +47,10 @@ Instance* Module::instantiate(const ValueVector& imports)
         }
         case ModuleImport::Global: {
             instance->m_global[m_import[i]->globalIndex()] = imports[i];
+            break;
+        }
+        case ModuleImport::Tag: {
+            instance->m_tag[m_import[i]->tagIndex()] = reinterpret_cast<Tag*>(imports[i].asExternal());
             break;
         }
         default: {
@@ -74,6 +79,14 @@ Instance* Module::instantiate(const ValueVector& imports)
         instance->m_table.pushBack(new Table(std::get<0>(m_table[i]), std::get<1>(m_table[i]), std::get<2>(m_table[i])));
     }
 
+    // init tag
+    for (size_t i = 0; i < m_tag.size(); i++) {
+        if (!instance->m_tag[i]) {
+            instance->m_tag[i] = new Tag(functionType(m_tag[i]));
+        }
+        ASSERT(instance->m_tag[i]);
+    }
+
     // init global
     if (m_globalInitBlock) {
         struct RunData {
@@ -91,7 +104,7 @@ Instance* Module::instantiate(const ValueVector& imports)
                                          data->module->m_globalInitBlock.value());
             ExecutionState newState(state, &fakeFunction);
 
-            Interpreter::interpret(newState, reinterpret_cast<size_t>(data->module->m_globalInitBlock->byteCode()), functionStackBase, functionStackPointer);
+            Interpreter::interpret(newState, functionStackBase, functionStackPointer);
         },
                  &data);
     }

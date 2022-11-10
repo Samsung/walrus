@@ -64,12 +64,14 @@ public:
         enum BlockType {
             IfElse,
             Loop,
-            Block
+            Block,
+            TryCatch,
         };
         BlockType m_blockType;
         Type m_returnValueType;
         size_t m_position;
-        size_t m_stackPushCount;
+        std::vector<unsigned char> m_vmStack;
+        bool m_shouldRestoreVMStackAtEnd;
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
         struct JumpToEndBrInfo {
@@ -83,7 +85,7 @@ public:
             : m_blockType(type)
             , m_returnValueType(returnValueType)
             , m_position(0)
-            , m_stackPushCount(0)
+            , m_shouldRestoreVMStackAtEnd(false)
         {
         }
     };
@@ -150,8 +152,19 @@ public:
         ASSERT(m_module->m_global.size() == globalIndex);
         m_module->m_global.pushBack(std::make_tuple(toValueKindForLocalType(type), mutable_));
         m_module->m_import.push_back(new Walrus::ModuleImport(
+            Walrus::ModuleImport::Global,
             importIndex, new Walrus::String(moduleName),
             new Walrus::String(fieldName), globalIndex));
+    }
+
+    virtual void OnImportTag(Index importIndex, std::string moduleName, std::string fieldName, Index tagIndex, Index sigIndex) override
+    {
+        m_module->m_import.push_back(new Walrus::ModuleImport(
+            Walrus::ModuleImport::Tag,
+            importIndex, new Walrus::String(moduleName),
+            new Walrus::String(fieldName), sigIndex));
+        ASSERT(tagIndex == m_module->m_tag.size());
+        m_module->m_tag.pushBack(sigIndex);
     }
 
     virtual void OnExportCount(Index count) override
@@ -249,6 +262,17 @@ public:
     virtual void EndGlobalSection() override
     {
         m_module->m_globalInitBlock->pushByteCode(Walrus::End());
+    }
+
+    virtual void OnTagCount(Index count) override
+    {
+        m_module->m_tag.reserve(count);
+    }
+
+    virtual void OnTagType(Index index, Index sigIndex) override
+    {
+        ASSERT(index == m_module->m_tag.size());
+        m_module->m_tag.pushBack(sigIndex);
     }
 
     virtual void OnStartFunction(Index funcIndex) override
@@ -448,7 +472,7 @@ public:
         BlockInfo b(BlockInfo::IfElse, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
         b.m_jumpToEndBrInfo.push_back({ true, b.m_position });
-        b.m_stackPushCount = m_vmStack.size();
+        b.m_vmStack = m_vmStack;
         m_blockInfo.push_back(b);
         m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
     }
@@ -472,7 +496,7 @@ public:
     {
         BlockInfo b(BlockInfo::Loop, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
-        b.m_stackPushCount = m_vmStack.size();
+        b.m_vmStack = m_vmStack;
         m_blockInfo.push_back(b);
     }
 
@@ -480,7 +504,7 @@ public:
     {
         BlockInfo b(BlockInfo::Block, sigType);
         b.m_position = m_currentFunction->currentByteCodeSize();
-        b.m_stackPushCount = m_vmStack.size();
+        b.m_vmStack = m_vmStack;
         m_blockInfo.push_back(b);
     }
 
@@ -501,7 +525,7 @@ public:
         if (depth < m_blockInfo.size()) {
             auto iter = m_blockInfo.rbegin() + depth;
 
-            size_t start = iter->m_stackPushCount;
+            size_t start = iter->m_vmStack.size();
             for (size_t i = start; i < m_vmStack.size(); i++) {
                 dropValueSize += m_vmStack[i];
             }
@@ -510,7 +534,7 @@ public:
             }
         } else if (m_blockInfo.size()) {
             auto iter = m_blockInfo.begin();
-            size_t start = iter->m_stackPushCount;
+            size_t start = iter->m_vmStack.size();
             for (size_t i = start; i < m_vmStack.size(); i++) {
                 dropValueSize += m_vmStack[i];
             }
@@ -532,6 +556,9 @@ public:
         } else {
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 popVMStack();
+            }
+            if (m_blockInfo.size()) {
+                m_blockInfo.back().m_shouldRestoreVMStackAtEnd = true;
             }
         }
 
@@ -643,6 +670,69 @@ public:
         pushVMStack(size);
     }
 
+    virtual void OnThrowExpr(Index tagIndex) override
+    {
+        m_currentFunction->pushByteCode(Walrus::Throw(tagIndex));
+
+        if (tagIndex != std::numeric_limits<Index>::max()) {
+            auto functionType = m_module->functionType(m_module->m_tag[tagIndex]);
+            for (size_t i = 0; i < functionType->param().size(); i++) {
+                ASSERT(peekVMStack() == Walrus::valueSizeInStack(functionType->param()[functionType->param().size() - i - 1]));
+                popVMStack();
+            }
+        }
+    }
+
+    virtual void OnTryExpr(Type sigType) override
+    {
+        BlockInfo b(BlockInfo::TryCatch, sigType);
+        b.m_position = m_currentFunction->currentByteCodeSize();
+        b.m_vmStack = m_vmStack;
+        m_blockInfo.push_back(b);
+    }
+
+    void processCatchExpr(Index tagIndex)
+    {
+        ASSERT(m_blockInfo.back().m_blockType == BlockInfo::TryCatch);
+
+        auto& blockInfo = m_blockInfo.back();
+        if (blockInfo.m_returnValueType != Type::Void) {
+            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+            popVMStack();
+        }
+
+        size_t tryEnd = m_currentFunction->currentByteCodeSize();
+        if (m_catchInfo.size() && m_catchInfo.back().m_tryCatchBlockDepth == m_blockInfo.size()) {
+            // not first catch
+            tryEnd = m_catchInfo.back().m_tryEnd;
+            blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+            m_currentFunction->pushByteCode(Walrus::Jump());
+        } else {
+            // first catch
+            blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+            m_currentFunction->pushByteCode(Walrus::Jump());
+        }
+
+        m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentFunction->currentByteCodeSize(), tagIndex });
+
+        if (tagIndex != std::numeric_limits<Index>::max()) {
+            auto functionType = m_module->functionType(m_module->m_tag[tagIndex]);
+            for (size_t i = 0; i < functionType->param().size(); i++) {
+                pushVMStack(Walrus::valueSizeInStack(functionType->param()[i]));
+            }
+        }
+    }
+
+    virtual void OnCatchExpr(Index tagIndex) override
+    {
+        processCatchExpr(tagIndex);
+    }
+
+    virtual void OnCatchAllExpr() override
+    {
+        processCatchExpr(std::numeric_limits<Index>::max());
+    }
+
     virtual void OnMemoryGrowExpr(Index memidx) override
     {
         ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
@@ -725,9 +815,24 @@ public:
             auto blockInfo = m_blockInfo.back();
             m_blockInfo.pop_back();
 
-            if (blockInfo.m_returnValueType != Type::Void) {
+            if (!blockInfo.m_shouldRestoreVMStackAtEnd && blockInfo.m_returnValueType != Type::Void) {
                 ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
-                // popVMStack();
+            }
+
+            if (blockInfo.m_blockType == BlockInfo::TryCatch) {
+                auto iter = m_catchInfo.begin();
+                while (iter != m_catchInfo.end()) {
+                    if (iter->m_tryCatchBlockDepth - 1 != m_blockInfo.size()) {
+                        iter++;
+                        continue;
+                    }
+                    size_t stackSizeToBe = 0;
+                    for (size_t i = 0; i < blockInfo.m_vmStack.size(); i++) {
+                        stackSizeToBe += m_vmStack[i];
+                    }
+                    m_currentFunction->m_catchInfo.pushBack({ iter->m_tryStart, iter->m_tryEnd, iter->m_tagIndex, iter->m_catchStart, stackSizeToBe });
+                    iter = m_catchInfo.erase(iter);
+                }
             }
 
             for (size_t i = 0; i < blockInfo.m_jumpToEndBrInfo.size(); i++) {
@@ -739,9 +844,20 @@ public:
                 }
             }
 
+            if (blockInfo.m_shouldRestoreVMStackAtEnd) {
+                m_vmStack = std::move(blockInfo.m_vmStack);
+                if (blockInfo.m_returnValueType != Type::Void) {
+                    pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+                }
+            }
         } else {
             m_currentFunction->pushByteCode(Walrus::End());
         }
+    }
+
+    virtual void OnUnreachableExpr() override
+    {
+        m_currentFunction->pushByteCode(Walrus::Unreachable());
     }
 
     virtual void EndFunctionBody(Index index) override
@@ -790,6 +906,14 @@ private:
     uint32_t m_functionStackSizeSoFar;
     std::vector<unsigned char> m_vmStack;
     std::vector<BlockInfo> m_blockInfo;
+    struct CatchInfo {
+        size_t m_tryCatchBlockDepth;
+        size_t m_tryStart;
+        size_t m_tryEnd;
+        size_t m_catchStart;
+        uint32_t m_tagIndex;
+    };
+    std::vector<CatchInfo> m_catchInfo;
 };
 
 } // namespace wabt
