@@ -822,6 +822,54 @@ protected:
     uint32_t m_index;
 };
 
+class Throw : public ByteCode {
+public:
+    Throw(uint32_t index)
+        : ByteCode(OpcodeKind::ThrowOpcode)
+        , m_tagIndex(index)
+    {
+    }
+
+    uint32_t tagIndex() const { return m_tagIndex; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tagIndex: %" PRId32,
+               m_tagIndex);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Throw);
+    }
+#endif
+
+protected:
+    uint32_t m_tagIndex;
+};
+
+class Unreachable : public ByteCode {
+public:
+    Unreachable()
+        : ByteCode(OpcodeKind::UnreachableOpcode)
+    {
+    }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Unreachable);
+    }
+#endif
+
+protected:
+};
+
 class End : public ByteCode {
 public:
     End()

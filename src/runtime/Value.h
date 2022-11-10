@@ -92,6 +92,12 @@ public:
     {
     }
 
+    explicit Value(void* ptr)
+        : m_ref(ptr)
+        , m_type(ExternRef)
+    {
+    }
+
     Value(Type type)
         : m_i64(0)
         , m_type(type)
@@ -167,6 +173,12 @@ public:
         return reinterpret_cast<Function*>(m_ref);
     }
 
+    void* asExternal() const
+    {
+        ASSERT(type() == ExternRef);
+        return reinterpret_cast<void*>(m_ref);
+    }
+
     inline void writeToStack(uint8_t*& ptr)
     {
         switch (m_type) {
@@ -219,6 +231,8 @@ public:
             case I64:
                 return m_i64 == v.m_i64;
             case FuncRef:
+                return m_ref == v.m_ref;
+            case ExternRef:
                 return m_ref == v.m_ref;
             default:
                 ASSERT_NOT_REACHED();

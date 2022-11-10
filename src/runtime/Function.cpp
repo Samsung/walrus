@@ -38,7 +38,7 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
     memset(functionStackPointer, 0, localSize);
     functionStackPointer += localSize;
 
-    Interpreter::interpret(newState, reinterpret_cast<size_t>(m_moduleFunction->byteCode()), functionStackBase, functionStackPointer);
+    Interpreter::interpret(newState, functionStackBase, functionStackPointer);
 
     FunctionType* ft = functionType();
     const FunctionType::FunctionTypeVector& resultTypeInfo = ft->result();

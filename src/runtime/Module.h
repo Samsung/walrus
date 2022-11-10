@@ -58,8 +58,8 @@ public:
 
 private:
     uint32_t m_index;
-    FunctionTypeVector m_param;
-    FunctionTypeVector m_result;
+    const FunctionTypeVector m_param;
+    const FunctionTypeVector m_result;
     size_t m_paramStackSize;
     size_t m_resultStackSize;
 
@@ -79,7 +79,8 @@ public:
     enum Type { Function,
                 Table,
                 Memory,
-                Global };
+                Global,
+                Tag };
 
     ModuleImport(uint32_t importIndex,
                  String* moduleName,
@@ -95,11 +96,12 @@ public:
     {
     }
 
-    ModuleImport(uint32_t importIndex,
+    ModuleImport(Type t,
+                 uint32_t importIndex,
                  String* moduleName,
                  String* fieldName,
                  uint32_t globalIndex)
-        : m_type(Type::Global)
+        : m_type(t)
         , m_importIndex(importIndex)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
@@ -133,6 +135,12 @@ public:
         return m_globalIndex;
     }
 
+    uint32_t tagIndex() const
+    {
+        ASSERT(type() == Type::Tag);
+        return m_tagIndex;
+    }
+
 private:
     Type m_type;
     uint32_t m_importIndex;
@@ -147,6 +155,9 @@ private:
         struct {
             uint32_t m_globalIndex;
         };
+        struct {
+            uint32_t m_tagIndex;
+        };
     };
 };
 
@@ -156,7 +167,8 @@ public:
     enum Type { Function,
                 Table,
                 Memory,
-                Global };
+                Global,
+                Tag };
 
     ModuleExport(Type type,
                  String* name,
@@ -193,6 +205,13 @@ class ModuleFunction : public gc {
 public:
     typedef Vector<Value::Type, GCUtil::gc_malloc_atomic_allocator<Value::Type>>
         LocalValueVector;
+    struct CatchInfo {
+        size_t m_tryStart;
+        size_t m_tryEnd;
+        uint32_t m_tagIndex;
+        size_t m_catchStartPosition;
+        size_t m_stackSizeToBe;
+    };
 
     ModuleFunction(Module* module, uint32_t functionIndex, uint32_t functionTypeIndex)
         : m_module(module)
@@ -251,6 +270,11 @@ public:
     void dumpByteCode();
 #endif
 
+    const Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>>& catchInfo() const
+    {
+        return m_catchInfo;
+    }
+
 private:
     Module* m_module;
     uint32_t m_functionIndex;
@@ -259,6 +283,7 @@ private:
     uint32_t m_requiredStackSizeDueToLocal;
     LocalValueVector m_local;
     Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_byteCode;
+    Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>> m_catchInfo;
 };
 
 class Module : public gc {
@@ -318,6 +343,7 @@ private:
         m_functionType;
     Vector<ModuleFunction*, GCUtil::gc_malloc_allocator<ModuleFunction*>>
         m_function;
+    Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_tag;
     /* initialSize, maximumSize */
     Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
         m_memory;

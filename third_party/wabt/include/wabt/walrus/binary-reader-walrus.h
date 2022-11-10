@@ -44,6 +44,7 @@ public:
     virtual void OnImportCount(Index count) = 0;
     virtual void OnImportFunc(Index importIndex, std::string moduleName, std::string fieldName, Index funcIndex, Index sigIndex) = 0;
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) = 0;
+    virtual void OnImportTag(Index importIndex, std::string moduleName, std::string fieldName, Index tagIndex, Index sigIndex) = 0;
 
     virtual void OnExportCount(Index count) = 0;
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) = 0;
@@ -63,6 +64,9 @@ public:
     virtual void EndGlobalInitExpr(Index index) = 0;
     virtual void EndGlobal(Index index) = 0;
     virtual void EndGlobalSection() = 0;
+
+    virtual void OnTagCount(Index count) = 0;
+    virtual void OnTagType(Index index, Index sigIndex) = 0;
 
     virtual void OnStartFunction(Index funcIndex) = 0;
 
@@ -94,6 +98,10 @@ public:
     virtual void OnBrIfExpr(Index depth) = 0;
     virtual void OnBrTableExpr(Index numTargets, Index *targetDepths, Index defaultTargetDepth) = 0;
     virtual void OnSelectExpr(Index resultCount, Type *resultTypes) = 0;
+    virtual void OnThrowExpr(Index tagIndex) = 0;
+    virtual void OnTryExpr(Type sigType) = 0;
+    virtual void OnCatchExpr(Index tagIndex) = 0;
+    virtual void OnCatchAllExpr() = 0;
     virtual void OnMemoryGrowExpr(Index memidx) = 0;
     virtual void OnMemorySizeExpr(Index memidx) = 0;
     virtual void OnTableGetExpr(Index table_index) = 0;
@@ -105,7 +113,7 @@ public:
     virtual void OnReturnExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
-
+    virtual void OnUnreachableExpr() = 0;
     virtual void EndFunctionBody(Index index) = 0;
 
     bool shouldContinueToGenerateByteCode() const
