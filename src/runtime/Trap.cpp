@@ -37,4 +37,9 @@ void Trap::throwException(String* message)
     throw Exception::create(message);
 }
 
+void Trap::throwException(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+{
+    throw Exception::create(tag, std::move(userExceptionData));
+}
+
 } // namespace Walrus

@@ -25,9 +25,48 @@
 #include "runtime/Table.h"
 #include "runtime/Module.h"
 #include "runtime/Trap.h"
+#include "runtime/Tag.h"
 #include "util/MathOperation.h"
 
 namespace Walrus {
+
+void Interpreter::interpret(ExecutionState& state,
+                            uint8_t* bp,
+                            uint8_t*& sp)
+{
+    ModuleFunction* mf = state.currentFunction()->asDefinedFunction()->moduleFunction();
+    size_t programCounter = reinterpret_cast<size_t>(mf->byteCode());
+    while (true) {
+        try {
+            interpret(state, programCounter, bp, sp);
+            break;
+        } catch (std::unique_ptr<Exception>& e) {
+            if (e->isUserException()) {
+                bool isCatchSucessful = false;
+                Tag* tag = e->tag().value();
+                size_t offset = programCounter - reinterpret_cast<size_t>(mf->byteCode());
+                for (const auto& item : mf->catchInfo()) {
+                    if (item.m_tryStart <= offset && offset < item.m_tryEnd) {
+                        if (item.m_tagIndex == std::numeric_limits<uint32_t>::max() || state.currentFunction()->asDefinedFunction()->instance()->tag(item.m_tagIndex) == tag) {
+                            programCounter = item.m_catchStartPosition + reinterpret_cast<size_t>(mf->byteCode());
+                            sp = bp + item.m_stackSizeToBe;
+                            if (item.m_tagIndex != std::numeric_limits<uint32_t>::max() && tag->functionType()->paramStackSize()) {
+                                memcpy(sp, e->userExceptionData().data(), tag->functionType()->paramStackSize());
+                                sp += tag->functionType()->paramStackSize();
+                            }
+                            isCatchSucessful = true;
+                            break;
+                        }
+                    }
+                }
+                if (isCatchSucessful) {
+                    continue;
+                }
+            }
+            throw std::unique_ptr<Exception>(std::move(e));
+        }
+    }
+}
 
 template <typename T>
 ALWAYS_INLINE void writeValue(uint8_t*& sp, const T& v)
@@ -134,7 +173,7 @@ R doConvert(T val)
 }
 
 void Interpreter::interpret(ExecutionState& state,
-                            size_t programCounter,
+                            size_t& programCounter,
                             uint8_t* bp,
                             uint8_t*& sp)
 {
@@ -712,6 +751,28 @@ NextInstruction:
             }
 
             ADD_PROGRAM_COUNTER(TableFill);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(Throw)
+            :
+        {
+            Throw* code = (Throw*)programCounter;
+            Tag* tag = state.currentFunction()->asDefinedFunction()->instance()->tag(code->tagIndex());
+            Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>> userExceptionData;
+            size_t sz = tag->functionType()->paramStackSize();
+            userExceptionData.resizeWithUninitializedValues(sz);
+            memcpy(userExceptionData.data(), sp - sz, sz);
+            Trap::throwException(tag, std::move(userExceptionData));
+            ASSERT_NOT_REACHED();
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(Unreachable)
+            :
+        {
+            Trap::throwException(new String("unreachable"));
+            ASSERT_NOT_REACHED();
             NEXT_INSTRUCTION();
         }
 

@@ -20,6 +20,8 @@
 namespace Walrus {
 
 class String;
+class Tag;
+
 class Exception : public gc {
 public:
     // we should use exception value as NoGC since bdwgc cannot find thrown value
@@ -28,9 +30,34 @@ public:
         return std::unique_ptr<Exception>(new (NoGC) Exception(m));
     }
 
-    String* message() const
+    static std::unique_ptr<Exception> create(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+    {
+        return std::unique_ptr<Exception>(new (NoGC) Exception(tag, std::move(userExceptionData)));
+    }
+
+    bool isBuiltinException()
+    {
+        return !!message();
+    }
+
+    bool isUserException()
+    {
+        return !!tag();
+    }
+
+    Optional<String*> message() const
     {
         return m_message;
+    }
+
+    Optional<Tag*> tag() const
+    {
+        return m_tag;
+    }
+
+    const Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>& userExceptionData() const
+    {
+        return m_userExceptionData;
     }
 
 private:
@@ -39,7 +66,15 @@ private:
     {
     }
 
-    String* m_message;
+    Exception(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+        : m_tag(tag)
+        , m_userExceptionData(std::move(userExceptionData))
+    {
+    }
+
+    Optional<String*> m_message;
+    Optional<Tag*> m_tag;
+    Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>> m_userExceptionData;
 };
 
 } // namespace Walrus

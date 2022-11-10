@@ -19,11 +19,14 @@
 
 #include "util/Vector.h"
 #include "runtime/Value.h"
+#include "runtime/Tag.h"
 
 namespace Walrus {
 
 class Module;
+class ModuleExport;
 class Function;
+class FunctionType;
 class Memory;
 class Table;
 
@@ -42,14 +45,19 @@ public:
     Function* function(uint32_t index) const { return m_function[index]; }
     Memory* memory(uint32_t index) const { return m_memory[index]; }
     Table* table(uint32_t index) const { return m_table[index]; }
+    Tag* tag(uint32_t index) const { return m_tag[index]; }
     Value& global(uint32_t index) { return m_global[index]; }
-    Value resolveExport(String* name);
+
+    Optional<ModuleExport*> resolveExport(String* name);
+    Optional<Function*> resolveExportFunction(String* name);
+    Optional<Tag*> resolveExportTag(String* name);
 
 private:
     Module* m_module;
     Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
     Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
     Vector<Table*, GCUtil::gc_malloc_allocator<Table*>> m_table;
+    Vector<Tag*, GCUtil::gc_malloc_allocator<Tag*>> m_tag;
     ValueVector m_global;
 };
 

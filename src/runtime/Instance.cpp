@@ -21,21 +21,35 @@
 
 namespace Walrus {
 
-Value Instance::resolveExport(String* name)
+Optional<ModuleExport*> Instance::resolveExport(String* name)
 {
     for (auto me : m_module->moduleExport()) {
         if (me->name()->equals(name)) {
-            switch (me->type()) {
-            case ModuleExport::Function:
-                return Value(function(me->itemIndex()));
-            default:
-                RELEASE_ASSERT_NOT_REACHED();
-            }
-            break;
+            return me;
         }
     }
 
-    return Value();
+    return nullptr;
+}
+
+Optional<Function*> Instance::resolveExportFunction(String* name)
+{
+    auto me = resolveExport(name);
+    if (me && me->type() == ModuleExport::Function) {
+        return function(me->itemIndex());
+    }
+
+    return nullptr;
+}
+
+Optional<Tag*> Instance::resolveExportTag(String* name)
+{
+    auto me = resolveExport(name);
+    if (me && me->type() == ModuleExport::Tag) {
+        return m_tag[me->itemIndex()];
+    }
+
+    return nullptr;
 }
 
 } // namespace Walrus
