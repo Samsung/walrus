@@ -373,6 +373,8 @@ static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance:
         return;
     }
 
+    std::map<size_t, Instance*> instanceMap;
+    size_t commandCount = 0;
     for (const std::unique_ptr<wabt::Command>& command : script->commands) {
         if (auto* moduleCommand = dynamic_cast<wabt::ModuleCommand*>(command.get())) {
             auto module = &moduleCommand->module;
@@ -383,23 +385,25 @@ static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance:
             stream.Flush();
             auto buf = stream.ReleaseOutputBuffer();
             executeWASM(store, buf->data, instances);
+            instanceMap[commandCount] = instances.back();
         } else if (auto* assertReturn = dynamic_cast<wabt::AssertReturnCommand*>(command.get())) {
-            auto value = instances[assertReturn->action->module_var.index()]->resolveExport(new Walrus::String(assertReturn->action->name));
+            auto value = instanceMap[assertReturn->action->module_var.index()]->resolveExport(new Walrus::String(assertReturn->action->name));
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = dynamic_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 RELEASE_ASSERT(value.type() == Walrus::Value::FuncRef);
-                auto fn = instances[action->module_var.index()]->resolveExport(new Walrus::String(action->name)).asFunction();
+                auto fn = instanceMap[action->module_var.index()]->resolveExport(new Walrus::String(action->name)).asFunction();
                 executeInvokeAction(action, fn, assertReturn->expected, nullptr);
             }
         } else if (auto* assertTrap = dynamic_cast<wabt::AssertTrapCommand*>(command.get())) {
-            auto value = instances[assertTrap->action->module_var.index()]->resolveExport(new Walrus::String(assertTrap->action->name));
+            auto value = instanceMap[assertTrap->action->module_var.index()]->resolveExport(new Walrus::String(assertTrap->action->name));
             if (assertTrap->action->type() == wabt::ActionType::Invoke) {
                 auto action = dynamic_cast<wabt::InvokeAction*>(assertTrap->action.get());
                 RELEASE_ASSERT(value.type() == Walrus::Value::FuncRef);
-                auto fn = instances[action->module_var.index()]->resolveExport(new Walrus::String(action->name)).asFunction();
+                auto fn = instanceMap[action->module_var.index()]->resolveExport(new Walrus::String(action->name)).asFunction();
                 executeInvokeAction(action, fn, wabt::ConstVector(), assertTrap->text.data());
             }
         }
+        commandCount++;
     }
 }
 
