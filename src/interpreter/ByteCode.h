@@ -365,18 +365,20 @@ protected:
 
 class Drop : public ByteCode {
 public:
-    Drop(uint32_t size)
+    Drop(uint32_t dropSize, uint32_t parameterSize = 0)
         : ByteCode(OpcodeKind::DropOpcode)
-        , m_size(size)
+        , m_dropSize(dropSize)
+        , m_parameterSize(parameterSize)
     {
     }
 
-    uint32_t size() const { return m_size; }
+    uint32_t dropSize() const { return m_dropSize; }
+    uint32_t parameterSize() const { return m_parameterSize; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("size: %" PRId32, m_size);
+        printf("dropSize: %" PRId32 ", parameterSize: %" PRId32, m_dropSize, m_parameterSize);
     }
 
     virtual size_t byteCodeSize()
@@ -386,7 +388,8 @@ public:
 #endif
 
 protected:
-    uint32_t m_size;
+    uint32_t m_dropSize;
+    uint32_t m_parameterSize;
 };
 
 class Jump : public ByteCode {
