@@ -502,7 +502,14 @@ NextInstruction:
             :
         {
             Drop* code = (Drop*)programCounter;
-            sp -= code->size();
+            if (UNLIKELY(code->parameterSize())) {
+                auto dest = sp - code->dropSize();
+                auto src = sp - code->parameterSize();
+                sp -= (code->dropSize() - code->parameterSize());
+                memmove(dest, src, code->parameterSize());
+            } else {
+                sp -= code->dropSize();
+            }
             ADD_PROGRAM_COUNTER(Drop);
             NEXT_INSTRUCTION();
         }

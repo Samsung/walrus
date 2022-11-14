@@ -519,9 +519,11 @@ public:
         return *iter;
     }
 
-    size_t dropStackValuesBeforeBrIfNeeds(Index depth)
+    // return drop size, parameter size
+    std::pair<size_t, size_t> dropStackValuesBeforeBrIfNeeds(Index depth)
     {
         size_t dropValueSize = 0;
+        size_t parameterSize = 0;
         if (depth < m_blockInfo.size()) {
             auto iter = m_blockInfo.rbegin() + depth;
 
@@ -529,8 +531,23 @@ public:
             for (size_t i = start; i < m_vmStack.size(); i++) {
                 dropValueSize += m_vmStack[i];
             }
-            if (iter->m_returnValueType != Type::Void && iter->m_blockType != BlockInfo::Loop) {
-                dropValueSize -= Walrus::valueSizeInStack(toValueKindForLocalType(iter->m_returnValueType));
+
+            if (iter->m_blockType == BlockInfo::Loop) {
+                if (iter->m_returnValueType.IsIndex()) {
+                    auto ft = m_module->functionType(iter->m_returnValueType);
+                    dropValueSize += ft->paramStackSize();
+                    parameterSize += ft->paramStackSize();
+                }
+            } else {
+                if (iter->m_returnValueType.IsIndex()) {
+                    auto ft = m_module->functionType(iter->m_returnValueType);
+                    const auto& result = ft->result();
+                    for (size_t i = 0; i < result.size(); i++) {
+                        dropValueSize -= Walrus::valueSizeInStack(result[i]);
+                    }
+                } else if (iter->m_returnValueType != Type::Void) {
+                    dropValueSize -= Walrus::valueSizeInStack(toValueKindForLocalType(iter->m_returnValueType));
+                }
             }
         } else if (m_blockInfo.size()) {
             auto iter = m_blockInfo.begin();
@@ -539,7 +556,7 @@ public:
                 dropValueSize += m_vmStack[i];
             }
         }
-        return dropValueSize;
+        return std::make_pair(dropValueSize, parameterSize);
     }
 
     void generateFunctionReturnCode(bool shouldClearVMStack = false)
@@ -549,7 +566,7 @@ public:
         }
         m_currentFunction->pushByteCode(Walrus::End());
         if (shouldClearVMStack) {
-            auto dropSize = dropStackValuesBeforeBrIfNeeds(m_blockInfo.size());
+            auto dropSize = dropStackValuesBeforeBrIfNeeds(m_blockInfo.size()).first;
             while (dropSize) {
                 dropSize -= popVMStack();
             }
@@ -578,8 +595,8 @@ public:
         auto& blockInfo = findBlockInfoInBr(depth);
         auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
-        if (dropSize) {
-            m_currentFunction->pushByteCode(Walrus::Drop(dropSize));
+        if (dropSize.first) {
+            m_currentFunction->pushByteCode(Walrus::Drop(dropSize.first, dropSize.second));
         }
         if (blockInfo.m_blockType == BlockInfo::Block) {
             blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
@@ -607,10 +624,10 @@ public:
 
         auto& blockInfo = findBlockInfoInBr(depth);
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
-        if (dropSize) {
+        if (dropSize.first) {
             size_t pos = m_currentFunction->currentByteCodeSize();
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
-            m_currentFunction->pushByteCode(Walrus::Drop(dropSize));
+            m_currentFunction->pushByteCode(Walrus::Drop(dropSize.first, dropSize.second));
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
             if (blockInfo.m_blockType == BlockInfo::Block) {
                 blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
@@ -815,9 +832,13 @@ public:
             auto blockInfo = m_blockInfo.back();
             m_blockInfo.pop_back();
 
-            if (!blockInfo.m_shouldRestoreVMStackAtEnd && blockInfo.m_returnValueType != Type::Void) {
-                ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+#if !defined(NDEBUG)
+            if (!blockInfo.m_shouldRestoreVMStackAtEnd) {
+                if (!blockInfo.m_returnValueType.IsIndex() && blockInfo.m_returnValueType != Type::Void) {
+                    ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+                }
             }
+#endif
 
             if (blockInfo.m_blockType == BlockInfo::TryCatch) {
                 auto iter = m_catchInfo.begin();
@@ -846,7 +867,19 @@ public:
 
             if (blockInfo.m_shouldRestoreVMStackAtEnd) {
                 m_vmStack = std::move(blockInfo.m_vmStack);
-                if (blockInfo.m_returnValueType != Type::Void) {
+                if (blockInfo.m_returnValueType.IsIndex()) {
+                    auto ft = m_module->functionType(blockInfo.m_returnValueType);
+                    const auto& param = ft->param();
+                    for (size_t i = 0; i < param.size(); i++) {
+                        ASSERT(peekVMStack() == Walrus::valueSizeInStack(param[param.size() - i - 1]));
+                        popVMStack();
+                    }
+
+                    const auto& result = ft->result();
+                    for (size_t i = 0; i < result.size(); i++) {
+                        pushVMStack(Walrus::valueSizeInStack(result[i]));
+                    }
+                } else if (blockInfo.m_returnValueType != Type::Void) {
                     pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
                 }
             }
