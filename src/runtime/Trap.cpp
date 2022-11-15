@@ -32,6 +32,11 @@ Trap::TrapResult Trap::run(void (*runner)(ExecutionState&, void*), void* data)
     return r;
 }
 
+void Trap::throwException(const char* message, size_t len)
+{
+    throwException(new String(message, len));
+}
+
 void Trap::throwException(String* message)
 {
     throw Exception::create(message);

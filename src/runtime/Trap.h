@@ -39,6 +39,12 @@ public:
     };
 
     TrapResult run(void (*runner)(ExecutionState&, void*), void* data);
+    static void throwException(const char* message, size_t len);
+    template <const size_t srcLen>
+    static void throwException(const char (&src)[srcLen])
+    {
+        throwException(src, srcLen - 1);
+    }
     static void throwException(String* message);
     static void throwException(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData);
 

@@ -270,15 +270,12 @@ public:
         return Result::Ok;
     }
     Result OnOpcodeUint32Uint32(uint32_t value, uint32_t value2) override {
-        abort();
         return Result::Ok;
     }
     Result OnOpcodeUint32Uint32Uint32(uint32_t value, uint32_t value2, uint32_t value3) override {
-        abort();
         return Result::Ok;
     }
     Result OnOpcodeUint32Uint32Uint32Uint32(uint32_t value, uint32_t value2, uint32_t value3, uint32_t value4) override {
-        abort();
         return Result::Ok;
     }
     Result OnOpcodeUint64(uint64_t value) override {
@@ -446,7 +443,8 @@ public:
         return Result::Ok;
     }
     Result OnLoadExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnLoadExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
     Result OnLocalGetExpr(Index local_index) override {
@@ -571,7 +569,8 @@ public:
         return Result::Ok;
     }
     Result OnStoreExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnStoreExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
     Result OnThrowExpr(Index tag_index) override {
@@ -678,35 +677,33 @@ public:
 
     /* Data section */
     Result BeginDataSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnDataSegmentCount(Index count) override {
-        abort();
+        m_externalDelegate->OnDataSegmentCount(count);
         return Result::Ok;
     }
     Result BeginDataSegment(Index index, Index memory_index, uint8_t flags) override {
-        abort();
+        m_externalDelegate->BeginDataSegment(index, memory_index, flags);
         return Result::Ok;
     }
     Result BeginDataSegmentInitExpr(Index index) override {
-        abort();
+        m_externalDelegate->BeginDataSegmentInitExpr(index);
         return Result::Ok;
     }
     Result EndDataSegmentInitExpr(Index index) override {
-        abort();
+        m_externalDelegate->EndDataSegmentInitExpr(index);
         return Result::Ok;
     }
     Result OnDataSegmentData(Index index, const void *data, Address size) override {
-        abort();
+        m_externalDelegate->OnDataSegmentData(index, data, size);
         return Result::Ok;
     }
     Result EndDataSegment(Index index) override {
-        abort();
+        m_externalDelegate->EndDataSegment(index);
         return Result::Ok;
     }
     Result EndDataSection() override {
-        abort();
         return Result::Ok;
     }
 
