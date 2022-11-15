@@ -359,7 +359,8 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
     }
     if (expectedException) {
         RELEASE_ASSERT(trapResult.exception);
-        RELEASE_ASSERT(trapResult.exception->message()->equals(expectedException, strlen(expectedException)));
+        std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
+        RELEASE_ASSERT(s.find(expectedException) == 0);
         printf("invoke %s(", action->name.data());
         printConstVector(action->args);
         printf("), expect exception: %s (line: %d) : OK\n", expectedException, action->loc.line);

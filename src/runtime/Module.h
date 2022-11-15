@@ -286,6 +286,29 @@ private:
     Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>> m_catchInfo;
 };
 
+class MemoryInit : public gc {
+public:
+    MemoryInit(ModuleFunction* moduleFunction, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& initData)
+        : m_moduleFunction(moduleFunction)
+        , m_initData(std::move(initData))
+    {
+    }
+
+    ModuleFunction* moduleFunction() const
+    {
+        return m_moduleFunction;
+    }
+
+    const Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>& initData() const
+    {
+        return m_initData;
+    }
+
+private:
+    ModuleFunction* m_moduleFunction;
+    Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_initData;
+};
+
 class Module : public gc {
     friend class wabt::WASMBinaryReader;
 
@@ -347,6 +370,7 @@ private:
     /* initialSize, maximumSize */
     Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
         m_memory;
+    Vector<MemoryInit*, GCUtil::gc_malloc_allocator<MemoryInit*>> m_memoryInitBlock;
     Vector<std::tuple<Value::Type, size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, size_t, size_t>>>
         m_table;
     Vector<std::tuple<Value::Type, bool>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, bool>>>

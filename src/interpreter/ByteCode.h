@@ -588,6 +588,62 @@ public:
 protected:
 };
 
+class MemoryLoad : public ByteCode {
+public:
+    MemoryLoad(OpcodeKind opcode, uint32_t offset)
+        : ByteCode(opcode)
+        , m_offset(offset)
+    {
+    }
+
+    uint32_t offset() const
+    {
+        return m_offset;
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(MemoryLoad);
+    }
+
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRIu32, m_offset);
+    }
+#endif
+protected:
+    uint32_t m_offset;
+};
+
+class MemoryStore : public ByteCode {
+public:
+    MemoryStore(OpcodeKind opcode, uint32_t offset)
+        : ByteCode(opcode)
+        , m_offset(offset)
+    {
+    }
+
+    uint32_t offset() const
+    {
+        return m_offset;
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(MemoryStore);
+    }
+
+    virtual void dump(size_t pos)
+    {
+        printf("offset: %" PRIu32, m_offset);
+    }
+#endif
+protected:
+    uint32_t m_offset;
+};
+
 class TableGet : public ByteCode {
 public:
     TableGet(uint32_t index)
