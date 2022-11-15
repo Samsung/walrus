@@ -124,7 +124,16 @@ static void executeWASM(Store* store, const std::vector<uint8_t>& src, Instance:
     for (size_t i = 0; i < moduleImportData.size(); i++) {
         auto import = moduleImportData[i];
         if (import->moduleName()->equals("spectest")) {
-            if (import->fieldName()->equals("print_i32")) {
+            if (import->fieldName()->equals("print")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 0);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                    },
+                    nullptr));
+            } else if (import->fieldName()->equals("print_i32")) {
                 auto ft = module->functionType(import->functionTypeIndex());
                 ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::I32);
                 importValues[i] = Value(new ImportedFunction(
@@ -347,10 +356,12 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         Walrus::ValueVector result;
         result.resize(data->expectedResult.size());
         data->fn->call(state, data->args.size(), data->args.data(), result.data());
-        RELEASE_ASSERT(data->fn->functionType()->result().size() == data->expectedResult.size());
-        // compare result
-        for (size_t i = 0; i < result.size(); i++) {
-            RELEASE_ASSERT(equals(result[i], data->expectedResult[i]));
+        if (data->expectedResult.size()) {
+            RELEASE_ASSERT(data->fn->functionType()->result().size() == data->expectedResult.size());
+            // compare result
+            for (size_t i = 0; i < result.size(); i++) {
+                RELEASE_ASSERT(equals(result[i], data->expectedResult[i]));
+            }
         }
     },
                                &data);
@@ -369,7 +380,7 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         printf("invoke %s(", action->name.data());
         printConstVector(action->args);
         printf(") expect user exception() (line: %d) : OK\n", action->loc.line);
-    } else {
+    } else if (expectedResult.size()) {
         printf("invoke %s(", action->name.data());
         printConstVector(action->args);
         printf(") expect value(");
@@ -435,6 +446,14 @@ static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance:
             }
         } else if (auto* registerCommand = dynamic_cast<wabt::RegisterCommand*>(command.get())) {
             registeredInstanceMap[registerCommand->module_name] = instanceMap[registerCommand->var.index()];
+        } else if (auto* actionCommand = dynamic_cast<wabt::ActionCommand*>(command.get())) {
+            auto value = instanceMap[actionCommand->action->module_var.index()]->resolveExportFunction(new Walrus::String(actionCommand->action->name)).value();
+            RELEASE_ASSERT(value);
+            if (actionCommand->action->type() == wabt::ActionType::Invoke) {
+                auto action = dynamic_cast<wabt::InvokeAction*>(actionCommand->action.get());
+                auto fn = instanceMap[action->module_var.index()]->resolveExportFunction(new Walrus::String(action->name)).value();
+                executeInvokeAction(action, fn, wabt::ConstVector(), nullptr);
+            }
         }
         commandCount++;
     }
