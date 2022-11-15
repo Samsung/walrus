@@ -24,8 +24,37 @@
 
 namespace Walrus {
 
+#if defined(WALRUS_BIG_ENDIAN)
+inline void memcpyEndianAware(void* dst,
+                              const void* src,
+                              size_t dsize,
+                              size_t ssize,
+                              size_t doff,
+                              size_t soff,
+                              size_t len)
+{
+    memcpy(static_cast<char*>(dst) + (dsize) - (len) - (doff),
+           static_cast<const char*>(src) + (ssize) - (len) - (soff), (len));
+}
+#else
+inline void memcpyEndianAware(void* dst,
+                              const void* src,
+                              size_t dsize,
+                              size_t ssize,
+                              size_t doff,
+                              size_t soff,
+                              size_t len)
+{
+    memcpy(static_cast<char*>(dst) + (doff),
+           static_cast<const char*>(src) + (soff), (len));
+}
+#endif
+
 template <typename T>
-T shiftMask(T val) { return val & (sizeof(T) * 8 - 1); }
+T shiftMask(T val)
+{
+    return val & (sizeof(T) * 8 - 1);
+}
 
 #if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
 

@@ -136,10 +136,10 @@ template <typename T>
 T intDiv(T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException(new String("integer divide by zero"));
+        Trap::throwException("integer divide by zero");
     }
     if (UNLIKELY(!isNormalDivRem(lhs, rhs))) {
-        Trap::throwException(new String("integer overflow"));
+        Trap::throwException("integer overflow");
     }
     return lhs / rhs;
 }
@@ -148,7 +148,7 @@ template <typename T>
 T intRem(T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException(new String("integer divide by zero"));
+        Trap::throwException("integer divide by zero");
     }
     if (LIKELY(isNormalDivRem(lhs, rhs))) {
         return lhs % rhs;
@@ -163,11 +163,11 @@ R doConvert(T val)
     if (std::is_integral<R>::value && std::is_floating_point<T>::value) {
         // Don't use std::isnan here because T may be a non-floating-point type.
         if (UNLIKELY(isNaN(val))) {
-            Trap::throwException(new String("invalid conversion to integer"));
+            Trap::throwException("invalid conversion to integer");
         }
     }
     if (UNLIKELY(!canConvert<R>(val))) {
-        Trap::throwException(new String("integer overflow"));
+        Trap::throwException("integer overflow");
     }
     return convert<R>(val);
 }
@@ -177,6 +177,7 @@ void Interpreter::interpret(ExecutionState& state,
                             uint8_t* bp,
                             uint8_t*& sp)
 {
+    Instance* instance = state.currentFunction()->asDefinedFunction()->instance();
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
 
 #define DEFINE_OPCODE(codeName) case codeName##Opcode
@@ -221,6 +222,31 @@ void Interpreter::interpret(ExecutionState& state,
     {                                                             \
         ADD_PROGRAM_COUNTER(UnaryOperation);                      \
         NEXT_INSTRUCTION();                                       \
+    }
+
+#define MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
+    DEFINE_OPCODE(opcodeName)                                                      \
+        :                                                                          \
+    {                                                                              \
+        MemoryLoad* code = (MemoryLoad*)programCounter;                            \
+        uint32_t offset = readValue<uint32_t>(sp);                                 \
+        nativeReadTypeName value;                                                  \
+        instance->memory(0)->load(offset, code->offset(), &value);                 \
+        writeValue<nativeWriteTypeName>(sp, value);                                \
+        ADD_PROGRAM_COUNTER(MemoryLoad);                                           \
+        NEXT_INSTRUCTION();                                                        \
+    }
+
+#define MEMORY_STORE_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
+    DEFINE_OPCODE(opcodeName)                                                       \
+        :                                                                           \
+    {                                                                               \
+        MemoryStore* code = (MemoryStore*)programCounter;                           \
+        nativeWriteTypeName value = readValue<nativeReadTypeName>(sp);              \
+        uint32_t offset = readValue<uint32_t>(sp);                                  \
+        instance->memory(0)->store(offset, code->offset(), value);                  \
+        ADD_PROGRAM_COUNTER(MemoryStore);                                           \
+        NEXT_INSTRUCTION();                                                         \
     }
 
 NextInstruction:
@@ -573,7 +599,7 @@ NextInstruction:
             :
         {
             GlobalGet4* code = (GlobalGet4*)programCounter;
-            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).writeToStack<4>(sp);
+            instance->global(code->index()).writeToStack<4>(sp);
             ADD_PROGRAM_COUNTER(GlobalGet4);
             NEXT_INSTRUCTION();
         }
@@ -582,7 +608,7 @@ NextInstruction:
             :
         {
             GlobalGet8* code = (GlobalGet8*)programCounter;
-            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).writeToStack<8>(sp);
+            instance->global(code->index()).writeToStack<8>(sp);
             ADD_PROGRAM_COUNTER(GlobalGet8);
             NEXT_INSTRUCTION();
         }
@@ -591,7 +617,7 @@ NextInstruction:
             :
         {
             GlobalSet4* code = (GlobalSet4*)programCounter;
-            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).readFromStack<4>(sp);
+            instance->global(code->index()).readFromStack<4>(sp);
             ADD_PROGRAM_COUNTER(GlobalSet4);
             NEXT_INSTRUCTION();
         }
@@ -600,15 +626,40 @@ NextInstruction:
             :
         {
             GlobalSet4* code = (GlobalSet4*)programCounter;
-            state.currentFunction()->asDefinedFunction()->instance()->global(code->index()).readFromStack<8>(sp);
+            instance->global(code->index()).readFromStack<8>(sp);
             ADD_PROGRAM_COUNTER(GlobalSet8);
             NEXT_INSTRUCTION();
         }
 
+        MEMORY_LOAD_OPERATION(I32Load, int32_t, int32_t)
+        MEMORY_LOAD_OPERATION(I32Load8S, int8_t, int32_t)
+        MEMORY_LOAD_OPERATION(I32Load8U, uint8_t, int32_t)
+        MEMORY_LOAD_OPERATION(I32Load16S, int16_t, int32_t)
+        MEMORY_LOAD_OPERATION(I32Load16U, uint16_t, int32_t)
+        MEMORY_LOAD_OPERATION(I64Load, int64_t, int64_t)
+        MEMORY_LOAD_OPERATION(I64Load8S, int8_t, int64_t)
+        MEMORY_LOAD_OPERATION(I64Load8U, uint8_t, int64_t)
+        MEMORY_LOAD_OPERATION(I64Load16S, int16_t, int64_t)
+        MEMORY_LOAD_OPERATION(I64Load16U, uint16_t, int64_t)
+        MEMORY_LOAD_OPERATION(I64Load32S, int32_t, int64_t)
+        MEMORY_LOAD_OPERATION(I64Load32U, uint32_t, int64_t)
+        MEMORY_LOAD_OPERATION(F32Load, float, float)
+        MEMORY_LOAD_OPERATION(F64Load, double, double)
+
+        MEMORY_STORE_OPERATION(I32Store, int32_t, int32_t)
+        MEMORY_STORE_OPERATION(I32Store16, int32_t, int16_t)
+        MEMORY_STORE_OPERATION(I32Store8, int32_t, int8_t)
+        MEMORY_STORE_OPERATION(I64Store, int64_t, int64_t)
+        MEMORY_STORE_OPERATION(I64Store32, int64_t, int32_t)
+        MEMORY_STORE_OPERATION(I64Store16, int64_t, int16_t)
+        MEMORY_STORE_OPERATION(I64Store8, int64_t, int8_t)
+        MEMORY_STORE_OPERATION(F32Store, float, float)
+        MEMORY_STORE_OPERATION(F64Store, double, double)
+
         DEFINE_OPCODE(MemorySize)
             :
         {
-            writeValue<int32_t>(sp, state.currentFunction()->asDefinedFunction()->instance()->memory(0)->sizeInPageSize());
+            writeValue<int32_t>(sp, instance->memory(0)->sizeInPageSize());
             ADD_PROGRAM_COUNTER(MemorySize);
             NEXT_INSTRUCTION();
         }
@@ -616,7 +667,7 @@ NextInstruction:
         DEFINE_OPCODE(MemoryGrow)
             :
         {
-            Memory* m = state.currentFunction()->asDefinedFunction()->instance()->memory(0);
+            Memory* m = instance->memory(0);
             auto oldSize = m->sizeInPageSize();
             if (m->grow(readValue<int32_t>(sp) * Memory::s_memoryPageSize)) {
                 writeValue<int32_t>(sp, oldSize);
@@ -631,7 +682,7 @@ NextInstruction:
             :
         {
             TableGet* code = (TableGet*)programCounter;
-            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+            Table* table = instance->table(code->tableIndex());
             uint32_t index = readValue<uint32_t>(sp);
             if (index >= table->size()) {
                 // TODO Trap
@@ -648,7 +699,7 @@ NextInstruction:
             :
         {
             TableSet* code = (TableSet*)programCounter;
-            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+            Table* table = instance->table(code->tableIndex());
 
             // FIXME read reference
             Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
@@ -668,7 +719,7 @@ NextInstruction:
             :
         {
             TableGrow* code = (TableGrow*)programCounter;
-            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+            Table* table = instance->table(code->tableIndex());
 
             size_t size = table->size();
 
@@ -693,7 +744,7 @@ NextInstruction:
             :
         {
             TableSize* code = (TableSize*)programCounter;
-            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+            Table* table = instance->table(code->tableIndex());
 
             size_t size = table->size();
             writeValue<int32_t>(sp, size);
@@ -706,8 +757,8 @@ NextInstruction:
             :
         {
             TableCopy* code = (TableCopy*)programCounter;
-            Table* dstTable = state.currentFunction()->asDefinedFunction()->instance()->table(code->dstIndex());
-            Table* srcTable = state.currentFunction()->asDefinedFunction()->instance()->table(code->srcIndex());
+            Table* dstTable = instance->table(code->dstIndex());
+            Table* srcTable = instance->table(code->srcIndex());
 
             int32_t dstSize = dstTable->size();
             int32_t srcSize = srcTable->size();
@@ -739,7 +790,7 @@ NextInstruction:
             :
         {
             TableFill* code = (TableFill*)programCounter;
-            Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+            Table* table = instance->table(code->tableIndex());
 
             int32_t size = table->size();
 
@@ -765,7 +816,7 @@ NextInstruction:
             :
         {
             Throw* code = (Throw*)programCounter;
-            Tag* tag = state.currentFunction()->asDefinedFunction()->instance()->tag(code->tagIndex());
+            Tag* tag = instance->tag(code->tagIndex());
             Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>> userExceptionData;
             size_t sz = tag->functionType()->paramStackSize();
             userExceptionData.resizeWithUninitializedValues(sz);
@@ -778,7 +829,7 @@ NextInstruction:
         DEFINE_OPCODE(Unreachable)
             :
         {
-            Trap::throwException(new String("unreachable"));
+            Trap::throwException("unreachable executed");
             ASSERT_NOT_REACHED();
             NEXT_INSTRUCTION();
         }

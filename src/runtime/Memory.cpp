@@ -16,6 +16,7 @@
 #include "Walrus.h"
 
 #include "Memory.h"
+#include "runtime/Trap.h"
 
 namespace Walrus {
 
@@ -45,6 +46,15 @@ bool Memory::grow(size_t growSizeInByte)
         }
     }
     return false;
+}
+
+void Memory::throwException(uint32_t offset, uint32_t addend, uint32_t size) const
+{
+    std::string str = "out of bounds memory access: access at ";
+    str += std::to_string(offset + addend);
+    str += "+";
+    str += std::to_string(size);
+    Trap::throwException(str.data(), str.length());
 }
 
 } // namespace Walrus

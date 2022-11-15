@@ -52,6 +52,13 @@ public:
     virtual void OnMemoryCount(Index count) = 0;
     virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) = 0;
 
+    virtual void OnDataSegmentCount(Index count) = 0;
+    virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) = 0;
+    virtual void BeginDataSegmentInitExpr(Index index) = 0;
+    virtual void EndDataSegmentInitExpr(Index index) = 0;
+    virtual void OnDataSegmentData(Index index, const void *data, Address size) = 0;
+    virtual void EndDataSegment(Index index) = 0;
+
     virtual void OnTableCount(Index count) = 0;
     virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) = 0;
 
@@ -110,6 +117,8 @@ public:
     virtual void OnTableSizeExpr(Index table_index) = 0;
     virtual void OnTableCopyExpr(Index dst_index, Index src_index) = 0;
     virtual void OnTableFillExpr(Index table_index) = 0;
+    virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnReturnExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;

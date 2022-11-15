@@ -202,6 +202,37 @@ public:
         m_module->m_memory.pushBack(std::make_pair(initialSize, maximumSize));
     }
 
+    virtual void OnDataSegmentCount(Index count) override
+    {
+        m_module->m_memoryInitBlock.reserve(count);
+    }
+
+    virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
+    {
+        ASSERT(index == m_module->m_memoryInitBlock.size());
+        m_currentFunction = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max());
+    }
+
+    virtual void BeginDataSegmentInitExpr(Index index) override
+    {
+    }
+
+    virtual void EndDataSegmentInitExpr(Index index) override
+    {
+    }
+
+    virtual void OnDataSegmentData(Index index, const void* data, Address size) override
+    {
+        m_memoryInitData.resizeWithUninitializedValues(size);
+        memcpy(m_memoryInitData.data(), data, size);
+    }
+
+    virtual void EndDataSegment(Index index) override
+    {
+        m_module->m_memoryInitBlock.pushBack(new Walrus::MemoryInit(m_currentFunction, std::move(m_memoryInitData)));
+        m_currentFunction = nullptr;
+    }
+
     /* Function section */
     virtual void OnFunctionCount(Index count) override
     {
@@ -817,6 +848,25 @@ public:
         popVMStack();
     }
 
+    virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<Walrus::OpcodeKind>(opcode);
+        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStack());
+        popVMStack();
+        pushVMStack(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
+        m_currentFunction->pushByteCode(Walrus::MemoryLoad(code, offset));
+    }
+
+    virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<Walrus::OpcodeKind>(opcode);
+        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[1]) == peekVMStack());
+        popVMStack();
+        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStack());
+        popVMStack();
+        m_currentFunction->pushByteCode(Walrus::MemoryStore(code, offset));
+    }
+
     virtual void OnNopExpr() override
     {
     }
@@ -947,6 +997,7 @@ private:
         uint32_t m_tagIndex;
     };
     std::vector<CatchInfo> m_catchInfo;
+    Walrus::Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_memoryInitData;
 };
 
 } // namespace wabt
