@@ -23,13 +23,7 @@ namespace Walrus {
 
 class Table : public gc {
 public:
-    Table(Value::Type type, size_t initialSize, size_t maximumSize)
-        : m_type(type)
-        , m_size(initialSize)
-        , m_maximumSize(maximumSize)
-    {
-        m_elements.resizeWithUninitializedValues(initialSize);
-    }
+    Table(Value::Type type, size_t initialSize, size_t maximumSize);
 
     Value::Type type() const
     {
@@ -54,18 +48,27 @@ public:
 
     Value getElement(uint32_t elemIndex) const
     {
-        ASSERT(elemIndex < m_size);
+        if (UNLIKELY(elemIndex >= m_size)) {
+            throwException();
+        }
         return m_elements[elemIndex];
     }
 
     void setElement(uint32_t elemIndex, const Value& val)
     {
-        ASSERT(elemIndex < m_size);
         ASSERT(val.type() == m_type);
+        if (UNLIKELY(elemIndex >= m_size)) {
+            throwException();
+        }
         m_elements[elemIndex] = val;
     }
 
+    void copy(const Table* srcTable, int32_t n, int32_t srcIndex, int32_t dstIndex);
+    void fill(int32_t n, const Value& value, int32_t index);
+
 private:
+    void throwException() const;
+
     // Table has elements of reference type (FuncRef | ExternRef)
     Value::Type m_type;
     size_t m_size;
