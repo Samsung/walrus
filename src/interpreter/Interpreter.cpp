@@ -683,12 +683,7 @@ NextInstruction:
         {
             TableGet* code = (TableGet*)programCounter;
             Table* table = instance->table(code->tableIndex());
-            uint32_t index = readValue<uint32_t>(sp);
-            if (index >= table->size()) {
-                // TODO Trap
-            }
-
-            Value val = table->getElement(index);
+            Value val = table->getElement(readValue<uint32_t>(sp));
             val.writeToStack(sp);
 
             ADD_PROGRAM_COUNTER(TableGet);
@@ -700,16 +695,9 @@ NextInstruction:
         {
             TableSet* code = (TableSet*)programCounter;
             Table* table = instance->table(code->tableIndex());
-
             // FIXME read reference
             Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
-            uint32_t index = readValue<uint32_t>(sp);
-
-            if (index >= table->size()) {
-                // TODO Trap
-            }
-
-            table->setElement(index, val);
+            table->setElement(readValue<uint32_t>(sp), val);
 
             ADD_PROGRAM_COUNTER(TableSet);
             NEXT_INSTRUCTION();
@@ -720,12 +708,8 @@ NextInstruction:
         {
             TableGrow* code = (TableGrow*)programCounter;
             Table* table = instance->table(code->tableIndex());
-
             size_t size = table->size();
-
-            int32_t n = readValue<int32_t>(sp);
-            size_t newSize = n + size;
-
+            size_t newSize = readValue<int32_t>(sp) + size;
             // FIXME read reference
             Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
 
@@ -745,7 +729,6 @@ NextInstruction:
         {
             TableSize* code = (TableSize*)programCounter;
             Table* table = instance->table(code->tableIndex());
-
             size_t size = table->size();
             writeValue<int32_t>(sp, size);
 
@@ -759,28 +742,10 @@ NextInstruction:
             TableCopy* code = (TableCopy*)programCounter;
             Table* dstTable = instance->table(code->dstIndex());
             Table* srcTable = instance->table(code->srcIndex());
-
-            int32_t dstSize = dstTable->size();
-            int32_t srcSize = srcTable->size();
-
-            int32_t n = readValue<int32_t>(sp);
-            int32_t s = readValue<int32_t>(sp);
-            int32_t d = readValue<int32_t>(sp);
-
-            if ((s + n > srcSize) || (d + n > dstSize)) {
-                // Trap
-            }
-
-            while (n > 0) {
-                if (d <= s) {
-                    dstTable->setElement(d, srcTable->getElement(s));
-                    d++;
-                    s++;
-                } else {
-                    dstTable->setElement(d + n - 1, srcTable->getElement(s + n - 1));
-                }
-                n--;
-            }
+            int n = readValue<int32_t>(sp);
+            int srcIndex = readValue<int32_t>(sp);
+            int dstIndex = readValue<int32_t>(sp);
+            dstTable->copy(srcTable, n, srcIndex, dstIndex);
 
             ADD_PROGRAM_COUNTER(TableCopy);
             NEXT_INSTRUCTION();
@@ -791,22 +756,10 @@ NextInstruction:
         {
             TableFill* code = (TableFill*)programCounter;
             Table* table = instance->table(code->tableIndex());
-
-            int32_t size = table->size();
-
             int32_t n = readValue<int32_t>(sp);
             Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
-            int32_t i = readValue<int32_t>(sp);
-
-            if (i + n > size) {
-                // Trap
-            }
-
-            while (n > 0) {
-                table->setElement(i, val);
-                n--;
-                i++;
-            }
+            int32_t index = readValue<int32_t>(sp);
+            table->fill(n, val, index);
 
             ADD_PROGRAM_COUNTER(TableFill);
             NEXT_INSTRUCTION();
