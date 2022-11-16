@@ -104,7 +104,7 @@ public:
         return Result::Ok;
     }
     Result OnImportTable(Index import_index, std::string_view module_name, std::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
-        abort();
+        m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
     }
     Result OnImportMemory(Index import_index, std::string_view module_name, std::string_view field_name, Index memory_index, const Limits *page_limits) override {

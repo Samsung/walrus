@@ -24,6 +24,7 @@
 namespace Walrus {
 
 class Function;
+class Table;
 
 class V128 {
 public:
@@ -171,6 +172,12 @@ public:
     {
         ASSERT(type() == FuncRef);
         return reinterpret_cast<Function*>(m_ref);
+    }
+
+    Table* asTable() const
+    {
+        ASSERT(type() == ExternRef);
+        return reinterpret_cast<Table*>(m_ref);
     }
 
     void* asExternal() const
