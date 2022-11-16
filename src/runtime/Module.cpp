@@ -35,6 +35,7 @@ Instance* Module::instantiate(const ValueVector& imports)
     for (size_t i = 0; i < m_global.size(); i++) {
         instance->m_global.pushBack(Value(std::get<0>(m_global[i])));
     }
+    instance->m_table.reserve(m_table.size() + m_importTableNum);
     instance->m_tag.resize(m_tag.size(), nullptr);
 
     for (size_t i = 0; i < m_import.size(); i++) {
@@ -47,6 +48,11 @@ Instance* Module::instantiate(const ValueVector& imports)
         }
         case ModuleImport::Global: {
             instance->m_global[m_import[i]->globalIndex()] = imports[i];
+            break;
+        }
+        case ModuleImport::Table: {
+            ASSERT(m_import[i]->tableIndex() == instance->m_table.size());
+            instance->m_table.push_back(imports[i].asTable());
             break;
         }
         case ModuleImport::Tag: {
@@ -78,6 +84,7 @@ Instance* Module::instantiate(const ValueVector& imports)
     for (size_t i = 0; i < m_table.size(); i++) {
         instance->m_table.pushBack(new Table(std::get<0>(m_table[i]), std::get<1>(m_table[i]), std::get<2>(m_table[i])));
     }
+    ASSERT(instance->m_table.size() == (m_table.size() + m_importTableNum));
 
     // init tag
     for (size_t i = 0; i < m_tag.size(); i++) {

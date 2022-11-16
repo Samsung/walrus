@@ -91,7 +91,7 @@ public:
         , m_importIndex(importIndex)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
-        , m_functionIndex(functionIndex)
+        , m_index(functionIndex)
         , m_functionTypeIndex(functionTypeIndex)
     {
     }
@@ -100,12 +100,12 @@ public:
                  uint32_t importIndex,
                  String* moduleName,
                  String* fieldName,
-                 uint32_t globalIndex)
+                 uint32_t index)
         : m_type(t)
         , m_importIndex(importIndex)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
-        , m_globalIndex(globalIndex)
+        , m_index(index)
     {
     }
 
@@ -120,7 +120,7 @@ public:
     uint32_t functionIndex() const
     {
         ASSERT(type() == Type::Function);
-        return m_functionIndex;
+        return m_index;
     }
 
     uint32_t functionTypeIndex() const
@@ -132,13 +132,19 @@ public:
     uint32_t globalIndex() const
     {
         ASSERT(type() == Type::Global);
-        return m_globalIndex;
+        return m_index;
+    }
+
+    uint32_t tableIndex() const
+    {
+        ASSERT(type() == Type::Table);
+        return m_index;
     }
 
     uint32_t tagIndex() const
     {
         ASSERT(type() == Type::Tag);
-        return m_tagIndex;
+        return m_index;
     }
 
 private:
@@ -146,19 +152,8 @@ private:
     uint32_t m_importIndex;
     String* m_moduleName;
     String* m_fieldName;
-
-    union {
-        struct {
-            uint32_t m_functionIndex;
-            uint32_t m_functionTypeIndex;
-        };
-        struct {
-            uint32_t m_globalIndex;
-        };
-        struct {
-            uint32_t m_tagIndex;
-        };
-    };
+    uint32_t m_index;
+    uint32_t m_functionTypeIndex;
 };
 
 class ModuleExport : public gc {
@@ -318,6 +313,7 @@ public:
         , m_seenStartAttribute(false)
         , m_version(0)
         , m_start(0)
+        , m_importTableNum(0)
     {
     }
 
@@ -360,6 +356,9 @@ private:
     bool m_seenStartAttribute;
     uint32_t m_version;
     uint32_t m_start;
+
+    size_t m_importTableNum;
+
     Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>> m_import;
     Vector<ModuleExport*, GCUtil::gc_malloc_allocator<ModuleExport*>> m_export;
     Vector<FunctionType*, GCUtil::gc_malloc_allocator<FunctionType*>>
