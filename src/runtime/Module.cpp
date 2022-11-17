@@ -30,33 +30,53 @@ namespace Walrus {
 Instance* Module::instantiate(const ValueVector& imports)
 {
     Instance* instance = new Instance(this);
-    instance->m_function.resize(m_function.size(), nullptr);
+
+    instance->m_function.reserve(m_function.size());
+    instance->m_table.reserve(m_table.size());
+    instance->m_memory.reserve(m_memory.size());
     instance->m_global.reserve(m_global.size());
+    instance->m_tag.reserve(m_tag.size());
+
+    size_t importFuncCount = 0;
+    size_t importTableCount = 0;
+    size_t importMemCount = 0;
+    size_t importTagCount = 0;
+
+    // FIXME Globals should be initialized first due to its initialization process
     for (size_t i = 0; i < m_global.size(); i++) {
         instance->m_global.pushBack(Value(std::get<0>(m_global[i])));
     }
-    instance->m_table.reserve(m_table.size() + m_importTableNum);
-    instance->m_tag.resize(m_tag.size(), nullptr);
 
     for (size_t i = 0; i < m_import.size(); i++) {
         auto type = m_import[i]->type();
 
         switch (type) {
         case ModuleImport::Function: {
-            instance->m_function[m_import[i]->functionIndex()] = imports[i].asFunction();
+            ASSERT(m_import[i]->functionIndex() == instance->m_function.size());
+            instance->m_function.push_back(imports[i].asFunction());
+            importFuncCount++;
+            break;
+        }
+        case ModuleImport::Table: {
+            ASSERT(m_import[i]->tableIndex() == instance->m_table.size());
+            instance->m_table.push_back(imports[i].asTable());
+            importTableCount++;
+            break;
+        }
+        case ModuleImport::Memory: {
+            ASSERT(m_import[i]->memoryIndex() == instance->m_table.size());
+            instance->m_memory.push_back(imports[i].asMemory());
+            importMemCount++;
             break;
         }
         case ModuleImport::Global: {
             instance->m_global[m_import[i]->globalIndex()] = imports[i];
             break;
         }
-        case ModuleImport::Table: {
-            ASSERT(m_import[i]->tableIndex() == instance->m_table.size());
-            instance->m_table.push_back(imports[i].asTable());
-            break;
-        }
         case ModuleImport::Tag: {
-            instance->m_tag[m_import[i]->tagIndex()] = reinterpret_cast<Tag*>(imports[i].asExternal());
+            ASSERT(m_import[i]->tagIndex() == instance->m_tag.size());
+            instance->m_tag.push_back(reinterpret_cast<Tag*>(imports[i].asExternal()));
+            importTagCount++;
             break;
         }
         default: {
@@ -67,31 +87,28 @@ Instance* Module::instantiate(const ValueVector& imports)
     }
 
     // init defined function
-    for (size_t i = 0; i < m_function.size(); i++) {
-        auto idx = m_function[i]->functionIndex();
-        if (!instance->m_function[idx]) {
-            // TODO if there is no function at function(idx), throw exception
-            instance->m_function[idx] = new DefinedFunction(m_store, functionType(m_function[i]->functionTypeIndex()), instance, function(idx));
-        }
-    }
-
-    // init memory
-    for (size_t i = 0; i < m_memory.size(); i++) {
-        instance->m_memory.pushBack(new Memory(m_memory[i].first * Memory::s_memoryPageSize, m_memory[i].second * Memory::s_memoryPageSize));
+    for (size_t i = importFuncCount; i < m_function.size(); i++) {
+        ASSERT(i == m_function[i]->functionIndex());
+        ASSERT(i == instance->m_function.size());
+        instance->m_function.push_back(new DefinedFunction(m_store, functionType(m_function[i]->functionTypeIndex()), instance, function(i)));
     }
 
     // init table
-    for (size_t i = 0; i < m_table.size(); i++) {
+    for (size_t i = importTableCount; i < m_table.size(); i++) {
+        ASSERT(i == instance->m_table.size());
         instance->m_table.pushBack(new Table(std::get<0>(m_table[i]), std::get<1>(m_table[i]), std::get<2>(m_table[i])));
     }
-    ASSERT(instance->m_table.size() == (m_table.size() + m_importTableNum));
+
+    // init memory
+    for (size_t i = importMemCount; i < m_memory.size(); i++) {
+        ASSERT(i == instance->m_memory.size());
+        instance->m_memory.pushBack(new Memory(m_memory[i].first * Memory::s_memoryPageSize, m_memory[i].second * Memory::s_memoryPageSize));
+    }
 
     // init tag
-    for (size_t i = 0; i < m_tag.size(); i++) {
-        if (!instance->m_tag[i]) {
-            instance->m_tag[i] = new Tag(functionType(m_tag[i]));
-        }
-        ASSERT(instance->m_tag[i]);
+    for (size_t i = importTagCount; i < m_tag.size(); i++) {
+        ASSERT(i == instance->m_tag.size());
+        instance->m_tag.push_back(new Tag(functionType(m_tag[i])));
     }
 
     // init global
@@ -116,7 +133,7 @@ Instance* Module::instantiate(const ValueVector& imports)
                  &data);
     }
 
-    // memory init
+    // init memory
     for (auto init : m_memoryInitBlock) {
         struct RunData {
             MemoryInit* init;

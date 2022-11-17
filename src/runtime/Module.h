@@ -141,6 +141,12 @@ public:
         return m_index;
     }
 
+    uint32_t memoryIndex() const
+    {
+        ASSERT(type() == Type::Memory);
+        return m_index;
+    }
+
     uint32_t tagIndex() const
     {
         ASSERT(type() == Type::Tag);
@@ -313,7 +319,6 @@ public:
         , m_seenStartAttribute(false)
         , m_version(0)
         , m_start(0)
-        , m_importTableNum(0)
     {
     }
 
@@ -357,23 +362,22 @@ private:
     uint32_t m_version;
     uint32_t m_start;
 
-    size_t m_importTableNum;
-
     Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>> m_import;
     Vector<ModuleExport*, GCUtil::gc_malloc_allocator<ModuleExport*>> m_export;
+
     Vector<FunctionType*, GCUtil::gc_malloc_allocator<FunctionType*>>
         m_functionType;
     Vector<ModuleFunction*, GCUtil::gc_malloc_allocator<ModuleFunction*>>
         m_function;
-    Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_tag;
+    Vector<std::tuple<Value::Type, size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, size_t, size_t>>>
+        m_table;
     /* initialSize, maximumSize */
     Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
         m_memory;
     Vector<MemoryInit*, GCUtil::gc_malloc_allocator<MemoryInit*>> m_memoryInitBlock;
-    Vector<std::tuple<Value::Type, size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, size_t, size_t>>>
-        m_table;
     Vector<std::tuple<Value::Type, bool>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, bool>>>
         m_global;
+    Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_tag;
     Optional<ModuleFunction*> m_globalInitBlock;
 };
 
