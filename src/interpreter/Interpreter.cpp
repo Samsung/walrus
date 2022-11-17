@@ -625,7 +625,7 @@ NextInstruction:
         DEFINE_OPCODE(GlobalSet8)
             :
         {
-            GlobalSet4* code = (GlobalSet4*)programCounter;
+            GlobalSet8* code = (GlobalSet8*)programCounter;
             instance->global(code->index()).readFromStack<8>(sp);
             ADD_PROGRAM_COUNTER(GlobalSet8);
             NEXT_INSTRUCTION();

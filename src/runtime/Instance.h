@@ -54,11 +54,12 @@ public:
 
 private:
     Module* m_module;
+
     Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
-    Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
     Vector<Table*, GCUtil::gc_malloc_allocator<Table*>> m_table;
-    Vector<Tag*, GCUtil::gc_malloc_allocator<Tag*>> m_tag;
+    Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
     ValueVector m_global;
+    Vector<Tag*, GCUtil::gc_malloc_allocator<Tag*>> m_tag;
 };
 
 } // namespace Walrus
