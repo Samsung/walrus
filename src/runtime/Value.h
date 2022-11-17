@@ -25,6 +25,7 @@ namespace Walrus {
 
 class Function;
 class Table;
+class Memory;
 
 class V128 {
 public:
@@ -178,6 +179,12 @@ public:
     {
         ASSERT(type() == ExternRef);
         return reinterpret_cast<Table*>(m_ref);
+    }
+
+    Memory* asMemory() const
+    {
+        ASSERT(type() == ExternRef);
+        return reinterpret_cast<Memory*>(m_ref);
     }
 
     void* asExternal() const

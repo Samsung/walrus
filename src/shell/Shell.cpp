@@ -10,6 +10,7 @@
 #include "runtime/Module.h"
 #include "runtime/Function.h"
 #include "runtime/Table.h"
+#include "runtime/Memory.h"
 #include "runtime/Instance.h"
 #include "runtime/Trap.h"
 #include "parser/WASMParser.h"
@@ -195,6 +196,8 @@ static void executeWASM(Store* store, const std::vector<uint8_t>& src, Instance:
                 importValues[i] = Value(double(0x4084d00000000000));
             } else if (import->fieldName()->equals("table")) {
                 importValues[i] = Value(new Table(Value::Type::FuncRef, 10, 20));
+            } else if (import->fieldName()->equals("memory")) {
+                importValues[i] = Value(new Memory(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
             }
         } else if (registeredInstanceMap) {
             auto iter = registeredInstanceMap->find(std::string(import->moduleName()->buffer(), import->moduleName()->length()));
