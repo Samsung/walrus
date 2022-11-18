@@ -765,6 +765,25 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(RefNull)
+            :
+        {
+            Value(Value::Type::FuncRef).writeToStack(sp);
+
+            ADD_PROGRAM_COUNTER(RefNull);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(RefIsNull)
+            :
+        {
+            Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
+            writeValue(sp, (int32_t)val.isNull());
+
+            ADD_PROGRAM_COUNTER(RefNull);
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(Throw)
             :
         {
