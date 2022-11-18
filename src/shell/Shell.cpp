@@ -303,6 +303,14 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
             }
         }
         return c.f64_bits() == v.asF64Bits();
+    } else if (c.type() == wabt::Type::ExternRef && v.type() == Walrus::Value::ExternRef) {
+        // FIXME value of c.ref_bits() for RefNull
+        wabt::Const constNull;
+        constNull.set_null(c.type());
+        if (c.ref_bits() == constNull.ref_bits()) {
+            // check RefNull
+            return v.isNull();
+        }
     }
     return false;
 }
@@ -333,6 +341,14 @@ static void printConstVector(wabt::ConstVector& v)
             auto bits = c.f64_bits();
             memcpy(&s, &bits, sizeof(double));
             printf("%lf", s);
+        } else if (c.type() == wabt::Type::ExternRef) {
+            // FIXME value of c.ref_bits() for RefNull
+            wabt::Const constNull;
+            constNull.set_null(c.type());
+            if (c.ref_bits() == constNull.ref_bits()) {
+                printf("ref.null");
+                return;
+            }
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }

@@ -122,6 +122,8 @@ public:
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnReturnExpr() = 0;
+    virtual void OnRefNullExpr(Type type) = 0;
+    virtual void OnRefIsNullExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
     virtual void OnUnreachableExpr() = 0;

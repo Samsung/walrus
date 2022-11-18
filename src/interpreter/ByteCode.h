@@ -773,6 +773,36 @@ protected:
     uint32_t m_tableIndex;
 };
 
+class RefNull : public ByteCode {
+public:
+    RefNull()
+        : ByteCode(OpcodeKind::RefNullOpcode)
+    {
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(RefNull);
+    }
+#endif
+};
+
+class RefIsNull : public ByteCode {
+public:
+    RefIsNull()
+        : ByteCode(OpcodeKind::RefIsNullOpcode)
+    {
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(RefIsNull);
+    }
+#endif
+};
+
 class GlobalGet4 : public ByteCode {
 public:
     GlobalGet4(uint32_t index)

@@ -47,6 +47,11 @@ size_t stackAllocatedSize()
 class Value {
 public:
     // https://webassembly.github.io/spec/core/syntax/types.html
+
+    // RefNull
+    static constexpr uintptr_t NullBits = ~uintptr_t(0);
+    enum RefNull { Null };
+
     enum Type : uint8_t {
         I32,
         I64,
@@ -106,6 +111,12 @@ public:
     {
     }
 
+    Value(RefNull)
+        : m_ref(reinterpret_cast<void*>(NullBits))
+        , m_type(ExternRef)
+    {
+    }
+
     Value(Type type, const uint8_t* memory)
         : m_type(type)
     {
@@ -123,7 +134,8 @@ public:
             m_i64 = *reinterpret_cast<const int64_t*>(memory);
             break;
         case FuncRef:
-            m_ref = const_cast<Function*>(reinterpret_cast<const Function*>(memory));
+        case ExternRef:
+            m_ref = *reinterpret_cast<void**>(const_cast<uint8_t*>(memory));
             break;
         default:
             ASSERT_NOT_REACHED();
@@ -216,7 +228,8 @@ public:
             ptr += stackAllocatedSize<int64_t>();
             break;
         }
-        case FuncRef: {
+        case FuncRef:
+        case ExternRef: {
             *reinterpret_cast<void**>(ptr) = m_ref;
             ptr += stackAllocatedSize<void*>();
             break;
@@ -226,6 +239,12 @@ public:
             break;
         }
         }
+    }
+
+    bool isNull() const
+    {
+        ASSERT(m_type == FuncRef || m_type == ExternRef);
+        return m_ref == reinterpret_cast<void*>(NullBits);
     }
 
     template <const size_t size>
@@ -245,7 +264,6 @@ public:
             case I64:
                 return m_i64 == v.m_i64;
             case FuncRef:
-                return m_ref == v.m_ref;
             case ExternRef:
                 return m_ref == v.m_ref;
             default:
