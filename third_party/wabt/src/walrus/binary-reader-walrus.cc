@@ -536,11 +536,13 @@ public:
         return Result::Ok;
     }
     Result OnRefNullExpr(Type type) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnRefNullExpr(type);
         return Result::Ok;
     }
     Result OnRefIsNullExpr() override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnRefIsNullExpr();
         return Result::Ok;
     }
     Result OnNopExpr() override {

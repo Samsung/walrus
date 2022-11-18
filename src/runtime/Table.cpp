@@ -25,7 +25,7 @@ Table::Table(Value::Type type, size_t initialSize, size_t maximumSize)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
 {
-    m_elements.resizeWithUninitializedValues(initialSize);
+    m_elements.resize(initialSize, Value(Value::Null));
 }
 
 void Table::copy(const Table* srcTable, int32_t n, int32_t srcIndex, int32_t dstIndex)

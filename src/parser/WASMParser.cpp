@@ -37,6 +37,8 @@ static Walrus::Value::Type toValueKindForFunctionType(Type type)
         return Walrus::Value::Type::F64;
     case Type::FuncRef:
         return Walrus::Value::Type::FuncRef;
+    case Type::ExternRef:
+        return Walrus::Value::Type::ExternRef;
     default:
         RELEASE_ASSERT_NOT_REACHED();
     }
@@ -53,6 +55,10 @@ static Walrus::Value::Type toValueKindForLocalType(Type type)
         return Walrus::Value::Type::F32;
     case Type::F64:
         return Walrus::Value::Type::F64;
+    case Type::FuncRef:
+        return Walrus::Value::Type::FuncRef;
+    case Type::ExternRef:
+        return Walrus::Value::Type::ExternRef;
     default:
         RELEASE_ASSERT_NOT_REACHED();
     }
@@ -169,7 +175,7 @@ public:
             new Walrus::String(fieldName), tableIndex));
     }
 
-    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize)
+    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize) override
     {
         ASSERT(memoryIndex == m_module->m_memory.size());
         m_module->m_memory.pushBack(std::make_pair(initialSize, maximumSize));
@@ -887,6 +893,19 @@ public:
         ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStack());
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::MemoryStore(code, offset));
+    }
+
+    virtual void OnRefNullExpr(Type type) override
+    {
+        m_currentFunction->pushByteCode(Walrus::RefNull());
+        pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
+    }
+
+    virtual void OnRefIsNullExpr() override
+    {
+        m_currentFunction->pushByteCode(Walrus::RefIsNull());
+        popVMStack();
+        pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
     }
 
     virtual void OnNopExpr() override
