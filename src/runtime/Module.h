@@ -287,9 +287,9 @@ private:
     Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>> m_catchInfo;
 };
 
-class MemoryInit : public gc {
+class Data : public gc {
 public:
-    MemoryInit(ModuleFunction* moduleFunction, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& initData)
+    Data(ModuleFunction* moduleFunction, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& initData)
         : m_moduleFunction(moduleFunction)
         , m_initData(std::move(initData))
     {
@@ -374,7 +374,7 @@ private:
     /* initialSize, maximumSize */
     Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
         m_memory;
-    Vector<MemoryInit*, GCUtil::gc_malloc_allocator<MemoryInit*>> m_memoryInitBlock;
+    Vector<Data*, GCUtil::gc_malloc_allocator<Data*>> m_data;
     Vector<std::tuple<Value::Type, bool>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, bool>>>
         m_global;
     Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_tag;

@@ -569,6 +569,98 @@ public:
 protected:
 };
 
+class MemoryInit : public ByteCode {
+public:
+    MemoryInit(uint32_t index, uint32_t segmentIndex)
+        : ByteCode(OpcodeKind::MemoryInitOpcode)
+        , m_segmentIndex(segmentIndex)
+    {
+        ASSERT(index == 0);
+    }
+
+    uint32_t segmentIndex() const
+    {
+        return m_segmentIndex;
+    }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("segmentIndex: %" PRIu32, m_segmentIndex);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(MemoryInit);
+    }
+#endif
+
+protected:
+    uint32_t m_segmentIndex;
+};
+
+class MemoryCopy : public ByteCode {
+public:
+    MemoryCopy(uint32_t srcIndex, uint32_t dstIndex)
+        : ByteCode(OpcodeKind::MemoryCopyOpcode)
+    {
+        ASSERT(srcIndex == 0);
+        ASSERT(dstIndex == 0);
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(MemoryCopy);
+    }
+#endif
+};
+
+class MemoryFill : public ByteCode {
+public:
+    MemoryFill(uint32_t memIdx)
+        : ByteCode(OpcodeKind::MemoryFillOpcode)
+    {
+        ASSERT(memIdx == 0);
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(MemoryFill);
+    }
+#endif
+};
+
+class DataDrop : public ByteCode {
+public:
+    DataDrop(uint32_t segmentIndex)
+        : ByteCode(OpcodeKind::DataDropOpcode)
+        , m_segmentIndex(segmentIndex)
+    {
+    }
+
+    uint32_t segmentIndex() const
+    {
+        return m_segmentIndex;
+    }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("segmentIndex: %" PRIu32, m_segmentIndex);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(DataDrop);
+    }
+#endif
+
+protected:
+    uint32_t m_segmentIndex;
+};
+
 class MemoryGrow : public ByteCode {
 public:
     MemoryGrow(uint32_t index)

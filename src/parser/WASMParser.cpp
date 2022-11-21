@@ -232,12 +232,12 @@ public:
 
     virtual void OnDataSegmentCount(Index count) override
     {
-        m_module->m_memoryInitBlock.reserve(count);
+        m_module->m_data.reserve(count);
     }
 
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
-        ASSERT(index == m_module->m_memoryInitBlock.size());
+        ASSERT(index == m_module->m_data.size());
         m_currentFunction = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max());
     }
 
@@ -257,7 +257,7 @@ public:
 
     virtual void EndDataSegment(Index index) override
     {
-        m_module->m_memoryInitBlock.pushBack(new Walrus::MemoryInit(m_currentFunction, std::move(m_memoryInitData)));
+        m_module->m_data.pushBack(new Walrus::Data(m_currentFunction, std::move(m_memoryInitData)));
         m_currentFunction = nullptr;
     }
 
@@ -807,6 +807,47 @@ public:
     virtual void OnCatchAllExpr() override
     {
         processCatchExpr(std::numeric_limits<Index>::max());
+    }
+
+    virtual void OnMemoryInitExpr(Index segmentIndex, Index memidx) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
+        m_currentFunction->pushByteCode(Walrus::MemoryInit(memidx, segmentIndex));
+    }
+
+    virtual void OnMemoryCopyExpr(Index srcMemIndex, Index dstMemIndex) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
+        m_currentFunction->pushByteCode(Walrus::MemoryCopy(srcMemIndex, dstMemIndex));
+    }
+
+    virtual void OnMemoryFillExpr(Index memidx) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
+        m_currentFunction->pushByteCode(Walrus::MemoryFill(memidx));
+    }
+
+    virtual void OnDataDropExpr(Index segmentIndex) override
+    {
+        m_currentFunction->pushByteCode(Walrus::DataDrop(segmentIndex));
     }
 
     virtual void OnMemoryGrowExpr(Index memidx) override
