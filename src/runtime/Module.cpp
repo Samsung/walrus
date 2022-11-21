@@ -134,31 +134,35 @@ Instance* Module::instantiate(const ValueVector& imports)
     }
 
     // init memory
-    for (auto init : m_memoryInitBlock) {
+    instance->m_dataSegment.reserve(m_data.size());
+    for (auto init : m_data) {
+        instance->m_dataSegment.pushBack(DataSegment(init));
         struct RunData {
-            MemoryInit* init;
+            Data* init;
             Instance* instance;
             Module* module;
         } data = { init, instance, this };
         Walrus::Trap trap;
         trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
-            uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
-            uint8_t* functionStackPointer = functionStackBase;
+            if (data->init->moduleFunction()->currentByteCodeSize()) {
+                uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
+                uint8_t* functionStackPointer = functionStackBase;
 
-            FunctionType fakeFunctionType(0, FunctionType::FunctionTypeVector(), FunctionType::FunctionTypeVector());
-            DefinedFunction fakeFunction(data->module->m_store, &fakeFunctionType, data->instance,
-                                         data->init->moduleFunction());
-            ExecutionState newState(state, &fakeFunction);
+                FunctionType fakeFunctionType(0, FunctionType::FunctionTypeVector(), FunctionType::FunctionTypeVector());
+                DefinedFunction fakeFunction(data->module->m_store, &fakeFunctionType, data->instance,
+                                             data->init->moduleFunction());
+                ExecutionState newState(state, &fakeFunction);
 
-            Interpreter::interpret(newState, functionStackBase, functionStackPointer);
+                Interpreter::interpret(newState, functionStackBase, functionStackPointer);
 
-            functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
-            uint8_t* resultStackPointer = functionStackPointer;
-            Value offset(Value::I32, resultStackPointer);
-            Memory* m = data->instance->memory(0);
-            const auto& initData = data->init->initData();
-            memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offset.asI32(), 0, initData.size());
+                functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
+                uint8_t* resultStackPointer = functionStackPointer;
+                Value offset(Value::I32, resultStackPointer);
+                Memory* m = data->instance->memory(0);
+                const auto& initData = data->init->initData();
+                memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offset.asI32(), 0, initData.size());
+            }
         },
                  &data);
     }
