@@ -864,6 +864,7 @@ public:
         popVMStack();
         ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
         popVMStack();
+        m_currentFunction->pushByteCode(Walrus::TableCopy(dst_index, src_index));
     }
 
     virtual void OnTableFillExpr(Index table_index) override
@@ -874,6 +875,7 @@ public:
         popVMStack();
         ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
         popVMStack();
+        m_currentFunction->pushByteCode(Walrus::TableFill(table_index));
     }
 
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
