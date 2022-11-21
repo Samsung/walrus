@@ -468,15 +468,18 @@ public:
         return Result::Ok;
     }
     Result OnMemoryCopyExpr(Index srcmemidx, Index destmemidx) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnMemoryCopyExpr(srcmemidx, destmemidx);
         return Result::Ok;
     }
     Result OnDataDropExpr(Index segment_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnDataDropExpr(segment_index);
         return Result::Ok;
     }
     Result OnMemoryFillExpr(Index memidx) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnMemoryFillExpr(memidx);
         return Result::Ok;
     }
     Result OnMemoryGrowExpr(Index memidx) override {
@@ -485,7 +488,8 @@ public:
         return Result::Ok;
     }
     Result OnMemoryInitExpr(Index segment_index, Index memidx) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnMemoryInitExpr(segment_index, memidx);
         return Result::Ok;
     }
     Result OnMemorySizeExpr(Index memidx) override {
@@ -633,11 +637,9 @@ public:
 
     /* Elem section */
     Result BeginElemSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnElemSegmentCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result BeginElemSegment(Index index, Index table_index, uint8_t flags) override {
@@ -669,11 +671,9 @@ public:
         return Result::Ok;
     }
     Result EndElemSegment(Index index) override {
-        abort();
         return Result::Ok;
     }
     Result EndElemSection() override {
-        abort();
         return Result::Ok;
     }
 
@@ -711,15 +711,12 @@ public:
 
     /* DataCount section */
     Result BeginDataCountSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnDataCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result EndDataCountSection() override {
-        abort();
         return Result::Ok;
     }
 

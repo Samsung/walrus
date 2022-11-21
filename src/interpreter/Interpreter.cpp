@@ -669,12 +669,60 @@ NextInstruction:
         {
             Memory* m = instance->memory(0);
             auto oldSize = m->sizeInPageSize();
-            if (m->grow(readValue<int32_t>(sp) * Memory::s_memoryPageSize)) {
+            if (m->grow(readValue<int32_t>(sp) * (uint64_t)Memory::s_memoryPageSize)) {
                 writeValue<int32_t>(sp, oldSize);
             } else {
                 writeValue<int32_t>(sp, -1);
             }
             ADD_PROGRAM_COUNTER(MemoryGrow);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(MemoryInit)
+            :
+        {
+            MemoryInit* code = (MemoryInit*)programCounter;
+            Memory* m = instance->memory(0);
+            DataSegment& sg = instance->dataSegment(code->segmentIndex());
+            auto size = readValue<int32_t>(sp);
+            auto srcStart = readValue<int32_t>(sp);
+            auto dstStart = readValue<int32_t>(sp);
+            m->init(&sg, dstStart, srcStart, size);
+            ADD_PROGRAM_COUNTER(MemoryInit);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(MemoryCopy)
+            :
+        {
+            Memory* m = instance->memory(0);
+            auto size = readValue<int32_t>(sp);
+            auto srcStart = readValue<int32_t>(sp);
+            auto dstStart = readValue<int32_t>(sp);
+            m->copy(dstStart, srcStart, size);
+            ADD_PROGRAM_COUNTER(MemoryCopy);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(MemoryFill)
+            :
+        {
+            Memory* m = instance->memory(0);
+            auto size = readValue<int32_t>(sp);
+            auto value = readValue<int32_t>(sp);
+            auto dstStart = readValue<int32_t>(sp);
+            m->fill(dstStart, value, size);
+            ADD_PROGRAM_COUNTER(MemoryCopy);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(DataDrop)
+            :
+        {
+            DataDrop* code = (DataDrop*)programCounter;
+            DataSegment& sg = instance->dataSegment(code->segmentIndex());
+            sg.drop();
+            ADD_PROGRAM_COUNTER(DataDrop);
             NEXT_INSTRUCTION();
         }
 

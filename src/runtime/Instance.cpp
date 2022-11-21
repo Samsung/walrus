@@ -18,6 +18,7 @@
 
 #include "Instance.h"
 #include "runtime/Module.h"
+#include "runtime/Module.h"
 
 namespace Walrus {
 
@@ -50,6 +51,12 @@ Optional<Tag*> Instance::resolveExportTag(String* name)
     }
 
     return nullptr;
+}
+
+DataSegment::DataSegment(Data* d)
+    : m_data(d)
+    , m_sizeInByte(m_data->initData().size())
+{
 }
 
 } // namespace Walrus
