@@ -226,11 +226,12 @@ static bool endsWith(const std::string& str, const std::string& suffix)
 
 static Walrus::Value toWalrusValue(wabt::Const& c)
 {
-    if (c.type() == wabt::Type::I32) {
+    switch (c.type()) {
+    case wabt::Type::I32:
         return Walrus::Value(static_cast<int32_t>(c.u32()));
-    } else if (c.type() == wabt::Type::I64) {
+    case wabt::Type::I64:
         return Walrus::Value(static_cast<int64_t>(c.u64()));
-    } else if (c.type() == wabt::Type::F32) {
+    case wabt::Type::F32: {
         if (c.is_expected_nan(0)) {
             return Walrus::Value(std::numeric_limits<float>::quiet_NaN());
         }
@@ -238,7 +239,8 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         auto bits = c.f32_bits();
         memcpy(&s, &bits, sizeof(float));
         return Walrus::Value(s);
-    } else if (c.type() == wabt::Type::F64) {
+    }
+    case wabt::Type::F64: {
         if (c.is_expected_nan(0)) {
             return Walrus::Value(std::numeric_limits<double>::quiet_NaN());
         }
@@ -246,7 +248,10 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         auto bits = c.f64_bits();
         memcpy(&s, &bits, sizeof(double));
         return Walrus::Value(s);
-    } else {
+    }
+    case wabt::Type::ExternRef:
+        return Walrus::Value(Walrus::Value::ExternRef, c.ref_bits(), Walrus::Value::Force);
+    default:
         RELEASE_ASSERT_NOT_REACHED();
     }
 }
@@ -310,6 +315,8 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         if (c.ref_bits() == constNull.ref_bits()) {
             // check RefNull
             return v.isNull();
+        } else {
+            return c.ref_bits() == reinterpret_cast<uintptr_t>(v.asExternal());
         }
     }
     return false;

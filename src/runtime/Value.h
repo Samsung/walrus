@@ -51,6 +51,7 @@ public:
     // RefNull
     static constexpr uintptr_t NullBits = ~uintptr_t(0);
     enum RefNull { Null };
+    enum ForceInit { Force };
 
     enum Type : uint8_t {
         I32,
@@ -114,6 +115,12 @@ public:
     Value(RefNull)
         : m_ref(reinterpret_cast<void*>(NullBits))
         , m_type(ExternRef)
+    {
+    }
+
+    Value(Type type, uintptr_t value, ForceInit)
+        : m_ref(reinterpret_cast<void*>(value))
+        , m_type(type)
     {
     }
 
