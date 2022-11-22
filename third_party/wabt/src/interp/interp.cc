@@ -420,7 +420,7 @@ Result DefinedFunc::DoCall(Thread& thread,
                            Trap::Ptr* out_trap) {
   assert(params.size() == type_.params.size());
   if (desc().jit_func.isCompiled()) {
-    desc().jit_func.call();
+    desc().jit_func.call(this->desc().type.params, params, this->desc().type.results, results);
     return Result::Ok;
   }
   thread.PushValues(type_.params, params);

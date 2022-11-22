@@ -65,7 +65,7 @@ void StackAllocator::push(ValueInfo value_info) {
     case LocationInfo::kFourByteSize:
       mask = sizeof(uint32_t) - 1;
       break;
-    case LocationInfo::kSixteenByteSize:
+    case LocationInfo::kEightByteSize:
       mask = sizeof(uint64_t) - 1;
       break;
     default:

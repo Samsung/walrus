@@ -16,11 +16,15 @@
 
 #include "wabt/interp/jit/jit.h"
 #include "wabt/interp/jit/jit-backend.h"
+#include "wabt/interp/interp.h"
 
 namespace wabt {
 namespace interp {
 
-void JITFunction::call() const {
+void JITFunction::call(const ValueTypes& param_types,
+                       const Values& params,
+                       const ValueTypes& result_types,
+                       Values& results) const {
   if (func_entry_ == nullptr) {
     return;
   }
@@ -44,6 +48,47 @@ void JITFunction::call() const {
 
   func.func_entry = func_entry_;
   func.code(context, reinterpret_cast<void*>(start));
+
+  StackAllocator* stackAllocator = new StackAllocator(0);
+  for (ValueType result_type : result_types) {
+    stackAllocator->push(LocationInfo::typeToValueInfo(result_type));
+  }
+
+  int result_index = 0;
+  std::vector<LocationInfo>& offsets = stackAllocator->values();
+#define push_result(type)                                  \
+  results.push_back(Value::Make(*(reinterpret_cast<type*>( \
+      reinterpret_cast<u8*>(data) + offsets[result_index].value))));
+
+  for (ValueType result_type : result_types) {
+    switch (result_type) {
+      case Type::I32:
+        push_result(s32);
+        break;
+      case Type::I64:
+        push_result(s64);
+        break;
+      case Type::F32:
+        push_result(f32);
+        break;
+      case Type::F64:
+        push_result(f64);
+        break;
+      case Type::V128:
+        push_result(v128);
+        break;
+      case Type::FuncRef:
+      case Type::ExternRef:
+      case Type::Reference:
+      case Type::Func:
+        push_result(Ref);
+        break;
+      default:
+        WABT_UNREACHABLE;
+    }
+    result_index++;
+  }
+#undef push_result
   free(data);
 }
 

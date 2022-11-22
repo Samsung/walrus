@@ -22,6 +22,11 @@
 namespace wabt {
 namespace interp {
 
+using ValueType = wabt::Type;
+using ValueTypes = std::vector<ValueType>;
+struct Value;
+using Values = std::vector<Value>;
+
 struct ExecutionContext {
   // Describes a function in the stack chain.
   struct CallFrame {
@@ -52,7 +57,10 @@ class JITFunction {
 
  public:
   bool isCompiled() const { return func_entry_ != nullptr; }
-  void call() const;
+  void call(const ValueTypes& param_types,
+            const Values& params,
+            const ValueTypes& result_types,
+            Values& results) const;
 
  private:
   void* func_entry_;
