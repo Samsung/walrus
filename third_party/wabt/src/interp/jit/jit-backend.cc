@@ -15,23 +15,10 @@
  */
 
 #include "wabt/interp/jit/jit-backend.h"
+#include "sljitLir.h"
 #include "wabt/interp/jit/jit.h"
 
 // Inlined platform independent assembler backend.
-
-#define SLJIT_CONFIG_AUTO 1
-#define SLJIT_CONFIG_STATIC 1
-#define SLJIT_VERBOSE 0
-
-#ifdef NDEBUG
-#define SLJIT_DEBUG 0
-#else
-#define SLJIT_DEBUG 1
-#endif
-
-extern "C" {
-#include "../../../../sljit/sljitLir.c"
-}
 
 #if defined SLJIT_CONFIG_UNSUPPORTED && SLJIT_CONFIG_UNSUPPORTED
 #error Unsupported architecture

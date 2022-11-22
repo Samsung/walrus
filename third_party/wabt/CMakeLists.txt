@@ -282,6 +282,7 @@ set(WABT_LIBRARY_CC
   src/interp/jit/jit-inst-elimination.cc
   src/interp/jit/jit-inst-list.cc
   src/interp/jit/jit.cc
+  ../sljit/sljit_src/sljitLir.c
 )
 
 set(WABT_LIBRARY_H
@@ -348,12 +349,19 @@ set(WABT_LIBRARY_SRC ${WABT_LIBRARY_CC} ${WABT_LIBRARY_H})
 add_library(wabt STATIC ${WABT_LIBRARY_SRC})
 add_library(wabt::wabt ALIAS wabt)
 
+if (NDEBUG)
+  set_source_files_properties(../sljit/sljit_src/sljitLir.c PROPERTIES COMPILE_DEFINITIONS SLJIT_VERBOSE=0 SLJIT_CONFIG_AUTO=1 SLJIT_DEBUG=0)
+else()
+  set_source_files_properties(../sljit/sljit_src/sljitLir.c PROPERTIES COMPILE_DEFINITIONS SLJIT_VERBOSE=0 SLJIT_CONFIG_AUTO=1 SLJIT_DEBUG=1)
+endif()
+
 target_compile_features(wabt PUBLIC cxx_std_17)
 target_include_directories(
   wabt
   PUBLIC
   "$<BUILD_INTERFACE:${WABT_SOURCE_DIR}/include>"
   "$<BUILD_INTERFACE:${WABT_BINARY_DIR}/include>"
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../sljit/sljit_src>"
 )
 
 if (WABT_INSTALL_RULES)
