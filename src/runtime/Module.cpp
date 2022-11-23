@@ -88,7 +88,6 @@ Instance* Module::instantiate(const ValueVector& imports)
 
     // init defined function
     for (size_t i = importFuncCount; i < m_function.size(); i++) {
-        ASSERT(i == m_function[i]->functionIndex());
         ASSERT(i == instance->m_function.size());
         instance->m_function.push_back(new DefinedFunction(m_store, functionType(m_function[i]->functionTypeIndex()), instance, function(i)));
     }
@@ -123,14 +122,51 @@ Instance* Module::instantiate(const ValueVector& imports)
             uint8_t* functionStackBase = ALLOCA(data->module->m_globalInitBlock->requiredStackSize(), uint8_t);
             uint8_t* functionStackPointer = functionStackBase;
 
-            FunctionType fakeFunctionType(0, FunctionType::FunctionTypeVector(), FunctionType::FunctionTypeVector());
-            DefinedFunction fakeFunction(data->module->m_store, &fakeFunctionType, data->instance,
+            DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
                                          data->module->m_globalInitBlock.value());
             ExecutionState newState(state, &fakeFunction);
 
             Interpreter::interpret(newState, functionStackBase, functionStackPointer);
         },
                  &data);
+    }
+
+    // init table(elem segment)
+    for (auto elem : m_element) {
+        uint32_t index = 0;
+        if (elem->hasModuleFunction()) {
+            struct RunData {
+                Element* elem;
+                Instance* instance;
+                Module* module;
+                uint32_t& index;
+            } data = { elem, instance, this, index };
+            Walrus::Trap trap;
+            trap.run([](Walrus::ExecutionState& state, void* d) {
+                RunData* data = reinterpret_cast<RunData*>(d);
+                uint8_t* functionStackBase = ALLOCA(data->elem->moduleFunction()->requiredStackSize(), uint8_t);
+                uint8_t* functionStackPointer = functionStackBase;
+
+                DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
+                                             data->elem->moduleFunction());
+                ExecutionState newState(state, &fakeFunction);
+
+                Interpreter::interpret(newState, functionStackBase, functionStackPointer);
+
+                functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
+                uint8_t* resultStackPointer = functionStackPointer;
+                Value offset(Value::I32, resultStackPointer);
+                data->index = offset.asI32();
+            },
+                     &data);
+        }
+
+        const auto& fi = elem->functionIndex();
+        for (size_t i = 0; i < fi.size(); i++) {
+            if (fi[i] != std::numeric_limits<uint32_t>::max()) {
+                instance->m_table[elem->tableIndex()]->setElement(index + i, Value(instance->m_function[fi[i]]));
+            }
+        }
     }
 
     // init memory
@@ -149,8 +185,7 @@ Instance* Module::instantiate(const ValueVector& imports)
                 uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
                 uint8_t* functionStackPointer = functionStackBase;
 
-                FunctionType fakeFunctionType(0, FunctionType::FunctionTypeVector(), FunctionType::FunctionTypeVector());
-                DefinedFunction fakeFunction(data->module->m_store, &fakeFunctionType, data->instance,
+                DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
                                              data->init->moduleFunction());
                 ExecutionState newState(state, &fakeFunction);
 
@@ -188,7 +223,7 @@ Instance* Module::instantiate(const ValueVector& imports)
 #if !defined(NDEBUG)
 void ModuleFunction::dumpByteCode()
 {
-    printf("module %p, function index %u, function type index %u\n", m_module, m_functionIndex, m_functionTypeIndex);
+    printf("module %p, function type index %u\n", m_module, m_functionTypeIndex);
     printf("requiredStackSize %u, requiredStackSizeDueToLocal %u\n", m_requiredStackSize, m_requiredStackSizeDueToLocal);
 
     size_t idx = 0;

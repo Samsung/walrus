@@ -35,18 +35,14 @@ class FunctionType : public gc {
 public:
     typedef Vector<Value::Type, GCUtil::gc_malloc_atomic_allocator<Value::Type>>
         FunctionTypeVector;
-    FunctionType(uint32_t index,
-                 FunctionTypeVector&& param,
+    FunctionType(FunctionTypeVector&& param,
                  FunctionTypeVector&& result)
-        : m_index(index)
-        , m_param(std::move(param))
+        : m_param(std::move(param))
         , m_result(std::move(result))
         , m_paramStackSize(computeStackSize(m_param))
         , m_resultStackSize(computeStackSize(m_result))
     {
     }
-
-    uint32_t index() const { return m_index; }
 
     const FunctionTypeVector& param() const { return m_param; }
 
@@ -56,8 +52,33 @@ public:
 
     size_t resultStackSize() const { return m_resultStackSize; }
 
+    bool equals(FunctionType* other) const
+    {
+        if (this == other) {
+            return true;
+        }
+
+        if (m_param.size() != other->param().size()) {
+            return false;
+        }
+
+        if (memcmp(m_param.data(), other->param().data(), sizeof(Value::Type) * other->param().size())) {
+            return false;
+        }
+
+        if (m_result.size() != other->result().size()) {
+            return false;
+        }
+
+        if (memcmp(m_result.data(), other->result().data(), sizeof(Value::Type) * other->result().size())) {
+            return false;
+        }
+
+
+        return true;
+    }
+
 private:
-    uint32_t m_index;
     const FunctionTypeVector m_param;
     const FunctionTypeVector m_result;
     size_t m_paramStackSize;
@@ -214,9 +235,8 @@ public:
         size_t m_stackSizeToBe;
     };
 
-    ModuleFunction(Module* module, uint32_t functionIndex, uint32_t functionTypeIndex)
+    ModuleFunction(Module* module, uint32_t functionTypeIndex)
         : m_module(module)
-        , m_functionIndex(functionIndex)
         , m_functionTypeIndex(functionTypeIndex)
         , m_requiredStackSize(0)
         , m_requiredStackSizeDueToLocal(0)
@@ -224,8 +244,6 @@ public:
     }
 
     Module* module() const { return m_module; }
-
-    uint32_t functionIndex() const { return m_functionIndex; }
 
     uint32_t functionTypeIndex() const { return m_functionTypeIndex; }
 
@@ -278,7 +296,6 @@ public:
 
 private:
     Module* m_module;
-    uint32_t m_functionIndex;
     uint32_t m_functionTypeIndex;
     uint32_t m_requiredStackSize;
     uint32_t m_requiredStackSizeDueToLocal;
@@ -310,6 +327,49 @@ private:
     Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_initData;
 };
 
+class Element : public gc {
+public:
+    Element(uint32_t tableIndex, ModuleFunction* moduleFunction, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
+        : m_tableIndex(tableIndex)
+        , m_moduleFunction(moduleFunction)
+        , m_functionIndex(std::move(functionIndex))
+    {
+    }
+
+    Element(uint32_t tableIndex, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
+        : m_tableIndex(tableIndex)
+        , m_moduleFunction()
+        , m_functionIndex(std::move(functionIndex))
+    {
+    }
+
+    uint32_t tableIndex() const
+    {
+        return m_tableIndex;
+    }
+
+    bool hasModuleFunction() const
+    {
+        return !!m_moduleFunction;
+    }
+
+    ModuleFunction* moduleFunction()
+    {
+        ASSERT(hasModuleFunction());
+        return m_moduleFunction.value();
+    }
+
+    const Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>& functionIndex() const
+    {
+        return m_functionIndex;
+    }
+
+private:
+    uint32_t m_tableIndex;
+    Optional<ModuleFunction*> m_moduleFunction;
+    Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_functionIndex;
+};
+
 class Module : public gc {
     friend class wabt::WASMBinaryReader;
 
@@ -324,24 +384,12 @@ public:
 
     ModuleFunction* function(uint32_t index)
     {
-        for (size_t i = 0; i < m_function.size(); i++) {
-            if (m_function[i]->functionIndex() == index) {
-                return m_function[i];
-            }
-        }
-        ASSERT_NOT_REACHED();
-        return nullptr;
+        return m_function[index];
     }
 
     FunctionType* functionType(uint32_t index)
     {
-        for (size_t i = 0; i < m_functionType.size(); i++) {
-            if (m_functionType[i]->index() == index) {
-                return m_functionType[i];
-            }
-        }
-        ASSERT_NOT_REACHED();
-        return nullptr;
+        return m_functionType[index];
     }
 
     const Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>>& moduleImport() const
@@ -371,6 +419,7 @@ private:
         m_function;
     Vector<std::tuple<Value::Type, size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, size_t, size_t>>>
         m_table;
+    Vector<Element*, GCUtil::gc_malloc_allocator<Element*>> m_element;
     /* initialSize, maximumSize */
     Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
         m_memory;

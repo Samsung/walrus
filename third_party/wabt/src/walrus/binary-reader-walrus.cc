@@ -356,7 +356,8 @@ public:
         return Result::Ok;
     }
     Result OnCallIndirectExpr(Index sig_index, Index table_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnCallIndirectExpr(sig_index, table_index);
         return Result::Ok;
     }
     Result OnCallRefExpr() override {
@@ -639,37 +640,39 @@ public:
         return Result::Ok;
     }
     Result OnElemSegmentCount(Index count) override {
+        m_externalDelegate->OnElemSegmentCount(count);
         return Result::Ok;
     }
     Result BeginElemSegment(Index index, Index table_index, uint8_t flags) override {
-        abort();
+        m_externalDelegate->BeginElemSegment(index, table_index, flags);
         return Result::Ok;
     }
     Result BeginElemSegmentInitExpr(Index index) override {
-        abort();
+        m_externalDelegate->BeginElemSegmentInitExpr(index);
         return Result::Ok;
     }
     Result EndElemSegmentInitExpr(Index index) override {
-        abort();
+        m_externalDelegate->EndElemSegmentInitExpr(index);
         return Result::Ok;
     }
     Result OnElemSegmentElemType(Index index, Type elem_type) override {
-        abort();
+        m_externalDelegate->OnElemSegmentElemType(index, elem_type);
         return Result::Ok;
     }
     Result OnElemSegmentElemExprCount(Index index, Index count) override {
-        abort();
+        m_externalDelegate->OnElemSegmentElemExprCount(index, count);
         return Result::Ok;
     }
     Result OnElemSegmentElemExpr_RefNull(Index segment_index, Type type) override {
-        abort();
+        m_externalDelegate->OnElemSegmentElemExpr_RefNull(segment_index, type);
         return Result::Ok;
     }
     Result OnElemSegmentElemExpr_RefFunc(Index segment_index, Index func_index) override {
-        abort();
+        m_externalDelegate->OnElemSegmentElemExpr_RefFunc(segment_index, func_index);
         return Result::Ok;
     }
     Result EndElemSegment(Index index) override {
+        m_externalDelegate->EndElemSegment(index);
         return Result::Ok;
     }
     Result EndElemSection() override {
