@@ -120,6 +120,19 @@ static void emitLocalMove(sljit_compiler* compiler, Instruction* instr) {
   sljit_emit_op1(compiler, opcode, dst.arg, dst.argw, src.arg, src.argw);
 }
 
+static void op0Instr(sljit_compiler* compiler, sljit_s32 opcode, 
+                     JITArg args[], ValueInfo value_info) {
+
+  sljit_s32 mov = SLJIT_MOV;
+  if (( value_info & LocationInfo::kSizeMask) == 1) {
+    mov = SLJIT_MOV32;
+  }
+
+  sljit_emit_op1(compiler, mov, SLJIT_R0, 0, args[0].arg, args[0].argw);
+  sljit_emit_op1(compiler, mov, SLJIT_R1, 0, args[1].arg, args[1].argw);
+  sljit_emit_op0(compiler, opcode);
+}
+
 static void emitBinary(sljit_compiler* compiler, Instruction* instr) {
   Operand* operands = instr->operands();
   JITArg args[3];
@@ -137,11 +150,83 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr) {
     case Opcode::I32Sub:
       opcode = SLJIT_SUB32;
       break;
+    case Opcode::I32Mul:
+      opcode = SLJIT_MUL32;
+      break;
+    case Opcode::I32DivS:
+      op0Instr(compiler, SLJIT_DIV_S32, args, operands->location.value_info );
+      return;
+    case Opcode::I32DivU:
+      op0Instr(compiler, SLJIT_DIV_U32, args, operands->location.value_info);
+      return;
+    case Opcode::I32RemS:
+      op0Instr(compiler, SLJIT_DIVMOD_S32, args, operands->location.value_info);
+      return;
+    case Opcode::I32RemU:
+      op0Instr(compiler, SLJIT_DIVMOD_U32, args, operands->location.value_info);
+      return;
+    case Opcode::I32Rotl:
+    case Opcode::I32Rotr:
+      return;
+    case Opcode::I32And:
+      opcode = SLJIT_AND32;
+      break;
+    case Opcode::I32Or:
+      opcode = SLJIT_OR32;
+      break;
+    case Opcode::I32Xor:
+      opcode = SLJIT_XOR32;
+      break;
+    case Opcode::I32Shl:
+      opcode = SLJIT_SHL32;
+      break;
+    case Opcode::I32ShrS:
+      opcode = SLJIT_ASHR32;
+      break;
+    case Opcode::I32ShrU:
+      opcode = SLJIT_LSHR32;
+      break;
     case Opcode::I64Add:
       opcode = SLJIT_ADD;
       break;
     case Opcode::I64Sub:
       opcode = SLJIT_SUB;
+      break;
+    case Opcode::I64Mul:
+      opcode = SLJIT_MUL;
+      break;
+    case Opcode::I64DivS:
+      op0Instr(compiler, SLJIT_DIV_SW, args, operands->location.value_info);
+      return;
+    case Opcode::I64DivU:
+      op0Instr(compiler, SLJIT_DIV_UW, args, operands->location.value_info);
+      return;
+    case Opcode::I64RemS:
+      op0Instr(compiler, SLJIT_DIVMOD_SW, args, operands->location.value_info);
+      return;
+    case Opcode::I64RemU:
+      op0Instr(compiler, SLJIT_DIVMOD_UW, args, operands->location.value_info);
+      return;
+    case Opcode::I64Rotl:
+    case Opcode::I64Rotr:
+      return;
+    case Opcode::I64And:
+      opcode = SLJIT_AND;
+      break;
+    case Opcode::I64Or:
+      opcode = SLJIT_OR;
+      break;
+    case Opcode::I64Xor:
+      opcode = SLJIT_XOR;
+      break;
+    case Opcode::I64Shl:
+      opcode = SLJIT_SHL;
+      break;
+    case Opcode::I64ShrS:
+      opcode = SLJIT_ASHR;
+      break;
+    case Opcode::I64ShrU:
+      opcode = SLJIT_LSHR;
       break;
     default:
       WABT_UNREACHABLE;
