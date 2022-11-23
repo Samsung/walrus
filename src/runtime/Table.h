@@ -55,6 +55,11 @@ public:
         return m_elements[elemIndex];
     }
 
+    Value uncheckedGetElement(uint32_t elemIndex) const
+    {
+        return m_elements[elemIndex];
+    }
+
     void setElement(uint32_t elemIndex, const Value& val)
     {
         ASSERT(val.type() == m_type);

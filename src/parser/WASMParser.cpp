@@ -101,6 +101,7 @@ public:
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
         , m_functionStackSizeSoFar(0)
+        , m_elementTableIndex(0)
     {
     }
 
@@ -131,8 +132,9 @@ public:
         for (size_t i = 0; i < resultCount; i++) {
             result.push_back(toValueKindForFunctionType(resultTypes[i]));
         }
+        ASSERT(index == m_module->m_functionType.size());
         m_module->m_functionType.push_back(
-            new Walrus::FunctionType(index, std::move(param), std::move(result)));
+            new Walrus::FunctionType(std::move(param), std::move(result)));
     }
 
     virtual void OnImportCount(Index count) override
@@ -146,8 +148,9 @@ public:
                               Index funcIndex,
                               Index sigIndex) override
     {
+        ASSERT(m_module->m_function.size() == funcIndex);
         m_module->m_function.push_back(
-            new Walrus::ModuleFunction(m_module, funcIndex, sigIndex));
+            new Walrus::ModuleFunction(m_module, sigIndex));
         m_module->m_import.push_back(new Walrus::ModuleImport(
             importIndex, new Walrus::String(moduleName),
             new Walrus::String(fieldName), funcIndex, sigIndex));
@@ -218,6 +221,63 @@ public:
         m_module->m_table.pushBack(std::make_tuple(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
     }
 
+    virtual void OnElemSegmentCount(Index count) override
+    {
+        m_module->m_element.reserve(count);
+    }
+
+    virtual void BeginElemSegment(Index index, Index tableIndex, uint8_t flags) override
+    {
+        m_elementTableIndex = tableIndex;
+        m_elementModuleFunction = nullptr;
+    }
+
+    virtual void BeginElemSegmentInitExpr(Index index) override
+    {
+        m_currentFunction = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max());
+    }
+
+    virtual void EndElemSegmentInitExpr(Index index) override
+    {
+        m_elementModuleFunction = m_currentFunction;
+        m_currentFunction = nullptr;
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+    }
+
+    virtual void OnElemSegmentElemType(Index index, Type elemType) override
+    {
+    }
+
+    virtual void OnElemSegmentElemExprCount(Index index, Index count) override
+    {
+        m_elementFunctionIndex.reserve(count);
+    }
+
+    virtual void OnElemSegmentElemExpr_RefNull(Index segmentIndex, Type type) override
+    {
+        m_elementFunctionIndex.pushBack(std::numeric_limits<uint32_t>::max());
+    }
+
+    virtual void OnElemSegmentElemExpr_RefFunc(Index segmentIndex, Index funcIndex) override
+    {
+        m_elementFunctionIndex.pushBack(funcIndex);
+    }
+
+    virtual void EndElemSegment(Index index) override
+    {
+        ASSERT(m_module->m_element.size() == index);
+        if (m_elementModuleFunction) {
+            m_module->m_element.pushBack(new Walrus::Element(m_elementTableIndex, m_elementModuleFunction.value(), std::move(m_elementFunctionIndex)));
+        } else {
+            m_module->m_element.pushBack(new Walrus::Element(m_elementTableIndex, std::move(m_elementFunctionIndex)));
+        }
+
+        m_elementModuleFunction = nullptr;
+        m_elementTableIndex = 0;
+        m_elementFunctionIndex.clear();
+    }
+
     /* Memory section */
     virtual void OnMemoryCount(Index count) override
     {
@@ -238,7 +298,7 @@ public:
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
         ASSERT(index == m_module->m_data.size());
-        m_currentFunction = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max());
+        m_currentFunction = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max());
     }
 
     virtual void BeginDataSegmentInitExpr(Index index) override
@@ -271,14 +331,14 @@ public:
     {
         ASSERT(m_currentFunction == nullptr);
         ASSERT(m_currentFunctionType == nullptr);
-        m_module->m_function.push_back(new Walrus::ModuleFunction(m_module, index, sigIndex));
+        ASSERT(m_module->m_function.size() == index);
+        m_module->m_function.push_back(new Walrus::ModuleFunction(m_module, sigIndex));
     }
 
     virtual void OnGlobalCount(Index count) override
     {
         m_module->m_global.reserve(count);
-        m_module->m_globalInitBlock = new Walrus::ModuleFunction(m_module,
-                                                                 std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max());
+        m_module->m_globalInitBlock = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max());
     }
 
     virtual void BeginGlobal(Index index, Type type, bool mutable_) override
@@ -382,6 +442,26 @@ public:
             popVMStack();
         }
         m_currentFunction->pushByteCode(Walrus::Call(index));
+        for (size_t i = 0; i < functionType->result().size(); i++) {
+            pushVMStack(Walrus::valueSizeInStack(functionType->result()[i]));
+        }
+    }
+
+    virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+
+        auto functionType = m_module->functionType(sigIndex);
+
+        size_t stackShrinkSize = functionType->paramStackSize();
+        size_t stackGrowSize = functionType->resultStackSize();
+
+        for (size_t i = 0; i < functionType->param().size(); i++) {
+            ASSERT(peekVMStack() == Walrus::valueSizeInStack(functionType->param()[functionType->param().size() - i - 1]));
+            popVMStack();
+        }
+        m_currentFunction->pushByteCode(Walrus::CallIndirect(tableIndex, sigIndex));
         for (size_t i = 0; i < functionType->result().size(); i++) {
             pushVMStack(Walrus::valueSizeInStack(functionType->result()[i]));
         }
@@ -1082,6 +1162,10 @@ private:
     };
     std::vector<CatchInfo> m_catchInfo;
     Walrus::Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_memoryInitData;
+
+    uint32_t m_elementTableIndex;
+    Walrus::Optional<Walrus::ModuleFunction*> m_elementModuleFunction;
+    Walrus::Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_elementFunctionIndex;
 };
 
 } // namespace wabt
