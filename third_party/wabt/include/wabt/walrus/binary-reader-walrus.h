@@ -64,6 +64,16 @@ public:
     virtual void OnTableCount(Index count) = 0;
     virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) = 0;
 
+    virtual void OnElemSegmentCount(Index count) = 0;
+    virtual void BeginElemSegment(Index index, Index tableIndex, uint8_t flags) = 0;
+    virtual void BeginElemSegmentInitExpr(Index index) = 0;
+    virtual void EndElemSegmentInitExpr(Index index) = 0;
+    virtual void OnElemSegmentElemType(Index index, Type elemType) = 0;
+    virtual void OnElemSegmentElemExprCount(Index index, Index count) = 0;
+    virtual void OnElemSegmentElemExpr_RefNull(Index segmentIndex, Type type) = 0;
+    virtual void OnElemSegmentElemExpr_RefFunc(Index segmentIndex, Index funcIndex) = 0;
+    virtual void EndElemSegment(Index index) = 0;
+
     virtual void OnFunctionCount(Index count) = 0;
     virtual void OnFunction(Index index, Index sigIndex) = 0;
 
@@ -87,6 +97,7 @@ public:
     virtual void OnOpcode(uint32_t opcode) = 0;
 
     virtual void OnCallExpr(Index index) = 0;
+    virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) = 0;
     virtual void OnI32ConstExpr(uint32_t value) = 0;
     virtual void OnI64ConstExpr(uint64_t value) = 0;
     virtual void OnF32ConstExpr(uint32_t value) = 0;

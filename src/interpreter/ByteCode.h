@@ -201,6 +201,35 @@ protected:
     uint32_t m_index;
 };
 
+class CallIndirect : public ByteCode {
+public:
+    CallIndirect(uint32_t tableIndex, uint32_t functionTypeIndex)
+        : ByteCode(OpcodeKind::CallIndirectOpcode)
+        , m_tableIndex(tableIndex)
+        , m_functionTypeIndex(functionTypeIndex)
+    {
+    }
+
+    uint32_t tableIndex() const { return m_tableIndex; }
+    uint32_t functionTypeIndex() const { return m_functionTypeIndex; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableIndex: %" PRId32 "functionTypeIndex: %" PRId32, m_tableIndex, m_functionTypeIndex);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(CallIndirect);
+    }
+#endif
+
+protected:
+    uint32_t m_tableIndex;
+    uint32_t m_functionTypeIndex;
+};
+
 class LocalGet4 : public ByteCode {
 public:
     LocalGet4(uint32_t offset)

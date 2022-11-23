@@ -580,6 +580,14 @@ NextInstruction:
             NEXT_INSTRUCTION();
         }
 
+        DEFINE_OPCODE(CallIndirect)
+            :
+        {
+            callIndirectOperation(state, programCounter, bp, sp);
+            ADD_PROGRAM_COUNTER(CallIndirect);
+            NEXT_INSTRUCTION();
+        }
+
         DEFINE_OPCODE(BrTable)
             :
         {
@@ -876,6 +884,47 @@ NEVER_INLINE void Interpreter::callOperation(
 
     Function* target = state.currentFunction()->asDefinedFunction()->instance()->function(code->index());
     FunctionType* ft = target->functionType();
+    const FunctionType::FunctionTypeVector& param = ft->param();
+    Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
+
+    sp = sp - ft->paramStackSize();
+    uint8_t* paramStackPointer = sp;
+    for (size_t i = 0; i < param.size(); i++) {
+        paramVector[i] = Value(param[i], paramStackPointer);
+        paramStackPointer += valueSizeInStack(param[i]);
+    }
+
+    const FunctionType::FunctionTypeVector& result = ft->result();
+    Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
+    target->call(state, param.size(), paramVector, resultVector);
+
+    for (size_t i = 0; i < result.size(); i++) {
+        resultVector[i].writeToStack(sp);
+    }
+}
+
+NEVER_INLINE void Interpreter::callIndirectOperation(
+    ExecutionState& state,
+    size_t programCounter,
+    uint8_t* bp,
+    uint8_t*& sp)
+{
+    CallIndirect* code = (CallIndirect*)programCounter;
+    Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
+
+    uint32_t idx = readValue<uint32_t>(sp);
+    if (idx >= table->size()) {
+        Trap::throwException("undefined element");
+    }
+    auto val = table->uncheckedGetElement(idx);
+    if (val.type() != Value::FuncRef) {
+        Trap::throwException("uninitialized table element");
+    }
+    Function* target = val.asFunction();
+    FunctionType* ft = target->functionType();
+    if (!ft->equals(state.currentFunction()->asDefinedFunction()->instance()->module()->functionType(code->functionTypeIndex()))) {
+        Trap::throwException("indirect call signature mismatch");
+    }
     const FunctionType::FunctionTypeVector& param = ft->param();
     Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
 

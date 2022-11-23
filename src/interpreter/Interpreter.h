@@ -36,6 +36,10 @@ private:
                               size_t programCounter,
                               uint8_t* bp,
                               uint8_t*& sp);
+    static void callIndirectOperation(ExecutionState& state,
+                                      size_t programCounter,
+                                      uint8_t* bp,
+                                      uint8_t*& sp);
 };
 
 } // namespace Walrus
