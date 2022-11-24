@@ -55,6 +55,8 @@ class InstructionListItem {
     Binary,
     // Compare operation. (e.g. I32Eqz, I64LtU)
     Compare,
+    //For memory instructions
+    Memory,
   };
 
   virtual ~InstructionListItem() {}

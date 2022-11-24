@@ -81,10 +81,10 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Result OnTable(Index index,
                  Type elem_type,
                  const Limits* elem_limits) override;
-
   Result OnMemoryCount(Index count) override;
+#endif
   Result OnMemory(Index index, const Limits* limits) override;
-
+#if 0
   Result OnGlobalCount(Index count) override;
   Result BeginGlobal(Index index, Type type, bool mutable_) override;
   Result BeginGlobalInitExpr(Index index) override;
@@ -268,6 +268,7 @@ class BinaryReaderJIT : public BinaryReaderNop {
 
   // Includes imported and defined.
   std::vector<FuncType> func_types_;
+  std::vector<MemoryType> memory_types_;
 };
 
 BinaryReaderJIT::BinaryReaderJIT(ModuleDesc* module,
@@ -346,6 +347,14 @@ Result BinaryReaderJIT::OnFunction(Index index, Index sig_index) {
   module_.funcs.push_back(
       FuncDesc{func_type, {}, Istream::kInvalidOffset, {}, {}});
   func_types_.push_back(func_type);
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnMemory(Index index, const Limits* limits) {
+  CHECK_RESULT(validator_.OnMemory(GetLocation(), *limits ));
+  MemoryType memory_type{*limits};
+  module_.memories.push_back(MemoryDesc{memory_type});
+  memory_types_.push_back(memory_type);
   return Result::Ok;
 }
 

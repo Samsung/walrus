@@ -128,6 +128,11 @@ static void op0Instr(sljit_compiler* compiler, sljit_s32 opcode,
     mov = SLJIT_MOV32;
   }
 
+  if( args[0].argw == 0 || args[1].argw == 0) {
+    //TODO: return an error by integer divison by zero instead of nothing
+    return;
+  }
+
   sljit_emit_op1(compiler, mov, SLJIT_R0, 0, args[0].arg, args[0].argw);
   sljit_emit_op1(compiler, mov, SLJIT_R1, 0, args[1].arg, args[1].argw);
   sljit_emit_op0(compiler, opcode);
@@ -345,6 +350,39 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr) {
   return true;
 }
 
+static void emitMemory( sljit_compiler* compiler, Instruction* instr ) {
+  Operand* operand = instr->operands();
+  JITArg args[2];
+
+  for (Index i = 0; i < instr->paramCount(); ++i) {
+    operandToArg(operand, args[i]);
+    operand++;
+  }
+
+  StackAllocator* stackAllocator = new StackAllocator(0);
+  sljit_s32 index = 0;
+  //LocationInfo value;
+
+#if 0
+  switch (instr->opcode()) {
+    case Opcode::MemoryInit:
+      // copies data into memory from data segment, not initializes memory
+      break;
+    case Opcode::I32Store:
+      stackAllocator->pushReg(args[0].argw, LocationInfo::typeToValueInfo(args[1].argw) );
+      ++index;
+      break;
+    case Opcode::I32Load:    
+      //value = stackAllocator->getValue( args[0].argw );
+      break;
+    default:
+      WABT_UNREACHABLE;
+      break;
+  }
+#endif
+  return;
+}
+
 static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr) {
   sljit_jump* jump;
 
@@ -458,6 +496,10 @@ void JITCompiler::compile() {
         if (emitCompare(compiler_, item->asInstruction())) {
           item = item->next();
         }
+        break;
+      }
+      case Instruction::Memory: {
+        emitMemory( compiler_, item->asInstruction());
         break;
       }
       default: {
