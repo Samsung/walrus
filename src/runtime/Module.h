@@ -402,7 +402,7 @@ public:
         return m_export;
     }
 
-    Instance* instantiate(const ValueVector& imports);
+    Instance* instantiate(ExecutionState& state, const ValueVector& imports);
 
 private:
     Store* m_store;

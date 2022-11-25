@@ -94,8 +94,8 @@ static void printF64(double v)
     printf("%s : f64\n", formatDecmialString(ss.str()).c_str());
 }
 
-static void executeWASM(Store* store, const std::vector<uint8_t>& src, Instance::InstanceVector& instances,
-                        std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
+static Trap::TrapResult executeWASM(Store* store, const std::vector<uint8_t>& src, Instance::InstanceVector& instances,
+                                    std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
     auto module = WASMParser::parseBinary(store, src.data(), src.size());
     const auto& moduleImportData = module->moduleImport();
@@ -209,6 +209,8 @@ static void executeWASM(Store* store, const std::vector<uint8_t>& src, Instance:
                     importValues[i] = Value(instance->resolveExportFunction(import->fieldName()).value());
                 } else if (e->type() == ModuleExport::Tag) {
                     importValues[i] = Value(instance->resolveExportTag(import->fieldName()).value());
+                } else if (e->type() == ModuleExport::Table) {
+                    importValues[i] = Value(instance->resolveExportTable(import->fieldName()).value());
                 } else {
                     RELEASE_ASSERT_NOT_REACHED();
                 }
@@ -216,7 +218,17 @@ static void executeWASM(Store* store, const std::vector<uint8_t>& src, Instance:
         }
     }
 
-    instances.pushBack(module->instantiate(importValues));
+    struct RunData {
+        Instance::InstanceVector& instances;
+        Module* module;
+        ValueVector& importValues;
+    } data = { instances, module.value(), importValues };
+    Walrus::Trap trap;
+    return trap.run([](ExecutionState& state, void* d) {
+        RunData* data = reinterpret_cast<RunData*>(d);
+        data->instances.pushBack(data->module->instantiate(state, data->importValues));
+    },
+                    &data);
 }
 
 static bool endsWith(const std::string& str, const std::string& suffix)
@@ -250,6 +262,9 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         return Walrus::Value(s);
     }
     case wabt::Type::ExternRef:
+        if (c.ref_bits() == wabt::Const::kRefNullBits) {
+            return Walrus::Value(Walrus::Value::ExternRef, 0, Walrus::Value::Force);
+        }
         return Walrus::Value(Walrus::Value::ExternRef, c.ref_bits(), Walrus::Value::Force);
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -418,6 +433,27 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
     }
 }
 
+static std::unique_ptr<wabt::OutputBuffer> readModuleData(wabt::Module* module)
+{
+    wabt::MemoryStream stream;
+    wabt::WriteBinaryOptions options;
+    wabt::Features features;
+    features.EnableAll();
+    options.features = features;
+    wabt::WriteBinaryModule(&stream, module, options);
+    stream.Flush();
+    return stream.ReleaseOutputBuffer();
+}
+
+Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>& instanceMap,
+                        std::map<std::string, Instance*> registeredInstanceMap)
+{
+    if (moduleVar.is_index()) {
+        return instanceMap[moduleVar.index()];
+    }
+    return registeredInstanceMap[moduleVar.name()];
+}
+
 static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance::InstanceVector& instances)
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
@@ -440,47 +476,53 @@ static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance:
     size_t commandCount = 0;
     for (const std::unique_ptr<wabt::Command>& command : script->commands) {
         if (auto* moduleCommand = dynamic_cast<wabt::ModuleCommand*>(command.get())) {
-            auto module = &moduleCommand->module;
-            wabt::MemoryStream stream;
-            wabt::WriteBinaryOptions options;
-            options.features = features;
-            wabt::WriteBinaryModule(&stream, module, options);
-            stream.Flush();
-            auto buf = stream.ReleaseOutputBuffer();
+            auto buf = readModuleData(&moduleCommand->module);
             executeWASM(store, buf->data, instances, &registeredInstanceMap);
             instanceMap[commandCount] = instances.back();
+            if (moduleCommand->module.name.size()) {
+                registeredInstanceMap[moduleCommand->module.name] = instances.back();
+            }
         } else if (auto* assertReturn = dynamic_cast<wabt::AssertReturnCommand*>(command.get())) {
-            auto value = instanceMap[assertReturn->action->module_var.index()]->resolveExportFunction(new Walrus::String(assertReturn->action->name)).value();
+            auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertReturn->action->name)).value();
             RELEASE_ASSERT(value);
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = dynamic_cast<wabt::InvokeAction*>(assertReturn->action.get());
-                auto fn = instanceMap[action->module_var.index()]->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, assertReturn->expected, nullptr);
             }
         } else if (auto* assertTrap = dynamic_cast<wabt::AssertTrapCommand*>(command.get())) {
-            auto value = instanceMap[assertTrap->action->module_var.index()]->resolveExportFunction(new Walrus::String(assertTrap->action->name)).value();
+            auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertTrap->action->name)).value();
             RELEASE_ASSERT(value);
             if (assertTrap->action->type() == wabt::ActionType::Invoke) {
                 auto action = dynamic_cast<wabt::InvokeAction*>(assertTrap->action.get());
-                auto fn = instanceMap[action->module_var.index()]->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), assertTrap->text.data());
             }
         } else if (auto* assertException = dynamic_cast<wabt::AssertExceptionCommand*>(command.get())) {
-            auto value = instanceMap[assertException->action->module_var.index()]->resolveExportFunction(new Walrus::String(assertException->action->name)).value();
+            auto value = fetchInstance(assertException->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertException->action->name)).value();
             RELEASE_ASSERT(value);
             if (assertException->action->type() == wabt::ActionType::Invoke) {
                 auto action = dynamic_cast<wabt::InvokeAction*>(assertException->action.get());
-                auto fn = instanceMap[action->module_var.index()]->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), nullptr, true);
             }
+        } else if (auto* assertModuleUninstantiable = dynamic_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertUninstantiable>*>(command.get())) {
+            auto m = assertModuleUninstantiable->module.get();
+            auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
+            RELEASE_ASSERT(tsm);
+            auto buf = readModuleData(&tsm->module);
+            auto trapResult = executeWASM(store, buf->data, instances);
+            std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
+            RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
+            printf("assertModuleUninstantiable (except exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
         } else if (auto* registerCommand = dynamic_cast<wabt::RegisterCommand*>(command.get())) {
-            registeredInstanceMap[registerCommand->module_name] = instanceMap[registerCommand->var.index()];
+            registeredInstanceMap[registerCommand->module_name] = fetchInstance(registerCommand->var, instanceMap, registeredInstanceMap);
         } else if (auto* actionCommand = dynamic_cast<wabt::ActionCommand*>(command.get())) {
-            auto value = instanceMap[actionCommand->action->module_var.index()]->resolveExportFunction(new Walrus::String(actionCommand->action->name)).value();
+            auto value = fetchInstance(actionCommand->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(actionCommand->action->name)).value();
             RELEASE_ASSERT(value);
             if (actionCommand->action->type() == wabt::ActionType::Invoke) {
                 auto action = dynamic_cast<wabt::InvokeAction*>(actionCommand->action.get());
-                auto fn = instanceMap[action->module_var.index()]->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), nullptr);
             }
         }

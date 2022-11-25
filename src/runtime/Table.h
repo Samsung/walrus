@@ -21,6 +21,9 @@
 
 namespace Walrus {
 
+class ElementSegment;
+class Instance;
+
 class Table : public gc {
 public:
     Table(Value::Type type, size_t initialSize, size_t maximumSize);
@@ -62,7 +65,6 @@ public:
 
     void setElement(uint32_t elemIndex, const Value& val)
     {
-        ASSERT(val.type() == m_type);
         if (UNLIKELY(elemIndex >= m_size)) {
             throwException();
         }
@@ -71,6 +73,7 @@ public:
 
     void copy(const Table* srcTable, int32_t n, int32_t srcIndex, int32_t dstIndex);
     void fill(int32_t n, const Value& value, int32_t index);
+    void init(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
 private:
     void throwException() const;
