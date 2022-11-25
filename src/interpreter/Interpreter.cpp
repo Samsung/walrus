@@ -751,8 +751,7 @@ NextInstruction:
         {
             TableSet* code = (TableSet*)programCounter;
             Table* table = instance->table(code->tableIndex());
-            // FIXME read reference
-            Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
+            Value val(table->type(), reinterpret_cast<intptr_t>(readValue<void*>(sp)), Value::Force);
             table->setElement(readValue<uint32_t>(sp), val);
 
             ADD_PROGRAM_COUNTER(TableSet);
@@ -818,6 +817,28 @@ NextInstruction:
             table->fill(n, val, index);
 
             ADD_PROGRAM_COUNTER(TableFill);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(TableInit)
+            :
+        {
+            TableInit* code = (TableInit*)programCounter;
+            ElementSegment& sg = instance->elementSegment(code->segmentIndex());
+            auto size = readValue<int32_t>(sp);
+            auto srcStart = readValue<int32_t>(sp);
+            auto dstStart = readValue<int32_t>(sp);
+            instance->table(code->tableIndex())->init(instance, &sg, dstStart, srcStart, size);
+            ADD_PROGRAM_COUNTER(TableInit);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(ElemDrop)
+            :
+        {
+            ElemDrop* code = (ElemDrop*)programCounter;
+            instance->elementSegment(code->segmentIndex()).drop();
+            ADD_PROGRAM_COUNTER(ElemDrop);
             NEXT_INSTRUCTION();
         }
 
@@ -918,12 +939,12 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
     auto val = table->uncheckedGetElement(idx);
     if (val.type() != Value::FuncRef) {
-        Trap::throwException("uninitialized table element");
+        Trap::throwException("uninitialized element");
     }
     Function* target = val.asFunction();
     FunctionType* ft = target->functionType();
     if (!ft->equals(state.currentFunction()->asDefinedFunction()->instance()->module()->functionType(code->functionTypeIndex()))) {
-        Trap::throwException("indirect call signature mismatch");
+        Trap::throwException("indirect call type mismatch");
     }
     const FunctionType::FunctionTypeVector& param = ft->param();
     Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);

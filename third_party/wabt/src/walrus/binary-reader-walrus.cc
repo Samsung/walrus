@@ -503,11 +503,13 @@ public:
         return Result::Ok;
     }
     Result OnElemDropExpr(Index segment_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnElemDropExpr(segment_index);
         return Result::Ok;
     }
     Result OnTableInitExpr(Index segment_index, Index table_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTableInitExpr(segment_index, table_index);
         return Result::Ok;
     }
     Result OnTableGetExpr(Index table_index) override {

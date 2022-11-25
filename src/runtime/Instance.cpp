@@ -53,9 +53,24 @@ Optional<Tag*> Instance::resolveExportTag(String* name)
     return nullptr;
 }
 
+Optional<Table*> Instance::resolveExportTable(String* name)
+{
+    auto me = resolveExport(name);
+    if (me && me->type() == ModuleExport::Table) {
+        return m_table[me->itemIndex()];
+    }
+
+    return nullptr;
+}
+
 DataSegment::DataSegment(Data* d)
     : m_data(d)
     , m_sizeInByte(m_data->initData().size())
+{
+}
+
+ElementSegment::ElementSegment(Element* elem)
+    : m_element(elem)
 {
 }
 

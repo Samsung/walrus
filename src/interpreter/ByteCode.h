@@ -894,6 +894,65 @@ protected:
     uint32_t m_tableIndex;
 };
 
+class TableInit : public ByteCode {
+public:
+    TableInit(uint32_t tableIndex, uint32_t segmentIndex)
+        : ByteCode(OpcodeKind::TableInitOpcode)
+        , m_tableIndex(tableIndex)
+        , m_segmentIndex(segmentIndex)
+    {
+    }
+
+    uint32_t tableIndex() const { return m_tableIndex; }
+    uint32_t segmentIndex() const { return m_segmentIndex; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableIndex: %" PRIu32, m_tableIndex);
+        printf(" segmentIndex: %" PRIu32, m_segmentIndex);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(TableInit);
+    }
+#endif
+
+protected:
+    uint32_t m_tableIndex;
+    uint32_t m_segmentIndex;
+};
+
+class ElemDrop : public ByteCode {
+public:
+    ElemDrop(uint32_t segmentIndex)
+        : ByteCode(OpcodeKind::ElemDropOpcode)
+        , m_segmentIndex(segmentIndex)
+    {
+    }
+
+    uint32_t segmentIndex() const
+    {
+        return m_segmentIndex;
+    }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("segmentIndex: %" PRIu32, m_segmentIndex);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(ElemDrop);
+    }
+#endif
+
+protected:
+    uint32_t m_segmentIndex;
+};
+
 class RefNull : public ByteCode {
 public:
     RefNull()

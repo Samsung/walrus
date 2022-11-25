@@ -49,7 +49,7 @@ public:
     // https://webassembly.github.io/spec/core/syntax/types.html
 
     // RefNull
-    static constexpr uintptr_t NullBits = ~uintptr_t(0);
+    static constexpr uintptr_t NullBits = uintptr_t(0);
     enum RefNull { Null };
     enum ForceInit { Force };
 
@@ -250,7 +250,7 @@ public:
 
     bool isNull() const
     {
-        ASSERT(m_type == FuncRef || m_type == ExternRef);
+        ASSERT(m_type == ExternRef);
         return m_ref == reinterpret_cast<void*>(NullBits);
     }
 
