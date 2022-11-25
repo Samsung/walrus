@@ -816,7 +816,7 @@ NextInstruction:
         DEFINE_OPCODE(RefNull)
             :
         {
-            Value(Value::Type::FuncRef).writeToStack(sp);
+            Value(Value::Null).writeToStack(sp);
 
             ADD_PROGRAM_COUNTER(RefNull);
             NEXT_INSTRUCTION();

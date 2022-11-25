@@ -295,7 +295,6 @@ public:
         return Result::Ok;
     }
     Result OnOpcodeType(Type type) override {
-        abort();
         return Result::Ok;
     }
     Result OnAtomicLoadExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
