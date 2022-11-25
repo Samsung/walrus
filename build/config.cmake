@@ -39,6 +39,7 @@ SET (WALRUS_CXXFLAGS
     -Wno-unused-parameter
     -Wno-type-limits -Wno-unused-result -Wno-unused-variable -Wno-invalid-offsetof
     -Wno-deprecated-declarations
+    -Wno-mismatched-new-delete
 )
 
 IF (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
