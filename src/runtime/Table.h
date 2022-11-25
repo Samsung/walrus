@@ -44,6 +44,7 @@ public:
     {
         ASSERT(newSize <= m_maximumSize);
         m_elements.resize(newSize, val);
+        m_size = newSize;
     }
 
     Value getElement(uint32_t elemIndex) const
