@@ -27,7 +27,7 @@
 
 namespace Walrus {
 
-Instance* Module::instantiate(const ValueVector& imports)
+Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
 {
     Instance* instance = new Instance(this);
 
@@ -132,7 +132,9 @@ Instance* Module::instantiate(const ValueVector& imports)
     }
 
     // init table(elem segment)
+    instance->m_elementSegment.reserve(m_element.size());
     for (auto elem : m_element) {
+        instance->m_elementSegment.pushBack(ElementSegment(elem));
         uint32_t index = 0;
         if (elem->hasModuleFunction()) {
             struct RunData {
@@ -161,12 +163,21 @@ Instance* Module::instantiate(const ValueVector& imports)
                      &data);
         }
 
+        if (UNLIKELY(index >= instance->m_table[elem->tableIndex()]->size())) {
+            Trap::throwException("out of bounds table access");
+        }
+
         const auto& fi = elem->functionIndex();
+        Table* table = instance->m_table[elem->tableIndex()];
         for (size_t i = 0; i < fi.size(); i++) {
             if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                instance->m_table[elem->tableIndex()]->setElement(index + i, Value(instance->m_function[fi[i]]));
+                table->setElement(index + i, Value(instance->m_function[fi[i]]));
+            } else {
+                table->setElement(index + i, Value(Value::Null));
             }
         }
+
+        instance->m_elementSegment.back().drop();
     }
 
     // init memory
@@ -205,16 +216,7 @@ Instance* Module::instantiate(const ValueVector& imports)
     if (m_seenStartAttribute) {
         ASSERT(instance->m_function[m_start]->functionType()->param().size() == 0);
         ASSERT(instance->m_function[m_start]->functionType()->result().size() == 0);
-        struct RunData {
-            Instance* instance;
-            Module* module;
-        } data = { instance, this };
-        Walrus::Trap trap;
-        trap.run([](Walrus::ExecutionState& state, void* d) {
-            RunData* data = reinterpret_cast<RunData*>(d);
-            data->instance->m_function[data->module->m_start]->call(state, 0, nullptr, nullptr);
-        },
-                 &data);
+        instance->m_function[m_start]->call(state, 0, nullptr, nullptr);
     }
 
     return instance;

@@ -17,6 +17,8 @@
 
 #include "Table.h"
 #include "runtime/Trap.h"
+#include "runtime/Instance.h"
+#include "runtime/Module.h"
 
 namespace Walrus {
 
@@ -62,6 +64,30 @@ void Table::fill(int32_t n, const Value& value, int32_t index)
 void Table::throwException() const
 {
     Trap::throwException("out of bounds table access");
+}
+
+void Table::init(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+{
+    if (UNLIKELY(dstStart + srcSize > m_size)) {
+        throwException();
+    }
+    if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->functionIndex().size())) {
+        throwException();
+    }
+    if (m_type != Value::Type::FuncRef) {
+        Trap::throwException("type mismatch");
+    }
+
+    const auto& f = source->element()->functionIndex();
+    size_t end = dstStart + srcSize;
+    for (size_t i = dstStart; i < end; i++) {
+        auto idx = f[srcStart++];
+        if (idx != std::numeric_limits<uint32_t>::max()) {
+            m_elements[i] = Value(instance->function(idx));
+        } else {
+            m_elements[i] = Value(Value::Null);
+        }
+    }
 }
 
 } // namespace Walrus

@@ -25,6 +25,8 @@ namespace Walrus {
 
 class Data;
 class DataSegment;
+class Element;
+class ElementSegment;
 class Function;
 class FunctionType;
 class Memory;
@@ -50,10 +52,12 @@ public:
     Tag* tag(uint32_t index) const { return m_tag[index]; }
     Value& global(uint32_t index) { return m_global[index]; }
     DataSegment& dataSegment(uint32_t index) { return m_dataSegment[index]; }
+    ElementSegment& elementSegment(uint32_t index) { return m_elementSegment[index]; }
 
     Optional<ModuleExport*> resolveExport(String* name);
     Optional<Function*> resolveExportFunction(String* name);
     Optional<Tag*> resolveExportTag(String* name);
+    Optional<Table*> resolveExportTable(String* name);
 
 private:
     Module* m_module;
@@ -62,6 +66,7 @@ private:
     Vector<Table*, GCUtil::gc_malloc_allocator<Table*>> m_table;
     Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
     Vector<DataSegment, GCUtil::gc_malloc_allocator<DataSegment>> m_dataSegment;
+    Vector<ElementSegment, GCUtil::gc_malloc_allocator<ElementSegment>> m_elementSegment;
     ValueVector m_global;
     Vector<Tag*, GCUtil::gc_malloc_allocator<Tag*>> m_tag;
 };
@@ -88,6 +93,24 @@ public:
 private:
     Data* m_data;
     size_t m_sizeInByte;
+};
+
+class ElementSegment : public gc {
+public:
+    ElementSegment(Element* elem);
+
+    Optional<Element*> element() const
+    {
+        return m_element;
+    }
+
+    void drop()
+    {
+        m_element = nullptr;
+    }
+
+private:
+    Optional<Element*> m_element;
 };
 
 } // namespace Walrus

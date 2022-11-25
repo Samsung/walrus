@@ -134,6 +134,8 @@ public:
     virtual void OnTableSizeExpr(Index table_index) = 0;
     virtual void OnTableCopyExpr(Index dst_index, Index src_index) = 0;
     virtual void OnTableFillExpr(Index table_index) = 0;
+    virtual void OnElemDropExpr(Index segmentIndex) = 0;
+    virtual void OnTableInitExpr(Index segmentIndex, Index tableIndex) = 0;
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnReturnExpr() = 0;

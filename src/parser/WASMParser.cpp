@@ -999,6 +999,22 @@ public:
         m_currentFunction->pushByteCode(Walrus::TableFill(table_index));
     }
 
+    virtual void OnElemDropExpr(Index segmentIndex) override
+    {
+        m_currentFunction->pushByteCode(Walrus::ElemDrop(segmentIndex));
+    }
+
+    virtual void OnTableInitExpr(Index segmentIndex, Index tableIndex) override
+    {
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        popVMStack();
+        m_currentFunction->pushByteCode(Walrus::TableInit(tableIndex, segmentIndex));
+    }
+
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<Walrus::OpcodeKind>(opcode);
