@@ -261,11 +261,18 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         memcpy(&s, &bits, sizeof(double));
         return Walrus::Value(s);
     }
-    case wabt::Type::ExternRef:
+    case wabt::Type::FuncRef: {
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
-            return Walrus::Value(Walrus::Value::ExternRef, 0, Walrus::Value::Force);
+            return Walrus::Value(Walrus::Value::FuncRef, Walrus::Value::Null);
+        }
+        return Walrus::Value(Walrus::Value::FuncRef, c.ref_bits(), Walrus::Value::Force);
+    }
+    case wabt::Type::ExternRef: {
+        if (c.ref_bits() == wabt::Const::kRefNullBits) {
+            return Walrus::Value(Walrus::Value::ExternRef, Walrus::Value::Null);
         }
         return Walrus::Value(Walrus::Value::ExternRef, c.ref_bits(), Walrus::Value::Force);
+    }
     default:
         RELEASE_ASSERT_NOT_REACHED();
     }
@@ -333,6 +340,16 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         } else {
             return c.ref_bits() == reinterpret_cast<uintptr_t>(v.asExternal());
         }
+    } else if (c.type() == wabt::Type::FuncRef && v.type() == Walrus::Value::FuncRef) {
+        // FIXME value of c.ref_bits() for RefNull
+        wabt::Const constNull;
+        constNull.set_null(c.type());
+        if (c.ref_bits() == constNull.ref_bits()) {
+            // check RefNull
+            return v.isNull();
+        } else {
+            return c.ref_bits() == reinterpret_cast<uintptr_t>(v.asFunction());
+        }
     }
     return false;
 }
@@ -364,6 +381,14 @@ static void printConstVector(wabt::ConstVector& v)
             memcpy(&s, &bits, sizeof(double));
             printf("%lf", s);
         } else if (c.type() == wabt::Type::ExternRef) {
+            // FIXME value of c.ref_bits() for RefNull
+            wabt::Const constNull;
+            constNull.set_null(c.type());
+            if (c.ref_bits() == constNull.ref_bits()) {
+                printf("ref.null");
+                return;
+            }
+        } else if (c.type() == wabt::Type::FuncRef) {
             // FIXME value of c.ref_bits() for RefNull
             wabt::Const constNull;
             constNull.set_null(c.type());

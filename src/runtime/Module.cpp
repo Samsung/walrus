@@ -173,7 +173,7 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
             if (fi[i] != std::numeric_limits<uint32_t>::max()) {
                 table->setElement(index + i, Value(instance->m_function[fi[i]]));
             } else {
-                table->setElement(index + i, Value(Value::Null));
+                table->setElement(index + i, Value(Value::FuncRef, Value::Null));
             }
         }
 

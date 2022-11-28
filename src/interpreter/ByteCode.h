@@ -955,17 +955,33 @@ protected:
 
 class RefNull : public ByteCode {
 public:
-    RefNull()
+    RefNull(Value::Type type)
         : ByteCode(OpcodeKind::RefNullOpcode)
+        , m_type(type)
     {
     }
 
+    Value::Type type() const { return m_type; }
+
 #if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        if (m_type == Value::FuncRef) {
+            printf("funcref");
+        } else {
+            ASSERT(m_type == Value::ExternRef);
+            printf("externref");
+        }
+    }
+
     virtual size_t byteCodeSize()
     {
         return sizeof(RefNull);
     }
 #endif
+
+private:
+    Value::Type m_type;
 };
 
 class RefIsNull : public ByteCode {

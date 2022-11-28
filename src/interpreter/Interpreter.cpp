@@ -607,7 +607,7 @@ NextInstruction:
             :
         {
             GlobalGet4* code = (GlobalGet4*)programCounter;
-            instance->global(code->index()).writeToStack<4>(sp);
+            instance->global(code->index()).writeToStack(sp);
             ADD_PROGRAM_COUNTER(GlobalGet4);
             NEXT_INSTRUCTION();
         }
@@ -616,7 +616,7 @@ NextInstruction:
             :
         {
             GlobalGet8* code = (GlobalGet8*)programCounter;
-            instance->global(code->index()).writeToStack<8>(sp);
+            instance->global(code->index()).writeToStack(sp);
             ADD_PROGRAM_COUNTER(GlobalGet8);
             NEXT_INSTRUCTION();
         }
@@ -845,7 +845,8 @@ NextInstruction:
         DEFINE_OPCODE(RefNull)
             :
         {
-            Value(Value::Null).writeToStack(sp);
+            RefNull* code = (RefNull*)programCounter;
+            Value(code->type(), Value::Null).writeToStack(sp);
 
             ADD_PROGRAM_COUNTER(RefNull);
             NEXT_INSTRUCTION();
@@ -857,7 +858,7 @@ NextInstruction:
             Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
             writeValue(sp, (int32_t)val.isNull());
 
-            ADD_PROGRAM_COUNTER(RefNull);
+            ADD_PROGRAM_COUNTER(RefIsNull);
             NEXT_INSTRUCTION();
         }
 
@@ -938,7 +939,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         Trap::throwException("undefined element");
     }
     auto val = table->uncheckedGetElement(idx);
-    if (val.type() != Value::FuncRef) {
+    if (val.isNull()) {
         Trap::throwException("uninitialized element");
     }
     Function* target = val.asFunction();
