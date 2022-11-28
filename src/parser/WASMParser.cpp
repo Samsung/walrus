@@ -24,27 +24,7 @@
 
 namespace wabt {
 
-static Walrus::Value::Type toValueKindForFunctionType(Type type)
-{
-    switch (type) {
-    case Type::I32:
-        return Walrus::Value::Type::I32;
-    case Type::I64:
-        return Walrus::Value::Type::I64;
-    case Type::F32:
-        return Walrus::Value::Type::F32;
-    case Type::F64:
-        return Walrus::Value::Type::F64;
-    case Type::FuncRef:
-        return Walrus::Value::Type::FuncRef;
-    case Type::ExternRef:
-        return Walrus::Value::Type::ExternRef;
-    default:
-        RELEASE_ASSERT_NOT_REACHED();
-    }
-}
-
-static Walrus::Value::Type toValueKindForLocalType(Type type)
+static Walrus::Value::Type toValueKind(Type type)
 {
     switch (type) {
     case Type::I32:
@@ -126,11 +106,11 @@ public:
         Walrus::FunctionType::FunctionTypeVector param;
         param.reserve(paramCount);
         for (size_t i = 0; i < paramCount; i++) {
-            param.push_back(toValueKindForFunctionType(paramTypes[i]));
+            param.push_back(toValueKind(paramTypes[i]));
         }
         Walrus::FunctionType::FunctionTypeVector result;
         for (size_t i = 0; i < resultCount; i++) {
-            result.push_back(toValueKindForFunctionType(resultTypes[i]));
+            result.push_back(toValueKind(resultTypes[i]));
         }
         ASSERT(index == m_module->m_functionType.size());
         m_module->m_functionType.push_back(
@@ -159,7 +139,7 @@ public:
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) override
     {
         ASSERT(m_module->m_global.size() == globalIndex);
-        m_module->m_global.pushBack(std::make_tuple(toValueKindForLocalType(type), mutable_));
+        m_module->m_global.pushBack(std::make_tuple(toValueKind(type), mutable_));
         m_module->m_import.push_back(new Walrus::ModuleImport(
             Walrus::ModuleImport::Global,
             importIndex, new Walrus::String(moduleName),
@@ -241,7 +221,7 @@ public:
     {
         m_elementModuleFunction = m_currentFunction;
         m_currentFunction = nullptr;
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
     }
 
@@ -344,7 +324,7 @@ public:
     virtual void BeginGlobal(Index index, Type type, bool mutable_) override
     {
         ASSERT(m_module->m_global.size() == index);
-        m_module->m_global.pushBack(std::make_tuple(toValueKindForLocalType(type), mutable_));
+        m_module->m_global.pushBack(std::make_tuple(toValueKind(type), mutable_));
         m_currentFunction = m_module->m_globalInitBlock.value();
     }
 
@@ -417,7 +397,7 @@ public:
     virtual void OnLocalDecl(Index decl_index, Index count, Type type) override
     {
         while (count) {
-            auto wType = toValueKindForLocalType(type);
+            auto wType = toValueKind(type);
             m_currentFunction->m_local.pushBack(wType);
             auto sz = Walrus::valueSizeInStack(wType);
             m_functionStackSizeSoFar += sz;
@@ -449,7 +429,7 @@ public:
 
     virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         auto functionType = m_module->functionType(sigIndex);
@@ -605,7 +585,7 @@ public:
 
     virtual void OnIfExpr(Type sigType) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         BlockInfo b(BlockInfo::IfElse, sigType);
@@ -624,7 +604,7 @@ public:
         m_currentFunction->pushByteCode(Walrus::Jump());
         ASSERT(blockInfo.m_blockType == BlockInfo::IfElse);
         if (blockInfo.m_returnValueType != Type::Void) {
-            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
             popVMStack();
         }
         m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
@@ -685,7 +665,7 @@ public:
                         dropValueSize -= Walrus::valueSizeInStack(result[i]);
                     }
                 } else if (iter->m_returnValueType != Type::Void) {
-                    dropValueSize -= Walrus::valueSizeInStack(toValueKindForLocalType(iter->m_returnValueType));
+                    dropValueSize -= Walrus::valueSizeInStack(toValueKind(iter->m_returnValueType));
                 }
             }
         } else if (m_blockInfo.size()) {
@@ -747,7 +727,7 @@ public:
     {
         if (m_blockInfo.size() == depth) {
             // this case acts like return
-            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
             size_t pos = m_currentFunction->currentByteCodeSize();
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse(sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End)));
             m_currentFunction->pushByteCode(Walrus::End());
@@ -758,7 +738,7 @@ public:
             return;
         }
 
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         auto& blockInfo = findBlockInfoInBr(depth);
@@ -785,7 +765,7 @@ public:
 
     virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         size_t brTableCode = m_currentFunction->currentByteCodeSize();
@@ -815,7 +795,7 @@ public:
     {
         // TODO implement selectT
         ASSERT(resultCount == 0);
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         ASSERT(m_vmStack.back() == *(m_vmStack.rbegin() + 1));
@@ -853,7 +833,7 @@ public:
 
         auto& blockInfo = m_blockInfo.back();
         if (blockInfo.m_returnValueType != Type::Void) {
-            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
             popVMStack();
         }
 
@@ -891,11 +871,11 @@ public:
 
     virtual void OnMemoryInitExpr(Index segmentIndex, Index memidx) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         m_currentFunction->pushByteCode(Walrus::MemoryInit(memidx, segmentIndex));
@@ -903,11 +883,11 @@ public:
 
     virtual void OnMemoryCopyExpr(Index srcMemIndex, Index dstMemIndex) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         m_currentFunction->pushByteCode(Walrus::MemoryCopy(srcMemIndex, dstMemIndex));
@@ -915,11 +895,11 @@ public:
 
     virtual void OnMemoryFillExpr(Index memidx) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
         m_currentFunction->pushByteCode(Walrus::MemoryFill(memidx));
@@ -932,7 +912,7 @@ public:
 
     virtual void OnMemoryGrowExpr(Index memidx) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::MemoryGrow(memidx));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
@@ -946,7 +926,7 @@ public:
 
     virtual void OnTableGetExpr(Index table_index) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::TableGet(table_index));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
@@ -954,18 +934,18 @@ public:
 
     virtual void OnTableSetExpr(Index table_index) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::FuncRef)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::FuncRef)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::TableSet(table_index));
     }
 
     virtual void OnTableGrowExpr(Index table_index) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::FuncRef)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::FuncRef)));
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::TableGrow(table_index));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
@@ -979,22 +959,22 @@ public:
 
     virtual void OnTableCopyExpr(Index dst_index, Index src_index) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::TableCopy(dst_index, src_index));
     }
 
     virtual void OnTableFillExpr(Index table_index) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::FuncRef)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::FuncRef)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::TableFill(table_index));
     }
@@ -1006,11 +986,11 @@ public:
 
     virtual void OnTableInitExpr(Index segmentIndex, Index tableIndex) override
     {
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(Type::I32)));
+        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
         m_currentFunction->pushByteCode(Walrus::TableInit(tableIndex, segmentIndex));
     }
@@ -1036,7 +1016,7 @@ public:
 
     virtual void OnRefNullExpr(Type type) override
     {
-        m_currentFunction->pushByteCode(Walrus::RefNull());
+        m_currentFunction->pushByteCode(Walrus::RefNull(toValueKind(type)));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
     }
 
@@ -1065,7 +1045,7 @@ public:
 #if !defined(NDEBUG)
             if (!blockInfo.m_shouldRestoreVMStackAtEnd) {
                 if (!blockInfo.m_returnValueType.IsIndex() && blockInfo.m_returnValueType != Type::Void) {
-                    ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+                    ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
                 }
             }
 #endif
@@ -1110,7 +1090,7 @@ public:
                         pushVMStack(Walrus::valueSizeInStack(result[i]));
                     }
                 } else if (blockInfo.m_returnValueType != Type::Void) {
-                    pushVMStack(Walrus::valueSizeInStack(toValueKindForLocalType(blockInfo.m_returnValueType)));
+                    pushVMStack(Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
                 }
             }
         } else {

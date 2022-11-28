@@ -49,7 +49,7 @@ public:
     // https://webassembly.github.io/spec/core/syntax/types.html
 
     // RefNull
-    static constexpr uintptr_t NullBits = uintptr_t(0);
+    static constexpr uintptr_t NullBits = ~uintptr_t(0);
     enum RefNull { Null };
     enum ForceInit { Force };
 
@@ -112,9 +112,9 @@ public:
     {
     }
 
-    Value(RefNull)
+    Value(Type type, RefNull)
         : m_ref(reinterpret_cast<void*>(NullBits))
-        , m_type(ExternRef)
+        , m_type(type)
     {
     }
 
@@ -250,7 +250,7 @@ public:
 
     bool isNull() const
     {
-        ASSERT(m_type == ExternRef);
+        ASSERT(m_type == ExternRef || m_type == FuncRef);
         return m_ref == reinterpret_cast<void*>(NullBits);
     }
 
@@ -308,20 +308,6 @@ inline size_t valueSizeInStack(Value::Type type)
         return 16;
     default:
         return sizeof(size_t);
-    }
-}
-
-template <const size_t size>
-inline void Value::writeToStack(uint8_t*& ptr)
-{
-    ASSERT(valueSizeInStack(m_type) == size);
-    if (size == 4) {
-        *reinterpret_cast<int32_t*>(ptr) = m_i32;
-        ptr += stackAllocatedSize<int32_t>();
-    } else {
-        ASSERT(size == 8);
-        *reinterpret_cast<int64_t*>(ptr) = m_i64;
-        ptr += stackAllocatedSize<int64_t>();
     }
 }
 
