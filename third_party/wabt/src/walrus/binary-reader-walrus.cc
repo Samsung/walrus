@@ -16,6 +16,7 @@
 
 #include <map>
 #include <set>
+#include <limits>
 
 #include "wabt/binary-reader.h"
 #include "wabt/feature.h"

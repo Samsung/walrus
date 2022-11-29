@@ -68,6 +68,7 @@ public:
     }
 
     void* operator new(size_t size);
+    void* operator new[](size_t size) = delete;
 
 private:
     char* m_buffer;
