@@ -638,6 +638,13 @@ public:
         return *iter;
     }
 
+    void markShouldRestoreVMStackAtEnd()
+    {
+        if (m_blockInfo.size()) {
+            m_blockInfo.back().m_shouldRestoreVMStackAtEnd = true;
+        }
+    }
+
     // return drop size, parameter size
     std::pair<size_t, size_t> dropStackValuesBeforeBrIfNeeds(Index depth)
     {
@@ -645,27 +652,28 @@ public:
         size_t parameterSize = 0;
         if (depth < m_blockInfo.size()) {
             auto iter = m_blockInfo.rbegin() + depth;
-
-            size_t start = iter->m_vmStack.size();
-            for (size_t i = start; i < m_vmStack.size(); i++) {
-                dropValueSize += m_vmStack[i];
-            }
-
-            if (iter->m_blockType == BlockInfo::Loop) {
-                if (iter->m_returnValueType.IsIndex()) {
-                    auto ft = m_module->functionType(iter->m_returnValueType);
-                    dropValueSize += ft->paramStackSize();
-                    parameterSize += ft->paramStackSize();
+            if (iter->m_vmStack.size() < m_vmStack.size()) {
+                size_t start = iter->m_vmStack.size();
+                for (size_t i = start; i < m_vmStack.size(); i++) {
+                    dropValueSize += m_vmStack[i];
                 }
-            } else {
-                if (iter->m_returnValueType.IsIndex()) {
-                    auto ft = m_module->functionType(iter->m_returnValueType);
-                    const auto& result = ft->result();
-                    for (size_t i = 0; i < result.size(); i++) {
-                        dropValueSize -= Walrus::valueSizeInStack(result[i]);
+
+                if (iter->m_blockType == BlockInfo::Loop) {
+                    if (iter->m_returnValueType.IsIndex()) {
+                        auto ft = m_module->functionType(iter->m_returnValueType);
+                        dropValueSize += ft->paramStackSize();
+                        parameterSize += ft->paramStackSize();
                     }
-                } else if (iter->m_returnValueType != Type::Void) {
-                    dropValueSize -= Walrus::valueSizeInStack(toValueKind(iter->m_returnValueType));
+                } else {
+                    if (iter->m_returnValueType.IsIndex()) {
+                        auto ft = m_module->functionType(iter->m_returnValueType);
+                        const auto& result = ft->result();
+                        for (size_t i = 0; i < result.size(); i++) {
+                            dropValueSize -= Walrus::valueSizeInStack(result[i]);
+                        }
+                    } else if (iter->m_returnValueType != Type::Void) {
+                        dropValueSize -= Walrus::valueSizeInStack(toValueKind(iter->m_returnValueType));
+                    }
                 }
             }
         } else if (m_blockInfo.size()) {
@@ -693,9 +701,7 @@ public:
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 popVMStack();
             }
-            if (m_blockInfo.size()) {
-                m_blockInfo.back().m_shouldRestoreVMStackAtEnd = true;
-            }
+            markShouldRestoreVMStackAtEnd();
         }
 
         if (!m_blockInfo.size()) {
@@ -711,6 +717,7 @@ public:
             generateFunctionReturnCode(true);
             return;
         }
+        markShouldRestoreVMStackAtEnd();
         auto& blockInfo = findBlockInfoInBr(depth);
         auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
@@ -765,6 +772,8 @@ public:
 
     virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
     {
+        markShouldRestoreVMStackAtEnd();
+
         ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
