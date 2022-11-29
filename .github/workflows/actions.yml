@@ -11,6 +11,7 @@ env:
 
 jobs:
   Check_tidy:
+    # setup-python does not support ubuntu-latest(ubuntu-22.04)
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
@@ -27,7 +28,7 @@ jobs:
       run: tools/check_tidy.py
 
   Clang_build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
@@ -50,7 +51,7 @@ jobs:
         ninja -Cout/clang/x64
 
   Linux_x86_test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
@@ -69,7 +70,7 @@ jobs:
       run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
 
   Linux_x64_test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
@@ -88,7 +89,7 @@ jobs:
       run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
 
   Linux_armv7l_test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v3
@@ -107,7 +108,7 @@ jobs:
           ./tools/run-tests.py --engine="./out/linux/arm/walrus"
 
   Linux_aarch64_test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v3
@@ -127,7 +128,7 @@ jobs:
 
   Coverity_scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
