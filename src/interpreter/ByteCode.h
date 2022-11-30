@@ -125,18 +125,18 @@ protected:
 
 class F32Const : public ByteCode {
 public:
-    F32Const(float value)
+    F32Const(uint32_t value)
         : ByteCode(OpcodeKind::F32ConstOpcode)
         , m_value(value)
     {
     }
 
-    float value() const { return m_value; }
+    uint32_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("value: %f", m_value);
+        printf("value: %f", static_cast<float>(m_value));
     }
 
     virtual size_t byteCodeSize()
@@ -146,23 +146,23 @@ public:
 #endif
 
 protected:
-    float m_value;
+    uint32_t m_value;
 };
 
 class F64Const : public ByteCode {
 public:
-    F64Const(double value)
+    F64Const(uint64_t value)
         : ByteCode(OpcodeKind::F64ConstOpcode)
         , m_value(value)
     {
     }
 
-    double value() const { return m_value; }
+    uint64_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("value: %lf", m_value);
+        printf("value: %lf", static_cast<double>(m_value));
     }
 
     virtual size_t byteCodeSize()
@@ -172,7 +172,7 @@ public:
 #endif
 
 protected:
-    double m_value;
+    uint64_t m_value;
 };
 
 class Call : public ByteCode {

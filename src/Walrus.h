@@ -47,16 +47,12 @@
 
 /* ALWAYS_INLINE */
 #ifndef ALWAYS_INLINE
-#if defined(WALRUS_SMALL_CONFIG)
-#define ALWAYS_INLINE inline
-#else
-#if (defined(COMPILER_GCC) || defined(COMPILER_CLANG)) && defined(NDEBUG) && !defined(COMPILER_MINGW)
+#if (defined(COMPILER_GCC) || defined(COMPILER_CLANG)) && !defined(COMPILER_MINGW)
 #define ALWAYS_INLINE inline __attribute__((__always_inline__))
 #elif defined(COMPILER_MSVC) && defined(NDEBUG)
 #define ALWAYS_INLINE __forceinline
 #else
 #define ALWAYS_INLINE inline
-#endif
 #endif
 #endif
 
