@@ -42,9 +42,9 @@ SET (WALRUS_CXXFLAGS
 )
 
 IF (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-    SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -frounding-math -fsignaling-nans -Wno-unused-but-set-variable -Wno-unused-but-set-parameter -Wno-mismatched-new-delete)
+    SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -Wno-unused-but-set-variable -Wno-unused-but-set-parameter -Wno-mismatched-new-delete)
 ELSEIF (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
-    SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -fno-fast-math -fno-unsafe-math-optimizations -fdenormal-fp-math=ieee -Wno-parentheses-equality -Wno-dynamic-class-memaccess -Wno-deprecated-register -Wno-expansion-to-defined -Wno-return-type -Wno-overloaded-virtual -Wno-unused-private-field)
+    SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -fno-fast-math -fno-unsafe-math-optimizations -Wno-parentheses-equality -Wno-dynamic-class-memaccess -Wno-deprecated-register -Wno-expansion-to-defined -Wno-return-type -Wno-overloaded-virtual -Wno-unused-private-field)
 ELSE()
     MESSAGE (FATAL_ERROR ${CMAKE_CXX_COMPILER_ID} " is Unsupported Compiler")
 ENDIF()

@@ -145,23 +145,24 @@ bool isNormalDivRem(T lhs, T rhs)
     return true;
 }
 
+// using ALWAYS_INLINE needs by regard to return some nan values (like nan:0x0f1e2) is converted other value
 #if defined(COMPILER_MSVC)
 template <typename T>
-T floatAbs(T val);
+ALWAYS_INLINE T floatAbs(T val);
 template <typename T>
-T floatCopysign(T lhs, T rhs);
+ALWAYS_INLINE T floatCopysign(T lhs, T rhs);
 
 // Don't use std::{abs,copysign} directly on MSVC, since that seems to lose
 // the NaN tag.
 template <>
-inline float floatAbs(float val)
+ALWAYS_INLINE float floatAbs(float val)
 {
     return _mm_cvtss_float(_mm_and_ps(
         _mm_set1_ps(val), _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff))));
 }
 
 template <>
-inline double floatAbs(double val)
+ALWAYS_INLINE double floatAbs(double val)
 {
     return _mm_cvtsd_double(
         _mm_and_pd(_mm_set1_pd(val),
@@ -169,7 +170,7 @@ inline double floatAbs(double val)
 }
 
 template <>
-inline float floatCopysign(float lhs, float rhs)
+ALWAYS_INLINE float floatCopysign(float lhs, float rhs)
 {
     return _mm_cvtss_float(
         _mm_or_ps(_mm_and_ps(_mm_set1_ps(lhs),
@@ -179,7 +180,7 @@ inline float floatCopysign(float lhs, float rhs)
 }
 
 template <>
-inline double floatCopysign(double lhs, double rhs)
+ALWAYS_INLINE double floatCopysign(double lhs, double rhs)
 {
     return _mm_cvtsd_double(_mm_or_pd(
         _mm_and_pd(_mm_set1_pd(lhs),
@@ -190,13 +191,13 @@ inline double floatCopysign(double lhs, double rhs)
 
 #else
 template <typename T>
-T floatAbs(T val)
+ALWAYS_INLINE T floatAbs(T val)
 {
     return std::abs(val);
 }
 
 template <typename T>
-T floatCopysign(T lhs, T rhs)
+ALWAYS_INLINE T floatCopysign(T lhs, T rhs)
 {
     return std::copysign(lhs, rhs);
 }
@@ -207,23 +208,23 @@ T floatCopysign(T lhs, T rhs)
 #endif
 
 template <typename T>
-T floatNeg(T val)
+ALWAYS_INLINE T floatNeg(T val)
 {
     return -val;
 }
 template <typename T>
-T floatCeil(T val) { return canonNaN(std::ceil(val)); }
+ALWAYS_INLINE T floatCeil(T val) { return canonNaN(std::ceil(val)); }
 template <typename T>
-T floatFloor(T val) { return canonNaN(std::floor(val)); }
+ALWAYS_INLINE T floatFloor(T val) { return canonNaN(std::floor(val)); }
 template <typename T>
-T floatTrunc(T val) { return canonNaN(std::trunc(val)); }
+ALWAYS_INLINE T floatTrunc(T val) { return canonNaN(std::trunc(val)); }
 template <typename T>
-T floatNearest(T val) { return canonNaN(std::nearbyint(val)); }
+ALWAYS_INLINE T floatNearest(T val) { return canonNaN(std::nearbyint(val)); }
 template <typename T>
-T floatSqrt(T val) { return canonNaN(std::sqrt(val)); }
+ALWAYS_INLINE T floatSqrt(T val) { return canonNaN(std::sqrt(val)); }
 
 template <typename T>
-T floatDiv(T lhs, T rhs)
+ALWAYS_INLINE T floatDiv(T lhs, T rhs)
 {
     // IEE754 specifies what should happen when dividing a float by zero, but
     // C/C++ says it is undefined behavior.
@@ -238,7 +239,7 @@ T floatDiv(T lhs, T rhs)
 }
 
 template <typename T>
-T floatMin(T lhs, T rhs)
+ALWAYS_INLINE T floatMin(T lhs, T rhs)
 {
     if (UNLIKELY(std::isnan(lhs) || std::isnan(rhs))) {
         return std::numeric_limits<T>::quiet_NaN();
@@ -250,13 +251,13 @@ T floatMin(T lhs, T rhs)
 }
 
 template <typename T>
-T floatPMin(T lhs, T rhs)
+ALWAYS_INLINE T floatPMin(T lhs, T rhs)
 {
     return std::min(lhs, rhs);
 }
 
 template <typename T>
-T floatMax(T lhs, T rhs)
+ALWAYS_INLINE T floatMax(T lhs, T rhs)
 {
     if (UNLIKELY(std::isnan(lhs) || std::isnan(rhs))) {
         return std::numeric_limits<T>::quiet_NaN();
@@ -268,7 +269,7 @@ T floatMax(T lhs, T rhs)
 }
 
 template <typename T>
-T floatPMax(T lhs, T rhs)
+ALWAYS_INLINE T floatPMax(T lhs, T rhs)
 {
     return std::max(lhs, rhs);
 }

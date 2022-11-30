@@ -461,15 +461,13 @@ public:
 
     virtual void OnF32ConstExpr(uint32_t value) override
     {
-        float* f = reinterpret_cast<float*>(&value);
-        m_currentFunction->pushByteCode(Walrus::F32Const(*f));
+        m_currentFunction->pushByteCode(Walrus::F32Const(value));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F32));
     }
 
     virtual void OnF64ConstExpr(uint64_t value) override
     {
-        double* f = reinterpret_cast<double*>(&value);
-        m_currentFunction->pushByteCode(Walrus::F64Const(*f));
+        m_currentFunction->pushByteCode(Walrus::F64Const(value));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F64));
     }
 
