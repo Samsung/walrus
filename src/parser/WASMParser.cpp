@@ -667,10 +667,10 @@ public:
                         auto ft = m_module->functionType(iter->m_returnValueType);
                         const auto& result = ft->result();
                         for (size_t i = 0; i < result.size(); i++) {
-                            dropValueSize -= Walrus::valueSizeInStack(result[i]);
+                            parameterSize += Walrus::valueSizeInStack(result[i]);
                         }
                     } else if (iter->m_returnValueType != Type::Void) {
-                        dropValueSize -= Walrus::valueSizeInStack(toValueKind(iter->m_returnValueType));
+                        parameterSize += Walrus::valueSizeInStack(toValueKind(iter->m_returnValueType));
                     }
                 }
             }
@@ -681,6 +681,12 @@ public:
                 dropValueSize += m_vmStack[i];
             }
         }
+
+        if (dropValueSize == parameterSize) {
+            dropValueSize = 0;
+            parameterSize = 0;
+        }
+
         return std::make_pair(dropValueSize, parameterSize);
     }
 
