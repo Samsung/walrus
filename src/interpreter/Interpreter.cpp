@@ -528,7 +528,7 @@ NextInstruction:
             :
         {
             Drop* code = (Drop*)programCounter;
-            if (UNLIKELY(code->parameterSize())) {
+            if (code->parameterSize()) {
                 auto dest = sp - code->dropSize();
                 auto src = sp - code->parameterSize();
                 sp -= (code->dropSize() - code->parameterSize());
