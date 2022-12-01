@@ -764,15 +764,15 @@ NextInstruction:
             TableGrow* code = (TableGrow*)programCounter;
             Table* table = instance->table(code->tableIndex());
             size_t size = table->size();
-            size_t newSize = readValue<int32_t>(sp) + size;
+            uint64_t newSize = (uint64_t)readValue<uint32_t>(sp) + size;
             // FIXME read reference
             Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
 
             if (newSize <= table->maximumSize()) {
                 table->grow(newSize, val);
-                writeValue<int32_t>(sp, size);
+                writeValue<uint32_t>(sp, size);
             } else {
-                writeValue<int32_t>(sp, -1);
+                writeValue<uint32_t>(sp, -1);
             }
 
             ADD_PROGRAM_COUNTER(TableGrow);
@@ -839,6 +839,16 @@ NextInstruction:
             ElemDrop* code = (ElemDrop*)programCounter;
             instance->elementSegment(code->segmentIndex()).drop();
             ADD_PROGRAM_COUNTER(ElemDrop);
+            NEXT_INSTRUCTION();
+        }
+
+        DEFINE_OPCODE(RefFunc)
+            :
+        {
+            RefFunc* code = (RefFunc*)programCounter;
+            Value(instance->function(code->funcIndex())).writeToStack(sp);
+
+            ADD_PROGRAM_COUNTER(RefFunc);
             NEXT_INSTRUCTION();
         }
 

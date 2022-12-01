@@ -57,18 +57,18 @@ protected:
 
 class I32Const : public ByteCode {
 public:
-    I32Const(int32_t value)
+    I32Const(uint32_t value)
         : ByteCode(OpcodeKind::I32ConstOpcode)
         , m_value(value)
     {
     }
 
-    int32_t value() const { return m_value; }
+    uint32_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("value: %" PRId32, m_value);
+        printf("value: %" PRId32, static_cast<int32_t>(m_value));
     }
 
     virtual size_t byteCodeSize()
@@ -78,7 +78,7 @@ public:
 #endif
 
 protected:
-    int32_t m_value;
+    uint32_t m_value;
 };
 
 class BinaryOperation : public ByteCode {
@@ -99,18 +99,18 @@ public:
 
 class I64Const : public ByteCode {
 public:
-    I64Const(int64_t value)
+    I64Const(uint64_t value)
         : ByteCode(OpcodeKind::I64ConstOpcode)
         , m_value(value)
     {
     }
 
-    int64_t value() const { return m_value; }
+    uint64_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("value: %" PRId64, m_value);
+        printf("value: %" PRId64, static_cast<int64_t>(m_value));
     }
 
     virtual size_t byteCodeSize()
@@ -120,7 +120,7 @@ public:
 #endif
 
 protected:
-    int64_t m_value;
+    uint64_t m_value;
 };
 
 class F32Const : public ByteCode {
@@ -951,6 +951,32 @@ public:
 
 protected:
     uint32_t m_segmentIndex;
+};
+
+class RefFunc : public ByteCode {
+public:
+    RefFunc(uint32_t funcIndex)
+        : ByteCode(OpcodeKind::RefFuncOpcode)
+        , m_funcIndex(funcIndex)
+    {
+    }
+
+    uint32_t funcIndex() const { return m_funcIndex; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("funcIndex: %" PRIu32, m_funcIndex);
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(RefFunc);
+    }
+#endif
+
+private:
+    uint32_t m_funcIndex;
 };
 
 class RefNull : public ByteCode {
