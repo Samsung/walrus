@@ -490,6 +490,13 @@ Result BinaryReaderJIT::OnConvertExpr(Opcode opcode) {
   if (opcode == Opcode::I32Eqz || opcode == Opcode::I64Eqz) {
     compiler_.append(Instruction::Compare, opcode, 1,
                      LocationInfo::kFourByteSize);
+  } else if (opcode == Opcode::I64ExtendI32S ||
+             opcode == Opcode::I64ExtendI32U) {
+    compiler_.append(Instruction::Unary, opcode, 1,
+                     LocationInfo::kEightByteSize);
+  } else if (opcode == Opcode::I32WrapI64) {
+    compiler_.append(Instruction::Unary, opcode, 1,
+                     LocationInfo::kFourByteSize);
   }
   return Result::Ok;
 }
