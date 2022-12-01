@@ -62,3 +62,25 @@
 (assert_return (invoke "size-t3") (i32.const 7))
 (assert_return (invoke "grow-t3" (i32.const 1)))
 (assert_return (invoke "size-t3") (i32.const 8))
+
+
+;; Type errors
+
+(assert_invalid
+  (module
+    (table $t 1 externref)
+    (func $type-result-i32-vs-empty
+      (table.size $t)
+    )
+  )
+  "type mismatch"
+)
+(assert_invalid
+  (module
+    (table $t 1 externref)
+    (func $type-result-i32-vs-f32 (result f32)
+      (table.size $t)
+    )
+  )
+  "type mismatch"
+)
