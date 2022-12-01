@@ -293,6 +293,9 @@ public:
         return Result::Ok;
     }
     Result OnOpcodeBlockSig(Type sig_type) override {
+        if (WABT_UNLIKELY(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd())) {
+            m_externalDelegate->setResumeGenerateByteCodeAfterNBlockEnd(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd() + 1);
+        }
         return Result::Ok;
     }
     Result OnOpcodeType(Type type) override {
@@ -365,12 +368,21 @@ public:
         abort();
         return Result::Ok;
     }
+    void SubBlockCheck()
+    {
+        if (WABT_UNLIKELY(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd() == 1)) {
+            m_externalDelegate->setResumeGenerateByteCodeAfterNBlockEnd(0);
+            m_externalDelegate->setShouldContinueToGenerateByteCode(true);
+        }
+    }
     Result OnCatchExpr(Index tag_index) override {
+        SubBlockCheck();
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnCatchExpr(tag_index);
         return Result::Ok;
     }
     Result OnCatchAllExpr() override {
+        SubBlockCheck();
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnCatchAllExpr();
         return Result::Ok;
@@ -395,11 +407,18 @@ public:
         return Result::Ok;
     }
     Result OnElseExpr() override {
+        SubBlockCheck();
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnElseExpr();
         return Result::Ok;
     }
     Result OnEndExpr() override {
+        if (WABT_UNLIKELY(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd())) {
+            m_externalDelegate->setResumeGenerateByteCodeAfterNBlockEnd(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd() - 1);
+            if (m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd() == 0) {
+                m_externalDelegate->setShouldContinueToGenerateByteCode(true);
+            }
+        }
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnEndExpr();
         return Result::Ok;
