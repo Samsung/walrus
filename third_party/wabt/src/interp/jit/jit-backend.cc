@@ -137,11 +137,75 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr) {
     case Opcode::I32Sub:
       opcode = SLJIT_SUB32;
       break;
+    case Opcode::I32Mul:
+      opcode = SLJIT_MUL32;
+      break;
+    case Opcode::I32DivS:
+    case Opcode::I32DivU:
+    case Opcode::I32RemS:
+    case Opcode::I32RemU:
+      return;
+    case Opcode::I32Rotl:
+      opcode = SLJIT_ROTL32;
+      break;
+    case Opcode::I32Rotr:
+      opcode = SLJIT_ROTR32;
+      break;
+    case Opcode::I32And:
+      opcode = SLJIT_AND32;
+      break;
+    case Opcode::I32Or:
+      opcode = SLJIT_OR32;
+      break;
+    case Opcode::I32Xor:
+      opcode = SLJIT_XOR32;
+      break;
+    case Opcode::I32Shl:
+      opcode = SLJIT_SHL32;
+      break;
+    case Opcode::I32ShrS:
+      opcode = SLJIT_ASHR32;
+      break;
+    case Opcode::I32ShrU:
+      opcode = SLJIT_LSHR32;
+      break;
     case Opcode::I64Add:
       opcode = SLJIT_ADD;
       break;
     case Opcode::I64Sub:
       opcode = SLJIT_SUB;
+      break;
+    case Opcode::I64Mul:
+      opcode = SLJIT_MUL;
+      break;
+    case Opcode::I64DivS:
+    case Opcode::I64DivU:
+    case Opcode::I64RemS:
+    case Opcode::I64RemU:
+      return;
+    case Opcode::I64Rotl:
+      opcode = SLJIT_ROTL;
+      break;
+    case Opcode::I64Rotr:
+      opcode = SLJIT_ROTR;
+      break;
+    case Opcode::I64And:
+      opcode = SLJIT_AND;
+      break;
+    case Opcode::I64Or:
+      opcode = SLJIT_OR;
+      break;
+    case Opcode::I64Xor:
+      opcode = SLJIT_XOR;
+      break;
+    case Opcode::I64Shl:
+      opcode = SLJIT_SHL;
+      break;
+    case Opcode::I64ShrS:
+      opcode = SLJIT_ASHR;
+      break;
+    case Opcode::I64ShrU:
+      opcode = SLJIT_LSHR;
       break;
     default:
       WABT_UNREACHABLE;
