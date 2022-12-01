@@ -636,11 +636,17 @@ public:
         return *iter;
     }
 
-    void markShouldRestoreVMStackAtEnd()
+    void stopToGenerateByteCodeWhileBlockEnd()
     {
+        if (m_resumeGenerateByteCodeAfterNBlockEnd) {
+            return;
+        }
+
+        m_resumeGenerateByteCodeAfterNBlockEnd = 1;
         if (m_blockInfo.size()) {
             m_blockInfo.back().m_shouldRestoreVMStackAtEnd = true;
         }
+        m_shouldContinueToGenerateByteCode = false;
     }
 
     // return drop size, parameter size
@@ -705,7 +711,7 @@ public:
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 popVMStack();
             }
-            markShouldRestoreVMStackAtEnd();
+            stopToGenerateByteCodeWhileBlockEnd();
         }
 
         if (!m_blockInfo.size()) {
@@ -721,7 +727,6 @@ public:
             generateFunctionReturnCode(true);
             return;
         }
-        markShouldRestoreVMStackAtEnd();
         auto& blockInfo = findBlockInfoInBr(depth);
         auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
@@ -732,6 +737,8 @@ public:
             blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
         }
         m_currentFunction->pushByteCode(Walrus::Jump(offset));
+
+        stopToGenerateByteCodeWhileBlockEnd();
     }
 
     virtual void OnBrIfExpr(Index depth) override
@@ -776,8 +783,6 @@ public:
 
     virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
     {
-        markShouldRestoreVMStackAtEnd();
-
         ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
@@ -790,7 +795,15 @@ public:
 
             for (Index i = 0; i < numTargets; i++) {
                 offsets.push_back(m_currentFunction->currentByteCodeSize() - brTableCode);
-                OnBrExpr(targetDepths[i]);
+                if (m_blockInfo.size() == targetDepths[i]) {
+                    // this case acts like return
+                    for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
+                        ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+                    }
+                    m_currentFunction->pushByteCode(Walrus::End());
+                } else {
+                    OnBrExpr(targetDepths[i]);
+                }
             }
 
             for (Index i = 0; i < numTargets; i++) {
@@ -802,6 +815,8 @@ public:
         size_t pos = m_currentFunction->currentByteCodeSize();
         OnBrExpr(defaultTargetDepth);
         m_currentFunction->peekByteCode<Walrus::BrTable>(brTableCode)->setDefaultOffset(pos - brTableCode);
+
+        stopToGenerateByteCodeWhileBlockEnd();
     }
 
     virtual void OnSelectExpr(Index resultCount, Type* resultTypes) override

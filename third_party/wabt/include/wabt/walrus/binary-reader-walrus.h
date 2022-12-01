@@ -31,6 +31,7 @@ class WASMBinaryReaderDelegate {
 public:
     WASMBinaryReaderDelegate()
         : m_shouldContinueToGenerateByteCode(true)
+        , m_resumeGenerateByteCodeAfterNBlockEnd(0)
     {
     }
     virtual ~WASMBinaryReaderDelegate() { }
@@ -152,8 +153,24 @@ public:
         return m_shouldContinueToGenerateByteCode;
     }
 
+    void setShouldContinueToGenerateByteCode(bool b)
+    {
+        m_shouldContinueToGenerateByteCode = b;
+    }
+
+    size_t resumeGenerateByteCodeAfterNBlockEnd() const
+    {
+        return m_resumeGenerateByteCodeAfterNBlockEnd;
+    }
+
+    void setResumeGenerateByteCodeAfterNBlockEnd(size_t s)
+    {
+        m_resumeGenerateByteCodeAfterNBlockEnd = s;
+    }
+
 protected:
     bool m_shouldContinueToGenerateByteCode;
+    size_t m_resumeGenerateByteCodeAfterNBlockEnd;
 };
 
 bool ReadWasmBinary(const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate);
