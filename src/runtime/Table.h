@@ -43,7 +43,7 @@ public:
         return m_maximumSize;
     }
 
-    void grow(size_t newSize, const Value& val)
+    void grow(uint64_t newSize, const Value& val)
     {
         ASSERT(newSize <= m_maximumSize);
         m_elements.resize(newSize, val);

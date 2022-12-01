@@ -539,7 +539,8 @@ public:
         return Result::Ok;
     }
     Result OnRefFuncExpr(Index func_index) override {
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnRefFuncExpr(func_index);
         return Result::Ok;
     }
     Result OnRefNullExpr(Type type) override {

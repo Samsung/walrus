@@ -1027,6 +1027,12 @@ public:
         m_currentFunction->pushByteCode(Walrus::MemoryStore(code, offset));
     }
 
+    virtual void OnRefFuncExpr(Index func_index) override
+    {
+        m_currentFunction->pushByteCode(Walrus::RefFunc(func_index));
+        pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
+    }
+
     virtual void OnRefNullExpr(Type type) override
     {
         m_currentFunction->pushByteCode(Walrus::RefNull(toValueKind(type)));
