@@ -950,7 +950,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
     auto val = table->uncheckedGetElement(idx);
     if (val.isNull()) {
-        Trap::throwException("uninitialized element");
+        Trap::throwException("uninitialized element " + std::to_string(idx));
     }
     Function* target = val.asFunction();
     FunctionType* ft = target->functionType();
