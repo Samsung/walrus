@@ -163,21 +163,22 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
                      &data);
         }
 
-        if (UNLIKELY(index >= instance->m_table[elem->tableIndex()]->size())) {
+        if (UNLIKELY(elem->tableIndex() >= instance->m_table.size() || index >= instance->m_table[elem->tableIndex()]->size())) {
             Trap::throwException("out of bounds table access");
         }
 
         const auto& fi = elem->functionIndex();
         Table* table = instance->m_table[elem->tableIndex()];
-        for (size_t i = 0; i < fi.size(); i++) {
-            if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                table->setElement(index + i, Value(instance->m_function[fi[i]]));
-            } else {
-                table->setElement(index + i, Value(Value::FuncRef, Value::Null));
+        if (fi.size() + index <= table->size()) {
+            for (size_t i = 0; i < fi.size(); i++) {
+                if (fi[i] != std::numeric_limits<uint32_t>::max()) {
+                    table->setElement(i + index, Value(instance->m_function[fi[i]]));
+                } else {
+                    table->setElement(i + index, Value(Value::FuncRef, Value::Null));
+                }
             }
+            instance->m_elementSegment.back().drop();
         }
-
-        instance->m_elementSegment.back().drop();
     }
 
     // init memory
@@ -190,7 +191,7 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
             Module* module;
         } data = { init, instance, this };
         Walrus::Trap trap;
-        trap.run([](Walrus::ExecutionState& state, void* d) {
+        auto result = trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
             if (data->init->moduleFunction()->currentByteCodeSize()) {
                 uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
@@ -207,10 +208,18 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
                 Value offset(Value::I32, resultStackPointer);
                 Memory* m = data->instance->memory(0);
                 const auto& initData = data->init->initData();
-                memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offset.asI32(), 0, initData.size());
+                if (m->sizeInByte() >= initData.size() && (offset.asI32() + initData.size()) <= m->sizeInByte() && offset.asI32() >= 0) {
+                    memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offset.asI32(), 0, initData.size());
+                } else {
+                    Trap::throwException("out of bounds memory access");
+                }
             }
         },
-                 &data);
+                               &data);
+
+        if (result.exception) {
+            Trap::throwException(std::move(result.exception));
+        }
     }
 
     if (m_seenStartAttribute) {

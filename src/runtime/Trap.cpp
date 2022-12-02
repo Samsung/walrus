@@ -47,4 +47,9 @@ void Trap::throwException(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<
     throw Exception::create(tag, std::move(userExceptionData));
 }
 
+void Trap::throwException(std::unique_ptr<Exception>&& e)
+{
+    throw std::move(e);
+}
+
 } // namespace Walrus
