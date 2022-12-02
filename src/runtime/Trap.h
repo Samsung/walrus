@@ -23,6 +23,7 @@
 
 namespace Walrus {
 
+class Exception;
 class Module;
 class Tag;
 
@@ -46,7 +47,12 @@ public:
         throwException(src, srcLen - 1);
     }
     static void throwException(String* message);
+    static void throwException(const std::string& src)
+    {
+        throwException(src.data(), src.length());
+    }
     static void throwException(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData);
+    static void throwException(std::unique_ptr<Exception>&& e);
 
 private:
 };
