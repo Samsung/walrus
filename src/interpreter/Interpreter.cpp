@@ -322,7 +322,7 @@ NextInstruction:
         DEFINE_OPCODE(LocalSet8)
             :
         {
-            LocalSet4* code = (LocalSet4*)programCounter;
+            LocalSet8* code = (LocalSet8*)programCounter;
             sp -= 8;
             *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp);
             ADD_PROGRAM_COUNTER(LocalSet8);
@@ -332,7 +332,7 @@ NextInstruction:
         DEFINE_OPCODE(LocalTee4)
             :
         {
-            LocalSet4* code = (LocalSet4*)programCounter;
+            LocalTee4* code = (LocalTee4*)programCounter;
             *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(sp - 4);
             ADD_PROGRAM_COUNTER(LocalTee4);
             NEXT_INSTRUCTION();
@@ -341,7 +341,7 @@ NextInstruction:
         DEFINE_OPCODE(LocalTee8)
             :
         {
-            LocalSet4* code = (LocalSet4*)programCounter;
+            LocalTee8* code = (LocalTee8*)programCounter;
             *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp - 8);
             ADD_PROGRAM_COUNTER(LocalTee8);
             NEXT_INSTRUCTION();

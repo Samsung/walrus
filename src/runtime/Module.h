@@ -31,6 +31,13 @@ class Store;
 class Module;
 class Instance;
 
+enum class SegmentMode {
+    None,
+    Active,
+    Passive,
+    Declared,
+};
+
 class FunctionType : public gc {
 public:
     typedef Vector<Value::Type, GCUtil::gc_malloc_atomic_allocator<Value::Type>>
@@ -329,18 +336,25 @@ private:
 
 class Element : public gc {
 public:
-    Element(uint32_t tableIndex, ModuleFunction* moduleFunction, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
-        : m_tableIndex(tableIndex)
+    Element(SegmentMode mode, uint32_t tableIndex, ModuleFunction* moduleFunction, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
+        : m_mode(mode)
+        , m_tableIndex(tableIndex)
         , m_moduleFunction(moduleFunction)
         , m_functionIndex(std::move(functionIndex))
     {
     }
 
-    Element(uint32_t tableIndex, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
-        : m_tableIndex(tableIndex)
+    Element(SegmentMode mode, uint32_t tableIndex, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
+        : m_mode(mode)
+        , m_tableIndex(tableIndex)
         , m_moduleFunction()
         , m_functionIndex(std::move(functionIndex))
     {
+    }
+
+    SegmentMode mode() const
+    {
+        return m_mode;
     }
 
     uint32_t tableIndex() const
@@ -365,6 +379,7 @@ public:
     }
 
 private:
+    SegmentMode m_mode;
     uint32_t m_tableIndex;
     Optional<ModuleFunction*> m_moduleFunction;
     Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_functionIndex;
