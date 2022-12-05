@@ -797,9 +797,9 @@ NextInstruction:
             TableCopy* code = (TableCopy*)programCounter;
             Table* dstTable = instance->table(code->dstIndex());
             Table* srcTable = instance->table(code->srcIndex());
-            int n = readValue<int32_t>(sp);
-            int srcIndex = readValue<int32_t>(sp);
-            int dstIndex = readValue<int32_t>(sp);
+            uint32_t n = readValue<uint32_t>(sp);
+            uint32_t srcIndex = readValue<uint32_t>(sp);
+            uint32_t dstIndex = readValue<uint32_t>(sp);
             dstTable->copy(srcTable, n, srcIndex, dstIndex);
 
             ADD_PROGRAM_COUNTER(TableCopy);
