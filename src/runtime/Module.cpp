@@ -135,48 +135,54 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
     instance->m_elementSegment.reserve(m_element.size());
     for (auto elem : m_element) {
         instance->m_elementSegment.pushBack(ElementSegment(elem));
-        uint32_t index = 0;
-        if (elem->hasModuleFunction()) {
-            struct RunData {
-                Element* elem;
-                Instance* instance;
-                Module* module;
-                uint32_t& index;
-            } data = { elem, instance, this, index };
-            Walrus::Trap trap;
-            trap.run([](Walrus::ExecutionState& state, void* d) {
-                RunData* data = reinterpret_cast<RunData*>(d);
-                uint8_t* functionStackBase = ALLOCA(data->elem->moduleFunction()->requiredStackSize(), uint8_t);
-                uint8_t* functionStackPointer = functionStackBase;
 
-                DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
-                                             data->elem->moduleFunction());
-                ExecutionState newState(state, &fakeFunction);
+        if (elem->mode() == SegmentMode::Active) {
+            uint32_t index = 0;
+            if (elem->hasModuleFunction()) {
+                struct RunData {
+                    Element* elem;
+                    Instance* instance;
+                    Module* module;
+                    uint32_t& index;
+                } data = { elem, instance, this, index };
+                Walrus::Trap trap;
+                trap.run([](Walrus::ExecutionState& state, void* d) {
+                    RunData* data = reinterpret_cast<RunData*>(d);
+                    uint8_t* functionStackBase = ALLOCA(data->elem->moduleFunction()->requiredStackSize(), uint8_t);
+                    uint8_t* functionStackPointer = functionStackBase;
 
-                Interpreter::interpret(newState, functionStackBase, functionStackPointer);
+                    DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
+                                                 data->elem->moduleFunction());
+                    ExecutionState newState(state, &fakeFunction);
 
-                functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
-                uint8_t* resultStackPointer = functionStackPointer;
-                Value offset(Value::I32, resultStackPointer);
-                data->index = offset.asI32();
-            },
-                     &data);
-        }
+                    Interpreter::interpret(newState, functionStackBase, functionStackPointer);
 
-        if (UNLIKELY(elem->tableIndex() >= instance->m_table.size() || index >= instance->m_table[elem->tableIndex()]->size())) {
-            Trap::throwException("out of bounds table access");
-        }
+                    functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
+                    uint8_t* resultStackPointer = functionStackPointer;
+                    Value offset(Value::I32, resultStackPointer);
+                    data->index = offset.asI32();
+                },
+                         &data);
+            }
 
-        const auto& fi = elem->functionIndex();
-        Table* table = instance->m_table[elem->tableIndex()];
-        if (fi.size() + index <= table->size()) {
-            for (size_t i = 0; i < fi.size(); i++) {
-                if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                    table->setElement(i + index, Value(instance->m_function[fi[i]]));
-                } else {
-                    table->setElement(i + index, Value(Value::FuncRef, Value::Null));
+            if (UNLIKELY(elem->tableIndex() >= instance->m_table.size() || index >= instance->m_table[elem->tableIndex()]->size())) {
+                Trap::throwException("out of bounds table access");
+            }
+
+            const auto& fi = elem->functionIndex();
+            Table* table = instance->m_table[elem->tableIndex()];
+            if (fi.size() + index <= table->size()) {
+                for (size_t i = 0; i < fi.size(); i++) {
+                    if (fi[i] != std::numeric_limits<uint32_t>::max()) {
+                        table->setElement(i + index, Value(instance->m_function[fi[i]]));
+                    } else {
+                        table->setElement(i + index, Value(Value::FuncRef, Value::Null));
+                    }
                 }
             }
+
+            instance->m_elementSegment.back().drop();
+        } else if (elem->mode() == SegmentMode::Declared) {
             instance->m_elementSegment.back().drop();
         }
     }

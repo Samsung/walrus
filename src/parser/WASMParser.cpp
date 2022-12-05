@@ -44,6 +44,26 @@ static Walrus::Value::Type toValueKind(Type type)
     }
 }
 
+static Walrus::SegmentMode toSegmentMode(uint8_t flags)
+{
+    enum SegmentFlags : uint8_t {
+        SegFlagsNone = 0,
+        SegPassive = 1, // bit 0: Is passive
+        SegExplicitIndex = 2, // bit 1: Has explict index (Implies table 0 if absent)
+        SegDeclared = 3, // Only used for declared segments
+        SegUseElemExprs = 4, // bit 2: Is elemexpr (Or else index sequence)
+        SegFlagMax = (SegUseElemExprs << 1) - 1, // All bits set.
+    };
+
+    if ((flags & SegDeclared) == SegDeclared) {
+        return Walrus::SegmentMode::Declared;
+    } else if ((flags & SegPassive) == SegPassive) {
+        return Walrus::SegmentMode::Passive;
+    } else {
+        return Walrus::SegmentMode::Active;
+    }
+}
+
 class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
 public:
     struct BlockInfo {
@@ -82,6 +102,7 @@ public:
         , m_currentFunctionType(nullptr)
         , m_functionStackSizeSoFar(0)
         , m_elementTableIndex(0)
+        , m_segmentMode(Walrus::SegmentMode::None)
     {
     }
 
@@ -210,6 +231,7 @@ public:
     {
         m_elementTableIndex = tableIndex;
         m_elementModuleFunction = nullptr;
+        m_segmentMode = toSegmentMode(flags);
     }
 
     virtual void BeginElemSegmentInitExpr(Index index) override
@@ -248,14 +270,15 @@ public:
     {
         ASSERT(m_module->m_element.size() == index);
         if (m_elementModuleFunction) {
-            m_module->m_element.pushBack(new Walrus::Element(m_elementTableIndex, m_elementModuleFunction.value(), std::move(m_elementFunctionIndex)));
+            m_module->m_element.pushBack(new Walrus::Element(m_segmentMode, m_elementTableIndex, m_elementModuleFunction.value(), std::move(m_elementFunctionIndex)));
         } else {
-            m_module->m_element.pushBack(new Walrus::Element(m_elementTableIndex, std::move(m_elementFunctionIndex)));
+            m_module->m_element.pushBack(new Walrus::Element(m_segmentMode, m_elementTableIndex, std::move(m_elementFunctionIndex)));
         }
 
         m_elementModuleFunction = nullptr;
         m_elementTableIndex = 0;
         m_elementFunctionIndex.clear();
+        m_segmentMode = Walrus::SegmentMode::None;
     }
 
     /* Memory section */
@@ -1196,6 +1219,7 @@ private:
     uint32_t m_elementTableIndex;
     Walrus::Optional<Walrus::ModuleFunction*> m_elementModuleFunction;
     Walrus::Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_elementFunctionIndex;
+    Walrus::SegmentMode m_segmentMode;
 };
 
 } // namespace wabt
