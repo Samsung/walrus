@@ -22,7 +22,7 @@
 
 namespace Walrus {
 
-Table::Table(Value::Type type, size_t initialSize, size_t maximumSize)
+Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize)
     : m_type(type)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
@@ -30,9 +30,9 @@ Table::Table(Value::Type type, size_t initialSize, size_t maximumSize)
     m_elements.resize(initialSize, Value(Value::FuncRef, Value::Null));
 }
 
-void Table::copy(const Table* srcTable, int32_t n, int32_t srcIndex, int32_t dstIndex)
+void Table::copy(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
 {
-    if (UNLIKELY(((size_t)srcIndex + n > srcTable->size()) || ((size_t)dstIndex + n > m_size))) {
+    if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)m_size))) {
         throwException();
     }
 
@@ -48,9 +48,9 @@ void Table::copy(const Table* srcTable, int32_t n, int32_t srcIndex, int32_t dst
     }
 }
 
-void Table::fill(int32_t n, const Value& value, int32_t index)
+void Table::fill(uint32_t n, const Value& value, uint32_t index)
 {
-    if ((size_t)index + n > m_size) {
+    if ((uint64_t)index + (uint64_t)n > (uint64_t)m_size) {
         throwException();
     }
 
@@ -68,7 +68,7 @@ void Table::throwException() const
 
 void Table::init(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
-    if (UNLIKELY(dstStart + srcSize > m_size)) {
+    if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)m_size)) {
         throwException();
     }
     if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->functionIndex().size())) {
@@ -79,8 +79,8 @@ void Table::init(Instance* instance, ElementSegment* source, uint32_t dstStart, 
     }
 
     const auto& f = source->element()->functionIndex();
-    size_t end = dstStart + srcSize;
-    for (size_t i = dstStart; i < end; i++) {
+    uint32_t end = dstStart + srcSize;
+    for (uint32_t i = dstStart; i < end; i++) {
         auto idx = f[srcStart++];
         if (idx != std::numeric_limits<uint32_t>::max()) {
             m_elements[i] = Value(instance->function(idx));
