@@ -26,19 +26,19 @@ class Instance;
 
 class Table : public gc {
 public:
-    Table(Value::Type type, size_t initialSize, size_t maximumSize);
+    Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize);
 
     Value::Type type() const
     {
         return m_type;
     }
 
-    size_t size() const
+    uint32_t size() const
     {
         return m_size;
     }
 
-    size_t maximumSize() const
+    uint32_t maximumSize() const
     {
         return m_maximumSize;
     }
@@ -71,8 +71,8 @@ public:
         m_elements[elemIndex] = val;
     }
 
-    void copy(const Table* srcTable, int32_t n, int32_t srcIndex, int32_t dstIndex);
-    void fill(int32_t n, const Value& value, int32_t index);
+    void copy(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
+    void fill(uint32_t n, const Value& value, uint32_t index);
     void init(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
 private:
@@ -80,8 +80,8 @@ private:
 
     // Table has elements of reference type (FuncRef | ExternRef)
     Value::Type m_type;
-    size_t m_size;
-    size_t m_maximumSize;
+    uint32_t m_size;
+    uint32_t m_maximumSize;
 
     ValueVector m_elements;
 };

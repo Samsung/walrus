@@ -776,6 +776,11 @@ public:
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableIndex: %" PRIu32, m_tableIndex);
+    }
+
     virtual size_t byteCodeSize()
     {
         return sizeof(TableGet);
@@ -797,6 +802,11 @@ public:
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableIndex: %" PRIu32, m_tableIndex);
+    }
+
     virtual size_t byteCodeSize()
     {
         return sizeof(TableSet);
@@ -818,6 +828,11 @@ public:
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableIndex: %" PRIu32, m_tableIndex);
+    }
+
     virtual size_t byteCodeSize()
     {
         return sizeof(TableGrow);
@@ -839,6 +854,11 @@ public:
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableIndex: %" PRIu32, m_tableIndex);
+    }
+
     virtual size_t byteCodeSize()
     {
         return sizeof(TableSize);
@@ -862,6 +882,11 @@ public:
     uint32_t srcIndex() const { return m_srcIndex; }
 
 #if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("dstIndex: %" PRIu32 " srcIndex: %" PRIu32, m_dstIndex, m_srcIndex);
+    }
+
     virtual size_t byteCodeSize()
     {
         return sizeof(TableCopy);
@@ -884,6 +909,11 @@ public:
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("tableIndex: %" PRIu32, m_tableIndex);
+    }
+
     virtual size_t byteCodeSize()
     {
         return sizeof(TableFill);
@@ -909,8 +939,7 @@ public:
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("tableIndex: %" PRIu32, m_tableIndex);
-        printf(" segmentIndex: %" PRIu32, m_segmentIndex);
+        printf("tableIndex: %" PRIu32 " segmentIndex: %" PRIu32, m_tableIndex, m_segmentIndex);
     }
 
     virtual size_t byteCodeSize()
