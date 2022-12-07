@@ -679,6 +679,15 @@ uint8_t ElemSegment::GetFlags(const Module* module) const {
                   });
   if (!all_ref_func) {
     flags |= SegUseElemExprs;
+    /* WALRUS fix
+    ;; example case
+    (module
+      (table $t 2 externref)
+      (elem (i32.const 0) externref (ref.null extern))
+    ) */
+    if (~flags & SegPassive) {
+        flags |= SegExplicitIndex;
+    }
   }
 
   return flags;

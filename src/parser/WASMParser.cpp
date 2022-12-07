@@ -1226,12 +1226,12 @@ private:
 
 namespace Walrus {
 
-Optional<Module*> WASMParser::parseBinary(Store* store, const uint8_t* data, size_t len)
+Optional<Module*> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len)
 {
     Module* module = new Module(store);
     wabt::WASMBinaryReader delegate(module);
 
-    ReadWasmBinary(data, len, &delegate);
+    ReadWasmBinary(filename, data, len, &delegate);
     return module;
 }
 
