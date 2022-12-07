@@ -531,12 +531,20 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 registeredInstanceMap[moduleCommand->module.name] = instances.back();
             }
         } else if (auto* assertReturn = dynamic_cast<wabt::AssertReturnCommand*>(command.get())) {
-            auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertReturn->action->name)).value();
+            auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExport(new Walrus::String(assertReturn->action->name));
             RELEASE_ASSERT(value);
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = dynamic_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, assertReturn->expected, nullptr);
+            } else if (assertReturn->action->type() == wabt::ActionType::Get) {
+                auto action = dynamic_cast<wabt::GetAction*>(assertReturn->action.get());
+                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(new Walrus::String(action->name));
+                RELEASE_ASSERT(equals(v, assertReturn->expected[0]))
+                printf("get %s", action->name.data());
+                printf(" expect value(");
+                printConstVector(assertReturn->expected);
+                printf(") (line: %d) : OK\n", action->loc.line);
             }
         } else if (auto* assertTrap = dynamic_cast<wabt::AssertTrapCommand*>(command.get())) {
             auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertTrap->action->name)).value();
