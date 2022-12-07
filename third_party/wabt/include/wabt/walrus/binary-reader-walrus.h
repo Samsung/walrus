@@ -173,7 +173,7 @@ protected:
     size_t m_resumeGenerateByteCodeAfterNBlockEnd;
 };
 
-bool ReadWasmBinary(const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate);
+bool ReadWasmBinary(const std::string& filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate);
 
 }  // namespace wabt
 

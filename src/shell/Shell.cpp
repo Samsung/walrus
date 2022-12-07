@@ -94,10 +94,10 @@ static void printF64(double v)
     printf("%s : f64\n", formatDecmialString(ss.str()).c_str());
 }
 
-static Trap::TrapResult executeWASM(Store* store, const std::vector<uint8_t>& src, Instance::InstanceVector& instances,
+static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
-    auto module = WASMParser::parseBinary(store, src.data(), src.size());
+    auto module = WASMParser::parseBinary(store, filename, src.data(), src.size());
     const auto& moduleImportData = module->moduleImport();
 
     ValueVector importValues;
@@ -479,7 +479,7 @@ Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>& insta
     return registeredInstanceMap[moduleVar.name()];
 }
 
-static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance::InstanceVector& instances)
+static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances)
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
     if (!lexer) {
@@ -502,7 +502,7 @@ static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance:
     for (const std::unique_ptr<wabt::Command>& command : script->commands) {
         if (auto* moduleCommand = dynamic_cast<wabt::ModuleCommand*>(command.get())) {
             auto buf = readModuleData(&moduleCommand->module);
-            executeWASM(store, buf->data, instances, &registeredInstanceMap);
+            executeWASM(store, filename, buf->data, instances, &registeredInstanceMap);
             instanceMap[commandCount] = instances.back();
             if (moduleCommand->module.name.size()) {
                 registeredInstanceMap[moduleCommand->module.name] = instances.back();
@@ -536,7 +536,7 @@ static void executeWAST(Store* store, const std::vector<uint8_t>& src, Instance:
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             RELEASE_ASSERT(tsm);
             auto buf = readModuleData(&tsm->module);
-            auto trapResult = executeWASM(store, buf->data, instances);
+            auto trapResult = executeWASM(store, filename, buf->data, instances);
             std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
             RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
             printf("assertModuleUninstantiable (except exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
@@ -589,9 +589,9 @@ int main(int argc, char* argv[])
             fclose(fp);
 
             if (endsWith(filePath, "wasm")) {
-                executeWASM(store, buf, instances);
+                executeWASM(store, filePath, buf, instances);
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
-                executeWAST(store, buf, instances);
+                executeWAST(store, filePath, buf, instances);
             }
         } else {
             printf("Cannot open file %s\n", argv[i]);

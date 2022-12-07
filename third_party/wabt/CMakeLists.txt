@@ -192,6 +192,8 @@ set(WABT_LIBRARY_SRC
   src/stream.cc
   src/utf8.cc
   src/validator.cc
+  src/shared-validator.cc
+  src/type-checker.cc
  
   src/walrus/binary-reader-walrus.cc
 
