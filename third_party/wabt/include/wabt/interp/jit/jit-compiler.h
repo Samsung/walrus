@@ -53,6 +53,8 @@ class InstructionListItem {
     Return,
     // Binary operation (e.g. I32Add, I64Sub).
     Binary,
+    // Unary operation (e.g. I32Ctz, U64Clz).
+    Unary,
     // Compare operation. (e.g. I32Eqz, I64LtU)
     Compare,
   };

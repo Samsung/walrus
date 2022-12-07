@@ -193,7 +193,9 @@ class BinaryReaderJIT : public BinaryReaderNop {
                      Index memidx,
                      Address alignment_log2,
                      Address offset) override;
+#endif
   Result OnUnaryExpr(Opcode opcode) override;
+#if 0
   Result OnTableCopyExpr(Index dst_index, Index src_index) override;
   Result OnTableGetExpr(Index table_index) override;
   Result OnTableSetExpr(Index table_index) override;
@@ -406,6 +408,12 @@ Result BinaryReaderJIT::OnLocalDecl(Index decl_index, Index count, Type type) {
 Result BinaryReaderJIT::OnBinaryExpr(Opcode opcode) {
   CHECK_RESULT(validator_.OnBinary(GetLocation(), opcode));
   compiler_.append(Instruction::Binary, opcode, 2, LocationInfo::kFourByteSize);
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnUnaryExpr(Opcode opcode) {
+  CHECK_RESULT(validator_.OnUnary(GetLocation(), opcode));
+  compiler_.append(Instruction::Unary, opcode, 1, LocationInfo::kFourByteSize);
   return Result::Ok;
 }
 

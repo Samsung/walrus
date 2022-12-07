@@ -216,6 +216,56 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr) {
                  args[0].argw, args[1].arg, args[1].argw);
 }
 
+static void emitUnary(sljit_compiler* compiler, Instruction* instr) {
+  Operand* operand = instr->operands();
+  JITArg args[2];
+
+  for (int i = 0; i < 2; ++i) {
+    operandToArg(operand + i, args[i]);
+  }
+
+  sljit_s32 opcode;
+
+  switch (instr->opcode()) {
+    case Opcode::I32Ctz:
+      opcode = SLJIT_CTZ32;
+      break;
+    case Opcode::I32Clz:
+      opcode = SLJIT_CLZ32;
+      break;
+    case Opcode::I64Ctz:
+      opcode = SLJIT_CTZ;
+      break;
+    case Opcode::I64Clz:
+      opcode = SLJIT_CLZ;
+      break;
+    case Opcode::I32Popcnt:
+    case Opcode::I64Popcnt:
+      // Not supported yet.
+      return;
+    default:
+      WABT_UNREACHABLE;
+      break;
+  }
+
+  // If the operand is an immidiate then it is necesarry to move it into a
+  // register because immidiate source arguments are not supported.
+  if (args[0].arg & SLJIT_IMM) {
+    sljit_s32 mov = SLJIT_MOV;
+
+    if ((operand->location.value_info & LocationInfo::kSizeMask) == 1) {
+      mov = SLJIT_MOV32;
+    }
+
+    sljit_emit_op1(compiler, mov, SLJIT_R0, 0, args[0].arg, args[0].argw);
+    args[0].arg = SLJIT_R0;
+    args[0].argw = 0;
+  }
+
+  sljit_emit_op1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg,
+                 args[0].argw);
+}
+
 static bool emitCompare(sljit_compiler* compiler, Instruction* instr) {
   Operand* operand = instr->operands();
   JITArg params[2];
@@ -431,6 +481,10 @@ void JITCompiler::compile() {
       }
       case Instruction::Binary: {
         emitBinary(compiler_, item->asInstruction());
+        break;
+      }
+      case Instruction::Unary: {
+        emitUnary(compiler_, item->asInstruction());
         break;
       }
       case Instruction::Compare: {
