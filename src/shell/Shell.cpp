@@ -97,7 +97,13 @@ static void printF64(double v)
 static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
-    auto module = WASMParser::parseBinary(store, filename, src.data(), src.size());
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
+    if (parseResult.second) {
+        Trap::TrapResult tr;
+        tr.exception = Exception::create(parseResult.second.value());
+        return tr;
+    }
+    auto module = parseResult.first;
     const auto& moduleImportData = module->moduleImport();
 
     ValueVector importValues;
@@ -109,9 +115,9 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
           (global (export "global_f32") f32)
           (global (export "global_f64") f64)
 
-          (table (export "table") 10 20 funcref) ;; TODO
+          (table (export "table") 10 20 funcref)
 
-          (memory (export "memory") 1 2) ;; TODO
+          (memory (export "memory") 1 2)
 
           (func (export "print"))
           (func (export "print_i32") (param i32))
