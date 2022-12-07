@@ -25,6 +25,14 @@
 
 #include "wabt/walrus/binary-reader-walrus.h"
 
+#undef CHECK_RESULT
+#define CHECK_RESULT(expr)          \
+  do {                              \
+    if (WABT_UNLIKELY(Failed(expr))) {             \
+      return ::wabt::Result::Error; \
+    }                               \
+  } while (0)
+
 #define SHOULD_GENERATE_BYTECODE if (WABT_UNLIKELY(!m_externalDelegate->shouldContinueToGenerateByteCode())) { return Result::Ok; }
 
 namespace wabt {
@@ -138,7 +146,7 @@ public:
     }
 
     bool OnError(const Error&) override {
-        return false;
+        return true;
     }
 
     /* Module */
@@ -1272,15 +1280,18 @@ public:
     Type m_lastInitType;
 };
 
-bool ReadWasmBinary(const std::string &filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate *delegate) {
-    const bool kReadDebugNames = true;
+std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate *delegate) {
+    const bool kReadDebugNames = false;
     const bool kStopOnFirstError = true;
     const bool kFailOnCustomSectionError = true;
     ReadBinaryOptions options(getFeatures(), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
     BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename);
     ReadBinary(data, size, &binaryReaderDelegateWalrus, options);
 
-    return true;
+    if (binaryReaderDelegateWalrus.m_errors.size()) {
+        return std::move(binaryReaderDelegateWalrus.m_errors.begin()->message);
+    }
+    return std::string();
 }
 
 }  // namespace wabt
