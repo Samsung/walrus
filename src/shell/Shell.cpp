@@ -192,6 +192,17 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         printF32(argv[1].asF32());
                     },
                     nullptr));
+            } else if (import->fieldName()->equals("print_f64_f64")) {
+                auto ft = module->functionType(import->functionTypeIndex());
+                ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::F64 && ft->param()[1] == Value::Type::F64);
+                importValues[i] = Value(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        printF64(argv[0].asF64());
+                        printF64(argv[1].asF64());
+                    },
+                    nullptr));
             } else if (import->fieldName()->equals("global_i32")) {
                 importValues[i] = Value(int32_t(666));
             } else if (import->fieldName()->equals("global_i64")) {
@@ -204,6 +215,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 importValues[i] = Value(new Table(Value::Type::FuncRef, 10, 20));
             } else if (import->fieldName()->equals("memory")) {
                 importValues[i] = Value(new Memory(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
+            } else {
+                RELEASE_ASSERT_NOT_REACHED();
             }
         } else if (registeredInstanceMap) {
             auto iter = registeredInstanceMap->find(std::string(import->moduleName()->buffer(), import->moduleName()->length()));
@@ -217,6 +230,10 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     importValues[i] = Value(instance->resolveExportTag(import->fieldName()).value());
                 } else if (e->type() == ModuleExport::Table) {
                     importValues[i] = Value(instance->resolveExportTable(import->fieldName()).value());
+                } else if (e->type() == ModuleExport::Memory) {
+                    importValues[i] = Value(instance->resolveExportMemory(import->fieldName()).value());
+                } else if (e->type() == ModuleExport::Global) {
+                    importValues[i] = instance->resolveExportGlobal(import->fieldName());
                 } else {
                     RELEASE_ASSERT_NOT_REACHED();
                 }
