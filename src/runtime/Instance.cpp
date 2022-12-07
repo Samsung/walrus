@@ -37,7 +37,7 @@ Optional<Function*> Instance::resolveExportFunction(String* name)
 {
     auto me = resolveExport(name);
     if (me && me->type() == ModuleExport::Function) {
-        return function(me->itemIndex());
+        return m_function[me->itemIndex()];
     }
 
     return nullptr;
@@ -61,6 +61,26 @@ Optional<Table*> Instance::resolveExportTable(String* name)
     }
 
     return nullptr;
+}
+
+Optional<Memory*> Instance::resolveExportMemory(String* name)
+{
+    auto me = resolveExport(name);
+    if (me && me->type() == ModuleExport::Memory) {
+        return m_memory[me->itemIndex()];
+    }
+
+    return nullptr;
+}
+
+Value Instance::resolveExportGlobal(String* name)
+{
+    auto me = resolveExport(name);
+    if (me && me->type() == ModuleExport::Global) {
+        return m_global[me->itemIndex()];
+    }
+
+    return Value();
 }
 
 DataSegment::DataSegment(Data* d)

@@ -58,6 +58,8 @@ public:
     Optional<Function*> resolveExportFunction(String* name);
     Optional<Tag*> resolveExportTag(String* name);
     Optional<Table*> resolveExportTable(String* name);
+    Optional<Memory*> resolveExportMemory(String* name);
+    Value resolveExportGlobal(String* name);
 
 private:
     Module* m_module;
