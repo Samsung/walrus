@@ -1158,6 +1158,7 @@ public:
     virtual void OnUnreachableExpr() override
     {
         m_currentFunction->pushByteCode(Walrus::Unreachable());
+        stopToGenerateByteCodeWhileBlockEnd();
     }
 
     virtual void EndFunctionBody(Index index) override
