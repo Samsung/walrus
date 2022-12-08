@@ -193,13 +193,51 @@ ALWAYS_INLINE double floatCopysign(double lhs, double rhs)
 template <typename T>
 ALWAYS_INLINE T floatAbs(T val)
 {
+#ifndef NDEBUG
+    // GCC does not inline std::abs in debug mode
+    if (std::is_same<T, float>::value) {
+        int32_t& i = reinterpret_cast<int32_t&>(val);
+        i &= 0x7FFFFFFF;
+        return val;
+    } else if (std::is_same<T, double>::value) {
+        int64_t& i = reinterpret_cast<int64_t&>(val);
+        i &= 0x7FFFFFFFFFFFFFFFLL;
+        return val;
+    }
+    return val < 0 ? -val : val;
+#else
     return std::abs(val);
+#endif
 }
 
 template <typename T>
 ALWAYS_INLINE T floatCopysign(T lhs, T rhs)
 {
+#ifndef NDEBUG
+    // GCC does not inline std::copysign in debug mode
+    if (std::is_same<T, float>::value) {
+        int32_t& i = reinterpret_cast<int32_t&>(lhs);
+        int32_t& j = reinterpret_cast<int32_t&>(rhs);
+        i &= 0x7FFFFFFF;
+        bool sign = j & 0X80000000;
+        if (sign) {
+            i |= 0X80000000;
+        }
+        return lhs;
+    } else if (std::is_same<T, double>::value) {
+        int64_t& i = reinterpret_cast<int64_t&>(lhs);
+        int64_t& j = reinterpret_cast<int64_t&>(rhs);
+        i &= 0x7FFFFFFFFFFFFFFFLL;
+        bool sign = j & 0X8000000000000000LL;
+        if (sign) {
+            i |= 0X8000000000000000LL;
+        }
+        return lhs;
+    }
     return std::copysign(lhs, rhs);
+#else
+    return std::copysign(lhs, rhs);
+#endif
 }
 #endif
 
