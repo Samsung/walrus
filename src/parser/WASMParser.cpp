@@ -236,7 +236,7 @@ public:
 
     virtual void BeginElemSegmentInitExpr(Index index) override
     {
-        m_currentFunction = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max());
+        m_currentFunction = new Walrus::ModuleFunction(m_module);
     }
 
     virtual void EndElemSegmentInitExpr(Index index) override
@@ -301,7 +301,7 @@ public:
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
         ASSERT(index == m_module->m_data.size());
-        m_currentFunction = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max());
+        m_currentFunction = new Walrus::ModuleFunction(m_module);
     }
 
     virtual void BeginDataSegmentInitExpr(Index index) override
@@ -341,7 +341,7 @@ public:
     virtual void OnGlobalCount(Index count) override
     {
         m_module->m_global.reserve(count);
-        m_module->m_globalInitBlock = new Walrus::ModuleFunction(m_module, std::numeric_limits<uint32_t>::max());
+        m_module->m_globalInitBlock = new Walrus::ModuleFunction(m_module);
     }
 
     virtual void BeginGlobal(Index index, Type type, bool mutable_) override
@@ -617,6 +617,36 @@ public:
         m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
     }
 
+    void restoreVMStackBy(const std::vector<unsigned char>& src)
+    {
+        m_vmStack = src;
+        m_functionStackSizeSoFar = 0;
+        for (auto s : m_vmStack) {
+            m_functionStackSizeSoFar += s;
+        }
+    }
+
+    void restoreVMStackRegardToPartOfBlockEnd(const BlockInfo& blockInfo)
+    {
+        if (blockInfo.m_shouldRestoreVMStackAtEnd) {
+            restoreVMStackBy(blockInfo.m_vmStack);
+        } else if (blockInfo.m_returnValueType.IsIndex()) {
+            auto ft = m_module->functionType(blockInfo.m_returnValueType);
+            if (ft->param().size()) {
+                restoreVMStackBy(blockInfo.m_vmStack);
+            } else {
+                const auto& result = ft->result();
+                for (size_t i = 0; i < result.size(); i++) {
+                    ASSERT(peekVMStack() == Walrus::valueSizeInStack(result[result.size() - i - 1]));
+                    popVMStack();
+                }
+            }
+        } else if (blockInfo.m_returnValueType != Type::Void) {
+            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
+            popVMStack();
+        }
+    }
+
     virtual void OnElseExpr() override
     {
         BlockInfo& blockInfo = m_blockInfo.back();
@@ -624,10 +654,7 @@ public:
         blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
         m_currentFunction->pushByteCode(Walrus::Jump());
         ASSERT(blockInfo.m_blockType == BlockInfo::IfElse);
-        if (blockInfo.m_returnValueType != Type::Void) {
-            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
-            popVMStack();
-        }
+        restoreVMStackRegardToPartOfBlockEnd(blockInfo);
         m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
             ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
     }
@@ -756,7 +783,7 @@ public:
         if (dropSize.first) {
             m_currentFunction->pushByteCode(Walrus::Drop(dropSize.first, dropSize.second));
         }
-        if (blockInfo.m_blockType == BlockInfo::Block) {
+        if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
             blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
         }
         m_currentFunction->pushByteCode(Walrus::Jump(offset));
@@ -769,13 +796,13 @@ public:
         if (m_blockInfo.size() == depth) {
             // this case acts like return
             ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
+            popVMStack();
             size_t pos = m_currentFunction->currentByteCodeSize();
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse(sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End)));
             m_currentFunction->pushByteCode(Walrus::End());
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
             }
-            popVMStack();
             return;
         }
 
@@ -789,7 +816,7 @@ public:
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse());
             m_currentFunction->pushByteCode(Walrus::Drop(dropSize.first, dropSize.second));
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
-            if (blockInfo.m_blockType == BlockInfo::Block) {
+            if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
                 blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
             }
             m_currentFunction->pushByteCode(Walrus::Jump(offset));
@@ -797,7 +824,7 @@ public:
                 ->setOffset(m_currentFunction->currentByteCodeSize() - pos);
         } else {
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
-            if (blockInfo.m_blockType == BlockInfo::Block) {
+            if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
                 blockInfo.m_jumpToEndBrInfo.push_back({ true, m_currentFunction->currentByteCodeSize() });
             }
             m_currentFunction->pushByteCode(Walrus::JumpIfTrue(offset));
@@ -883,10 +910,7 @@ public:
         ASSERT(m_blockInfo.back().m_blockType == BlockInfo::TryCatch);
 
         auto& blockInfo = m_blockInfo.back();
-        if (blockInfo.m_returnValueType != Type::Void) {
-            ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
-            popVMStack();
-        }
+        restoreVMStackRegardToPartOfBlockEnd(blockInfo);
 
         size_t tryEnd = m_currentFunction->currentByteCodeSize();
         if (m_catchInfo.size() && m_catchInfo.back().m_tryCatchBlockDepth == m_blockInfo.size()) {
@@ -1133,7 +1157,7 @@ public:
             }
 
             if (blockInfo.m_shouldRestoreVMStackAtEnd) {
-                m_vmStack = std::move(blockInfo.m_vmStack);
+                restoreVMStackBy(blockInfo.m_vmStack);
                 if (blockInfo.m_returnValueType.IsIndex()) {
                     auto ft = m_module->functionType(blockInfo.m_returnValueType);
                     const auto& param = ft->param();
