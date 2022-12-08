@@ -494,8 +494,8 @@ static std::unique_ptr<wabt::OutputBuffer> readModuleData(wabt::Module* module)
     return stream.ReleaseOutputBuffer();
 }
 
-Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>& instanceMap,
-                        std::map<std::string, Instance*> registeredInstanceMap)
+static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>& instanceMap,
+                               std::map<std::string, Instance*>& registeredInstanceMap)
 {
     if (moduleVar.is_index()) {
         return instanceMap[moduleVar.index()];
@@ -589,7 +589,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             RELEASE_ASSERT(tsm);
             auto buf = readModuleData(&tsm->module);
-            auto trapResult = executeWASM(store, filename, buf->data, instances);
+            auto trapResult = executeWASM(store, filename, buf->data, instances, &registeredInstanceMap);
             std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
             RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
