@@ -27,6 +27,18 @@
 
 namespace Walrus {
 
+ModuleFunction::ModuleFunction(Module* module, uint32_t functionTypeIndex)
+    : m_module(module)
+    , m_functionTypeIndex(functionTypeIndex)
+    , m_requiredStackSize(0)
+    , m_requiredStackSizeDueToLocal(0)
+{
+    if (m_functionTypeIndex != g_invalidFunctionTypeIndex) {
+        auto ft = module->functionType(m_functionTypeIndex);
+        m_requiredStackSize = std::max(ft->paramStackSize(), ft->resultStackSize());
+    }
+}
+
 Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
 {
     Instance* instance = new Instance(this);
