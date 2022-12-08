@@ -530,6 +530,14 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             if (moduleCommand->module.name.size()) {
                 registeredInstanceMap[moduleCommand->module.name] = instances.back();
             }
+        } else if (auto* scriptModuleCommand = dynamic_cast<wabt::ScriptModuleCommand*>(command.get())) {
+            auto dsm = dynamic_cast<wabt::BinaryScriptModule*>(scriptModuleCommand->script_module.get());
+            RELEASE_ASSERT(dsm);
+            executeWASM(store, filename, dsm->data, instances, &registeredInstanceMap);
+            instanceMap[commandCount] = instances.back();
+            if (scriptModuleCommand->module.name.size()) {
+                registeredInstanceMap[scriptModuleCommand->module.name] = instances.back();
+            }
         } else if (auto* assertReturn = dynamic_cast<wabt::AssertReturnCommand*>(command.get())) {
             auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExport(new Walrus::String(assertReturn->action->name));
             RELEASE_ASSERT(value);
