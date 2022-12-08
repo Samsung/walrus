@@ -871,8 +871,6 @@ public:
 
     virtual void OnSelectExpr(Index resultCount, Type* resultTypes) override
     {
-        // TODO implement selectT
-        ASSERT(resultCount == 0);
         ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
