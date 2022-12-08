@@ -83,4 +83,4 @@ private:
 
 } // namespace Walrus
 
-#endif // __WalrusInstance__
+#endif // __WalrusMemory__

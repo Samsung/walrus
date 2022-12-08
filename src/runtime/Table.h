@@ -88,4 +88,4 @@ private:
 
 } // namespace Walrus
 
-#endif // __WalrusInstance__
+#endif // __WalrusTable__
