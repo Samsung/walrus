@@ -23,6 +23,7 @@
 #include "runtime/Function.h"
 #include "runtime/Memory.h"
 #include "runtime/Table.h"
+#include "runtime/Global.h"
 #include "runtime/Module.h"
 #include "runtime/Trap.h"
 #include "runtime/Tag.h"
@@ -607,7 +608,7 @@ NextInstruction:
             :
         {
             GlobalGet4* code = (GlobalGet4*)programCounter;
-            instance->global(code->index()).writeToStack(sp);
+            instance->global(code->index())->getValue().writeToStack(sp);
             ADD_PROGRAM_COUNTER(GlobalGet4);
             NEXT_INSTRUCTION();
         }
@@ -616,7 +617,7 @@ NextInstruction:
             :
         {
             GlobalGet8* code = (GlobalGet8*)programCounter;
-            instance->global(code->index()).writeToStack(sp);
+            instance->global(code->index())->getValue().writeToStack(sp);
             ADD_PROGRAM_COUNTER(GlobalGet8);
             NEXT_INSTRUCTION();
         }
@@ -625,7 +626,9 @@ NextInstruction:
             :
         {
             GlobalSet4* code = (GlobalSet4*)programCounter;
-            instance->global(code->index()).readFromStack<4>(sp);
+            Value val = instance->global(code->index())->getValue();
+            val.readFromStack<4>(sp);
+            instance->global(code->index())->setValue(val);
             ADD_PROGRAM_COUNTER(GlobalSet4);
             NEXT_INSTRUCTION();
         }
@@ -634,7 +637,9 @@ NextInstruction:
             :
         {
             GlobalSet8* code = (GlobalSet8*)programCounter;
-            instance->global(code->index()).readFromStack<8>(sp);
+            Value val = instance->global(code->index())->getValue();
+            val.readFromStack<8>(sp);
+            instance->global(code->index())->setValue(val);
             ADD_PROGRAM_COUNTER(GlobalSet8);
             NEXT_INSTRUCTION();
         }

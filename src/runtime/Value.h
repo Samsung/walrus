@@ -26,6 +26,7 @@ namespace Walrus {
 class Function;
 class Table;
 class Memory;
+class Global;
 
 class V128 {
 public:
@@ -204,6 +205,12 @@ public:
     {
         ASSERT(type() == ExternRef);
         return reinterpret_cast<Memory*>(m_ref);
+    }
+
+    Global* asGlobal() const
+    {
+        ASSERT(type() == ExternRef);
+        return reinterpret_cast<Global*>(m_ref);
     }
 
     void* asExternal() const

@@ -30,6 +30,7 @@ class ElementSegment;
 class Function;
 class FunctionType;
 class Memory;
+class Global;
 class Module;
 class ModuleExport;
 class Table;
@@ -50,7 +51,7 @@ public:
     Memory* memory(uint32_t index) const { return m_memory[index]; }
     Table* table(uint32_t index) const { return m_table[index]; }
     Tag* tag(uint32_t index) const { return m_tag[index]; }
-    Value& global(uint32_t index) { return m_global[index]; }
+    Global* global(uint32_t index) { return m_global[index]; }
     DataSegment& dataSegment(uint32_t index) { return m_dataSegment[index]; }
     ElementSegment& elementSegment(uint32_t index) { return m_elementSegment[index]; }
 
@@ -59,7 +60,7 @@ public:
     Optional<Tag*> resolveExportTag(String* name);
     Optional<Table*> resolveExportTable(String* name);
     Optional<Memory*> resolveExportMemory(String* name);
-    Value resolveExportGlobal(String* name);
+    Optional<Global*> resolveExportGlobal(String* name);
 
 private:
     Module* m_module;
@@ -67,9 +68,9 @@ private:
     Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
     Vector<Table*, GCUtil::gc_malloc_allocator<Table*>> m_table;
     Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
+    Vector<Global*, GCUtil::gc_malloc_allocator<Global*>> m_global;
     Vector<DataSegment, GCUtil::gc_malloc_allocator<DataSegment>> m_dataSegment;
     Vector<ElementSegment, GCUtil::gc_malloc_allocator<ElementSegment>> m_elementSegment;
-    ValueVector m_global;
     Vector<Tag*, GCUtil::gc_malloc_allocator<Tag*>> m_tag;
 };
 

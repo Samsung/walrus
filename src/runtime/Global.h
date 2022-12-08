@@ -14,14 +14,33 @@
  * limitations under the License.
  */
 
-#ifndef __WalrusEngine__
-#define __WalrusEngine__
+#ifndef __WalrusGlobal__
+#define __WalrusGlobal__
 
 namespace Walrus {
 
-class Engine : public gc {
+class Global : public gc {
+public:
+    Global(const Value& value)
+        : m_value(value)
+    {
+    }
+
+    Value getValue() const
+    {
+        return m_value;
+    }
+
+    void setValue(const Value& value)
+    {
+        ASSERT(value.type() == m_value.type());
+        m_value = value;
+    }
+
+private:
+    Value m_value;
 };
 
 } // namespace Walrus
 
-#endif // __WalrusEngine__
+#endif // __WalrusGlobal__

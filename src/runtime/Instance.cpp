@@ -73,14 +73,14 @@ Optional<Memory*> Instance::resolveExportMemory(String* name)
     return nullptr;
 }
 
-Value Instance::resolveExportGlobal(String* name)
+Optional<Global*> Instance::resolveExportGlobal(String* name)
 {
     auto me = resolveExport(name);
     if (me && me->type() == ModuleExport::Global) {
         return m_global[me->itemIndex()];
     }
 
-    return Value();
+    return nullptr;
 }
 
 DataSegment::DataSegment(Data* d)

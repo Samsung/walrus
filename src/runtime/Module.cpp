@@ -22,6 +22,7 @@
 #include "runtime/Trap.h"
 #include "runtime/Memory.h"
 #include "runtime/Table.h"
+#include "runtime/Global.h"
 #include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 
@@ -56,7 +57,7 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
 
     // FIXME Globals should be initialized first due to its initialization process
     for (size_t i = 0; i < m_global.size(); i++) {
-        instance->m_global.pushBack(Value(std::get<0>(m_global[i])));
+        instance->m_global.pushBack(new Global(Value(std::get<0>(m_global[i]))));
     }
 
     for (size_t i = 0; i < m_import.size(); i++) {
@@ -82,7 +83,7 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
             break;
         }
         case ModuleImport::Global: {
-            instance->m_global[m_import[i]->globalIndex()] = imports[i];
+            instance->m_global[m_import[i]->globalIndex()] = imports[i].asGlobal();
             break;
         }
         case ModuleImport::Tag: {
