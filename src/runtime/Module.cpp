@@ -178,19 +178,17 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
                          &data);
             }
 
-            if (UNLIKELY(elem->tableIndex() >= instance->m_table.size() || index >= instance->m_table[elem->tableIndex()]->size())) {
+            if (UNLIKELY(elem->tableIndex() >= instance->m_table.size() || index >= instance->m_table[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_table[elem->tableIndex()]->size())) {
                 Trap::throwException("out of bounds table access");
             }
 
             const auto& fi = elem->functionIndex();
             Table* table = instance->m_table[elem->tableIndex()];
-            if (fi.size() + index <= table->size()) {
-                for (size_t i = 0; i < fi.size(); i++) {
-                    if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                        table->setElement(i + index, Value(instance->m_function[fi[i]]));
-                    } else {
-                        table->setElement(i + index, Value(Value::FuncRef, Value::Null));
-                    }
+            for (size_t i = 0; i < fi.size(); i++) {
+                if (fi[i] != std::numeric_limits<uint32_t>::max()) {
+                    table->setElement(i + index, Value(instance->m_function[fi[i]]));
+                } else {
+                    table->setElement(i + index, Value(Value::FuncRef, Value::Null));
                 }
             }
 
