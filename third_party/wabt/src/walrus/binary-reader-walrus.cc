@@ -75,7 +75,7 @@ static Features getFeatures() {
 class BinaryReaderDelegateWalrus: public BinaryReaderDelegate {
 public:
     BinaryReaderDelegateWalrus(WASMBinaryReaderDelegate *delegate, const std::string &filename) :
-        m_externalDelegate(delegate), m_filename(filename), m_validator(&m_errors, ValidateOptions(getFeatures())), m_lastInitType(Type::___) {
+        m_externalDelegate(delegate), m_filename(filename), m_validator(&m_errors, ValidateOptions(getFeatures())), m_lastInitType(Type::___), m_currentElementTableIndex(0) {
 
     }
 
@@ -145,7 +145,8 @@ public:
         return Result::Ok;
     }
 
-    bool OnError(const Error&) override {
+    bool OnError(const Error& err) override {
+        m_errors.push_back(err);
         return true;
     }
 
@@ -218,6 +219,7 @@ public:
     }
     Result OnImportTable(Index import_index, std::string_view module_name, std::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
         CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits));
+        m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
     }
@@ -267,6 +269,7 @@ public:
     }
     Result OnTable(Index index, Type elem_type, const Limits *elem_limits) override {
         CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits));
+        m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnTable(index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
     }
@@ -937,6 +940,7 @@ public:
         CHECK_RESULT(m_validator.OnElemSegment(GetLocation(), Var(table_index, GetLocation()), mode));
         m_externalDelegate->BeginElemSegment(index, table_index, flags);
         m_lastInitType = Type::I32;
+        m_currentElementTableIndex = table_index;
         return Result::Ok;
     }
     Result BeginElemSegmentInitExpr(Index index) override {
@@ -964,11 +968,19 @@ public:
     }
     Result OnElemSegmentElemExpr_RefNull(Index segment_index, Type type) override {
         CHECK_RESULT(m_validator.OnElemSegmentElemExpr_RefNull(GetLocation(), type));
+        if (m_currentElementTableIndex < m_tableTypes.size() && m_tableTypes[m_currentElementTableIndex] != type) {
+            m_errors.push_back(Error(ErrorLevel::Error, GetLocation(), "elem type mismatch"));
+            return ::wabt::Result::Error;
+        }
         m_externalDelegate->OnElemSegmentElemExpr_RefNull(segment_index, type);
         return Result::Ok;
     }
     Result OnElemSegmentElemExpr_RefFunc(Index segment_index, Index func_index) override {
         CHECK_RESULT(m_validator.OnElemSegmentElemExpr_RefFunc(GetLocation(), Var(func_index, GetLocation())));
+        if (m_currentElementTableIndex < m_tableTypes.size() && m_tableTypes[m_currentElementTableIndex] != Type::FuncRef) {
+            m_errors.push_back(Error(ErrorLevel::Error, GetLocation(), "elem type mismatch"));
+            return ::wabt::Result::Error;
+        }
         m_externalDelegate->OnElemSegmentElemExpr_RefFunc(segment_index, func_index);
         return Result::Ok;
     }
@@ -1278,6 +1290,8 @@ public:
     std::vector<Label> m_labelStack;
     std::vector<SimpleFuncType> m_functionTypes;
     Type m_lastInitType;
+    std::vector<Type> m_tableTypes;
+    Index m_currentElementTableIndex;
 };
 
 std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate *delegate) {
