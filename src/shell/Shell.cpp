@@ -11,6 +11,7 @@
 #include "runtime/Function.h"
 #include "runtime/Table.h"
 #include "runtime/Memory.h"
+#include "runtime/Global.h"
 #include "runtime/Instance.h"
 #include "runtime/Trap.h"
 #include "parser/WASMParser.h"
@@ -204,13 +205,13 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("global_i32")) {
-                importValues[i] = Value(int32_t(666));
+                importValues[i] = Value(new Global(Value(int32_t(666))));
             } else if (import->fieldName()->equals("global_i64")) {
-                importValues[i] = Value(int64_t(666));
+                importValues[i] = Value(new Global(Value(int64_t(666))));
             } else if (import->fieldName()->equals("global_f32")) {
-                importValues[i] = Value(float(0x44268000));
+                importValues[i] = Value(new Global(Value(float(0x44268000))));
             } else if (import->fieldName()->equals("global_f64")) {
-                importValues[i] = Value(double(0x4084d00000000000));
+                importValues[i] = Value(new Global(Value(double(0x4084d00000000000))));
             } else if (import->fieldName()->equals("table")) {
                 importValues[i] = Value(new Table(Value::Type::FuncRef, 10, 20));
             } else if (import->fieldName()->equals("memory")) {
@@ -233,7 +234,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 } else if (e->type() == ModuleExport::Memory) {
                     importValues[i] = Value(instance->resolveExportMemory(import->fieldName()).value());
                 } else if (e->type() == ModuleExport::Global) {
-                    importValues[i] = instance->resolveExportGlobal(import->fieldName());
+                    importValues[i] = Value(instance->resolveExportGlobal(import->fieldName()).value());
                 } else {
                     RELEASE_ASSERT_NOT_REACHED();
                 }
@@ -545,7 +546,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 executeInvokeAction(action, fn, assertReturn->expected, nullptr);
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
                 auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
-                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(new Walrus::String(action->name));
+                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(new Walrus::String(action->name)).value()->getValue();
                 RELEASE_ASSERT(equals(v, assertReturn->expected[0]))
                 printf("get %s", action->name.data());
                 printf(" expect value(");
