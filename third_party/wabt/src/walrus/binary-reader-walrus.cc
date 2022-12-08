@@ -167,11 +167,9 @@ public:
 
     /* Custom section */
     Result BeginCustomSection(Index section_index, Offset size, std::string_view section_name) override {
-        abort();
         return Result::Ok;
     }
     Result EndCustomSection() override {
-        abort();
         return Result::Ok;
     }
 
