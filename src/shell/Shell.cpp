@@ -523,30 +523,28 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     std::map<std::string, Instance*> registeredInstanceMap;
     size_t commandCount = 0;
     for (const std::unique_ptr<wabt::Command>& command : script->commands) {
-        if (auto* moduleCommand = dynamic_cast<wabt::ModuleCommand*>(command.get())) {
+        switch (command->type) {
+        case wabt::CommandType::Module:
+        case wabt::CommandType::ScriptModule: {
+            auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
             executeWASM(store, filename, buf->data, instances, &registeredInstanceMap);
             instanceMap[commandCount] = instances.back();
             if (moduleCommand->module.name.size()) {
                 registeredInstanceMap[moduleCommand->module.name] = instances.back();
             }
-        } else if (auto* scriptModuleCommand = dynamic_cast<wabt::ScriptModuleCommand*>(command.get())) {
-            auto dsm = dynamic_cast<wabt::BinaryScriptModule*>(scriptModuleCommand->script_module.get());
-            RELEASE_ASSERT(dsm);
-            executeWASM(store, filename, dsm->data, instances, &registeredInstanceMap);
-            instanceMap[commandCount] = instances.back();
-            if (scriptModuleCommand->module.name.size()) {
-                registeredInstanceMap[scriptModuleCommand->module.name] = instances.back();
-            }
-        } else if (auto* assertReturn = dynamic_cast<wabt::AssertReturnCommand*>(command.get())) {
+            break;
+        }
+        case wabt::CommandType::AssertReturn: {
+            auto* assertReturn = static_cast<wabt::AssertReturnCommand*>(command.get());
             auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExport(new Walrus::String(assertReturn->action->name));
             RELEASE_ASSERT(value);
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
-                auto action = dynamic_cast<wabt::InvokeAction*>(assertReturn->action.get());
+                auto action = static_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, assertReturn->expected, nullptr);
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
-                auto action = dynamic_cast<wabt::GetAction*>(assertReturn->action.get());
+                auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
                 auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(new Walrus::String(action->name));
                 RELEASE_ASSERT(equals(v, assertReturn->expected[0]))
                 printf("get %s", action->name.data());
@@ -556,27 +554,36 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 ASSERT_NOT_REACHED();
             }
-        } else if (auto* assertTrap = dynamic_cast<wabt::AssertTrapCommand*>(command.get())) {
+            break;
+        }
+        case wabt::CommandType::AssertTrap: {
+            auto* assertTrap = static_cast<wabt::AssertTrapCommand*>(command.get());
             auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertTrap->action->name)).value();
             RELEASE_ASSERT(value);
             if (assertTrap->action->type() == wabt::ActionType::Invoke) {
-                auto action = dynamic_cast<wabt::InvokeAction*>(assertTrap->action.get());
+                auto action = static_cast<wabt::InvokeAction*>(assertTrap->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), assertTrap->text.data());
             } else {
                 ASSERT_NOT_REACHED();
             }
-        } else if (auto* assertException = dynamic_cast<wabt::AssertExceptionCommand*>(command.get())) {
+            break;
+        }
+        case wabt::CommandType::AssertException: {
+            auto* assertException = static_cast<wabt::AssertExceptionCommand*>(command.get());
             auto value = fetchInstance(assertException->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertException->action->name)).value();
             RELEASE_ASSERT(value);
             if (assertException->action->type() == wabt::ActionType::Invoke) {
-                auto action = dynamic_cast<wabt::InvokeAction*>(assertException->action.get());
+                auto action = static_cast<wabt::InvokeAction*>(assertException->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), nullptr, true);
             } else {
                 ASSERT_NOT_REACHED();
             }
-        } else if (auto* assertModuleUninstantiable = dynamic_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertUninstantiable>*>(command.get())) {
+            break;
+        }
+        case wabt::CommandType::AssertUninstantiable: {
+            auto* assertModuleUninstantiable = static_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertUninstantiable>*>(command.get());
             auto m = assertModuleUninstantiable->module.get();
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             RELEASE_ASSERT(tsm);
@@ -585,19 +592,28 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
             RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
-        } else if (auto* registerCommand = dynamic_cast<wabt::RegisterCommand*>(command.get())) {
+            break;
+        }
+        case wabt::CommandType::Register: {
+            auto* registerCommand = static_cast<wabt::RegisterCommand*>(command.get());
             registeredInstanceMap[registerCommand->module_name] = fetchInstance(registerCommand->var, instanceMap, registeredInstanceMap);
-        } else if (auto* actionCommand = dynamic_cast<wabt::ActionCommand*>(command.get())) {
+            break;
+        }
+        case wabt::CommandType::Action: {
+            auto* actionCommand = static_cast<wabt::ActionCommand*>(command.get());
             auto value = fetchInstance(actionCommand->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(actionCommand->action->name)).value();
             RELEASE_ASSERT(value);
             if (actionCommand->action->type() == wabt::ActionType::Invoke) {
-                auto action = dynamic_cast<wabt::InvokeAction*>(actionCommand->action.get());
+                auto action = static_cast<wabt::InvokeAction*>(actionCommand->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), nullptr);
             } else {
                 ASSERT_NOT_REACHED();
             }
-        } else if (auto* assertModuleInvalid = dynamic_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertInvalid>*>(command.get())) {
+            break;
+        }
+        case wabt::CommandType::AssertInvalid: {
+            auto* assertModuleInvalid = static_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertInvalid>*>(command.get());
             auto m = assertModuleInvalid->module.get();
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             auto dsm = dynamic_cast<wabt::BinaryScriptModule*>(m);
@@ -612,10 +628,27 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             RELEASE_ASSERT(trapResult.exception);
             std::string actual(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
             printf("assertModuleInvalid (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertModuleInvalid->text.data(), actual.data(), assertModuleInvalid->module->location().line);
-
-        } else if (auto* assertMalformed = dynamic_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertMalformed>*>(command.get())) {
-            // we don't need to run invalid wat
+            break;
         }
+        case wabt::CommandType::AssertMalformed: {
+            // we don't need to run invalid wat
+            auto* assertMalformed = static_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertMalformed>*>(command.get());
+            break;
+        }
+        case wabt::CommandType::AssertUnlinkable: {
+            // TODO
+            break;
+        }
+        case wabt::CommandType::AssertExhaustion: {
+            // TODO
+            break;
+        }
+        default: {
+            RELEASE_ASSERT_NOT_REACHED();
+            break;
+        }
+        }
+
         commandCount++;
     }
 }
