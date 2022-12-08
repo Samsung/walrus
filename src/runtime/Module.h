@@ -242,13 +242,8 @@ public:
         size_t m_stackSizeToBe;
     };
 
-    ModuleFunction(Module* module, uint32_t functionTypeIndex)
-        : m_module(module)
-        , m_functionTypeIndex(functionTypeIndex)
-        , m_requiredStackSize(0)
-        , m_requiredStackSizeDueToLocal(0)
-    {
-    }
+    constexpr static uint32_t g_invalidFunctionTypeIndex = std::numeric_limits<uint32_t>::max();
+    ModuleFunction(Module* module, uint32_t functionTypeIndex = g_invalidFunctionTypeIndex);
 
     Module* module() const { return m_module; }
 
