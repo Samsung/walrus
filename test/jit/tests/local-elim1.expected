@@ -1,5 +1,4 @@
-++++++++++++++++++++++++++++++
-Function: 0
+[[[[[[[  Function   0  ]]]]]]]
 0: Opcode: local.get
   Index: 0
   Result[0]: i32
@@ -25,19 +24,20 @@ Function: 0
   Param[0]: ref:6(0)
 8: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 unused
 1: Opcode: local.set
-  Index: 4
+  Addr: sp[4]
   Param[0]: i32 sp[0]
 2: Opcode: i32.const
   Result[0]: i32 unused
 3: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 const:2
 4: Opcode: local.get
-  Index: 4
+  Addr: sp[4]
   Result[0]: i32 unused
 5: Opcode: i32.const
   Result[0]: i32 unused
@@ -46,11 +46,11 @@ Function: 0
   Param[1]: i32 const:5
   Result[0]: i32 sp[0]
 7: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 unused
 8: Opcode: return
-++++++++++++++++++++++++++++++
-Function: 1
+
+[[[[[[[  Function   1  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -76,20 +76,21 @@ Function: 1
   Param[0]: ref:6(0)
 8: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: br_unless
   Jump to: 4
   Param[0]: i32 const:0
 2: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 unused
 3: Opcode: br
   Jump to: 6
 4: Label: result_count: 0 preserved_count: 0
   Jump from: 1
 5: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 unused
 6: Label: result_count: 1 preserved_count: 0
   Jump from: 3
@@ -97,11 +98,11 @@ Function: 1
     2(0) instruction
     5(0) instruction
 7: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 sp[0]
 8: Opcode: return
-++++++++++++++++++++++++++++++
-Function: 2
+
+[[[[[[[  Function   2  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -125,6 +126,7 @@ Function: 2
   Param[0]: ref:6(0)
 8: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: br_unless
@@ -144,11 +146,11 @@ Function: 2
     2(0) instruction
     5(0) instruction
 7: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 const:2
 8: Opcode: return
-++++++++++++++++++++++++++++++
-Function: 3
+
+[[[[[[[  Function   3  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -173,13 +175,14 @@ Function: 3
   Param[0]: ref:6(0)
 8: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: br_unless
   Jump to: 4
   Param[0]: i32 const:0
 2: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 sp[0]
 3: Opcode: br
   Jump to: 6
@@ -193,6 +196,7 @@ Function: 3
     2(0) instruction
     5(0) instruction
 7: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 unused
 8: Opcode: return
+

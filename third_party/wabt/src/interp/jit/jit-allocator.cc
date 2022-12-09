@@ -43,16 +43,13 @@ ValueInfo LocationInfo::typeToValueInfo(Type type) {
 
 StackAllocator::StackAllocator(StackAllocator* other, Index end)
     : values_(other->values_.begin(), other->values_.begin() + end),
-      start_(other->start_),
-      size_(other->start_),
       skip_start_(other->skip_start_),
       skip_end_(other->skip_end_) {
   while (end > 0) {
     --end;
     LocationInfo& info = values_[end];
     if (info.status & LocationInfo::kIsOffset) {
-      size_ =
-          info.value + (0x2u << (info.value_info & LocationInfo::kSizeMask));
+      size_ = info.value + LocationInfo::length(info.value_info);
       return;
     }
   }
@@ -100,14 +97,25 @@ void StackAllocator::pop() {
     LocationInfo& location = values_[i - 1];
 
     if (location.status & LocationInfo::kIsOffset) {
-      size_t length = 0x2u << (location.value_info & LocationInfo::kSizeMask);
-
-      size_ = location.value + length;
+      size_ = location.value + LocationInfo::length(location.value_info);
       return;
     }
   }
 
-  size_ = start_;
+  size_ = 0;
+}
+
+void StackAllocator::skipRange(Index start, Index end) {
+  assert(skip_start_ == 0 && skip_end_ == 0);
+  assert(start <= end && size_ <= start);
+
+  if (start < end) {
+    skip_start_ = start;
+    skip_end_ = end;
+  }
+
+  size_ = 0;
+  values_.clear();
 }
 
 void LocalsAllocator::allocate(ValueInfo value_info) {

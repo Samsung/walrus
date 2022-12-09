@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+#include "wabt/interp/interp.h"
 #include "wabt/interp/jit/jit-compiler.h"
+#include "wabt/interp/jit/jit.h"
 
 #include <set>
 
@@ -183,7 +185,7 @@ void JITCompiler::buildParamDependencies() {
       if (instr->opcode() == Opcode::Br) {
         update_deps = false;
       }
-    } else if (instr->opcode() == Opcode::BrTable) {
+    } else if (instr->group() == Instruction::BrTable) {
       Label** label = instr->asBrTable()->targetLabels();
       Label** end = label + instr->value().target_label_count;
       std::set<Label*> updated_labels;
@@ -322,19 +324,78 @@ void JITCompiler::buildParamDependencies() {
 }
 
 void JITCompiler::optimizeBlocks() {
+  std::vector<Label::Dependency> stack;
+
   for (InstructionListItem* item = first_; item != nullptr;
        item = item->next()) {
-    if (item->group() == Instruction::Compare) {
-      assert(item->next() != nullptr);
+    if (item->isLabel()) {
+      stack.clear();
+      continue;
+    }
 
-      if (item->next()->group() == Instruction::DirectBranch) {
-        Instruction* next = item->next()->asInstruction();
+    switch (item->group()) {
+      case Instruction::Call: {
+        CallInstruction* call_instr = reinterpret_cast<CallInstruction*>(item);
 
-        if (next->opcode() == Opcode::BrIf ||
-            next->opcode() == Opcode::InterpBrUnless) {
-          item->asInstruction()->getResult(0)->location.type = Operand::Unused;
+        LocalsAllocator locals_allocator(call_instr->paramStart());
+
+        for (auto it : call_instr->funcType().params) {
+          locals_allocator.allocate(LocationInfo::typeToValueInfo(it));
         }
+
+        Index end = call_instr->paramCount();
+        size_t size = stack.size();
+
+        for (Index i = 0; i < end; ++i) {
+          if (size + i >= end) {
+            Label::Dependency& item = stack[size + i - end];
+
+            Operand* operand = item.instr->getResult(item.index);
+
+            if (operand->location.type == Operand::Stack) {
+              operand->location.type = Operand::CallArg;
+              operand->value = locals_allocator.get(i).value;
+            }
+          }
+        }
+
+        stack.clear();
+        continue;
       }
+      case Instruction::Compare: {
+        assert(item->next() != nullptr);
+
+        if (item->next()->group() == Instruction::DirectBranch) {
+          Instruction* next = item->next()->asInstruction();
+
+          if (next->opcode() == Opcode::BrIf ||
+              next->opcode() == Opcode::InterpBrUnless) {
+            item->asInstruction()->getResult(0)->location.type =
+                Operand::Unused;
+          }
+        }
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+
+    Instruction* instr = item->asInstruction();
+    Index end = instr->paramCount();
+
+    for (Index i = end; i > 0; --i) {
+      if (stack.empty()) {
+        break;
+      }
+
+      stack.pop_back();
+    }
+
+    end = instr->resultCount();
+
+    for (Index i = 0; i < end; i++) {
+      stack.push_back(Label::Dependency(instr, i));
     }
   }
 }
@@ -366,35 +427,30 @@ static StackAllocator* cloneAllocator(Label* label, StackAllocator* other) {
   return allocator;
 }
 
-void JITCompiler::computeOperandLocations(size_t params_size,
+void JITCompiler::computeOperandLocations(JITFunction* jit_func,
                                           std::vector<Type>& results) {
-  // Build space for locals first.
-  LocalsAllocator local_allocator;
+  // Build space for results first.
+  StackAllocator* stack_allocator = new StackAllocator();
 
-  for (size_t i = 0; i < params_size; i++) {
-    local_allocator.allocate(locals_[i]);
+  for (auto it : results) {
+    stack_allocator->push(LocationInfo::typeToValueInfo(it));
   }
 
-  StackAllocator* stack_allocator = new StackAllocator(local_allocator.size());
+  Index locals_start = stack_allocator->size();
+  LocalsAllocator locals_allocator(locals_start);
 
   size_t size = locals_.size();
 
-  if (params_size < size) {
-    for (auto it : results) {
-      stack_allocator->push(LocationInfo::typeToValueInfo(it));
-    }
-
-    size_t locals_start = stack_allocator->alignedSize();
-    stack_allocator->reset();
-
-    local_allocator.setStart(locals_start);
-
-    for (size_t i = params_size; i < size; i++) {
-      local_allocator.allocate(locals_[i]);
-    }
-
-    stack_allocator->skipRange(locals_start, local_allocator.size());
+  for (size_t i = 0; i < size; i++) {
+    locals_allocator.allocate(locals_[i]);
   }
+
+  Index max_stack_size = locals_allocator.size();
+  Index args_size = StackAllocator::alignedSize(max_stack_size);
+  Index total_frame_size = args_size;
+  Index max_call_frame_size = 0;
+
+  stack_allocator->skipRange(locals_start, max_stack_size);
 
   // Compute stack allocation.
   for (InstructionListItem* item = first_; item != nullptr;
@@ -409,6 +465,14 @@ void JITCompiler::computeOperandLocations(size_t params_size,
        item = item->next()) {
     if (item->isLabel()) {
       Label* label = item->asLabel();
+
+      max_call_frame_size += StackAllocator::alignedSize(max_stack_size);
+      if (max_call_frame_size > total_frame_size) {
+        total_frame_size = max_call_frame_size;
+      }
+
+      max_call_frame_size = 0;
+      max_stack_size = 0;
 
       if (label->stack_allocator_ == nullptr) {
         // Avoid cloning the allocator when a block
@@ -444,6 +508,9 @@ void JITCompiler::computeOperandLocations(size_t params_size,
       } else if (location.status & LocationInfo::kIsRegister) {
         operand->value = location.value;
         operand->location.type = Operand::Register;
+      } else if (location.status & LocationInfo::kIsCallArg) {
+        operand->value = location.value;
+        operand->location.type = Operand::CallArg;
       } else if (location.status & LocationInfo::kIsImmediate) {
         assert(location.value == 0);
         if (operand->item->isLabel()) {
@@ -481,6 +548,12 @@ void JITCompiler::computeOperandLocations(size_t params_size,
                                      operand->location.value_info);
             break;
           }
+          case Operand::CallArg: {
+            operand->location.type = Operand::CallArg;
+            stack_allocator->pushCallArg(operand->value,
+                                         operand->location.value_info);
+            break;
+          }
           case Operand::Immediate: {
             assert(instr->group() == Instruction::Immediate);
             stack_allocator->pushImmediate(operand->location.value_info);
@@ -490,8 +563,7 @@ void JITCompiler::computeOperandLocations(size_t params_size,
           }
           case Operand::LocalSet: {
             operand->location.type = Operand::Stack;
-            operand->value =
-                local_allocator.getValue(operand->local_index).value;
+            operand->value = locals_allocator.get(operand->local_index).value;
             stack_allocator->pushUnused(operand->location.value_info);
             break;
           }
@@ -499,7 +571,7 @@ void JITCompiler::computeOperandLocations(size_t params_size,
             assert(instr->opcode() == Opcode::LocalGet);
             operand->location.type = Operand::Unused;
             Index offset =
-                local_allocator.getValue(instr->value().local_index).value;
+                locals_allocator.get(instr->value().local_index).value;
             stack_allocator->pushLocal(offset, operand->location.value_info);
             break;
           }
@@ -509,34 +581,112 @@ void JITCompiler::computeOperandLocations(size_t params_size,
             break;
           }
         }
+
+        operand++;
+      }
+
+      if (max_stack_size < stack_allocator->size()) {
+        max_stack_size = stack_allocator->size();
       }
     }
 
-    if (instr->group() == Instruction::LocalMove) {
-      instr->value().value =
-          local_allocator.getValue(instr->value().local_index).value;
-    } else if (instr->group() == Instruction::DirectBranch) {
-      Label* label = instr->value().target_label;
-      if ((label->info() & Label::kAfterUncondBranch) &&
-          label->stack_allocator_ == nullptr) {
-        label->stack_allocator_ = cloneAllocator(label, stack_allocator);
-      }
-    } else if (instr->opcode() == Opcode::BrTable) {
-      Label** label = instr->asBrTable()->targetLabels();
-      Label** end = label + instr->value().target_label_count;
-
-      while (label < end) {
-        if (((*label)->info() & Label::kAfterUncondBranch) &&
-            (*label)->stack_allocator_ == nullptr) {
-          (*label)->stack_allocator_ = cloneAllocator(*label, stack_allocator);
+    switch (instr->group()) {
+      case Instruction::DirectBranch: {
+        Label* label = instr->value().target_label;
+        if ((label->info() & Label::kAfterUncondBranch) &&
+            label->stack_allocator_ == nullptr) {
+          label->stack_allocator_ = cloneAllocator(label, stack_allocator);
         }
-        label++;
+        break;
+      }
+      case Instruction::BrTable: {
+        Label** label = instr->asBrTable()->targetLabels();
+        Label** end = label + instr->value().target_label_count;
+
+        while (label < end) {
+          if (((*label)->info() & Label::kAfterUncondBranch) &&
+              (*label)->stack_allocator_ == nullptr) {
+            (*label)->stack_allocator_ =
+                cloneAllocator(*label, stack_allocator);
+          }
+          label++;
+        }
+        break;
+      }
+      case Instruction::Call: {
+        Index frame_size = instr->asCall()->frameSize();
+
+        if (max_call_frame_size < frame_size) {
+          max_call_frame_size = frame_size;
+        }
+        break;
+      }
+      default: {
+        break;
       }
     }
   }
 
   assert(stack_allocator->empty() || last_->group() != Instruction::Return);
   delete stack_allocator;
+
+  max_call_frame_size += StackAllocator::alignedSize(max_stack_size);
+  if (max_call_frame_size > total_frame_size) {
+    total_frame_size = max_call_frame_size;
+  }
+
+  assert(total_frame_size >= args_size &&
+         StackAllocator::alignedSize(total_frame_size) == total_frame_size);
+  jit_func->initSizes(args_size, total_frame_size - args_size);
+
+  Index args_start = total_frame_size - args_size;
+
+  for (InstructionListItem* item = first_; item != nullptr;
+       item = item->next()) {
+    if (item->isLabel()) {
+      continue;
+    }
+
+    Instruction* instr = item->asInstruction();
+
+    // Pop params from the stack first.
+    Operand* operand = instr->operands();
+    Operand* operand_end = operand + instr->paramCount() + instr->resultCount();
+
+    if (instr->group() == Instruction::LocalMove) {
+      assert(operand + 1 == operand_end);
+
+      Index value = locals_allocator.get(instr->value().local_index).value;
+
+      if (value < args_size) {
+        value += args_start;
+      } else {
+        Index length = LocationInfo::length(operand->location.value_info);
+
+        assert(total_frame_size >= value + length);
+        value = total_frame_size - value - length;
+      }
+
+      instr->value().value = value;
+    }
+
+    while (operand < operand_end) {
+      if (operand->location.type == Operand::CallArg) {
+        operand->location.type = Operand::Stack;
+      } else if (operand->location.type == Operand::Stack) {
+        if (operand->value < args_size) {
+          operand->value += args_start;
+        } else {
+          Index length = LocationInfo::length(operand->location.value_info);
+
+          assert(operand->value >= operand->value + length);
+          operand->value = total_frame_size - operand->value - length;
+        }
+      }
+
+      operand++;
+    }
+  }
 }
 
 }  // namespace interp

@@ -1,5 +1,4 @@
-++++++++++++++++++++++++++++++
-Function: 0
+[[[[[[[  Function   0  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: i32.const
@@ -12,6 +11,7 @@ Function: 0
   Jump from: 3
 5: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 0 (total: 0)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: i32.const
@@ -23,8 +23,8 @@ Function: 0
 4: Label: result_count: 0 preserved_count: 0
   Jump from: 3
 5: Opcode: return
-++++++++++++++++++++++++++++++
-Function: 1
+
+[[[[[[[  Function   1  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Label: result_count: 1 preserved_count: 0
@@ -33,6 +33,7 @@ Function: 1
 2: Opcode: br
   Jump to: 1
 ------------------------------
+Frame size: 0, Arguments size: 0 (total: 0)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Label: result_count: 1 preserved_count: 0
@@ -40,3 +41,4 @@ Function: 1
   Param[0]
 2: Opcode: br
   Jump to: 1
+

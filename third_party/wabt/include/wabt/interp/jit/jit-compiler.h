@@ -32,7 +32,12 @@ namespace interp {
 class JITFunction;
 class Instruction;
 class BrTableInstruction;
+class CallInstruction;
 class Label;
+class JITModuleDescriptor;
+
+// Defined in interp.h.
+class FuncType;
 
 class InstructionListItem {
   friend class JITCompiler;
@@ -49,8 +54,12 @@ class InstructionListItem {
     LocalMove,
     // Br, BrIf, InterpBrUnless.
     DirectBranch,
+    // BrTable.
+    BrTable,
     // Return.
     Return,
+    // Call, CallIndirect, ReturnCall, ReturnCallIndirect.
+    Call,
     // Binary operation (e.g. I32Add, I64Sub).
     Binary,
     // Compare operation. (e.g. I32Eqz, I64LtU)
@@ -109,6 +118,7 @@ struct Operand {
     // Cannot be a result type.
     Immediate,
     // Not allowed after computeOperandLocations() call.
+    CallArg,
     LocalSet,
     LocalGet,
   };
@@ -146,6 +156,8 @@ union InstructionValue {
   // For local management.
   Index local_index;
   Index value;
+  // For direct calls.
+  Index func_index;
   // For direct branches.
   Label* target_label;
   // For BrTable instruction.
@@ -191,6 +203,11 @@ class Instruction : public InstructionListItem {
   BrTableInstruction* asBrTable() {
     assert(opcode() == Opcode::BrTable);
     return reinterpret_cast<BrTableInstruction*>(this);
+  }
+
+  CallInstruction* asCall() {
+    assert(group() == Call);
+    return reinterpret_cast<CallInstruction*>(this);
   }
 
  protected:
@@ -272,9 +289,61 @@ class ComplexInstruction : public Instruction {
                     param_count,
                     new Operand[operand_count],
                     prev) {
-    assert(operand_count >= param_count);
+    assert(operand_count >= param_count && operand_count > 4);
     assert(opcode == Opcode::Return);
   }
+};
+
+class CallInstruction : public Instruction {
+  friend class JITCompiler;
+
+ public:
+  static const uint16_t kIndirect = 1 << 0;
+  static const uint16_t kReturn = 1 << 1;
+
+  FuncType& funcType() { return func_type_; }
+  Index frameSize() { return frame_size_; }
+  Index paramStart() { return param_start_; }
+
+ protected:
+  explicit CallInstruction(Opcode opcode,
+                           Index param_count,
+                           FuncType& func_type,
+                           Operand* operands,
+                           InstructionListItem* prev)
+      : Instruction(Instruction::Call, opcode, param_count, operands, prev),
+        func_type_(func_type) {
+    assert(opcode == Opcode::Call || opcode == Opcode::CallIndirect ||
+           opcode == Opcode::ReturnCall);
+  }
+
+  FuncType& func_type_;
+  Index frame_size_;
+  Index param_start_;
+};
+
+template <int n>
+class SimpleCallInstruction : public CallInstruction {
+  friend class JITCompiler;
+
+ private:
+  explicit SimpleCallInstruction(Opcode opcode,
+                                 FuncType& func_type,
+                                 InstructionListItem* prev);
+
+  Operand inlineOperands_[n];
+};
+
+class ComplexCallInstruction : public CallInstruction {
+  friend class JITCompiler;
+
+ public:
+  ~ComplexCallInstruction() override;
+
+ private:
+  explicit ComplexCallInstruction(Opcode opcode,
+                                  FuncType& func_type,
+                                  InstructionListItem* prev);
 };
 
 class DependencyGenContext;
@@ -294,7 +363,7 @@ class Label : public InstructionListItem {
   static const uint16_t kHasLabelData = 1 << 4;
 
   struct Dependency {
-    Dependency(Instruction* instr, size_t index) : instr(instr), index(index) {}
+    Dependency(Instruction* instr, Index index) : instr(instr), index(index) {}
 
     Instruction* instr;
     Index index;
@@ -364,6 +433,7 @@ class JITCompiler {
                       Opcode opcode,
                       Index param_count,
                       ValueInfo result);
+  CallInstruction* appendCall(Opcode opcode, FuncType& func_type);
   void appendBranch(Opcode opcode, Index depth);
   void appendElseLabel();
   void appendBrTable(Index num_targets,
@@ -382,19 +452,24 @@ class JITCompiler {
   void buildParamDependencies();
   void reduceLocalAndConstantMoves();
   void optimizeBlocks();
-  void computeOperandLocations(size_t params_size, std::vector<Type>& results);
-  void compile();
+  void computeOperandLocations(JITFunction* jit_func,
+                               std::vector<Type>& results);
+  JITModuleDescriptor* compile();
+
+  Label* getFunctionEntry(size_t i) { return function_list_[i].entry_label; }
 
  private:
   struct FunctionList {
-    FunctionList(JITFunction* jit_func, Label* entry_label, bool is_external)
+    FunctionList(JITFunction* jit_func, Label* entry_label, bool is_exported)
         : jit_func(jit_func),
           entry_label(entry_label),
-          is_external(is_external) {}
+          export_label(nullptr),
+          is_exported(is_exported) {}
 
     JITFunction* jit_func;
     Label* entry_label;
-    bool is_external;
+    sljit_label* export_label;
+    bool is_exported;
   };
 
   struct ElseBlock {

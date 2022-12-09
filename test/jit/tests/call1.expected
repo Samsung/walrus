@@ -1,0 +1,168 @@
+[[[[[[[  Function   0  ]]]]]]]
+0: Opcode: local.get
+  Index: 0
+  Result[0]: i32
+1: Opcode: local.get
+  Index: 1
+  Result[0]: i32
+2: Opcode: i32.add
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: i32
+3: Opcode: local.get
+  Index: 2
+  Result[0]: i32
+4: Opcode: return
+  Param[0]: ref:2(0)
+  Param[1]: ref:3(0)
+------------------------------
+Frame size: 0, Arguments size: 32 (total: 32)
+0: Opcode: local.get
+  Addr: sp[8]
+  Result[0]: i32 unused
+1: Opcode: local.get
+  Addr: sp[12]
+  Result[0]: i32 unused
+2: Opcode: i32.add
+  Param[0]: i32 sp[8]
+  Param[1]: i32 sp[12]
+  Result[0]: i32 sp[0]
+3: Opcode: local.get
+  Addr: sp[16]
+  Result[0]: i32 sp[4]
+4: Opcode: return
+  Param[0]: i32 sp[0]
+  Param[1]: i32 sp[4]
+
+[[[[[[[  Function   1  ]]]]]]]
+0: Opcode: i32.const
+  Result[0]: i32
+1: Opcode: i32.const
+  Result[0]: i32
+2: Opcode: i32.const
+  Result[0]: i32
+3: Opcode: call
+  Frame size: 32, param start: 8
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Param[2]: ref:2(0)
+  Result[0]: i32
+  Result[1]: i32
+4: Opcode: return
+  Param[0]: ref:3(0)
+  Param[1]: ref:3(1)
+------------------------------
+Frame size: 32, Arguments size: 16 (total: 48)
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Opcode: i32.const
+  Result[0]: i32 unused
+2: Opcode: i32.const
+  Result[0]: i32 unused
+3: Opcode: call
+  Frame size: 32, param start: 8
+  Param[0]: i32 const:0
+  Param[1]: i32 const:1
+  Param[2]: i32 const:2
+  Result[0]: i32 sp[32]
+  Result[1]: i32 sp[36]
+4: Opcode: return
+  Param[0]: i32 sp[32]
+  Param[1]: i32 sp[36]
+
+[[[[[[[  Function   2  ]]]]]]]
+0: Opcode: i32.const
+  Result[0]: i32
+1: Opcode: i32.eqz
+  Param[0]: ref:0(0)
+  Result[0]: i32
+2: Opcode: i32.const
+  Result[0]: i32
+3: Opcode: i32.const
+  Result[0]: i32
+4: Opcode: i32.const
+  Result[0]: i32
+5: Opcode: i32.add
+  Param[0]: ref:3(0)
+  Param[1]: ref:4(0)
+  Result[0]: i32
+6: Opcode: i32.const
+  Result[0]: i32
+7: Opcode: i32.const
+  Result[0]: i32
+8: Opcode: i32.add
+  Param[0]: ref:6(0)
+  Param[1]: ref:7(0)
+  Result[0]: i32
+9: Opcode: call
+  Frame size: 32, param start: 8
+  Param[0]: ref:2(0)
+  Param[1]: ref:5(0)
+  Param[2]: ref:8(0)
+  Result[0]: i32
+  Result[1]: i32
+10: Opcode: i32.const
+  Result[0]: i32
+11: Opcode: i32.add
+  Param[0]: ref:9(1)
+  Param[1]: ref:10(0)
+  Result[0]: i32
+12: Opcode: call
+  Frame size: 32, param start: 8
+  Param[0]: ref:1(0)
+  Param[1]: ref:9(0)
+  Param[2]: ref:11(0)
+  Result[0]: i32
+  Result[1]: i32
+13: Opcode: return
+  Param[0]: ref:12(0)
+  Param[1]: ref:12(1)
+------------------------------
+Frame size: 32, Arguments size: 16 (total: 48)
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Opcode: i32.eqz
+  Param[0]: i32 const:0
+  Result[0]: i32 sp[32]
+2: Opcode: i32.const
+  Result[0]: i32 unused
+3: Opcode: i32.const
+  Result[0]: i32 unused
+4: Opcode: i32.const
+  Result[0]: i32 unused
+5: Opcode: i32.add
+  Param[0]: i32 const:3
+  Param[1]: i32 const:4
+  Result[0]: i32 sp[12]
+6: Opcode: i32.const
+  Result[0]: i32 unused
+7: Opcode: i32.const
+  Result[0]: i32 unused
+8: Opcode: i32.add
+  Param[0]: i32 const:6
+  Param[1]: i32 const:7
+  Result[0]: i32 sp[16]
+9: Opcode: call
+  Frame size: 32, param start: 8
+  Param[0]: i32 const:2
+  Param[1]: i32 sp[12]
+  Param[2]: i32 sp[16]
+  Result[0]: i32 sp[36]
+  Result[1]: i32 sp[40]
+10: Opcode: i32.const
+  Result[0]: i32 unused
+11: Opcode: i32.add
+  Param[0]: i32 sp[40]
+  Param[1]: i32 const:10
+  Result[0]: i32 sp[16]
+12: Opcode: call
+  Frame size: 32, param start: 8
+  Param[0]: i32 sp[32]
+  Param[1]: i32 sp[36]
+  Param[2]: i32 sp[16]
+  Result[0]: i32 sp[32]
+  Result[1]: i32 sp[36]
+13: Opcode: return
+  Param[0]: i32 sp[32]
+  Param[1]: i32 sp[36]
+

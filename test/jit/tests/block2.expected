@@ -1,5 +1,4 @@
-++++++++++++++++++++++++++++++
-Function: 0
+[[[[[[[  Function   0  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -52,6 +51,7 @@ Function: 0
   Jump from: 15
 19: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: br_unless
@@ -87,7 +87,7 @@ Function: 0
     7(0) instruction
     10(0) instruction
 14: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 const:7
 15: Opcode: br
   Jump to: 18
@@ -98,13 +98,13 @@ Function: 0
     2(0) instruction
     10(0) instruction
 17: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 const:2
 18: Label: result_count: 0 preserved_count: 0
   Jump from: 15
 19: Opcode: return
-++++++++++++++++++++++++++++++
-Function: 1
+
+[[[[[[[  Function   1  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -160,13 +160,14 @@ Function: 1
   Jump from: 15
 19: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: br_unless
   Jump to: 4
   Param[0]: i32 const:0
 2: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 unused
 3: Opcode: br
   Jump to: 16
@@ -178,14 +179,14 @@ Function: 1
   Jump to: 9
   Param[0]: i32 const:5
 7: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 unused
 8: Opcode: br
   Jump to: 13
 9: Label: result_count: 0 preserved_count: 0
   Jump from: 6
 10: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 unused
 11: Opcode: i32.const
   Result[0]: i32 unused
@@ -198,7 +199,7 @@ Function: 1
     7(0) instruction
     10(0) instruction
 14: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 sp[0]
 15: Opcode: br
   Jump to: 18
@@ -209,13 +210,13 @@ Function: 1
     2(0) instruction
     10(0) instruction
 17: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 sp[0]
 18: Label: result_count: 0 preserved_count: 0
   Jump from: 15
 19: Opcode: return
-++++++++++++++++++++++++++++++
-Function: 2
+
+[[[[[[[  Function   2  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -270,6 +271,7 @@ Function: 2
   Jump from: 15
 19: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: br_unless
@@ -287,14 +289,14 @@ Function: 2
   Jump to: 9
   Param[0]: i32 const:5
 7: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 sp[0]
 8: Opcode: br
   Jump to: 13
 9: Label: result_count: 0 preserved_count: 0
   Jump from: 6
 10: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 sp[0]
 11: Opcode: i32.const
   Result[0]: i32 unused
@@ -307,7 +309,7 @@ Function: 2
     7(0) instruction
     10(0) instruction
 14: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 unused
 15: Opcode: br
   Jump to: 18
@@ -318,13 +320,13 @@ Function: 2
     2(0) instruction
     10(0) instruction
 17: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 unused
 18: Label: result_count: 0 preserved_count: 0
   Jump from: 15
 19: Opcode: return
-++++++++++++++++++++++++++++++
-Function: 3
+
+[[[[[[[  Function   3  ]]]]]]]
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -379,6 +381,7 @@ Function: 3
   Jump from: 15
 19: Opcode: return
 ------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
 0: Opcode: i32.const
   Result[0]: i32 unused
 1: Opcode: br_unless
@@ -396,14 +399,14 @@ Function: 3
   Jump to: 9
   Param[0]: i32 const:5
 7: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 sp[8]
 8: Opcode: br
   Jump to: 13
 9: Label: result_count: 0 preserved_count: 0
   Jump from: 6
 10: Opcode: local.get
-  Index: 0
+  Addr: sp[0]
   Result[0]: i32 sp[8]
 11: Opcode: i32.const
   Result[0]: i32 unused
@@ -416,7 +419,7 @@ Function: 3
     7(0) instruction
     10(0) instruction
 14: Opcode: local.set
-  Index: 0
+  Addr: sp[0]
   Param[0]: i32 sp[8]
 15: Opcode: br
   Jump to: 18
@@ -427,8 +430,9 @@ Function: 3
     2(0) instruction
     10(0) instruction
 17: Opcode: local.set
-  Index: 4
+  Addr: sp[4]
   Param[0]: i32 sp[8]
 18: Label: result_count: 0 preserved_count: 0
   Jump from: 15
 19: Opcode: return
+

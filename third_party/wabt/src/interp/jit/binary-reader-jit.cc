@@ -141,9 +141,9 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Result OnBrTableExpr(Index num_targets,
                        Index* target_depths,
                        Index default_target_depth) override;
-#if 0
   Result OnCallExpr(Index func_index) override;
   Result OnCallIndirectExpr(Index sig_index, Index table_index) override;
+#if 0
   Result OnCatchExpr(Index tag_index) override;
   Result OnCatchAllExpr() override;
   Result OnDelegateExpr(Index depth) override;
@@ -266,8 +266,11 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Index function_body_index_;
   JITCompiler compiler_;
 
+  size_t func_import_end_ = 0;
+
   // Includes imported and defined.
   std::vector<FuncType> func_types_;
+  std::vector<bool> func_is_exported_;
 };
 
 BinaryReaderJIT::BinaryReaderJIT(ModuleDesc* module,
@@ -310,7 +313,7 @@ bool BinaryReaderJIT::OnError(const Error& error) {
 
 Result BinaryReaderJIT::EndModule() {
   CHECK_RESULT(validator_.EndModule());
-  compiler_.compile();
+  module_.jit_data.setDescriptor(compiler_.compile());
   return Result::Ok;
 }
 
@@ -346,6 +349,7 @@ Result BinaryReaderJIT::OnFunction(Index index, Index sig_index) {
   module_.funcs.push_back(
       FuncDesc{func_type, {}, Istream::kInvalidOffset, {}, {}});
   func_types_.push_back(func_type);
+  func_is_exported_.push_back(false);
   return Result::Ok;
 }
 
@@ -360,6 +364,8 @@ Result BinaryReaderJIT::OnExport(Index index,
   switch (kind) {
     case ExternalKind::Func: {
       type = func_types_[item_index].Clone();
+      if (item_index >= func_import_end_)
+        func_is_exported_[item_index - func_import_end_] = true;
       break;
     }
     default: {
@@ -440,6 +446,27 @@ Result BinaryReaderJIT::OnBrTableExpr(Index num_targets,
       GetLocation(), Var(default_target_depth, GetLocation())));
   CHECK_RESULT(validator_.EndBrTable(GetLocation()));
   compiler_.appendBrTable(num_targets, target_depths, default_target_depth);
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnCallExpr(Index func_index) {
+  CHECK_RESULT(
+      validator_.OnCall(GetLocation(), Var(func_index, GetLocation())));
+
+  FuncType& func_type = module_.funcs[func_index].type;
+
+  CallInstruction* call_instr = compiler_.appendCall(Opcode::Call, func_type);
+
+  if (call_instr != nullptr) {
+    call_instr->value().func_index = func_index;
+  }
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnCallIndirectExpr(Index sig_index, Index table_index) {
+  CHECK_RESULT(validator_.OnCallIndirect(GetLocation(),
+                                         Var(sig_index, GetLocation()),
+                                         Var(table_index, GetLocation())));
   return Result::Ok;
 }
 
@@ -565,21 +592,26 @@ Result BinaryReaderJIT::EndFunctionBody(Index index) {
   compiler_.buildParamDependencies();
 
   if (verbose_level_ >= 1) {
-    printf("++++++++++++++++++++++++++++++\nFunction: %d\n",
-           static_cast<int>(index));
+    printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(index));
     compiler_.dump(verbose_level_ >= 2, false);
   }
 
   compiler_.reduceLocalAndConstantMoves();
   compiler_.optimizeBlocks();
-  compiler_.computeOperandLocations(func_type.params.size(), func_type.results);
+
+  JITFunction* jit_func = &module_.funcs[function_body_index_].jit_func;
+  compiler_.computeOperandLocations(jit_func, func_type.results);
 
   if (verbose_level_ >= 1) {
     printf("------------------------------\n");
+    printf("Frame size: %d, Arguments size: %d (total: %d)\n",
+           jit_func->frameSize(), jit_func->argsSize(),
+           jit_func->frameSize() + jit_func->argsSize());
     compiler_.dump(verbose_level_ >= 2, true);
+    printf("\n");
   }
 
-  compiler_.appendFunction(&module_.funcs[function_body_index_].jit_func, true);
+  compiler_.appendFunction(jit_func, func_is_exported_[function_body_index_]);
 
   compiler_.clear();
   return Result::Ok;

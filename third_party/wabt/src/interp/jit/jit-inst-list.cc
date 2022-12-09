@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "wabt/interp/interp.h"
 #include "wabt/interp/jit/jit-compiler.h"
 
 #include <map>
@@ -24,6 +25,11 @@ namespace interp {
 Index Instruction::resultCount() {
   if (!hasResult()) {
     return 0;
+  }
+
+  if (group() == Call) {
+    CallInstruction* call_instr = reinterpret_cast<CallInstruction*>(this);
+    return call_instr->funcType().results.size();
   }
 
   return 1;
@@ -37,9 +43,37 @@ ComplexInstruction::~ComplexInstruction() {
   delete[] params();
 }
 
+template <int n>
+SimpleCallInstruction<n>::SimpleCallInstruction(Opcode opcode,
+                                                FuncType& func_type,
+                                                InstructionListItem* prev)
+    : CallInstruction(opcode,
+                      func_type.params.size(),
+                      func_type,
+                      inlineOperands_,
+                      prev) {
+  assert(func_type.params.size() + func_type.results.size() == n);
+}
+
+ComplexCallInstruction::ComplexCallInstruction(Opcode opcode,
+                                               FuncType& func_type,
+                                               InstructionListItem* prev)
+    : CallInstruction(
+          opcode,
+          func_type.params.size(),
+          func_type,
+          new Operand[func_type.params.size() + func_type.results.size()],
+          prev) {
+  assert(func_type.params.size() + func_type.results.size() > 4);
+}
+
+ComplexCallInstruction::~ComplexCallInstruction() {
+  delete[] params();
+}
+
 BrTableInstruction::BrTableInstruction(size_t target_label_count,
                                        InstructionListItem* prev)
-    : Instruction(Instruction::Any,
+    : Instruction(Instruction::BrTable,
                   Opcode::BrTable,
                   1,
                   &inlineParam_,
@@ -81,7 +115,7 @@ void Label::merge(Label* other) {
   assert(stackSize() == other->stackSize());
 
   for (auto it : other->branches_) {
-    if (it->opcode() != Opcode::BrTable) {
+    if (it->group() != Instruction::BrTable) {
       assert(it->group() == Instruction::DirectBranch);
       it->value().target_label = this;
       branches_.push_back(it);
@@ -149,6 +183,72 @@ Instruction* JITCompiler::append(Instruction::Group group,
                                  ValueInfo result) {
   assert(result != LocationInfo::kNone);
   return appendInternal(group, op, param_count, param_count + 1, result);
+}
+
+CallInstruction* JITCompiler::appendCall(Opcode opcode, FuncType& func_type) {
+  if (stack_depth_ == kInvalidIndex) {
+    return nullptr;
+  }
+
+  Index param_count = func_type.params.size();
+  Index result_count = func_type.results.size();
+
+  stack_depth_ -= param_count;
+  stack_depth_ += result_count;
+
+  CallInstruction* call_instr;
+  switch (param_count + result_count) {
+    case 0:
+      call_instr = new CallInstruction(opcode, 0, func_type, nullptr, nullptr);
+      break;
+    case 1:
+      call_instr = new SimpleCallInstruction<1>(opcode, func_type, last_);
+      break;
+    case 2:
+      call_instr = new SimpleCallInstruction<2>(opcode, func_type, last_);
+      break;
+    case 3:
+      call_instr = new SimpleCallInstruction<3>(opcode, func_type, last_);
+      break;
+    case 4:
+      call_instr = new SimpleCallInstruction<4>(opcode, func_type, last_);
+      break;
+    default:
+      call_instr = new ComplexCallInstruction(opcode, func_type, last_);
+      break;
+  }
+
+  call_instr->result_count_ =
+      static_cast<uint8_t>((result_count > 255) ? 255 : result_count);
+
+  StackAllocator stack_allocator;
+
+  if (result_count > 0) {
+    Operand* results = call_instr->results();
+
+    for (Index i = 0; i < result_count; i++) {
+      ValueInfo value_info =
+          LocationInfo::typeToValueInfo(func_type.results[i]);
+
+      results[i].location.type = Operand::Stack;
+      results[i].location.value_info = value_info;
+      stack_allocator.push(value_info);
+    }
+  }
+
+  call_instr->param_start_ = stack_allocator.size();
+
+  LocalsAllocator locals_allocator(stack_allocator.size());
+
+  for (auto it : func_type.params) {
+    locals_allocator.allocate(LocationInfo::typeToValueInfo(it));
+  }
+
+  call_instr->frame_size_ =
+      StackAllocator::alignedSize(locals_allocator.size());
+
+  append(call_instr);
+  return call_instr;
 }
 
 void JITCompiler::appendBranch(Opcode opcode, Index depth) {
@@ -323,88 +423,6 @@ void JITCompiler::popLabel() {
   stack_depth_ = label->preservedCount() + label->resultCount();
 }
 
-void JITCompiler::append(InstructionListItem* item) {
-  if (last_ != nullptr) {
-    last_->next_ = item;
-  } else {
-    first_ = item;
-  }
-
-  item->prev_ = last_;
-  last_ = item;
-}
-
-InstructionListItem* JITCompiler::remove(InstructionListItem* item) {
-  InstructionListItem* prev = item->prev_;
-  InstructionListItem* next = item->next_;
-
-  if (prev == nullptr) {
-    assert(first_ == item);
-    first_ = next;
-  } else {
-    assert(first_ != item);
-    prev->next_ = next;
-  }
-
-  if (next == nullptr) {
-    assert(last_ == item);
-    last_ = prev;
-  } else {
-    assert(last_ != item);
-    next->prev_ = prev;
-  }
-
-  delete item;
-  return next;
-}
-
-void JITCompiler::replace(InstructionListItem* item,
-                          InstructionListItem* new_item) {
-  assert(item != new_item);
-
-  InstructionListItem* prev = item->prev_;
-  InstructionListItem* next = item->next_;
-
-  new_item->prev_ = prev;
-  new_item->next_ = next;
-
-  if (prev == nullptr) {
-    assert(first_ == item);
-    first_ = new_item;
-  } else {
-    assert(first_ != item);
-    prev->next_ = new_item;
-  }
-
-  if (next == nullptr) {
-    assert(last_ == item);
-    last_ = new_item;
-  } else {
-    assert(last_ != item);
-    next->prev_ = new_item;
-  }
-
-  delete item;
-}
-
-static const char* flagsToType(ValueInfo value_info) {
-  ValueInfo size = value_info & LocationInfo::kSizeMask;
-
-  if (value_info & LocationInfo::kReference) {
-    return (size == LocationInfo::kEightByteSize) ? "ref8" : "ref4";
-  }
-
-  if (value_info & LocationInfo::kFloat) {
-    return (size == LocationInfo::kEightByteSize) ? "f64" : "f32";
-  }
-
-  if (size == LocationInfo::kSixteenByteSize) {
-    return "v128";
-  }
-
-  return (size == LocationInfo::kEightByteSize) ? "i64" : "i32";
-}
-
 void JITCompiler::appendFunction(JITFunction* jit_func, bool is_external) {
   assert(first_ != nullptr && last_ != nullptr);
 
@@ -425,6 +443,24 @@ void JITCompiler::appendFunction(JITFunction* jit_func, bool is_external) {
   first_ = nullptr;
   last_ = nullptr;
   function_list_.push_back(FunctionList(jit_func, entry_label, is_external));
+}
+
+static const char* flagsToType(ValueInfo value_info) {
+  ValueInfo size = value_info & LocationInfo::kSizeMask;
+
+  if (value_info & LocationInfo::kReference) {
+    return (size == LocationInfo::kEightByteSize) ? "ref8" : "ref4";
+  }
+
+  if (value_info & LocationInfo::kFloat) {
+    return (size == LocationInfo::kEightByteSize) ? "f64" : "f32";
+  }
+
+  if (size == LocationInfo::kSixteenByteSize) {
+    return "v128";
+  }
+
+  return (size == LocationInfo::kEightByteSize) ? "i64" : "i32";
 }
 
 void JITCompiler::dump(bool enable_colors, bool after_stack_computation) {
@@ -453,20 +489,39 @@ void JITCompiler::dump(bool enable_colors, bool after_stack_computation) {
 
       printf("Opcode: %s\n", instr->opcode().GetName());
 
-      if (instr->group() == Instruction::DirectBranch) {
-        printf("  Jump to: %s%d%s\n", label_text,
-               instr_index[instr->value().target_label], default_text);
-      } else if (instr->opcode() == Opcode::BrTable) {
-        size_t target_label_count = instr->value().target_label_count;
-        Label** target_labels = instr->asBrTable()->targetLabels();
-
-        for (size_t i = 0; i < target_label_count; i++) {
-          printf("  Jump to: %s%d%s\n", label_text, instr_index[*target_labels],
-                 default_text);
-          target_labels++;
+      switch (instr->group()) {
+        case Instruction::DirectBranch: {
+          printf("  Jump to: %s%d%s\n", label_text,
+                 instr_index[instr->value().target_label], default_text);
+          break;
         }
-      } else if (instr->group() == Instruction::LocalMove) {
-        printf("  Index: %d\n", instr->value().local_index);
+        case Instruction::LocalMove: {
+          if (after_stack_computation) {
+            printf("  Addr: sp[%d]\n", instr->value().local_index);
+          } else {
+            printf("  Index: %d\n", instr->value().local_index);
+          }
+          break;
+        }
+        case Instruction::Call: {
+          printf("  Frame size: %d, param start: %d\n",
+                 instr->asCall()->frameSize(), instr->asCall()->paramStart());
+          break;
+        }
+        case Instruction::BrTable: {
+          size_t target_label_count = instr->value().target_label_count;
+          Label** target_labels = instr->asBrTable()->targetLabels();
+
+          for (size_t i = 0; i < target_label_count; i++) {
+            printf("  Jump to: %s%d%s\n", label_text,
+                   instr_index[*target_labels], default_text);
+            target_labels++;
+          }
+          break;
+        }
+        default: {
+          break;
+        }
       }
 
       Index param_count = instr->paramCount();
@@ -547,6 +602,70 @@ void JITCompiler::dump(bool enable_colors, bool after_stack_computation) {
       }
     }
   }
+}
+
+void JITCompiler::append(InstructionListItem* item) {
+  if (last_ != nullptr) {
+    last_->next_ = item;
+  } else {
+    first_ = item;
+  }
+
+  item->prev_ = last_;
+  last_ = item;
+}
+
+InstructionListItem* JITCompiler::remove(InstructionListItem* item) {
+  InstructionListItem* prev = item->prev_;
+  InstructionListItem* next = item->next_;
+
+  if (prev == nullptr) {
+    assert(first_ == item);
+    first_ = next;
+  } else {
+    assert(first_ != item);
+    prev->next_ = next;
+  }
+
+  if (next == nullptr) {
+    assert(last_ == item);
+    last_ = prev;
+  } else {
+    assert(last_ != item);
+    next->prev_ = prev;
+  }
+
+  delete item;
+  return next;
+}
+
+void JITCompiler::replace(InstructionListItem* item,
+                          InstructionListItem* new_item) {
+  assert(item != new_item);
+
+  InstructionListItem* prev = item->prev_;
+  InstructionListItem* next = item->next_;
+
+  new_item->prev_ = prev;
+  new_item->next_ = next;
+
+  if (prev == nullptr) {
+    assert(first_ == item);
+    first_ = new_item;
+  } else {
+    assert(first_ != item);
+    prev->next_ = new_item;
+  }
+
+  if (next == nullptr) {
+    assert(last_ == item);
+    last_ = new_item;
+  } else {
+    assert(last_ != item);
+    next->prev_ = new_item;
+  }
+
+  delete item;
 }
 
 Instruction* JITCompiler::appendInternal(Instruction::Group group,

@@ -37,7 +37,7 @@ void JITFunction::call(const ValueTypes& param_types,
 
   start = (start + (alignment - 1)) & ~(alignment - 1);
 
-  ExecutionContext* context = reinterpret_cast<ExecutionContext*>(start + size);
+  ExecutionContext* context = reinterpret_cast<ExecutionContext*>(start);
 
   context->last_frame = nullptr;
 
@@ -46,10 +46,12 @@ void JITFunction::call(const ValueTypes& param_types,
     JITModuleDescriptor::ExternalDecl code;
   } func;
 
-  func.func_entry = func_entry_;
-  func.code(context, reinterpret_cast<void*>(start));
+  void* args = reinterpret_cast<void*>(start + size - argsSize());
 
-  StackAllocator* stackAllocator = new StackAllocator(0);
+  func.func_entry = module_->machine_code;
+  func.code(context + 1, args, func_entry_);
+
+  StackAllocator* stackAllocator = new StackAllocator();
   for (ValueType result_type : result_types) {
     stackAllocator->push(LocationInfo::typeToValueInfo(result_type));
   }
@@ -58,7 +60,7 @@ void JITFunction::call(const ValueTypes& param_types,
   std::vector<LocationInfo>& offsets = stackAllocator->values();
 #define push_result(type)                                  \
   results.push_back(Value::Make(*(reinterpret_cast<type*>( \
-      reinterpret_cast<u8*>(data) + offsets[result_index].value))));
+      reinterpret_cast<u8*>(args) + offsets[result_index].value))));
 
   for (ValueType result_type : result_types) {
     switch (result_type) {
