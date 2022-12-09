@@ -767,6 +767,7 @@ public:
         if (!m_blockInfo.size()) {
             // stop to generate bytecode from here!
             m_shouldContinueToGenerateByteCode = false;
+            m_resumeGenerateByteCodeAfterNBlockEnd = 0;
         }
     }
 
@@ -874,12 +875,18 @@ public:
         ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         popVMStack();
 
-        ASSERT(m_vmStack.back() == *(m_vmStack.rbegin() + 1));
-        size_t size = popVMStack();
-        popVMStack();
+        size_t size = 0;
+        if (resultCount == 0) {
+            ASSERT(m_vmStack.back() == *(m_vmStack.rbegin() + 1));
+            size = popVMStack();
+        } else {
+            for (Index i = 0; i < resultCount; i++) {
+                ASSERT(*(m_vmStack.rbegin() + i) == *(m_vmStack.rbegin() + resultCount + i));
+                size += popVMStack();
+            }
+        }
 
         m_currentFunction->pushByteCode(Walrus::Select(size));
-        pushVMStack(size);
     }
 
     virtual void OnThrowExpr(Index tagIndex) override
@@ -1189,10 +1196,12 @@ public:
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
             m_currentFunction->dumpByteCode();
         }
-        for (size_t i = 0; i < m_currentFunctionType->result().size() && m_vmStack.size(); i++) {
-            ASSERT(popVMStack() == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+        if (m_shouldContinueToGenerateByteCode) {
+            for (size_t i = 0; i < m_currentFunctionType->result().size() && m_vmStack.size(); i++) {
+                ASSERT(popVMStack() == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+            }
+            ASSERT(m_vmStack.empty());
         }
-        ASSERT(m_vmStack.empty());
 #endif
 
         ASSERT(m_currentFunction == m_module->function(index));
