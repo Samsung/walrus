@@ -53,12 +53,8 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
     size_t importFuncCount = 0;
     size_t importTableCount = 0;
     size_t importMemCount = 0;
+    size_t importGlobCount = 0;
     size_t importTagCount = 0;
-
-    // FIXME Globals should be initialized first due to its initialization process
-    for (size_t i = 0; i < m_global.size(); i++) {
-        instance->m_global.pushBack(new Global(Value(std::get<0>(m_global[i]))));
-    }
 
     for (size_t i = 0; i < m_import.size(); i++) {
         auto type = m_import[i]->type();
@@ -83,7 +79,9 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
             break;
         }
         case ModuleImport::Global: {
-            instance->m_global[m_import[i]->globalIndex()] = imports[i].asGlobal();
+            ASSERT(m_import[i]->globalIndex() == instance->m_global.size());
+            instance->m_global.push_back(imports[i].asGlobal());
+            importGlobCount++;
             break;
         }
         case ModuleImport::Tag: {
@@ -115,6 +113,12 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
     for (size_t i = importMemCount; i < m_memory.size(); i++) {
         ASSERT(i == instance->m_memory.size());
         instance->m_memory.pushBack(new Memory(m_memory[i].first * Memory::s_memoryPageSize, m_memory[i].second * Memory::s_memoryPageSize));
+    }
+
+    // init global
+    for (size_t i = importGlobCount; i < m_global.size(); i++) {
+        ASSERT(i == instance->m_global.size());
+        instance->m_global.pushBack(new Global(Value(std::get<0>(m_global[i]))));
     }
 
     // init tag
