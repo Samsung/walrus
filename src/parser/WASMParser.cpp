@@ -412,7 +412,6 @@ public:
     virtual void BeginFunctionBody(Index index, Offset size) override
     {
         ASSERT(m_currentFunction == nullptr);
-        m_shouldContinueToGenerateByteCode = true;
         m_currentFunction = m_module->function(index);
         m_currentFunctionType = m_module->functionType(m_currentFunction->functionTypeIndex());
         m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
@@ -698,8 +697,8 @@ public:
             return;
         }
 
-        m_resumeGenerateByteCodeAfterNBlockEnd = 1;
         if (m_blockInfo.size()) {
+            m_resumeGenerateByteCodeAfterNBlockEnd = 1;
             m_blockInfo.back().m_shouldRestoreVMStackAtEnd = true;
         }
         m_shouldContinueToGenerateByteCode = false;
@@ -1214,6 +1213,7 @@ public:
         m_currentFunction = nullptr;
         m_currentFunctionType = nullptr;
         m_vmStack.clear();
+        m_shouldContinueToGenerateByteCode = true;
     }
 
 private:
