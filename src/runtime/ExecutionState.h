@@ -29,12 +29,14 @@ public:
 
     ExecutionState(ExecutionState& parent)
         : m_parent(&parent)
+        , m_stackLimit(parent.m_stackLimit)
     {
     }
 
     ExecutionState(ExecutionState& parent, Function* currentFunction)
         : m_parent(&parent)
         , m_currentFunction(currentFunction)
+        , m_stackLimit(parent.m_stackLimit)
     {
     }
 
@@ -43,13 +45,27 @@ public:
         return m_currentFunction;
     }
 
+    size_t stackLimit() const
+    {
+        return m_stackLimit;
+    }
+
 private:
     ExecutionState()
     {
+        volatile int sp;
+        m_stackLimit = (size_t)&sp;
+
+#ifdef STACK_GROWS_DOWN
+        m_stackLimit = m_stackLimit - STACK_LIMIT_FROM_BASE;
+#else
+        m_stackLimit = m_stackLimit + STACK_LIMIT_FROM_BASE;
+#endif
     }
 
     Optional<ExecutionState*> m_parent;
     Optional<Function*> m_currentFunction;
+    size_t m_stackLimit;
 };
 
 } // namespace Walrus

@@ -26,6 +26,7 @@ namespace Walrus {
 void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
 {
     ExecutionState newState(state, this);
+    checkStackLimit(newState);
     uint8_t* functionStackBase = ALLOCA(m_moduleFunction->requiredStackSize(), uint8_t);
     uint8_t* functionStackPointer = functionStackBase;
 
@@ -54,6 +55,7 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
 void ImportedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
 {
     ExecutionState newState(state, this);
+    checkStackLimit(newState);
     m_callback(newState, argc, argv, result, m_data);
 }
 

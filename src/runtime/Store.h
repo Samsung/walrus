@@ -27,22 +27,13 @@ class Engine;
 
 class Store : public gc {
 public:
-    // <Value, mutable>
-    typedef Vector<std::pair<Value, bool>, GCUtil::gc_malloc_allocator<std::pair<Value, bool>>> GlobalVariableVector;
-
     Store(Engine* engine)
         : m_engine(engine)
     {
     }
 
-    GlobalVariableVector& global()
-    {
-        return m_global;
-    }
-
 private:
     Engine* m_engine;
-    GlobalVariableVector m_global;
 };
 
 } // namespace Walrus
