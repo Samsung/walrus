@@ -110,13 +110,11 @@ public:
                 Global,
                 Tag };
 
-    ModuleImport(uint32_t importIndex,
-                 String* moduleName,
+    ModuleImport(String* moduleName,
                  String* fieldName,
                  uint32_t functionIndex,
                  uint32_t functionTypeIndex)
         : m_type(Type::Function)
-        , m_importIndex(importIndex)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
         , m_index(functionIndex)
@@ -125,21 +123,18 @@ public:
     }
 
     ModuleImport(Type t,
-                 uint32_t importIndex,
                  String* moduleName,
                  String* fieldName,
                  uint32_t index)
         : m_type(t)
-        , m_importIndex(importIndex)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
         , m_index(index)
+        , m_functionTypeIndex(std::numeric_limits<uint32_t>::max())
     {
     }
 
     Type type() const { return m_type; }
-
-    uint32_t importIndex() const { return m_importIndex; }
 
     String* moduleName() const { return m_moduleName; }
 
@@ -183,7 +178,6 @@ public:
 
 private:
     Type m_type;
-    uint32_t m_importIndex;
     String* m_moduleName;
     String* m_fieldName;
     uint32_t m_index;
@@ -201,18 +195,14 @@ public:
 
     ModuleExport(Type type,
                  String* name,
-                 uint32_t exportIndex,
                  uint32_t itemIndex)
         : m_type(type)
         , m_name(name)
-        , m_exportIndex(exportIndex)
         , m_itemIndex(itemIndex)
     {
     }
 
     Type type() const { return m_type; }
-
-    uint32_t exportIndex() const { return m_exportIndex; }
 
     String* name() const { return m_name; }
 
@@ -224,7 +214,6 @@ public:
 private:
     Type m_type;
     String* m_name;
-    uint32_t m_exportIndex;
     uint32_t m_itemIndex;
 };
 
