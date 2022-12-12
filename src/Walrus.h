@@ -342,6 +342,10 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #define STACK_GROWS_DOWN
 #endif
 
+#ifndef STACK_LIMIT_FROM_BASE
+#define STACK_LIMIT_FROM_BASE (1024 * 1024 * 3) // 3MB
+#endif
+
 #include "GCUtil.h"
 #include "util/Optional.h"
 #include "util/String.h"
