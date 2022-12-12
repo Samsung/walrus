@@ -641,7 +641,16 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             break;
         }
         case wabt::CommandType::AssertExhaustion: {
-            // TODO
+            auto* assertExhaustion = static_cast<wabt::AssertExhaustionCommand*>(command.get());
+            auto value = fetchInstance(assertExhaustion->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertExhaustion->action->name)).value();
+            RELEASE_ASSERT(value);
+            if (assertExhaustion->action->type() == wabt::ActionType::Invoke) {
+                auto action = static_cast<wabt::InvokeAction*>(assertExhaustion->action.get());
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
+                executeInvokeAction(action, fn, wabt::ConstVector(), assertExhaustion->text.data());
+            } else {
+                ASSERT_NOT_REACHED();
+            }
             break;
         }
         default: {

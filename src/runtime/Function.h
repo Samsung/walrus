@@ -18,6 +18,7 @@
 #define __WalrusFunction__
 
 #include "runtime/Value.h"
+#include "runtime/Trap.h"
 
 namespace Walrus {
 
@@ -61,10 +62,35 @@ public:
     }
 
 protected:
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+    static inline void* currentStackPointer()
+    {
+        return __builtin_frame_address(0);
+    }
+#elif defined(COMPILER_MSVC)
+    static inline void* currentStackPointer()
+    {
+        volatile int temp;
+        return (void*)&temp;
+    }
+#else
+#error
+#endif
+
+    static ALWAYS_INLINE void checkStackLimit(ExecutionState& state)
+    {
+#ifdef STACK_GROWS_DOWN
+        if (UNLIKELY(state.stackLimit() > (size_t)currentStackPointer())) {
+#else
+        if (UNLIKELY(state.stackLimit() < (size_t)currentStackPointer())) {
+#endif
+            Trap::throwException("call stack exhausted");
+        }
+    }
     virtual ~Function() {}
     Store* m_store;
     FunctionType* m_functionType;
-};
+}; // namespace Walrus
 
 
 class DefinedFunction : public Function {
