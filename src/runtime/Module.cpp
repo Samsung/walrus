@@ -40,7 +40,7 @@ ModuleFunction::ModuleFunction(Module* module, uint32_t functionTypeIndex)
     }
 }
 
-Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
+Instance* Module::instantiate(ExecutionState& state, const ImportedValueVector& imports)
 {
     Instance* instance = new Instance(this);
 
@@ -56,37 +56,74 @@ Instance* Module::instantiate(ExecutionState& state, const ValueVector& imports)
     size_t importGlobCount = 0;
     size_t importTagCount = 0;
 
+    if (imports.size() < m_import.size()) {
+        Trap::throwException("Insufficient import");
+    }
+
     for (size_t i = 0; i < m_import.size(); i++) {
         auto type = m_import[i]->type();
 
         switch (type) {
         case ModuleImport::Function: {
             ASSERT(m_import[i]->functionIndex() == instance->m_function.size());
+            if (imports[i].type() != ModuleImport::Function) {
+                Trap::throwException("incompatible import type");
+            }
+            if (!imports[i].asFunction()->functionType()->equals(functionType(m_import[i]->functionTypeIndex()))) {
+                Trap::throwException("imported function type mismatch");
+            }
             instance->m_function.push_back(imports[i].asFunction());
             importFuncCount++;
             break;
         }
         case ModuleImport::Table: {
+            if (imports[i].type() != ModuleImport::Table
+                || m_import[i]->tableType() != imports[i].asTable()->type()
+                || m_import[i]->initialSize() > imports[i].asTable()->size()) {
+                Trap::throwException("incompatible import type");
+            }
+
+            if (m_import[i]->maximumSize() != std::numeric_limits<uint32_t>::max()) {
+                if (imports[i].asTable()->maximumSize() == std::numeric_limits<uint32_t>::max()
+                    || imports[i].asTable()->maximumSize() > m_import[i]->maximumSize())
+                    Trap::throwException("incompatible import type");
+            }
             ASSERT(m_import[i]->tableIndex() == instance->m_table.size());
             instance->m_table.push_back(imports[i].asTable());
             importTableCount++;
             break;
         }
         case ModuleImport::Memory: {
-            ASSERT(m_import[i]->memoryIndex() == instance->m_table.size());
+            if (imports[i].type() != ModuleImport::Memory
+                || m_import[i]->initialSize() > imports[i].asMemory()->sizeInPageSize()) {
+                Trap::throwException("incompatible import type");
+            }
+
+            if (m_import[i]->maximumSize() != std::numeric_limits<uint32_t>::max()) {
+                if (imports[i].asMemory()->maximumSizeInPageSize() == std::numeric_limits<uint32_t>::max()
+                    || imports[i].asMemory()->maximumSizeInPageSize() > m_import[i]->maximumSize())
+                    Trap::throwException("incompatible import type");
+            }
+            ASSERT(m_import[i]->memoryIndex() == instance->m_memory.size());
             instance->m_memory.push_back(imports[i].asMemory());
             importMemCount++;
             break;
         }
         case ModuleImport::Global: {
             ASSERT(m_import[i]->globalIndex() == instance->m_global.size());
+            if (imports[i].type() != ModuleImport::Global) {
+                Trap::throwException("incompatible import type");
+            }
             instance->m_global.push_back(imports[i].asGlobal());
             importGlobCount++;
             break;
         }
         case ModuleImport::Tag: {
             ASSERT(m_import[i]->tagIndex() == instance->m_tag.size());
-            instance->m_tag.push_back(reinterpret_cast<Tag*>(imports[i].asExternal()));
+            if (imports[i].type() != ModuleImport::Tag) {
+                Trap::throwException("incompatible import type");
+            }
+            instance->m_tag.push_back(reinterpret_cast<Tag*>(imports[i].asTag()));
             importTagCount++;
             break;
         }

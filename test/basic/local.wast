@@ -8,7 +8,7 @@
       (i32.add)
   )
 
-  (func $local_test (export "local_test2")(param i32)(result i32)
+  (func $local_test2 (export "local_test2")(param i32)(result i32)
       (local i32)
       (i32.const 444)
       (local.tee 1)
