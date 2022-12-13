@@ -107,8 +107,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     auto module = parseResult.first;
     const auto& moduleImportData = module->moduleImport();
 
-    ValueVector importValues;
-    importValues.resize(moduleImportData.size());
+    ImportedValueVector importValues;
+    importValues.reserve(moduleImportData.size());
     /*
         (module ;; spectest host module(https://github.com/WebAssembly/spec/tree/main/interpreter)
           (global (export "global_i32") i32)
@@ -134,18 +134,16 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         auto import = moduleImportData[i];
         if (import->moduleName()->equals("spectest")) {
             if (import->fieldName()->equals("print")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 0);
-                importValues[i] = Value(new ImportedFunction(
+                auto ft = new FunctionType(FunctionType::FunctionTypeVector(), FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_i32")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::I32);
-                importValues[i] = Value(new ImportedFunction(
+                auto ft = new FunctionType({ Value::Type::I32 }, FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
@@ -153,9 +151,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_i64")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::I64);
-                importValues[i] = Value(new ImportedFunction(
+                auto ft = new FunctionType({ Value::Type::I64 }, FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
@@ -163,9 +160,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_f32")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::F32);
-                importValues[i] = Value(new ImportedFunction(
+                auto ft = new FunctionType({ Value::Type::F32 }, FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
@@ -173,9 +169,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_f64")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 1 && ft->param()[0] == Value::Type::F64);
-                importValues[i] = Value(new ImportedFunction(
+                auto ft = new FunctionType({ Value::Type::F64 }, FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
@@ -183,9 +178,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_i32_f32")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::I32 && ft->param()[1] == Value::Type::F32);
-                importValues[i] = Value(new ImportedFunction(
+                auto ft = new FunctionType({ Value::Type::I32, Value::Type::F32 }, FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
@@ -194,9 +188,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_f64_f64")) {
-                auto ft = module->functionType(import->functionTypeIndex());
-                ASSERT(ft->result().size() == 0 && ft->param().size() == 2 && ft->param()[0] == Value::Type::F64 && ft->param()[1] == Value::Type::F64);
-                importValues[i] = Value(new ImportedFunction(
+                auto ft = new FunctionType({ Value::Type::F64, Value::Type::F64 }, FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
@@ -205,19 +198,26 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("global_i32")) {
-                importValues[i] = Value(new Global(Value(int32_t(666))));
+                importValues.pushBack(new Global(Value(int32_t(666))));
             } else if (import->fieldName()->equals("global_i64")) {
-                importValues[i] = Value(new Global(Value(int64_t(666))));
+                importValues.pushBack(new Global(Value(int64_t(666))));
             } else if (import->fieldName()->equals("global_f32")) {
-                importValues[i] = Value(new Global(Value(float(0x44268000))));
+                importValues.pushBack(new Global(Value(float(0x44268000))));
             } else if (import->fieldName()->equals("global_f64")) {
-                importValues[i] = Value(new Global(Value(double(0x4084d00000000000))));
+                importValues.pushBack(new Global(Value(double(0x4084d00000000000))));
             } else if (import->fieldName()->equals("table")) {
-                importValues[i] = Value(new Table(Value::Type::FuncRef, 10, 20));
+                importValues.pushBack(new Table(Value::Type::FuncRef, 10, 20));
             } else if (import->fieldName()->equals("memory")) {
-                importValues[i] = Value(new Memory(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
+                importValues.pushBack(new Memory(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
             } else {
-                RELEASE_ASSERT_NOT_REACHED();
+                // import wrong value for test
+                auto ft = new FunctionType({ Value::Type::F64, Value::Type::F64, Value::Type::F64, Value::Type::F64 }, FunctionType::FunctionTypeVector());
+                importValues.pushBack(new ImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                    },
+                    nullptr));
             }
         } else if (registeredInstanceMap) {
             auto iter = registeredInstanceMap->find(std::string(import->moduleName()->buffer(), import->moduleName()->length()));
@@ -226,15 +226,15 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 auto e = instance->resolveExport(import->fieldName());
                 RELEASE_ASSERT(e);
                 if (e->type() == ModuleExport::Function) {
-                    importValues[i] = Value(instance->resolveExportFunction(import->fieldName()).value());
+                    importValues.pushBack(instance->resolveExportFunction(import->fieldName()).value());
                 } else if (e->type() == ModuleExport::Tag) {
-                    importValues[i] = Value(instance->resolveExportTag(import->fieldName()).value());
+                    importValues.pushBack(instance->resolveExportTag(import->fieldName()).value());
                 } else if (e->type() == ModuleExport::Table) {
-                    importValues[i] = Value(instance->resolveExportTable(import->fieldName()).value());
+                    importValues.pushBack(instance->resolveExportTable(import->fieldName()).value());
                 } else if (e->type() == ModuleExport::Memory) {
-                    importValues[i] = Value(instance->resolveExportMemory(import->fieldName()).value());
+                    importValues.pushBack(instance->resolveExportMemory(import->fieldName()).value());
                 } else if (e->type() == ModuleExport::Global) {
-                    importValues[i] = Value(instance->resolveExportGlobal(import->fieldName()).value());
+                    importValues.pushBack(instance->resolveExportGlobal(import->fieldName()).value());
                 } else {
                     RELEASE_ASSERT_NOT_REACHED();
                 }
@@ -245,7 +245,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     struct RunData {
         Instance::InstanceVector& instances;
         Module* module;
-        ValueVector& importValues;
+        ImportedValueVector& importValues;
     } data = { instances, module.value(), importValues };
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {
@@ -507,6 +507,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
     if (!lexer) {
+        RELEASE_ASSERT_NOT_REACHED();
         return;
     }
 
@@ -517,6 +518,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     wabt::WastParseOptions parse_wast_options(features);
     auto result = wabt::ParseWastScript(lexer.get(), &script, &errors, &parse_wast_options);
     if (!wabt::Succeeded(result)) {
+        RELEASE_ASSERT_NOT_REACHED();
         return;
     }
 
@@ -637,7 +639,19 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             break;
         }
         case wabt::CommandType::AssertUnlinkable: {
-            // TODO
+            auto* assertUnlinkable = static_cast<wabt::AssertUnlinkableCommand*>(command.get());
+            auto m = assertUnlinkable->module.get();
+            auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
+            auto dsm = dynamic_cast<wabt::BinaryScriptModule*>(m);
+            RELEASE_ASSERT(tsm || dsm);
+            std::vector<uint8_t> buf;
+            if (tsm) {
+                buf = readModuleData(&tsm->module)->data;
+            } else {
+                buf = dsm->data;
+            }
+            auto trapResult = executeWASM(store, filename, buf, instances);
+            RELEASE_ASSERT(trapResult.exception);
             break;
         }
         case wabt::CommandType::AssertExhaustion: {

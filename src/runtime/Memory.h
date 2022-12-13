@@ -47,6 +47,11 @@ public:
         return m_maximumSizeInByte;
     }
 
+    uint32_t maximumSizeInPageSize() const
+    {
+        return m_maximumSizeInByte / s_memoryPageSize;
+    }
+
     bool grow(uint64_t growSizeInByte);
 
     template <typename T>
