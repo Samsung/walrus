@@ -79,18 +79,20 @@ protected:
 
     static ALWAYS_INLINE void checkStackLimit(ExecutionState& state)
     {
+        if (UNLIKELY(state.stackLimit()
 #ifdef STACK_GROWS_DOWN
-        if (UNLIKELY(state.stackLimit() > (size_t)currentStackPointer())) {
+                     >
 #else
-        if (UNLIKELY(state.stackLimit() < (size_t)currentStackPointer())) {
+                     <
 #endif
+                     (size_t)currentStackPointer())) {
             Trap::throwException("call stack exhausted");
         }
     }
     virtual ~Function() {}
     Store* m_store;
     FunctionType* m_functionType;
-}; // namespace Walrus
+};
 
 
 class DefinedFunction : public Function {

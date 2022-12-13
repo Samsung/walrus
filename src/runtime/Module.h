@@ -125,12 +125,17 @@ public:
     ModuleImport(Type t,
                  String* moduleName,
                  String* fieldName,
-                 uint32_t index)
+                 uint32_t index,
+                 uint32_t initialSize = std::numeric_limits<uint32_t>::max(),
+                 uint32_t maximumSize = std::numeric_limits<uint32_t>::max(),
+                 Value::Type tableType = Value::Type::Void)
         : m_type(t)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
         , m_index(index)
-        , m_functionTypeIndex(std::numeric_limits<uint32_t>::max())
+        , m_initialSize(initialSize)
+        , m_maximumSize(maximumSize)
+        , m_tableType(tableType)
     {
     }
 
@@ -164,6 +169,12 @@ public:
         return m_index;
     }
 
+    Value::Type tableType() const
+    {
+        ASSERT(type() == Type::Table);
+        return m_tableType;
+    }
+
     uint32_t memoryIndex() const
     {
         ASSERT(type() == Type::Memory);
@@ -176,13 +187,103 @@ public:
         return m_index;
     }
 
+    uint32_t initialSize() const
+    {
+        ASSERT(type() == Type::Memory || type() == Type::Table);
+        return m_initialSize;
+    }
+
+    uint32_t maximumSize() const
+    {
+        ASSERT(type() == Type::Memory || type() == Type::Table);
+        return m_maximumSize;
+    }
+
 private:
     Type m_type;
     String* m_moduleName;
     String* m_fieldName;
     uint32_t m_index;
-    uint32_t m_functionTypeIndex;
+    union {
+        struct {
+            uint32_t m_functionTypeIndex;
+        };
+        struct {
+            uint32_t m_initialSize;
+            uint32_t m_maximumSize;
+            Value::Type m_tableType;
+        };
+    };
 };
+
+class ImportedValue : public gc {
+public:
+    ImportedValue(Function* ptr)
+        : m_type(ModuleImport::Function)
+        , m_pointer(ptr)
+    {
+    }
+
+    ImportedValue(Table* ptr)
+        : m_type(ModuleImport::Table)
+        , m_pointer(ptr)
+    {
+    }
+
+    ImportedValue(Memory* ptr)
+        : m_type(ModuleImport::Memory)
+        , m_pointer(ptr)
+    {
+    }
+
+    ImportedValue(Global* ptr)
+        : m_type(ModuleImport::Global)
+        , m_pointer(ptr)
+    {
+    }
+
+    ImportedValue(Tag* ptr)
+        : m_type(ModuleImport::Tag)
+        , m_pointer(ptr)
+    {
+    }
+
+    ModuleImport::Type type() const
+    {
+        return m_type;
+    }
+
+    Function* asFunction() const
+    {
+        return reinterpret_cast<Function*>(m_pointer);
+    }
+
+    Table* asTable() const
+    {
+        return reinterpret_cast<Table*>(m_pointer);
+    }
+
+    Memory* asMemory() const
+    {
+        return reinterpret_cast<Memory*>(m_pointer);
+    }
+
+    Global* asGlobal() const
+    {
+        return reinterpret_cast<Global*>(m_pointer);
+    }
+
+    Tag* asTag() const
+    {
+        return reinterpret_cast<Tag*>(m_pointer);
+    }
+
+private:
+    ModuleImport::Type m_type;
+    void* m_pointer;
+};
+
+typedef Vector<ImportedValue, GCUtil::gc_malloc_allocator<ImportedValue>> ImportedValueVector;
 
 class ModuleExport : public gc {
 public:
@@ -401,7 +502,7 @@ public:
         return m_export;
     }
 
-    Instance* instantiate(ExecutionState& state, const ValueVector& imports);
+    Instance* instantiate(ExecutionState& state, const ImportedValueVector& imports);
 
 private:
     Store* m_store;

@@ -179,7 +179,8 @@ public:
         m_module->m_import.push_back(new Walrus::ModuleImport(
             Walrus::ModuleImport::Table,
             new Walrus::String(moduleName),
-            new Walrus::String(fieldName), tableIndex));
+            new Walrus::String(fieldName), tableIndex,
+            initialSize, maximumSize, toValueKind(type)));
     }
 
     virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize) override
@@ -190,7 +191,8 @@ public:
         m_module->m_import.push_back(new Walrus::ModuleImport(
             Walrus::ModuleImport::Memory,
             new Walrus::String(moduleName),
-            new Walrus::String(fieldName), memoryIndex));
+            new Walrus::String(fieldName), memoryIndex,
+            initialSize, maximumSize));
     }
 
     virtual void OnImportTag(Index importIndex, std::string moduleName, std::string fieldName, Index tagIndex, Index sigIndex) override
