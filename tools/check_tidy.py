@@ -36,7 +36,7 @@ TERM_EMPTY = '\033[0m'
 
 clang_format_exts = ['.cpp', '.h']
 skip_dirs = ['build', 'CMakeFiles', 'docs', 'out', 'tools', 'third_party', 'test', '.git']
-skip_files = []
+skip_files = ['wasm.h']
 
 
 class Stats(object):
