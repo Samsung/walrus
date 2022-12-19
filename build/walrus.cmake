@@ -34,6 +34,7 @@ ENDIF()
 # SOURCE FILES
 FILE (GLOB_RECURSE WALRUS_SRC ${WALRUS_ROOT}/src/*.cpp)
 LIST (REMOVE_ITEM WALRUS_SRC ${WALRUS_ROOT}/src/shell/Shell.cpp)
+LIST (REMOVE_ITEM WALRUS_SRC ${WALRUS_ROOT}/src/api/wasm.cpp)
 
 SET (WALRUS_SRC_LIST
     ${WALRUS_SRC}
@@ -76,9 +77,9 @@ INCLUDE_DIRECTORIES (${WALRUS_INCDIRS})
 IF (${WALRUS_OUTPUT} MATCHES "_lib")
     # walrus library using wasm-c-api
     IF (${WALRUS_OUTPUT} STREQUAL "static_lib")
-        ADD_LIBRARY (${WALRUS_TARGET} STATIC ${WALRUS_SRC_LIST})
+        ADD_LIBRARY (${WALRUS_TARGET} STATIC ${WALRUS_SRC_LIST} ${WALRUS_ROOT}/src/api/wasm.cpp)
     ELSE ()
-        ADD_LIBRARY (${WALRUS_TARGET} SHARED ${WALRUS_SRC_LIST})
+        ADD_LIBRARY (${WALRUS_TARGET} SHARED ${WALRUS_SRC_LIST} ${WALRUS_ROOT}/src/api/wasm.cpp)
     ENDIF()
 
     TARGET_LINK_LIBRARIES (${WALRUS_TARGET} PRIVATE ${WALRUS_LIBRARIES} ${WALRUS_LDFLAGS} ${LDFLAGS_FROM_ENV})
@@ -91,4 +92,38 @@ ELSEIF (${WALRUS_OUTPUT} MATCHES "shell")
     TARGET_LINK_LIBRARIES (${WALRUS_TARGET} PRIVATE ${WALRUS_LIBRARIES} ${WALRUS_LDFLAGS} ${LDFLAGS_FROM_ENV})
     TARGET_COMPILE_DEFINITIONS (${WALRUS_TARGET} PRIVATE ${WALRUS_DEFINITIONS})
     TARGET_COMPILE_OPTIONS (${WALRUS_TARGET} PRIVATE ${WALRUS_CXXFLAGS} ${WALRUS_CXXFLAGS_SHELL} ${CXXFLAGS_FROM_ENV} ${PROFILER_FLAGS})
+ELSEIF (${WALRUS_OUTPUT} STREQUAL "api_test")
+   # BUILD WASM API TESTS
+    ADD_LIBRARY (${WALRUS_TARGET} STATIC ${WALRUS_SRC_LIST} ${WALRUS_ROOT}/src/api/wasm.cpp)
+
+    TARGET_LINK_LIBRARIES (${WALRUS_TARGET} PRIVATE ${WALRUS_LIBRARIES} ${WALRUS_LDFLAGS} ${LDFLAGS_FROM_ENV})
+    TARGET_INCLUDE_DIRECTORIES (${WALRUS_TARGET} PUBLIC ${WALRUS_ROOT}/src/api/)
+    TARGET_COMPILE_DEFINITIONS (${WALRUS_TARGET} PRIVATE ${WALRUS_DEFINITIONS} "WASM_API_EXTERN=__attribute__((visibility(\"default\")))")
+    TARGET_COMPILE_OPTIONS (${WALRUS_TARGET} PRIVATE ${WALRUS_CXXFLAGS} ${CXXFLAGS_FROM_ENV})
+
+    function(c_api_example NAME)
+        set(EXENAME wasm-c-api-${NAME})
+        add_executable(${EXENAME} ${WALRUS_THIRD_PARTY_ROOT}/wasm-c-api/example/${NAME}.c)
+        if (COMPILER_IS_MSVC)
+            set_target_properties(${EXENAME} PROPERTIES COMPILE_FLAGS "-wd4311")
+        else ()
+            set_target_properties(${EXENAME} PROPERTIES COMPILE_FLAGS "-std=gnu11 -Wno-pointer-to-int-cast")
+        endif ()
+
+        target_link_libraries(${EXENAME} ${WALRUS_TARGET})
+    endfunction()
+
+#c_api_example(callback)
+#c_api_example(finalize)
+#c_api_example(global)
+#c_api_example(hello)
+#c_api_example(hostref)
+#c_api_example(multi)
+#c_api_example(memory)
+#c_api_example(reflect)
+#c_api_example(serialize)
+#c_api_example(start)
+#c_api_example(table)
+#c_api_example(trap)
+#c_api_example(threads)
 ENDIF()
