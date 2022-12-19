@@ -21,6 +21,8 @@
 
 namespace Walrus {
 
+class Instance;
+
 class Interpreter {
 public:
     static void interpret(ExecutionState& state,
@@ -28,10 +30,12 @@ public:
                           uint8_t*& sp);
 
 private:
+    friend class OpcodeTable;
     static void interpret(ExecutionState& state,
                           size_t& programCounter,
                           uint8_t* bp,
-                          uint8_t*& sp);
+                          uint8_t*& sp,
+                          Instance* instance);
     static void callOperation(ExecutionState& state,
                               size_t programCounter,
                               uint8_t* bp,

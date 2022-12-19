@@ -328,6 +328,10 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #define MAY_THREAD_LOCAL __thread
 #endif
 
+#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
+#define WALRUS_ENABLE_COMPUTED_GOTO
+#endif
+
 #define MAKE_STACK_ALLOCATED()                    \
     static void* operator new(size_t) = delete;   \
     static void* operator new[](size_t) = delete; \

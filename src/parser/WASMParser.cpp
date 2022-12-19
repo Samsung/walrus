@@ -366,8 +366,12 @@ public:
     {
         ASSERT(m_currentFunction->peekByteCode<Walrus::End>(
                                     m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
-                   ->opcode()
-               == Walrus::OpcodeKind::EndOpcode);
+                       ->opcode()
+                   == Walrus::OpcodeKind::EndOpcode
+               || m_currentFunction->peekByteCode<Walrus::End>(
+                                       m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
+                       ->opcodeInAddress()
+                   == Walrus::g_opcodeTable.m_addressTable[Walrus::OpcodeKind::EndOpcode]);
 
         m_currentFunction->shrinkByteCode(sizeof(Walrus::End));
 
