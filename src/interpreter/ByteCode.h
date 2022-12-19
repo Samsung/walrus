@@ -28,6 +28,13 @@ namespace Walrus {
 class ByteCode {
 public:
     OpcodeKind opcode() const { return m_opcode; }
+    void* opcodeInAddress() const { return m_opcodeInAddress; }
+#if !defined(NDEBUG)
+    OpcodeKind orgOpcode() const
+    {
+        return m_orgOpcode;
+    }
+#endif
 #if !defined(NDEBUG)
     virtual ~ByteCode()
     {
@@ -44,15 +51,39 @@ public:
 #endif
 
 protected:
+    friend class Interpreter;
+    friend class OpcodeTable;
     ByteCode(OpcodeKind opcode)
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+        : m_opcodeInAddress(g_opcodeTable.m_addressTable[opcode])
+#else
         : m_opcode(opcode)
+#endif
+#if !defined(NDEBUG)
+        , m_orgOpcode(opcode)
+#endif
+    {
+    }
+
+    ByteCode()
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+        : m_opcodeInAddress(nullptr)
+#else
+        : m_opcode(OpcodeKind::InvalidOpcode)
+#endif
+#if !defined(NDEBUG)
+        , m_orgOpcode(OpcodeKind::InvalidOpcode)
+#endif
     {
     }
 
     union {
         OpcodeKind m_opcode;
-        void* m_opcodeInAddress; // TODO
+        void* m_opcodeInAddress;
     };
+#if !defined(NDEBUG)
+    OpcodeKind m_orgOpcode;
+#endif
 };
 
 class I32Const : public ByteCode {
