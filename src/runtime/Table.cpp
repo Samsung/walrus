@@ -27,7 +27,7 @@ Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
 {
-    m_elements.resize(initialSize, Value(Value::FuncRef, Value::Null));
+    m_elements.resize(initialSize, reinterpret_cast<void*>(Value::NullBits));
 }
 
 void Table::copy(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
@@ -48,7 +48,7 @@ void Table::copy(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t 
     }
 }
 
-void Table::fill(uint32_t n, const Value& value, uint32_t index)
+void Table::fill(uint32_t n, void* value, uint32_t index)
 {
     if ((uint64_t)index + (uint64_t)n > (uint64_t)m_size) {
         throwException();
@@ -74,7 +74,7 @@ void Table::init(Instance* instance, ElementSegment* source, uint32_t dstStart, 
     if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->functionIndex().size())) {
         throwException();
     }
-    if (m_type != Value::Type::FuncRef) {
+    if (UNLIKELY(m_type != Value::Type::FuncRef)) {
         Trap::throwException("type mismatch");
     }
 
@@ -83,9 +83,9 @@ void Table::init(Instance* instance, ElementSegment* source, uint32_t dstStart, 
     for (uint32_t i = dstStart; i < end; i++) {
         auto idx = f[srcStart++];
         if (idx != std::numeric_limits<uint32_t>::max()) {
-            m_elements[i] = Value(instance->function(idx));
+            m_elements[i] = instance->function(idx);
         } else {
-            m_elements[i] = Value(Value::FuncRef, Value::Null);
+            m_elements[i] = reinterpret_cast<void*>(Value::NullBits);
         }
     }
 }

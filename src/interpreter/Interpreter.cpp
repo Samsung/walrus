@@ -763,8 +763,8 @@ NextInstruction:
     {
         TableGet* code = (TableGet*)programCounter;
         Table* table = instance->table(code->tableIndex());
-        Value val = table->getElement(readValue<uint32_t>(sp));
-        val.writeToStack(sp);
+        void* val = table->getElement(readValue<uint32_t>(sp));
+        writeValue(sp, val);
 
         ADD_PROGRAM_COUNTER(TableGet);
         NEXT_INSTRUCTION();
@@ -775,8 +775,8 @@ NextInstruction:
     {
         TableSet* code = (TableSet*)programCounter;
         Table* table = instance->table(code->tableIndex());
-        Value val(table->type(), reinterpret_cast<intptr_t>(readValue<void*>(sp)), Value::Force);
-        table->setElement(readValue<uint32_t>(sp), val);
+        void* ptr = readValue<void*>(sp);
+        table->setElement(readValue<uint32_t>(sp), ptr);
 
         ADD_PROGRAM_COUNTER(TableSet);
         NEXT_INSTRUCTION();
@@ -790,10 +790,10 @@ NextInstruction:
         size_t size = table->size();
         uint64_t newSize = (uint64_t)readValue<uint32_t>(sp) + size;
         // FIXME read reference
-        Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
+        void* ptr = readValue<void*>(sp);
 
         if (newSize <= table->maximumSize()) {
-            table->grow(newSize, val);
+            table->grow(newSize, ptr);
             writeValue<uint32_t>(sp, size);
         } else {
             writeValue<uint32_t>(sp, -1);
@@ -836,9 +836,9 @@ NextInstruction:
         TableFill* code = (TableFill*)programCounter;
         Table* table = instance->table(code->tableIndex());
         int32_t n = readValue<int32_t>(sp);
-        Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
+        void* ptr = readValue<void*>(sp);
         int32_t index = readValue<int32_t>(sp);
-        table->fill(n, val, index);
+        table->fill(n, ptr, index);
 
         ADD_PROGRAM_COUNTER(TableFill);
         NEXT_INSTRUCTION();
@@ -986,11 +986,10 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     if (idx >= table->size()) {
         Trap::throwException("undefined element");
     }
-    auto val = table->uncheckedGetElement(idx);
-    if (val.isNull()) {
+    auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
+    if (UNLIKELY(Value::isNull(target))) {
         Trap::throwException("uninitialized element " + std::to_string(idx));
     }
-    Function* target = val.asFunction();
     const FunctionType* ft = target->functionType();
     if (!ft->equals(state.currentFunction()->asDefinedFunction()->instance()->module()->functionType(code->functionTypeIndex()))) {
         Trap::throwException("indirect call type mismatch");
