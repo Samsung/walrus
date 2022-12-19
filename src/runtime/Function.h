@@ -19,6 +19,7 @@
 
 #include "runtime/Value.h"
 #include "runtime/Trap.h"
+#include "runtime/Object.h"
 
 namespace Walrus {
 
@@ -29,12 +30,22 @@ class ModuleFunction;
 class DefinedFunction;
 class ImportedFunction;
 
-class Function : public gc {
+class Function : public Object {
 public:
     Function(Store* store, FunctionType* functionType)
         : m_store(store)
         , m_functionType(functionType)
     {
+    }
+
+    virtual Object::Kind kind() const override
+    {
+        return Object::FunctionKind;
+    }
+
+    virtual bool isFunction() const override
+    {
+        return true;
     }
 
     FunctionType* functionType() const { return m_functionType; }
