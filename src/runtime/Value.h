@@ -258,7 +258,12 @@ public:
     bool isNull() const
     {
         ASSERT(m_type == ExternRef || m_type == FuncRef);
-        return m_ref == reinterpret_cast<void*>(NullBits);
+        return isNull(m_ref);
+    }
+
+    static bool isNull(void* ptr)
+    {
+        return ptr == reinterpret_cast<void*>(NullBits);
     }
 
     template <const size_t size>

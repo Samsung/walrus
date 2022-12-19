@@ -54,14 +54,14 @@ public:
         return m_maximumSize;
     }
 
-    void grow(uint64_t newSize, const Value& val)
+    void grow(uint64_t newSize, void* val)
     {
         ASSERT(newSize <= m_maximumSize);
         m_elements.resize(newSize, val);
         m_size = newSize;
     }
 
-    Value getElement(uint32_t elemIndex) const
+    void* getElement(uint32_t elemIndex) const
     {
         if (UNLIKELY(elemIndex >= m_size)) {
             throwException();
@@ -69,12 +69,12 @@ public:
         return m_elements[elemIndex];
     }
 
-    Value uncheckedGetElement(uint32_t elemIndex) const
+    void* uncheckedGetElement(uint32_t elemIndex) const
     {
         return m_elements[elemIndex];
     }
 
-    void setElement(uint32_t elemIndex, const Value& val)
+    void setElement(uint32_t elemIndex, void* val)
     {
         if (UNLIKELY(elemIndex >= m_size)) {
             throwException();
@@ -83,7 +83,7 @@ public:
     }
 
     void copy(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
-    void fill(uint32_t n, const Value& value, uint32_t index);
+    void fill(uint32_t n, void* value, uint32_t index);
     void init(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
 private:
@@ -94,7 +94,7 @@ private:
     uint32_t m_size;
     uint32_t m_maximumSize;
 
-    ValueVector m_elements;
+    Vector<void*, GCUtil::gc_malloc_allocator<void*>> m_elements;
 };
 
 } // namespace Walrus
