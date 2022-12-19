@@ -126,6 +126,23 @@ jobs:
           ninja -Cout/linux/aarch64
           ./tools/run-tests.py --engine="./out/linux/aarch64/walrus"
 
+  API_test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=api_test -GNinja
+      run: |
+        cmake -H. -Bout/api_test/x64 $BUILD_OPTIONS
+        ninja -Cout/api_test/x64
+
   Coverity_scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
