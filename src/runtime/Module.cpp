@@ -227,9 +227,9 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             Table* table = instance->m_table[elem->tableIndex()];
             for (size_t i = 0; i < fi.size(); i++) {
                 if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                    table->setElement(i + index, Value(instance->m_function[fi[i]]));
+                    table->setElement(i + index, instance->m_function[fi[i]]);
                 } else {
-                    table->setElement(i + index, Value(Value::FuncRef, Value::Null));
+                    table->setElement(i + index, reinterpret_cast<void*>(Value::NullBits));
                 }
             }
 
