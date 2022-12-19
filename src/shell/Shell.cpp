@@ -107,7 +107,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     auto module = parseResult.first;
     const auto& moduleImportData = module->moduleImport();
 
-    ImportedValueVector importValues;
+    ObjectVector importValues;
     importValues.reserve(moduleImportData.size());
     /*
         (module ;; spectest host module(https://github.com/WebAssembly/spec/tree/main/interpreter)
@@ -245,7 +245,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     struct RunData {
         Instance::InstanceVector& instances;
         Module* module;
-        ImportedValueVector& importValues;
+        ObjectVector& importValues;
     } data = { instances, module.value(), importValues };
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {

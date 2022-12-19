@@ -17,13 +17,25 @@
 #ifndef __WalrusGlobal__
 #define __WalrusGlobal__
 
+#include "runtime/Object.h"
+
 namespace Walrus {
 
-class Global : public gc {
+class Global : public Object {
 public:
     Global(const Value& value)
         : m_value(value)
     {
+    }
+
+    virtual Object::Kind kind() const override
+    {
+        return Object::GlobalKind;
+    }
+
+    virtual bool isGlobal() const override
+    {
+        return true;
     }
 
     Value getValue() const

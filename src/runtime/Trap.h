@@ -18,6 +18,7 @@
 #define __WalrusTrap__
 
 #include "runtime/Value.h"
+#include "runtime/Object.h"
 #include "runtime/Exception.h"
 #include "runtime/ExecutionState.h"
 
@@ -27,9 +28,7 @@ class Exception;
 class Module;
 class Tag;
 
-class Trap {
-    MAKE_STACK_ALLOCATED();
-
+class Trap : public Object {
 public:
     struct TrapResult {
         std::unique_ptr<Exception> exception;
@@ -38,6 +37,16 @@ public:
         {
         }
     };
+
+    virtual Object::Kind kind() const override
+    {
+        return Object::TrapKind;
+    }
+
+    virtual bool isTrap() const override
+    {
+        return true;
+    }
 
     TrapResult run(void (*runner)(ExecutionState&, void*), void* data);
     static void throwException(const char* message, size_t len);
