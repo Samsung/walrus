@@ -18,15 +18,26 @@
 #define __WalrusTable__
 
 #include "runtime/Value.h"
+#include "runtime/Object.h"
 
 namespace Walrus {
 
 class ElementSegment;
 class Instance;
 
-class Table : public gc {
+class Table : public Object {
 public:
     Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize);
+
+    virtual Object::Kind kind() const override
+    {
+        return Object::TableKind;
+    }
+
+    virtual bool isTable() const override
+    {
+        return true;
+    }
 
     Value::Type type() const
     {

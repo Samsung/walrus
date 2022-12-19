@@ -17,15 +17,27 @@
 #ifndef __WalrusTag__
 #define __WalrusTag__
 
+#include "runtime/Object.h"
+
 namespace Walrus {
 
 class FunctionType;
 
-class Tag : public gc {
+class Tag : public Object {
 public:
     Tag(FunctionType* functionType)
         : m_functionType(functionType)
     {
+    }
+
+    virtual Object::Kind kind() const override
+    {
+        return Object::TagKind;
+    }
+
+    virtual bool isTag() const override
+    {
+        return true;
     }
 
     FunctionType* functionType()

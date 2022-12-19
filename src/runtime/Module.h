@@ -19,7 +19,7 @@
 
 #include <numeric>
 #include "runtime/Value.h"
-#include "util/Vector.h"
+#include "runtime/Object.h"
 
 namespace wabt {
 class WASMBinaryReader;
@@ -216,75 +216,6 @@ private:
     };
 };
 
-class ImportedValue : public gc {
-public:
-    ImportedValue(Function* ptr)
-        : m_type(ModuleImport::Function)
-        , m_pointer(ptr)
-    {
-    }
-
-    ImportedValue(Table* ptr)
-        : m_type(ModuleImport::Table)
-        , m_pointer(ptr)
-    {
-    }
-
-    ImportedValue(Memory* ptr)
-        : m_type(ModuleImport::Memory)
-        , m_pointer(ptr)
-    {
-    }
-
-    ImportedValue(Global* ptr)
-        : m_type(ModuleImport::Global)
-        , m_pointer(ptr)
-    {
-    }
-
-    ImportedValue(Tag* ptr)
-        : m_type(ModuleImport::Tag)
-        , m_pointer(ptr)
-    {
-    }
-
-    ModuleImport::Type type() const
-    {
-        return m_type;
-    }
-
-    Function* asFunction() const
-    {
-        return reinterpret_cast<Function*>(m_pointer);
-    }
-
-    Table* asTable() const
-    {
-        return reinterpret_cast<Table*>(m_pointer);
-    }
-
-    Memory* asMemory() const
-    {
-        return reinterpret_cast<Memory*>(m_pointer);
-    }
-
-    Global* asGlobal() const
-    {
-        return reinterpret_cast<Global*>(m_pointer);
-    }
-
-    Tag* asTag() const
-    {
-        return reinterpret_cast<Tag*>(m_pointer);
-    }
-
-private:
-    ModuleImport::Type m_type;
-    void* m_pointer;
-};
-
-typedef Vector<ImportedValue, GCUtil::gc_malloc_allocator<ImportedValue>> ImportedValueVector;
-
 class ModuleExport : public gc {
 public:
     // matches binary format, do not change
@@ -470,7 +401,7 @@ private:
     Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_functionIndex;
 };
 
-class Module : public gc {
+class Module : public Object {
     friend class wabt::WASMBinaryReader;
 
 public:
@@ -480,6 +411,16 @@ public:
         , m_version(0)
         , m_start(0)
     {
+    }
+
+    virtual Object::Kind kind() const override
+    {
+        return Object::ModuleKind;
+    }
+
+    virtual bool isModule() const override
+    {
+        return true;
     }
 
     ModuleFunction* function(uint32_t index)
@@ -502,7 +443,7 @@ public:
         return m_export;
     }
 
-    Instance* instantiate(ExecutionState& state, const ImportedValueVector& imports);
+    Instance* instantiate(ExecutionState& state, const ObjectVector& imports);
 
 private:
     Store* m_store;
