@@ -18,7 +18,7 @@
 	path = third_party/GCutil
 	url = https://github.com/Samsung/gcutil.git
 	ignore = untracked
-[submodule "third_party/wasm-c-cpi"]
-	path = third_party/wasm-c-cpi
+[submodule "third_party/wasm-c-api"]
+	path = third_party/wasm-c-api
 	url = https://github.com/WebAssembly/wasm-c-api
 	ignore = untracked
