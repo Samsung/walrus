@@ -41,8 +41,8 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
 
     Interpreter::interpret(newState, functionStackBase, functionStackPointer);
 
-    FunctionType* ft = functionType();
-    const FunctionType::FunctionTypeVector& resultTypeInfo = ft->result();
+    const FunctionType* ft = functionType();
+    const ValueTypeVector& resultTypeInfo = ft->result();
 
     functionStackPointer = functionStackPointer - ft->resultStackSize();
     uint8_t* resultStackPointer = functionStackPointer;
