@@ -341,19 +341,19 @@ struct wasm_func_t {
 
 static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
 {
-    FunctionType::FunctionTypeVector params;
-    FunctionType::FunctionTypeVector results;
-    params.reserve(ft->params.size);
-    results.reserve(ft->results.size);
+    ValueTypeVector* params = new ValueTypeVector();
+    ValueTypeVector* results = new ValueTypeVector();
+    params->reserve(ft->params.size);
+    results->reserve(ft->results.size);
 
     for (uint32_t i = 0; i < ft->params.size; i++) {
-        params.push_back(ft->params.data[i]->type);
+        params->push_back(ft->params.data[i]->type);
     }
     for (uint32_t i = 0; i < ft->results.size; i++) {
-        results.push_back(ft->results.data[i]->type);
+        results->push_back(ft->results.data[i]->type);
     }
 
-    return new FunctionType(std::move(params), std::move(results));
+    return new FunctionType(params, results);
 }
 
 own wasm_func_t* wasm_func_new(
@@ -401,8 +401,8 @@ own wasm_func_t* wasm_func_new_with_env(
 
 static own wasm_functype_t* FromWalrusFunctionType(const FunctionType* ft)
 {
-    const FunctionType::FunctionTypeVector& srcParams = ft->param();
-    const FunctionType::FunctionTypeVector& srcResults = ft->result();
+    const ValueTypeVector& srcParams = ft->param();
+    const ValueTypeVector& srcResults = ft->result();
 
     wasm_valtype_vec_t params;
     wasm_valtype_vec_t results;

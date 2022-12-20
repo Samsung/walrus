@@ -17,8 +17,7 @@
 #ifndef __WalrusModule__
 #define __WalrusModule__
 
-#include <numeric>
-#include "runtime/Value.h"
+#include "runtime/ObjectType.h"
 #include "runtime/Object.h"
 
 namespace wabt {
@@ -36,69 +35,6 @@ enum class SegmentMode {
     Active,
     Passive,
     Declared,
-};
-
-class FunctionType : public gc {
-public:
-    typedef Vector<Value::Type, GCUtil::gc_malloc_atomic_allocator<Value::Type>>
-        FunctionTypeVector;
-    FunctionType(FunctionTypeVector&& param,
-                 FunctionTypeVector&& result)
-        : m_param(std::move(param))
-        , m_result(std::move(result))
-        , m_paramStackSize(computeStackSize(m_param))
-        , m_resultStackSize(computeStackSize(m_result))
-    {
-    }
-
-    const FunctionTypeVector& param() const { return m_param; }
-
-    const FunctionTypeVector& result() const { return m_result; }
-
-    size_t paramStackSize() const { return m_paramStackSize; }
-
-    size_t resultStackSize() const { return m_resultStackSize; }
-
-    bool equals(FunctionType* other) const
-    {
-        if (this == other) {
-            return true;
-        }
-
-        if (m_param.size() != other->param().size()) {
-            return false;
-        }
-
-        if (memcmp(m_param.data(), other->param().data(), sizeof(Value::Type) * other->param().size())) {
-            return false;
-        }
-
-        if (m_result.size() != other->result().size()) {
-            return false;
-        }
-
-        if (memcmp(m_result.data(), other->result().data(), sizeof(Value::Type) * other->result().size())) {
-            return false;
-        }
-
-
-        return true;
-    }
-
-private:
-    const FunctionTypeVector m_param;
-    const FunctionTypeVector m_result;
-    size_t m_paramStackSize;
-    size_t m_resultStackSize;
-
-    static size_t computeStackSize(const FunctionTypeVector& v)
-    {
-        size_t s = 0;
-        for (size_t i = 0; i < v.size(); i++) {
-            s += valueSizeInStack(v[i]);
-        }
-        return s;
-    }
 };
 
 // https://webassembly.github.io/spec/core/syntax/modules.html#syntax-import
@@ -253,8 +189,6 @@ class ModuleFunction : public gc {
     friend class wabt::WASMBinaryReader;
 
 public:
-    typedef Vector<Value::Type, GCUtil::gc_malloc_atomic_allocator<Value::Type>>
-        LocalValueVector;
     struct CatchInfo {
         size_t m_tryStart;
         size_t m_tryEnd;
@@ -322,7 +256,7 @@ private:
     uint32_t m_functionTypeIndex;
     uint32_t m_requiredStackSize;
     uint32_t m_requiredStackSizeDueToLocal;
-    LocalValueVector m_local;
+    ValueTypeVector m_local;
     Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_byteCode;
     Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>> m_catchInfo;
 };
@@ -425,12 +359,14 @@ public:
 
     ModuleFunction* function(uint32_t index)
     {
+        ASSERT(index < m_function.size());
         return m_function[index];
     }
 
     FunctionType* functionType(uint32_t index)
     {
-        return m_functionType[index];
+        ASSERT(index < m_functionTypes.size());
+        return &m_functionTypes[index];
     }
 
     const Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>>& moduleImport() const
@@ -454,20 +390,18 @@ private:
     Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>> m_import;
     Vector<ModuleExport*, GCUtil::gc_malloc_allocator<ModuleExport*>> m_export;
 
-    Vector<FunctionType*, GCUtil::gc_malloc_allocator<FunctionType*>>
-        m_functionType;
     Vector<ModuleFunction*, GCUtil::gc_malloc_allocator<ModuleFunction*>>
         m_function;
-    Vector<std::tuple<Value::Type, size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, size_t, size_t>>>
-        m_table;
+
+    FunctionTypeVector m_functionTypes;
+    GlobalTypeVector m_globalTypes;
+    TableTypeVector m_tableTypes;
+    MemoryTypeVector m_memoryTypes;
+    TagTypeVector m_tagTypes;
+
     Vector<Element*, GCUtil::gc_malloc_allocator<Element*>> m_element;
-    /* initialSize, maximumSize */
-    Vector<std::pair<size_t, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<size_t, size_t>>>
-        m_memory;
     Vector<Data*, GCUtil::gc_malloc_allocator<Data*>> m_data;
-    Vector<std::tuple<Value::Type, bool>, GCUtil::gc_malloc_atomic_allocator<std::tuple<Value::Type, bool>>>
-        m_global;
-    Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_tag;
+
     Optional<ModuleFunction*> m_globalInitBlock;
 };
 

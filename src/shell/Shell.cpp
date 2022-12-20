@@ -95,7 +95,100 @@ static void printF64(double v)
     printf("%s : f64\n", formatDecmialString(ss.str()).c_str());
 }
 
-static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances,
+class SpecTestFunctionTypes {
+    MAKE_STACK_ALLOCATED();
+
+public:
+    enum Index : uint8_t {
+        NONE = 0,
+        I32,
+        I64,
+        F32,
+        F64,
+        I32F32,
+        F64F64,
+        INVALID,
+        INDEX_NUM,
+    };
+
+    SpecTestFunctionTypes()
+    {
+        m_vector.reserve(INDEX_NUM);
+        ValueTypeVector* param;
+        ValueTypeVector* result;
+
+        {
+            // NONE
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            m_vector.push_back(FunctionType(param, result));
+        }
+        {
+            // I32
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::I32);
+            m_vector.push_back(FunctionType(param, result));
+        }
+        {
+            // I64
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::I64);
+            m_vector.push_back(FunctionType(param, result));
+        }
+        {
+            // F32
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::F32);
+            m_vector.push_back(FunctionType(param, result));
+        }
+        {
+            // F64
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::F64);
+            m_vector.push_back(FunctionType(param, result));
+        }
+        {
+            // I32F32
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::I32);
+            param->push_back(Value::Type::F32);
+            m_vector.push_back(FunctionType(param, result));
+        }
+        {
+            // F64F64
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::F64);
+            param->push_back(Value::Type::F64);
+            m_vector.push_back(FunctionType(param, result));
+        }
+        {
+            // INVALID
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::Void);
+            m_vector.push_back(FunctionType(param, result));
+        }
+
+        ASSERT(m_vector.size() == INDEX_NUM);
+    }
+
+    FunctionType* operator[](const size_t idx)
+    {
+        ASSERT(idx < m_vector.size());
+        return &m_vector[idx];
+    }
+
+private:
+    FunctionTypeVector m_vector;
+};
+
+static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances, SpecTestFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
     auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
@@ -134,7 +227,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         auto import = moduleImportData[i];
         if (import->moduleName()->equals("spectest")) {
             if (import->fieldName()->equals("print")) {
-                auto ft = new FunctionType(FunctionType::FunctionTypeVector(), FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::NONE];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -142,7 +235,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_i32")) {
-                auto ft = new FunctionType({ Value::Type::I32 }, FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::I32];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -151,7 +244,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_i64")) {
-                auto ft = new FunctionType({ Value::Type::I64 }, FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::I64];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -160,7 +253,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_f32")) {
-                auto ft = new FunctionType({ Value::Type::F32 }, FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::F32];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -169,7 +262,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_f64")) {
-                auto ft = new FunctionType({ Value::Type::F64 }, FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::F64];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -178,7 +271,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_i32_f32")) {
-                auto ft = new FunctionType({ Value::Type::I32, Value::Type::F32 }, FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::I32F32];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -188,7 +281,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName()->equals("print_f64_f64")) {
-                auto ft = new FunctionType({ Value::Type::F64, Value::Type::F64 }, FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::F64F64];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -211,7 +304,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 importValues.pushBack(new Memory(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
             } else {
                 // import wrong value for test
-                auto ft = new FunctionType({ Value::Type::F64, Value::Type::F64, Value::Type::F64, Value::Type::F64 }, FunctionType::FunctionTypeVector());
+                auto ft = functionTypes[SpecTestFunctionTypes::INVALID];
                 importValues.pushBack(new ImportedFunction(
                     store,
                     ft,
@@ -503,7 +596,7 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
     return registeredInstanceMap[moduleVar.name()];
 }
 
-static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances)
+static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances, SpecTestFunctionTypes& functionTypes)
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
     if (!lexer) {
@@ -531,7 +624,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::ScriptModule: {
             auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
-            executeWASM(store, filename, buf->data, instances, &registeredInstanceMap);
+            executeWASM(store, filename, buf->data, instances, functionTypes, &registeredInstanceMap);
             instanceMap[commandCount] = instances.back();
             if (moduleCommand->module.name.size()) {
                 registeredInstanceMap[moduleCommand->module.name] = instances.back();
@@ -591,7 +684,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             RELEASE_ASSERT(tsm);
             auto buf = readModuleData(&tsm->module);
-            auto trapResult = executeWASM(store, filename, buf->data, instances, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, instances, functionTypes, &registeredInstanceMap);
             std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
             RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
@@ -627,7 +720,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, instances);
+            auto trapResult = executeWASM(store, filename, buf, instances, functionTypes);
             RELEASE_ASSERT(trapResult.exception);
             std::string actual(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
             printf("assertModuleInvalid (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertModuleInvalid->text.data(), actual.data(), assertModuleInvalid->module->location().line);
@@ -650,7 +743,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, instances);
+            auto trapResult = executeWASM(store, filename, buf, instances, functionTypes);
             RELEASE_ASSERT(trapResult.exception);
             break;
         }
@@ -697,6 +790,7 @@ int main(int argc, char* argv[])
     Store* store = new Store(engine);
 
     Instance::InstanceVector instances;
+    SpecTestFunctionTypes functionTypes;
 
     for (int i = 1; i < argc; i++) {
         std::string filePath = argv[i];
@@ -711,9 +805,9 @@ int main(int argc, char* argv[])
             fclose(fp);
 
             if (endsWith(filePath, "wasm")) {
-                executeWASM(store, filePath, buf, instances);
+                executeWASM(store, filePath, buf, instances, functionTypes);
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
-                executeWAST(store, filePath, buf, instances);
+                executeWAST(store, filePath, buf, instances, functionTypes);
             }
         } else {
             printf("Cannot open file %s\n", argv[i]);

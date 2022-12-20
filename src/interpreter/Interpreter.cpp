@@ -906,8 +906,8 @@ NEVER_INLINE void Interpreter::callOperation(
     Call* code = (Call*)programCounter;
 
     Function* target = state.currentFunction()->asDefinedFunction()->instance()->function(code->index());
-    FunctionType* ft = target->functionType();
-    const FunctionType::FunctionTypeVector& param = ft->param();
+    const FunctionType* ft = target->functionType();
+    const ValueTypeVector& param = ft->param();
     Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
 
     sp = sp - ft->paramStackSize();
@@ -917,7 +917,7 @@ NEVER_INLINE void Interpreter::callOperation(
         paramStackPointer += valueSizeInStack(param[i]);
     }
 
-    const FunctionType::FunctionTypeVector& result = ft->result();
+    const ValueTypeVector& result = ft->result();
     Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
     target->call(state, param.size(), paramVector, resultVector);
 
@@ -944,11 +944,11 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         Trap::throwException("uninitialized element " + std::to_string(idx));
     }
     Function* target = val.asFunction();
-    FunctionType* ft = target->functionType();
+    const FunctionType* ft = target->functionType();
     if (!ft->equals(state.currentFunction()->asDefinedFunction()->instance()->module()->functionType(code->functionTypeIndex()))) {
         Trap::throwException("indirect call type mismatch");
     }
-    const FunctionType::FunctionTypeVector& param = ft->param();
+    const ValueTypeVector& param = ft->param();
     Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
 
     sp = sp - ft->paramStackSize();
@@ -958,7 +958,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         paramStackPointer += valueSizeInStack(param[i]);
     }
 
-    const FunctionType::FunctionTypeVector& result = ft->result();
+    const ValueTypeVector& result = ft->result();
     Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
     target->call(state, param.size(), paramVector, resultVector);
 
