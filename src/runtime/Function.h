@@ -48,7 +48,7 @@ public:
         return true;
     }
 
-    FunctionType* functionType() const { return m_functionType; }
+    const FunctionType* functionType() const { return m_functionType; }
 
     virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) = 0;
     virtual bool isDefinedFunction() const
@@ -102,7 +102,7 @@ protected:
     }
     virtual ~Function() {}
     Store* m_store;
-    FunctionType* m_functionType;
+    const FunctionType* m_functionType;
 };
 
 

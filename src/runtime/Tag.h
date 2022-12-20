@@ -40,13 +40,13 @@ public:
         return true;
     }
 
-    FunctionType* functionType()
+    const FunctionType* functionType() const
     {
         return m_functionType;
     }
 
 private:
-    FunctionType* m_functionType;
+    const FunctionType* m_functionType;
 };
 
 } // namespace Walrus

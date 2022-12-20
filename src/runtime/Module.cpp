@@ -45,10 +45,10 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     Instance* instance = new Instance(this);
 
     instance->m_function.reserve(m_function.size());
-    instance->m_table.reserve(m_table.size());
-    instance->m_memory.reserve(m_memory.size());
-    instance->m_global.reserve(m_global.size());
-    instance->m_tag.reserve(m_tag.size());
+    instance->m_table.reserve(m_tableTypes.size());
+    instance->m_memory.reserve(m_memoryTypes.size());
+    instance->m_global.reserve(m_globalTypes.size());
+    instance->m_tag.reserve(m_tagTypes.size());
 
     size_t importFuncCount = 0;
     size_t importTableCount = 0;
@@ -141,27 +141,27 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     // init table
-    for (size_t i = importTableCount; i < m_table.size(); i++) {
+    for (size_t i = importTableCount; i < m_tableTypes.size(); i++) {
         ASSERT(i == instance->m_table.size());
-        instance->m_table.pushBack(new Table(std::get<0>(m_table[i]), std::get<1>(m_table[i]), std::get<2>(m_table[i])));
+        instance->m_table.pushBack(new Table(m_tableTypes[i].type(), m_tableTypes[i].initialSize(), m_tableTypes[i].maximumSize()));
     }
 
     // init memory
-    for (size_t i = importMemCount; i < m_memory.size(); i++) {
+    for (size_t i = importMemCount; i < m_memoryTypes.size(); i++) {
         ASSERT(i == instance->m_memory.size());
-        instance->m_memory.pushBack(new Memory(m_memory[i].first * Memory::s_memoryPageSize, m_memory[i].second * Memory::s_memoryPageSize));
+        instance->m_memory.pushBack(new Memory(m_memoryTypes[i].initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i].maximumSize() * Memory::s_memoryPageSize));
     }
 
     // init global
-    for (size_t i = importGlobCount; i < m_global.size(); i++) {
+    for (size_t i = importGlobCount; i < m_globalTypes.size(); i++) {
         ASSERT(i == instance->m_global.size());
-        instance->m_global.pushBack(new Global(Value(std::get<0>(m_global[i]))));
+        instance->m_global.pushBack(new Global(Value(m_globalTypes[i].type())));
     }
 
     // init tag
-    for (size_t i = importTagCount; i < m_tag.size(); i++) {
+    for (size_t i = importTagCount; i < m_tagTypes.size(); i++) {
         ASSERT(i == instance->m_tag.size());
-        instance->m_tag.push_back(new Tag(functionType(m_tag[i])));
+        instance->m_tag.push_back(new Tag(&m_functionTypes[m_tagTypes[i].sigIndex()]));
     }
 
     // init global
