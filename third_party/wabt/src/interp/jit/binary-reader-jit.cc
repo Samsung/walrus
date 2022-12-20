@@ -207,8 +207,8 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Result OnTernaryExpr(Opcode opcode) override;
   Result OnThrowExpr(Index tag_index) override;
   Result OnTryExpr(Type sig_type) override;
-  Result OnUnreachableExpr() override;
 #endif
+  Result OnUnreachableExpr() override;
   Result EndFunctionBody(Index index) override;
 #if 0
   Result OnSimdLaneOpExpr(Opcode opcode, uint64_t value) override;
@@ -587,6 +587,12 @@ Result BinaryReaderJIT::OnLoopExpr(Type sig_type) {
   CHECK_RESULT(validator_.OnLoop(GetLocation(), sig_type));
 
   pushLabel(Opcode::Loop, sig_type);
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnUnreachableExpr() {
+  CHECK_RESULT(validator_.OnUnreachable(GetLocation()));
+  compiler_.appendUnreachable();
   return Result::Ok;
 }
 

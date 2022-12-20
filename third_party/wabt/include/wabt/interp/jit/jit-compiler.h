@@ -35,6 +35,7 @@ class BrTableInstruction;
 class CallInstruction;
 class Label;
 class JITModuleDescriptor;
+struct CompileContext;
 
 // Defined in interp.h.
 class FuncType;
@@ -441,6 +442,10 @@ class JITCompiler {
   void appendBrTable(Index num_targets,
                      Index* target_depths,
                      Index default_target_depth);
+  void appendUnreachable() {
+    append(Instruction::Any, Opcode::Unreachable, 0);
+    stack_depth_ = kInvalidIndex;
+  }
 
   void pushLabel(Opcode opcode, Index param_count, Index result_count);
   void popLabel();
@@ -465,12 +470,12 @@ class JITCompiler {
     FunctionList(JITFunction* jit_func, Label* entry_label, bool is_exported)
         : jit_func(jit_func),
           entry_label(entry_label),
-          export_label(nullptr),
+          export_entry_label(nullptr),
           is_exported(is_exported) {}
 
     JITFunction* jit_func;
     Label* entry_label;
-    sljit_label* export_label;
+    sljit_label* export_entry_label;
     bool is_exported;
   };
 
@@ -497,8 +502,8 @@ class JITCompiler {
 
   // Backend operations.
   void releaseFunctionList();
-  void emitProlog(size_t index);
-  void emitEpilog(size_t index);
+  void emitProlog(size_t index, CompileContext& context);
+  sljit_label* emitEpilog(size_t index, CompileContext& context);
 
   InstructionListItem* first_ = nullptr;
   InstructionListItem* last_ = nullptr;

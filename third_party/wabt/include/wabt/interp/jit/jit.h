@@ -59,21 +59,37 @@ struct ExecutionContext {
     void* frame_start;
   };
 
+  enum ErrorCodes : uint32_t {
+    NoError,
+    InstrError,
+  };
+
   CallFrame* last_frame;
+  ErrorCodes error;
 };
 
-struct JITModuleDescriptor {
-  // Update JITCompiler::compile() after this definition is modified.
-  typedef void (*ExternalDecl)(ExecutionContext* context,
-                               void* aligned_start,
-                               void* func_entry);
+class JITModuleDescriptor {
+  friend class JITModuleData;
 
-  JITModuleDescriptor(void* machine_code) : machine_code(machine_code) {}
+ public:
+  // Update JITCompiler::compile() after this definition is modified.
+  typedef void (*ExportCall)(ExecutionContext* context,
+                             void* aligned_start,
+                             void* export_entry);
+
+  JITModuleDescriptor(void* module_start, uintptr_t module_end)
+      : module_start_(module_start), module_end_(module_end) {}
   ~JITModuleDescriptor();
 
+  ExportCall exportCall() {
+    return reinterpret_cast<ExportCall>(module_start_);
+  }
+
+ private:
   // Reference counted because it is often copied by wabt.
-  size_t ref_count = 1;
-  void* machine_code;
+  size_t ref_count_ = 1;
+  void* module_start_;
+  uintptr_t module_end_;
 };
 
 class JITCompiler;
@@ -82,7 +98,7 @@ class JITFunction {
   friend class JITCompiler;
 
  public:
-  bool isCompiled() const { return func_entry_ != nullptr; }
+  bool isCompiled() const { return export_entry_ != nullptr; }
   void call(const ValueTypes& param_types,
             const Values& params,
             const ValueTypes& result_types,
@@ -97,7 +113,7 @@ class JITFunction {
   Index frameSize() const { return frame_size_; }
 
  private:
-  void* func_entry_;
+  void* export_entry_;
   JITModuleDescriptor* module_;
   Index args_size_;
   Index frame_size_;
@@ -110,14 +126,14 @@ class JITModuleData {
   JITModuleData() : descriptor_(nullptr) {}
   JITModuleData(const JITModuleData& other) : descriptor_(other.descriptor_) {
     if (descriptor_ != nullptr) {
-      descriptor_->ref_count++;
+      descriptor_->ref_count_++;
     }
   }
   JITModuleData(JITModuleData&& other) : descriptor_(other.descriptor_) {
     other.descriptor_ = nullptr;
   }
   ~JITModuleData() {
-    if (descriptor_ != nullptr && --descriptor_->ref_count == 0) {
+    if (descriptor_ != nullptr && --descriptor_->ref_count_ == 0) {
       delete descriptor_;
     }
   }

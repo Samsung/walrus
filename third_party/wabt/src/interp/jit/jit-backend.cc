@@ -19,6 +19,9 @@
 #include "wabt/interp/interp.h"
 #include "wabt/interp/jit/jit.h"
 
+#include <map>
+#include <mutex>
+
 // Inlined platform independent assembler backend.
 
 #if defined SLJIT_CONFIG_UNSUPPORTED && SLJIT_CONFIG_UNSUPPORTED
@@ -28,6 +31,12 @@
 #define OffsetOfContextField(field)                           \
   (static_cast<sljit_sw>(offsetof(ExecutionContext, field)) - \
    static_cast<sljit_sw>(sizeof(ExecutionContext)))
+
+#if !(defined SLJIT_INDIRECT_CALL && SLJIT_INDIRECT_CALL)
+#define GET_FUNC_ADDR(type, func) (reinterpret_cast<type>(func))
+#else
+#define GET_FUNC_ADDR(type, func) (*reinterpret_cast<type*>(func))
+#endif
 
 namespace wabt {
 namespace interp {
@@ -40,8 +49,17 @@ struct JITArg {
   sljit_sw argw;
 };
 
+struct TrapBlock {
+  TrapBlock(sljit_label* end_label, sljit_label* handler_label)
+      : end_label(end_label), handler_label(handler_label) {}
+
+  sljit_label* end_label;
+  sljit_label* handler_label;
+};
+
 struct CompileContext {
-  CompileContext(JITCompiler* compiler) : compiler(compiler), frame_size(0) {}
+  CompileContext(JITCompiler* compiler)
+      : compiler(compiler), frame_size(0), trap_label(nullptr) {}
 
   static CompileContext* get(sljit_compiler* compiler) {
     void* context = sljit_get_allocator_data(compiler);
@@ -50,7 +68,57 @@ struct CompileContext {
 
   JITCompiler* compiler;
   Index frame_size;
+  sljit_label* trap_label;
+  std::vector<TrapBlock> trap_blocks;
 };
+
+class TrapHandlerList {
+ public:
+  ~TrapHandlerList() {
+    lock_.lock();
+    destroyed_ = true;
+    lock_.unlock();
+  }
+
+  void insert(std::vector<TrapBlock>& trap_blocks) {
+    assert(!destroyed_);
+
+    lock_.lock();
+    for (auto it : trap_blocks) {
+      sljit_uw end_addr = sljit_get_label_addr(it.end_label);
+      trap_map_[end_addr] = sljit_get_label_addr(it.handler_label);
+    }
+    lock_.unlock();
+  }
+
+  sljit_uw get(sljit_uw return_addr) {
+    assert(!destroyed_);
+    lock_.lock();
+    sljit_uw result = trap_map_.lower_bound(return_addr)->second;
+    lock_.unlock();
+    return result;
+  }
+
+  void erase(sljit_uw module_start, sljit_uw module_end) {
+    if (!destroyed_) {
+      lock_.lock();
+      trap_map_.erase(trap_map_.lower_bound(module_start),
+                      trap_map_.upper_bound(module_end));
+      lock_.unlock();
+    }
+  }
+
+ private:
+  bool destroyed_ = false;
+  std::map<sljit_uw, sljit_uw> trap_map_;
+  std::mutex lock_;
+};
+
+static TrapHandlerList trap_handler_list;
+
+static sljit_uw SLJIT_FUNC getTrapHandler(sljit_uw return_addr) {
+  return trap_handler_list.get(return_addr);
+}
 
 static void operandToArg(Operand* operand, JITArg& arg) {
   switch (operand->location.type) {
@@ -562,7 +630,8 @@ static void emitCall(sljit_compiler* compiler, CallInstruction* call_instr) {
 }
 
 JITModuleDescriptor::~JITModuleDescriptor() {
-  sljit_free_code(machine_code, nullptr);
+  trap_handler_list.erase(GET_FUNC_ADDR(sljit_uw, module_start_), module_end_);
+  sljit_free_code(module_start_, nullptr);
 }
 
 struct LabelJumpList {
@@ -618,7 +687,11 @@ JITModuleDescriptor* JITCompiler::compile() {
   sljit_emit_enter(compiler_, 0, SLJIT_ARGS3(VOID, P, P, P_R), 3, 2, 0, 0, 0);
   sljit_emit_icall(compiler_, SLJIT_CALL_REG_ARG, SLJIT_ARGS0(VOID), SLJIT_R2,
                    0);
+  sljit_label* trap_label = sljit_emit_label(compiler_);
   sljit_emit_return_void(compiler_);
+
+  compile_context.trap_blocks.push_back(
+      TrapBlock(sljit_emit_label(compiler_), trap_label));
 
   size_t current_function = 0;
 
@@ -631,10 +704,10 @@ JITModuleDescriptor* JITCompiler::compile() {
         label->emit(compiler_);
       } else {
         if (label->prev() != nullptr) {
-          emitEpilog(current_function);
+          emitEpilog(current_function, compile_context);
           current_function++;
         }
-        emitProlog(current_function);
+        emitProlog(current_function, compile_context);
         compile_context.frame_size =
             function_list_[current_function].jit_func->frameSize();
       }
@@ -678,6 +751,11 @@ JITModuleDescriptor* JITCompiler::compile() {
           case Opcode::Return: {
             break;
           }
+          case Opcode::Unreachable: {
+            sljit_set_label(sljit_emit_jump(compiler_, SLJIT_JUMP),
+                            compile_context.trap_label);
+            break;
+          }
           default: {
             WABT_UNREACHABLE;
             break;
@@ -688,24 +766,27 @@ JITModuleDescriptor* JITCompiler::compile() {
     }
   }
 
-  emitEpilog(current_function);
+  sljit_label* end_label = emitEpilog(current_function, compile_context);
 
   void* code = sljit_generate_code(compiler_);
   JITModuleDescriptor* module_descriptor = nullptr;
 
   if (code != nullptr) {
-    module_descriptor = new JITModuleDescriptor(code);
+    sljit_uw end_addr = sljit_get_label_addr(end_label);
+    module_descriptor = new JITModuleDescriptor(code, end_addr);
+
+    trap_handler_list.insert(compile_context.trap_blocks);
 
     for (auto it : function_list_) {
       it.jit_func->module_ = module_descriptor;
 
       if (!it.is_exported) {
-        it.jit_func->func_entry_ = nullptr;
+        it.jit_func->export_entry_ = nullptr;
         continue;
       }
 
-      it.jit_func->func_entry_ =
-          reinterpret_cast<void*>(sljit_get_label_addr(it.export_label));
+      it.jit_func->export_entry_ =
+          reinterpret_cast<void*>(sljit_get_label_addr(it.export_entry_label));
     }
   }
 
@@ -742,11 +823,26 @@ void JITCompiler::releaseFunctionList() {
   function_list_.clear();
 }
 
-void JITCompiler::emitProlog(size_t index) {
+void JITCompiler::emitProlog(size_t index, CompileContext& context) {
   FunctionList& func = function_list_[index];
 
+  sljit_set_context(compiler_, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2),
+                    SLJIT_ARGS0(VOID), SLJIT_NUMBER_OF_SCRATCH_REGISTERS, 2,
+                    SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0,
+                    sizeof(ExecutionContext::CallFrame));
+
+  context.trap_label = sljit_emit_label(compiler_);
+  sljit_emit_op1(compiler_, SLJIT_MOV_U32, SLJIT_MEM1(kContextReg),
+                 OffsetOfContextField(error), SLJIT_IMM,
+                 ExecutionContext::InstrError);
+
+  sljit_emit_op_dst(compiler_, SLJIT_GET_RETURN_ADDRESS, SLJIT_R0, 0);
+  sljit_emit_icall(compiler_, SLJIT_CALL, SLJIT_ARGS1(W, W), SLJIT_IMM,
+                   GET_FUNC_ADDR(sljit_sw, getTrapHandler));
+  sljit_emit_return_to(compiler_, SLJIT_R0, 0);
+
   if (func.is_exported) {
-    func.export_label = sljit_emit_label(compiler_);
+    func.export_entry_label = sljit_emit_label(compiler_);
   }
 
   func.entry_label->emit(compiler_);
@@ -762,6 +858,10 @@ void JITCompiler::emitProlog(size_t index) {
   if (func.jit_func->frameSize() > 0) {
     sljit_emit_op2(compiler_, SLJIT_SUB, kFrameReg, 0, kFrameReg, 0, SLJIT_IMM,
                    static_cast<sljit_sw>(func.jit_func->frameSize()));
+
+    sljit_jump* cmp =
+        sljit_emit_cmp(compiler_, SLJIT_LESS, kFrameReg, 0, kContextReg, 0);
+    sljit_set_label(cmp, context.trap_label);
   }
   sljit_get_local_base(compiler_, SLJIT_R1, 0, 0);
   sljit_emit_op1(compiler_, SLJIT_MOV_P, SLJIT_MEM1(kContextReg),
@@ -774,7 +874,7 @@ void JITCompiler::emitProlog(size_t index) {
                  0);
 }
 
-void JITCompiler::emitEpilog(size_t index) {
+sljit_label* JITCompiler::emitEpilog(size_t index, CompileContext& context) {
   FunctionList& func = function_list_[index];
 
   // Restore previous frame.
@@ -788,6 +888,10 @@ void JITCompiler::emitEpilog(size_t index) {
                  OffsetOfContextField(last_frame), SLJIT_R0, 0);
 
   sljit_emit_return_void(compiler_);
+
+  sljit_label* end_label = sljit_emit_label(compiler_);
+  context.trap_blocks.push_back(TrapBlock(end_label, context.trap_label));
+  return end_label;
 }
 
 }  // namespace interp

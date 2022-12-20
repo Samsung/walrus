@@ -25,7 +25,7 @@ void JITFunction::call(const ValueTypes& param_types,
                        const Values& params,
                        const ValueTypes& result_types,
                        Values& results) const {
-  if (func_entry_ == nullptr) {
+  if (export_entry_ == nullptr) {
     return;
   }
 
@@ -40,16 +40,10 @@ void JITFunction::call(const ValueTypes& param_types,
   ExecutionContext* context = reinterpret_cast<ExecutionContext*>(start);
 
   context->last_frame = nullptr;
-
-  union {
-    void* func_entry;
-    JITModuleDescriptor::ExternalDecl code;
-  } func;
+  context->error = ExecutionContext::NoError;
 
   void* args = reinterpret_cast<void*>(start + size - argsSize());
-
-  func.func_entry = module_->machine_code;
-  func.code(context + 1, args, func_entry_);
+  module_->exportCall()(context + 1, args, export_entry_);
 
   StackAllocator* stackAllocator = new StackAllocator();
   for (ValueType result_type : result_types) {
