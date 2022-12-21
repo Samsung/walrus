@@ -237,7 +237,9 @@ enum OpcodeKind : size_t {
 class OpcodeTable {
 public:
     OpcodeTable();
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
     void* m_addressTable[InvalidOpcode];
+#endif
 };
 
 extern OpcodeTable g_opcodeTable;
