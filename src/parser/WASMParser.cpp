@@ -365,14 +365,17 @@ public:
 
     virtual void EndGlobalInitExpr(Index index) override
     {
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
         ASSERT(m_currentFunction->peekByteCode<Walrus::End>(
                                     m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
-                       ->opcode()
-                   == Walrus::OpcodeKind::EndOpcode
-               || m_currentFunction->peekByteCode<Walrus::End>(
-                                       m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
-                       ->opcodeInAddress()
-                   == Walrus::g_opcodeTable.m_addressTable[Walrus::OpcodeKind::EndOpcode]);
+                   ->opcodeInAddress()
+               == Walrus::g_opcodeTable.m_addressTable[Walrus::OpcodeKind::EndOpcode]);
+#else
+        ASSERT(m_currentFunction->peekByteCode<Walrus::End>(
+                                    m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
+                   ->opcode()
+               == Walrus::OpcodeKind::EndOpcode);
+#endif
 
         m_currentFunction->shrinkByteCode(sizeof(Walrus::End));
 
