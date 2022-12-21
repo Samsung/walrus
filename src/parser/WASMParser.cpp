@@ -100,6 +100,7 @@ public:
         : m_module(module)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
+        , m_initialFunctionStackSize(0)
         , m_functionStackSizeSoFar(0)
         , m_elementTableIndex(0)
         , m_segmentMode(Walrus::SegmentMode::None)
@@ -419,7 +420,9 @@ public:
         ASSERT(m_currentFunction == nullptr);
         m_currentFunction = m_module->function(index);
         m_currentFunctionType = m_module->functionType(m_currentFunction->functionTypeIndex());
-        m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
+        m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
+        m_currentFunction->m_requiredStackSize = std::max(
+            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
 
     virtual void OnLocalDeclCount(Index count) override
@@ -433,10 +436,13 @@ public:
             auto wType = toValueKind(type);
             m_currentFunction->m_local.pushBack(wType);
             auto sz = Walrus::valueSizeInStack(wType);
+            m_initialFunctionStackSize += sz;
             m_functionStackSizeSoFar += sz;
             m_currentFunction->m_requiredStackSizeDueToLocal += sz;
             count--;
         }
+        m_currentFunction->m_requiredStackSize = std::max(
+            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
 
     virtual void OnOpcode(uint32_t opcode) override
@@ -630,7 +636,7 @@ public:
     void restoreVMStackBy(const std::vector<unsigned char>& src)
     {
         m_vmStack = src;
-        m_functionStackSizeSoFar = 0;
+        m_functionStackSizeSoFar = m_initialFunctionStackSize;
         for (auto s : m_vmStack) {
             m_functionStackSizeSoFar += s;
         }
@@ -1246,6 +1252,7 @@ private:
     Walrus::Module* m_module;
     Walrus::ModuleFunction* m_currentFunction;
     Walrus::FunctionType* m_currentFunctionType;
+    uint32_t m_initialFunctionStackSize;
     uint32_t m_functionStackSizeSoFar;
     std::vector<unsigned char> m_vmStack;
     std::vector<BlockInfo> m_blockInfo;
