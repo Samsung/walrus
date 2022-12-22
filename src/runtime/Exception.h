@@ -17,6 +17,9 @@
 #ifndef __WalrusException__
 #define __WalrusException__
 
+#include "runtime/ExecutionState.h"
+#include "util/Vector.h"
+
 namespace Walrus {
 
 class String;
@@ -30,9 +33,14 @@ public:
         return std::unique_ptr<Exception>(new (NoGC) Exception(m));
     }
 
-    static std::unique_ptr<Exception> create(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+    static std::unique_ptr<Exception> create(ExecutionState& state, String* m)
     {
-        return std::unique_ptr<Exception>(new (NoGC) Exception(tag, std::move(userExceptionData)));
+        return std::unique_ptr<Exception>(new (NoGC) Exception(state, m));
+    }
+
+    static std::unique_ptr<Exception> create(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+    {
+        return std::unique_ptr<Exception>(new (NoGC) Exception(state, tag, std::move(userExceptionData)));
     }
 
     bool isBuiltinException()
@@ -61,20 +69,30 @@ public:
     }
 
 private:
+    friend class Interpreter;
     Exception(String* message)
-        : m_message(message)
     {
+        m_message = message;
     }
 
-    Exception(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
-        : m_tag(tag)
-        , m_userExceptionData(std::move(userExceptionData))
+    Exception(ExecutionState& state);
+    Exception(ExecutionState& state, String* message)
+        : Exception(state)
     {
+        m_message = message;
+    }
+
+    Exception(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+        : Exception(state)
+    {
+        m_tag = tag;
+        m_userExceptionData = std::move(userExceptionData);
     }
 
     Optional<String*> m_message;
     Optional<Tag*> m_tag;
     Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>> m_userExceptionData;
+    Vector<std::pair<ExecutionState*, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<ExecutionState*, size_t>>> m_programCounterInfo;
 };
 
 } // namespace Walrus

@@ -68,6 +68,12 @@ void Interpreter::interpret(ExecutionState& state,
             interpret(state, programCounter, bp, sp, instance);
             break;
         } catch (std::unique_ptr<Exception>& e) {
+            for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
+                if (e->m_programCounterInfo[i - 1].first == &state) {
+                    programCounter = e->m_programCounterInfo[i - 1].second;
+                    break;
+                }
+            }
             if (e->isUserException()) {
                 bool isCatchSucessful = false;
                 Tag* tag = e->tag().value();
@@ -113,69 +119,69 @@ ALWAYS_INLINE T readValue(uint8_t*& sp)
 template <typename T>
 bool intEqz(T val) { return val == 0; }
 template <typename T>
-bool eq(T lhs, T rhs) { return lhs == rhs; }
+bool eq(ExecutionState& state, T lhs, T rhs) { return lhs == rhs; }
 template <typename T>
-bool ne(T lhs, T rhs) { return lhs != rhs; }
+bool ne(ExecutionState& state, T lhs, T rhs) { return lhs != rhs; }
 template <typename T>
-bool lt(T lhs, T rhs) { return lhs < rhs; }
+bool lt(ExecutionState& state, T lhs, T rhs) { return lhs < rhs; }
 template <typename T>
-bool le(T lhs, T rhs) { return lhs <= rhs; }
+bool le(ExecutionState& state, T lhs, T rhs) { return lhs <= rhs; }
 template <typename T>
-bool gt(T lhs, T rhs) { return lhs > rhs; }
+bool gt(ExecutionState& state, T lhs, T rhs) { return lhs > rhs; }
 template <typename T>
-bool ge(T lhs, T rhs) { return lhs >= rhs; }
+bool ge(ExecutionState& state, T lhs, T rhs) { return lhs >= rhs; }
 template <typename T>
-T add(T lhs, T rhs) { return canonNaN(lhs + rhs); }
+T add(ExecutionState& state, T lhs, T rhs) { return canonNaN(lhs + rhs); }
 template <typename T>
-T sub(T lhs, T rhs) { return canonNaN(lhs - rhs); }
+T sub(ExecutionState& state, T lhs, T rhs) { return canonNaN(lhs - rhs); }
 template <typename T>
-T xchg(T lhs, T rhs) { return rhs; }
+T xchg(ExecutionState& state, T lhs, T rhs) { return rhs; }
 template <typename T>
-T intAnd(T lhs, T rhs) { return lhs & rhs; }
+T intAnd(ExecutionState& state, T lhs, T rhs) { return lhs & rhs; }
 template <typename T>
-T intOr(T lhs, T rhs) { return lhs | rhs; }
+T intOr(ExecutionState& state, T lhs, T rhs) { return lhs | rhs; }
 template <typename T>
-T intXor(T lhs, T rhs) { return lhs ^ rhs; }
+T intXor(ExecutionState& state, T lhs, T rhs) { return lhs ^ rhs; }
 template <typename T>
-T intShl(T lhs, T rhs) { return lhs << shiftMask(rhs); }
+T intShl(ExecutionState& state, T lhs, T rhs) { return lhs << shiftMask(rhs); }
 template <typename T>
-T intShr(T lhs, T rhs) { return lhs >> shiftMask(rhs); }
+T intShr(ExecutionState& state, T lhs, T rhs) { return lhs >> shiftMask(rhs); }
 template <typename T>
-T intMin(T lhs, T rhs) { return std::min(lhs, rhs); }
+T intMin(ExecutionState& state, T lhs, T rhs) { return std::min(lhs, rhs); }
 template <typename T>
-T intMax(T lhs, T rhs) { return std::max(lhs, rhs); }
+T intMax(ExecutionState& state, T lhs, T rhs) { return std::max(lhs, rhs); }
 template <typename T>
-T intAndNot(T lhs, T rhs) { return lhs & ~rhs; }
+T intAndNot(ExecutionState& state, T lhs, T rhs) { return lhs & ~rhs; }
 template <typename T>
-T intClz(T val) { return clz(val); }
+T intClz(ExecutionState& state, T val) { return clz(val); }
 template <typename T>
-T intCtz(T val) { return ctz(val); }
+T intCtz(ExecutionState& state, T val) { return ctz(val); }
 template <typename T>
-T intPopcnt(T val) { return popCount(val); }
+T intPopcnt(ExecutionState& state, T val) { return popCount(val); }
 template <typename T>
-T intNot(T val) { return ~val; }
+T intNot(ExecutionState& state, T val) { return ~val; }
 template <typename T>
-T intNeg(T val) { return ~val + 1; }
+T intNeg(ExecutionState& state, T val) { return ~val + 1; }
 template <typename T>
-T intAvgr(T lhs, T rhs) { return (lhs + rhs + 1) / 2; }
+T intAvgr(ExecutionState& state, T lhs, T rhs) { return (lhs + rhs + 1) / 2; }
 
 template <typename T>
-T intDiv(T lhs, T rhs)
+T intDiv(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException("integer divide by zero");
+        Trap::throwException(state, "integer divide by zero");
     }
     if (UNLIKELY(!isNormalDivRem(lhs, rhs))) {
-        Trap::throwException("integer overflow");
+        Trap::throwException(state, "integer overflow");
     }
     return lhs / rhs;
 }
 
 template <typename T>
-T intRem(T lhs, T rhs)
+T intRem(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException("integer divide by zero");
+        Trap::throwException(state, "integer divide by zero");
     }
     if (LIKELY(isNormalDivRem(lhs, rhs))) {
         return lhs % rhs;
@@ -185,26 +191,28 @@ T intRem(T lhs, T rhs)
 }
 
 template <typename R, typename T>
-R doConvert(T val)
+R doConvert(ExecutionState& state, T val)
 {
     if (std::is_integral<R>::value && std::is_floating_point<T>::value) {
         // Don't use std::isnan here because T may be a non-floating-point type.
         if (UNLIKELY(isNaN(val))) {
-            Trap::throwException("invalid conversion to integer");
+            Trap::throwException(state, "invalid conversion to integer");
         }
     }
     if (UNLIKELY(!canConvert<R>(val))) {
-        Trap::throwException("integer overflow");
+        Trap::throwException(state, "integer overflow");
     }
     return convert<R>(val);
 }
 
 void Interpreter::interpret(ExecutionState& state,
-                            size_t& programCounter,
+                            size_t programCounter,
                             uint8_t* bp,
                             uint8_t*& sp,
                             Instance* instance)
 {
+    state.m_programCounterPointer = &programCounter;
+
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
 
 #define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
@@ -213,7 +221,7 @@ void Interpreter::interpret(ExecutionState& state,
     {                                                                                                                       \
         auto rhs = readValue<nativeParameterTypeName>(sp);                                                                  \
         auto lhs = readValue<nativeParameterTypeName>(sp);                                                                  \
-        writeValue<nativeReturnTypeName>(sp, operationName(lhs, rhs));                                                      \
+        writeValue<nativeReturnTypeName>(sp, operationName(state, lhs, rhs));                                               \
         ADD_PROGRAM_COUNTER(BinaryOperation);                                                                               \
         NEXT_INSTRUCTION();                                                                                                 \
     }
@@ -231,7 +239,7 @@ void Interpreter::interpret(ExecutionState& state,
     DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                                  \
         :                                                                                                                                               \
     {                                                                                                                                                   \
-        writeValue<nativeReturnTypeName>(sp, operationName<T1, T2>(readValue<nativeParameterTypeName>(sp)));                                            \
+        writeValue<nativeReturnTypeName>(sp, operationName<T1, T2>(state, readValue<nativeParameterTypeName>(sp)));                                     \
         ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                                            \
         NEXT_INSTRUCTION();                                                                                                                             \
     }
@@ -251,7 +259,7 @@ void Interpreter::interpret(ExecutionState& state,
         MemoryLoad* code = (MemoryLoad*)programCounter;                            \
         uint32_t offset = readValue<uint32_t>(sp);                                 \
         nativeReadTypeName value;                                                  \
-        instance->memory(0)->load(offset, code->offset(), &value);                 \
+        instance->memory(0)->load(state, offset, code->offset(), &value);          \
         writeValue<nativeWriteTypeName>(sp, value);                                \
         ADD_PROGRAM_COUNTER(MemoryLoad);                                           \
         NEXT_INSTRUCTION();                                                        \
@@ -264,7 +272,7 @@ void Interpreter::interpret(ExecutionState& state,
         MemoryStore* code = (MemoryStore*)programCounter;                           \
         nativeWriteTypeName value = readValue<nativeReadTypeName>(sp);              \
         uint32_t offset = readValue<uint32_t>(sp);                                  \
-        instance->memory(0)->store(offset, code->offset(), value);                  \
+        instance->memory(0)->store(state, offset, code->offset(), value);           \
         ADD_PROGRAM_COUNTER(MemoryStore);                                           \
         NEXT_INSTRUCTION();                                                         \
     }
@@ -731,7 +739,7 @@ NextInstruction:
         auto size = readValue<int32_t>(sp);
         auto srcStart = readValue<int32_t>(sp);
         auto dstStart = readValue<int32_t>(sp);
-        m->init(&sg, dstStart, srcStart, size);
+        m->init(state, &sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(MemoryInit);
         NEXT_INSTRUCTION();
     }
@@ -743,7 +751,7 @@ NextInstruction:
         auto size = readValue<int32_t>(sp);
         auto srcStart = readValue<int32_t>(sp);
         auto dstStart = readValue<int32_t>(sp);
-        m->copy(dstStart, srcStart, size);
+        m->copy(state, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(MemoryCopy);
         NEXT_INSTRUCTION();
     }
@@ -755,7 +763,7 @@ NextInstruction:
         auto size = readValue<int32_t>(sp);
         auto value = readValue<int32_t>(sp);
         auto dstStart = readValue<int32_t>(sp);
-        m->fill(dstStart, value, size);
+        m->fill(state, dstStart, value, size);
         ADD_PROGRAM_COUNTER(MemoryCopy);
         NEXT_INSTRUCTION();
     }
@@ -775,7 +783,7 @@ NextInstruction:
     {
         TableGet* code = (TableGet*)programCounter;
         Table* table = instance->table(code->tableIndex());
-        void* val = table->getElement(readValue<uint32_t>(sp));
+        void* val = table->getElement(state, readValue<uint32_t>(sp));
         writeValue(sp, val);
 
         ADD_PROGRAM_COUNTER(TableGet);
@@ -788,7 +796,7 @@ NextInstruction:
         TableSet* code = (TableSet*)programCounter;
         Table* table = instance->table(code->tableIndex());
         void* ptr = readValue<void*>(sp);
-        table->setElement(readValue<uint32_t>(sp), ptr);
+        table->setElement(state, readValue<uint32_t>(sp), ptr);
 
         ADD_PROGRAM_COUNTER(TableSet);
         NEXT_INSTRUCTION();
@@ -836,7 +844,7 @@ NextInstruction:
         uint32_t n = readValue<uint32_t>(sp);
         uint32_t srcIndex = readValue<uint32_t>(sp);
         uint32_t dstIndex = readValue<uint32_t>(sp);
-        dstTable->copy(srcTable, n, srcIndex, dstIndex);
+        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
 
         ADD_PROGRAM_COUNTER(TableCopy);
         NEXT_INSTRUCTION();
@@ -850,7 +858,7 @@ NextInstruction:
         int32_t n = readValue<int32_t>(sp);
         void* ptr = readValue<void*>(sp);
         int32_t index = readValue<int32_t>(sp);
-        table->fill(n, ptr, index);
+        table->fill(state, n, ptr, index);
 
         ADD_PROGRAM_COUNTER(TableFill);
         NEXT_INSTRUCTION();
@@ -864,7 +872,7 @@ NextInstruction:
         auto size = readValue<int32_t>(sp);
         auto srcStart = readValue<int32_t>(sp);
         auto dstStart = readValue<int32_t>(sp);
-        instance->table(code->tableIndex())->init(instance, &sg, dstStart, srcStart, size);
+        instance->table(code->tableIndex())->init(state, instance, &sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();
     }
@@ -917,7 +925,7 @@ NextInstruction:
         size_t sz = tag->functionType()->paramStackSize();
         userExceptionData.resizeWithUninitializedValues(sz);
         memcpy(userExceptionData.data(), sp - sz, sz);
-        Trap::throwException(tag, std::move(userExceptionData));
+        Trap::throwException(state, tag, std::move(userExceptionData));
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
     }
@@ -925,7 +933,7 @@ NextInstruction:
     DEFINE_OPCODE(Unreachable)
         :
     {
-        Trap::throwException("unreachable executed");
+        Trap::throwException(state, "unreachable executed");
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
     }
@@ -996,15 +1004,15 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
 
     uint32_t idx = readValue<uint32_t>(sp);
     if (idx >= table->size()) {
-        Trap::throwException("undefined element");
+        Trap::throwException(state, "undefined element");
     }
     auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
     if (UNLIKELY(Value::isNull(target))) {
-        Trap::throwException("uninitialized element " + std::to_string(idx));
+        Trap::throwException(state, "uninitialized element " + std::to_string(idx));
     }
     const FunctionType* ft = target->functionType();
     if (!ft->equals(state.currentFunction()->asDefinedFunction()->instance()->module()->functionType(code->functionTypeIndex()))) {
-        Trap::throwException("indirect call type mismatch");
+        Trap::throwException(state, "indirect call type mismatch");
     }
     const ValueTypeVector& param = ft->param();
     Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);

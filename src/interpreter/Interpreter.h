@@ -32,7 +32,7 @@ public:
 private:
     friend class OpcodeTable;
     static void interpret(ExecutionState& state,
-                          size_t& programCounter,
+                          size_t programCounter,
                           uint8_t* bp,
                           uint8_t*& sp,
                           Instance* instance);

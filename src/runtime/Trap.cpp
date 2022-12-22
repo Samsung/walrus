@@ -32,22 +32,22 @@ Trap::TrapResult Trap::run(void (*runner)(ExecutionState&, void*), void* data)
     return r;
 }
 
-void Trap::throwException(const char* message, size_t len)
+void Trap::throwException(ExecutionState& state, const char* message, size_t len)
 {
-    throwException(new String(message, len));
+    throwException(state, new String(message, len));
 }
 
-void Trap::throwException(String* message)
+void Trap::throwException(ExecutionState& state, String* message)
 {
-    throw Exception::create(message);
+    throw Exception::create(state, message);
 }
 
-void Trap::throwException(Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+void Trap::throwException(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
 {
-    throw Exception::create(tag, std::move(userExceptionData));
+    throw Exception::create(state, tag, std::move(userExceptionData));
 }
 
-void Trap::throwException(std::unique_ptr<Exception>&& e)
+void Trap::throwException(ExecutionState& state, std::unique_ptr<Exception>&& e)
 {
     throw std::move(e);
 }

@@ -30,28 +30,28 @@ Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize)
     m_elements.resize(initialSize, reinterpret_cast<void*>(Value::NullBits));
 }
 
-void Table::copy(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
+void Table::copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
 {
     if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)m_size))) {
-        throwException();
+        throwException(state);
     }
 
     while (n > 0) {
         if (dstIndex <= srcIndex) {
-            m_elements[dstIndex] = srcTable->getElement(srcIndex);
+            m_elements[dstIndex] = srcTable->getElement(state, srcIndex);
             dstIndex++;
             srcIndex++;
         } else {
-            m_elements[dstIndex + n - 1] = srcTable->getElement(srcIndex + n - 1);
+            m_elements[dstIndex + n - 1] = srcTable->getElement(state, srcIndex + n - 1);
         }
         n--;
     }
 }
 
-void Table::fill(uint32_t n, void* value, uint32_t index)
+void Table::fill(ExecutionState& state, uint32_t n, void* value, uint32_t index)
 {
     if ((uint64_t)index + (uint64_t)n > (uint64_t)m_size) {
-        throwException();
+        throwException(state);
     }
 
     while (n > 0) {
@@ -61,21 +61,21 @@ void Table::fill(uint32_t n, void* value, uint32_t index)
     }
 }
 
-void Table::throwException() const
+void Table::throwException(ExecutionState& state) const
 {
-    Trap::throwException("out of bounds table access");
+    Trap::throwException(state, "out of bounds table access");
 }
 
-void Table::init(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Table::init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
     if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)m_size)) {
-        throwException();
+        throwException(state);
     }
     if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->functionIndex().size())) {
-        throwException();
+        throwException(state);
     }
     if (UNLIKELY(m_type != Value::Type::FuncRef)) {
-        Trap::throwException("type mismatch");
+        Trap::throwException(state, "type mismatch");
     }
 
     const auto& f = source->element()->functionIndex();
