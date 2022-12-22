@@ -22,6 +22,9 @@
 namespace Walrus {
 
 class Instance;
+class Memory;
+class Table;
+class Global;
 
 class Interpreter {
 public:
@@ -35,7 +38,10 @@ private:
                           size_t programCounter,
                           uint8_t* bp,
                           uint8_t*& sp,
-                          Instance* instance);
+                          Instance* instance,
+                          Memory** memories,
+                          Table** tables,
+                          Global** globals);
     static void callOperation(ExecutionState& state,
                               size_t programCounter,
                               uint8_t* bp,

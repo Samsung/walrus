@@ -38,7 +38,12 @@ public:
         return true;
     }
 
-    Value getValue() const
+    Value& value()
+    {
+        return m_value;
+    }
+
+    Value value() const
     {
         return m_value;
     }
