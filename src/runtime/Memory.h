@@ -18,6 +18,7 @@
 #define __WalrusMemory__
 
 #include "util/BitOperation.h"
+#include "runtime/ExecutionState.h"
 #include "runtime/Object.h"
 
 namespace Walrus {
@@ -68,29 +69,29 @@ public:
     bool grow(uint64_t growSizeInByte);
 
     template <typename T>
-    void load(uint32_t offset, uint32_t addend, T* out) const
+    void load(ExecutionState& state, uint32_t offset, uint32_t addend, T* out) const
     {
-        checkAccess(offset, addend, sizeof(T));
+        checkAccess(state, offset, addend, sizeof(T));
         memcpyEndianAware(out, m_buffer, sizeof(T), m_sizeInByte, 0, offset + addend, sizeof(T));
     }
 
     template <typename T>
-    void store(uint32_t offset, uint32_t addend, const T& val) const
+    void store(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
     {
-        checkAccess(offset, addend, sizeof(T));
+        checkAccess(state, offset, addend, sizeof(T));
         memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(T), offset + addend, 0, sizeof(T));
     }
 
-    void init(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
-    void copy(uint32_t dstStart, uint32_t srcStart, uint32_t size);
-    void fill(uint32_t start, uint8_t value, uint32_t size);
+    void init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size);
+    void fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size);
 
 private:
-    void throwException(uint32_t offset, uint32_t addend, uint32_t size) const;
-    inline void checkAccess(uint32_t offset, uint32_t addend, uint32_t size) const
+    void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
+    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const
     {
         if (UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte))) {
-            throwException(offset, addend, size);
+            throwException(state, offset, addend, size);
         }
     }
 

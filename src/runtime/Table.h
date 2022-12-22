@@ -61,10 +61,10 @@ public:
         m_size = newSize;
     }
 
-    void* getElement(uint32_t elemIndex) const
+    void* getElement(ExecutionState& state, uint32_t elemIndex) const
     {
         if (UNLIKELY(elemIndex >= m_size)) {
-            throwException();
+            throwException(state);
         }
         return m_elements[elemIndex];
     }
@@ -74,20 +74,20 @@ public:
         return m_elements[elemIndex];
     }
 
-    void setElement(uint32_t elemIndex, void* val)
+    void setElement(ExecutionState& state, uint32_t elemIndex, void* val)
     {
         if (UNLIKELY(elemIndex >= m_size)) {
-            throwException();
+            throwException(state);
         }
         m_elements[elemIndex] = val;
     }
 
-    void copy(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
-    void fill(uint32_t n, void* value, uint32_t index);
-    void init(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
+    void fill(ExecutionState& state, uint32_t n, void* value, uint32_t index);
+    void init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
 private:
-    void throwException() const;
+    void throwException(ExecutionState& state) const;
 
     // Table has elements of reference type (FuncRef | ExternRef)
     Value::Type m_type;

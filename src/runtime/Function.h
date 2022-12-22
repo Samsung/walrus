@@ -97,7 +97,7 @@ protected:
                      <
 #endif
                      (size_t)currentStackPointer())) {
-            Trap::throwException("call stack exhausted");
+            Trap::throwException(state, "call stack exhausted");
         }
     }
     virtual ~Function() {}
