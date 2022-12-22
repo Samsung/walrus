@@ -51,7 +51,7 @@ OpcodeTable::OpcodeTable()
     size_t pc = reinterpret_cast<size_t>(&b);
     uint8_t* bp = nullptr;
     uint8_t* sp = nullptr;
-    Interpreter::interpret(dummyState, pc, bp, sp, nullptr);
+    Interpreter::interpret(dummyState, pc, bp, sp, nullptr, nullptr, nullptr, nullptr);
 #endif
 }
 
@@ -65,7 +65,7 @@ void Interpreter::interpret(ExecutionState& state,
     Instance* instance = df->instance();
     while (true) {
         try {
-            interpret(state, programCounter, bp, sp, instance);
+            interpret(state, programCounter, bp, sp, instance, instance->m_memory.data(), instance->m_table.data(), instance->m_global.data());
             break;
         } catch (std::unique_ptr<Exception>& e) {
             for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
@@ -209,7 +209,10 @@ void Interpreter::interpret(ExecutionState& state,
                             size_t programCounter,
                             uint8_t* bp,
                             uint8_t*& sp,
-                            Instance* instance)
+                            Instance* instance,
+                            Memory** memories,
+                            Table** tables,
+                            Global** globals)
 {
     state.m_programCounterPointer = &programCounter;
 
@@ -259,7 +262,7 @@ void Interpreter::interpret(ExecutionState& state,
         MemoryLoad* code = (MemoryLoad*)programCounter;                            \
         uint32_t offset = readValue<uint32_t>(sp);                                 \
         nativeReadTypeName value;                                                  \
-        instance->memory(0)->load(state, offset, code->offset(), &value);          \
+        memories[0]->load(state, offset, code->offset(), &value);                  \
         writeValue<nativeWriteTypeName>(sp, value);                                \
         ADD_PROGRAM_COUNTER(MemoryLoad);                                           \
         NEXT_INSTRUCTION();                                                        \
@@ -272,7 +275,7 @@ void Interpreter::interpret(ExecutionState& state,
         MemoryStore* code = (MemoryStore*)programCounter;                           \
         nativeWriteTypeName value = readValue<nativeReadTypeName>(sp);              \
         uint32_t offset = readValue<uint32_t>(sp);                                  \
-        instance->memory(0)->store(state, offset, code->offset(), value);           \
+        memories[0]->store(state, offset, code->offset(), value);                   \
         ADD_PROGRAM_COUNTER(MemoryStore);                                           \
         NEXT_INSTRUCTION();                                                         \
     }
@@ -647,7 +650,8 @@ NextInstruction:
         :
     {
         GlobalGet4* code = (GlobalGet4*)programCounter;
-        instance->global(code->index())->getValue().writeToStack(sp);
+        ASSERT(code->index() < instance->m_global.size());
+        globals[code->index()]->value().writeNBytesToStack<4>(sp);
         ADD_PROGRAM_COUNTER(GlobalGet4);
         NEXT_INSTRUCTION();
     }
@@ -656,7 +660,8 @@ NextInstruction:
         :
     {
         GlobalGet8* code = (GlobalGet8*)programCounter;
-        instance->global(code->index())->getValue().writeToStack(sp);
+        ASSERT(code->index() < instance->m_global.size());
+        globals[code->index()]->value().writeNBytesToStack<8>(sp);
         ADD_PROGRAM_COUNTER(GlobalGet8);
         NEXT_INSTRUCTION();
     }
@@ -665,9 +670,9 @@ NextInstruction:
         :
     {
         GlobalSet4* code = (GlobalSet4*)programCounter;
-        Value val = instance->global(code->index())->getValue();
+        ASSERT(code->index() < instance->m_global.size());
+        Value& val = globals[code->index()]->value();
         val.readFromStack<4>(sp);
-        instance->global(code->index())->setValue(val);
         ADD_PROGRAM_COUNTER(GlobalSet4);
         NEXT_INSTRUCTION();
     }
@@ -676,9 +681,9 @@ NextInstruction:
         :
     {
         GlobalSet8* code = (GlobalSet8*)programCounter;
-        Value val = instance->global(code->index())->getValue();
+        ASSERT(code->index() < instance->m_global.size());
+        Value& val = globals[code->index()]->value();
         val.readFromStack<8>(sp);
-        instance->global(code->index())->setValue(val);
         ADD_PROGRAM_COUNTER(GlobalSet8);
         NEXT_INSTRUCTION();
     }
@@ -711,7 +716,7 @@ NextInstruction:
     DEFINE_OPCODE(MemorySize)
         :
     {
-        writeValue<int32_t>(sp, instance->memory(0)->sizeInPageSize());
+        writeValue<int32_t>(sp, memories[0]->sizeInPageSize());
         ADD_PROGRAM_COUNTER(MemorySize);
         NEXT_INSTRUCTION();
     }
@@ -719,7 +724,7 @@ NextInstruction:
     DEFINE_OPCODE(MemoryGrow)
         :
     {
-        Memory* m = instance->memory(0);
+        Memory* m = memories[0];
         auto oldSize = m->sizeInPageSize();
         if (m->grow(readValue<int32_t>(sp) * (uint64_t)Memory::s_memoryPageSize)) {
             writeValue<int32_t>(sp, oldSize);
@@ -734,7 +739,7 @@ NextInstruction:
         :
     {
         MemoryInit* code = (MemoryInit*)programCounter;
-        Memory* m = instance->memory(0);
+        Memory* m = memories[0];
         DataSegment& sg = instance->dataSegment(code->segmentIndex());
         auto size = readValue<int32_t>(sp);
         auto srcStart = readValue<int32_t>(sp);
@@ -747,7 +752,7 @@ NextInstruction:
     DEFINE_OPCODE(MemoryCopy)
         :
     {
-        Memory* m = instance->memory(0);
+        Memory* m = memories[0];
         auto size = readValue<int32_t>(sp);
         auto srcStart = readValue<int32_t>(sp);
         auto dstStart = readValue<int32_t>(sp);
@@ -759,7 +764,7 @@ NextInstruction:
     DEFINE_OPCODE(MemoryFill)
         :
     {
-        Memory* m = instance->memory(0);
+        Memory* m = memories[0];
         auto size = readValue<int32_t>(sp);
         auto value = readValue<int32_t>(sp);
         auto dstStart = readValue<int32_t>(sp);
@@ -782,7 +787,8 @@ NextInstruction:
         :
     {
         TableGet* code = (TableGet*)programCounter;
-        Table* table = instance->table(code->tableIndex());
+        ASSERT(code->tableIndex() < instance->m_table.size());
+        Table* table = tables[code->tableIndex()];
         void* val = table->getElement(state, readValue<uint32_t>(sp));
         writeValue(sp, val);
 
@@ -794,7 +800,8 @@ NextInstruction:
         :
     {
         TableSet* code = (TableSet*)programCounter;
-        Table* table = instance->table(code->tableIndex());
+        ASSERT(code->tableIndex() < instance->m_table.size());
+        Table* table = tables[code->tableIndex()];
         void* ptr = readValue<void*>(sp);
         table->setElement(state, readValue<uint32_t>(sp), ptr);
 
@@ -806,7 +813,8 @@ NextInstruction:
         :
     {
         TableGrow* code = (TableGrow*)programCounter;
-        Table* table = instance->table(code->tableIndex());
+        ASSERT(code->tableIndex() < instance->m_table.size());
+        Table* table = tables[code->tableIndex()];
         size_t size = table->size();
         uint64_t newSize = (uint64_t)readValue<uint32_t>(sp) + size;
         // FIXME read reference
@@ -827,7 +835,8 @@ NextInstruction:
         :
     {
         TableSize* code = (TableSize*)programCounter;
-        Table* table = instance->table(code->tableIndex());
+        ASSERT(code->tableIndex() < instance->m_table.size());
+        Table* table = tables[code->tableIndex()];
         size_t size = table->size();
         writeValue<int32_t>(sp, size);
 
@@ -839,8 +848,10 @@ NextInstruction:
         :
     {
         TableCopy* code = (TableCopy*)programCounter;
-        Table* dstTable = instance->table(code->dstIndex());
-        Table* srcTable = instance->table(code->srcIndex());
+        ASSERT(code->dstIndex() < instance->m_table.size());
+        ASSERT(code->srcIndex() < instance->m_table.size());
+        Table* dstTable = tables[code->dstIndex()];
+        Table* srcTable = tables[code->srcIndex()];
         uint32_t n = readValue<uint32_t>(sp);
         uint32_t srcIndex = readValue<uint32_t>(sp);
         uint32_t dstIndex = readValue<uint32_t>(sp);
@@ -854,7 +865,8 @@ NextInstruction:
         :
     {
         TableFill* code = (TableFill*)programCounter;
-        Table* table = instance->table(code->tableIndex());
+        ASSERT(code->tableIndex() < instance->m_table.size());
+        Table* table = tables[code->tableIndex()];
         int32_t n = readValue<int32_t>(sp);
         void* ptr = readValue<void*>(sp);
         int32_t index = readValue<int32_t>(sp);
@@ -872,7 +884,9 @@ NextInstruction:
         auto size = readValue<int32_t>(sp);
         auto srcStart = readValue<int32_t>(sp);
         auto dstStart = readValue<int32_t>(sp);
-        instance->table(code->tableIndex())->init(state, instance, &sg, dstStart, srcStart, size);
+        ASSERT(code->tableIndex() < instance->m_table.size());
+        Table* table = tables[code->tableIndex()];
+        table->init(state, instance, &sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();
     }

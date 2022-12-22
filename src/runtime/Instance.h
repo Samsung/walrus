@@ -77,6 +77,7 @@ private:
 
 class Instance : public Object {
     friend class Module;
+    friend class Interpreter;
 
 public:
     typedef Vector<Instance*, GCUtil::gc_malloc_allocator<Instance*>> InstanceVector;

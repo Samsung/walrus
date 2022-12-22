@@ -255,6 +255,20 @@ public:
         }
     }
 
+    template <const size_t siz>
+    inline void writeNBytesToStack(uint8_t*& ptr)
+    {
+        if (siz == 4) {
+            *reinterpret_cast<int32_t*>(ptr) = m_i32;
+            ptr += siz;
+        } else if (siz == 8) {
+            *reinterpret_cast<int64_t*>(ptr) = m_i64;
+            ptr += siz;
+        } else {
+            ASSERT_NOT_REACHED();
+        }
+    }
+
     bool isNull() const
     {
         ASSERT(m_type == ExternRef || m_type == FuncRef);
