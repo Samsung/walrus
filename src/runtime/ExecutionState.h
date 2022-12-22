@@ -25,7 +25,9 @@ class Function;
 
 class ExecutionState {
 public:
+    friend class Exception;
     friend class Trap;
+    friend class Interpreter;
 
     ExecutionState(ExecutionState& parent)
         : m_parent(&parent)
@@ -67,6 +69,7 @@ private:
     Optional<ExecutionState*> m_parent;
     Optional<Function*> m_currentFunction;
     size_t m_stackLimit;
+    Optional<size_t*> m_programCounterPointer;
 };
 
 } // namespace Walrus

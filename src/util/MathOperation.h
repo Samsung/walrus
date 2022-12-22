@@ -19,6 +19,7 @@
 #define __WalrusMathOperation__
 
 #include "util/BitOperation.h"
+#include "runtime/ExecutionState.h"
 
 namespace Walrus {
 
@@ -84,7 +85,7 @@ struct PromoteMul<uint16_t> {
 };
 
 template <typename T>
-T mul(T lhs, T rhs)
+T mul(ExecutionState& state, T lhs, T rhs)
 {
     using U = typename PromoteMul<T>::type;
     return canonNaN(U(lhs) * U(rhs));
@@ -117,13 +118,13 @@ template <typename T>
 typename Mask<T>::Type geMask(T lhs, T rhs) { return lhs >= rhs ? -1 : 0; }
 
 template <typename T>
-T intRotl(T lhs, T rhs)
+T intRotl(ExecutionState& state, T lhs, T rhs)
 {
     return (lhs << shiftMask(rhs)) | (lhs >> shiftMask<T>(0 - rhs));
 }
 
 template <typename T>
-T intRotr(T lhs, T rhs)
+T intRotr(ExecutionState& state, T lhs, T rhs)
 {
     return (lhs >> shiftMask(rhs)) | (lhs << shiftMask<T>(0 - rhs));
 }
@@ -211,7 +212,7 @@ ALWAYS_INLINE T floatAbs(T val)
 }
 
 template <typename T>
-ALWAYS_INLINE T floatCopysign(T lhs, T rhs)
+ALWAYS_INLINE T floatCopysign(ExecutionState& state, T lhs, T rhs)
 {
 #ifndef NDEBUG
     // GCC does not inline std::copysign in debug mode
@@ -262,7 +263,7 @@ template <typename T>
 ALWAYS_INLINE T floatSqrt(T val) { return canonNaN(std::sqrt(val)); }
 
 template <typename T>
-ALWAYS_INLINE T floatDiv(T lhs, T rhs)
+ALWAYS_INLINE T floatDiv(ExecutionState& state, T lhs, T rhs)
 {
     // IEE754 specifies what should happen when dividing a float by zero, but
     // C/C++ says it is undefined behavior.
@@ -277,7 +278,7 @@ ALWAYS_INLINE T floatDiv(T lhs, T rhs)
 }
 
 template <typename T>
-ALWAYS_INLINE T floatMin(T lhs, T rhs)
+ALWAYS_INLINE T floatMin(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(std::isnan(lhs) || std::isnan(rhs))) {
         return std::numeric_limits<T>::quiet_NaN();
@@ -295,7 +296,7 @@ ALWAYS_INLINE T floatPMin(T lhs, T rhs)
 }
 
 template <typename T>
-ALWAYS_INLINE T floatMax(T lhs, T rhs)
+ALWAYS_INLINE T floatMax(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(std::isnan(lhs) || std::isnan(rhs))) {
         return std::numeric_limits<T>::quiet_NaN();
@@ -412,7 +413,7 @@ inline double convert(int64_t val)
 }
 
 template <typename T, int N>
-T intExtend(T val)
+T intExtend(ExecutionState& state, T val)
 {
     // Hacker's delight 2.6 - sign extension
     auto bit = T{ 1 } << N;
@@ -421,7 +422,7 @@ T intExtend(T val)
 }
 
 template <typename R, typename T>
-R intTruncSat(T val)
+R intTruncSat(ExecutionState& state, T val)
 {
     if (UNLIKELY(std::isnan(val))) {
         return 0;
