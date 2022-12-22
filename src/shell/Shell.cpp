@@ -641,7 +641,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 executeInvokeAction(action, fn, assertReturn->expected, nullptr);
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
                 auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
-                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(new Walrus::String(action->name)).value()->getValue();
+                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(new Walrus::String(action->name)).value()->value();
                 RELEASE_ASSERT(equals(v, assertReturn->expected[0]))
                 printf("get %s", action->name.data());
                 printf(" expect value(");
