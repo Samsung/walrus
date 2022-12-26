@@ -256,14 +256,12 @@ public:
     }
 
     template <const size_t siz>
-    inline void writeNBytesToStack(uint8_t*& ptr)
+    inline void writeNBytesToStack(uint8_t* ptr)
     {
         if (siz == 4) {
             *reinterpret_cast<int32_t*>(ptr) = m_i32;
-            ptr += siz;
         } else if (siz == 8) {
             *reinterpret_cast<int64_t*>(ptr) = m_i64;
-            ptr += siz;
         } else {
             ASSERT_NOT_REACHED();
         }
@@ -284,7 +282,7 @@ public:
     void writeToStack(uint8_t*& ptr);
 
     template <const size_t size>
-    void readFromStack(uint8_t*& ptr);
+    void readFromStack(uint8_t* ptr);
 
     bool operator==(const Value& v) const
     {
@@ -338,15 +336,13 @@ inline size_t valueSizeInStack(Value::Type type)
 }
 
 template <const size_t size>
-inline void Value::readFromStack(uint8_t*& ptr)
+inline void Value::readFromStack(uint8_t* ptr)
 {
     ASSERT(valueSizeInStack(m_type) == size);
     if (size == 4) {
-        ptr -= stackAllocatedSize<int32_t>();
         m_i32 = *reinterpret_cast<int32_t*>(ptr);
     } else {
         ASSERT(size == 8);
-        ptr -= stackAllocatedSize<int64_t>();
         m_i64 = *reinterpret_cast<int64_t*>(ptr);
     }
 }

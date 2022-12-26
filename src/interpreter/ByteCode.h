@@ -35,6 +35,10 @@ public:
         return m_orgOpcode;
     }
 #endif
+    uint32_t stackOffset() const
+    {
+        return m_stackOffset;
+    }
 #if !defined(NDEBUG)
     virtual ~ByteCode()
     {
@@ -53,7 +57,7 @@ public:
 protected:
     friend class Interpreter;
     friend class OpcodeTable;
-    ByteCode(OpcodeKind opcode)
+    ByteCode(OpcodeKind opcode, uint32_t stackOffset = 0)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
         : m_opcodeInAddress(g_opcodeTable.m_addressTable[opcode])
 #else
@@ -62,10 +66,11 @@ protected:
 #if !defined(NDEBUG)
         , m_orgOpcode(opcode)
 #endif
+        , m_stackOffset(stackOffset)
     {
     }
 
-    ByteCode()
+    ByteCode(uint32_t stackOffset = 0)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
         : m_opcodeInAddress(nullptr)
 #else
@@ -74,6 +79,7 @@ protected:
 #if !defined(NDEBUG)
         , m_orgOpcode(OpcodeKind::InvalidOpcode)
 #endif
+        , m_stackOffset(stackOffset)
     {
     }
 
@@ -84,12 +90,13 @@ protected:
 #if !defined(NDEBUG)
     OpcodeKind m_orgOpcode;
 #endif
+    uint32_t m_stackOffset;
 };
 
 class I32Const : public ByteCode {
 public:
-    I32Const(uint32_t value)
-        : ByteCode(OpcodeKind::I32ConstOpcode)
+    I32Const(uint32_t stackOffset, uint32_t value)
+        : ByteCode(OpcodeKind::I32ConstOpcode, stackOffset)
         , m_value(value)
     {
     }
@@ -99,7 +106,7 @@ public:
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("value: %" PRId32, static_cast<int32_t>(m_value));
+        printf("value: %" PRId32, m_value);
     }
 
     virtual size_t byteCodeSize()
@@ -114,24 +121,24 @@ protected:
 
 class BinaryOperation : public ByteCode {
 public:
-    BinaryOperation(OpcodeKind opcode)
-        : ByteCode(opcode)
+    BinaryOperation(OpcodeKind opcode, uint32_t stackOffset)
+        : ByteCode(opcode, stackOffset)
     {
     }
 };
 
 class UnaryOperation : public ByteCode {
 public:
-    UnaryOperation(OpcodeKind opcode)
-        : ByteCode(opcode)
+    UnaryOperation(OpcodeKind opcode, uint32_t stackOffset)
+        : ByteCode(opcode, stackOffset)
     {
     }
 };
 
 class I64Const : public ByteCode {
 public:
-    I64Const(uint64_t value)
-        : ByteCode(OpcodeKind::I64ConstOpcode)
+    I64Const(uint32_t stackOffset, uint64_t value)
+        : ByteCode(OpcodeKind::I64ConstOpcode, stackOffset)
         , m_value(value)
     {
     }
@@ -156,8 +163,8 @@ protected:
 
 class F32Const : public ByteCode {
 public:
-    F32Const(uint32_t value)
-        : ByteCode(OpcodeKind::F32ConstOpcode)
+    F32Const(uint32_t stackOffset, uint32_t value)
+        : ByteCode(OpcodeKind::F32ConstOpcode, stackOffset)
         , m_value(value)
     {
     }
@@ -182,8 +189,8 @@ protected:
 
 class F64Const : public ByteCode {
 public:
-    F64Const(uint64_t value)
-        : ByteCode(OpcodeKind::F64ConstOpcode)
+    F64Const(uint32_t stackOffset, uint64_t value)
+        : ByteCode(OpcodeKind::F64ConstOpcode, stackOffset)
         , m_value(value)
     {
     }
@@ -208,8 +215,8 @@ protected:
 
 class Call : public ByteCode {
 public:
-    Call(uint32_t index)
-        : ByteCode(OpcodeKind::CallOpcode)
+    Call(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::CallOpcode, stackOffset)
         , m_index(index)
     {
     }
@@ -234,8 +241,8 @@ protected:
 
 class CallIndirect : public ByteCode {
 public:
-    CallIndirect(uint32_t tableIndex, uint32_t functionTypeIndex)
-        : ByteCode(OpcodeKind::CallIndirectOpcode)
+    CallIndirect(uint32_t stackOffset, uint32_t tableIndex, uint32_t functionTypeIndex)
+        : ByteCode(OpcodeKind::CallIndirectOpcode, stackOffset)
         , m_tableIndex(tableIndex)
         , m_functionTypeIndex(functionTypeIndex)
     {
@@ -263,8 +270,8 @@ protected:
 
 class LocalGet4 : public ByteCode {
 public:
-    LocalGet4(uint32_t offset)
-        : ByteCode(OpcodeKind::LocalGet4Opcode)
+    LocalGet4(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalGet4Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -290,8 +297,8 @@ protected:
 
 class LocalGet8 : public ByteCode {
 public:
-    LocalGet8(uint32_t offset)
-        : ByteCode(OpcodeKind::LocalGet8Opcode)
+    LocalGet8(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalGet8Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -317,8 +324,8 @@ protected:
 
 class LocalSet4 : public ByteCode {
 public:
-    LocalSet4(uint32_t offset)
-        : ByteCode(OpcodeKind::LocalSet4Opcode)
+    LocalSet4(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalSet4Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -344,8 +351,8 @@ protected:
 
 class LocalSet8 : public ByteCode {
 public:
-    LocalSet8(uint32_t offset)
-        : ByteCode(OpcodeKind::LocalSet8Opcode)
+    LocalSet8(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalSet8Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -371,8 +378,8 @@ protected:
 
 class LocalTee4 : public ByteCode {
 public:
-    LocalTee4(uint32_t offset)
-        : ByteCode(OpcodeKind::LocalTee4Opcode)
+    LocalTee4(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalTee4Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -398,8 +405,8 @@ protected:
 
 class LocalTee8 : public ByteCode {
 public:
-    LocalTee8(uint32_t offset)
-        : ByteCode(OpcodeKind::LocalTee8Opcode)
+    LocalTee8(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalTee8Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -425,8 +432,8 @@ protected:
 
 class Drop : public ByteCode {
 public:
-    Drop(uint32_t dropSize, uint32_t parameterSize = 0)
-        : ByteCode(OpcodeKind::DropOpcode)
+    Drop(uint32_t stackOffset, uint32_t dropSize, uint32_t parameterSize)
+        : ByteCode(OpcodeKind::DropOpcode, stackOffset)
         , m_dropSize(dropSize)
         , m_parameterSize(parameterSize)
     {
@@ -484,8 +491,8 @@ protected:
 
 class JumpIfTrue : public ByteCode {
 public:
-    JumpIfTrue(int32_t offset = 0)
-        : ByteCode(OpcodeKind::JumpIfTrueOpcode)
+    JumpIfTrue(uint32_t stackOffset, int32_t offset = 0)
+        : ByteCode(OpcodeKind::JumpIfTrueOpcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -514,8 +521,8 @@ protected:
 
 class JumpIfFalse : public ByteCode {
 public:
-    JumpIfFalse(int32_t offset = 0)
-        : ByteCode(OpcodeKind::JumpIfFalseOpcode)
+    JumpIfFalse(uint32_t stackOffset, int32_t offset = 0)
+        : ByteCode(OpcodeKind::JumpIfFalseOpcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -544,8 +551,8 @@ protected:
 
 class Select : public ByteCode {
 public:
-    Select(uint32_t size)
-        : ByteCode(OpcodeKind::SelectOpcode)
+    Select(uint32_t stackOffset, uint32_t size)
+        : ByteCode(OpcodeKind::SelectOpcode, stackOffset)
         , m_size(size)
     {
     }
@@ -570,8 +577,8 @@ protected:
 
 class BrTable : public ByteCode {
 public:
-    BrTable(uint32_t m_tableSize)
-        : ByteCode(OpcodeKind::BrTableOpcode)
+    BrTable(uint32_t stackOffset, uint32_t m_tableSize)
+        : ByteCode(OpcodeKind::BrTableOpcode, stackOffset)
         , m_defaultOffset(0)
         , m_tableSize(m_tableSize)
     {
@@ -612,8 +619,8 @@ protected:
 
 class MemorySize : public ByteCode {
 public:
-    MemorySize(uint32_t index)
-        : ByteCode(OpcodeKind::MemorySizeOpcode)
+    MemorySize(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::MemorySizeOpcode, stackOffset)
     {
         ASSERT(index == 0);
     }
@@ -631,8 +638,8 @@ protected:
 
 class MemoryInit : public ByteCode {
 public:
-    MemoryInit(uint32_t index, uint32_t segmentIndex)
-        : ByteCode(OpcodeKind::MemoryInitOpcode)
+    MemoryInit(uint32_t stackOffset, uint32_t index, uint32_t segmentIndex)
+        : ByteCode(OpcodeKind::MemoryInitOpcode, stackOffset)
         , m_segmentIndex(segmentIndex)
     {
         ASSERT(index == 0);
@@ -661,8 +668,8 @@ protected:
 
 class MemoryCopy : public ByteCode {
 public:
-    MemoryCopy(uint32_t srcIndex, uint32_t dstIndex)
-        : ByteCode(OpcodeKind::MemoryCopyOpcode)
+    MemoryCopy(uint32_t stackOffset, uint32_t srcIndex, uint32_t dstIndex)
+        : ByteCode(OpcodeKind::MemoryCopyOpcode, stackOffset)
     {
         ASSERT(srcIndex == 0);
         ASSERT(dstIndex == 0);
@@ -678,8 +685,8 @@ public:
 
 class MemoryFill : public ByteCode {
 public:
-    MemoryFill(uint32_t memIdx)
-        : ByteCode(OpcodeKind::MemoryFillOpcode)
+    MemoryFill(uint32_t stackOffset, uint32_t memIdx)
+        : ByteCode(OpcodeKind::MemoryFillOpcode, stackOffset)
     {
         ASSERT(memIdx == 0);
     }
@@ -694,8 +701,8 @@ public:
 
 class DataDrop : public ByteCode {
 public:
-    DataDrop(uint32_t segmentIndex)
-        : ByteCode(OpcodeKind::DataDropOpcode)
+    DataDrop(uint32_t stackOffset, uint32_t segmentIndex)
+        : ByteCode(OpcodeKind::DataDropOpcode, stackOffset)
         , m_segmentIndex(segmentIndex)
     {
     }
@@ -723,8 +730,8 @@ protected:
 
 class MemoryGrow : public ByteCode {
 public:
-    MemoryGrow(uint32_t index)
-        : ByteCode(OpcodeKind::MemoryGrowOpcode)
+    MemoryGrow(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::MemoryGrowOpcode, stackOffset)
     {
         ASSERT(index == 0);
     }
@@ -742,8 +749,8 @@ protected:
 
 class MemoryLoad : public ByteCode {
 public:
-    MemoryLoad(OpcodeKind opcode, uint32_t offset)
-        : ByteCode(opcode)
+    MemoryLoad(OpcodeKind opcode, uint32_t stackOffset, uint32_t offset)
+        : ByteCode(opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -770,8 +777,8 @@ protected:
 
 class MemoryStore : public ByteCode {
 public:
-    MemoryStore(OpcodeKind opcode, uint32_t offset)
-        : ByteCode(opcode)
+    MemoryStore(OpcodeKind opcode, uint32_t stackOffset, uint32_t offset)
+        : ByteCode(opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -798,8 +805,8 @@ protected:
 
 class TableGet : public ByteCode {
 public:
-    TableGet(uint32_t index)
-        : ByteCode(OpcodeKind::TableGetOpcode)
+    TableGet(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::TableGetOpcode, stackOffset)
         , m_tableIndex(index)
     {
     }
@@ -824,8 +831,8 @@ protected:
 
 class TableSet : public ByteCode {
 public:
-    TableSet(uint32_t index)
-        : ByteCode(OpcodeKind::TableSetOpcode)
+    TableSet(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::TableSetOpcode, stackOffset)
         , m_tableIndex(index)
     {
     }
@@ -850,8 +857,8 @@ protected:
 
 class TableGrow : public ByteCode {
 public:
-    TableGrow(uint32_t index)
-        : ByteCode(OpcodeKind::TableGrowOpcode)
+    TableGrow(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::TableGrowOpcode, stackOffset)
         , m_tableIndex(index)
     {
     }
@@ -876,8 +883,8 @@ protected:
 
 class TableSize : public ByteCode {
 public:
-    TableSize(uint32_t index)
-        : ByteCode(OpcodeKind::TableSizeOpcode)
+    TableSize(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::TableSizeOpcode, stackOffset)
         , m_tableIndex(index)
     {
     }
@@ -902,8 +909,8 @@ protected:
 
 class TableCopy : public ByteCode {
 public:
-    TableCopy(uint32_t dstIndex, uint32_t srcIndex)
-        : ByteCode(OpcodeKind::TableCopyOpcode)
+    TableCopy(uint32_t stackOffset, uint32_t dstIndex, uint32_t srcIndex)
+        : ByteCode(OpcodeKind::TableCopyOpcode, stackOffset)
         , m_dstIndex(dstIndex)
         , m_srcIndex(srcIndex)
     {
@@ -931,8 +938,8 @@ protected:
 
 class TableFill : public ByteCode {
 public:
-    TableFill(uint32_t index)
-        : ByteCode(OpcodeKind::TableFillOpcode)
+    TableFill(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::TableFillOpcode, stackOffset)
         , m_tableIndex(index)
     {
     }
@@ -957,8 +964,8 @@ protected:
 
 class TableInit : public ByteCode {
 public:
-    TableInit(uint32_t tableIndex, uint32_t segmentIndex)
-        : ByteCode(OpcodeKind::TableInitOpcode)
+    TableInit(uint32_t stackOffset, uint32_t tableIndex, uint32_t segmentIndex)
+        : ByteCode(OpcodeKind::TableInitOpcode, stackOffset)
         , m_tableIndex(tableIndex)
         , m_segmentIndex(segmentIndex)
     {
@@ -1015,8 +1022,8 @@ protected:
 
 class RefFunc : public ByteCode {
 public:
-    RefFunc(uint32_t funcIndex)
-        : ByteCode(OpcodeKind::RefFuncOpcode)
+    RefFunc(uint32_t stackOffset, uint32_t funcIndex)
+        : ByteCode(OpcodeKind::RefFuncOpcode, stackOffset)
         , m_funcIndex(funcIndex)
     {
     }
@@ -1041,8 +1048,8 @@ private:
 
 class RefNull : public ByteCode {
 public:
-    RefNull(Value::Type type)
-        : ByteCode(OpcodeKind::RefNullOpcode)
+    RefNull(uint32_t stackOffset, Value::Type type)
+        : ByteCode(OpcodeKind::RefNullOpcode, stackOffset)
         , m_type(type)
     {
     }
@@ -1072,8 +1079,8 @@ private:
 
 class RefIsNull : public ByteCode {
 public:
-    RefIsNull()
-        : ByteCode(OpcodeKind::RefIsNullOpcode)
+    RefIsNull(uint32_t stackOffset)
+        : ByteCode(OpcodeKind::RefIsNullOpcode, stackOffset)
     {
     }
 
@@ -1087,8 +1094,8 @@ public:
 
 class GlobalGet4 : public ByteCode {
 public:
-    GlobalGet4(uint32_t index)
-        : ByteCode(OpcodeKind::GlobalGet4Opcode)
+    GlobalGet4(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalGet4Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1114,8 +1121,8 @@ protected:
 
 class GlobalGet8 : public ByteCode {
 public:
-    GlobalGet8(uint32_t index)
-        : ByteCode(OpcodeKind::GlobalGet8Opcode)
+    GlobalGet8(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalGet8Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1141,8 +1148,8 @@ protected:
 
 class GlobalSet4 : public ByteCode {
 public:
-    GlobalSet4(uint32_t index)
-        : ByteCode(OpcodeKind::GlobalSet4Opcode)
+    GlobalSet4(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalSet4Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1168,8 +1175,8 @@ protected:
 
 class GlobalSet8 : public ByteCode {
 public:
-    GlobalSet8(uint32_t index)
-        : ByteCode(OpcodeKind::GlobalSet8Opcode)
+    GlobalSet8(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalSet8Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1195,8 +1202,8 @@ protected:
 
 class Throw : public ByteCode {
 public:
-    Throw(uint32_t index)
-        : ByteCode(OpcodeKind::ThrowOpcode)
+    Throw(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::ThrowOpcode, stackOffset)
         , m_tagIndex(index)
     {
     }
@@ -1243,8 +1250,8 @@ protected:
 
 class End : public ByteCode {
 public:
-    End()
-        : ByteCode(OpcodeKind::EndOpcode)
+    End(uint32_t stackOffset)
+        : ByteCode(OpcodeKind::EndOpcode, stackOffset)
     {
     }
 

@@ -49,15 +49,12 @@ OpcodeTable::OpcodeTable()
     b.m_opcodeInAddress = nullptr;
 #endif
     size_t pc = reinterpret_cast<size_t>(&b);
-    uint8_t* bp = nullptr;
-    uint8_t* sp = nullptr;
-    Interpreter::interpret(dummyState, pc, bp, sp, nullptr, nullptr, nullptr, nullptr);
+    Interpreter::interpret(dummyState, pc, nullptr, nullptr, nullptr, nullptr, nullptr);
 #endif
 }
 
-void Interpreter::interpret(ExecutionState& state,
-                            uint8_t* bp,
-                            uint8_t*& sp)
+uint8_t* Interpreter::interpret(ExecutionState& state,
+                                uint8_t* bp)
 {
     DefinedFunction* df = state.currentFunction()->asDefinedFunction();
     ModuleFunction* mf = df->moduleFunction();
@@ -65,8 +62,7 @@ void Interpreter::interpret(ExecutionState& state,
     Instance* instance = df->instance();
     while (true) {
         try {
-            interpret(state, programCounter, bp, sp, instance, instance->m_memory.data(), instance->m_table.data(), instance->m_global.data());
-            break;
+            return interpret(state, programCounter, bp, instance, instance->m_memory.data(), instance->m_table.data(), instance->m_global.data());
         } catch (std::unique_ptr<Exception>& e) {
             for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
                 if (e->m_programCounterInfo[i - 1].first == &state) {
@@ -82,7 +78,7 @@ void Interpreter::interpret(ExecutionState& state,
                     if (item.m_tryStart <= offset && offset < item.m_tryEnd) {
                         if (item.m_tagIndex == std::numeric_limits<uint32_t>::max() || state.currentFunction()->asDefinedFunction()->instance()->tag(item.m_tagIndex) == tag) {
                             programCounter = item.m_catchStartPosition + reinterpret_cast<size_t>(mf->byteCode());
-                            sp = bp + item.m_stackSizeToBe;
+                            uint8_t* sp = bp + item.m_stackSizeToBe;
                             if (item.m_tagIndex != std::numeric_limits<uint32_t>::max() && tag->functionType()->paramStackSize()) {
                                 memcpy(sp, e->userExceptionData().data(), tag->functionType()->paramStackSize());
                                 sp += tag->functionType()->paramStackSize();
@@ -114,6 +110,18 @@ ALWAYS_INLINE T readValue(uint8_t*& sp)
     sp -= stackAllocatedSize<T>();
     T v = *reinterpret_cast<T*>(sp);
     return v;
+}
+
+template <typename T>
+ALWAYS_INLINE void writeValue(uint8_t* bp, uint32_t offset, const T& v)
+{
+    *reinterpret_cast<T*>(bp + offset) = v;
+}
+
+template <typename T>
+ALWAYS_INLINE T readValue(uint8_t* bp, uint32_t offset)
+{
+    return *reinterpret_cast<T*>(bp + offset);
 }
 
 template <typename T>
@@ -205,44 +213,49 @@ R doConvert(ExecutionState& state, T val)
     return convert<R>(val);
 }
 
-void Interpreter::interpret(ExecutionState& state,
-                            size_t programCounter,
-                            uint8_t* bp,
-                            uint8_t*& sp,
-                            Instance* instance,
-                            Memory** memories,
-                            Table** tables,
-                            Global** globals)
+uint8_t* Interpreter::interpret(ExecutionState& state,
+                                size_t programCounter,
+                                uint8_t* bp,
+                                Instance* instance,
+                                Memory** memories,
+                                Table** tables,
+                                Global** globals)
 {
     state.m_programCounterPointer = &programCounter;
 
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
 
-#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                      \
-        :                                                                                                                   \
-    {                                                                                                                       \
-        auto rhs = readValue<nativeParameterTypeName>(sp);                                                                  \
-        auto lhs = readValue<nativeParameterTypeName>(sp);                                                                  \
-        writeValue<nativeReturnTypeName>(sp, operationName(state, lhs, rhs));                                               \
-        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                               \
-        NEXT_INSTRUCTION();                                                                                                 \
+#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)                    \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                         \
+        :                                                                                                                                      \
+    {                                                                                                                                          \
+        BinaryOperation* code = (BinaryOperation*)programCounter;                                                                              \
+        const auto stackOffset = code->stackOffset();                                                                                          \
+        auto rhs = readValue<nativeParameterTypeName>(bp, stackOffset - stackAllocatedSize<nativeParameterTypeName>());                        \
+        auto lhs = readValue<nativeParameterTypeName>(bp, stackOffset - stackAllocatedSize<nativeParameterTypeName>() * 2);                    \
+        writeValue<nativeReturnTypeName>(bp, stackOffset - stackAllocatedSize<nativeParameterTypeName>() * 2, operationName(state, lhs, rhs)); \
+        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                                                  \
+        NEXT_INSTRUCTION();                                                                                                                    \
     }
 
-#define UNARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                     \
-        :                                                                                                                  \
-    {                                                                                                                      \
-        writeValue<nativeReturnTypeName>(sp, operationName(readValue<nativeParameterTypeName>(sp)));                       \
-        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                               \
-        NEXT_INSTRUCTION();                                                                                                \
+#define UNARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)     \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                         \
+        :                                                                                                                      \
+    {                                                                                                                          \
+        UnaryOperation* code = (UnaryOperation*)programCounter;                                                                \
+        const auto stackOffset = code->stackOffset() - stackAllocatedSize<nativeParameterTypeName>();                          \
+        writeValue<nativeReturnTypeName>(bp, stackOffset, operationName(readValue<nativeParameterTypeName>(bp, stackOffset))); \
+        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                   \
+        NEXT_INSTRUCTION();                                                                                                    \
     }
 
 #define UNARY_OPERATION_OPERATION_TEMPLATE_2(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, T1, T2, byteCodeOperationName) \
     DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                                  \
         :                                                                                                                                               \
     {                                                                                                                                                   \
-        writeValue<nativeReturnTypeName>(sp, operationName<T1, T2>(state, readValue<nativeParameterTypeName>(sp)));                                     \
+        UnaryOperation* code = (UnaryOperation*)programCounter;                                                                                         \
+        const auto stackOffset = code->stackOffset() - stackAllocatedSize<nativeParameterTypeName>();                                                   \
+        writeValue<nativeReturnTypeName>(bp, stackOffset, operationName<T1, T2>(state, readValue<nativeParameterTypeName>(bp, stackOffset)));           \
         ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                                            \
         NEXT_INSTRUCTION();                                                                                                                             \
     }
@@ -255,29 +268,29 @@ void Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                       \
     }
 
-#define MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
-    DEFINE_OPCODE(opcodeName)                                                      \
-        :                                                                          \
-    {                                                                              \
-        MemoryLoad* code = (MemoryLoad*)programCounter;                            \
-        uint32_t offset = readValue<uint32_t>(sp);                                 \
-        nativeReadTypeName value;                                                  \
-        memories[0]->load(state, offset, code->offset(), &value);                  \
-        writeValue<nativeWriteTypeName>(sp, value);                                \
-        ADD_PROGRAM_COUNTER(MemoryLoad);                                           \
-        NEXT_INSTRUCTION();                                                        \
+#define MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName)                        \
+    DEFINE_OPCODE(opcodeName)                                                                             \
+        :                                                                                                 \
+    {                                                                                                     \
+        MemoryLoad* code = (MemoryLoad*)programCounter;                                                   \
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>());  \
+        nativeReadTypeName value;                                                                         \
+        memories[0]->load(state, offset, code->offset(), &value);                                         \
+        writeValue<nativeWriteTypeName>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>(), value); \
+        ADD_PROGRAM_COUNTER(MemoryLoad);                                                                  \
+        NEXT_INSTRUCTION();                                                                               \
     }
 
-#define MEMORY_STORE_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
-    DEFINE_OPCODE(opcodeName)                                                       \
-        :                                                                           \
-    {                                                                               \
-        MemoryStore* code = (MemoryStore*)programCounter;                           \
-        nativeWriteTypeName value = readValue<nativeReadTypeName>(sp);              \
-        uint32_t offset = readValue<uint32_t>(sp);                                  \
-        memories[0]->store(state, offset, code->offset(), value);                   \
-        ADD_PROGRAM_COUNTER(MemoryStore);                                           \
-        NEXT_INSTRUCTION();                                                         \
+#define MEMORY_STORE_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName)                                                                 \
+    DEFINE_OPCODE(opcodeName)                                                                                                                       \
+        :                                                                                                                                           \
+    {                                                                                                                                               \
+        MemoryStore* code = (MemoryStore*)programCounter;                                                                                           \
+        nativeWriteTypeName value = readValue<nativeReadTypeName>(bp, code->stackOffset() - stackAllocatedSize<nativeReadTypeName>());              \
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<nativeReadTypeName>() - stackAllocatedSize<uint32_t>()); \
+        memories[0]->store(state, offset, code->offset(), value);                                                                                   \
+        ADD_PROGRAM_COUNTER(MemoryStore);                                                                                                           \
+        NEXT_INSTRUCTION();                                                                                                                         \
     }
 
 
@@ -314,7 +327,7 @@ NextInstruction:
         :
     {
         I32Const* code = (I32Const*)programCounter;
-        writeValue(sp, code->value());
+        *reinterpret_cast<uint32_t*>(bp + code->stackOffset()) = code->value();
         ADD_PROGRAM_COUNTER(I32Const);
         NEXT_INSTRUCTION();
     }
@@ -323,7 +336,7 @@ NextInstruction:
         :
     {
         I64Const* code = (I64Const*)programCounter;
-        writeValue(sp, code->value());
+        *reinterpret_cast<uint64_t*>(bp + code->stackOffset()) = code->value();
         ADD_PROGRAM_COUNTER(I64Const);
         NEXT_INSTRUCTION();
     }
@@ -332,7 +345,7 @@ NextInstruction:
         :
     {
         F32Const* code = (F32Const*)programCounter;
-        writeValue(sp, code->value());
+        *reinterpret_cast<uint32_t*>(bp + code->stackOffset()) = code->value();
         ADD_PROGRAM_COUNTER(F32Const);
         NEXT_INSTRUCTION();
     }
@@ -341,7 +354,7 @@ NextInstruction:
         :
     {
         F64Const* code = (F64Const*)programCounter;
-        writeValue(sp, code->value());
+        *reinterpret_cast<uint64_t*>(bp + code->stackOffset()) = code->value();
         ADD_PROGRAM_COUNTER(F64Const);
         NEXT_INSTRUCTION();
     }
@@ -350,8 +363,7 @@ NextInstruction:
         :
     {
         LocalGet4* code = (LocalGet4*)programCounter;
-        *reinterpret_cast<uint32_t*>(sp) = *reinterpret_cast<uint32_t*>(&bp[code->offset()]);
-        sp += 4;
+        *reinterpret_cast<uint32_t*>(bp + code->stackOffset()) = *reinterpret_cast<uint32_t*>(&bp[code->offset()]);
         ADD_PROGRAM_COUNTER(LocalGet4);
         NEXT_INSTRUCTION();
     }
@@ -360,8 +372,7 @@ NextInstruction:
         :
     {
         LocalGet8* code = (LocalGet8*)programCounter;
-        *reinterpret_cast<uint64_t*>(sp) = *reinterpret_cast<uint64_t*>(&bp[code->offset()]);
-        sp += 8;
+        *reinterpret_cast<uint64_t*>(bp + code->stackOffset()) = *reinterpret_cast<uint64_t*>(&bp[code->offset()]);
         ADD_PROGRAM_COUNTER(LocalGet8);
         NEXT_INSTRUCTION();
     }
@@ -370,8 +381,7 @@ NextInstruction:
         :
     {
         LocalSet4* code = (LocalSet4*)programCounter;
-        sp -= 4;
-        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(sp);
+        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset() - 4);
         ADD_PROGRAM_COUNTER(LocalSet4);
         NEXT_INSTRUCTION();
     }
@@ -380,8 +390,7 @@ NextInstruction:
         :
     {
         LocalSet8* code = (LocalSet8*)programCounter;
-        sp -= 8;
-        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp);
+        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset() - 8);
         ADD_PROGRAM_COUNTER(LocalSet8);
         NEXT_INSTRUCTION();
     }
@@ -390,7 +399,7 @@ NextInstruction:
         :
     {
         LocalTee4* code = (LocalTee4*)programCounter;
-        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(sp - 4);
+        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset() - 4);
         ADD_PROGRAM_COUNTER(LocalTee4);
         NEXT_INSTRUCTION();
     }
@@ -399,7 +408,7 @@ NextInstruction:
         :
     {
         LocalTee8* code = (LocalTee8*)programCounter;
-        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(sp - 8);
+        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset() - 8);
         ADD_PROGRAM_COUNTER(LocalTee8);
         NEXT_INSTRUCTION();
     }
@@ -409,10 +418,11 @@ NextInstruction:
     {
         Select* code = (Select*)programCounter;
         auto size = code->size();
-        auto cond = readValue<int32_t>(sp);
-        uint8_t* src = cond ? (sp - size) : (sp - size * 2);
-        sp -= size;
-        memmove(src, sp, size);
+        auto cond = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>());
+        uint8_t* m = bp + code->stackOffset() - stackAllocatedSize<int32_t>();
+        uint8_t* src = cond ? (m - size) : (m - size * 2);
+        m -= size;
+        memmove(src, m, size);
         ADD_PROGRAM_COUNTER(Select);
         NEXT_INSTRUCTION();
     }
@@ -572,12 +582,9 @@ NextInstruction:
     {
         Drop* code = (Drop*)programCounter;
         if (code->parameterSize()) {
-            auto dest = sp - code->dropSize();
-            auto src = sp - code->parameterSize();
-            sp -= (code->dropSize() - code->parameterSize());
+            auto dest = bp + code->stackOffset() - code->dropSize();
+            auto src = bp + code->stackOffset() - code->parameterSize();
             memmove(dest, src, code->parameterSize());
-        } else {
-            sp -= code->dropSize();
         }
         ADD_PROGRAM_COUNTER(Drop);
         NEXT_INSTRUCTION();
@@ -595,7 +602,7 @@ NextInstruction:
         :
     {
         JumpIfTrue* code = (JumpIfTrue*)programCounter;
-        if (readValue<int32_t>(sp)) {
+        if (readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>())) {
             programCounter += code->offset();
         } else {
             ADD_PROGRAM_COUNTER(JumpIfTrue);
@@ -607,7 +614,7 @@ NextInstruction:
         :
     {
         JumpIfFalse* code = (JumpIfFalse*)programCounter;
-        if (readValue<int32_t>(sp)) {
+        if (readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>())) {
             ADD_PROGRAM_COUNTER(JumpIfFalse);
         } else {
             programCounter += code->offset();
@@ -618,7 +625,7 @@ NextInstruction:
     DEFINE_OPCODE(Call)
         :
     {
-        callOperation(state, programCounter, bp, sp);
+        callOperation(state, programCounter, bp);
         ADD_PROGRAM_COUNTER(Call);
         NEXT_INSTRUCTION();
     }
@@ -626,7 +633,7 @@ NextInstruction:
     DEFINE_OPCODE(CallIndirect)
         :
     {
-        callIndirectOperation(state, programCounter, bp, sp);
+        callIndirectOperation(state, programCounter, bp);
         ADD_PROGRAM_COUNTER(CallIndirect);
         NEXT_INSTRUCTION();
     }
@@ -635,7 +642,7 @@ NextInstruction:
         :
     {
         BrTable* code = (BrTable*)programCounter;
-        uint32_t value = readValue<uint32_t>(sp);
+        uint32_t value = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>());
 
         if (value >= code->tableSize()) {
             // default case
@@ -651,7 +658,7 @@ NextInstruction:
     {
         GlobalGet4* code = (GlobalGet4*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
-        globals[code->index()]->value().writeNBytesToStack<4>(sp);
+        globals[code->index()]->value().writeNBytesToStack<4>(bp + code->stackOffset());
         ADD_PROGRAM_COUNTER(GlobalGet4);
         NEXT_INSTRUCTION();
     }
@@ -661,7 +668,7 @@ NextInstruction:
     {
         GlobalGet8* code = (GlobalGet8*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
-        globals[code->index()]->value().writeNBytesToStack<8>(sp);
+        globals[code->index()]->value().writeNBytesToStack<8>(bp + code->stackOffset());
         ADD_PROGRAM_COUNTER(GlobalGet8);
         NEXT_INSTRUCTION();
     }
@@ -672,7 +679,7 @@ NextInstruction:
         GlobalSet4* code = (GlobalSet4*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
         Value& val = globals[code->index()]->value();
-        val.readFromStack<4>(sp);
+        val.readFromStack<4>(bp + code->stackOffset() - 4);
         ADD_PROGRAM_COUNTER(GlobalSet4);
         NEXT_INSTRUCTION();
     }
@@ -683,7 +690,7 @@ NextInstruction:
         GlobalSet8* code = (GlobalSet8*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
         Value& val = globals[code->index()]->value();
-        val.readFromStack<8>(sp);
+        val.readFromStack<8>(bp + code->stackOffset() - 8);
         ADD_PROGRAM_COUNTER(GlobalSet8);
         NEXT_INSTRUCTION();
     }
@@ -716,7 +723,8 @@ NextInstruction:
     DEFINE_OPCODE(MemorySize)
         :
     {
-        writeValue<int32_t>(sp, memories[0]->sizeInPageSize());
+        MemorySize* code = (MemorySize*)programCounter;
+        writeValue<int32_t>(bp, code->stackOffset(), memories[0]->sizeInPageSize());
         ADD_PROGRAM_COUNTER(MemorySize);
         NEXT_INSTRUCTION();
     }
@@ -724,12 +732,13 @@ NextInstruction:
     DEFINE_OPCODE(MemoryGrow)
         :
     {
+        MemoryGrow* code = (MemoryGrow*)programCounter;
         Memory* m = memories[0];
         auto oldSize = m->sizeInPageSize();
-        if (m->grow(readValue<int32_t>(sp) * (uint64_t)Memory::s_memoryPageSize)) {
-            writeValue<int32_t>(sp, oldSize);
+        if (m->grow(readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>()) * (uint64_t)Memory::s_memoryPageSize)) {
+            writeValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>(), oldSize);
         } else {
-            writeValue<int32_t>(sp, -1);
+            writeValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>(), -1);
         }
         ADD_PROGRAM_COUNTER(MemoryGrow);
         NEXT_INSTRUCTION();
@@ -741,9 +750,9 @@ NextInstruction:
         MemoryInit* code = (MemoryInit*)programCounter;
         Memory* m = memories[0];
         DataSegment& sg = instance->dataSegment(code->segmentIndex());
-        auto size = readValue<int32_t>(sp);
-        auto srcStart = readValue<int32_t>(sp);
-        auto dstStart = readValue<int32_t>(sp);
+        auto dstStart = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 3);
+        auto srcStart = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 2);
+        auto size = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>());
         m->init(state, &sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(MemoryInit);
         NEXT_INSTRUCTION();
@@ -752,10 +761,11 @@ NextInstruction:
     DEFINE_OPCODE(MemoryCopy)
         :
     {
+        MemoryCopy* code = (MemoryCopy*)programCounter;
         Memory* m = memories[0];
-        auto size = readValue<int32_t>(sp);
-        auto srcStart = readValue<int32_t>(sp);
-        auto dstStart = readValue<int32_t>(sp);
+        auto dstStart = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 3);
+        auto srcStart = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 2);
+        auto size = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>());
         m->copy(state, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(MemoryCopy);
         NEXT_INSTRUCTION();
@@ -764,12 +774,13 @@ NextInstruction:
     DEFINE_OPCODE(MemoryFill)
         :
     {
+        MemoryFill* code = (MemoryFill*)programCounter;
         Memory* m = memories[0];
-        auto size = readValue<int32_t>(sp);
-        auto value = readValue<int32_t>(sp);
-        auto dstStart = readValue<int32_t>(sp);
+        auto dstStart = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 3);
+        auto value = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 2);
+        auto size = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>());
         m->fill(state, dstStart, value, size);
-        ADD_PROGRAM_COUNTER(MemoryCopy);
+        ADD_PROGRAM_COUNTER(MemoryFill);
         NEXT_INSTRUCTION();
     }
 
@@ -789,8 +800,8 @@ NextInstruction:
         TableGet* code = (TableGet*)programCounter;
         ASSERT(code->tableIndex() < instance->m_table.size());
         Table* table = tables[code->tableIndex()];
-        void* val = table->getElement(state, readValue<uint32_t>(sp));
-        writeValue(sp, val);
+        void* val = table->getElement(state, readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>()));
+        writeValue(bp, code->stackOffset() - stackAllocatedSize<uint32_t>(), val);
 
         ADD_PROGRAM_COUNTER(TableGet);
         NEXT_INSTRUCTION();
@@ -802,8 +813,8 @@ NextInstruction:
         TableSet* code = (TableSet*)programCounter;
         ASSERT(code->tableIndex() < instance->m_table.size());
         Table* table = tables[code->tableIndex()];
-        void* ptr = readValue<void*>(sp);
-        table->setElement(state, readValue<uint32_t>(sp), ptr);
+        void* ptr = readValue<void*>(bp, code->stackOffset() - stackAllocatedSize<void*>());
+        table->setElement(state, readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>() - stackAllocatedSize<void*>()), ptr);
 
         ADD_PROGRAM_COUNTER(TableSet);
         NEXT_INSTRUCTION();
@@ -816,15 +827,16 @@ NextInstruction:
         ASSERT(code->tableIndex() < instance->m_table.size());
         Table* table = tables[code->tableIndex()];
         size_t size = table->size();
-        uint64_t newSize = (uint64_t)readValue<uint32_t>(sp) + size;
+
+        uint64_t newSize = (uint64_t)readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>()) + size;
         // FIXME read reference
-        void* ptr = readValue<void*>(sp);
+        void* ptr = readValue<void*>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>() - stackAllocatedSize<void*>());
 
         if (newSize <= table->maximumSize()) {
             table->grow(newSize, ptr);
-            writeValue<uint32_t>(sp, size);
+            writeValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>() - stackAllocatedSize<void*>(), size);
         } else {
-            writeValue<uint32_t>(sp, -1);
+            writeValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>() - stackAllocatedSize<void*>(), -1);
         }
 
         ADD_PROGRAM_COUNTER(TableGrow);
@@ -838,7 +850,7 @@ NextInstruction:
         ASSERT(code->tableIndex() < instance->m_table.size());
         Table* table = tables[code->tableIndex()];
         size_t size = table->size();
-        writeValue<int32_t>(sp, size);
+        writeValue<uint32_t>(bp, code->stackOffset(), size);
 
         ADD_PROGRAM_COUNTER(TableSize);
         NEXT_INSTRUCTION();
@@ -852,9 +864,11 @@ NextInstruction:
         ASSERT(code->srcIndex() < instance->m_table.size());
         Table* dstTable = tables[code->dstIndex()];
         Table* srcTable = tables[code->srcIndex()];
-        uint32_t n = readValue<uint32_t>(sp);
-        uint32_t srcIndex = readValue<uint32_t>(sp);
-        uint32_t dstIndex = readValue<uint32_t>(sp);
+
+        uint32_t dstIndex = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 3);
+        uint32_t srcIndex = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 2);
+        uint32_t n = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>());
+
         dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
 
         ADD_PROGRAM_COUNTER(TableCopy);
@@ -867,9 +881,10 @@ NextInstruction:
         TableFill* code = (TableFill*)programCounter;
         ASSERT(code->tableIndex() < instance->m_table.size());
         Table* table = tables[code->tableIndex()];
-        int32_t n = readValue<int32_t>(sp);
-        void* ptr = readValue<void*>(sp);
-        int32_t index = readValue<int32_t>(sp);
+
+        int32_t index = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 2 - stackAllocatedSize<void*>());
+        void* ptr = readValue<void*>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() - stackAllocatedSize<void*>());
+        int32_t n = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>());
         table->fill(state, n, ptr, index);
 
         ADD_PROGRAM_COUNTER(TableFill);
@@ -881,9 +896,11 @@ NextInstruction:
     {
         TableInit* code = (TableInit*)programCounter;
         ElementSegment& sg = instance->elementSegment(code->segmentIndex());
-        auto size = readValue<int32_t>(sp);
-        auto srcStart = readValue<int32_t>(sp);
-        auto dstStart = readValue<int32_t>(sp);
+
+        int32_t dstStart = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 3);
+        int32_t srcStart = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>() * 2);
+        int32_t size = readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<int32_t>());
+
         ASSERT(code->tableIndex() < instance->m_table.size());
         Table* table = tables[code->tableIndex()];
         table->init(state, instance, &sg, dstStart, srcStart, size);
@@ -904,7 +921,8 @@ NextInstruction:
         :
     {
         RefFunc* code = (RefFunc*)programCounter;
-        Value(instance->function(code->funcIndex())).writeToStack(sp);
+        uint8_t* ptr = code->stackOffset() + bp;
+        Value(instance->function(code->funcIndex())).writeToStack(ptr);
 
         ADD_PROGRAM_COUNTER(RefFunc);
         NEXT_INSTRUCTION();
@@ -914,7 +932,8 @@ NextInstruction:
         :
     {
         RefNull* code = (RefNull*)programCounter;
-        Value(code->type(), Value::Null).writeToStack(sp);
+        uint8_t* ptr = code->stackOffset() + bp;
+        Value(code->type(), Value::Null).writeToStack(ptr);
 
         ADD_PROGRAM_COUNTER(RefNull);
         NEXT_INSTRUCTION();
@@ -923,8 +942,10 @@ NextInstruction:
     DEFINE_OPCODE(RefIsNull)
         :
     {
-        Value val(reinterpret_cast<Function*>(readValue<void*>(sp)));
-        writeValue(sp, (int32_t)val.isNull());
+        RefIsNull* code = (RefIsNull*)programCounter;
+
+        Value val(reinterpret_cast<Function*>(readValue<void*>(bp, code->stackOffset() - stackAllocatedSize<int32_t>())));
+        writeValue(bp, code->stackOffset() - stackAllocatedSize<int32_t>(), (int32_t)val.isNull());
 
         ADD_PROGRAM_COUNTER(RefIsNull);
         NEXT_INSTRUCTION();
@@ -938,7 +959,7 @@ NextInstruction:
         Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>> userExceptionData;
         size_t sz = tag->functionType()->paramStackSize();
         userExceptionData.resizeWithUninitializedValues(sz);
-        memcpy(userExceptionData.data(), sp - sz, sz);
+        memcpy(userExceptionData.data(), bp + code->stackOffset() - sz, sz);
         Trap::throwException(state, tag, std::move(userExceptionData));
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
@@ -956,7 +977,7 @@ NextInstruction:
         :
     {
         End* code = (End*)programCounter;
-        return;
+        return bp + code->stackOffset();
     }
 
     DEFINE_OPCODE(FillOpcodeTable)
@@ -972,17 +993,18 @@ NextInstruction:
         FOR_EACH_USED_OPCODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
 #endif
-        return;
+        return nullptr;
     }
 
     DEFINE_DEFAULT
+
+    return nullptr;
 }
 
 NEVER_INLINE void Interpreter::callOperation(
     ExecutionState& state,
     size_t programCounter,
-    uint8_t* bp,
-    uint8_t*& sp)
+    uint8_t* bp)
 {
     Call* code = (Call*)programCounter;
 
@@ -991,8 +1013,7 @@ NEVER_INLINE void Interpreter::callOperation(
     const ValueTypeVector& param = ft->param();
     Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
 
-    sp = sp - ft->paramStackSize();
-    uint8_t* paramStackPointer = sp;
+    uint8_t* paramStackPointer = bp + code->stackOffset() - ft->paramStackSize();
     for (size_t i = 0; i < param.size(); i++) {
         paramVector[i] = Value(param[i], paramStackPointer);
         paramStackPointer += valueSizeInStack(param[i]);
@@ -1002,21 +1023,21 @@ NEVER_INLINE void Interpreter::callOperation(
     Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
     target->call(state, param.size(), paramVector, resultVector);
 
+    uint8_t* resultStackPointer = bp + code->stackOffset() - ft->paramStackSize();
     for (size_t i = 0; i < result.size(); i++) {
-        resultVector[i].writeToStack(sp);
+        resultVector[i].writeToStack(resultStackPointer);
     }
 }
 
 NEVER_INLINE void Interpreter::callIndirectOperation(
     ExecutionState& state,
     size_t programCounter,
-    uint8_t* bp,
-    uint8_t*& sp)
+    uint8_t* bp)
 {
     CallIndirect* code = (CallIndirect*)programCounter;
     Table* table = state.currentFunction()->asDefinedFunction()->instance()->table(code->tableIndex());
 
-    uint32_t idx = readValue<uint32_t>(sp);
+    uint32_t idx = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>());
     if (idx >= table->size()) {
         Trap::throwException(state, "undefined element");
     }
@@ -1031,8 +1052,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     const ValueTypeVector& param = ft->param();
     Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
 
-    sp = sp - ft->paramStackSize();
-    uint8_t* paramStackPointer = sp;
+    uint8_t* paramStackPointer = bp + code->stackOffset() - ft->paramStackSize() - stackAllocatedSize<uint32_t>();
     for (size_t i = 0; i < param.size(); i++) {
         paramVector[i] = Value(param[i], paramStackPointer);
         paramStackPointer += valueSizeInStack(param[i]);
@@ -1042,8 +1062,9 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
     target->call(state, param.size(), paramVector, resultVector);
 
+    uint8_t* resultStackPointer = bp + code->stackOffset() - ft->paramStackSize() - stackAllocatedSize<uint32_t>();
     for (size_t i = 0; i < result.size(); i++) {
-        resultVector[i].writeToStack(sp);
+        resultVector[i].writeToStack(resultStackPointer);
     }
 }
 
