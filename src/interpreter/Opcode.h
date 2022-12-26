@@ -64,10 +64,6 @@ enum OpcodeKind : size_t {
     WABT_OPCODE(___, I32, I64, ___, 4, 0, 0x3e, I64Store32, "i64.store32", "")                 \
     WABT_OPCODE(I32, ___, ___, ___, 0, 0, 0x3f, MemorySize, "memory.size", "")                 \
     WABT_OPCODE(I32, I32, ___, ___, 0, 0, 0x40, MemoryGrow, "memory.grow", "")                 \
-    WABT_OPCODE(I32, ___, ___, ___, 0, 0, 0x41, I32Const, "i32.const", "")                     \
-    WABT_OPCODE(I64, ___, ___, ___, 0, 0, 0x42, I64Const, "i64.const", "")                     \
-    WABT_OPCODE(F32, ___, ___, ___, 0, 0, 0x43, F32Const, "f32.const", "")                     \
-    WABT_OPCODE(F64, ___, ___, ___, 0, 0, 0x44, F64Const, "f64.const", "")                     \
     WABT_OPCODE(I32, I32, ___, ___, 0, 0, 0x45, I32Eqz, "i32.eqz", "eqz")                      \
     WABT_OPCODE(I32, I32, I32, ___, 0, 0, 0x46, I32Eq, "i32.eq", "==")                         \
     WABT_OPCODE(I32, I32, I32, ___, 0, 0, 0x47, I32Ne, "i32.ne", "!=")                         \
@@ -232,7 +228,9 @@ enum OpcodeKind : size_t {
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf0, GlobalGet8, "global_get_8", "")                \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf1, GlobalSet4, "global_set_4", "")                \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf2, GlobalSet8, "global_set_8", "")                \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf3, FillOpcodeTable, "fill_opcode_table", "")
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf3, Const32, "const_32", "")                       \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf4, Const64, "const_64", "")                       \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf5, FillOpcodeTable, "fill_opcode_table", "")
 
 class OpcodeTable {
 public:

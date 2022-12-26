@@ -93,10 +93,10 @@ protected:
     uint32_t m_stackOffset;
 };
 
-class I32Const : public ByteCode {
+class Const32 : public ByteCode {
 public:
-    I32Const(uint32_t stackOffset, uint32_t value)
-        : ByteCode(OpcodeKind::I32ConstOpcode, stackOffset)
+    Const32(uint32_t stackOffset, uint32_t value)
+        : ByteCode(OpcodeKind::Const32Opcode, stackOffset)
         , m_value(value)
     {
     }
@@ -111,12 +111,39 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(I32Const);
+        return sizeof(Const32);
     }
 #endif
 
 protected:
     uint32_t m_value;
+};
+
+
+class Const64 : public ByteCode {
+public:
+    Const64(uint32_t stackOffset, uint64_t value)
+        : ByteCode(OpcodeKind::Const64Opcode, stackOffset)
+        , m_value(value)
+    {
+    }
+
+    uint64_t value() const { return m_value; }
+
+#if !defined(NDEBUG)
+    virtual void dump(size_t pos)
+    {
+        printf("value: %lf", static_cast<double>(m_value));
+    }
+
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Const64);
+    }
+#endif
+
+protected:
+    uint64_t m_value;
 };
 
 class BinaryOperation : public ByteCode {
@@ -133,84 +160,6 @@ public:
         : ByteCode(opcode, stackOffset)
     {
     }
-};
-
-class I64Const : public ByteCode {
-public:
-    I64Const(uint32_t stackOffset, uint64_t value)
-        : ByteCode(OpcodeKind::I64ConstOpcode, stackOffset)
-        , m_value(value)
-    {
-    }
-
-    uint64_t value() const { return m_value; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        printf("value: %" PRId64, static_cast<int64_t>(m_value));
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(I64Const);
-    }
-#endif
-
-protected:
-    uint64_t m_value;
-};
-
-class F32Const : public ByteCode {
-public:
-    F32Const(uint32_t stackOffset, uint32_t value)
-        : ByteCode(OpcodeKind::F32ConstOpcode, stackOffset)
-        , m_value(value)
-    {
-    }
-
-    uint32_t value() const { return m_value; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        printf("value: %f", static_cast<float>(m_value));
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(F32Const);
-    }
-#endif
-
-protected:
-    uint32_t m_value;
-};
-
-class F64Const : public ByteCode {
-public:
-    F64Const(uint32_t stackOffset, uint64_t value)
-        : ByteCode(OpcodeKind::F64ConstOpcode, stackOffset)
-        , m_value(value)
-    {
-    }
-
-    uint64_t value() const { return m_value; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        printf("value: %lf", static_cast<double>(m_value));
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(F64Const);
-    }
-#endif
-
-protected:
-    uint64_t m_value;
 };
 
 class Call : public ByteCode {
