@@ -217,10 +217,10 @@ protected:
     uint32_t m_functionTypeIndex;
 };
 
-class LocalGet4 : public ByteCode {
+class LocalGet32 : public ByteCode {
 public:
-    LocalGet4(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalGet4Opcode, stackOffset)
+    LocalGet32(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalGet32Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -236,7 +236,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalGet4);
+        return sizeof(LocalGet32);
     }
 #endif
 
@@ -244,10 +244,10 @@ protected:
     uint32_t m_offset;
 };
 
-class LocalGet8 : public ByteCode {
+class LocalGet64 : public ByteCode {
 public:
-    LocalGet8(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalGet8Opcode, stackOffset)
+    LocalGet64(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalGet64Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -263,7 +263,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalGet8);
+        return sizeof(LocalGet64);
     }
 #endif
 
@@ -271,10 +271,10 @@ protected:
     uint32_t m_offset;
 };
 
-class LocalSet4 : public ByteCode {
+class LocalSet32 : public ByteCode {
 public:
-    LocalSet4(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalSet4Opcode, stackOffset)
+    LocalSet32(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalSet32Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -290,7 +290,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalSet4);
+        return sizeof(LocalSet32);
     }
 #endif
 
@@ -298,10 +298,10 @@ protected:
     uint32_t m_offset;
 };
 
-class LocalSet8 : public ByteCode {
+class LocalSet64 : public ByteCode {
 public:
-    LocalSet8(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalSet8Opcode, stackOffset)
+    LocalSet64(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalSet64Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -317,7 +317,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalSet8);
+        return sizeof(LocalSet64);
     }
 #endif
 
@@ -325,10 +325,10 @@ protected:
     uint32_t m_offset;
 };
 
-class LocalTee4 : public ByteCode {
+class LocalTee32 : public ByteCode {
 public:
-    LocalTee4(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalTee4Opcode, stackOffset)
+    LocalTee32(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalTee32Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -344,7 +344,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalTee4);
+        return sizeof(LocalTee32);
     }
 #endif
 
@@ -352,10 +352,10 @@ protected:
     uint32_t m_offset;
 };
 
-class LocalTee8 : public ByteCode {
+class LocalTee64 : public ByteCode {
 public:
-    LocalTee8(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalTee8Opcode, stackOffset)
+    LocalTee64(uint32_t stackOffset, uint32_t offset)
+        : ByteCode(OpcodeKind::LocalTee64Opcode, stackOffset)
         , m_offset(offset)
     {
     }
@@ -371,12 +371,72 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalTee8);
+        return sizeof(LocalTee64);
     }
 #endif
 
 protected:
     uint32_t m_offset;
+};
+
+class Load32 : public ByteCode {
+public:
+    Load32(uint32_t stackOffset)
+        : ByteCode(OpcodeKind::Load32Opcode, stackOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(LocalGet32);
+    }
+#endif
+};
+
+class Load64 : public ByteCode {
+public:
+    Load64(uint32_t stackOffset)
+        : ByteCode(OpcodeKind::Load64Opcode, stackOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Load64);
+    }
+#endif
+};
+
+class Store32 : public ByteCode {
+public:
+    Store32(uint32_t stackOffset)
+        : ByteCode(OpcodeKind::Store32Opcode, stackOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Store32);
+    }
+#endif
+};
+
+class Store64 : public ByteCode {
+public:
+    Store64(uint32_t stackOffset)
+        : ByteCode(OpcodeKind::Store64Opcode, stackOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    virtual size_t byteCodeSize()
+    {
+        return sizeof(Store64);
+    }
+#endif
 };
 
 class Drop : public ByteCode {
@@ -1037,10 +1097,10 @@ public:
 #endif
 };
 
-class GlobalGet4 : public ByteCode {
+class GlobalGet32 : public ByteCode {
 public:
-    GlobalGet4(uint32_t stackOffset, uint32_t index)
-        : ByteCode(OpcodeKind::GlobalGet4Opcode, stackOffset)
+    GlobalGet32(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalGet32Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1056,7 +1116,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(GlobalGet4);
+        return sizeof(GlobalGet32);
     }
 #endif
 
@@ -1064,10 +1124,10 @@ protected:
     uint32_t m_index;
 };
 
-class GlobalGet8 : public ByteCode {
+class GlobalGet64 : public ByteCode {
 public:
-    GlobalGet8(uint32_t stackOffset, uint32_t index)
-        : ByteCode(OpcodeKind::GlobalGet8Opcode, stackOffset)
+    GlobalGet64(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalGet64Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1083,7 +1143,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(GlobalGet8);
+        return sizeof(GlobalGet64);
     }
 #endif
 
@@ -1091,10 +1151,10 @@ protected:
     uint32_t m_index;
 };
 
-class GlobalSet4 : public ByteCode {
+class GlobalSet32 : public ByteCode {
 public:
-    GlobalSet4(uint32_t stackOffset, uint32_t index)
-        : ByteCode(OpcodeKind::GlobalSet4Opcode, stackOffset)
+    GlobalSet32(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalSet32Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1110,7 +1170,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(GlobalSet4);
+        return sizeof(GlobalSet32);
     }
 #endif
 
@@ -1118,10 +1178,10 @@ protected:
     uint32_t m_index;
 };
 
-class GlobalSet8 : public ByteCode {
+class GlobalSet64 : public ByteCode {
 public:
-    GlobalSet8(uint32_t stackOffset, uint32_t index)
-        : ByteCode(OpcodeKind::GlobalSet8Opcode, stackOffset)
+    GlobalSet64(uint32_t stackOffset, uint32_t index)
+        : ByteCode(OpcodeKind::GlobalSet64Opcode, stackOffset)
         , m_index(index)
     {
     }
@@ -1137,7 +1197,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(GlobalSet8);
+        return sizeof(GlobalSet64);
     }
 #endif
 
