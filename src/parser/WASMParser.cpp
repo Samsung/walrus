@@ -496,25 +496,25 @@ public:
 
     virtual void OnI32ConstExpr(uint32_t value) override
     {
-        m_currentFunction->pushByteCode(Walrus::I32Const(m_functionStackSizeSoFar, value));
+        m_currentFunction->pushByteCode(Walrus::Const32(m_functionStackSizeSoFar, value));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
     }
 
     virtual void OnI64ConstExpr(uint64_t value) override
     {
-        m_currentFunction->pushByteCode(Walrus::I64Const(m_functionStackSizeSoFar, value));
+        m_currentFunction->pushByteCode(Walrus::Const64(m_functionStackSizeSoFar, value));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I64));
     }
 
     virtual void OnF32ConstExpr(uint32_t value) override
     {
-        m_currentFunction->pushByteCode(Walrus::F32Const(m_functionStackSizeSoFar, value));
+        m_currentFunction->pushByteCode(Walrus::Const32(m_functionStackSizeSoFar, value));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F32));
     }
 
     virtual void OnF64ConstExpr(uint64_t value) override
     {
-        m_currentFunction->pushByteCode(Walrus::F64Const(m_functionStackSizeSoFar, value));
+        m_currentFunction->pushByteCode(Walrus::Const64(m_functionStackSizeSoFar, value));
         pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F64));
     }
 

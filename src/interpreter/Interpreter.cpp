@@ -323,39 +323,21 @@ NextInstruction:
     switch (currentOpcode) {
 #endif
 
-    DEFINE_OPCODE(I32Const)
+    DEFINE_OPCODE(Const32)
         :
     {
-        I32Const* code = (I32Const*)programCounter;
+        Const32* code = (Const32*)programCounter;
         *reinterpret_cast<uint32_t*>(bp + code->stackOffset()) = code->value();
-        ADD_PROGRAM_COUNTER(I32Const);
+        ADD_PROGRAM_COUNTER(Const32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(I64Const)
+    DEFINE_OPCODE(Const64)
         :
     {
-        I64Const* code = (I64Const*)programCounter;
+        Const64* code = (Const64*)programCounter;
         *reinterpret_cast<uint64_t*>(bp + code->stackOffset()) = code->value();
-        ADD_PROGRAM_COUNTER(I64Const);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(F32Const)
-        :
-    {
-        F32Const* code = (F32Const*)programCounter;
-        *reinterpret_cast<uint32_t*>(bp + code->stackOffset()) = code->value();
-        ADD_PROGRAM_COUNTER(F32Const);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(F64Const)
-        :
-    {
-        F64Const* code = (F64Const*)programCounter;
-        *reinterpret_cast<uint64_t*>(bp + code->stackOffset()) = code->value();
-        ADD_PROGRAM_COUNTER(F64Const);
+        ADD_PROGRAM_COUNTER(Const64);
         NEXT_INSTRUCTION();
     }
 
