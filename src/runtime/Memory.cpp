@@ -28,10 +28,11 @@ Memory::Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte)
     , m_buffer(reinterpret_cast<uint8_t*>(calloc(1, initialSizeInByte)))
 {
     RELEASE_ASSERT(m_buffer);
-    GC_REGISTER_FINALIZER_NO_ORDER(this, [](void* obj, void* cd) {
-        free(reinterpret_cast<Memory*>(obj)->m_buffer);
-    },
-                                   nullptr, nullptr, nullptr);
+    GC_REGISTER_FINALIZER_NO_ORDER(
+        this, [](void* obj, void* cd) {
+            free(reinterpret_cast<Memory*>(obj)->m_buffer);
+        },
+        nullptr, nullptr, nullptr);
 }
 
 bool Memory::grow(uint64_t growSizeInByte)
