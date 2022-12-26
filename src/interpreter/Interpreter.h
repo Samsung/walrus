@@ -28,28 +28,24 @@ class Global;
 
 class Interpreter {
 public:
-    static void interpret(ExecutionState& state,
-                          uint8_t* bp,
-                          uint8_t*& sp);
+    static uint8_t* interpret(ExecutionState& state,
+                              uint8_t* bp);
 
 private:
     friend class OpcodeTable;
-    static void interpret(ExecutionState& state,
-                          size_t programCounter,
-                          uint8_t* bp,
-                          uint8_t*& sp,
-                          Instance* instance,
-                          Memory** memories,
-                          Table** tables,
-                          Global** globals);
-    static void callOperation(ExecutionState& state,
+    static uint8_t* interpret(ExecutionState& state,
                               size_t programCounter,
                               uint8_t* bp,
-                              uint8_t*& sp);
+                              Instance* instance,
+                              Memory** memories,
+                              Table** tables,
+                              Global** globals);
+    static void callOperation(ExecutionState& state,
+                              size_t programCounter,
+                              uint8_t* bp);
     static void callIndirectOperation(ExecutionState& state,
                                       size_t programCounter,
-                                      uint8_t* bp,
-                                      uint8_t*& sp);
+                                      uint8_t* bp);
 };
 
 } // namespace Walrus

@@ -174,13 +174,12 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
         trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
             uint8_t* functionStackBase = ALLOCA(data->module->m_globalInitBlock->requiredStackSize(), uint8_t);
-            uint8_t* functionStackPointer = functionStackBase;
 
             DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
                                          data->module->m_globalInitBlock.value());
             ExecutionState newState(state, &fakeFunction);
 
-            Interpreter::interpret(newState, functionStackBase, functionStackPointer);
+            Interpreter::interpret(newState, functionStackBase);
         },
                  &data);
     }
@@ -203,13 +202,12 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                 trap.run([](Walrus::ExecutionState& state, void* d) {
                     RunData* data = reinterpret_cast<RunData*>(d);
                     uint8_t* functionStackBase = ALLOCA(data->elem->moduleFunction()->requiredStackSize(), uint8_t);
-                    uint8_t* functionStackPointer = functionStackBase;
 
                     DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
                                                  data->elem->moduleFunction());
                     ExecutionState newState(state, &fakeFunction);
 
-                    Interpreter::interpret(newState, functionStackBase, functionStackPointer);
+                    uint8_t* functionStackPointer = Interpreter::interpret(newState, functionStackBase);
 
                     functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
                     uint8_t* resultStackPointer = functionStackPointer;
@@ -253,13 +251,12 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             RunData* data = reinterpret_cast<RunData*>(d);
             if (data->init->moduleFunction()->currentByteCodeSize()) {
                 uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
-                uint8_t* functionStackPointer = functionStackBase;
 
                 DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
                                              data->init->moduleFunction());
                 ExecutionState newState(state, &fakeFunction);
 
-                Interpreter::interpret(newState, functionStackBase, functionStackPointer);
+                uint8_t* functionStackPointer = Interpreter::interpret(newState, functionStackBase);
 
                 functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
                 uint8_t* resultStackPointer = functionStackPointer;
@@ -300,6 +297,7 @@ void ModuleFunction::dumpByteCode()
         ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
         printf("%zu: ", idx);
         printf("%s ", g_byteCodeInfo[code->orgOpcode()].m_name);
+        printf("stackOffset: %" PRIu32 " ", code->stackOffset());
         code->dump(idx);
         printf("\n");
         idx += code->byteCodeSize();

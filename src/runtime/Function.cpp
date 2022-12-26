@@ -37,9 +37,8 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
     // init local space
     auto localSize = m_moduleFunction->requiredStackSizeDueToLocal();
     memset(functionStackPointer, 0, localSize);
-    functionStackPointer += localSize;
 
-    Interpreter::interpret(newState, functionStackBase, functionStackPointer);
+    functionStackPointer = Interpreter::interpret(newState, functionStackBase);
 
     const FunctionType* ft = functionType();
     const ValueTypeVector& resultTypeInfo = ft->result();
