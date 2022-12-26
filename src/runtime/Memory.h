@@ -76,10 +76,32 @@ public:
     }
 
     template <typename T>
+    void load(ExecutionState& state, uint32_t offset, T* out) const
+    {
+        checkAccess(state, offset, sizeof(T));
+#if defined(WALRUS_BIG_ENDIAN)
+        *out = *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset]));
+#else
+        *out = *(reinterpret_cast<T*>(&m_buffer[offset]));
+#endif
+    }
+
+    template <typename T>
     void store(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
     {
         checkAccess(state, offset, addend, sizeof(T));
         memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(T), offset + addend, 0, sizeof(T));
+    }
+
+    template <typename T>
+    void store(ExecutionState& state, uint32_t offset, const T& val) const
+    {
+        checkAccess(state, offset, sizeof(T));
+#if defined(WALRUS_BIG_ENDIAN)
+        *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset])) = val;
+#else
+        *(reinterpret_cast<T*>(&m_buffer[offset])) = val;
+#endif
     }
 
     void init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
@@ -92,6 +114,13 @@ private:
     {
         if (UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte))) {
             throwException(state, offset, addend, size);
+        }
+    }
+    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size) const
+    {
+        const auto s = offset + size;
+        if (UNLIKELY(s > m_sizeInByte || s < offset)) {
+            throwException(state, offset, 0, size);
         }
     }
 

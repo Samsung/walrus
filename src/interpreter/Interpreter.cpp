@@ -326,57 +326,99 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalGet4)
+    DEFINE_OPCODE(LocalGet32)
         :
     {
-        LocalGet4* code = (LocalGet4*)programCounter;
+        LocalGet32* code = (LocalGet32*)programCounter;
         *reinterpret_cast<uint32_t*>(bp + code->stackOffset()) = *reinterpret_cast<uint32_t*>(&bp[code->offset()]);
-        ADD_PROGRAM_COUNTER(LocalGet4);
+        ADD_PROGRAM_COUNTER(LocalGet32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalGet8)
+    DEFINE_OPCODE(LocalGet64)
         :
     {
-        LocalGet8* code = (LocalGet8*)programCounter;
+        LocalGet64* code = (LocalGet64*)programCounter;
         *reinterpret_cast<uint64_t*>(bp + code->stackOffset()) = *reinterpret_cast<uint64_t*>(&bp[code->offset()]);
-        ADD_PROGRAM_COUNTER(LocalGet8);
+        ADD_PROGRAM_COUNTER(LocalGet64);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalSet4)
+    DEFINE_OPCODE(LocalSet32)
         :
     {
-        LocalSet4* code = (LocalSet4*)programCounter;
+        LocalSet32* code = (LocalSet32*)programCounter;
         *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(LocalSet4);
+        ADD_PROGRAM_COUNTER(LocalSet32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalSet8)
+    DEFINE_OPCODE(LocalSet64)
         :
     {
-        LocalSet8* code = (LocalSet8*)programCounter;
+        LocalSet64* code = (LocalSet64*)programCounter;
         *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(LocalSet8);
+        ADD_PROGRAM_COUNTER(LocalSet64);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalTee4)
+    DEFINE_OPCODE(LocalTee32)
         :
     {
-        LocalTee4* code = (LocalTee4*)programCounter;
+        LocalTee32* code = (LocalTee32*)programCounter;
         *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(LocalTee4);
+        ADD_PROGRAM_COUNTER(LocalTee32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalTee8)
+    DEFINE_OPCODE(LocalTee64)
         :
     {
-        LocalTee8* code = (LocalTee8*)programCounter;
+        LocalTee64* code = (LocalTee64*)programCounter;
         *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(LocalTee8);
+        ADD_PROGRAM_COUNTER(LocalTee64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(Load32)
+        :
+    {
+        Load32* code = (Load32*)programCounter;
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset());
+        memories[0]->load(state, offset, reinterpret_cast<uint32_t*>(bp + code->stackOffset()));
+        ADD_PROGRAM_COUNTER(Load32);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(Load64)
+        :
+    {
+        Load64* code = (Load64*)programCounter;
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset());
+        memories[0]->load(state, offset, reinterpret_cast<uint64_t*>(bp + code->stackOffset()));
+        ADD_PROGRAM_COUNTER(Load64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(Store32)
+        :
+    {
+        Store32* code = (Store32*)programCounter;
+        uint32_t value = readValue<uint32_t>(bp, code->stackOffset());
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>());
+        memories[0]->store(state, offset, value);
+        ADD_PROGRAM_COUNTER(Store32);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(Store64)
+        :
+    {
+        Store64* code = (Store64*)programCounter;
+        uint64_t value = readValue<uint64_t>(bp, code->stackOffset());
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>());
+        memories[0]->store(state, offset, value);
+        ADD_PROGRAM_COUNTER(Store64);
         NEXT_INSTRUCTION();
     }
 
@@ -620,45 +662,45 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(GlobalGet4)
+    DEFINE_OPCODE(GlobalGet32)
         :
     {
-        GlobalGet4* code = (GlobalGet4*)programCounter;
+        GlobalGet32* code = (GlobalGet32*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
         globals[code->index()]->value().writeNBytesToStack<4>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(GlobalGet4);
+        ADD_PROGRAM_COUNTER(GlobalGet32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(GlobalGet8)
+    DEFINE_OPCODE(GlobalGet64)
         :
     {
-        GlobalGet8* code = (GlobalGet8*)programCounter;
+        GlobalGet64* code = (GlobalGet64*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
         globals[code->index()]->value().writeNBytesToStack<8>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(GlobalGet8);
+        ADD_PROGRAM_COUNTER(GlobalGet64);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(GlobalSet4)
+    DEFINE_OPCODE(GlobalSet32)
         :
     {
-        GlobalSet4* code = (GlobalSet4*)programCounter;
+        GlobalSet32* code = (GlobalSet32*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
         Value& val = globals[code->index()]->value();
         val.readFromStack<4>(bp + code->stackOffset() - 4);
-        ADD_PROGRAM_COUNTER(GlobalSet4);
+        ADD_PROGRAM_COUNTER(GlobalSet32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(GlobalSet8)
+    DEFINE_OPCODE(GlobalSet64)
         :
     {
-        GlobalSet8* code = (GlobalSet8*)programCounter;
+        GlobalSet64* code = (GlobalSet64*)programCounter;
         ASSERT(code->index() < instance->m_global.size());
         Value& val = globals[code->index()]->value();
         val.readFromStack<8>(bp + code->stackOffset() - 8);
-        ADD_PROGRAM_COUNTER(GlobalSet8);
+        ADD_PROGRAM_COUNTER(GlobalSet64);
         NEXT_INSTRUCTION();
     }
 

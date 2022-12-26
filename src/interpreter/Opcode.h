@@ -215,22 +215,26 @@ enum OpcodeKind : size_t {
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xd0, RefNull, "ref.null", "")                       \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xd1, RefIsNull, "ref.is_null", "")                  \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xd2, RefFunc, "ref.func", "")                       \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe7, LocalGet4, "local_get_4", "")                  \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe8, LocalGet8, "local_get_8", "")                  \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe9, LocalSet4, "local_set_4", "")                  \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe0, LocalSet8, "local_set_8", "")                  \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xea, LocalTee4, "local_tee_4", "")                  \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xeb, LocalTee8, "local_tee_8", "")                  \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe7, LocalGet32, "local_get_32", "")                \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe8, LocalGet64, "local_get_64", "")                \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe9, LocalSet32, "local_set_32", "")                \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe0, LocalSet64, "local_set_64", "")                \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xea, LocalTee32, "local_tee_32", "")                \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xeb, LocalTee64, "local_tee_64", "")                \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xec, Jump, "jump", "")                              \
     WABT_OPCODE(___, I32, ___, ___, 0, 0, 0xed, JumpIfTrue, "jump_if_true", "")                \
     WABT_OPCODE(___, I32, ___, ___, 0, 0, 0xee, JumpIfFalse, "jump_if_false", "")              \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xef, GlobalGet4, "global_get_4", "")                \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf0, GlobalGet8, "global_get_8", "")                \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf1, GlobalSet4, "global_set_4", "")                \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf2, GlobalSet8, "global_set_8", "")                \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xef, GlobalGet32, "global_get_32", "")              \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf0, GlobalGet64, "global_get_64", "")              \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf1, GlobalSet32, "global_set_32", "")              \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf2, GlobalSet64, "global_set_64", "")              \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf3, Const32, "const_32", "")                       \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf4, Const64, "const_64", "")                       \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf5, FillOpcodeTable, "fill_opcode_table", "")
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf5, Load32, "load_32", "")                         \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf6, Load64, "load_64", "")                         \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf7, Store32, "store_32", "")                       \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf8, Store64, "store_64", "")                       \
+    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xf9, FillOpcodeTable, "fill_opcode_table", "")
 
 class OpcodeTable {
 public:
