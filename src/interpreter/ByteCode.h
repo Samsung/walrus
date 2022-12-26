@@ -411,21 +411,20 @@ protected:
 class Jump : public ByteCode {
 public:
     Jump(int32_t offset = 0)
-        : ByteCode(OpcodeKind::JumpOpcode)
-        , m_offset(offset)
+        : ByteCode(OpcodeKind::JumpOpcode, offset)
     {
     }
 
-    int32_t offset() const { return m_offset; }
+    int32_t offset() const { return m_stackOffset; }
     void setOffset(int32_t offset)
     {
-        m_offset = offset;
+        m_stackOffset = offset;
     }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-        printf("dst: %" PRId32, (int32_t)pos + m_offset);
+        printf("dst: %" PRId32, (int32_t)pos + m_stackOffset);
     }
 
     virtual size_t byteCodeSize()
@@ -433,9 +432,6 @@ public:
         return sizeof(Jump);
     }
 #endif
-
-protected:
-    int32_t m_offset;
 };
 
 class JumpIfTrue : public ByteCode {

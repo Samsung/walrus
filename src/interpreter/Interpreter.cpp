@@ -98,21 +98,6 @@ uint8_t* Interpreter::interpret(ExecutionState& state,
 }
 
 template <typename T>
-ALWAYS_INLINE void writeValue(uint8_t*& sp, const T& v)
-{
-    *reinterpret_cast<T*>(sp) = v;
-    sp += stackAllocatedSize<T>();
-}
-
-template <typename T>
-ALWAYS_INLINE T readValue(uint8_t*& sp)
-{
-    sp -= stackAllocatedSize<T>();
-    T v = *reinterpret_cast<T*>(sp);
-    return v;
-}
-
-template <typename T>
 ALWAYS_INLINE void writeValue(uint8_t* bp, uint32_t offset, const T& v)
 {
     *reinterpret_cast<T*>(bp + offset) = v;
@@ -225,28 +210,28 @@ uint8_t* Interpreter::interpret(ExecutionState& state,
 
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
 
-#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)                    \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                         \
-        :                                                                                                                                      \
-    {                                                                                                                                          \
-        BinaryOperation* code = (BinaryOperation*)programCounter;                                                                              \
-        const auto stackOffset = code->stackOffset();                                                                                          \
-        auto rhs = readValue<nativeParameterTypeName>(bp, stackOffset - stackAllocatedSize<nativeParameterTypeName>());                        \
-        auto lhs = readValue<nativeParameterTypeName>(bp, stackOffset - stackAllocatedSize<nativeParameterTypeName>() * 2);                    \
-        writeValue<nativeReturnTypeName>(bp, stackOffset - stackAllocatedSize<nativeParameterTypeName>() * 2, operationName(state, lhs, rhs)); \
-        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                                                  \
-        NEXT_INSTRUCTION();                                                                                                                    \
+#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                      \
+        :                                                                                                                   \
+    {                                                                                                                       \
+        BinaryOperation* code = (BinaryOperation*)programCounter;                                                           \
+        const auto stackOffset = code->stackOffset();                                                                       \
+        auto rhs = readValue<nativeParameterTypeName>(bp, stackOffset + stackAllocatedSize<nativeParameterTypeName>());     \
+        auto lhs = readValue<nativeParameterTypeName>(bp, stackOffset);                                                     \
+        writeValue<nativeReturnTypeName>(bp, stackOffset, operationName(state, lhs, rhs));                                  \
+        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                               \
+        NEXT_INSTRUCTION();                                                                                                 \
     }
 
-#define UNARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)     \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                         \
-        :                                                                                                                      \
-    {                                                                                                                          \
-        UnaryOperation* code = (UnaryOperation*)programCounter;                                                                \
-        const auto stackOffset = code->stackOffset() - stackAllocatedSize<nativeParameterTypeName>();                          \
-        writeValue<nativeReturnTypeName>(bp, stackOffset, operationName(readValue<nativeParameterTypeName>(bp, stackOffset))); \
-        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                   \
-        NEXT_INSTRUCTION();                                                                                                    \
+#define UNARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)             \
+    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                 \
+        :                                                                                                                              \
+    {                                                                                                                                  \
+        UnaryOperation* code = (UnaryOperation*)programCounter;                                                                        \
+        const auto stackOffset = code->stackOffset();                                                                                  \
+        writeValue<nativeReturnTypeName>(bp, code->stackOffset(), operationName(readValue<nativeParameterTypeName>(bp, stackOffset))); \
+        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                           \
+        NEXT_INSTRUCTION();                                                                                                            \
     }
 
 #define UNARY_OPERATION_OPERATION_TEMPLATE_2(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, T1, T2, byteCodeOperationName) \
@@ -254,7 +239,7 @@ uint8_t* Interpreter::interpret(ExecutionState& state,
         :                                                                                                                                               \
     {                                                                                                                                                   \
         UnaryOperation* code = (UnaryOperation*)programCounter;                                                                                         \
-        const auto stackOffset = code->stackOffset() - stackAllocatedSize<nativeParameterTypeName>();                                                   \
+        const auto stackOffset = code->stackOffset();                                                                                                   \
         writeValue<nativeReturnTypeName>(bp, stackOffset, operationName<T1, T2>(state, readValue<nativeParameterTypeName>(bp, stackOffset)));           \
         ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                                            \
         NEXT_INSTRUCTION();                                                                                                                             \
@@ -268,29 +253,29 @@ uint8_t* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                       \
     }
 
-#define MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName)                        \
-    DEFINE_OPCODE(opcodeName)                                                                             \
-        :                                                                                                 \
-    {                                                                                                     \
-        MemoryLoad* code = (MemoryLoad*)programCounter;                                                   \
-        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>());  \
-        nativeReadTypeName value;                                                                         \
-        memories[0]->load(state, offset, code->offset(), &value);                                         \
-        writeValue<nativeWriteTypeName>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>(), value); \
-        ADD_PROGRAM_COUNTER(MemoryLoad);                                                                  \
-        NEXT_INSTRUCTION();                                                                               \
+#define MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
+    DEFINE_OPCODE(opcodeName)                                                      \
+        :                                                                          \
+    {                                                                              \
+        MemoryLoad* code = (MemoryLoad*)programCounter;                            \
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset());            \
+        nativeReadTypeName value;                                                  \
+        memories[0]->load(state, offset, code->offset(), &value);                  \
+        writeValue<nativeWriteTypeName>(bp, code->stackOffset(), value);           \
+        ADD_PROGRAM_COUNTER(MemoryLoad);                                           \
+        NEXT_INSTRUCTION();                                                        \
     }
 
-#define MEMORY_STORE_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName)                                                                 \
-    DEFINE_OPCODE(opcodeName)                                                                                                                       \
-        :                                                                                                                                           \
-    {                                                                                                                                               \
-        MemoryStore* code = (MemoryStore*)programCounter;                                                                                           \
-        nativeWriteTypeName value = readValue<nativeReadTypeName>(bp, code->stackOffset() - stackAllocatedSize<nativeReadTypeName>());              \
-        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<nativeReadTypeName>() - stackAllocatedSize<uint32_t>()); \
-        memories[0]->store(state, offset, code->offset(), value);                                                                                   \
-        ADD_PROGRAM_COUNTER(MemoryStore);                                                                                                           \
-        NEXT_INSTRUCTION();                                                                                                                         \
+#define MEMORY_STORE_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName)                      \
+    DEFINE_OPCODE(opcodeName)                                                                            \
+        :                                                                                                \
+    {                                                                                                    \
+        MemoryStore* code = (MemoryStore*)programCounter;                                                \
+        nativeWriteTypeName value = readValue<nativeReadTypeName>(bp, code->stackOffset());              \
+        uint32_t offset = readValue<uint32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>()); \
+        memories[0]->store(state, offset, code->offset(), value);                                        \
+        ADD_PROGRAM_COUNTER(MemoryStore);                                                                \
+        NEXT_INSTRUCTION();                                                                              \
     }
 
 
@@ -363,7 +348,7 @@ NextInstruction:
         :
     {
         LocalSet4* code = (LocalSet4*)programCounter;
-        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset() - 4);
+        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset());
         ADD_PROGRAM_COUNTER(LocalSet4);
         NEXT_INSTRUCTION();
     }
@@ -372,7 +357,7 @@ NextInstruction:
         :
     {
         LocalSet8* code = (LocalSet8*)programCounter;
-        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset() - 8);
+        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset());
         ADD_PROGRAM_COUNTER(LocalSet8);
         NEXT_INSTRUCTION();
     }
@@ -381,7 +366,7 @@ NextInstruction:
         :
     {
         LocalTee4* code = (LocalTee4*)programCounter;
-        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset() - 4);
+        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset());
         ADD_PROGRAM_COUNTER(LocalTee4);
         NEXT_INSTRUCTION();
     }
@@ -390,7 +375,7 @@ NextInstruction:
         :
     {
         LocalTee8* code = (LocalTee8*)programCounter;
-        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset() - 8);
+        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset());
         ADD_PROGRAM_COUNTER(LocalTee8);
         NEXT_INSTRUCTION();
     }
@@ -584,7 +569,7 @@ NextInstruction:
         :
     {
         JumpIfTrue* code = (JumpIfTrue*)programCounter;
-        if (readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>())) {
+        if (readValue<int32_t>(bp, code->stackOffset())) {
             programCounter += code->offset();
         } else {
             ADD_PROGRAM_COUNTER(JumpIfTrue);
@@ -596,7 +581,7 @@ NextInstruction:
         :
     {
         JumpIfFalse* code = (JumpIfFalse*)programCounter;
-        if (readValue<int32_t>(bp, code->stackOffset() - stackAllocatedSize<uint32_t>())) {
+        if (readValue<int32_t>(bp, code->stackOffset())) {
             ADD_PROGRAM_COUNTER(JumpIfFalse);
         } else {
             programCounter += code->offset();
