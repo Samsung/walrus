@@ -465,29 +465,30 @@ own wasm_func_t* wasm_func_new(
         wasm_func_callback_t callback;
         size_t resultSize;
     } data = { callback, ft->params.size };
-    Function* func = new ImportedFunction(store->get(), ToWalrusFunctionType(ft),
-                                          [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
-                                              FuncData* data = reinterpret_cast<FuncData*>(d);
-                                              wasm_val_vec_t params, results;
-                                              wasm_val_vec_new_uninitialized(&params, argc);
-                                              wasm_val_vec_new_uninitialized(&results, data->resultSize);
-                                              FromWalrusValues(params.data, argv, argc);
+    Function* func = new ImportedFunction(
+        store->get(), ToWalrusFunctionType(ft),
+        [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
+            FuncData* data = reinterpret_cast<FuncData*>(d);
+            wasm_val_vec_t params, results;
+            wasm_val_vec_new_uninitialized(&params, argc);
+            wasm_val_vec_new_uninitialized(&results, data->resultSize);
+            FromWalrusValues(params.data, argv, argc);
 
-                                              auto trap = data->callback(&params, &results);
-                                              wasm_val_vec_delete(&params);
+            auto trap = data->callback(&params, &results);
+            wasm_val_vec_delete(&params);
 
-                                              if (trap) {
-                                                  // TODO
-                                                  wasm_trap_delete(trap);
-                                                  RELEASE_ASSERT_NOT_REACHED();
-                                                  // Can't use wasm_val_vec_delete since it wasn't populated.
-                                                  delete[] results.data;
-                                              }
+            if (trap) {
+                // TODO
+                wasm_trap_delete(trap);
+                RELEASE_ASSERT_NOT_REACHED();
+                // Can't use wasm_val_vec_delete since it wasn't populated.
+                delete[] results.data;
+            }
 
-                                              ToWalrusValues(result, results.data, results.size);
-                                              wasm_val_vec_delete(&results);
-                                          },
-                                          &data);
+            ToWalrusValues(result, results.data, results.size);
+            wasm_val_vec_delete(&results);
+        },
+        &data);
 
     return new wasm_func_t(func);
 }
