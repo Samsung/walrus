@@ -362,24 +362,6 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalTee32)
-        :
-    {
-        LocalTee32* code = (LocalTee32*)programCounter;
-        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(LocalTee32);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(LocalTee64)
-        :
-    {
-        LocalTee64* code = (LocalTee64*)programCounter;
-        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->stackOffset());
-        ADD_PROGRAM_COUNTER(LocalTee64);
-        NEXT_INSTRUCTION();
-    }
-
     DEFINE_OPCODE(Load32)
         :
     {
