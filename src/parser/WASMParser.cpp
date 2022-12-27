@@ -568,9 +568,9 @@ public:
     {
         auto r = resolveLocalOffsetAndSize(localIndex);
         if (r.second == 4) {
-            m_currentFunction->pushByteCode(Walrus::LocalTee32(m_functionStackSizeSoFar - 4, r.first));
+            m_currentFunction->pushByteCode(Walrus::LocalSet32(m_functionStackSizeSoFar - 4, r.first));
         } else if (r.second == 8) {
-            m_currentFunction->pushByteCode(Walrus::LocalTee64(m_functionStackSizeSoFar - 8, r.first));
+            m_currentFunction->pushByteCode(Walrus::LocalSet64(m_functionStackSizeSoFar - 8, r.first));
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
