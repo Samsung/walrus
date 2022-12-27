@@ -28,16 +28,55 @@
 
 namespace Walrus {
 
-ModuleFunction::ModuleFunction(Module* module, uint32_t functionTypeIndex)
+ModuleFunction::ModuleFunction(Module* module, FunctionType* functionType)
     : m_module(module)
-    , m_functionTypeIndex(functionTypeIndex)
-    , m_requiredStackSize(0)
+    , m_functionType(functionType)
+    , m_requiredStackSize(std::max(m_functionType->paramStackSize(), m_functionType->resultStackSize()))
     , m_requiredStackSizeDueToLocal(0)
 {
-    if (m_functionTypeIndex != g_invalidFunctionTypeIndex) {
-        auto ft = module->functionType(m_functionTypeIndex);
-        m_requiredStackSize = std::max(ft->paramStackSize(), ft->resultStackSize());
+}
+
+FunctionType* Module::initIndexFunctionType()
+{
+    return initGlobalFunctionType(Value::I32);
+}
+
+FunctionType* Module::initGlobalFunctionType(Value::Type type)
+{
+    static FunctionType* info[Value::Type::Void];
+    switch (type) {
+    case Value::Type::I32:
+        if (!info[type])
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
+        break;
+    case Value::Type::I64:
+        if (!info[type])
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
+        break;
+    case Value::Type::F32:
+        if (!info[type])
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
+        break;
+    case Value::Type::F64:
+        if (!info[type])
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
+        break;
+    case Value::Type::V128:
+        if (!info[type])
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
+        break;
+    case Value::Type::FuncRef:
+        if (!info[type])
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
+        break;
+    case Value::Type::ExternRef:
+        if (!info[type])
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
     }
+    return info[type];
 }
 
 Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports)
@@ -47,7 +86,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     instance->m_function.reserve(m_function.size());
     instance->m_table.reserve(m_tableTypes.size());
     instance->m_memory.reserve(m_memoryTypes.size());
-    instance->m_global.reserve(m_globalTypes.size());
+    instance->m_global.reserve(m_global.size());
     instance->m_tag.reserve(m_tagTypes.size());
 
     size_t importFuncCount = 0;
@@ -137,7 +176,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     // init defined function
     for (size_t i = importFuncCount; i < m_function.size(); i++) {
         ASSERT(i == instance->m_function.size());
-        instance->m_function.push_back(new DefinedFunction(m_store, functionType(m_function[i]->functionTypeIndex()), instance, function(i)));
+        instance->m_function.push_back(new DefinedFunction(m_store, instance, function(i)));
     }
 
     // init table
@@ -152,12 +191,6 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
         instance->m_memory.pushBack(new Memory(m_memoryTypes[i].initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i].maximumSize() * Memory::s_memoryPageSize));
     }
 
-    // init global
-    for (size_t i = importGlobCount; i < m_globalTypes.size(); i++) {
-        ASSERT(i == instance->m_global.size());
-        instance->m_global.pushBack(new Global(Value(m_globalTypes[i].type())));
-    }
-
     // init tag
     for (size_t i = importTagCount; i < m_tagTypes.size(); i++) {
         ASSERT(i == instance->m_tag.size());
@@ -165,23 +198,32 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     // init global
-    if (m_globalInitBlock) {
-        struct RunData {
-            Instance* instance;
-            Module* module;
-        } data = { instance, this };
-        Walrus::Trap trap;
-        trap.run([](Walrus::ExecutionState& state, void* d) {
-            RunData* data = reinterpret_cast<RunData*>(d);
-            uint8_t* functionStackBase = ALLOCA(data->module->m_globalInitBlock->requiredStackSize(), uint8_t);
+    for (size_t i = importGlobCount; i < m_global.size(); i++) {
+        ASSERT(i == instance->m_global.size());
+        auto& globalData = m_global[i];
+        instance->m_global.pushBack(new Global(Value(globalData.first.type())));
 
-            DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
-                                         data->module->m_globalInitBlock.value());
-            ExecutionState newState(state, &fakeFunction);
+        if (globalData.second) {
+            struct RunData {
+                Instance* instance;
+                Module* module;
+                Value::Type type;
+                ModuleFunction* mf;
+            } data = { instance, this, globalData.first.type(), globalData.second.value() };
+            Walrus::Trap trap;
+            trap.run([](Walrus::ExecutionState& state, void* d) {
+                RunData* data = reinterpret_cast<RunData*>(d);
+                uint8_t* functionStackBase = ALLOCA(data->mf->requiredStackSize(), uint8_t);
 
-            Interpreter::interpret(newState, functionStackBase);
-        },
-                 &data);
+                DefinedFunction fakeFunction(data->module->m_store, data->instance, data->mf);
+                ExecutionState newState(state, &fakeFunction);
+                uint8_t* functionStackPointer = Interpreter::interpret(newState, functionStackBase);
+                functionStackPointer = functionStackPointer - valueSizeInStack(data->type);
+                uint8_t* resultStackPointer = functionStackPointer;
+                data->instance->m_global.back()->setValue(Value(data->type, resultStackPointer));
+            },
+                     &data);
+        }
     }
 
     // init table(elem segment)
@@ -203,7 +245,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                     RunData* data = reinterpret_cast<RunData*>(d);
                     uint8_t* functionStackBase = ALLOCA(data->elem->moduleFunction()->requiredStackSize(), uint8_t);
 
-                    DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
+                    DefinedFunction fakeFunction(data->module->m_store, data->instance,
                                                  data->elem->moduleFunction());
                     ExecutionState newState(state, &fakeFunction);
 
@@ -252,7 +294,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             if (data->init->moduleFunction()->currentByteCodeSize()) {
                 uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
 
-                DefinedFunction fakeFunction(data->module->m_store, nullptr, data->instance,
+                DefinedFunction fakeFunction(data->module->m_store, data->instance,
                                              data->init->moduleFunction());
                 ExecutionState newState(state, &fakeFunction);
 
@@ -289,7 +331,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
 #if !defined(NDEBUG)
 void ModuleFunction::dumpByteCode()
 {
-    printf("module %p, function type index %u\n", m_module, m_functionTypeIndex);
+    printf("module %p, function type %p\n", m_module, m_functionType);
     printf("requiredStackSize %u, requiredStackSizeDueToLocal %u\n", m_requiredStackSize, m_requiredStackSizeDueToLocal);
 
     size_t idx = 0;

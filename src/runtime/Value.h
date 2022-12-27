@@ -62,7 +62,7 @@ public:
         V128,
         FuncRef,
         ExternRef,
-        Void,
+        Void, // Void type should be located at end
     };
 
     Value()
