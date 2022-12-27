@@ -325,60 +325,6 @@ protected:
     uint32_t m_offset;
 };
 
-class LocalTee32 : public ByteCode {
-public:
-    LocalTee32(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalTee32Opcode, stackOffset)
-        , m_offset(offset)
-    {
-    }
-
-    uint32_t offset() const { return m_offset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        printf("offset: %" PRId32,
-               m_offset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(LocalTee32);
-    }
-#endif
-
-protected:
-    uint32_t m_offset;
-};
-
-class LocalTee64 : public ByteCode {
-public:
-    LocalTee64(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalTee64Opcode, stackOffset)
-        , m_offset(offset)
-    {
-    }
-
-    uint32_t offset() const { return m_offset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        printf("offset: %" PRId32,
-               m_offset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(LocalTee64);
-    }
-#endif
-
-protected:
-    uint32_t m_offset;
-};
-
 class Load32 : public ByteCode {
 public:
     Load32(uint32_t stackOffset)
