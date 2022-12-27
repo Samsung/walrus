@@ -109,15 +109,8 @@ protected:
 class DefinedFunction : public Function {
 public:
     DefinedFunction(Store* store,
-                    FunctionType* functionType,
                     Instance* instance,
-                    ModuleFunction* moduleFunction)
-        : Function(store, functionType)
-        , m_instance(instance)
-        , m_moduleFunction(moduleFunction)
-    {
-    }
-
+                    ModuleFunction* moduleFunction);
     ModuleFunction* moduleFunction() const { return m_moduleFunction; }
     Instance* instance() const { return m_instance; }
 

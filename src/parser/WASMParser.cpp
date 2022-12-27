@@ -65,7 +65,12 @@ static Walrus::SegmentMode toSegmentMode(uint8_t flags)
 }
 
 class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
-public:
+private:
+    struct VMStackInfo {
+        size_t m_size;
+        size_t m_position;
+    };
+
     struct BlockInfo {
         enum BlockType {
             IfElse,
@@ -76,7 +81,7 @@ public:
         BlockType m_blockType;
         Type m_returnValueType;
         size_t m_position;
-        std::vector<unsigned char> m_vmStack;
+        std::vector<VMStackInfo> m_vmStack;
         bool m_shouldRestoreVMStackAtEnd;
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
@@ -96,6 +101,72 @@ public:
         }
     };
 
+    Walrus::Module* m_module;
+    Walrus::ModuleFunction* m_currentFunction;
+    Walrus::FunctionType* m_currentFunctionType;
+    uint32_t m_initialFunctionStackSize;
+    uint32_t m_functionStackSizeSoFar;
+    std::vector<VMStackInfo> m_vmStack;
+    std::vector<BlockInfo> m_blockInfo;
+    struct CatchInfo {
+        size_t m_tryCatchBlockDepth;
+        size_t m_tryStart;
+        size_t m_tryEnd;
+        size_t m_catchStart;
+        uint32_t m_tagIndex;
+    };
+    std::vector<CatchInfo> m_catchInfo;
+    Walrus::Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_memoryInitData;
+
+    uint32_t m_elementTableIndex;
+    Walrus::Optional<Walrus::ModuleFunction*> m_elementModuleFunction;
+    Walrus::Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_elementFunctionIndex;
+    Walrus::SegmentMode m_segmentMode;
+
+    void pushVMStack(size_t size)
+    {
+        pushVMStack(size, m_functionStackSizeSoFar);
+    }
+
+    void pushVMStack(size_t size, size_t pos)
+    {
+        m_vmStack.push_back({ size, pos });
+        m_functionStackSizeSoFar += size;
+        m_currentFunction->m_requiredStackSize = std::max(
+            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
+    }
+
+    size_t popVMStack()
+    {
+        auto info = m_vmStack.back();
+        m_functionStackSizeSoFar -= info.m_size;
+        m_vmStack.pop_back();
+        return info.m_size;
+    }
+
+    size_t peekVMStack()
+    {
+        return m_vmStack.back().m_size;
+    }
+
+    void beginFunction(Walrus::ModuleFunction* mf)
+    {
+        m_currentFunction = mf;
+        m_currentFunctionType = mf->functionType();
+        m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
+        m_currentFunction->m_requiredStackSize = std::max(
+            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
+    }
+
+    void endFunction()
+    {
+        m_currentFunction = nullptr;
+        m_currentFunctionType = nullptr;
+        m_vmStack.clear();
+        m_shouldContinueToGenerateByteCode = true;
+    }
+
+public:
     WASMBinaryReader(Walrus::Module* module)
         : m_module(module)
         , m_currentFunction(nullptr)
@@ -152,7 +223,7 @@ public:
         ASSERT(m_module->m_function.size() == funcIndex);
         ASSERT(m_module->m_import.size() == importIndex);
         m_module->m_function.push_back(
-            new Walrus::ModuleFunction(m_module, sigIndex));
+            new Walrus::ModuleFunction(m_module, m_module->functionType(sigIndex)));
         m_module->m_import.push_back(new Walrus::ModuleImport(
             new Walrus::String(moduleName),
             new Walrus::String(fieldName), funcIndex, sigIndex));
@@ -160,9 +231,9 @@ public:
 
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) override
     {
-        ASSERT(m_module->m_globalTypes.size() == globalIndex);
+        ASSERT(m_module->m_global.size() == globalIndex);
         ASSERT(m_module->m_import.size() == importIndex);
-        m_module->m_globalTypes.pushBack(Walrus::GlobalType(toValueKind(type), mutable_));
+        m_module->m_global.pushBack(std::make_pair(Walrus::GlobalType(toValueKind(type), mutable_), nullptr));
         m_module->m_import.push_back(new Walrus::ModuleImport(
             Walrus::ModuleImport::Global,
             new Walrus::String(moduleName),
@@ -244,16 +315,13 @@ public:
 
     virtual void BeginElemSegmentInitExpr(Index index) override
     {
-        m_currentFunction = new Walrus::ModuleFunction(m_module);
-        m_initialFunctionStackSize = m_functionStackSizeSoFar = 0;
+        beginFunction(new Walrus::ModuleFunction(m_module, Walrus::Module::initIndexFunctionType()));
     }
 
     virtual void EndElemSegmentInitExpr(Index index) override
     {
         m_elementModuleFunction = m_currentFunction;
-        m_currentFunction = nullptr;
-        ASSERT(peekVMStack() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
-        popVMStack();
+        endFunction();
     }
 
     virtual void OnElemSegmentElemType(Index index, Type elemType) override
@@ -310,8 +378,7 @@ public:
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
         ASSERT(index == m_module->m_data.size());
-        m_currentFunction = new Walrus::ModuleFunction(m_module);
-        m_initialFunctionStackSize = m_functionStackSizeSoFar = 0;
+        beginFunction(new Walrus::ModuleFunction(m_module, Walrus::Module::initIndexFunctionType()));
     }
 
     virtual void BeginDataSegmentInitExpr(Index index) override
@@ -331,7 +398,7 @@ public:
     virtual void EndDataSegment(Index index) override
     {
         m_module->m_data.pushBack(new Walrus::Data(m_currentFunction, std::move(m_memoryInitData)));
-        m_currentFunction = nullptr;
+        endFunction();
     }
 
     /* Function section */
@@ -345,65 +412,38 @@ public:
         ASSERT(m_currentFunction == nullptr);
         ASSERT(m_currentFunctionType == nullptr);
         ASSERT(m_module->m_function.size() == index);
-        m_module->m_function.push_back(new Walrus::ModuleFunction(m_module, sigIndex));
+        m_module->m_function.push_back(new Walrus::ModuleFunction(m_module, m_module->functionType(sigIndex)));
     }
 
     virtual void OnGlobalCount(Index count) override
     {
-        m_module->m_globalTypes.reserve(count);
-        m_module->m_globalInitBlock = new Walrus::ModuleFunction(m_module);
+        m_module->m_global.reserve(count);
     }
 
     virtual void BeginGlobal(Index index, Type type, bool mutable_) override
     {
-        ASSERT(m_module->m_globalTypes.size() == index);
-        m_module->m_globalTypes.pushBack(Walrus::GlobalType(toValueKind(type), mutable_));
-        m_currentFunction = m_module->m_globalInitBlock.value();
-        m_initialFunctionStackSize = m_functionStackSizeSoFar = 0;
+        ASSERT(m_module->m_global.size() == index);
+        m_module->m_global.pushBack(std::make_pair(Walrus::GlobalType(toValueKind(type), mutable_), nullptr));
     }
 
     virtual void BeginGlobalInitExpr(Index index) override
     {
+        auto ft = Walrus::Module::initGlobalFunctionType(m_module->m_global[index].first.type());
+        m_module->m_global[index].second = new Walrus::ModuleFunction(m_module, ft);
+        beginFunction(m_module->m_global[index].second.value());
     }
 
     virtual void EndGlobalInitExpr(Index index) override
     {
-#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-        ASSERT(m_currentFunction->peekByteCode<Walrus::End>(
-                                    m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
-                   ->opcodeInAddress()
-               == Walrus::g_opcodeTable.m_addressTable[Walrus::OpcodeKind::EndOpcode]);
-#else
-        ASSERT(m_currentFunction->peekByteCode<Walrus::End>(
-                                    m_currentFunction->currentByteCodeSize() - sizeof(Walrus::End))
-                   ->opcode()
-               == Walrus::OpcodeKind::EndOpcode);
-#endif
-
-        m_currentFunction->shrinkByteCode(sizeof(Walrus::End));
-
-        auto stackPos = m_functionStackSizeSoFar;
-
-        auto sz = Walrus::valueSizeInStack(m_module->m_globalTypes[index].type());
-        if (sz == 4) {
-            ASSERT(peekVMStack() == 4);
-            m_currentFunction->pushByteCode(Walrus::GlobalSet32(stackPos, index));
-        } else {
-            ASSERT(sz == 8);
-            ASSERT(peekVMStack() == 8);
-            m_currentFunction->pushByteCode(Walrus::GlobalSet64(stackPos, index));
-        }
-        popVMStack();
+        endFunction();
     }
 
     virtual void EndGlobal(Index index) override
     {
-        m_currentFunction = nullptr;
     }
 
     virtual void EndGlobalSection() override
     {
-        m_module->m_globalInitBlock->pushByteCode(Walrus::End(m_functionStackSizeSoFar));
     }
 
     virtual void OnTagCount(Index count) override
@@ -426,11 +466,7 @@ public:
     virtual void BeginFunctionBody(Index index, Offset size) override
     {
         ASSERT(m_currentFunction == nullptr);
-        m_currentFunction = m_module->function(index);
-        m_currentFunctionType = m_module->functionType(m_currentFunction->functionTypeIndex());
-        m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
-        m_currentFunction->m_requiredStackSize = std::max(
-            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
+        beginFunction(m_module->function(index));
     }
 
     virtual void OnLocalDeclCount(Index count) override
@@ -459,7 +495,7 @@ public:
 
     virtual void OnCallExpr(uint32_t index) override
     {
-        auto functionType = m_module->functionType(m_module->function(index)->functionTypeIndex());
+        auto functionType = m_module->function(index)->functionType();
         m_currentFunction->pushByteCode(Walrus::Call(m_functionStackSizeSoFar, index));
 
         size_t stackShrinkSize = functionType->paramStackSize();
@@ -580,7 +616,7 @@ public:
     {
         auto stackPos = m_functionStackSizeSoFar;
 
-        auto sz = Walrus::valueSizeInStack(m_module->m_globalTypes[index].type());
+        auto sz = Walrus::valueSizeInStack(m_module->m_global[index].first.type());
         pushVMStack(sz);
         if (sz == 4) {
             m_currentFunction->pushByteCode(Walrus::GlobalGet32(stackPos, index));
@@ -594,7 +630,7 @@ public:
     {
         auto stackPos = m_functionStackSizeSoFar;
 
-        auto sz = Walrus::valueSizeInStack(m_module->m_globalTypes[index].type());
+        auto sz = Walrus::valueSizeInStack(m_module->m_global[index].first.type());
         if (sz == 4) {
             ASSERT(peekVMStack() == 4);
             m_currentFunction->pushByteCode(Walrus::GlobalSet32(stackPos, index));
@@ -646,12 +682,12 @@ public:
         m_currentFunction->pushByteCode(Walrus::JumpIfFalse(stackPos));
     }
 
-    void restoreVMStackBy(const std::vector<unsigned char>& src)
+    void restoreVMStackBy(const std::vector<VMStackInfo>& src)
     {
         m_vmStack = src;
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
         for (auto s : m_vmStack) {
-            m_functionStackSizeSoFar += s;
+            m_functionStackSizeSoFar += s.m_size;
         }
     }
 
@@ -738,7 +774,7 @@ public:
             if (iter->m_vmStack.size() < m_vmStack.size()) {
                 size_t start = iter->m_vmStack.size();
                 for (size_t i = start; i < m_vmStack.size(); i++) {
-                    dropValueSize += m_vmStack[i];
+                    dropValueSize += m_vmStack[i].m_size;
                 }
 
                 if (iter->m_blockType == BlockInfo::Loop) {
@@ -763,7 +799,7 @@ public:
             auto iter = m_blockInfo.begin();
             size_t start = iter->m_vmStack.size();
             for (size_t i = start; i < m_vmStack.size(); i++) {
-                dropValueSize += m_vmStack[i];
+                dropValueSize += m_vmStack[i].m_size;
             }
         }
 
@@ -778,7 +814,7 @@ public:
     void generateFunctionReturnCode(bool shouldClearVMStack = false)
     {
         for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-            ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+            ASSERT((m_vmStack.rbegin() + i)->m_size == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
         }
         m_currentFunction->pushByteCode(Walrus::End(m_functionStackSizeSoFar));
         if (shouldClearVMStack) {
@@ -831,7 +867,7 @@ public:
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse(m_functionStackSizeSoFar, sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End)));
             m_currentFunction->pushByteCode(Walrus::End(m_functionStackSizeSoFar));
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-                ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+                ASSERT((m_vmStack.rbegin() + i)->m_size == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
             }
             return;
         }
@@ -879,7 +915,7 @@ public:
                 if (m_blockInfo.size() == targetDepths[i]) {
                     // this case acts like return
                     for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-                        ASSERT(*(m_vmStack.rbegin() + i) == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+                        ASSERT((m_vmStack.rbegin() + i)->m_size == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
                     }
                     m_currentFunction->pushByteCode(Walrus::End(m_functionStackSizeSoFar));
                 } else {
@@ -909,11 +945,11 @@ public:
 
         size_t size = 0;
         if (resultCount == 0) {
-            ASSERT(m_vmStack.back() == *(m_vmStack.rbegin() + 1));
+            ASSERT(m_vmStack.back().m_size == (m_vmStack.rbegin() + 1)->m_size);
             size = popVMStack();
         } else {
             for (Index i = 0; i < resultCount; i++) {
-                ASSERT(*(m_vmStack.rbegin() + i) == *(m_vmStack.rbegin() + resultCount + i));
+                ASSERT((m_vmStack.rbegin() + i)->m_size == (m_vmStack.rbegin() + resultCount + i)->m_size);
                 size += popVMStack();
             }
         }
@@ -1210,7 +1246,7 @@ public:
                     }
                     size_t stackSizeToBe = m_initialFunctionStackSize;
                     for (size_t i = 0; i < blockInfo.m_vmStack.size(); i++) {
-                        stackSizeToBe += m_vmStack[i];
+                        stackSizeToBe += m_vmStack[i].m_size;
                     }
                     m_currentFunction->m_catchInfo.pushBack({ iter->m_tryStart, iter->m_tryEnd, iter->m_tagIndex, iter->m_catchStart, stackSizeToBe });
                     iter = m_catchInfo.erase(iter);
@@ -1270,55 +1306,8 @@ public:
 #endif
 
         ASSERT(m_currentFunction == m_module->function(index));
-        m_currentFunction = nullptr;
-        m_currentFunctionType = nullptr;
-        m_vmStack.clear();
-        m_shouldContinueToGenerateByteCode = true;
+        endFunction();
     }
-
-private:
-    void pushVMStack(size_t s)
-    {
-        m_vmStack.push_back(s);
-        m_functionStackSizeSoFar += s;
-        m_currentFunction->m_requiredStackSize = std::max(
-            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
-    }
-
-    size_t popVMStack()
-    {
-        auto s = m_vmStack.back();
-        m_functionStackSizeSoFar -= s;
-        m_vmStack.pop_back();
-        return s;
-    }
-
-    size_t peekVMStack()
-    {
-        return m_vmStack.back();
-    }
-
-    Walrus::Module* m_module;
-    Walrus::ModuleFunction* m_currentFunction;
-    Walrus::FunctionType* m_currentFunctionType;
-    uint32_t m_initialFunctionStackSize;
-    uint32_t m_functionStackSizeSoFar;
-    std::vector<unsigned char> m_vmStack;
-    std::vector<BlockInfo> m_blockInfo;
-    struct CatchInfo {
-        size_t m_tryCatchBlockDepth;
-        size_t m_tryStart;
-        size_t m_tryEnd;
-        size_t m_catchStart;
-        uint32_t m_tagIndex;
-    };
-    std::vector<CatchInfo> m_catchInfo;
-    Walrus::Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_memoryInitData;
-
-    uint32_t m_elementTableIndex;
-    Walrus::Optional<Walrus::ModuleFunction*> m_elementModuleFunction;
-    Walrus::Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_elementFunctionIndex;
-    Walrus::SegmentMode m_segmentMode;
 };
 
 } // namespace wabt

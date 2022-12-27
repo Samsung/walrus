@@ -197,13 +197,10 @@ public:
         size_t m_stackSizeToBe;
     };
 
-    constexpr static uint32_t g_invalidFunctionTypeIndex = std::numeric_limits<uint32_t>::max();
-    ModuleFunction(Module* module, uint32_t functionTypeIndex = g_invalidFunctionTypeIndex);
+    ModuleFunction(Module* module, FunctionType* functionType);
 
     Module* module() const { return m_module; }
-
-    uint32_t functionTypeIndex() const { return m_functionTypeIndex; }
-
+    FunctionType* functionType() const { return m_functionType; }
     uint32_t requiredStackSize() const { return m_requiredStackSize; }
     uint32_t requiredStackSizeDueToLocal() const { return m_requiredStackSizeDueToLocal; }
 
@@ -253,7 +250,7 @@ public:
 
 private:
     Module* m_module;
-    uint32_t m_functionTypeIndex;
+    FunctionType* m_functionType;
     uint32_t m_requiredStackSize;
     uint32_t m_requiredStackSizeDueToLocal;
     ValueTypeVector m_local;
@@ -381,6 +378,9 @@ public:
 
     Instance* instantiate(ExecutionState& state, const ObjectVector& imports);
 
+    static FunctionType* initIndexFunctionType();
+    static FunctionType* initGlobalFunctionType(Value::Type type);
+
 private:
     Store* m_store;
     bool m_seenStartAttribute;
@@ -394,15 +394,13 @@ private:
         m_function;
 
     FunctionTypeVector m_functionTypes;
-    GlobalTypeVector m_globalTypes;
     TableTypeVector m_tableTypes;
     MemoryTypeVector m_memoryTypes;
     TagTypeVector m_tagTypes;
 
     Vector<Element*, GCUtil::gc_malloc_allocator<Element*>> m_element;
     Vector<Data*, GCUtil::gc_malloc_allocator<Data*>> m_data;
-
-    Optional<ModuleFunction*> m_globalInitBlock;
+    Vector<std::pair<GlobalType, Optional<ModuleFunction*>>, GCUtil::gc_malloc_allocator<std::pair<GlobalType, Optional<ModuleFunction*>>>> m_global;
 };
 
 } // namespace Walrus

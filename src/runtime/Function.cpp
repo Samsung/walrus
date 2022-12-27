@@ -23,6 +23,15 @@
 
 namespace Walrus {
 
+DefinedFunction::DefinedFunction(Store* store,
+                                 Instance* instance,
+                                 ModuleFunction* moduleFunction)
+    : Function(store, moduleFunction->functionType())
+    , m_instance(instance)
+    , m_moduleFunction(moduleFunction)
+{
+}
+
 void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
 {
     ExecutionState newState(state, this);
