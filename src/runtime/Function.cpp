@@ -41,22 +41,45 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
 
     // init parameter space
     for (size_t i = 0; i < argc; i++) {
-        argv[i].writeToStack(functionStackPointer);
+        argv[i].writeToMemory(functionStackPointer);
+        switch (argv[i].type()) {
+        case Value::I32: {
+            functionStackPointer += stackAllocatedSize<int32_t>();
+            break;
+        }
+        case Value::F32: {
+            functionStackPointer += stackAllocatedSize<float>();
+            break;
+        }
+        case Value::F64: {
+            functionStackPointer += stackAllocatedSize<double>();
+            break;
+        }
+        case Value::I64: {
+            functionStackPointer += stackAllocatedSize<int64_t>();
+            break;
+        }
+        case Value::FuncRef:
+        case Value::ExternRef: {
+            functionStackPointer += stackAllocatedSize<void*>();
+            break;
+        }
+        default: {
+            ASSERT_NOT_REACHED();
+            break;
+        }
+        }
     }
     // init local space
     auto localSize = m_moduleFunction->requiredStackSizeDueToLocal();
     memset(functionStackPointer, 0, localSize);
 
-    functionStackPointer = Interpreter::interpret(newState, functionStackBase);
+    auto resultOffsets = Interpreter::interpret(newState, functionStackBase);
 
     const FunctionType* ft = functionType();
     const ValueTypeVector& resultTypeInfo = ft->result();
-
-    functionStackPointer = functionStackPointer - ft->resultStackSize();
-    uint8_t* resultStackPointer = functionStackPointer;
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {
-        result[i] = Value(resultTypeInfo[i], resultStackPointer);
-        resultStackPointer += valueSizeInStack(resultTypeInfo[i]);
+        result[i] = Value(resultTypeInfo[i], functionStackBase + resultOffsets[i]);
     }
 }
 
