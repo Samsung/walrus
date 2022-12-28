@@ -219,33 +219,28 @@ public:
         return reinterpret_cast<void*>(m_ref);
     }
 
-    inline void writeToStack(uint8_t*& ptr)
+    inline void writeToMemory(uint8_t* ptr)
     {
         switch (m_type) {
         case I32: {
             *reinterpret_cast<int32_t*>(ptr) = m_i32;
-            ptr += stackAllocatedSize<int32_t>();
             break;
         }
         case F32: {
             *reinterpret_cast<float*>(ptr) = m_f32;
-            ptr += stackAllocatedSize<float>();
             break;
         }
         case F64: {
             *reinterpret_cast<double*>(ptr) = m_f64;
-            ptr += stackAllocatedSize<double>();
             break;
         }
         case I64: {
             *reinterpret_cast<int64_t*>(ptr) = m_i64;
-            ptr += stackAllocatedSize<int64_t>();
             break;
         }
         case FuncRef:
         case ExternRef: {
             *reinterpret_cast<void**>(ptr) = m_ref;
-            ptr += stackAllocatedSize<void*>();
             break;
         }
         default: {
@@ -256,7 +251,7 @@ public:
     }
 
     template <const size_t siz>
-    inline void writeNBytesToStack(uint8_t* ptr)
+    inline void writeNBytesToMemory(uint8_t* ptr)
     {
         if (siz == 4) {
             *reinterpret_cast<int32_t*>(ptr) = m_i32;
