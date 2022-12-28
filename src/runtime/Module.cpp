@@ -47,31 +47,31 @@ FunctionType* Module::initGlobalFunctionType(Value::Type type)
     switch (type) {
     case Value::Type::I32:
         if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
+            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
         break;
     case Value::Type::I64:
         if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
+            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
         break;
     case Value::Type::F32:
         if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
+            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
         break;
     case Value::Type::F64:
         if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
+            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
         break;
     case Value::Type::V128:
         if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
+            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
         break;
     case Value::Type::FuncRef:
         if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
+            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
         break;
     case Value::Type::ExternRef:
         if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
+            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
         break;
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -217,10 +217,8 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
 
                 DefinedFunction fakeFunction(data->module->m_store, data->instance, data->mf);
                 ExecutionState newState(state, &fakeFunction);
-                uint8_t* functionStackPointer = Interpreter::interpret(newState, functionStackBase);
-                functionStackPointer = functionStackPointer - valueSizeInStack(data->type);
-                uint8_t* resultStackPointer = functionStackPointer;
-                data->instance->m_global.back()->setValue(Value(data->type, resultStackPointer));
+                auto resultOffset = Interpreter::interpret(newState, functionStackBase);
+                data->instance->m_global.back()->setValue(Value(data->type, functionStackBase + resultOffset[0]));
             },
                      &data);
         }
@@ -249,11 +247,8 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                                                  data->elem->moduleFunction());
                     ExecutionState newState(state, &fakeFunction);
 
-                    uint8_t* functionStackPointer = Interpreter::interpret(newState, functionStackBase);
-
-                    functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
-                    uint8_t* resultStackPointer = functionStackPointer;
-                    Value offset(Value::I32, resultStackPointer);
+                    auto resultOffset = Interpreter::interpret(newState, functionStackBase);
+                    Value offset(Value::I32, functionStackBase + resultOffset[0]);
                     data->index = offset.asI32();
                 },
                          &data);
@@ -298,11 +293,8 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                                              data->init->moduleFunction());
                 ExecutionState newState(state, &fakeFunction);
 
-                uint8_t* functionStackPointer = Interpreter::interpret(newState, functionStackBase);
-
-                functionStackPointer = functionStackPointer - valueSizeInStack(Value::I32);
-                uint8_t* resultStackPointer = functionStackPointer;
-                Value offset(Value::I32, resultStackPointer);
+                auto resultOffset = Interpreter::interpret(newState, functionStackBase);
+                Value offset(Value::I32, functionStackBase + resultOffset[0]);
                 Memory* m = data->instance->memory(0);
                 const auto& initData = data->init->initData();
                 if (m->sizeInByte() >= initData.size() && (offset.asI32() + initData.size()) <= m->sizeInByte() && offset.asI32() >= 0) {
@@ -339,7 +331,6 @@ void ModuleFunction::dumpByteCode()
         ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
         printf("%zu: ", idx);
         printf("%s ", g_byteCodeInfo[code->orgOpcode()].m_name);
-        printf("stackOffset: %" PRIu32 " ", code->stackOffset());
         code->dump(idx);
         printf("\n");
         idx += code->byteCodeSize();
