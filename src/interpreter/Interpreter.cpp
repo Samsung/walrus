@@ -322,39 +322,21 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalGet32)
+    DEFINE_OPCODE(Move32)
         :
     {
-        LocalGet32* code = (LocalGet32*)programCounter;
-        *reinterpret_cast<uint32_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint32_t*>(&bp[code->offset()]);
-        ADD_PROGRAM_COUNTER(LocalGet32);
+        Move32* code = (Move32*)programCounter;
+        *reinterpret_cast<uint32_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint32_t*>(bp + code->srcOffset());
+        ADD_PROGRAM_COUNTER(Move32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(LocalGet64)
+    DEFINE_OPCODE(Move64)
         :
     {
-        LocalGet64* code = (LocalGet64*)programCounter;
-        *reinterpret_cast<uint64_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint64_t*>(&bp[code->offset()]);
-        ADD_PROGRAM_COUNTER(LocalGet64);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(LocalSet32)
-        :
-    {
-        LocalSet32* code = (LocalSet32*)programCounter;
-        *reinterpret_cast<uint32_t*>(&bp[code->offset()]) = *reinterpret_cast<uint32_t*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(LocalSet32);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(LocalSet64)
-        :
-    {
-        LocalSet64* code = (LocalSet64*)programCounter;
-        *reinterpret_cast<uint64_t*>(&bp[code->offset()]) = *reinterpret_cast<uint64_t*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(LocalSet64);
+        Move64* code = (Move64*)programCounter;
+        *reinterpret_cast<uint64_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint64_t*>(bp + code->srcOffset());
+        ADD_PROGRAM_COUNTER(Move64);
         NEXT_INSTRUCTION();
     }
 
