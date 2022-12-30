@@ -320,128 +320,64 @@ protected:
     FunctionType* m_functionType;
 };
 
-class LocalGet32 : public ByteCode {
+class Move32 : public ByteCode {
 public:
-    LocalGet32(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalGet32Opcode)
-        , m_dstOffset(stackOffset)
-        , m_offset(offset)
-    {
-    }
-
-    uint32_t dstOffset() const { return m_dstOffset; }
-    uint32_t offset() const { return m_offset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("offset: %" PRId32,
-               m_offset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(LocalGet32);
-    }
-#endif
-
-protected:
-    uint32_t m_dstOffset;
-    uint32_t m_offset;
-};
-
-class LocalGet64 : public ByteCode {
-public:
-    LocalGet64(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalGet64Opcode)
-        , m_dstOffset(stackOffset)
-        , m_offset(offset)
-    {
-    }
-
-    uint32_t dstOffset() const { return m_dstOffset; }
-    uint32_t offset() const { return m_offset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("offset: %" PRId32,
-               m_offset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(LocalGet64);
-    }
-#endif
-
-protected:
-    uint32_t m_dstOffset;
-    uint32_t m_offset;
-};
-
-class LocalSet32 : public ByteCode {
-public:
-    LocalSet32(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalSet32Opcode)
-        , m_srcOffset(stackOffset)
-        , m_offset(offset)
+    Move32(uint32_t srcOffset, uint32_t dstOffset)
+        : ByteCode(OpcodeKind::Move32Opcode)
+        , m_srcOffset(srcOffset)
+        , m_dstOffset(dstOffset)
     {
     }
 
     uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t offset() const { return m_offset; }
+    uint32_t dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
         DUMP_BYTECODE_OFFSET(srcOffset);
-        printf("offset: %" PRId32,
-               m_offset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
     }
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalSet32);
+        return sizeof(Move32);
     }
 #endif
 
 protected:
     uint32_t m_srcOffset;
-    uint32_t m_offset;
+    uint32_t m_dstOffset;
 };
 
-class LocalSet64 : public ByteCode {
+class Move64 : public ByteCode {
 public:
-    LocalSet64(uint32_t stackOffset, uint32_t offset)
-        : ByteCode(OpcodeKind::LocalSet64Opcode)
-        , m_srcOffset(stackOffset)
-        , m_offset(offset)
+    Move64(uint32_t srcOffset, uint32_t dstOffset)
+        : ByteCode(OpcodeKind::Move64Opcode)
+        , m_srcOffset(srcOffset)
+        , m_dstOffset(dstOffset)
     {
     }
 
     uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t offset() const { return m_offset; }
+    uint32_t dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
         DUMP_BYTECODE_OFFSET(srcOffset);
-        printf("offset: %" PRId32,
-               m_offset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
     }
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(LocalSet64);
+        return sizeof(Move64);
     }
 #endif
 
 protected:
     uint32_t m_srcOffset;
-    uint32_t m_offset;
+    uint32_t m_dstOffset;
 };
 
 class Load32 : public ByteCode {

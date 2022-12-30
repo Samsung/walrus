@@ -605,9 +605,9 @@ public:
         auto r = resolveLocalOffsetAndSize(localIndex);
         auto offset = pushVMStack(r.second);
         if (r.second == 4) {
-            m_currentFunction->pushByteCode(Walrus::LocalGet32(offset, r.first));
+            m_currentFunction->pushByteCode(Walrus::Move32(r.first, offset));
         } else if (r.second == 8) {
-            m_currentFunction->pushByteCode(Walrus::LocalGet64(offset, r.first));
+            m_currentFunction->pushByteCode(Walrus::Move64(r.first, offset));
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
@@ -620,9 +620,9 @@ public:
         auto offset = popVMStack();
 
         if (r.second == 4) {
-            m_currentFunction->pushByteCode(Walrus::LocalSet32(offset, r.first));
+            m_currentFunction->pushByteCode(Walrus::Move32(offset, r.first));
         } else if (r.second == 8) {
-            m_currentFunction->pushByteCode(Walrus::LocalSet64(offset, r.first));
+            m_currentFunction->pushByteCode(Walrus::Move64(offset, r.first));
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
@@ -635,9 +635,9 @@ public:
         auto offset = peekVMStack();
 
         if (r.second == 4) {
-            m_currentFunction->pushByteCode(Walrus::LocalSet32(offset, r.first));
+            m_currentFunction->pushByteCode(Walrus::Move32(offset, r.first));
         } else if (r.second == 8) {
-            m_currentFunction->pushByteCode(Walrus::LocalSet64(offset, r.first));
+            m_currentFunction->pushByteCode(Walrus::Move64(offset, r.first));
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
