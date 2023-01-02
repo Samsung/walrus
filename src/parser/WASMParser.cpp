@@ -82,6 +82,7 @@ private:
         Type m_returnValueType;
         size_t m_position;
         std::vector<VMStackInfo> m_vmStack;
+        uint32_t m_functionStackSizeSoFar;
         bool m_shouldRestoreVMStackAtEnd;
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
@@ -92,10 +93,12 @@ private:
 
         std::vector<JumpToEndBrInfo> m_jumpToEndBrInfo;
 
-        BlockInfo(BlockType type, Type returnValueType)
+        BlockInfo(BlockType type, Type returnValueType, WASMBinaryReader& binaryReader)
             : m_blockType(type)
             , m_returnValueType(returnValueType)
-            , m_position(0)
+            , m_position(binaryReader.m_currentFunction->currentByteCodeSize())
+            , m_vmStack(binaryReader.m_vmStack)
+            , m_functionStackSizeSoFar(binaryReader.m_functionStackSizeSoFar)
             , m_shouldRestoreVMStackAtEnd(false)
         {
         }
@@ -701,31 +704,26 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto stackPos = popVMStack();
 
-        BlockInfo b(BlockInfo::IfElse, sigType);
-        b.m_position = m_currentFunction->currentByteCodeSize();
+        BlockInfo b(BlockInfo::IfElse, sigType, *this);
         b.m_jumpToEndBrInfo.push_back({ true, b.m_position });
-        b.m_vmStack = m_vmStack;
         m_blockInfo.push_back(b);
         m_currentFunction->pushByteCode(Walrus::JumpIfFalse(stackPos));
     }
 
-    void restoreVMStackBy(const std::vector<VMStackInfo>& src)
+    void restoreVMStackBy(const BlockInfo& blockInfo)
     {
-        m_vmStack = src;
-        m_functionStackSizeSoFar = m_initialFunctionStackSize;
-        for (auto s : m_vmStack) {
-            m_functionStackSizeSoFar += s.m_size;
-        }
+        m_vmStack = blockInfo.m_vmStack;
+        m_functionStackSizeSoFar = blockInfo.m_functionStackSizeSoFar;
     }
 
     void restoreVMStackRegardToPartOfBlockEnd(const BlockInfo& blockInfo)
     {
         if (blockInfo.m_shouldRestoreVMStackAtEnd) {
-            restoreVMStackBy(blockInfo.m_vmStack);
+            restoreVMStackBy(blockInfo);
         } else if (blockInfo.m_returnValueType.IsIndex()) {
             auto ft = m_module->functionType(blockInfo.m_returnValueType);
             if (ft->param().size()) {
-                restoreVMStackBy(blockInfo.m_vmStack);
+                restoreVMStackBy(blockInfo);
             } else {
                 const auto& result = ft->result();
                 for (size_t i = 0; i < result.size(); i++) {
@@ -753,17 +751,13 @@ public:
 
     virtual void OnLoopExpr(Type sigType) override
     {
-        BlockInfo b(BlockInfo::Loop, sigType);
-        b.m_position = m_currentFunction->currentByteCodeSize();
-        b.m_vmStack = m_vmStack;
+        BlockInfo b(BlockInfo::Loop, sigType, *this);
         m_blockInfo.push_back(b);
     }
 
     virtual void OnBlockExpr(Type sigType) override
     {
-        BlockInfo b(BlockInfo::Block, sigType);
-        b.m_position = m_currentFunction->currentByteCodeSize();
-        b.m_vmStack = m_vmStack;
+        BlockInfo b(BlockInfo::Block, sigType, *this);
         m_blockInfo.push_back(b);
     }
 
@@ -838,6 +832,49 @@ public:
         return std::make_pair(dropValueSize, parameterSize);
     }
 
+    void generateMoveValuesCodeRegardToDrop(std::pair<size_t, size_t> dropSize)
+    {
+        ASSERT(dropSize.first != dropSize.second && dropSize.second);
+        size_t remainParameterSize = dropSize.second;
+        auto srcIter = m_vmStack.rbegin();
+        while (true) {
+            remainParameterSize -= srcIter->m_size;
+            if (!remainParameterSize) {
+                break;
+            }
+            srcIter++;
+        }
+
+        size_t remainDropSize = dropSize.first;
+        auto dstIter = m_vmStack.rbegin();
+        while (true) {
+            remainDropSize -= dstIter->m_size;
+            if (!remainDropSize) {
+                break;
+            }
+            dstIter++;
+        }
+
+        // reverse order copy to protect newer values
+        remainParameterSize = dropSize.second;
+        while (true) {
+            if (srcIter->m_size == 4) {
+                m_currentFunction->pushByteCode(Walrus::Move32(srcIter->m_position, dstIter->m_position));
+            } else {
+                m_currentFunction->pushByteCode(Walrus::Move64(srcIter->m_position, dstIter->m_position));
+                ASSERT(srcIter->m_size == 8);
+            }
+
+            remainParameterSize -= srcIter->m_size;
+            if (!remainParameterSize) {
+                break;
+            }
+
+            srcIter--;
+            dstIter--;
+        }
+    }
+
     void generateEndCode()
     {
         if (UNLIKELY(m_currentFunctionType->result().size() > m_vmStack.size())) {
@@ -894,8 +931,8 @@ public:
         auto& blockInfo = findBlockInfoInBr(depth);
         auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
-        if (dropSize.first) {
-            m_currentFunction->pushByteCode(Walrus::Drop(m_functionStackSizeSoFar, dropSize.first, dropSize.second));
+        if (dropSize.first != dropSize.second && dropSize.second) {
+            generateMoveValuesCodeRegardToDrop(dropSize);
         }
         if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
             blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
@@ -925,10 +962,10 @@ public:
 
         auto& blockInfo = findBlockInfoInBr(depth);
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
-        if (dropSize.first) {
+        if (dropSize.first != dropSize.second && dropSize.second) {
             size_t pos = m_currentFunction->currentByteCodeSize();
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse(stackPos));
-            m_currentFunction->pushByteCode(Walrus::Drop(stackPos, dropSize.first, dropSize.second));
+            generateMoveValuesCodeRegardToDrop(dropSize);
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
             if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
                 blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
@@ -1025,9 +1062,7 @@ public:
 
     virtual void OnTryExpr(Type sigType) override
     {
-        BlockInfo b(BlockInfo::TryCatch, sigType);
-        b.m_position = m_currentFunction->currentByteCodeSize();
-        b.m_vmStack = m_vmStack;
+        BlockInfo b(BlockInfo::TryCatch, sigType, *this);
         m_blockInfo.push_back(b);
     }
 
@@ -1294,7 +1329,7 @@ public:
             }
 
             if (blockInfo.m_shouldRestoreVMStackAtEnd) {
-                restoreVMStackBy(blockInfo.m_vmStack);
+                restoreVMStackBy(blockInfo);
                 if (blockInfo.m_returnValueType.IsIndex()) {
                     auto ft = m_module->functionType(blockInfo.m_returnValueType);
                     const auto& param = ft->param();
