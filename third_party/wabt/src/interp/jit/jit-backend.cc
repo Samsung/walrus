@@ -329,27 +329,38 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr) {
       // Not supported yet.
       return;
     case Opcode::I32WrapI64:
-      sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, args[0].arg,
-                     args[0].argw);
-      if (args[1].arg & SLJIT_MEM) {
+      if (args[0].arg & SLJIT_MEM) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, args[0].arg,
+                       args[0].argw);
         sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw,
                        SLJIT_R0, 0);
+      } else {
+        sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw,
+                       args[0].arg, args[0].argw);
       }
       return;
     case Opcode::I64ExtendI32S:
-      sljit_emit_op1(compiler, SLJIT_MOV_S32, SLJIT_R0, 0, args[0].arg,
-                     args[0].argw);
-      if (args[1].arg & SLJIT_MEM) {
+      if (args[0].arg & args[1].arg & SLJIT_MEM) {
+        /* Both operands are memory. */
+        sljit_emit_op1(compiler, SLJIT_MOV_S32, SLJIT_R0, 0, args[0].arg,
+                       args[0].argw);
         sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_R0,
                        0);
+      } else {
+        sljit_emit_op1(compiler, SLJIT_MOV_S32, args[1].arg, args[1].argw,
+                       args[0].arg, args[0].argw);
       }
       return;
     case Opcode::I64ExtendI32U:
-      sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R0, 0, args[0].arg,
-                     args[0].argw);
-      if (args[1].arg & SLJIT_MEM) {
+      if (args[0].arg & args[1].arg & SLJIT_MEM) {
+        /* Both operands are memory. */
+        sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R0, 0, args[0].arg,
+                       args[0].argw);
         sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_R0,
                        0);
+      } else {
+        sljit_emit_op1(compiler, SLJIT_MOV_U32, args[1].arg, args[1].argw,
+                       args[0].arg, args[0].argw);
       }
       return;
     default:

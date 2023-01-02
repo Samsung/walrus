@@ -61,7 +61,7 @@ def runTests(args):
             failing_tests.append(text_file)
             continue
 
-        output = subprocess.run([interp, '--jit', '--jit-verbose', wasm_file], universal_newlines=True,
+        output = subprocess.run([interp, '--jit', '--jit-verbose', "--run-all-exports", wasm_file], universal_newlines=True,
                                 capture_output=True)
 
         if output.returncode != 0:

@@ -166,3 +166,5 @@ Frame size: 32, Arguments size: 16 (total: 48)
   Param[0]: i32 sp[32]
   Param[1]: i32 sp[36]
 
+test1() => i32:3, i32:3
+test2() => i32:7, i32:10

@@ -1,0 +1,27 @@
+[[[[[[[  Function   0  ]]]]]]]
+0: Opcode: unreachable
+------------------------------
+Frame size: 0, Arguments size: 0 (total: 0)
+0: Opcode: unreachable
+
+[[[[[[[  Function   1  ]]]]]]]
+0: Opcode: call
+  Frame size: 0, param start: 0
+1: Opcode: return
+------------------------------
+Frame size: 0, Arguments size: 0 (total: 0)
+0: Opcode: call
+  Frame size: 0, param start: 0
+1: Opcode: return
+
+[[[[[[[  Function   2  ]]]]]]]
+0: Opcode: call
+  Frame size: 0, param start: 0
+1: Opcode: return
+------------------------------
+Frame size: 0, Arguments size: 0 (total: 0)
+0: Opcode: call
+  Frame size: 0, param start: 0
+1: Opcode: return
+
+test1() =>

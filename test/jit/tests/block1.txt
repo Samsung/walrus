@@ -1,5 +1,5 @@
 (module
-(func $test1 (export "test1")
+(func $test1
   block
     i32.const 1
     i32.const 2
@@ -33,7 +33,7 @@
   end
 )
 
-(func $test2 (export "test2")
+(func $test2
   i32.const 5
   loop (param i32)
     br 0

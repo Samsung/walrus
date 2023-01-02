@@ -1,5 +1,5 @@
 (module
-(func $test1 (export "test1") (local i32 i32)
+(func $test1 (local i32 i32)
   local.get 0
   local.set 1
 
@@ -12,7 +12,7 @@
   local.set 0
 )
 
-(func $test2 (export "test2") (local i32)
+(func $test2 (local i32)
   i32.const 1
   if (result i32)
     local.get 0
@@ -23,7 +23,7 @@
   local.set 0
 )
 
-(func $test3 (export "test3") (local i32)
+(func $test3 (local i32)
   i32.const 1
   if (result i32)
     i32.const 3
@@ -34,7 +34,7 @@
   local.set 0
 )
 
-(func $test4 (export "test4") (local i32)
+(func $test4 (local i32)
   i32.const 1
   if (result i32)
     local.get 0
