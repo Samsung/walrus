@@ -496,38 +496,6 @@ protected:
     uint32_t m_src1Offset;
 };
 
-class Drop : public ByteCode {
-public:
-    Drop(uint32_t stackOffset, uint32_t dropSize, uint32_t parameterSize)
-        : ByteCode(OpcodeKind::DropOpcode)
-        , m_stackOffset(stackOffset)
-        , m_dropSize(dropSize)
-        , m_parameterSize(parameterSize)
-    {
-    }
-
-    uint32_t stackOffset() const { return m_stackOffset; }
-    uint32_t dropSize() const { return m_dropSize; }
-    uint32_t parameterSize() const { return m_parameterSize; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        printf("dropSize: %" PRId32 ", parameterSize: %" PRId32, m_dropSize, m_parameterSize);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Drop);
-    }
-#endif
-
-protected:
-    uint32_t m_stackOffset;
-    uint32_t m_dropSize;
-    uint32_t m_parameterSize;
-};
-
 class Jump : public ByteCode {
 public:
     Jump(int32_t offset = 0)
@@ -1506,7 +1474,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(Throw) + m_functionType ? sizeof(uint32_t) * m_functionType->result().size() : 0;
+        return sizeof(Throw) + (m_functionType ? sizeof(uint32_t) * m_functionType->result().size() : 0);
     }
 #endif
 

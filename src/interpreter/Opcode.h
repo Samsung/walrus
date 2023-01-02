@@ -37,7 +37,6 @@ enum OpcodeKind : size_t {
     WABT_OPCODE(___, I32, ___, ___, 0, 0, 0x0e, BrTable, "br_table", "")                       \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0x10, Call, "call", "")                              \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0x11, CallIndirect, "call_indirect", "")             \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0x1a, Drop, "drop", "")                              \
     WABT_OPCODE(___, ___, ___, I32, 0, 0, 0x1b, Select, "select", "")                          \
     WABT_OPCODE(I32, I32, ___, ___, 4, 0, 0x28, I32Load, "i32.load", "")                       \
     WABT_OPCODE(I64, I32, ___, ___, 8, 0, 0x29, I64Load, "i64.load", "")                       \

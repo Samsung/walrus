@@ -593,19 +593,6 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(Drop)
-        :
-    {
-        Drop* code = (Drop*)programCounter;
-        if (code->parameterSize()) {
-            auto dest = bp + code->stackOffset() - code->dropSize();
-            auto src = bp + code->stackOffset() - code->parameterSize();
-            memmove(dest, src, code->parameterSize());
-        }
-        ADD_PROGRAM_COUNTER(Drop);
-        NEXT_INSTRUCTION();
-    }
-
     DEFINE_OPCODE(BrTable)
         :
     {
