@@ -363,7 +363,7 @@ public:
     FunctionType* functionType(uint32_t index)
     {
         ASSERT(index < m_functionTypes.size());
-        return &m_functionTypes[index];
+        return m_functionTypes[index];
     }
 
     const Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>>& moduleImport() const

@@ -182,19 +182,19 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     // init table
     for (size_t i = importTableCount; i < m_tableTypes.size(); i++) {
         ASSERT(i == instance->m_table.size());
-        instance->m_table.pushBack(new Table(m_tableTypes[i].type(), m_tableTypes[i].initialSize(), m_tableTypes[i].maximumSize()));
+        instance->m_table.pushBack(new Table(m_tableTypes[i]->type(), m_tableTypes[i]->initialSize(), m_tableTypes[i]->maximumSize()));
     }
 
     // init memory
     for (size_t i = importMemCount; i < m_memoryTypes.size(); i++) {
         ASSERT(i == instance->m_memory.size());
-        instance->m_memory.pushBack(new Memory(m_memoryTypes[i].initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i].maximumSize() * Memory::s_memoryPageSize));
+        instance->m_memory.pushBack(new Memory(m_memoryTypes[i]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i]->maximumSize() * Memory::s_memoryPageSize));
     }
 
     // init tag
     for (size_t i = importTagCount; i < m_tagTypes.size(); i++) {
         ASSERT(i == instance->m_tag.size());
-        instance->m_tag.push_back(new Tag(&m_functionTypes[m_tagTypes[i].sigIndex()]));
+        instance->m_tag.push_back(new Tag(m_functionTypes[m_tagTypes[i]->sigIndex()]));
     }
 
     // init global

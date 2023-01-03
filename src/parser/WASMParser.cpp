@@ -234,7 +234,7 @@ public:
             result->push_back(toValueKind(resultTypes[i]));
         }
         ASSERT(index == m_module->m_functionTypes.size());
-        m_module->m_functionTypes.push_back(Walrus::FunctionType(param, result));
+        m_module->m_functionTypes.push_back(new Walrus::FunctionType(param, result));
     }
 
     virtual void OnImportCount(Index count) override
@@ -274,7 +274,7 @@ public:
         ASSERT(m_module->m_import.size() == importIndex);
         ASSERT(type == Type::FuncRef || type == Type::ExternRef);
 
-        m_module->m_tableTypes.pushBack(Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
+        m_module->m_tableTypes.pushBack(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
         m_module->m_import.push_back(new Walrus::ModuleImport(
             Walrus::ModuleImport::Table,
             new Walrus::String(moduleName),
@@ -286,7 +286,7 @@ public:
     {
         ASSERT(memoryIndex == m_module->m_memoryTypes.size());
         ASSERT(m_module->m_import.size() == importIndex);
-        m_module->m_memoryTypes.pushBack(Walrus::MemoryType(initialSize, maximumSize));
+        m_module->m_memoryTypes.pushBack(new Walrus::MemoryType(initialSize, maximumSize));
         m_module->m_import.push_back(new Walrus::ModuleImport(
             Walrus::ModuleImport::Memory,
             new Walrus::String(moduleName),
@@ -298,7 +298,7 @@ public:
     {
         ASSERT(tagIndex == m_module->m_tagTypes.size());
         ASSERT(m_module->m_import.size() == importIndex);
-        m_module->m_tagTypes.pushBack(Walrus::TagType(sigIndex));
+        m_module->m_tagTypes.pushBack(new Walrus::TagType(sigIndex));
         m_module->m_import.push_back(new Walrus::ModuleImport(
             Walrus::ModuleImport::Tag,
             new Walrus::String(moduleName),
@@ -326,7 +326,7 @@ public:
     {
         ASSERT(index == m_module->m_tableTypes.size());
         ASSERT(type == Type::FuncRef || type == Type::ExternRef);
-        m_module->m_tableTypes.pushBack(Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
+        m_module->m_tableTypes.pushBack(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
     }
 
     virtual void OnElemSegmentCount(Index count) override
@@ -395,7 +395,7 @@ public:
     virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) override
     {
         ASSERT(index == m_module->m_memoryTypes.size());
-        m_module->m_memoryTypes.pushBack(Walrus::MemoryType(initialSize, maximumSize));
+        m_module->m_memoryTypes.pushBack(new Walrus::MemoryType(initialSize, maximumSize));
     }
 
     virtual void OnDataSegmentCount(Index count) override
@@ -482,7 +482,7 @@ public:
     virtual void OnTagType(Index index, Index sigIndex) override
     {
         ASSERT(index == m_module->m_tagTypes.size());
-        m_module->m_tagTypes.pushBack(Walrus::TagType(sigIndex));
+        m_module->m_tagTypes.pushBack(new Walrus::TagType(sigIndex));
     }
 
     virtual void OnStartFunction(Index funcIndex) override
@@ -1043,12 +1043,12 @@ public:
         m_currentFunction->pushByteCode(Walrus::Throw(tagIndex
 #if !defined(NDEBUG)
                                                       ,
-                                                      tagIndex != std::numeric_limits<Index>::max() ? m_module->functionType(m_module->m_tagTypes[tagIndex].sigIndex()) : nullptr
+                                                      tagIndex != std::numeric_limits<Index>::max() ? m_module->functionType(m_module->m_tagTypes[tagIndex]->sigIndex()) : nullptr
 #endif
                                                       ));
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            auto functionType = m_module->functionType(m_module->m_tagTypes[tagIndex].sigIndex());
+            auto functionType = m_module->functionType(m_module->m_tagTypes[tagIndex]->sigIndex());
             auto& param = functionType->param();
             m_currentFunction->expandByteCode(sizeof(uint32_t) * param.size());
             Walrus::Throw* code = m_currentFunction->peekByteCode<Walrus::Throw>(pos);
@@ -1092,7 +1092,7 @@ public:
         m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentFunction->currentByteCodeSize(), tagIndex });
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            auto functionType = m_module->functionType(m_module->m_tagTypes[tagIndex].sigIndex());
+            auto functionType = m_module->functionType(m_module->m_tagTypes[tagIndex]->sigIndex());
             for (size_t i = 0; i < functionType->param().size(); i++) {
                 pushVMStack(Walrus::valueSizeInStack(functionType->param()[i]));
             }
