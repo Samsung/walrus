@@ -21,7 +21,7 @@
 
 namespace Walrus {
 
-class ObjectType {
+class ObjectType : public gc {
 public:
     enum Kind : uint8_t {
         Invalid,
@@ -32,14 +32,14 @@ public:
         TagKind,
     };
 
+    Kind kind() const { return m_kind; }
+
+protected:
     ObjectType(Kind kind)
         : m_kind(kind)
     {
     }
 
-    Kind kind() const { return m_kind; }
-
-protected:
     Kind m_kind;
 };
 
@@ -170,12 +170,11 @@ private:
 };
 
 // ObjectType Vectors
-// FunctionType has GC Vectors in itself, so FunctionTypeVector should use non-atomic allocator
-typedef Vector<FunctionType, GCUtil::gc_malloc_allocator<FunctionType>> FunctionTypeVector;
-typedef Vector<GlobalType, GCUtil::gc_malloc_atomic_allocator<GlobalType>> GlobalTypeVector;
-typedef Vector<TableType, GCUtil::gc_malloc_atomic_allocator<TableType>> TableTypeVector;
-typedef Vector<MemoryType, GCUtil::gc_malloc_atomic_allocator<MemoryType>> MemoryTypeVector;
-typedef Vector<TagType, GCUtil::gc_malloc_atomic_allocator<TagType>> TagTypeVector;
+typedef Vector<FunctionType*, GCUtil::gc_malloc_allocator<FunctionType*>> FunctionTypeVector;
+typedef Vector<GlobalType*, GCUtil::gc_malloc_allocator<GlobalType*>> GlobalTypeVector;
+typedef Vector<TableType*, GCUtil::gc_malloc_allocator<TableType*>> TableTypeVector;
+typedef Vector<MemoryType*, GCUtil::gc_malloc_allocator<MemoryType*>> MemoryTypeVector;
+typedef Vector<TagType*, GCUtil::gc_malloc_allocator<TagType*>> TagTypeVector;
 
 } // namespace Walrus
 

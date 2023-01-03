@@ -100,7 +100,12 @@ public:
     Module* module() const { return m_module; }
 
     Function* function(uint32_t index) const { return m_function[index]; }
-    Memory* memory(uint32_t index) const { return m_memory[index]; }
+    Memory* memory(uint32_t index) const
+    {
+        // now only one memory is allowed for each Instance
+        ASSERT(index == 0);
+        return m_memory[index];
+    }
     Table* table(uint32_t index) const { return m_table[index]; }
     Tag* tag(uint32_t index) const { return m_tag[index]; }
     Global* global(uint32_t index) { return m_global[index]; }
