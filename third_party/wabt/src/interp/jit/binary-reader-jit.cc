@@ -81,10 +81,10 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Result OnTable(Index index,
                  Type elem_type,
                  const Limits* elem_limits) override;
-
+#endif
   Result OnMemoryCount(Index count) override;
   Result OnMemory(Index index, const Limits* limits) override;
-
+#if 0
   Result OnGlobalCount(Index count) override;
   Result BeginGlobal(Index index, Type type, bool mutable_) override;
   Result BeginGlobalInitExpr(Index index) override;
@@ -165,12 +165,10 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Result OnI32ConstExpr(uint32_t value) override;
   Result OnI64ConstExpr(uint64_t value) override;
   Result OnIfExpr(Type sig_type) override;
-#if 0
   Result OnLoadExpr(Opcode opcode,
                     Index memidx,
                     Address alignment_log2,
                     Address offset) override;
-#endif
   Result OnLocalGetExpr(Index local_index) override;
   Result OnLocalSetExpr(Index local_index) override;
   Result OnLocalTeeExpr(Index local_index) override;
@@ -189,11 +187,11 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Result OnRethrowExpr(Index depth) override;
   Result OnReturnExpr() override;
   Result OnSelectExpr(Index result_count, Type* result_types) override;
+#endif
   Result OnStoreExpr(Opcode opcode,
                      Index memidx,
                      Address alignment_log2,
                      Address offset) override;
-#endif
   Result OnUnaryExpr(Opcode opcode) override;
 #if 0
   Result OnTableCopyExpr(Index dst_index, Index src_index) override;
@@ -273,6 +271,7 @@ class BinaryReaderJIT : public BinaryReaderNop {
   // Includes imported and defined.
   std::vector<FuncType> func_types_;
   std::vector<bool> func_is_exported_;
+  std::vector<MemoryType> memory_types_;
 };
 
 BinaryReaderJIT::BinaryReaderJIT(ModuleDesc* module,
@@ -291,6 +290,10 @@ Location BinaryReaderJIT::GetLocation() const {
   loc.filename = filename_;
   loc.offset = state->offset;
   return loc;
+}
+
+uint32_t GetAlignment(Address alignment_log2) {
+  return alignment_log2 < 32 ? 1 << alignment_log2 : ~0u;
 }
 
 void BinaryReaderJIT::pushLabel(Opcode opcode, Type sig_type) {
@@ -635,6 +638,43 @@ Result BinaryReaderJIT::EndFunctionBody(Index index) {
   compiler_.appendFunction(jit_func, func_is_exported_[function_body_index_]);
 
   compiler_.clear();
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnMemoryCount(Index count) {
+  module_.memories.reserve(count);
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnMemory(Index index, const Limits* limits) {
+  CHECK_RESULT(validator_.OnMemory(GetLocation(), *limits));
+  MemoryType memory_type{*limits};
+  module_.memories.push_back(MemoryDesc{memory_type});
+  memory_types_.push_back(memory_type);
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnStoreExpr(Opcode opcode,
+                                    Index memidx,
+                                    Address align_log2,
+                                    Address offset) {
+  CHECK_RESULT(validator_.OnStore(GetLocation(), opcode,
+                                  Var(memidx, GetLocation()),
+                                  GetAlignment(align_log2)));
+  compiler_.append(Instruction::Memory, opcode, 2, LocationInfo::kIsOffset);
+
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnLoadExpr(Opcode opcode,
+                                   Index memidx,
+                                   Address align_log2,
+                                   Address offset) {
+  CHECK_RESULT(validator_.OnLoad(GetLocation(), opcode,
+                                 Var(memidx, GetLocation()),
+                                 GetAlignment(align_log2)));
+  compiler_.append(Instruction::Memory, opcode, 2, LocationInfo::kIsOffset);
+
   return Result::Ok;
 }
 

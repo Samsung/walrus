@@ -67,6 +67,8 @@ class InstructionListItem {
     Unary,
     // Compare operation. (e.g. I32Eqz, I64LtU)
     Compare,
+    // Memory operation (e.g. I32Store, I64Load)
+    Memory,
   };
 
   virtual ~InstructionListItem() {}

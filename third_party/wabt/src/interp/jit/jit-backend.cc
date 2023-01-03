@@ -518,6 +518,54 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr) {
   instr->value().target_label->jumpFrom(jump);
 }
 
+void emitMemory(sljit_compiler* compiler, Instruction* instr) {
+  Operand* operand = instr->operands();
+  JITArg args[2];
+
+  for (Index i = 0; i < instr->paramCount(); ++i) {
+    operandToArg(operand, args[i]);
+    operand++;
+  }
+
+  sljit_sw memType;
+
+  switch (instr->opcode()) {
+    case Opcode::I32Store8:
+    case Opcode::I64Store:
+      memType = SLJIT_MOV | SLJIT_MEM_STORE | SLJIT_MEM_UNALIGNED;
+      break;
+    case Opcode::I32Store16:
+      memType = SLJIT_MOV | SLJIT_MEM_STORE | SLJIT_MEM_UNALIGNED_16;
+      break;
+    case Opcode::I32Store:
+      memType = SLJIT_MOV | SLJIT_MEM_STORE | SLJIT_MEM_UNALIGNED_32;
+      break;
+    case Opcode::I32Load8S:
+    case Opcode::I32Load8U:
+    case Opcode::I64Load:
+      memType = SLJIT_MOV | SLJIT_MEM_LOAD | SLJIT_MEM_UNALIGNED;
+      break;
+    case Opcode::I32Load16S:
+    case Opcode::I32Load16U:
+      memType = SLJIT_MOV | SLJIT_MEM_LOAD | SLJIT_MEM_UNALIGNED_16;
+      break;
+    case Opcode::I32Load:
+      memType = SLJIT_MOV | SLJIT_MEM_LOAD | SLJIT_MEM_UNALIGNED_32;
+      break;
+    default:
+      WABT_UNREACHABLE;
+      break;
+  }
+
+  if (memType & SLJIT_MEM_STORE) {
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, args[1].arg, args[1].argw);
+    sljit_emit_mem(compiler, memType, SLJIT_R0, SLJIT_MEM1(SLJIT_SP), 0);
+  } else {
+    sljit_emit_mem(compiler, memType, SLJIT_R0, SLJIT_MEM1(SLJIT_SP), 0);
+    sljit_emit_op1(compiler, SLJIT_MOV, args[0].arg, args[0].argw, SLJIT_R0, 0);
+  }
+}
+
 class MoveContext {
  public:
   MoveContext(sljit_compiler* compiler);
@@ -778,6 +826,10 @@ JITModuleDescriptor* JITCompiler::compile() {
         if (emitCompare(compiler_, item->asInstruction())) {
           item = item->next();
         }
+        break;
+      }
+      case Instruction::Memory: {
+        emitMemory(compiler_, item->asInstruction());
         break;
       }
       default: {
