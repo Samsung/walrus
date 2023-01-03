@@ -176,7 +176,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     // init defined function
     for (size_t i = importFuncCount; i < m_function.size(); i++) {
         ASSERT(i == instance->m_function.size());
-        instance->m_function.push_back(new DefinedFunction(m_store, instance, function(i)));
+        instance->m_function.push_back(new DefinedFunction(instance, function(i)));
     }
 
     // init table
@@ -215,7 +215,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                 RunData* data = reinterpret_cast<RunData*>(d);
                 uint8_t* functionStackBase = ALLOCA(data->mf->requiredStackSize(), uint8_t);
 
-                DefinedFunction fakeFunction(data->module->m_store, data->instance, data->mf);
+                DefinedFunction fakeFunction(data->instance, data->mf);
                 ExecutionState newState(state, &fakeFunction);
                 auto resultOffset = Interpreter::interpret(newState, functionStackBase);
                 data->instance->m_global.back()->setValue(Value(data->type, functionStackBase + resultOffset[0]));
@@ -243,7 +243,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                     RunData* data = reinterpret_cast<RunData*>(d);
                     uint8_t* functionStackBase = ALLOCA(data->elem->moduleFunction()->requiredStackSize(), uint8_t);
 
-                    DefinedFunction fakeFunction(data->module->m_store, data->instance,
+                    DefinedFunction fakeFunction(data->instance,
                                                  data->elem->moduleFunction());
                     ExecutionState newState(state, &fakeFunction);
 
@@ -289,7 +289,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             if (data->init->moduleFunction()->currentByteCodeSize()) {
                 uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
 
-                DefinedFunction fakeFunction(data->module->m_store, data->instance,
+                DefinedFunction fakeFunction(data->instance,
                                              data->init->moduleFunction());
                 ExecutionState newState(state, &fakeFunction);
 

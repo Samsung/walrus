@@ -38,7 +38,7 @@ public:
         return std::unique_ptr<Exception>(new (NoGC) Exception(state, m));
     }
 
-    static std::unique_ptr<Exception> create(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+    static std::unique_ptr<Exception> create(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& userExceptionData)
     {
         return std::unique_ptr<Exception>(new (NoGC) Exception(state, tag, std::move(userExceptionData)));
     }
@@ -63,7 +63,7 @@ public:
         return m_tag;
     }
 
-    const Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>& userExceptionData() const
+    const Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>& userExceptionData() const
     {
         return m_userExceptionData;
     }
@@ -82,7 +82,7 @@ private:
         m_message = message;
     }
 
-    Exception(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>>&& userExceptionData)
+    Exception(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& userExceptionData)
         : Exception(state)
     {
         m_tag = tag;
@@ -91,7 +91,7 @@ private:
 
     Optional<String*> m_message;
     Optional<Tag*> m_tag;
-    Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>> m_userExceptionData;
+    Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_userExceptionData;
     Vector<std::pair<ExecutionState*, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<ExecutionState*, size_t>>> m_programCounterInfo;
 };
 

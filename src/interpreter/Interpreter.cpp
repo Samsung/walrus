@@ -909,7 +909,7 @@ NextInstruction:
     {
         Throw* code = (Throw*)programCounter;
         Tag* tag = instance->tag(code->tagIndex());
-        Vector<uint8_t, GCUtil::gc_malloc_allocator<uint8_t>> userExceptionData;
+        Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> userExceptionData;
         size_t sz = tag->functionType()->paramStackSize();
         userExceptionData.resizeWithUninitializedValues(sz);
 
