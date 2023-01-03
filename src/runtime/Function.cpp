@@ -23,10 +23,9 @@
 
 namespace Walrus {
 
-DefinedFunction::DefinedFunction(Store* store,
-                                 Instance* instance,
+DefinedFunction::DefinedFunction(Instance* instance,
                                  ModuleFunction* moduleFunction)
-    : Function(store, moduleFunction->functionType())
+    : Function(moduleFunction->functionType())
     , m_instance(instance)
     , m_moduleFunction(moduleFunction)
 {

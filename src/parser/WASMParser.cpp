@@ -202,6 +202,10 @@ public:
     {
     }
 
+    // should be allocated on the stack
+    static void* operator new(size_t) = delete;
+    static void* operator new[](size_t) = delete;
+
     virtual void BeginModule(uint32_t version) override
     {
         m_module->m_version = version;

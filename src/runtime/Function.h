@@ -23,7 +23,6 @@
 
 namespace Walrus {
 
-class Store;
 class Instance;
 class FunctionType;
 class ModuleFunction;
@@ -32,9 +31,8 @@ class ImportedFunction;
 
 class Function : public Object {
 public:
-    Function(Store* store, FunctionType* functionType)
-        : m_store(store)
-        , m_functionType(functionType)
+    Function(FunctionType* functionType)
+        : m_functionType(functionType)
     {
     }
 
@@ -101,16 +99,15 @@ protected:
         }
     }
     virtual ~Function() {}
-    Store* m_store;
     const FunctionType* m_functionType;
 };
 
 
 class DefinedFunction : public Function {
 public:
-    DefinedFunction(Store* store,
-                    Instance* instance,
+    DefinedFunction(Instance* instance,
                     ModuleFunction* moduleFunction);
+
     ModuleFunction* moduleFunction() const { return m_moduleFunction; }
     Instance* instance() const { return m_instance; }
 
@@ -129,11 +126,10 @@ class ImportedFunction : public Function {
 public:
     typedef void (*ImportedFunctionCallback)(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data);
 
-    ImportedFunction(Store* store,
-                     FunctionType* functionType,
+    ImportedFunction(FunctionType* functionType,
                      ImportedFunctionCallback callback,
                      void* data)
-        : Function(store, functionType)
+        : Function(functionType)
         , m_callback(callback)
         , m_data(data)
     {
