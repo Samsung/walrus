@@ -121,35 +121,35 @@ public:
             // NONE
             param = new ValueTypeVector();
             result = new ValueTypeVector();
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
         {
             // I32
             param = new ValueTypeVector();
             result = new ValueTypeVector();
             param->push_back(Value::Type::I32);
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
         {
             // I64
             param = new ValueTypeVector();
             result = new ValueTypeVector();
             param->push_back(Value::Type::I64);
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
         {
             // F32
             param = new ValueTypeVector();
             result = new ValueTypeVector();
             param->push_back(Value::Type::F32);
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
         {
             // F64
             param = new ValueTypeVector();
             result = new ValueTypeVector();
             param->push_back(Value::Type::F64);
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
         {
             // I32F32
@@ -157,7 +157,7 @@ public:
             result = new ValueTypeVector();
             param->push_back(Value::Type::I32);
             param->push_back(Value::Type::F32);
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
         {
             // F64F64
@@ -165,14 +165,14 @@ public:
             result = new ValueTypeVector();
             param->push_back(Value::Type::F64);
             param->push_back(Value::Type::F64);
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
         {
             // INVALID
             param = new ValueTypeVector();
             result = new ValueTypeVector();
             param->push_back(Value::Type::Void);
-            m_vector.push_back(FunctionType(param, result));
+            m_vector.push_back(new FunctionType(param, result));
         }
 
         ASSERT(m_vector.size() == INDEX_NUM);
@@ -181,7 +181,7 @@ public:
     FunctionType* operator[](const size_t idx)
     {
         ASSERT(idx < m_vector.size());
-        return &m_vector[idx];
+        return m_vector[idx];
     }
 
 private:
