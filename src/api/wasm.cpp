@@ -466,7 +466,7 @@ own wasm_func_t* wasm_func_new(
         size_t resultSize;
     } data = { callback, ft->params.size };
     Function* func = new ImportedFunction(
-        store->get(), ToWalrusFunctionType(ft),
+        ToWalrusFunctionType(ft),
         [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
             FuncData* data = reinterpret_cast<FuncData*>(d);
             wasm_val_vec_t params, results;

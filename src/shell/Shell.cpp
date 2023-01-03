@@ -229,7 +229,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             if (import->fieldName()->equals("print")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::NONE];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                     },
@@ -237,7 +236,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName()->equals("print_i32")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::I32];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printI32(argv[0].asI32());
@@ -246,7 +244,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName()->equals("print_i64")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::I64];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printI64(argv[0].asI64());
@@ -255,7 +252,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName()->equals("print_f32")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::F32];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printF32(argv[0].asF32());
@@ -264,7 +260,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName()->equals("print_f64")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::F64];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printF64(argv[0].asF64());
@@ -273,7 +268,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName()->equals("print_i32_f32")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::I32F32];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printI32(argv[0].asI32());
@@ -283,7 +277,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName()->equals("print_f64_f64")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::F64F64];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printF64(argv[0].asF64());
@@ -306,7 +299,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 // import wrong value for test
                 auto ft = functionTypes[SpecTestFunctionTypes::INVALID];
                 importValues.pushBack(new ImportedFunction(
-                    store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                     },
