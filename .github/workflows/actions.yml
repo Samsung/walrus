@@ -11,8 +11,7 @@ env:
 
 jobs:
   Check_tidy:
-    # setup-python does not support ubuntu-latest(ubuntu-22.04)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
       with:
@@ -22,6 +21,7 @@ jobs:
         python-version: '2.7'
     - name: Install Packages
       run: |
+        sudo add-apt-repository "deb http://mirrors.kernel.org/ubuntu/ focal main universe"
         sudo apt update
         sudo apt install -y clang-format-10
     - name: Test
