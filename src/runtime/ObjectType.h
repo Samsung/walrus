@@ -55,6 +55,22 @@ public:
     {
     }
 
+    FunctionType* clone() const
+    {
+        ValueTypeVector* param = new ValueTypeVector();
+        ValueTypeVector* result = new ValueTypeVector();
+        param->reserve(m_param->size());
+        result->reserve(m_result->size());
+        for (size_t i = 0; i < m_param->size(); i++) {
+            param->push_back(m_param->at(i));
+        }
+        for (size_t i = 0; i < m_result->size(); i++) {
+            result->push_back(m_result->at(i));
+        }
+
+        return new FunctionType(param, result);
+    }
+
     ValueTypeVector& param() const { return *m_param; }
     ValueTypeVector& result() const { return *m_result; }
     size_t paramStackSize() const { return m_paramStackSize; }
