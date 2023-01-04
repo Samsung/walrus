@@ -31,6 +31,7 @@
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 extern char FillByteCodeOpcodeTableAsmLbl[];
+const void* FillByteCodeOpcodeAddress[] = { &FillByteCodeOpcodeTableAsmLbl[0] };
 #endif
 
 namespace Walrus {
@@ -43,11 +44,7 @@ OpcodeTable::OpcodeTable()
     // Dummy bytecode execution to initialize the OpcodeTable.
     ExecutionState dummyState;
     ByteCode b;
-#if defined(WALRUS_ENABLE_COMPUTED_GOTO_WITH_ASMLABEL)
-    b.m_opcodeInAddress = reinterpret_cast<void*>(FillByteCodeOpcodeTableAsmLbl);
-#else
-    b.m_opcodeInAddress = nullptr;
-#endif
+    b.m_opcodeInAddress = const_cast<void*>(FillByteCodeOpcodeAddress[0]);
     size_t pc = reinterpret_cast<size_t>(&b);
     Interpreter::interpret(dummyState, pc, nullptr, nullptr, nullptr, nullptr, nullptr);
 #endif
@@ -279,12 +276,6 @@ uint32_t* Interpreter::interpret(ExecutionState& state,
 #define DEFINE_OPCODE(codeName) codeName##OpcodeLbl
 #define DEFINE_DEFAULT
 #define NEXT_INSTRUCTION() goto NextInstruction;
-
-#if !defined(WALRUS_ENABLE_COMPUTED_GOTO_WITH_ASMLABEL)
-    if (UNLIKELY(((ByteCode*)programCounter)->m_opcodeInAddress == nullptr)) {
-        goto FillOpcodeTableOpcodeLbl;
-    }
-#endif
 
 NextInstruction:
     /* Execute first instruction. */
