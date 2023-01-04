@@ -330,9 +330,6 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 
 #if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
 #define WALRUS_ENABLE_COMPUTED_GOTO
-#if !defined(CPU_ARM64) // re-enable this if FillByteCodeOpcodeTableAsmLbl indicates right address in aarch64.
-#define WALRUS_ENABLE_COMPUTED_GOTO_WITH_ASMLABEL
-#endif
 #endif
 
 #define MAKE_STACK_ALLOCATED()                    \
