@@ -124,7 +124,7 @@ protected:
 
 class ImportedFunction : public Function {
 public:
-    typedef void (*ImportedFunctionCallback)(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data);
+    typedef std::function<void(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data)> ImportedFunctionCallback;
 
     ImportedFunction(FunctionType* functionType,
                      ImportedFunctionCallback callback,
