@@ -142,6 +142,11 @@ jobs:
       run: |
         cmake -H. -Bout/api_test/x64 $BUILD_OPTIONS
         ninja -Cout/api_test/x64
+        cp third_party/wasm-c-api/example/*.wasm out/api_test/x64/.
+    - name: Run Tests
+      working-directory: ./out/api_test/x64
+      run: |
+        ./wasm-c-api-hello
 
   Coverity_scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
