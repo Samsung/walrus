@@ -138,6 +138,9 @@ private:
     {
         m_vmStack.push_back({ size, pos, m_functionStackSizeSoFar });
         m_functionStackSizeSoFar += size;
+        if (UNLIKELY(m_functionStackSizeSoFar > std::numeric_limits<Walrus::ByteCodeStackOffset>::max())) {
+            throw std::string("too many stack usage. we could not support this(yet).");
+        }
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
@@ -527,7 +530,7 @@ public:
 #endif
                                                      ));
 
-        m_currentFunction->expandByteCode(sizeof(uint32_t) * (functionType->param().size() + functionType->result().size()));
+        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (functionType->param().size() + functionType->result().size()));
         auto code = m_currentFunction->peekByteCode<Walrus::Call>(callPos);
 
         size_t c = 0;
@@ -548,7 +551,7 @@ public:
         auto functionType = m_module->functionType(sigIndex);
         auto callPos = m_currentFunction->currentByteCodeSize();
         m_currentFunction->pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType));
-        m_currentFunction->expandByteCode(sizeof(uint32_t) * (functionType->param().size() + functionType->result().size()));
+        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (functionType->param().size() + functionType->result().size()));
 
         auto code = m_currentFunction->peekByteCode<Walrus::CallIndirect>(callPos);
 
@@ -911,7 +914,7 @@ public:
             ));
 
         auto& result = m_currentFunctionType->result();
-        m_currentFunction->expandByteCode(sizeof(uint32_t) * result.size());
+        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * result.size());
         Walrus::End* end = m_currentFunction->peekByteCode<Walrus::End>(pos);
         for (size_t i = 0; i < result.size(); i++) {
             end->resultOffsets()[result.size() - i - 1] = (m_vmStack.rbegin() + i)->m_position;
@@ -971,7 +974,7 @@ public:
             ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
             auto stackPos = popVMStack();
             size_t pos = m_currentFunction->currentByteCodeSize();
-            m_currentFunction->pushByteCode(Walrus::JumpIfFalse(stackPos, sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End) + sizeof(uint32_t) * m_currentFunctionType->result().size()));
+            m_currentFunction->pushByteCode(Walrus::JumpIfFalse(stackPos, sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End) + sizeof(uint16_t) * m_currentFunctionType->result().size()));
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 ASSERT((m_vmStack.rbegin() + i)->m_size == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
             }
@@ -1068,7 +1071,7 @@ public:
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = m_module->functionType(m_module->m_tagTypes[tagIndex]->sigIndex());
             auto& param = functionType->param();
-            m_currentFunction->expandByteCode(sizeof(uint32_t) * param.size());
+            m_currentFunction->expandByteCode(sizeof(uint16_t) * param.size());
             Walrus::Throw* code = m_currentFunction->peekByteCode<Walrus::Throw>(pos);
             for (size_t i = 0; i < param.size(); i++) {
                 code->dataOffsets()[param.size() - i - 1] = (m_vmStack.rbegin() + i)->m_position;
