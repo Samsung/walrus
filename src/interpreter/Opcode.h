@@ -182,10 +182,6 @@ enum OpcodeKind : size_t {
     WABT_OPCODE(F64, I64, ___, ___, 0, 0, 0xb9, F64ConvertI64S, "f64.convert_i64_s", "")       \
     WABT_OPCODE(F64, I64, ___, ___, 0, 0, 0xba, F64ConvertI64U, "f64.convert_i64_u", "")       \
     WABT_OPCODE(F64, F32, ___, ___, 0, 0, 0xbb, F64PromoteF32, "f64.promote_f32", "")          \
-    WABT_OPCODE(I32, F32, ___, ___, 0, 0, 0xbc, I32ReinterpretF32, "i32.reinterpret_f32", "")  \
-    WABT_OPCODE(I64, F64, ___, ___, 0, 0, 0xbd, I64ReinterpretF64, "i64.reinterpret_f64", "")  \
-    WABT_OPCODE(F32, I32, ___, ___, 0, 0, 0xbe, F32ReinterpretI32, "f32.reinterpret_i32", "")  \
-    WABT_OPCODE(F64, I64, ___, ___, 0, 0, 0xbf, F64ReinterpretI64, "f64.reinterpret_i64", "")  \
     WABT_OPCODE(I32, I32, ___, ___, 0, 0, 0xC0, I32Extend8S, "i32.extend8_s", "")              \
     WABT_OPCODE(I32, I32, ___, ___, 0, 0, 0xC1, I32Extend16S, "i32.extend16_s", "")            \
     WABT_OPCODE(I64, I64, ___, ___, 0, 0, 0xC2, I64Extend8S, "i64.extend8_s", "")              \
