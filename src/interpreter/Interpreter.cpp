@@ -50,8 +50,8 @@ OpcodeTable::OpcodeTable()
 #endif
 }
 
-uint32_t* Interpreter::interpret(ExecutionState& state,
-                                 uint8_t* bp)
+ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
+                                            uint8_t* bp)
 {
     DefinedFunction* df = state.currentFunction()->asDefinedFunction();
     ModuleFunction* mf = df->moduleFunction();
@@ -94,13 +94,13 @@ uint32_t* Interpreter::interpret(ExecutionState& state,
 }
 
 template <typename T>
-ALWAYS_INLINE void writeValue(uint8_t* bp, uint32_t offset, const T& v)
+ALWAYS_INLINE void writeValue(uint8_t* bp, ByteCodeStackOffset offset, const T& v)
 {
     *reinterpret_cast<T*>(bp + offset) = v;
 }
 
 template <typename T>
-ALWAYS_INLINE T readValue(uint8_t* bp, uint32_t offset)
+ALWAYS_INLINE T readValue(uint8_t* bp, ByteCodeStackOffset offset)
 {
     return *reinterpret_cast<T*>(bp + offset);
 }
@@ -194,13 +194,13 @@ R doConvert(ExecutionState& state, T val)
     return convert<R>(val);
 }
 
-uint32_t* Interpreter::interpret(ExecutionState& state,
-                                 size_t programCounter,
-                                 uint8_t* bp,
-                                 Instance* instance,
-                                 Memory** memories,
-                                 Table** tables,
-                                 Global** globals)
+ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
+                                            size_t programCounter,
+                                            uint8_t* bp,
+                                            Instance* instance,
+                                            Memory** memories,
+                                            Table** tables,
+                                            Global** globals)
 {
     state.m_programCounterPointer = &programCounter;
 
@@ -959,7 +959,7 @@ NEVER_INLINE void Interpreter::callOperation(
 
     const ValueTypeVector& result = ft->result();
     Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
-    size_t codeExtraOffsetsSize = sizeof(uint32_t) * ft->param().size() + sizeof(uint32_t) * ft->result().size();
+    size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     target->call(state, param.size(), paramVector, resultVector);
 
@@ -1002,7 +1002,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
 
     const ValueTypeVector& result = ft->result();
     Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
-    size_t codeExtraOffsetsSize = sizeof(uint32_t) * ft->param().size() + sizeof(uint32_t) * ft->result().size();
+    size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     target->call(state, param.size(), paramVector, resultVector);
 
