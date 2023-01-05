@@ -238,14 +238,6 @@ uint32_t* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                                                                                               \
     }
 
-#define UNARY_OPERATION_NOOP(wasmTypeName, byteCodeOperationName) \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)            \
-        :                                                         \
-    {                                                             \
-        ADD_PROGRAM_COUNTER(UnaryOperation);                      \
-        NEXT_INSTRUCTION();                                       \
-    }
-
 #define MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
     DEFINE_OPCODE(opcodeName)                                                      \
         :                                                                          \
@@ -517,11 +509,6 @@ NextInstruction:
 
     UNARY_OPERATION_OPERATION_TEMPLATE_2(float, double, F64, doConvert, double, float, PromoteF32)
     UNARY_OPERATION_OPERATION_TEMPLATE_2(double, float, F32, doConvert, float, double, DemoteF64)
-
-    UNARY_OPERATION_NOOP(I32, ReinterpretF32)
-    UNARY_OPERATION_NOOP(F32, ReinterpretI32)
-    UNARY_OPERATION_NOOP(I64, ReinterpretF64)
-    UNARY_OPERATION_NOOP(F64, ReinterpretI64)
 
     DEFINE_OPCODE(Jump)
         :
