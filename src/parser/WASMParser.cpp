@@ -68,7 +68,8 @@ class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
 private:
     struct VMStackInfo {
         size_t m_size;
-        size_t m_position;
+        size_t m_position; // optimized position (local values will have different position)
+        size_t m_nonOptimizedPosition; // non-optimized position (same with m_functionStackSizeSoFar)
     };
 
     struct BlockInfo {
@@ -135,20 +136,16 @@ private:
 
     void pushVMStack(size_t size, size_t pos)
     {
-        m_vmStack.push_back({ size, pos });
-        if (pos == m_functionStackSizeSoFar) {
-            m_functionStackSizeSoFar += size;
-            m_currentFunction->m_requiredStackSize = std::max(
-                m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
-        }
+        m_vmStack.push_back({ size, pos, m_functionStackSizeSoFar });
+        m_functionStackSizeSoFar += size;
+        m_currentFunction->m_requiredStackSize = std::max(
+            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
 
     size_t popVMStackSize()
     {
         auto info = m_vmStack.back();
-        if (info.m_position == m_functionStackSizeSoFar - info.m_size) {
-            m_functionStackSizeSoFar -= info.m_size;
-        }
+        m_functionStackSizeSoFar -= info.m_size;
         m_vmStack.pop_back();
         return info.m_size;
     }
@@ -156,9 +153,7 @@ private:
     size_t popVMStack()
     {
         auto info = m_vmStack.back();
-        if (info.m_position == m_functionStackSizeSoFar - info.m_size) {
-            m_functionStackSizeSoFar -= info.m_size;
-        }
+        m_functionStackSizeSoFar -= info.m_size;
         m_vmStack.pop_back();
         return info.m_position;
     }
@@ -610,14 +605,7 @@ public:
     virtual void OnLocalGetExpr(Index localIndex) override
     {
         auto r = resolveLocalOffsetAndSize(localIndex);
-        auto offset = pushVMStack(r.second);
-        if (r.second == 4) {
-            m_currentFunction->pushByteCode(Walrus::Move32(r.first, offset));
-        } else if (r.second == 8) {
-            m_currentFunction->pushByteCode(Walrus::Move64(r.first, offset));
-        } else {
-            RELEASE_ASSERT_NOT_REACHED();
-        }
+        pushVMStack(r.second, r.first);
     }
 
     virtual void OnLocalSetExpr(Index localIndex) override
@@ -625,14 +613,7 @@ public:
         auto r = resolveLocalOffsetAndSize(localIndex);
         ASSERT(r.second == peekVMStackSize());
         auto offset = popVMStack();
-
-        if (r.second == 4) {
-            m_currentFunction->pushByteCode(Walrus::Move32(offset, r.first));
-        } else if (r.second == 8) {
-            m_currentFunction->pushByteCode(Walrus::Move64(offset, r.first));
-        } else {
-            RELEASE_ASSERT_NOT_REACHED();
-        }
+        generateMoveCodeIfNeeds(offset, r.first, r.second);
     }
 
     virtual void OnLocalTeeExpr(Index localIndex) override
@@ -640,14 +621,7 @@ public:
         auto r = resolveLocalOffsetAndSize(localIndex);
         ASSERT(r.second == peekVMStackSize());
         auto offset = peekVMStack();
-
-        if (r.second == 4) {
-            m_currentFunction->pushByteCode(Walrus::Move32(offset, r.first));
-        } else if (r.second == 8) {
-            m_currentFunction->pushByteCode(Walrus::Move64(offset, r.first));
-        } else {
-            RELEASE_ASSERT_NOT_REACHED();
-        }
+        generateMoveCodeIfNeeds(offset, r.first, r.second);
     }
 
     virtual void OnGlobalGetExpr(Index index) override
@@ -700,7 +674,16 @@ public:
         ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStackSize());
         auto src = popVMStack();
         auto dst = pushVMStack(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
-        m_currentFunction->pushByteCode(Walrus::UnaryOperation(code, src, dst));
+        switch (code) {
+        case Walrus::OpcodeKind::I32ReinterpretF32Opcode:
+        case Walrus::OpcodeKind::I64ReinterpretF64Opcode:
+        case Walrus::OpcodeKind::F32ReinterpretI32Opcode:
+        case Walrus::OpcodeKind::F64ReinterpretI64Opcode:
+            generateMoveCodeIfNeeds(src, dst, Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
+            break;
+        default:
+            m_currentFunction->pushByteCode(Walrus::UnaryOperation(code, src, dst));
+        }
     }
 
     virtual void OnIfExpr(Type sigType) override
@@ -741,8 +724,22 @@ public:
         }
     }
 
+    void keepSubResultsIfNeeds()
+    {
+        BlockInfo& blockInfo = m_blockInfo.back();
+        if ((blockInfo.m_returnValueType.IsIndex() && m_module->functionType(blockInfo.m_returnValueType)->result().size())
+            || blockInfo.m_returnValueType != Type::Void) {
+            blockInfo.m_shouldRestoreVMStackAtEnd = true;
+            auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
+            if (dropSize.second) {
+                generateMoveValuesCodeRegardToDrop(dropSize);
+            }
+        }
+    }
+
     virtual void OnElseExpr() override
     {
+        keepSubResultsIfNeeds();
         BlockInfo& blockInfo = m_blockInfo.back();
         blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
         blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
@@ -755,6 +752,19 @@ public:
 
     virtual void OnLoopExpr(Type sigType) override
     {
+        if (sigType.IsIndex() && m_module->functionType(sigType)->param().size()) {
+            // assign local values into general register for re-exectuing
+            auto& param = m_module->functionType(sigType)->param();
+            auto endIter = m_vmStack.rbegin() + param.size();
+            auto iter = m_vmStack.rbegin();
+            while (iter != endIter) {
+                if (iter->m_position != iter->m_nonOptimizedPosition) {
+                    generateMoveCodeIfNeeds(iter->m_position, iter->m_nonOptimizedPosition, iter->m_size);
+                    iter->m_position = iter->m_nonOptimizedPosition;
+                }
+                iter++;
+            }
+        }
         BlockInfo b(BlockInfo::Loop, sigType, *this);
         m_blockInfo.push_back(b);
     }
@@ -828,52 +838,60 @@ public:
             }
         }
 
-        if (dropValueSize == parameterSize) {
-            dropValueSize = 0;
-            parameterSize = 0;
-        }
-
         return std::make_pair(dropValueSize, parameterSize);
+    }
+
+    void generateMoveCodeIfNeeds(size_t srcPosition, size_t dstPosition, size_t size)
+    {
+        if (srcPosition != dstPosition) {
+            if (size == 4) {
+                m_currentFunction->pushByteCode(Walrus::Move32(srcPosition, dstPosition));
+            } else {
+                ASSERT(size == 8);
+                m_currentFunction->pushByteCode(Walrus::Move64(srcPosition, dstPosition));
+            }
+        }
     }
 
     void generateMoveValuesCodeRegardToDrop(std::pair<size_t, size_t> dropSize)
     {
-        ASSERT(dropSize.first != dropSize.second && dropSize.second);
-        size_t remainParameterSize = dropSize.second;
+        ASSERT(dropSize.second);
+        int64_t remainSize = dropSize.second;
         auto srcIter = m_vmStack.rbegin();
         while (true) {
-            remainParameterSize -= srcIter->m_size;
-            if (!remainParameterSize) {
+            remainSize -= srcIter->m_size;
+            if (!remainSize) {
                 break;
+            }
+            if (remainSize < 0) {
+                // stack mismatch! we don't need to generate code
+                return;
             }
             srcIter++;
         }
 
-        size_t remainDropSize = dropSize.first;
+        remainSize = dropSize.first;
         auto dstIter = m_vmStack.rbegin();
         while (true) {
-            remainDropSize -= dstIter->m_size;
-            if (!remainDropSize) {
+            remainSize -= dstIter->m_size;
+            if (!remainSize) {
                 break;
+            }
+            if (remainSize < 0) {
+                // stack mismatch! we don't need to generate code
+                return;
             }
             dstIter++;
         }
 
         // reverse order copy to protect newer values
-        remainParameterSize = dropSize.second;
+        remainSize = dropSize.second;
         while (true) {
-            if (srcIter->m_size == 4) {
-                m_currentFunction->pushByteCode(Walrus::Move32(srcIter->m_position, dstIter->m_position));
-            } else {
-                m_currentFunction->pushByteCode(Walrus::Move64(srcIter->m_position, dstIter->m_position));
-                ASSERT(srcIter->m_size == 8);
-            }
-
-            remainParameterSize -= srcIter->m_size;
-            if (!remainParameterSize) {
+            generateMoveCodeIfNeeds(srcIter->m_position, dstIter->m_nonOptimizedPosition, srcIter->m_size);
+            remainSize -= srcIter->m_size;
+            if (!remainSize) {
                 break;
             }
-
             srcIter--;
             dstIter--;
         }
@@ -935,7 +953,7 @@ public:
         auto& blockInfo = findBlockInfoInBr(depth);
         auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
-        if (dropSize.first != dropSize.second && dropSize.second) {
+        if (dropSize.second) {
             generateMoveValuesCodeRegardToDrop(dropSize);
         }
         if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
@@ -966,7 +984,7 @@ public:
 
         auto& blockInfo = findBlockInfoInBr(depth);
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
-        if (dropSize.first != dropSize.second && dropSize.second) {
+        if (dropSize.second) {
             size_t pos = m_currentFunction->currentByteCodeSize();
             m_currentFunction->pushByteCode(Walrus::JumpIfFalse(stackPos));
             generateMoveValuesCodeRegardToDrop(dropSize);
@@ -1073,6 +1091,7 @@ public:
     void processCatchExpr(Index tagIndex)
     {
         ASSERT(m_blockInfo.back().m_blockType == BlockInfo::TryCatch);
+        keepSubResultsIfNeeds();
 
         auto& blockInfo = m_blockInfo.back();
         restoreVMStackRegardToPartOfBlockEnd(blockInfo);
@@ -1296,6 +1315,7 @@ public:
     virtual void OnEndExpr() override
     {
         if (m_blockInfo.size()) {
+            auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
             auto blockInfo = m_blockInfo.back();
             m_blockInfo.pop_back();
 
@@ -1323,16 +1343,10 @@ public:
                 }
             }
 
-            for (size_t i = 0; i < blockInfo.m_jumpToEndBrInfo.size(); i++) {
-                if (blockInfo.m_jumpToEndBrInfo[i].m_isJumpIf) {
-                    m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_jumpToEndBrInfo[i].m_position)
-                        ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
-                } else {
-                    m_currentFunction->peekByteCode<Walrus::Jump>(blockInfo.m_jumpToEndBrInfo[i].m_position)->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
-                }
-            }
-
             if (blockInfo.m_shouldRestoreVMStackAtEnd) {
+                if (dropSize.second) {
+                    generateMoveValuesCodeRegardToDrop(dropSize);
+                }
                 restoreVMStackBy(blockInfo);
                 if (blockInfo.m_returnValueType.IsIndex()) {
                     auto ft = m_module->functionType(blockInfo.m_returnValueType);
@@ -1348,6 +1362,15 @@ public:
                     }
                 } else if (blockInfo.m_returnValueType != Type::Void) {
                     pushVMStack(Walrus::valueSizeInStack(toValueKind(blockInfo.m_returnValueType)));
+                }
+            }
+
+            for (size_t i = 0; i < blockInfo.m_jumpToEndBrInfo.size(); i++) {
+                if (blockInfo.m_jumpToEndBrInfo[i].m_isJumpIf) {
+                    m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_jumpToEndBrInfo[i].m_position)
+                        ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
+                } else {
+                    m_currentFunction->peekByteCode<Walrus::Jump>(blockInfo.m_jumpToEndBrInfo[i].m_position)->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
                 }
             }
         } else {
