@@ -1,0 +1,188 @@
+name: Actions
+
+on:
+  push:
+    branches: [ interp ]
+  pull_request:
+    branches: [ interp ]
+
+env:
+  RUNNER: tools/run-tests.py
+
+jobs:
+  Check_tidy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '2.7'
+    - name: Install Packages
+      run: |
+        sudo add-apt-repository "deb http://mirrors.kernel.org/ubuntu/ focal main universe"
+        sudo apt update
+        sudo apt install -y clang-format-10
+    - name: Test
+      run: tools/check_tidy.py
+
+  Clang_build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Build x86
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        CC=clang CXX=clang++ cmake -H. -Bout/clang/x86 $BUILD_OPTIONS
+        ninja -Cout/clang/x86
+    - name: Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        CC=clang CXX=clang++ cmake -H. -Bout/clang/x64 $BUILD_OPTIONS
+        ninja -Cout/clang/x64
+
+  Linux_x86_test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Build x86
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        cmake -H. -Bout/linux/x86 $BUILD_OPTIONS
+        ninja -Cout/linux/x86
+    - name: Run Tests
+      run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
+
+  Linux_x64_test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
+        ninja -Cout/linux/x64
+    - name: Run Tests
+      run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
+
+  Linux_armv7l_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: pguyot/arm-runner-action@v2
+      with:
+        base_image: raspios_lite:latest
+        cpu: cortex-a7
+        cpu_info: cpuinfo/raspberrypi_3b
+        commands: |
+          apt-get update
+          apt-get install -y cmake build-essential ninja-build
+          cmake -H. -Bout/linux/arm -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          ninja -Cout/linux/arm
+          ./tools/run-tests.py --engine="./out/linux/arm/walrus"
+
+  Linux_aarch64_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: pguyot/arm-runner-action@v2
+      with:
+        base_image: raspios_lite_arm64:latest
+        cpu: cortex-a53
+        cpu_info: cpuinfo/raspberrypi_zero2_w_arm64
+        commands: |
+          apt-get update
+          apt-get install -y cmake build-essential ninja-build
+          cmake -H. -Bout/linux/aarch64 -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          ninja -Cout/linux/aarch64
+          ./tools/run-tests.py --engine="./out/linux/aarch64/walrus"
+
+  API_test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=api_test -GNinja
+      run: |
+        cmake -H. -Bout/api_test/x64 $BUILD_OPTIONS
+        ninja -Cout/api_test/x64
+        cp third_party/wasm-c-api/example/*.wasm out/api_test/x64/.
+    - name: Run Tests
+      working-directory: ./out/api_test/x64
+      run: |
+        ./wasm-c-api-hello
+
+  Coverity_scan:
+    if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        sudo apt update
+        sudo apt install -y ninja-build gcc-multilib g++-multilib
+    - name: Download Coverity Tool
+      env:
+        TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+      run: |
+        wget -q https://scan.coverity.com/download/cxx/linux64 --post-data "token=$TOKEN&project=Samsung-walrus" -O cov-analysis-linux64.tar.gz
+        mkdir cov-analysis-linux64
+        tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
+    - name: Build
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        export PATH=$GITHUB_WORKSPACE/cov-analysis-linux64/bin:$PATH
+        cmake -H. -Bout/coverity_scan $BUILD_OPTIONS
+        cov-build --dir cov-int ninja -Cout/coverity_scan
+    - name: Submit
+      env:
+        TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+        NOTI_MAIL: ${{ secrets.COVERITY_SCAN_MAIL }}
+      run: |
+        tar czvf walrus.tgz cov-int
+        curl \
+          --form token=$TOKEN \
+          --form email=$NOTI_MAIL \
+          --form file=@walrus.tgz \
+          --form version="0.0.1" \
+          --form description="walrus coverity scan" \
+          https://scan.coverity.com/builds?project=Samsung-walrus
