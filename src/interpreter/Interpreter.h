@@ -18,6 +18,7 @@
 #define __WalrusInterpreter__
 
 #include "runtime/ExecutionState.h"
+#include "interpreter/ByteCode.h"
 
 namespace Walrus {
 
@@ -28,18 +29,18 @@ class Global;
 
 class Interpreter {
 public:
-    static uint32_t* interpret(ExecutionState& state,
-                               uint8_t* bp);
+    static ByteCodeStackOffset* interpret(ExecutionState& state,
+                                          uint8_t* bp);
 
 private:
     friend class OpcodeTable;
-    static uint32_t* interpret(ExecutionState& state,
-                               size_t programCounter,
-                               uint8_t* bp,
-                               Instance* instance,
-                               Memory** memories,
-                               Table** tables,
-                               Global** globals);
+    static ByteCodeStackOffset* interpret(ExecutionState& state,
+                                          size_t programCounter,
+                                          uint8_t* bp,
+                                          Instance* instance,
+                                          Memory** memories,
+                                          Table** tables,
+                                          Global** globals);
     static void callOperation(ExecutionState& state,
                               size_t& programCounter,
                               uint8_t* bp,

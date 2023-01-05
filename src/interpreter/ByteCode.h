@@ -24,10 +24,12 @@
 #include "runtime/Module.h"
 
 #define DUMP_BYTECODE_OFFSET(name) \
-    printf(#name ": %" PRIu32 " ", m_##name);
+    printf(#name ": %" PRIu32 " ", (uint32_t)m_##name);
 #endif
 
 namespace Walrus {
+
+typedef uint16_t ByteCodeStackOffset;
 
 class FunctionType;
 
@@ -95,14 +97,14 @@ protected:
 
 class Const32 : public ByteCode {
 public:
-    Const32(uint32_t dstOffset, uint32_t value)
+    Const32(ByteCodeStackOffset dstOffset, uint32_t value)
         : ByteCode(OpcodeKind::Const32Opcode)
         , m_dstOffset(dstOffset)
         , m_value(value)
     {
     }
 
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     uint32_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
@@ -119,21 +121,21 @@ public:
 #endif
 
 protected:
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
     uint32_t m_value;
 };
 
 
 class Const64 : public ByteCode {
 public:
-    Const64(uint32_t dstOffset, uint64_t value)
+    Const64(ByteCodeStackOffset dstOffset, uint64_t value)
         : ByteCode(OpcodeKind::Const64Opcode)
         , m_dstOffset(dstOffset)
         , m_value(value)
     {
     }
 
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     uint64_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
@@ -150,21 +152,21 @@ public:
 #endif
 
 protected:
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
     uint64_t m_value;
 };
 
 class BinaryOperation : public ByteCode {
 public:
-    BinaryOperation(OpcodeKind opcode, uint32_t src0Offset, uint32_t src1Offset, uint32_t dstOffset)
+    BinaryOperation(OpcodeKind opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset dstOffset)
         : ByteCode(opcode)
         , m_srcOffset{ src0Offset, src1Offset }
         , m_dstOffset(dstOffset)
     {
     }
 
-    const uint32_t* srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    const ByteCodeStackOffset* srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -181,21 +183,21 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset[2];
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset[2];
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class UnaryOperation : public ByteCode {
 public:
-    UnaryOperation(OpcodeKind opcode, uint32_t srcOffset, uint32_t dstOffset)
+    UnaryOperation(OpcodeKind opcode, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(opcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -211,8 +213,8 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class Call : public ByteCode {
@@ -232,9 +234,9 @@ public:
     }
 
     uint32_t index() const { return m_index; }
-    uint32_t* stackOffsets() const
+    ByteCodeStackOffset* stackOffsets() const
     {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<size_t>(this) + sizeof(Call));
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call));
     }
 
 #if !defined(NDEBUG)
@@ -245,20 +247,20 @@ public:
         auto arr = stackOffsets();
         printf("paramOffsets: ");
         for (size_t i = 0; i < m_functionType->param().size(); i++) {
-            printf("%" PRIu32 " ", arr[c++]);
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
         printf(" ");
 
         printf("resultOffsets: ");
         for (size_t i = 0; i < m_functionType->result().size(); i++) {
-            printf("%" PRIu32 " ", arr[c++]);
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
         printf(" ");
     }
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(Call) + sizeof(uint32_t) * m_functionType->param().size() + sizeof(uint32_t) * m_functionType->result().size();
+        return sizeof(Call) + sizeof(ByteCodeStackOffset) * m_functionType->param().size() + sizeof(ByteCodeStackOffset) * m_functionType->result().size();
     }
 #endif
 
@@ -271,7 +273,7 @@ protected:
 
 class CallIndirect : public ByteCode {
 public:
-    CallIndirect(uint32_t stackOffset, uint32_t tableIndex, FunctionType* functionType)
+    CallIndirect(ByteCodeStackOffset stackOffset, uint32_t tableIndex, FunctionType* functionType)
         : ByteCode(OpcodeKind::CallIndirectOpcode)
         , m_calleeOffset(stackOffset)
         , m_tableIndex(tableIndex)
@@ -279,12 +281,12 @@ public:
     {
     }
 
-    uint32_t calleeOffset() const { return m_calleeOffset; }
+    ByteCodeStackOffset calleeOffset() const { return m_calleeOffset; }
     uint32_t tableIndex() const { return m_tableIndex; }
     FunctionType* functionType() const { return m_functionType; }
-    uint32_t* stackOffsets() const
+    ByteCodeStackOffset* stackOffsets() const
     {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<size_t>(this) + sizeof(CallIndirect));
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallIndirect));
     }
 
 #if !defined(NDEBUG)
@@ -297,40 +299,40 @@ public:
         auto arr = stackOffsets();
         printf("paramOffsets: ");
         for (size_t i = 0; i < m_functionType->param().size(); i++) {
-            printf("%" PRIu32 " ", arr[c++]);
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
         printf(" ");
 
         printf("resultOffsets: ");
         for (size_t i = 0; i < m_functionType->result().size(); i++) {
-            printf("%" PRIu32 " ", arr[c++]);
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
         printf(" ");
     }
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(CallIndirect) + sizeof(uint32_t) * m_functionType->param().size() + sizeof(uint32_t) * m_functionType->result().size();
+        return sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * m_functionType->param().size() + sizeof(ByteCodeStackOffset) * m_functionType->result().size();
     }
 #endif
 
 protected:
-    uint32_t m_calleeOffset;
+    ByteCodeStackOffset m_calleeOffset;
     uint32_t m_tableIndex;
     FunctionType* m_functionType;
 };
 
 class Move32 : public ByteCode {
 public:
-    Move32(uint32_t srcOffset, uint32_t dstOffset)
+    Move32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::Move32Opcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -346,21 +348,21 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class Move64 : public ByteCode {
 public:
-    Move64(uint32_t srcOffset, uint32_t dstOffset)
+    Move64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::Move64Opcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -376,21 +378,21 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class Load32 : public ByteCode {
 public:
-    Load32(uint32_t srcOffset, uint32_t dstOffset)
+    Load32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::Load32Opcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -405,21 +407,21 @@ public:
     }
 #endif
 protected:
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class Load64 : public ByteCode {
 public:
-    Load64(uint32_t srcOffset, uint32_t dstOffset)
+    Load64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::Load64Opcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -434,21 +436,21 @@ public:
     }
 #endif
 protected:
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class Store32 : public ByteCode {
 public:
-    Store32(uint32_t src0, uint32_t src1)
+    Store32(ByteCodeStackOffset src0, ByteCodeStackOffset src1)
         : ByteCode(OpcodeKind::Store32Opcode)
         , m_src0Offset(src0)
         , m_src1Offset(src1)
     {
     }
 
-    uint32_t src0Offset() const { return m_src0Offset; }
-    uint32_t src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -463,21 +465,21 @@ public:
     }
 #endif
 protected:
-    uint32_t m_src0Offset;
-    uint32_t m_src1Offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
 };
 
 class Store64 : public ByteCode {
 public:
-    Store64(uint32_t src0, uint32_t src1)
+    Store64(ByteCodeStackOffset src0, ByteCodeStackOffset src1)
         : ByteCode(OpcodeKind::Store64Opcode)
         , m_src0Offset(src0)
         , m_src1Offset(src1)
     {
     }
 
-    uint32_t src0Offset() const { return m_src0Offset; }
-    uint32_t src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -492,8 +494,8 @@ public:
     }
 #endif
 protected:
-    uint32_t m_src0Offset;
-    uint32_t m_src1Offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
 };
 
 class Jump : public ByteCode {
@@ -528,14 +530,14 @@ protected:
 
 class JumpIfTrue : public ByteCode {
 public:
-    JumpIfTrue(uint32_t srcOffset, int32_t offset = 0)
+    JumpIfTrue(ByteCodeStackOffset srcOffset, int32_t offset = 0)
         : ByteCode(OpcodeKind::JumpIfTrueOpcode)
         , m_srcOffset(srcOffset)
         , m_offset(offset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     int32_t offset() const { return m_offset; }
     void setOffset(int32_t offset)
     {
@@ -556,20 +558,20 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
+    ByteCodeStackOffset m_srcOffset;
     int32_t m_offset;
 };
 
 class JumpIfFalse : public ByteCode {
 public:
-    JumpIfFalse(uint32_t srcOffset, int32_t offset = 0)
+    JumpIfFalse(ByteCodeStackOffset srcOffset, int32_t offset = 0)
         : ByteCode(OpcodeKind::JumpIfFalseOpcode)
         , m_srcOffset(srcOffset)
         , m_offset(offset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     int32_t offset() const { return m_offset; }
     void setOffset(int32_t offset)
     {
@@ -590,13 +592,13 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
+    ByteCodeStackOffset m_srcOffset;
     int32_t m_offset;
 };
 
 class Select : public ByteCode {
 public:
-    Select(uint32_t condOffset, uint32_t size, uint32_t src0, uint32_t src1, uint32_t dst)
+    Select(ByteCodeStackOffset condOffset, uint16_t size, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
         : ByteCode(OpcodeKind::SelectOpcode)
         , m_condOffset(condOffset)
         , m_valueSize(size)
@@ -606,14 +608,14 @@ public:
     {
     }
 
-    uint32_t condOffset() const { return m_condOffset; }
-    uint32_t valueSize() const
+    ByteCodeStackOffset condOffset() const { return m_condOffset; }
+    uint16_t valueSize() const
     {
         return m_valueSize;
     }
-    uint32_t src0Offset() const { return m_src0Offset; }
-    uint32_t src1Offset() const { return m_src1Offset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -631,16 +633,16 @@ public:
 #endif
 
 protected:
-    uint32_t m_condOffset;
-    uint32_t m_valueSize;
-    uint32_t m_src0Offset;
-    uint32_t m_src1Offset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_condOffset;
+    uint16_t m_valueSize;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class BrTable : public ByteCode {
 public:
-    BrTable(uint32_t condOffset, uint32_t m_tableSize)
+    BrTable(ByteCodeStackOffset condOffset, uint32_t m_tableSize)
         : ByteCode(OpcodeKind::BrTableOpcode)
         , m_condOffset(condOffset)
         , m_defaultOffset(0)
@@ -648,7 +650,7 @@ public:
     {
     }
 
-    uint32_t condOffset() const { return m_condOffset; }
+    ByteCodeStackOffset condOffset() const { return m_condOffset; }
     int32_t defaultOffset() const { return m_defaultOffset; }
     void setDefaultOffset(int32_t offset)
     {
@@ -679,21 +681,21 @@ public:
 #endif
 
 protected:
-    uint32_t m_condOffset;
+    ByteCodeStackOffset m_condOffset;
     int32_t m_defaultOffset;
     uint32_t m_tableSize;
 };
 
 class MemorySize : public ByteCode {
 public:
-    MemorySize(uint32_t index, uint32_t dstOffset)
+    MemorySize(uint32_t index, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::MemorySizeOpcode)
         , m_dstOffset(dstOffset)
     {
         ASSERT(index == 0);
     }
 
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -708,12 +710,12 @@ public:
 #endif
 
 protected:
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class MemoryInit : public ByteCode {
 public:
-    MemoryInit(uint32_t index, uint32_t segmentIndex, uint32_t src0, uint32_t src1, uint32_t src2)
+    MemoryInit(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCode(OpcodeKind::MemoryInitOpcode)
         , m_segmentIndex(segmentIndex)
         , m_srcOffsets{ src0, src1, src2 }
@@ -726,7 +728,7 @@ public:
         return m_segmentIndex;
     }
 
-    const uint32_t* srcOffsets() const
+    const ByteCodeStackOffset* srcOffsets() const
     {
         return m_srcOffsets;
     }
@@ -748,12 +750,12 @@ public:
 
 protected:
     uint32_t m_segmentIndex;
-    uint32_t m_srcOffsets[3];
+    ByteCodeStackOffset m_srcOffsets[3];
 };
 
 class MemoryCopy : public ByteCode {
 public:
-    MemoryCopy(uint32_t srcIndex, uint32_t dstIndex, uint32_t src0, uint32_t src1, uint32_t src2)
+    MemoryCopy(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCode(OpcodeKind::MemoryCopyOpcode)
         , m_srcOffsets{ src0, src1, src2 }
     {
@@ -761,7 +763,7 @@ public:
         ASSERT(dstIndex == 0);
     }
 
-    const uint32_t* srcOffsets() const
+    const ByteCodeStackOffset* srcOffsets() const
     {
         return m_srcOffsets;
     }
@@ -780,19 +782,19 @@ public:
     }
 #endif
 protected:
-    uint32_t m_srcOffsets[3];
+    ByteCodeStackOffset m_srcOffsets[3];
 };
 
 class MemoryFill : public ByteCode {
 public:
-    MemoryFill(uint32_t memIdx, uint32_t src0, uint32_t src1, uint32_t src2)
+    MemoryFill(uint32_t memIdx, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCode(OpcodeKind::MemoryFillOpcode)
         , m_srcOffsets{ src0, src1, src2 }
     {
         ASSERT(memIdx == 0);
     }
 
-    const uint32_t* srcOffsets() const
+    const ByteCodeStackOffset* srcOffsets() const
     {
         return m_srcOffsets;
     }
@@ -811,7 +813,7 @@ public:
     }
 #endif
 protected:
-    uint32_t m_srcOffsets[3];
+    ByteCodeStackOffset m_srcOffsets[3];
 };
 
 class DataDrop : public ByteCode {
@@ -845,7 +847,7 @@ protected:
 
 class MemoryGrow : public ByteCode {
 public:
-    MemoryGrow(uint32_t index, uint32_t srcOffset, uint32_t dstOffset)
+    MemoryGrow(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::MemoryGrowOpcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
@@ -853,8 +855,8 @@ public:
         ASSERT(index == 0);
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -869,13 +871,13 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class MemoryLoad : public ByteCode {
 public:
-    MemoryLoad(OpcodeKind opcode, uint32_t offset, uint32_t srcOffset, uint32_t dstOffset)
+    MemoryLoad(OpcodeKind opcode, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(opcode)
         , m_offset(offset)
         , m_srcOffset(srcOffset)
@@ -888,8 +890,8 @@ public:
         return m_offset;
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual size_t byteCodeSize()
@@ -906,13 +908,13 @@ public:
 #endif
 protected:
     uint32_t m_offset;
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class MemoryStore : public ByteCode {
 public:
-    MemoryStore(OpcodeKind opcode, uint32_t offset, uint32_t src0, uint32_t src1)
+    MemoryStore(OpcodeKind opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
         : ByteCode(opcode)
         , m_offset(offset)
         , m_src0Offset(src0)
@@ -925,8 +927,8 @@ public:
         return m_offset;
     }
 
-    uint32_t src0Offset() const { return m_src0Offset; }
-    uint32_t src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
     virtual size_t byteCodeSize()
@@ -943,13 +945,13 @@ public:
 #endif
 protected:
     uint32_t m_offset;
-    uint32_t m_src0Offset;
-    uint32_t m_src1Offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
 };
 
 class TableGet : public ByteCode {
 public:
-    TableGet(uint32_t index, uint32_t srcOffset, uint32_t dstOffset)
+    TableGet(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::TableGetOpcode)
         , m_tableIndex(index)
         , m_srcOffset(srcOffset)
@@ -958,8 +960,8 @@ public:
     }
 
     uint32_t tableIndex() const { return m_tableIndex; }
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -977,13 +979,13 @@ public:
 
 protected:
     uint32_t m_tableIndex;
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class TableSet : public ByteCode {
 public:
-    TableSet(uint32_t index, uint32_t src0, uint32_t src1)
+    TableSet(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
         : ByteCode(OpcodeKind::TableSetOpcode)
         , m_tableIndex(index)
         , m_src0Offset(src0)
@@ -991,8 +993,8 @@ public:
     {
     }
 
-    uint32_t src0Offset() const { return m_src0Offset; }
-    uint32_t src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
@@ -1011,13 +1013,13 @@ public:
 
 protected:
     uint32_t m_tableIndex;
-    uint32_t m_src0Offset;
-    uint32_t m_src1Offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
 };
 
 class TableGrow : public ByteCode {
 public:
-    TableGrow(uint32_t index, uint32_t src0, uint32_t src1, uint32_t dst)
+    TableGrow(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
         : ByteCode(OpcodeKind::TableGrowOpcode)
         , m_tableIndex(index)
         , m_src0Offset(src0)
@@ -1027,9 +1029,9 @@ public:
     }
 
     uint32_t tableIndex() const { return m_tableIndex; }
-    uint32_t src0Offset() const { return m_src0Offset; }
-    uint32_t src1Offset() const { return m_src1Offset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -1048,14 +1050,14 @@ public:
 
 protected:
     uint32_t m_tableIndex;
-    uint32_t m_src0Offset;
-    uint32_t m_src1Offset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class TableSize : public ByteCode {
 public:
-    TableSize(uint32_t index, uint32_t dst)
+    TableSize(uint32_t index, ByteCodeStackOffset dst)
         : ByteCode(OpcodeKind::TableSizeOpcode)
         , m_tableIndex(index)
         , m_dstOffset(dst)
@@ -1063,7 +1065,7 @@ public:
     }
 
     uint32_t tableIndex() const { return m_tableIndex; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -1080,12 +1082,12 @@ public:
 
 protected:
     uint32_t m_tableIndex;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class TableCopy : public ByteCode {
 public:
-    TableCopy(uint32_t dstIndex, uint32_t srcIndex, uint32_t src0, uint32_t src1, uint32_t src2)
+    TableCopy(uint32_t dstIndex, uint32_t srcIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCode(OpcodeKind::TableCopyOpcode)
         , m_dstIndex(dstIndex)
         , m_srcIndex(srcIndex)
@@ -1095,7 +1097,7 @@ public:
 
     uint32_t dstIndex() const { return m_dstIndex; }
     uint32_t srcIndex() const { return m_srcIndex; }
-    const uint32_t* srcOffsets() const
+    const ByteCodeStackOffset* srcOffsets() const
     {
         return m_srcOffsets;
     }
@@ -1118,12 +1120,12 @@ public:
 protected:
     uint32_t m_dstIndex;
     uint32_t m_srcIndex;
-    uint32_t m_srcOffsets[3];
+    ByteCodeStackOffset m_srcOffsets[3];
 };
 
 class TableFill : public ByteCode {
 public:
-    TableFill(uint32_t index, uint32_t src0, uint32_t src1, uint32_t src2)
+    TableFill(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCode(OpcodeKind::TableFillOpcode)
         , m_tableIndex(index)
         , m_srcOffsets{ src0, src1, src2 }
@@ -1131,7 +1133,7 @@ public:
     }
 
     uint32_t tableIndex() const { return m_tableIndex; }
-    const uint32_t* srcOffsets() const
+    const ByteCodeStackOffset* srcOffsets() const
     {
         return m_srcOffsets;
     }
@@ -1152,12 +1154,12 @@ public:
 
 protected:
     uint32_t m_tableIndex;
-    uint32_t m_srcOffsets[3];
+    ByteCodeStackOffset m_srcOffsets[3];
 };
 
 class TableInit : public ByteCode {
 public:
-    TableInit(uint32_t tableIndex, uint32_t segmentIndex, uint32_t src0, uint32_t src1, uint32_t src2)
+    TableInit(uint32_t tableIndex, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCode(OpcodeKind::TableInitOpcode)
         , m_tableIndex(tableIndex)
         , m_segmentIndex(segmentIndex)
@@ -1167,7 +1169,7 @@ public:
 
     uint32_t tableIndex() const { return m_tableIndex; }
     uint32_t segmentIndex() const { return m_segmentIndex; }
-    const uint32_t* srcOffsets() const
+    const ByteCodeStackOffset* srcOffsets() const
     {
         return m_srcOffsets;
     }
@@ -1189,7 +1191,7 @@ public:
 protected:
     uint32_t m_tableIndex;
     uint32_t m_segmentIndex;
-    uint32_t m_srcOffsets[3];
+    ByteCodeStackOffset m_srcOffsets[3];
 };
 
 class ElemDrop : public ByteCode {
@@ -1223,14 +1225,14 @@ protected:
 
 class RefFunc : public ByteCode {
 public:
-    RefFunc(uint32_t funcIndex, uint32_t dstOffset)
+    RefFunc(uint32_t funcIndex, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::RefFuncOpcode)
         , m_funcIndex(funcIndex)
         , m_dstOffset(dstOffset)
     {
     }
 
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     uint32_t funcIndex() const { return m_funcIndex; }
 
 #if !defined(NDEBUG)
@@ -1248,12 +1250,12 @@ public:
 
 private:
     uint32_t m_funcIndex;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class RefNull : public ByteCode {
 public:
-    RefNull(Value::Type type, uint32_t dstOffset)
+    RefNull(Value::Type type, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::RefNullOpcode)
         , m_type(type)
         , m_dstOffset(dstOffset)
@@ -1261,7 +1263,7 @@ public:
     }
 
     Value::Type type() const { return m_type; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -1283,20 +1285,20 @@ public:
 
 private:
     Value::Type m_type;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class RefIsNull : public ByteCode {
 public:
-    RefIsNull(uint32_t srcOffset, uint32_t dstOffset)
+    RefIsNull(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCode(OpcodeKind::RefIsNullOpcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
@@ -1310,20 +1312,20 @@ public:
     }
 #endif
 protected:
-    uint32_t m_srcOffset;
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
 };
 
 class GlobalGet32 : public ByteCode {
 public:
-    GlobalGet32(uint32_t dstOffset, uint32_t index)
+    GlobalGet32(ByteCodeStackOffset dstOffset, uint32_t index)
         : ByteCode(OpcodeKind::GlobalGet32Opcode)
         , m_dstOffset(dstOffset)
         , m_index(index)
     {
     }
 
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
@@ -1340,20 +1342,20 @@ public:
 #endif
 
 protected:
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
     uint32_t m_index;
 };
 
 class GlobalGet64 : public ByteCode {
 public:
-    GlobalGet64(uint32_t dstOffset, uint32_t index)
+    GlobalGet64(ByteCodeStackOffset dstOffset, uint32_t index)
         : ByteCode(OpcodeKind::GlobalGet64Opcode)
         , m_dstOffset(dstOffset)
         , m_index(index)
     {
     }
 
-    uint32_t dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
@@ -1370,20 +1372,20 @@ public:
 #endif
 
 protected:
-    uint32_t m_dstOffset;
+    ByteCodeStackOffset m_dstOffset;
     uint32_t m_index;
 };
 
 class GlobalSet32 : public ByteCode {
 public:
-    GlobalSet32(uint32_t srcOffset, uint32_t index)
+    GlobalSet32(ByteCodeStackOffset srcOffset, uint32_t index)
         : ByteCode(OpcodeKind::GlobalSet32Opcode)
         , m_srcOffset(srcOffset)
         , m_index(index)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
@@ -1400,20 +1402,20 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
+    ByteCodeStackOffset m_srcOffset;
     uint32_t m_index;
 };
 
 class GlobalSet64 : public ByteCode {
 public:
-    GlobalSet64(uint32_t srcOffset, uint32_t index)
+    GlobalSet64(ByteCodeStackOffset srcOffset, uint32_t index)
         : ByteCode(OpcodeKind::GlobalSet64Opcode)
         , m_srcOffset(srcOffset)
         , m_index(index)
     {
     }
 
-    uint32_t srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
@@ -1430,7 +1432,7 @@ public:
 #endif
 
 protected:
-    uint32_t m_srcOffset;
+    ByteCodeStackOffset m_srcOffset;
     uint32_t m_index;
 };
 
@@ -1451,9 +1453,9 @@ public:
     }
 
     uint32_t tagIndex() const { return m_tagIndex; }
-    uint32_t* dataOffsets() const
+    ByteCodeStackOffset* dataOffsets() const
     {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<size_t>(this) + sizeof(Throw));
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Throw));
     }
 
 #if !defined(NDEBUG)
@@ -1466,7 +1468,7 @@ public:
             auto arr = dataOffsets();
             printf("resultOffsets: ");
             for (size_t i = 0; i < m_functionType->result().size(); i++) {
-                printf("%" PRIu32 " ", arr[i]);
+                printf("%" PRIu32 " ", (uint32_t)arr[i]);
             }
             printf(" ");
         }
@@ -1474,7 +1476,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(Throw) + (m_functionType ? sizeof(uint32_t) * m_functionType->result().size() : 0);
+        return sizeof(Throw) + (m_functionType ? sizeof(ByteCodeStackOffset) * m_functionType->result().size() : 0);
     }
 #endif
 
@@ -1520,9 +1522,9 @@ public:
     {
     }
 
-    uint32_t* resultOffsets() const
+    ByteCodeStackOffset* resultOffsets() const
     {
-        return reinterpret_cast<uint32_t*>(reinterpret_cast<size_t>(this) + sizeof(End));
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(End));
     }
 
 #if !defined(NDEBUG)
@@ -1538,7 +1540,7 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(End) + sizeof(uint32_t) * m_functionType->result().size();
+        return sizeof(End) + sizeof(ByteCodeStackOffset) * m_functionType->result().size();
     }
 
 protected:
