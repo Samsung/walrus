@@ -350,6 +350,7 @@ class ComplexCallInstruction : public CallInstruction {
 };
 
 class DependencyGenContext;
+class SetLocalContext;
 class ReduceMovesContext;
 struct LabelJumpList;
 struct LabelData;
@@ -364,6 +365,10 @@ class Label : public InstructionListItem {
   static const uint16_t kCanHaveElse = 1 << 2;
   static const uint16_t kHasJumpList = 1 << 3;
   static const uint16_t kHasLabelData = 1 << 4;
+
+  // Info bits for checkLocals.
+  static const uint16_t kCheckLocalsReached = 1 << 5;
+  static const uint16_t kCheckLocalsHasContext = 1 << 6;
 
   struct Dependency {
     Dependency(Instruction* instr, Index index) : instr(instr), index(index) {}
@@ -383,8 +388,6 @@ class Label : public InstructionListItem {
   const DependencyList& dependencies(size_t i) { return dependencies_[i]; }
 
   void append(Instruction* instr);
-  void remove(Instruction* instr);
-  void replace(Instruction* instr, Instruction* other_instr);
   // Should be called before removing the other instruction.
   void merge(Label* other);
 
@@ -407,23 +410,28 @@ class Label : public InstructionListItem {
   std::vector<Instruction*> branches_;
   std::vector<DependencyList> dependencies_;
 
-  // Contexts used by different compiling stages
+  // Contexts used by different compiling stages.
   union {
+    SetLocalContext* set_local_ctx_;
     DependencyGenContext* dependency_ctx_;
     ReduceMovesContext* reduce_moves_ctx_;
     StackAllocator* stack_allocator_;
     LabelJumpList* jump_list_;
     LabelData* label_data_;
+    size_t instr_index_;
   };
 };
 
 class JITCompiler {
  public:
+  JITCompiler(int verbose_level) : verbose_level_(verbose_level) {}
+
   ~JITCompiler() {
     clear();
     releaseFunctionList();
   }
 
+  int verboseLevel() { return verbose_level_; }
   InstructionListItem* first() { return first_; }
   InstructionListItem* last() { return last_; }
 
@@ -454,8 +462,9 @@ class JITCompiler {
   std::vector<ValueInfo>& locals() { return locals_; }
 
   void appendFunction(JITFunction* jit_func, bool is_external);
-  void dump(bool enable_colors, bool after_stack_computation);
+  void dump(bool after_stack_computation);
 
+  void checkLocals(size_t params_size);
   void buildParamDependencies();
   void reduceLocalAndConstantMoves();
   void optimizeBlocks();
@@ -513,9 +522,9 @@ class JITCompiler {
   InstructionListItem* function_list_first_ = nullptr;
   InstructionListItem* function_list_last_ = nullptr;
 
-  Index stack_depth_ = 0;
-
   sljit_compiler* compiler_ = nullptr;
+  Index stack_depth_ = 0;
+  int verbose_level_;
 
   std::vector<Label*> label_stack_;
   std::vector<ElseBlock> else_blocks_;

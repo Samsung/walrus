@@ -1,4 +1,7 @@
 [[[[[[[  Function   0  ]]]]]]]
+Local 0: mapped to: 0 range [BEGIN - 7]
+Local 1: mapped to: 1 range [1 - 4]
+Number of locals reduced from 2 to 2
 0: Opcode: local.get
   Index: 0
   Result[0]: i32
@@ -51,6 +54,8 @@ Frame size: 0, Arguments size: 16 (total: 16)
 8: Opcode: return
 
 [[[[[[[  Function   1  ]]]]]]]
+Local 0: mapped to: 0 range [BEGIN - 7]
+Number of locals reduced from 1 to 1
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -103,6 +108,8 @@ Frame size: 0, Arguments size: 16 (total: 16)
 8: Opcode: return
 
 [[[[[[[  Function   2  ]]]]]]]
+Local 0: mapped to: 0 range [7 - 7]
+Number of locals reduced from 1 to 1
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless
@@ -151,6 +158,8 @@ Frame size: 0, Arguments size: 16 (total: 16)
 8: Opcode: return
 
 [[[[[[[  Function   3  ]]]]]]]
+Local 0: mapped to: 0 range [BEGIN - 7]
+Number of locals reduced from 1 to 1
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: br_unless

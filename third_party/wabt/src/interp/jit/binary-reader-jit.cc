@@ -258,7 +258,7 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Location GetLocation() const;
   void pushLabel(Opcode opcode, Type sig_type);
 
-  int verbose_level_;
+  JITCompiler compiler_;
   Errors* errors_ = nullptr;
   ModuleDesc& module_;
 
@@ -266,7 +266,6 @@ class BinaryReaderJIT : public BinaryReaderNop {
   std::string_view filename_;
 
   Index function_body_index_;
-  JITCompiler compiler_;
 
   size_t func_import_end_ = 0;
 
@@ -280,7 +279,7 @@ BinaryReaderJIT::BinaryReaderJIT(ModuleDesc* module,
                                  Errors* errors,
                                  const Features& features,
                                  int verbose_level)
-    : verbose_level_(verbose_level),
+    : compiler_(verbose_level),
       errors_(errors),
       module_(*module),
       validator_(errors, ValidateOptions(features)),
@@ -610,11 +609,15 @@ Result BinaryReaderJIT::EndFunctionBody(Index index) {
   compiler_.append(Instruction::Return, Opcode::Return,
                    func_type.results.size());
 
+  if (compiler_.verboseLevel() >= 1) {
+    printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(index));
+  }
+
+  compiler_.checkLocals(func_type.params.size());
   compiler_.buildParamDependencies();
 
-  if (verbose_level_ >= 1) {
-    printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(index));
-    compiler_.dump(verbose_level_ >= 2, false);
+  if (compiler_.verboseLevel() >= 1) {
+    compiler_.dump(false);
   }
 
   compiler_.reduceLocalAndConstantMoves();
@@ -623,12 +626,12 @@ Result BinaryReaderJIT::EndFunctionBody(Index index) {
   JITFunction* jit_func = &module_.funcs[function_body_index_].jit_func;
   compiler_.computeOperandLocations(jit_func, func_type.results);
 
-  if (verbose_level_ >= 1) {
+  if (compiler_.verboseLevel() >= 1) {
     printf("------------------------------\n");
     printf("Frame size: %d, Arguments size: %d (total: %d)\n",
            jit_func->frameSize(), jit_func->argsSize(),
            jit_func->frameSize() + jit_func->argsSize());
-    compiler_.dump(verbose_level_ >= 2, true);
+    compiler_.dump(true);
     printf("\n");
   }
 

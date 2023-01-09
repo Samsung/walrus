@@ -281,6 +281,7 @@ set(WABT_LIBRARY_CC
   src/interp/jit/jit-backend.cc
   src/interp/jit/jit-inst-elimination.cc
   src/interp/jit/jit-inst-list.cc
+  src/interp/jit/jit-locals.cc
   src/interp/jit/jit.cc
   ../sljit/sljit_src/sljitLir.c
 )

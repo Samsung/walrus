@@ -92,24 +92,6 @@ void Label::append(Instruction* instr) {
   branches_.push_back(instr);
 }
 
-void Label::remove(Instruction* instr) {
-  for (size_t i = 0; i < branches_.size(); i++) {
-    if (branches_[i] == instr) {
-      branches_.erase(branches_.begin() + i);
-      return;
-    }
-  }
-}
-
-void Label::replace(Instruction* instr, Instruction* other_instr) {
-  for (size_t i = 0; i < branches_.size(); i++) {
-    if (branches_[i] == instr) {
-      branches_[i] = other_instr;
-      return;
-    }
-  }
-}
-
 void Label::merge(Label* other) {
   assert(this != other);
   assert(stackSize() == other->stackSize());
@@ -463,8 +445,9 @@ static const char* flagsToType(ValueInfo value_info) {
   return (size == LocationInfo::kEightByteSize) ? "i64" : "i32";
 }
 
-void JITCompiler::dump(bool enable_colors, bool after_stack_computation) {
+void JITCompiler::dump(bool after_stack_computation) {
   std::map<InstructionListItem*, int> instr_index;
+  bool enable_colors = (verboseLevel() >= 2);
   int counter = 0;
 
   for (InstructionListItem* item = first(); item != nullptr;

@@ -1,4 +1,5 @@
 [[[[[[[  Function   0  ]]]]]]]
+Number of locals reduced from 0 to 0
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: i32.const
@@ -25,6 +26,7 @@ Frame size: 0, Arguments size: 0 (total: 0)
 5: Opcode: return
 
 [[[[[[[  Function   1  ]]]]]]]
+Number of locals reduced from 0 to 0
 0: Opcode: i32.const
   Result[0]: i32
 1: Label: result_count: 1 preserved_count: 0

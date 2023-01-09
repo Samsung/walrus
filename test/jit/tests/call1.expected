@@ -1,4 +1,8 @@
 [[[[[[[  Function   0  ]]]]]]]
+Local 0: mapped to: 0 range [BEGIN - 0]
+Local 1: mapped to: 1 range [BEGIN - 1]
+Local 2: mapped to: 2 range [BEGIN - 3]
+Number of locals reduced from 3 to 3
 0: Opcode: local.get
   Index: 0
   Result[0]: i32
@@ -35,6 +39,7 @@ Frame size: 0, Arguments size: 32 (total: 32)
   Param[1]: i32 sp[4]
 
 [[[[[[[  Function   1  ]]]]]]]
+Number of locals reduced from 0 to 0
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: i32.const
@@ -71,6 +76,7 @@ Frame size: 32, Arguments size: 16 (total: 48)
   Param[1]: i32 sp[36]
 
 [[[[[[[  Function   2  ]]]]]]]
+Number of locals reduced from 0 to 0
 0: Opcode: i32.const
   Result[0]: i32
 1: Opcode: i32.eqz

@@ -1,10 +1,12 @@
 [[[[[[[  Function   0  ]]]]]]]
+Number of locals reduced from 0 to 0
 0: Opcode: unreachable
 ------------------------------
 Frame size: 0, Arguments size: 0 (total: 0)
 0: Opcode: unreachable
 
 [[[[[[[  Function   1  ]]]]]]]
+Number of locals reduced from 0 to 0
 0: Opcode: call
   Frame size: 0, param start: 0
 1: Opcode: return
@@ -15,6 +17,7 @@ Frame size: 0, Arguments size: 0 (total: 0)
 1: Opcode: return
 
 [[[[[[[  Function   2  ]]]]]]]
+Number of locals reduced from 0 to 0
 0: Opcode: call
   Frame size: 0, param start: 0
 1: Opcode: return
