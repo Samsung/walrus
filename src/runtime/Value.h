@@ -23,6 +23,7 @@
 
 namespace Walrus {
 
+class Object;
 class Function;
 class Table;
 class Memory;
@@ -193,6 +194,12 @@ public:
     {
         ASSERT(type() == FuncRef);
         return reinterpret_cast<Function*>(m_ref);
+    }
+
+    Object* asObject() const
+    {
+        ASSERT(type() == ExternRef);
+        return reinterpret_cast<Object*>(m_ref);
     }
 
     Table* asTable() const
