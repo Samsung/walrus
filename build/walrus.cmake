@@ -115,7 +115,7 @@ ELSEIF (${WALRUS_OUTPUT} STREQUAL "api_test")
 
 #c_api_example(callback)
 #c_api_example(finalize)
-#c_api_example(global)
+    c_api_example(global)
     c_api_example(hello)
 #c_api_example(hostref)
 #c_api_example(multi)
