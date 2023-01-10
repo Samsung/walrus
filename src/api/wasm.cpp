@@ -163,6 +163,24 @@ struct wasm_globaltype_t : wasm_externtype_t {
     wasm_valtype_t valtype;
 };
 
+struct wasm_tabletype_t : wasm_externtype_t {
+    wasm_tabletype_t(const TableType* type)
+        : wasm_externtype_t(type)
+        , valtype(type->type())
+        , limits{ type->initialSize(), type->maximumSize() }
+    {
+    }
+
+    wasm_tabletype_t* clone() const
+    {
+        TableType* type = static_cast<const TableType*>(get())->clone();
+        return new wasm_tabletype_t(type);
+    }
+
+    wasm_valtype_t valtype;
+    wasm_limits_t limits;
+};
+
 struct wasm_memorytype_t : wasm_externtype_t {
     wasm_memorytype_t(const MemoryType* type)
         : wasm_externtype_t(type)
@@ -250,6 +268,22 @@ struct wasm_global_t : wasm_extern_t {
     }
 
     const GlobalType* type;
+};
+
+struct wasm_table_t : wasm_extern_t {
+    wasm_table_t(const Table* table, const wasm_tabletype_t* tt)
+        : wasm_extern_t(table)
+        , type(static_cast<const TableType*>(tt->get()))
+    {
+    }
+
+    Table* get() const
+    {
+        ASSERT(obj && obj->isTable());
+        return const_cast<Table*>(static_cast<const Table*>(obj));
+    }
+
+    const TableType* type;
 };
 
 struct wasm_memory_t : wasm_extern_t {
@@ -546,6 +580,24 @@ wasm_mutability_t wasm_globaltype_mutability(const wasm_globaltype_t* gt)
     return mut ? WASM_VAR : WASM_CONST;
 }
 
+// Table Types
+own wasm_tabletype_t* wasm_tabletype_new(
+    own wasm_valtype_t* valtype, const wasm_limits_t* limits)
+{
+    TableType* type = new TableType(valtype->type, limits->min, limits->max);
+    return new wasm_tabletype_t(type);
+}
+
+const wasm_valtype_t* wasm_tabletype_element(const wasm_tabletype_t* tt)
+{
+    return &tt->valtype;
+}
+
+const wasm_limits_t* wasm_tabletype_limits(const wasm_tabletype_t* tt)
+{
+    return &tt->limits;
+}
+
 // Memory Types
 own wasm_memorytype_t* wasm_memorytype_new(const wasm_limits_t* limits)
 {
@@ -811,6 +863,61 @@ void wasm_global_set(wasm_global_t* glob, const wasm_val_t* val)
     glob->get()->setValue(ToWalrusValue(*val));
 }
 
+// Table Instances
+own wasm_table_t* wasm_table_new(
+    wasm_store_t* store, const wasm_tabletype_t* tt, wasm_ref_t* init)
+{
+    Table* table = new Table(tt->valtype.type, tt->limits.min, tt->limits.max);
+    return new wasm_table_t(table, tt);
+}
+
+own wasm_tabletype_t* wasm_table_type(const wasm_table_t* table)
+{
+    return new wasm_tabletype_t(table->type);
+}
+
+own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t index)
+{
+    if (UNLIKELY(index >= table->get()->size())) {
+        return nullptr;
+    }
+
+    ExecutionState state(ExecutionState::Temporal);
+    Value val(table->get()->getElement(state, index));
+
+    if (val.isNull()) {
+        return nullptr;
+    }
+
+    return new wasm_ref_t(val.asObject());
+}
+
+bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* ref)
+{
+    if (UNLIKELY(index >= table->get()->size())) {
+        return false;
+    }
+
+    ExecutionState state(ExecutionState::Temporal);
+    table->get()->setElement(state, index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
+    return true;
+}
+
+wasm_table_size_t wasm_table_size(const wasm_table_t* table)
+{
+    return table->get()->size();
+}
+
+bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* init)
+{
+    if (UNLIKELY(delta + table->get()->size() > table->get()->maximumSize())) {
+        return false;
+    }
+
+    table->get()->grow(delta + table->get()->size(), init ? const_cast<Object*>(init->get()) : reinterpret_cast<void*>(Value::NullBits));
+    return true;
+}
+
 // Memory Instances
 own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
@@ -1052,7 +1159,7 @@ WASM_IMPL_TYPE(valtype);
 
 WASM_IMPL_TYPE_CLONE(functype);
 WASM_IMPL_TYPE_CLONE(globaltype);
-//WASM_IMPL_TYPE_CLONE(tabletype);
+WASM_IMPL_TYPE_CLONE(tabletype);
 WASM_IMPL_TYPE_CLONE(memorytype);
 //WASM_IMPL_TYPE_CLONE(externtype);
 
@@ -1096,7 +1203,7 @@ WASM_IMPL_REF(func);
 WASM_IMPL_REF(global);
 WASM_IMPL_REF(instance);
 WASM_IMPL_REF(memory);
-//WASM_IMPL_REF(table);
+WASM_IMPL_REF(table);
 WASM_IMPL_REF(trap);
 WASM_IMPL_REF(module); // FIXME
 
@@ -1151,7 +1258,7 @@ WASM_IMPL_REF(module); // FIXME
     }
 
 // TODO
-//WASM_IMPL_EXTERN(table);
+WASM_IMPL_EXTERN(table);
 WASM_IMPL_EXTERN(func);
 WASM_IMPL_EXTERN(global);
 WASM_IMPL_EXTERN(memory);
