@@ -148,6 +148,7 @@ jobs:
       run: |
         ./wasm-c-api-hello
         ./wasm-c-api-global
+        ./wasm-c-api-table
         ./wasm-c-api-memory
 
   Coverity_scan:

@@ -149,6 +149,11 @@ public:
     {
     }
 
+    TableType* clone() const
+    {
+        return new TableType(m_type, m_initialSize, m_maximumSize);
+    }
+
     Value::Type type() const { return m_type; }
     uint32_t initialSize() const { return m_initialSize; }
     uint32_t maximumSize() const { return m_maximumSize; }
