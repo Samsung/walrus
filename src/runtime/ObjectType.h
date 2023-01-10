@@ -141,7 +141,7 @@ private:
 
 class TableType : public ObjectType {
 public:
-    TableType(Value::Type type, size_t initSize, size_t maxSize)
+    TableType(Value::Type type, uint32_t initSize, uint32_t maxSize)
         : ObjectType(ObjectType::TableKind)
         , m_type(type)
         , m_initialSize(initSize)
@@ -150,30 +150,35 @@ public:
     }
 
     Value::Type type() const { return m_type; }
-    size_t initialSize() const { return m_initialSize; }
-    size_t maximumSize() const { return m_maximumSize; }
+    uint32_t initialSize() const { return m_initialSize; }
+    uint32_t maximumSize() const { return m_maximumSize; }
 
 private:
     Value::Type m_type;
-    size_t m_initialSize;
-    size_t m_maximumSize;
+    uint32_t m_initialSize;
+    uint32_t m_maximumSize;
 };
 
 class MemoryType : public ObjectType {
 public:
-    MemoryType(size_t initSize, size_t maxSize)
+    MemoryType(uint32_t initSize, uint32_t maxSize)
         : ObjectType(ObjectType::MemoryKind)
         , m_initialSize(initSize)
         , m_maximumSize(maxSize)
     {
     }
 
-    size_t initialSize() const { return m_initialSize; }
-    size_t maximumSize() const { return m_maximumSize; }
+    MemoryType* clone() const
+    {
+        return new MemoryType(m_initialSize, m_maximumSize);
+    }
+
+    uint32_t initialSize() const { return m_initialSize; }
+    uint32_t maximumSize() const { return m_maximumSize; }
 
 private:
-    size_t m_initialSize;
-    size_t m_maximumSize;
+    uint32_t m_initialSize;
+    uint32_t m_maximumSize;
 };
 
 class TagType : public ObjectType {
