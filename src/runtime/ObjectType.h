@@ -126,6 +126,11 @@ public:
     {
     }
 
+    GlobalType* clone() const
+    {
+        return new GlobalType(m_type, m_mutable);
+    }
+
     Value::Type type() const { return m_type; }
     bool isMutable() const { return m_mutable; }
 

@@ -108,7 +108,7 @@ public:
     }
     Table* table(uint32_t index) const { return m_table[index]; }
     Tag* tag(uint32_t index) const { return m_tag[index]; }
-    Global* global(uint32_t index) { return m_global[index]; }
+    Global* global(uint32_t index) const { return m_global[index]; }
     DataSegment& dataSegment(uint32_t index) { return m_dataSegment[index]; }
     ElementSegment& elementSegment(uint32_t index) { return m_elementSegment[index]; }
 
