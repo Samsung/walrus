@@ -147,6 +147,8 @@ jobs:
       working-directory: ./out/api_test/x64
       run: |
         ./wasm-c-api-hello
+        ./wasm-c-api-global
+        ./wasm-c-api-memory
 
   Coverity_scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}

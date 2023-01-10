@@ -159,7 +159,24 @@ struct wasm_globaltype_t : wasm_externtype_t {
         GlobalType* type = static_cast<const GlobalType*>(get())->clone();
         return new wasm_globaltype_t(type);
     }
+
     wasm_valtype_t valtype;
+};
+
+struct wasm_memorytype_t : wasm_externtype_t {
+    wasm_memorytype_t(const MemoryType* type)
+        : wasm_externtype_t(type)
+        , limits{ type->initialSize() / (uint32_t)MEMORY_PAGE_SIZE, type->maximumSize() / (uint32_t)MEMORY_PAGE_SIZE }
+    {
+    }
+
+    wasm_memorytype_t* clone() const
+    {
+        MemoryType* type = static_cast<const MemoryType*>(get())->clone();
+        return new wasm_memorytype_t(type);
+    }
+
+    wasm_limits_t limits;
 };
 
 struct wasm_ref_t : public wasm_gc {
@@ -235,6 +252,22 @@ struct wasm_global_t : wasm_extern_t {
     const GlobalType* type;
 };
 
+struct wasm_memory_t : wasm_extern_t {
+    wasm_memory_t(const Memory* mem, const wasm_memorytype_t* mt)
+        : wasm_extern_t(mem)
+        , type(static_cast<const MemoryType*>(mt->get()))
+    {
+    }
+
+    Memory* get() const
+    {
+        ASSERT(obj && obj->isMemory());
+        return const_cast<Memory*>(static_cast<const Memory*>(obj));
+    }
+
+    const MemoryType* type;
+};
+
 struct wasm_instance_t : wasm_ref_t {
     wasm_instance_t(const Instance* ins)
         : wasm_ref_t(ins)
@@ -249,9 +282,10 @@ struct wasm_instance_t : wasm_ref_t {
 };
 
 struct wasm_trap_t : wasm_ref_t {
-    wasm_trap_t(const Trap* t)
+    wasm_trap_t(const Trap* t, const wasm_message_t* msg)
         : wasm_ref_t(t)
     {
+        wasm_byte_vec_copy(&message, msg);
     }
 
     const Trap* get() const
@@ -259,6 +293,8 @@ struct wasm_trap_t : wasm_ref_t {
         ASSERT(obj && obj->isTrap());
         return static_cast<const Trap*>(obj);
     }
+
+    wasm_message_t message;
 };
 
 // Common Internal Methods
@@ -478,14 +514,14 @@ own wasm_functype_t* wasm_functype_new(
     return new wasm_functype_t(type, params, results);
 }
 
-const wasm_valtype_vec_t* wasm_functype_params(const wasm_functype_t* f)
+const wasm_valtype_vec_t* wasm_functype_params(const wasm_functype_t* ft)
 {
-    return &f->params;
+    return &ft->params;
 }
 
-const wasm_valtype_vec_t* wasm_functype_results(const wasm_functype_t* f)
+const wasm_valtype_vec_t* wasm_functype_results(const wasm_functype_t* ft)
 {
-    return &f->results;
+    return &ft->results;
 }
 
 // Global Types
@@ -497,17 +533,29 @@ own wasm_globaltype_t* wasm_globaltype_new(own wasm_valtype_t* valtype, wasm_mut
     return new wasm_globaltype_t(type);
 }
 
-const wasm_valtype_t* wasm_globaltype_content(const wasm_globaltype_t* g)
+const wasm_valtype_t* wasm_globaltype_content(const wasm_globaltype_t* gt)
 {
-    return &g->valtype;
+    return &gt->valtype;
 }
 
-wasm_mutability_t wasm_globaltype_mutability(const wasm_globaltype_t* g)
+wasm_mutability_t wasm_globaltype_mutability(const wasm_globaltype_t* gt)
 {
-    ASSERT(g->get()->kind() == ObjectType::GlobalKind);
-    bool mut = static_cast<const GlobalType*>(g->get())->isMutable();
+    ASSERT(gt->get()->kind() == ObjectType::GlobalKind);
+    bool mut = static_cast<const GlobalType*>(gt->get())->isMutable();
 
     return mut ? WASM_VAR : WASM_CONST;
+}
+
+// Memory Types
+own wasm_memorytype_t* wasm_memorytype_new(const wasm_limits_t* limits)
+{
+    MemoryType* type = new MemoryType(limits->min * MEMORY_PAGE_SIZE, limits->max * MEMORY_PAGE_SIZE);
+    return new wasm_memorytype_t(type);
+}
+
+const wasm_limits_t* wasm_memorytype_limits(const wasm_memorytype_t* mt)
+{
+    return &mt->limits;
 }
 
 // Extern Types
@@ -539,6 +587,30 @@ void wasm_val_copy(own wasm_val_t* out, const wasm_val_t* src)
 }
 
 // References
+// Traps
+own wasm_trap_t* wasm_trap_new(wasm_store_t* store, const wasm_message_t* message)
+{
+    Trap* trap = new Trap();
+    return new wasm_trap_t(trap, message);
+}
+
+void wasm_trap_message(const wasm_trap_t* trap, own wasm_message_t* out)
+{
+    wasm_byte_vec_copy(out, &trap->message);
+}
+
+own wasm_frame_t* wasm_trap_origin(const wasm_trap_t*)
+{
+    // TODO
+    RELEASE_ASSERT_NOT_REACHED();
+}
+
+void wasm_trap_trace(const wasm_trap_t*, own wasm_frame_vec_t* out)
+{
+    // TODO
+    RELEASE_ASSERT_NOT_REACHED();
+}
+
 // Modules
 own wasm_module_t* wasm_module_new(wasm_store_t* store, const wasm_byte_vec_t* binary)
 {
@@ -698,8 +770,18 @@ own wasm_trap_t* wasm_func_call(
                                &data);
 
     if (trapResult.exception) {
-        // TODO
-        RELEASE_ASSERT_NOT_REACHED();
+        // FIXME
+        own wasm_message_t msg;
+        if (trapResult.exception->message()) {
+            String* exceptionMsg = trapResult.exception->message().value();
+            wasm_byte_vec_new(&msg, exceptionMsg->length(), exceptionMsg->buffer());
+        } else {
+            wasm_byte_vec_new_empty(&msg);
+        }
+
+        wasm_trap_t* trap = new wasm_trap_t(new Trap(), &msg);
+        wasm_byte_vec_delete(&msg);
+        return trap;
     }
 
     FromWalrusValues(results->data, walrusResults.data(), resultNum);
@@ -727,6 +809,38 @@ void wasm_global_get(const wasm_global_t* glob, own wasm_val_t* out)
 void wasm_global_set(wasm_global_t* glob, const wasm_val_t* val)
 {
     glob->get()->setValue(ToWalrusValue(*val));
+}
+
+// Memory Instances
+own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
+{
+    Memory* mem = new Memory(mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE);
+    return new wasm_memory_t(mem, mt);
+}
+
+own wasm_memorytype_t* wasm_memory_type(const wasm_memory_t* mem)
+{
+    return new wasm_memorytype_t(mem->type);
+}
+
+byte_t* wasm_memory_data(wasm_memory_t* mem)
+{
+    return reinterpret_cast<byte_t*>(mem->get()->buffer());
+}
+
+size_t wasm_memory_data_size(const wasm_memory_t* mem)
+{
+    return mem->get()->sizeInByte();
+}
+
+wasm_memory_pages_t wasm_memory_size(const wasm_memory_t* mem)
+{
+    return mem->get()->sizeInPageSize();
+}
+
+bool wasm_memory_grow(wasm_memory_t* mem, wasm_memory_pages_t delta)
+{
+    return mem->get()->grow(delta * MEMORY_PAGE_SIZE);
 }
 
 // Externals
@@ -939,7 +1053,7 @@ WASM_IMPL_TYPE(valtype);
 WASM_IMPL_TYPE_CLONE(functype);
 WASM_IMPL_TYPE_CLONE(globaltype);
 //WASM_IMPL_TYPE_CLONE(tabletype);
-//WASM_IMPL_TYPE_CLONE(memorytype);
+WASM_IMPL_TYPE_CLONE(memorytype);
 //WASM_IMPL_TYPE_CLONE(externtype);
 
 #define WASM_IMPL_REF_BASE(name)                                        \
@@ -981,7 +1095,7 @@ WASM_IMPL_REF(extern);
 WASM_IMPL_REF(func);
 WASM_IMPL_REF(global);
 WASM_IMPL_REF(instance);
-//WASM_IMPL_REF(memory);
+WASM_IMPL_REF(memory);
 //WASM_IMPL_REF(table);
 WASM_IMPL_REF(trap);
 WASM_IMPL_REF(module); // FIXME
@@ -1040,7 +1154,7 @@ WASM_IMPL_REF(module); // FIXME
 //WASM_IMPL_EXTERN(table);
 WASM_IMPL_EXTERN(func);
 WASM_IMPL_EXTERN(global);
-//WASM_IMPL_EXTERN(memory);
+WASM_IMPL_EXTERN(memory);
 
 } // extern "C"
 
