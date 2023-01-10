@@ -120,6 +120,72 @@ static sljit_uw SLJIT_FUNC getTrapHandler(sljit_uw return_addr) {
   return trap_handler_list.get(return_addr);
 }
 
+// Float operations.
+// TODO Canonical NaN
+static sljit_f32 floatCeil(sljit_f32 val) {
+  return std::ceil(val);
+}
+
+static sljit_f64 floatCeil(sljit_f64 val) {
+  return std::ceil(val);
+}
+
+static sljit_f32 floatFloor(sljit_f32 val) {
+  return std::floor(val);
+}
+
+static sljit_f64 floatFloor(sljit_f64 val) {
+  return std::floor(val);
+}
+
+static sljit_f32 floatTrunc(sljit_f32 val) {
+  return std::trunc(val);
+}
+
+static sljit_f64 floatTrunc(sljit_f64 val) {
+  return std::trunc(val);
+}
+
+static sljit_f32 floatNearest(sljit_f32 val) {
+  return std::nearbyint(val);
+}
+
+static sljit_f64 floatNearest(sljit_f64 val) {
+  return std::nearbyint(val);
+}
+
+static sljit_f32 floatSqrt(sljit_f32 val) {
+  return std::sqrt(val);
+}
+
+static sljit_f64 floatSqrt(sljit_f64 val) {
+  return std::sqrt(val);
+}
+
+static sljit_f32 floatMin(sljit_f32 lhs, sljit_f32 rhs) {
+  return std::min(lhs, rhs);
+}
+
+static sljit_f64 floatMin(sljit_f64 lhs, sljit_f64 rhs) {
+  return std::min(lhs, rhs);
+}
+
+static sljit_f32 floatMax(sljit_f32 lhs, sljit_f32 rhs) {
+  return std::max(lhs, rhs);
+}
+
+static sljit_f64 floatMax(sljit_f64 lhs, sljit_f64 rhs) {
+  return std::max(lhs, rhs);
+}
+
+static sljit_f32 floatCopySign(sljit_f32 lhs, sljit_f32 rhs) {
+  return std::copysign(lhs, rhs);
+}
+
+static sljit_f64 floatCopySign(sljit_f64 lhs, sljit_f64 rhs) {
+  return std::copysign(lhs, rhs);
+}
+
 static void operandToArg(Operand* operand, JITArg& arg) {
   switch (operand->location.type) {
     case Operand::Stack: {
@@ -301,6 +367,96 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr) {
                  args[0].argw, args[1].arg, args[1].argw);
 }
 
+static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr) {
+  Operand* operands = instr->operands();
+  JITArg args[3];
+
+  for (int i = 0; i < 3; ++i) {
+    operandToArg(operands + i, args[i]);
+  }
+
+  sljit_s32 opcode;
+  sljit_s32 mov = SLJIT_CONV_F32_FROM_SW;
+  sljit_f32 (*f32Function)(sljit_f32, sljit_f32) = nullptr;
+  sljit_f64 (*f64Function)(sljit_f64, sljit_f64) = nullptr;
+
+  switch (instr->opcode()) {
+    case Opcode::F32Add:
+      opcode = SLJIT_ADD_F32;
+      break;
+    case Opcode::F32Sub:
+      opcode = SLJIT_SUB_F32;
+      break;
+    case Opcode::F32Mul:
+      opcode = SLJIT_MUL_F32;
+      break;
+    case Opcode::F32Div:
+      opcode = SLJIT_DIV_F32;
+      break;
+    case Opcode::F32Max:
+      f32Function = floatMax;
+      break;
+    case Opcode::F32Min:
+      f32Function = floatMin;
+      break;
+    case Opcode::F32Copysign:
+      f32Function = floatCopySign;
+      break;
+    case Opcode::F64Add:
+      opcode = SLJIT_ADD_F64;
+      mov = SLJIT_CONV_F64_FROM_SW;
+      break;
+    case Opcode::F64Sub:
+      opcode = SLJIT_SUB_F64;
+      mov = SLJIT_CONV_F64_FROM_SW;
+      break;
+    case Opcode::F64Mul:
+      opcode = SLJIT_MUL_F64;
+      mov = SLJIT_CONV_F64_FROM_SW;
+      break;
+    case Opcode::F64Div:
+      opcode = SLJIT_DIV_F64;
+      mov = SLJIT_CONV_F64_FROM_SW;
+      break;
+    case Opcode::F64Max:
+      f64Function = floatMax;
+      mov = SLJIT_CONV_F64_FROM_SW;
+      break;
+    case Opcode::F64Min:
+      f64Function = floatMin;
+      mov = SLJIT_CONV_F64_FROM_SW;
+      break;
+    case Opcode::F64Copysign:
+      f64Function = floatCopySign;
+      mov = SLJIT_CONV_F64_FROM_SW;
+      break;
+    default:
+      WABT_UNREACHABLE;
+  }
+
+  if (!(args[0].arg & SLJIT_FR0)) {
+    sljit_emit_fop1(compiler, mov, SLJIT_FR0, 0, args[0].arg, args[0].argw);
+    args[0].arg = SLJIT_FR0;
+  }
+
+  if (!(args[1].arg & SLJIT_FR1)) {
+    sljit_emit_fop1(compiler, mov, SLJIT_FR1, 0, args[1].arg, args[1].argw);
+    args[1].arg = SLJIT_FR1;
+  }
+
+  if (f32Function) {
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F32, F32, F32),
+                     SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f32Function));
+  } else if (f64Function) {
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F64, F64, F64),
+                     SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Function));
+  } else {
+    sljit_emit_fop2(compiler, opcode, args[2].arg, args[2].argw,
+                    SLJIT_MEM1(SLJIT_FR0), args[0].argw, SLJIT_MEM1(SLJIT_FR1),
+                    args[1].argw);
+  }
+}
+
 static void emitUnary(sljit_compiler* compiler, Instruction* instr) {
   Operand* operand = instr->operands();
   JITArg args[2];
@@ -386,6 +542,89 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr) {
                  args[0].argw);
 }
 
+static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr) {
+  Operand* operand = instr->operands();
+  JITArg args[2];
+
+  for (int i = 0; i < 2; ++i) {
+    operandToArg(operand + i, args[i]);
+  }
+
+  sljit_s32 opcode;
+  sljit_f32 (*f32Function)(sljit_f32) = nullptr;
+  sljit_f64 (*f64Function)(sljit_f64) = nullptr;
+
+  switch (instr->opcode()) {
+    case Opcode::F32Ceil:
+      f32Function = floatCeil;
+      break;
+    case Opcode::F32Floor:
+      f32Function = floatFloor;
+      break;
+    case Opcode::F32Trunc:
+      f32Function = floatTrunc;
+      break;
+    case Opcode::F32Nearest:
+      f32Function = floatNearest;
+      break;
+    case Opcode::F32Sqrt:
+      f32Function = floatSqrt;
+      break;
+    case Opcode::F32Neg:
+      opcode = SLJIT_NEG_F32;
+      break;
+    case Opcode::F32Abs:
+      opcode = SLJIT_ABS_F32;
+      break;
+    case Opcode::F64Ceil:
+      f64Function = floatCeil;
+      break;
+    case Opcode::F64Floor:
+      f64Function = floatFloor;
+      break;
+    case Opcode::F64Trunc:
+      f64Function = floatTrunc;
+      break;
+    case Opcode::F64Nearest:
+      f64Function = floatNearest;
+      break;
+    case Opcode::F64Sqrt:
+      f64Function = floatSqrt;
+      break;
+    case Opcode::F64Neg:
+      opcode = SLJIT_NEG_F64;
+      break;
+    case Opcode::F64Abs:
+      opcode = SLJIT_ABS_F64;
+      break;
+    default:
+      WABT_UNREACHABLE;
+  }
+
+  if (!(args[0].arg & SLJIT_R0)) {
+    sljit_s32 mov = SLJIT_MOV;
+
+    if ((operand->location.value_info & LocationInfo::kSizeMask) == 1) {
+      mov = SLJIT_MOV32;
+    }
+
+    sljit_emit_op1(compiler, mov, SLJIT_R0, 0, args[0].arg, args[0].argw);
+    args[0].arg = SLJIT_R0;
+    args[0].argw = 0;
+  }
+
+  if (f32Function) {
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F32, F32), SLJIT_IMM,
+                     GET_FUNC_ADDR(sljit_sw, f32Function));
+  } else if (f64Function) {
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F64, F64), SLJIT_IMM,
+                     GET_FUNC_ADDR(sljit_sw, f64Function));
+  } else {
+    sljit_emit_fop1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg,
+                    args[0].argw);
+  }
+}
+
 static bool emitCompare(sljit_compiler* compiler, Instruction* instr) {
   Operand* operand = instr->operands();
   JITArg params[2];
@@ -455,6 +694,54 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr) {
     case Opcode::I64GeU:
       opcode = SLJIT_SUB | SLJIT_SET_GREATER_EQUAL;
       type = SLJIT_GREATER_EQUAL;
+      break;
+    case Opcode::F32Eq:
+      opcode = SLJIT_CMP_F32;
+      type = SLJIT_F_EQUAL;
+      break;
+    case Opcode::F32Ne:
+      opcode = SLJIT_CMP_F32;
+      type = SLJIT_F_NOT_EQUAL;
+      break;
+    case Opcode::F32Lt:
+      opcode = SLJIT_CMP_F32;
+      type = SLJIT_F_LESS;
+      break;
+    case Opcode::F32Le:
+      opcode = SLJIT_CMP_F32;
+      type = SLJIT_F_LESS_EQUAL;
+      break;
+    case Opcode::F32Gt:
+      opcode = SLJIT_CMP_F32;
+      type = SLJIT_F_GREATER;
+      break;
+    case Opcode::F32Ge:
+      opcode = SLJIT_CMP_F32;
+      type = SLJIT_F_GREATER_EQUAL;
+      break;
+    case Opcode::F64Eq:
+      opcode = SLJIT_CMP_F64;
+      type = SLJIT_F_EQUAL;
+      break;
+    case Opcode::F64Ne:
+      opcode = SLJIT_CMP_F64;
+      type = SLJIT_F_NOT_EQUAL;
+      break;
+    case Opcode::F64Lt:
+      opcode = SLJIT_CMP_F64;
+      type = SLJIT_F_LESS;
+      break;
+    case Opcode::F64Le:
+      opcode = SLJIT_CMP_F64;
+      type = SLJIT_F_LESS_EQUAL;
+      break;
+    case Opcode::F64Gt:
+      opcode = SLJIT_CMP_F64;
+      type = SLJIT_F_GREATER;
+      break;
+    case Opcode::F64Ge:
+      opcode = SLJIT_CMP_F64;
+      type = SLJIT_F_GREATER_EQUAL;
       break;
     default:
       WABT_UNREACHABLE;
@@ -770,8 +1057,18 @@ JITModuleDescriptor* JITCompiler::compile() {
         emitBinary(compiler_, item->asInstruction());
         break;
       }
+      case Instruction::BinaryFloat32:
+      case Instruction::BinaryFloat64: {
+        emitFloatBinary(compiler_, item->asInstruction());
+        break;
+      }
       case Instruction::Unary: {
         emitUnary(compiler_, item->asInstruction());
+        break;
+      }
+      case Instruction::UnaryFloat32:
+      case Instruction::UnaryFloat64: {
+        emitFloatUnary(compiler_, item->asInstruction());
         break;
       }
       case Instruction::Compare: {

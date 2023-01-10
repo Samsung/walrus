@@ -17,6 +17,7 @@
 #ifndef WABT_JIT_COMPILER_H_
 #define WABT_JIT_COMPILER_H_
 
+#include <cmath>
 #include "wabt/common.h"
 #include "wabt/interp/jit/jit-allocator.h"
 #include "wabt/opcode.h"
@@ -63,8 +64,16 @@ class InstructionListItem {
     Call,
     // Binary operation (e.g. I32Add, I64Sub).
     Binary,
+    // Binary float32 operation
+    BinaryFloat32,
+    // Binary float64 operation
+    BinaryFloat64,
     // Unary operation (e.g. I32Ctz, U64Clz).
     Unary,
+    // Unary float32 operation
+    UnaryFloat32,
+    // Unary float64 operation
+    UnaryFloat64,
     // Compare operation. (e.g. I32Eqz, I64LtU)
     Compare,
   };
