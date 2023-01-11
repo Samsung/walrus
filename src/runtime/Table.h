@@ -71,6 +71,7 @@ public:
 
     void* uncheckedGetElement(uint32_t elemIndex) const
     {
+        ASSERT(elemIndex < m_size);
         return m_elements[elemIndex];
     }
 
@@ -79,6 +80,12 @@ public:
         if (UNLIKELY(elemIndex >= m_size)) {
             throwException(state);
         }
+        m_elements[elemIndex] = val;
+    }
+
+    void uncheckedSetElement(uint32_t elemIndex, void* val)
+    {
+        ASSERT(elemIndex < m_size);
         m_elements[elemIndex] = val;
     }
 
