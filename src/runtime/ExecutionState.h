@@ -29,8 +29,6 @@ public:
     friend class Trap;
     friend class Interpreter;
 
-    enum TemporalInit { Temporal };
-
     ExecutionState(ExecutionState& parent)
         : m_parent(&parent)
         , m_stackLimit(parent.m_stackLimit)
@@ -41,11 +39,6 @@ public:
         : m_parent(&parent)
         , m_currentFunction(currentFunction)
         , m_stackLimit(parent.m_stackLimit)
-    {
-    }
-
-    ExecutionState(TemporalInit)
-        : m_stackLimit(0)
     {
     }
 

@@ -463,6 +463,7 @@ wasm_functype_t::wasm_functype_t(const FunctionType* type)
 extern "C" {
 
 // Import Types
+// TODO
 own wasm_importtype_t* wasm_importtype_new(
     own wasm_name_t* module, own wasm_name_t* name, own wasm_externtype_t*);
 
@@ -882,8 +883,7 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
         return nullptr;
     }
 
-    ExecutionState state(ExecutionState::Temporal);
-    Value val(table->get()->getElement(state, index));
+    Value val(table->get()->uncheckedGetElement(index));
 
     if (val.isNull()) {
         return nullptr;
@@ -898,8 +898,7 @@ bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* re
         return false;
     }
 
-    ExecutionState state(ExecutionState::Temporal);
-    table->get()->setElement(state, index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
+    table->get()->uncheckedSetElement(index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
     return true;
 }
 
