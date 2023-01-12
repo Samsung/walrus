@@ -25,12 +25,25 @@
 
 #include "wabt/walrus/binary-reader-walrus.h"
 
+#define EXECUTE_VALIDATOR(expr)                                      \
+  do {                                                               \
+    if (WABT_UNLIKELY(state->offset <= m_externalDelegate->          \
+            skipValidationUntil())) {                                \
+        break;                                                       \
+    }                                                                \
+    expr;                                                            \
+  } while (0)
+
 #undef CHECK_RESULT
-#define CHECK_RESULT(expr)          \
-  do {                              \
-    if (WABT_UNLIKELY(Failed(expr))) {             \
-      return ::wabt::Result::Error; \
-    }                               \
+#define CHECK_RESULT(expr)                                           \
+  do {                                                               \
+    if (WABT_UNLIKELY(state->offset <= m_externalDelegate->          \
+            skipValidationUntil())) {                                \
+        break;                                                       \
+    }                                                                \
+    if (WABT_UNLIKELY(Failed(expr))) {                               \
+      return ::wabt::Result::Error;                                  \
+    }                                                                \
   } while (0)
 
 #define SHOULD_GENERATE_BYTECODE if (WABT_UNLIKELY(!m_externalDelegate->shouldContinueToGenerateByteCode())) { return Result::Ok; }
@@ -123,11 +136,15 @@ public:
         return Result::Ok;
     }
     Result GetBrDropKeepCount(Index depth, Index *out_drop_count, Index *out_keep_count) {
-        SharedValidator::Label *label;
-        CHECK_RESULT(m_validator.GetLabel(depth, &label));
-        Index keep_count = label->br_types().size();
-        CHECK_RESULT(GetDropCount(keep_count, label->type_stack_limit, out_drop_count));
-        *out_keep_count = keep_count;
+        if (state->offset > m_externalDelegate->skipValidationUntil()) {
+            SharedValidator::Label *label;
+            if (WABT_UNLIKELY(Failed(m_validator.GetLabel(depth, &label)))) {
+                return ::wabt::Result::Error;
+            }
+            Index keep_count = label->br_types().size();
+            CHECK_RESULT(GetDropCount(keep_count, label->type_stack_limit, out_drop_count));
+            *out_keep_count = keep_count;
+        }
         return Result::Ok;
     }
 
@@ -143,6 +160,11 @@ public:
         *out_drop_count += m_validator.GetLocalCount();
         *out_keep_count = keep_count;
         return Result::Ok;
+    }
+
+    void OnSetState(const State* s) override {
+        BinaryReaderDelegate::OnSetState(s);
+        m_externalDelegate->OnSetOffsetAddress(const_cast<size_t*>(&s->offset));
     }
 
     bool OnError(const Error& err) override {
@@ -384,6 +406,11 @@ public:
         return Result::Ok;
     }
 
+    Result OnStartReadInstructions() override {
+        m_externalDelegate->OnStartReadInstructions();
+        return Result::Ok;
+    }
+
     /* Function expressions; called between BeginFunctionBody and
      EndFunctionBody */
     Result OnOpcode(Opcode opcode) override {
@@ -479,7 +506,7 @@ public:
     }
     Result OnBlockExpr(Type sig_type) override {
         CHECK_RESULT(m_validator.OnBlock(GetLocation(), sig_type));
-        PushLabel(LabelKind::Block);
+        EXECUTE_VALIDATOR(PushLabel(LabelKind::Block));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnBlockExpr(sig_type);
         return Result::Ok;
@@ -571,7 +598,7 @@ public:
     }
     Result OnDelegateExpr(Index depth) override {
         CHECK_RESULT(m_validator.OnDelegate(GetLocation(), Var(depth, GetLocation())));
-        PopLabel();
+        EXECUTE_VALIDATOR(PopLabel());
         abort();
         return Result::Ok;
     }
@@ -589,7 +616,7 @@ public:
         return Result::Ok;
     }
     Result OnEndExpr() override {
-        if (m_labelStack.size() != 1) {
+        if (state->offset > m_externalDelegate->skipValidationUntil() && m_labelStack.size() != 1) {
             CHECK_RESULT(m_validator.OnEnd(GetLocation()));
             PopLabel();
         }
@@ -646,7 +673,7 @@ public:
     }
     Result OnIfExpr(Type sig_type) override {
         CHECK_RESULT(m_validator.OnIf(GetLocation(), sig_type));
-        PushLabel(LabelKind::Block);
+        EXECUTE_VALIDATOR(PushLabel(LabelKind::Block));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnIfExpr(sig_type);
         return Result::Ok;
@@ -680,7 +707,7 @@ public:
     }
     Result OnLoopExpr(Type sig_type) override {
         CHECK_RESULT(m_validator.OnLoop(GetLocation(), sig_type));
-        PushLabel(LabelKind::Block);
+        EXECUTE_VALIDATOR(PushLabel(LabelKind::Block));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLoopExpr(sig_type);
         return Result::Ok;
@@ -859,7 +886,7 @@ public:
         uint32_t exn_stack_height;
         CHECK_RESULT(m_validator.GetCatchCount(m_labelStack.size() - 1, &exn_stack_height));
         CHECK_RESULT(m_validator.OnTry(GetLocation(), sig_type));
-        PushLabel(LabelKind::Try);
+        EXECUTE_VALIDATOR(PushLabel(LabelKind::Try));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnTryExpr(sig_type);
         return Result::Ok;
@@ -885,7 +912,7 @@ public:
         Index drop_count, keep_count;
         CHECK_RESULT(GetReturnDropKeepCount(&drop_count, &keep_count));
         CHECK_RESULT(m_validator.EndFunctionBody(GetLocation()));
-        PopLabel();
+        EXECUTE_VALIDATOR(PopLabel());
         m_externalDelegate->EndFunctionBody(index);
         return Result::Ok;
     }

@@ -68,7 +68,8 @@ class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
 private:
     struct VMStackInfo {
         size_t m_size;
-        size_t m_position; // optimized position (local values will have different position)
+        size_t m_position; // effective position (local values will have different position)
+        size_t m_optimizedPosition; // optimized position
         size_t m_nonOptimizedPosition; // non-optimized position (same with m_functionStackSizeSoFar)
     };
 
@@ -106,6 +107,10 @@ private:
     };
 
     Walrus::Module* m_module;
+
+    size_t* m_readerOffsetPointer;
+    size_t m_codeStartOffset;
+
     Walrus::ModuleFunction* m_currentFunction;
     Walrus::FunctionType* m_currentFunctionType;
     uint32_t m_initialFunctionStackSize;
@@ -120,12 +125,28 @@ private:
         uint32_t m_tagIndex;
     };
     std::vector<CatchInfo> m_catchInfo;
+    struct LocalInfo {
+        size_t m_refCount;
+        bool m_canUseDirectReference;
+        LocalInfo()
+            : m_refCount(0)
+            , m_canUseDirectReference(true)
+        {
+        }
+    };
+    std::vector<LocalInfo> m_localInfo;
+
     Walrus::Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_memoryInitData;
 
     uint32_t m_elementTableIndex;
     Walrus::Optional<Walrus::ModuleFunction*> m_elementModuleFunction;
     Walrus::Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_elementFunctionIndex;
     Walrus::SegmentMode m_segmentMode;
+
+    virtual void OnSetOffsetAddress(size_t* ptr) override
+    {
+        m_readerOffsetPointer = ptr;
+    }
 
     size_t pushVMStack(size_t size)
     {
@@ -134,9 +155,27 @@ private:
         return pos;
     }
 
+    void resetFunctionCodeDataFromHere()
+    {
+        m_skipValidationUntil = *m_readerOffsetPointer;
+        *m_readerOffsetPointer = m_codeStartOffset;
+
+        m_currentFunction->m_byteCode.clear();
+        m_currentFunction->m_catchInfo.clear();
+        m_blockInfo.clear();
+        m_catchInfo.clear();
+
+        m_functionStackSizeSoFar = m_initialFunctionStackSize;
+        m_vmStack.clear();
+
+        for (auto& info : m_localInfo) {
+            info.m_refCount = 0;
+        }
+    }
+
     void pushVMStack(size_t size, size_t pos)
     {
-        m_vmStack.push_back({ size, pos, m_functionStackSizeSoFar });
+        m_vmStack.push_back({ size, pos, pos, m_functionStackSizeSoFar });
         m_functionStackSizeSoFar += size;
         if (UNLIKELY(m_functionStackSizeSoFar > std::numeric_limits<Walrus::ByteCodeStackOffset>::max())) {
             throw std::string("too many stack usage. we could not support this(yet).");
@@ -145,20 +184,25 @@ private:
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
 
-    size_t popVMStackSize()
+    VMStackInfo popVMStackInfo()
     {
         auto info = m_vmStack.back();
         m_functionStackSizeSoFar -= info.m_size;
+        if (info.m_optimizedPosition != info.m_nonOptimizedPosition) {
+            m_localInfo[resolveLocalIndexFromStackPosition(info.m_optimizedPosition)].m_refCount--;
+        }
         m_vmStack.pop_back();
-        return info.m_size;
+        return info;
+    }
+
+    size_t popVMStackSize()
+    {
+        return popVMStackInfo().m_size;
     }
 
     size_t popVMStack()
     {
-        auto info = m_vmStack.back();
-        m_functionStackSizeSoFar -= info.m_size;
-        m_vmStack.pop_back();
-        return info.m_position;
+        return popVMStackInfo().m_position;
     }
 
     size_t peekVMStackSize()
@@ -175,6 +219,11 @@ private:
     {
         m_currentFunction = mf;
         m_currentFunctionType = mf->functionType();
+        m_localInfo.clear();
+        m_localInfo.reserve(m_currentFunctionType->param().size());
+        for (size_t i = 0; i < m_currentFunctionType->param().size(); i++) {
+            m_localInfo.push_back(LocalInfo());
+        }
         m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
@@ -191,6 +240,8 @@ private:
 public:
     WASMBinaryReader(Walrus::Module* module)
         : m_module(module)
+        , m_readerOffsetPointer(nullptr)
+        , m_codeStartOffset(0)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
         , m_initialFunctionStackSize(0)
@@ -498,6 +549,7 @@ public:
     virtual void OnLocalDeclCount(Index count) override
     {
         m_currentFunction->m_local.reserve(count);
+        m_localInfo.reserve(count + m_currentFunctionType->param().size());
     }
 
     virtual void OnLocalDecl(Index decl_index, Index count, Type type) override
@@ -505,6 +557,7 @@ public:
         while (count) {
             auto wType = toValueKind(type);
             m_currentFunction->m_local.pushBack(wType);
+            m_localInfo.push_back(LocalInfo());
             auto sz = Walrus::valueSizeInStack(wType);
             m_initialFunctionStackSize += sz;
             m_functionStackSizeSoFar += sz;
@@ -513,6 +566,11 @@ public:
         }
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
+    }
+
+    virtual void OnStartReadInstructions() override
+    {
+        m_codeStartOffset = *m_readerOffsetPointer;
     }
 
     virtual void OnOpcode(uint32_t opcode) override
@@ -605,10 +663,49 @@ public:
         }
     }
 
+    Index resolveLocalIndexFromStackPosition(size_t pos)
+    {
+        ASSERT(pos < m_initialFunctionStackSize);
+        if (pos <= m_currentFunctionType->paramStackSize()) {
+            Index idx = 0;
+            size_t offset = 0;
+            while (true) {
+                if (offset == pos) {
+                    return idx;
+                }
+                offset += Walrus::valueSizeInStack(m_currentFunctionType->param()[idx]);
+                idx++;
+            }
+        }
+        pos -= m_currentFunctionType->paramStackSize();
+        Index idx = 0;
+        size_t offset = 0;
+        while (true) {
+            if (offset == pos) {
+                return idx;
+            }
+            offset += Walrus::valueSizeInStack(m_currentFunction->m_local[idx]);
+            idx++;
+        }
+    }
+
     virtual void OnLocalGetExpr(Index localIndex) override
     {
+        m_localInfo[localIndex].m_refCount++;
+        if (m_localInfo[localIndex].m_refCount > 1 && m_localInfo[localIndex].m_canUseDirectReference) {
+            // rewind generating bytecode bacuase
+            m_localInfo[localIndex].m_canUseDirectReference = false;
+            resetFunctionCodeDataFromHere();
+            return;
+        }
+
         auto r = resolveLocalOffsetAndSize(localIndex);
-        pushVMStack(r.second, r.first);
+        if (m_localInfo[localIndex].m_canUseDirectReference) {
+            pushVMStack(r.second, r.first);
+        } else {
+            auto pos = pushVMStack(r.second);
+            generateMoveCodeIfNeeds(r.first, pos, r.second);
+        }
     }
 
     virtual void OnLocalSetExpr(Index localIndex) override
@@ -1356,7 +1453,7 @@ public:
                     const auto& param = ft->param();
                     for (size_t i = 0; i < param.size(); i++) {
                         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(param[param.size() - i - 1]));
-                        popVMStackSize();
+                        popVMStack();
                     }
 
                     const auto& result = ft->result();

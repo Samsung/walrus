@@ -103,7 +103,7 @@ jobs:
         commands: |
           apt-get update
           apt-get install -y cmake build-essential ninja-build
-          cmake -H. -Bout/linux/arm -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          cmake -H. -Bout/linux/arm -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
           ninja -Cout/linux/arm
           ./tools/run-tests.py --engine="./out/linux/arm/walrus"
 
@@ -122,7 +122,7 @@ jobs:
         commands: |
           apt-get update
           apt-get install -y cmake build-essential ninja-build
-          cmake -H. -Bout/linux/aarch64 -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          cmake -H. -Bout/linux/aarch64 -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
           ninja -Cout/linux/aarch64
           ./tools/run-tests.py --engine="./out/linux/aarch64/walrus"
 
