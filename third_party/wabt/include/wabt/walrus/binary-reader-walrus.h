@@ -32,9 +32,11 @@ public:
     WASMBinaryReaderDelegate()
         : m_shouldContinueToGenerateByteCode(true)
         , m_resumeGenerateByteCodeAfterNBlockEnd(0)
+        , m_skipValidationUntil(0)
     {
     }
     virtual ~WASMBinaryReaderDelegate() { }
+    virtual void OnSetOffsetAddress(size_t* o) = 0;
     /* Module */
     virtual void BeginModule(uint32_t version) = 0;
     virtual void EndModule() = 0;
@@ -94,6 +96,8 @@ public:
 
     virtual void OnLocalDeclCount(Index count) = 0;
     virtual void OnLocalDecl(Index decl_index, Index count, Type type) = 0;
+
+    virtual void OnStartReadInstructions() = 0;
 
     virtual void OnOpcode(uint32_t opcode) = 0;
 
@@ -168,9 +172,15 @@ public:
         m_resumeGenerateByteCodeAfterNBlockEnd = s;
     }
 
+    size_t skipValidationUntil() const
+    {
+        return m_skipValidationUntil;
+    }
+
 protected:
     bool m_shouldContinueToGenerateByteCode;
     size_t m_resumeGenerateByteCodeAfterNBlockEnd;
+    size_t m_skipValidationUntil;
 };
 
 std::string ReadWasmBinary(const std::string& filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate);

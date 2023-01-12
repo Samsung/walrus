@@ -676,6 +676,8 @@ Result BinaryReader::ReadFunctionBody(Offset end_offset) {
 Result BinaryReader::ReadInstructions(bool stop_on_end,
                                       Offset end_offset,
                                       Opcode* final_opcode) {
+  CALLBACK(OnStartReadInstructions);
+
   while (state_.offset < end_offset) {
     Opcode opcode;
     CHECK_RESULT(ReadOpcode(&opcode, "opcode"));
