@@ -44,7 +44,11 @@ OpcodeTable::OpcodeTable()
     // Dummy bytecode execution to initialize the OpcodeTable.
     ExecutionState dummyState;
     ByteCode b;
+#if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
+    b.m_opcodeInAddress = nullptr;
+#else
     b.m_opcodeInAddress = const_cast<void*>(FillByteCodeOpcodeAddress[0]);
+#endif
     size_t pc = reinterpret_cast<size_t>(&b);
     Interpreter::interpret(dummyState, pc, nullptr, nullptr, nullptr, nullptr, nullptr);
 #endif
@@ -265,6 +269,12 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
 
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+#if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
+    if (UNLIKELY((((ByteCode*)programCounter)->m_opcodeInAddress) == NULL)) {
+        goto FillOpcodeTableOpcodeLbl;
+    }
+#endif
+
 #define DEFINE_OPCODE(codeName) codeName##OpcodeLbl
 #define DEFINE_DEFAULT
 #define NEXT_INSTRUCTION() goto NextInstruction;
