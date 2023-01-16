@@ -192,7 +192,7 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #define CPU_X86
 
 #elif defined(__arm__) || defined(__thumb__) || defined(_ARM) || defined(_M_ARM) || defined(_M_ARMT) || defined(__arm) || defined(__arm)
-#define CPU_ARM
+#define CPU_ARM32
 
 #elif defined(__aarch64__)
 #define CPU_ARM64
@@ -330,6 +330,10 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 
 #if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
 #define WALRUS_ENABLE_COMPUTED_GOTO
+// some devices cannot support getting label address from outside well
+#if defined(CPU_ARM64) || (defined(CPU_ARM32) && defined(COMPILER_CLANG))
+#define WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL
+#endif
 #endif
 
 #define MAKE_STACK_ALLOCATED()                    \
