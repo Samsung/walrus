@@ -198,10 +198,10 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         return tr;
     }
     auto module = parseResult.first;
-    const auto& moduleImportData = module->moduleImport();
+    const auto& importTypes = module->imports();
 
     ObjectVector importValues;
-    importValues.reserve(moduleImportData.size());
+    importValues.reserve(importTypes.size());
     /*
         (module ;; spectest host module(https://github.com/WebAssembly/spec/tree/main/interpreter)
           (global (export "global_i32") i32)
@@ -223,8 +223,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         )
     */
 
-    for (size_t i = 0; i < moduleImportData.size(); i++) {
-        auto import = moduleImportData[i];
+    for (size_t i = 0; i < importTypes.size(); i++) {
+        auto import = importTypes[i];
         if (import->moduleName()->equals("spectest")) {
             if (import->fieldName()->equals("print")) {
                 auto ft = functionTypes[SpecTestFunctionTypes::NONE];
@@ -310,15 +310,15 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 Instance* instance = iter->second;
                 auto e = instance->resolveExport(import->fieldName());
                 RELEASE_ASSERT(e);
-                if (e->type() == ModuleExport::Function) {
+                if (e->exportType() == ExportType::Function) {
                     importValues.pushBack(instance->resolveExportFunction(import->fieldName()).value());
-                } else if (e->type() == ModuleExport::Tag) {
+                } else if (e->exportType() == ExportType::Tag) {
                     importValues.pushBack(instance->resolveExportTag(import->fieldName()).value());
-                } else if (e->type() == ModuleExport::Table) {
+                } else if (e->exportType() == ExportType::Table) {
                     importValues.pushBack(instance->resolveExportTable(import->fieldName()).value());
-                } else if (e->type() == ModuleExport::Memory) {
+                } else if (e->exportType() == ExportType::Memory) {
                     importValues.pushBack(instance->resolveExportMemory(import->fieldName()).value());
-                } else if (e->type() == ModuleExport::Global) {
+                } else if (e->exportType() == ExportType::Global) {
                     importValues.pushBack(instance->resolveExportGlobal(import->fieldName()).value());
                 } else {
                     RELEASE_ASSERT_NOT_REACHED();

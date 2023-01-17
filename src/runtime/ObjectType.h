@@ -76,7 +76,7 @@ public:
     size_t paramStackSize() const { return m_paramStackSize; }
     size_t resultStackSize() const { return m_resultStackSize; }
 
-    bool equals(FunctionType* other) const
+    bool equals(const FunctionType* other) const
     {
         if (this == other) {
             return true;

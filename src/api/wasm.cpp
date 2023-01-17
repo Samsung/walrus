@@ -40,10 +40,12 @@ struct wasm_gc : public gc {
     // for marking of GC objects
 };
 
-struct wasm_importtype_t {
+struct wasm_importtype_t : public wasm_gc {
+    ModuleImport* im;
 };
 
-struct wasm_exporttype_t {
+struct wasm_exporttype_t : public wasm_gc {
+    ModuleExport* ex;
 };
 
 struct wasm_config_t {
@@ -463,9 +465,10 @@ wasm_functype_t::wasm_functype_t(const FunctionType* type)
 extern "C" {
 
 // Import Types
-// TODO
 own wasm_importtype_t* wasm_importtype_new(
-    own wasm_name_t* module, own wasm_name_t* name, own wasm_externtype_t*);
+    own wasm_name_t* module, own wasm_name_t* name, own wasm_externtype_t* type)
+{
+}
 
 const wasm_name_t* wasm_importtype_module(const wasm_importtype_t*);
 const wasm_name_t* wasm_importtype_name(const wasm_importtype_t*);
@@ -612,10 +615,23 @@ const wasm_limits_t* wasm_memorytype_limits(const wasm_memorytype_t* mt)
 }
 
 // Extern Types
-// TODO
-/*
-wasm_externkind_t wasm_externtype_kind(const wasm_externtype_t*);
-*/
+wasm_externkind_t wasm_externtype_kind(const wasm_externtype_t* type)
+{
+    ASSERT(type);
+    switch (type->get()->kind()) {
+    case ObjectType::FunctionKind:
+        return WASM_EXTERN_FUNC;
+    case ObjectType::GlobalKind:
+        return WASM_EXTERN_GLOBAL;
+    case ObjectType::TableKind:
+        return WASM_EXTERN_TABLE;
+    case ObjectType::MemoryKind:
+        return WASM_EXTERN_MEMORY;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        return WASM_EXTERN_MEMORY;
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Runtime Objects
@@ -640,6 +656,9 @@ void wasm_val_copy(own wasm_val_t* out, const wasm_val_t* src)
 }
 
 // References
+// Frames
+// TODO
+
 // Traps
 own wasm_trap_t* wasm_trap_new(wasm_store_t* store, const wasm_message_t* message)
 {
@@ -754,12 +773,35 @@ own wasm_func_t* wasm_func_new(
 }
 
 own wasm_func_t* wasm_func_new_with_env(
-    wasm_store_t*, const wasm_functype_t* type, wasm_func_callback_with_env_t,
+    wasm_store_t* store, const wasm_functype_t* ft, wasm_func_callback_with_env_t callback,
     void* env, void (*finalizer)(void*))
 {
-    // TODO
-    RELEASE_ASSERT_NOT_REACHED();
-    return nullptr;
+    // TODO: finalizer
+    Function* func = new ImportedFunction(
+        ToWalrusFunctionType(ft),
+        [=](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
+            wasm_val_vec_t params, results;
+            wasm_val_vec_new_uninitialized(&params, argc);
+            wasm_val_vec_new_uninitialized(&results, reinterpret_cast<size_t>(d));
+            FromWalrusValues(params.data, argv, argc);
+
+            auto trap = callback(env, &params, &results);
+            wasm_val_vec_delete(&params);
+
+            if (trap) {
+                // TODO
+                wasm_trap_delete(trap);
+                RELEASE_ASSERT_NOT_REACHED();
+                // Can't use wasm_val_vec_delete since it wasn't populated.
+                delete[] results.data;
+            }
+
+            ToWalrusValues(result, results.data, results.size);
+            wasm_val_vec_delete(&results);
+        },
+        reinterpret_cast<void*>(ft->results.size));
+
+    return new wasm_func_t(func);
 }
 
 static own wasm_functype_t* FromWalrusFunctionType(const FunctionType* ft)
