@@ -22,9 +22,9 @@
 
 namespace Walrus {
 
-Optional<ModuleExport*> Instance::resolveExport(String* name)
+Optional<ExportType*> Instance::resolveExport(String* name)
 {
-    for (auto me : m_module->moduleExport()) {
+    for (auto me : m_module->exports()) {
         if (me->name()->equals(name)) {
             return me;
         }
@@ -36,7 +36,7 @@ Optional<ModuleExport*> Instance::resolveExport(String* name)
 Optional<Function*> Instance::resolveExportFunction(String* name)
 {
     auto me = resolveExport(name);
-    if (me && me->type() == ModuleExport::Function) {
+    if (me && me->exportType() == ExportType::Function) {
         return m_function[me->itemIndex()];
     }
 
@@ -46,7 +46,7 @@ Optional<Function*> Instance::resolveExportFunction(String* name)
 Optional<Tag*> Instance::resolveExportTag(String* name)
 {
     auto me = resolveExport(name);
-    if (me && me->type() == ModuleExport::Tag) {
+    if (me && me->exportType() == ExportType::Tag) {
         return m_tag[me->itemIndex()];
     }
 
@@ -56,7 +56,7 @@ Optional<Tag*> Instance::resolveExportTag(String* name)
 Optional<Table*> Instance::resolveExportTable(String* name)
 {
     auto me = resolveExport(name);
-    if (me && me->type() == ModuleExport::Table) {
+    if (me && me->exportType() == ExportType::Table) {
         return m_table[me->itemIndex()];
     }
 
@@ -66,7 +66,7 @@ Optional<Table*> Instance::resolveExportTable(String* name)
 Optional<Memory*> Instance::resolveExportMemory(String* name)
 {
     auto me = resolveExport(name);
-    if (me && me->type() == ModuleExport::Memory) {
+    if (me && me->exportType() == ExportType::Memory) {
         return m_memory[me->itemIndex()];
     }
 
@@ -76,7 +76,7 @@ Optional<Memory*> Instance::resolveExportMemory(String* name)
 Optional<Global*> Instance::resolveExportGlobal(String* name)
 {
     auto me = resolveExport(name);
-    if (me && me->type() == ModuleExport::Global) {
+    if (me && me->exportType() == ExportType::Global) {
         return m_global[me->itemIndex()];
     }
 

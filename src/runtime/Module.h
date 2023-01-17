@@ -38,7 +38,7 @@ enum class SegmentMode {
 };
 
 // https://webassembly.github.io/spec/core/syntax/modules.html#syntax-import
-class ModuleImport : public gc {
+class ImportType : public gc {
 public:
     enum Type { Function,
                 Table,
@@ -46,113 +46,77 @@ public:
                 Global,
                 Tag };
 
-    ModuleImport(String* moduleName,
-                 String* fieldName,
-                 uint32_t functionIndex,
-                 uint32_t functionTypeIndex)
-        : m_type(Type::Function)
+    ImportType(Type t,
+               String* moduleName,
+               String* fieldName,
+               const ObjectType* type)
+        : m_importType(t)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
-        , m_index(functionIndex)
-        , m_functionTypeIndex(functionTypeIndex)
+        , m_type(type)
     {
     }
 
-    ModuleImport(Type t,
-                 String* moduleName,
-                 String* fieldName,
-                 uint32_t index,
-                 uint32_t initialSize = std::numeric_limits<uint32_t>::max(),
-                 uint32_t maximumSize = std::numeric_limits<uint32_t>::max(),
-                 Value::Type tableType = Value::Type::Void)
-        : m_type(t)
+    ImportType(String* moduleName,
+               String* fieldName,
+               const ObjectType* type)
+        : m_importType(Function)
         , m_moduleName(std::move(moduleName))
         , m_fieldName(std::move(fieldName))
-        , m_index(index)
-        , m_initialSize(initialSize)
-        , m_maximumSize(maximumSize)
-        , m_tableType(tableType)
+        , m_type(type)
     {
+        switch (type->kind()) {
+        case ObjectType::FunctionKind:
+            m_importType = Function;
+            break;
+        case ObjectType::GlobalKind:
+            m_importType = Global;
+            break;
+        case ObjectType::TableKind:
+            m_importType = Table;
+            break;
+        case ObjectType::MemoryKind:
+            m_importType = Memory;
+            break;
+        case ObjectType::TagKind:
+            m_importType = Tag;
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            break;
+        }
     }
 
-    Type type() const { return m_type; }
-
+    Type importType() const { return m_importType; }
     String* moduleName() const { return m_moduleName; }
-
     String* fieldName() const { return m_fieldName; }
 
-    uint32_t functionIndex() const
+    const FunctionType* functionType() const
     {
-        ASSERT(type() == Type::Function);
-        return m_index;
+        ASSERT(importType() == Type::Function);
+        return static_cast<const FunctionType*>(m_type);
     }
 
-    uint32_t functionTypeIndex() const
+    const TableType* tableType() const
     {
-        ASSERT(type() == Type::Function);
-        return m_functionTypeIndex;
+        ASSERT(importType() == Type::Table);
+        return static_cast<const TableType*>(m_type);
     }
 
-    uint32_t globalIndex() const
+    const MemoryType* memoryType() const
     {
-        ASSERT(type() == Type::Global);
-        return m_index;
-    }
-
-    uint32_t tableIndex() const
-    {
-        ASSERT(type() == Type::Table);
-        return m_index;
-    }
-
-    Value::Type tableType() const
-    {
-        ASSERT(type() == Type::Table);
-        return m_tableType;
-    }
-
-    uint32_t memoryIndex() const
-    {
-        ASSERT(type() == Type::Memory);
-        return m_index;
-    }
-
-    uint32_t tagIndex() const
-    {
-        ASSERT(type() == Type::Tag);
-        return m_index;
-    }
-
-    uint32_t initialSize() const
-    {
-        ASSERT(type() == Type::Memory || type() == Type::Table);
-        return m_initialSize;
-    }
-
-    uint32_t maximumSize() const
-    {
-        ASSERT(type() == Type::Memory || type() == Type::Table);
-        return m_maximumSize;
+        ASSERT(importType() == Type::Memory);
+        return static_cast<const MemoryType*>(m_type);
     }
 
 private:
-    Type m_type;
+    Type m_importType;
     String* m_moduleName;
     String* m_fieldName;
-    uint32_t m_index;
-    union {
-        struct {
-            uint32_t m_functionTypeIndex;
-        };
-        struct {
-            uint32_t m_initialSize;
-            uint32_t m_maximumSize;
-            Value::Type m_tableType;
-        };
-    };
+    const ObjectType* m_type;
 };
 
-class ModuleExport : public gc {
+class ExportType : public gc {
 public:
     // matches binary format, do not change
     enum Type { Function,
@@ -161,17 +125,16 @@ public:
                 Global,
                 Tag };
 
-    ModuleExport(Type type,
-                 String* name,
-                 uint32_t itemIndex)
-        : m_type(type)
+    ExportType(Type type,
+               String* name,
+               uint32_t itemIndex)
+        : m_exportType(type)
         , m_name(name)
         , m_itemIndex(itemIndex)
     {
     }
 
-    Type type() const { return m_type; }
-
+    Type exportType() const { return m_exportType; }
     String* name() const { return m_name; }
 
     uint32_t itemIndex() const
@@ -180,7 +143,7 @@ public:
     }
 
 private:
-    Type m_type;
+    Type m_exportType;
     String* m_name;
     uint32_t m_itemIndex;
 };
@@ -361,14 +324,14 @@ public:
         return m_functionTypes[index];
     }
 
-    const Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>>& moduleImport() const
+    const Vector<ImportType*, GCUtil::gc_malloc_allocator<ImportType*>>& imports() const
     {
-        return m_import;
+        return m_imports;
     }
 
-    const Vector<ModuleExport*, GCUtil::gc_malloc_allocator<ModuleExport*>>& moduleExport() const
+    const Vector<ExportType*, GCUtil::gc_malloc_allocator<ExportType*>>& exports() const
     {
-        return m_export;
+        return m_exports;
     }
 
     Instance* instantiate(ExecutionState& state, const ObjectVector& imports);
@@ -382,8 +345,8 @@ private:
     uint32_t m_version;
     uint32_t m_start;
 
-    Vector<ModuleImport*, GCUtil::gc_malloc_allocator<ModuleImport*>> m_import;
-    Vector<ModuleExport*, GCUtil::gc_malloc_allocator<ModuleExport*>> m_export;
+    Vector<ImportType*, GCUtil::gc_malloc_allocator<ImportType*>> m_imports;
+    Vector<ExportType*, GCUtil::gc_malloc_allocator<ExportType*>> m_exports;
 
     Vector<ModuleFunction*, GCUtil::gc_malloc_allocator<ModuleFunction*>>
         m_function;
