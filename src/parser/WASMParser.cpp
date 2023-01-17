@@ -67,10 +67,64 @@ static Walrus::SegmentMode toSegmentMode(uint8_t flags)
 class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
 private:
     struct VMStackInfo {
+        WASMBinaryReader& m_reader;
         size_t m_size;
         size_t m_position; // effective position (local values will have different position)
-        size_t m_optimizedPosition; // optimized position
         size_t m_nonOptimizedPosition; // non-optimized position (same with m_functionStackSizeSoFar)
+        size_t m_localIndex;
+
+        VMStackInfo(WASMBinaryReader& reader, size_t size, size_t position, size_t nonOptimizedPosition, size_t localIndex)
+            : m_reader(reader)
+            , m_size(size)
+            , m_position(position)
+            , m_nonOptimizedPosition(nonOptimizedPosition)
+            , m_localIndex(localIndex)
+        {
+            increaseRefCountIfNeeds();
+        }
+
+        VMStackInfo(const VMStackInfo& src)
+            : m_reader(src.m_reader)
+            , m_size(src.m_size)
+            , m_position(src.m_position)
+            , m_nonOptimizedPosition(src.m_nonOptimizedPosition)
+            , m_localIndex(src.m_localIndex)
+        {
+            increaseRefCountIfNeeds();
+        }
+
+        ~VMStackInfo()
+        {
+            decreaseRefCountIfNeeds();
+        }
+
+        const VMStackInfo& operator=(const VMStackInfo& src)
+        {
+            decreaseRefCountIfNeeds();
+
+            m_reader = src.m_reader;
+            m_size = src.m_size;
+            m_position = src.m_position;
+            m_nonOptimizedPosition = src.m_nonOptimizedPosition;
+            m_localIndex = src.m_localIndex;
+            increaseRefCountIfNeeds();
+            return *this;
+        }
+
+    private:
+        void increaseRefCountIfNeeds()
+        {
+            if (m_localIndex != std::numeric_limits<size_t>::max()) {
+                m_reader.m_localInfo[m_localIndex].m_refCount++;
+            }
+        }
+
+        void decreaseRefCountIfNeeds()
+        {
+            if (m_localIndex != std::numeric_limits<size_t>::max()) {
+                m_reader.m_localInfo[m_localIndex].m_refCount--;
+            }
+        }
     };
 
     struct BlockInfo {
@@ -133,6 +187,11 @@ private:
             , m_canUseDirectReference(true)
         {
         }
+
+        void reset()
+        {
+            m_refCount = 0;
+        }
     };
     std::vector<LocalInfo> m_localInfo;
 
@@ -169,13 +228,13 @@ private:
         m_vmStack.clear();
 
         for (auto& info : m_localInfo) {
-            info.m_refCount = 0;
+            info.reset();
         }
     }
 
-    void pushVMStack(size_t size, size_t pos)
+    void pushVMStack(size_t size, size_t pos, size_t localIndex = std::numeric_limits<size_t>::max())
     {
-        m_vmStack.push_back({ size, pos, pos, m_functionStackSizeSoFar });
+        m_vmStack.push_back(VMStackInfo(*this, size, pos, m_functionStackSizeSoFar, localIndex));
         m_functionStackSizeSoFar += size;
         if (UNLIKELY(m_functionStackSizeSoFar > std::numeric_limits<Walrus::ByteCodeStackOffset>::max())) {
             throw std::string("too many stack usage. we could not support this(yet).");
@@ -188,9 +247,6 @@ private:
     {
         auto info = m_vmStack.back();
         m_functionStackSizeSoFar -= info.m_size;
-        if (info.m_optimizedPosition != info.m_nonOptimizedPosition) {
-            m_localInfo[resolveLocalIndexFromStackPosition(info.m_optimizedPosition)].m_refCount--;
-        }
         m_vmStack.pop_back();
         return info;
     }
@@ -213,6 +269,11 @@ private:
     size_t peekVMStack()
     {
         return m_vmStack.back().m_position;
+    }
+
+    const VMStackInfo& peekVMStackInfo()
+    {
+        return m_vmStack.back();
     }
 
     void beginFunction(Walrus::ModuleFunction* mf)
@@ -249,6 +310,13 @@ public:
         , m_elementTableIndex(0)
         , m_segmentMode(Walrus::SegmentMode::None)
     {
+    }
+
+    ~WASMBinaryReader()
+    {
+        // clear stack first! because vmStack refer localInfo
+        m_vmStack.clear();
+        m_localInfo.clear();
     }
 
     // should be allocated on the stack
@@ -682,7 +750,7 @@ public:
         size_t offset = 0;
         while (true) {
             if (offset == pos) {
-                return idx;
+                return idx + m_currentFunctionType->param().size();
             }
             offset += Walrus::valueSizeInStack(m_currentFunction->m_local[idx]);
             idx++;
@@ -691,19 +759,12 @@ public:
 
     virtual void OnLocalGetExpr(Index localIndex) override
     {
-        m_localInfo[localIndex].m_refCount++;
-        if (m_localInfo[localIndex].m_refCount > 1 && m_localInfo[localIndex].m_canUseDirectReference) {
-            // rewind generating bytecode bacuase
-            m_localInfo[localIndex].m_canUseDirectReference = false;
-            resetFunctionCodeDataFromHere();
-            return;
-        }
-
         auto r = resolveLocalOffsetAndSize(localIndex);
         if (m_localInfo[localIndex].m_canUseDirectReference) {
-            pushVMStack(r.second, r.first);
+            pushVMStack(r.second, r.first, localIndex);
         } else {
-            auto pos = pushVMStack(r.second);
+            auto pos = m_functionStackSizeSoFar;
+            pushVMStack(r.second, pos, localIndex);
             generateMoveCodeIfNeeds(r.first, pos, r.second);
         }
     }
@@ -711,6 +772,17 @@ public:
     virtual void OnLocalSetExpr(Index localIndex) override
     {
         auto r = resolveLocalOffsetAndSize(localIndex);
+        if (m_localInfo[localIndex].m_refCount && m_localInfo[localIndex].m_canUseDirectReference) {
+            // src and dst are same!
+            // example) (local.get 0) (local.set 0) ;; w/direct access
+            if (peekVMStackInfo().m_position != r.first) {
+                // rewind generating bytecode
+                m_localInfo[localIndex].m_canUseDirectReference = false;
+                resetFunctionCodeDataFromHere();
+                return;
+            }
+        }
+
         ASSERT(r.second == peekVMStackSize());
         auto offset = popVMStack();
         generateMoveCodeIfNeeds(offset, r.first, r.second);
@@ -718,6 +790,12 @@ public:
 
     virtual void OnLocalTeeExpr(Index localIndex) override
     {
+        if (m_localInfo[localIndex].m_refCount && m_localInfo[localIndex].m_canUseDirectReference) {
+            m_localInfo[localIndex].m_canUseDirectReference = false;
+            resetFunctionCodeDataFromHere();
+            return;
+        }
+
         auto r = resolveLocalOffsetAndSize(localIndex);
         ASSERT(r.second == peekVMStackSize());
         auto offset = peekVMStack();
