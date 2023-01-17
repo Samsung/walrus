@@ -30,7 +30,7 @@ class FunctionType;
 class Memory;
 class Global;
 class Module;
-class ModuleExport;
+class ExportType;
 class Table;
 
 class DataSegment : public gc {
@@ -112,7 +112,7 @@ public:
     DataSegment& dataSegment(uint32_t index) { return m_dataSegment[index]; }
     ElementSegment& elementSegment(uint32_t index) { return m_elementSegment[index]; }
 
-    Optional<ModuleExport*> resolveExport(String* name);
+    Optional<ExportType*> resolveExport(String* name);
     Optional<Function*> resolveExportFunction(String* name);
     Optional<Tag*> resolveExportTag(String* name);
     Optional<Table*> resolveExportTable(String* name);
