@@ -88,43 +88,59 @@ jobs:
     - name: Run Tests
       run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
 
-  Linux_armv7l_test:
+  Linux_armv7_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: true
-    - uses: pguyot/arm-runner-action@v2
+    - name: Build in arm32 container
+      uses: uraimo/run-on-arch-action@v2.5.0
       with:
-        base_image: raspios_lite:latest
-        cpu: cortex-a7
-        cpu_info: cpuinfo/raspberrypi_3b
-        commands: |
+        arch: armv7
+        distro: ubuntu_latest
+
+        # Install deps into the container. With the token, the container will be cached
+        # The image is cached publically like a package
+        githubToken: ${{ github.token }}
+
+        install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build
-          cmake -H. -Bout/linux/arm -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-          ninja -Cout/linux/arm
-          ./tools/run-tests.py --engine="./out/linux/arm/walrus"
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12
+          #FIXME fix clang version as to 12
+          ln -s /usr/bin/clang-12 /usr/bin/clang
+          ln -s /usr/bin/clang++-12 /usr/bin/clang++
+        run: |
+          CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          ninja -Cout/debug
+          python3 ./tools/run-tests.py --engine="./out/debug/walrus"
 
   Linux_aarch64_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: true
-    - uses: pguyot/arm-runner-action@v2
+    - name: Build in arm64 container
+      uses: uraimo/run-on-arch-action@v2.5.0
       with:
-        base_image: raspios_lite_arm64:latest
-        cpu: cortex-a53
-        cpu_info: cpuinfo/raspberrypi_zero2_w_arm64
-        commands: |
+        arch: aarch64
+        distro: ubuntu_latest
+
+        # Install deps into the container. With the token, the container will be cached
+        # The image is cached publically like a package
+        githubToken: ${{ github.token }}
+
+        install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build
-          cmake -H. -Bout/linux/aarch64 -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-          ninja -Cout/linux/aarch64
-          ./tools/run-tests.py --engine="./out/linux/aarch64/walrus"
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12
+          #FIXME fix clang version as to 12
+          ln -s /usr/bin/clang-12 /usr/bin/clang
+          ln -s /usr/bin/clang++-12 /usr/bin/clang++
+        run: |
+          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+          ninja -Cout/release
+          python3 ./tools/run-tests.py --engine="./out/release/walrus"
 
   API_test:
     runs-on: ubuntu-latest
