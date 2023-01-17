@@ -412,13 +412,50 @@ Result BinaryReaderJIT::OnLocalDecl(Index decl_index, Index count, Type type) {
 
 Result BinaryReaderJIT::OnBinaryExpr(Opcode opcode) {
   CHECK_RESULT(validator_.OnBinary(GetLocation(), opcode));
-  compiler_.append(Instruction::Binary, opcode, 2, LocationInfo::kFourByteSize);
+
+  ValueInfo result = LocationInfo::kFourByteSize;
+
+  switch (opcode) {
+    case Opcode::I64Add:
+    case Opcode::I64Sub:
+    case Opcode::I64Mul:
+    case Opcode::I64DivS:
+    case Opcode::I64DivU:
+    case Opcode::I64RemS:
+    case Opcode::I64RemU:
+    case Opcode::I64Rotl:
+    case Opcode::I64Rotr:
+    case Opcode::I64And:
+    case Opcode::I64Or:
+    case Opcode::I64Xor:
+    case Opcode::I64Shl:
+    case Opcode::I64ShrS:
+    case Opcode::I64ShrU:
+      result = LocationInfo::kEightByteSize;
+      break;
+    default:
+      break;
+  }
+
+  compiler_.append(Instruction::Binary, opcode, 2, result);
   return Result::Ok;
 }
 
 Result BinaryReaderJIT::OnUnaryExpr(Opcode opcode) {
   CHECK_RESULT(validator_.OnUnary(GetLocation(), opcode));
-  compiler_.append(Instruction::Unary, opcode, 1, LocationInfo::kFourByteSize);
+
+  ValueInfo result = LocationInfo::kFourByteSize;
+  switch (opcode) {
+    case Opcode::I64Clz:
+    case Opcode::I64Ctz:
+    case Opcode::I64Popcnt:
+      result = LocationInfo::kEightByteSize;
+      break;
+    default:
+      break;
+  }
+
+  compiler_.append(Instruction::Unary, opcode, 1, result);
   return Result::Ok;
 }
 
@@ -486,17 +523,26 @@ Result BinaryReaderJIT::OnCompareExpr(Opcode opcode) {
 
 Result BinaryReaderJIT::OnConvertExpr(Opcode opcode) {
   CHECK_RESULT(validator_.OnConvert(GetLocation(), opcode));
-  if (opcode == Opcode::I32Eqz || opcode == Opcode::I64Eqz) {
-    compiler_.append(Instruction::Compare, opcode, 1,
-                     LocationInfo::kFourByteSize);
-  } else if (opcode == Opcode::I64ExtendI32S ||
-             opcode == Opcode::I64ExtendI32U) {
-    compiler_.append(Instruction::Unary, opcode, 1,
-                     LocationInfo::kEightByteSize);
-  } else if (opcode == Opcode::I32WrapI64) {
-    compiler_.append(Instruction::Unary, opcode, 1,
-                     LocationInfo::kFourByteSize);
+
+  switch (opcode) {
+    case Opcode::I32Eqz:
+    case Opcode::I64Eqz:
+      compiler_.append(Instruction::Compare, opcode, 1,
+                       LocationInfo::kFourByteSize);
+      break;
+    case Opcode::I64ExtendI32S:
+    case Opcode::I64ExtendI32U:
+      compiler_.append(Instruction::Convert, opcode, 1,
+                       LocationInfo::kEightByteSize);
+      break;
+    case Opcode::I32WrapI64:
+      compiler_.append(Instruction::Convert, opcode, 1,
+                       LocationInfo::kFourByteSize);
+      break;
+    default:
+      break;
   }
+
   return Result::Ok;
 }
 

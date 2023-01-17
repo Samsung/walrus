@@ -67,6 +67,8 @@ class InstructionListItem {
     Unary,
     // Compare operation. (e.g. I32Eqz, I64LtU)
     Compare,
+    // Covert operation. (e.g. I64ExtendI32S, I32WrapI64)
+    Convert,
   };
 
   virtual ~InstructionListItem() {}

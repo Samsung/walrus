@@ -1,0 +1,141 @@
+[[[[[[[  Function   0  ]]]]]]]
+Local 0: mapped to: 0 range [1 - 12]
+Number of locals reduced from 1 to 1
+0: Opcode: i64.const
+  Result[0]: i64
+1: Opcode: local.set
+  Index: 0
+  Param[0]: ref:0(0)
+2: Opcode: i64.const
+  Result[0]: i64
+3: Opcode: i64.eqz
+  Param[0]: ref:2(0)
+  Result[0]: i32
+4: Opcode: i64.const
+  Result[0]: i64
+5: Opcode: i64.eqz
+  Param[0]: ref:4(0)
+  Result[0]: i32
+6: Opcode: local.get
+  Index: 0
+  Result[0]: i64
+7: Opcode: i64.eqz
+  Param[0]: ref:6(0)
+  Result[0]: i32
+8: Opcode: local.get
+  Index: 0
+  Result[0]: i64
+9: Opcode: i64.eqz
+  Param[0]: ref:8(0)
+  Result[0]: i32
+10: Opcode: br_unless
+  Jump to: 19
+  Param[0]: ref:9(0)
+11: Opcode: i32.const
+  Result[0]: i32
+12: Opcode: local.get
+  Index: 0
+  Result[0]: i64
+13: Opcode: i64.eqz
+  Param[0]: ref:12(0)
+  Result[0]: i32
+14: Opcode: br_if
+  Jump to: 17
+  Param[0]: ref:13(0)
+15: Opcode: drop
+  Param[0]: ref:11(0)
+16: Opcode: i32.const
+  Result[0]: i32
+17: Label: result_count: 1 preserved_count: 3
+  Jump from: 14
+18: Opcode: br
+  Jump to: 21
+19: Label: result_count: 0 preserved_count: 3
+  Jump from: 10
+20: Opcode: i32.const
+  Result[0]: i32
+21: Label: result_count: 1 preserved_count: 3
+  Jump from: 18
+  Param[0]
+  Param[1]
+  Param[2]
+  Param[3]
+    20(0) instruction
+    11(0) instruction
+    16(0) instruction
+22: Opcode: return
+  Param[0]: ref:3(0)
+  Param[1]: ref:5(0)
+  Param[2]: ref:7(0)
+  Param[3]: ref:21(3)
+------------------------------
+Frame size: 0, Arguments size: 32 (total: 32)
+0: Opcode: i64.const
+  Result[0]: i64 unused
+1: Opcode: local.set
+  Addr: sp[16]
+  Param[0]: i64 const:0
+2: Opcode: i64.const
+  Result[0]: i64 unused
+3: Opcode: i64.eqz
+  Param[0]: i64 const:2
+  Result[0]: i32 sp[0]
+4: Opcode: i64.const
+  Result[0]: i64 unused
+5: Opcode: i64.eqz
+  Param[0]: i64 const:4
+  Result[0]: i32 sp[4]
+6: Opcode: local.get
+  Addr: sp[16]
+  Result[0]: i64 unused
+7: Opcode: i64.eqz
+  Param[0]: i64 sp[16]
+  Result[0]: i32 sp[8]
+8: Opcode: local.get
+  Addr: sp[16]
+  Result[0]: i64 unused
+9: Opcode: i64.eqz
+  Param[0]: i64 sp[16]
+  Result[0]: i32 unused
+10: Opcode: br_unless
+  Jump to: 19
+  Param[0]: i32 unused
+11: Opcode: i32.const
+  Result[0]: i32 sp[12]
+12: Opcode: local.get
+  Addr: sp[16]
+  Result[0]: i64 unused
+13: Opcode: i64.eqz
+  Param[0]: i64 sp[16]
+  Result[0]: i32 unused
+14: Opcode: br_if
+  Jump to: 17
+  Param[0]: i32 unused
+15: Opcode: drop
+  Param[0]: i32 sp[12]
+16: Opcode: i32.const
+  Result[0]: i32 sp[12]
+17: Label: result_count: 1 preserved_count: 3
+  Jump from: 14
+18: Opcode: br
+  Jump to: 21
+19: Label: result_count: 0 preserved_count: 3
+  Jump from: 10
+20: Opcode: i32.const
+  Result[0]: i32 sp[12]
+21: Label: result_count: 1 preserved_count: 3
+  Jump from: 18
+  Param[0]
+  Param[1]
+  Param[2]
+  Param[3]
+    20(0) instruction
+    11(0) instruction
+    16(0) instruction
+22: Opcode: return
+  Param[0]: i32 sp[0]
+  Param[1]: i32 sp[4]
+  Param[2]: i32 sp[8]
+  Param[3]: i32 sp[12]
+
+test1() => i32:0, i32:0, i32:1, i32:3
