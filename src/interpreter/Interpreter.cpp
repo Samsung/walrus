@@ -198,6 +198,16 @@ R doConvert(ExecutionState& state, T val)
     return convert<R>(val);
 }
 
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+static void initAddressToOpcodeTable()
+{
+#define REGISTER_TABLE(rtype, type1, type2, type3, memSize, prefix, code, name, text, decomp) \
+    g_opcodeTable.m_addressToOpcodeTable[g_opcodeTable.m_addressTable[name##Opcode]] = name##Opcode;
+    FOR_EACH_USED_OPCODE(REGISTER_TABLE)
+#undef REGISTER_TABLE
+}
+#endif
+
 ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
                                             size_t programCounter,
                                             uint8_t* bp,
@@ -941,6 +951,7 @@ NextInstruction:
         FOR_EACH_USED_OPCODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
 #endif
+        initAddressToOpcodeTable();
         return nullptr;
     }
 
