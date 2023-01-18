@@ -228,11 +228,6 @@ public:
         m_byteCode.resizeWithUninitializedValues(m_byteCode.size() + s);
     }
 
-    void shrinkByteCode(size_t s)
-    {
-        m_byteCode.resize(m_byteCode.size() - s);
-    }
-
     size_t currentByteCodeSize() const
     {
         return m_byteCode.size();

@@ -232,6 +232,7 @@ public:
     OpcodeTable();
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
     void* m_addressTable[InvalidOpcode];
+    std::unordered_map<void*, int> m_addressToOpcodeTable;
 #endif
 };
 

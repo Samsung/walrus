@@ -35,14 +35,18 @@ class FunctionType;
 
 class ByteCode {
 public:
-    OpcodeKind opcode() const { return m_opcode; }
-    void* opcodeInAddress() const { return m_opcodeInAddress; }
-#if !defined(NDEBUG)
-    OpcodeKind orgOpcode() const
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+    OpcodeKind opcode() const
     {
-        return m_orgOpcode;
+        return static_cast<OpcodeKind>(g_opcodeTable.m_addressToOpcodeTable[m_opcodeInAddress]);
+    }
+#else
+    OpcodeKind opcode() const
+    {
+        return m_opcode;
     }
 #endif
+
 
 #if !defined(NDEBUG)
     virtual ~ByteCode()
@@ -68,9 +72,6 @@ protected:
 #else
         : m_opcode(opcode)
 #endif
-#if !defined(NDEBUG)
-        , m_orgOpcode(opcode)
-#endif
     {
     }
 
@@ -80,9 +81,6 @@ protected:
 #else
         : m_opcode(OpcodeKind::InvalidOpcode)
 #endif
-#if !defined(NDEBUG)
-        , m_orgOpcode(OpcodeKind::InvalidOpcode)
-#endif
     {
     }
 
@@ -90,9 +88,6 @@ protected:
         OpcodeKind m_opcode;
         void* m_opcodeInAddress;
     };
-#if !defined(NDEBUG)
-    OpcodeKind m_orgOpcode;
-#endif
 };
 
 class Const32 : public ByteCode {
@@ -105,6 +100,7 @@ public:
     }
 
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
     uint32_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
@@ -136,6 +132,7 @@ public:
     }
 
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
     uint64_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
@@ -167,6 +164,7 @@ public:
 
     const ByteCodeStackOffset* srcOffset() const { return m_srcOffset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
