@@ -1,0 +1,274 @@
+[[[[[[[  Function   0  ]]]]]]]
+Local 0: mapped to: 0 range [1 - 8]
+Local 1: mapped to: 1 range [3 - 10]
+Local 2: mapped to: 2 range [5 - 12]
+Local 3: mapped to: 3 range [7 - 14]
+Number of locals reduced from 4 to 4
+0: Opcode: i32.const
+  Result[0]: i32
+1: Opcode: local.set
+  Index: 0
+  Param[0]: ref:0(0)
+2: Opcode: i32.const
+  Result[0]: i32
+3: Opcode: local.set
+  Index: 1
+  Param[0]: ref:2(0)
+4: Opcode: i32.const
+  Result[0]: i32
+5: Opcode: local.set
+  Index: 2
+  Param[0]: ref:4(0)
+6: Opcode: i32.const
+  Result[0]: i32
+7: Opcode: local.set
+  Index: 3
+  Param[0]: ref:6(0)
+8: Opcode: local.get
+  Index: 0
+  Result[0]: i32
+9: Opcode: i32.extend8_s
+  Param[0]: ref:8(0)
+  Result[0]: i32
+10: Opcode: local.get
+  Index: 1
+  Result[0]: i32
+11: Opcode: i32.extend8_s
+  Param[0]: ref:10(0)
+  Result[0]: i32
+12: Opcode: local.get
+  Index: 2
+  Result[0]: i32
+13: Opcode: i32.extend16_s
+  Param[0]: ref:12(0)
+  Result[0]: i32
+14: Opcode: local.get
+  Index: 3
+  Result[0]: i32
+15: Opcode: i32.extend16_s
+  Param[0]: ref:14(0)
+  Result[0]: i32
+16: Opcode: return
+  Param[0]: ref:9(0)
+  Param[1]: ref:11(0)
+  Param[2]: ref:13(0)
+  Param[3]: ref:15(0)
+------------------------------
+Frame size: 0, Arguments size: 32 (total: 32)
+0: Opcode: i32.const
+  Result[0]: i32 unused
+1: Opcode: local.set
+  Addr: sp[16]
+  Param[0]: i32 const:0
+2: Opcode: i32.const
+  Result[0]: i32 unused
+3: Opcode: local.set
+  Addr: sp[20]
+  Param[0]: i32 const:2
+4: Opcode: i32.const
+  Result[0]: i32 unused
+5: Opcode: local.set
+  Addr: sp[24]
+  Param[0]: i32 const:4
+6: Opcode: i32.const
+  Result[0]: i32 unused
+7: Opcode: local.set
+  Addr: sp[28]
+  Param[0]: i32 const:6
+8: Opcode: local.get
+  Addr: sp[16]
+  Result[0]: i32 unused
+9: Opcode: i32.extend8_s
+  Param[0]: i32 sp[16]
+  Result[0]: i32 sp[0]
+10: Opcode: local.get
+  Addr: sp[20]
+  Result[0]: i32 unused
+11: Opcode: i32.extend8_s
+  Param[0]: i32 sp[20]
+  Result[0]: i32 sp[4]
+12: Opcode: local.get
+  Addr: sp[24]
+  Result[0]: i32 unused
+13: Opcode: i32.extend16_s
+  Param[0]: i32 sp[24]
+  Result[0]: i32 sp[8]
+14: Opcode: local.get
+  Addr: sp[28]
+  Result[0]: i32 unused
+15: Opcode: i32.extend16_s
+  Param[0]: i32 sp[28]
+  Result[0]: i32 sp[12]
+16: Opcode: return
+  Param[0]: i32 sp[0]
+  Param[1]: i32 sp[4]
+  Param[2]: i32 sp[8]
+  Param[3]: i32 sp[12]
+
+[[[[[[[  Function   1  ]]]]]]]
+Local 0: mapped to: 0 range [1 - 8]
+Local 1: mapped to: 1 range [3 - 10]
+Local 2: mapped to: 2 range [5 - 12]
+Local 3: mapped to: 3 range [7 - 14]
+Number of locals reduced from 4 to 4
+0: Opcode: i64.const
+  Result[0]: i64
+1: Opcode: local.set
+  Index: 0
+  Param[0]: ref:0(0)
+2: Opcode: i64.const
+  Result[0]: i64
+3: Opcode: local.set
+  Index: 1
+  Param[0]: ref:2(0)
+4: Opcode: i64.const
+  Result[0]: i64
+5: Opcode: local.set
+  Index: 2
+  Param[0]: ref:4(0)
+6: Opcode: i64.const
+  Result[0]: i64
+7: Opcode: local.set
+  Index: 3
+  Param[0]: ref:6(0)
+8: Opcode: local.get
+  Index: 0
+  Result[0]: i64
+9: Opcode: i64.extend8_s
+  Param[0]: ref:8(0)
+  Result[0]: i64
+10: Opcode: local.get
+  Index: 1
+  Result[0]: i64
+11: Opcode: i64.extend8_s
+  Param[0]: ref:10(0)
+  Result[0]: i64
+12: Opcode: local.get
+  Index: 2
+  Result[0]: i64
+13: Opcode: i64.extend16_s
+  Param[0]: ref:12(0)
+  Result[0]: i64
+14: Opcode: local.get
+  Index: 3
+  Result[0]: i64
+15: Opcode: i64.extend16_s
+  Param[0]: ref:14(0)
+  Result[0]: i64
+16: Opcode: return
+  Param[0]: ref:9(0)
+  Param[1]: ref:11(0)
+  Param[2]: ref:13(0)
+  Param[3]: ref:15(0)
+------------------------------
+Frame size: 0, Arguments size: 64 (total: 64)
+0: Opcode: i64.const
+  Result[0]: i64 unused
+1: Opcode: local.set
+  Addr: sp[32]
+  Param[0]: i64 const:0
+2: Opcode: i64.const
+  Result[0]: i64 unused
+3: Opcode: local.set
+  Addr: sp[40]
+  Param[0]: i64 const:2
+4: Opcode: i64.const
+  Result[0]: i64 unused
+5: Opcode: local.set
+  Addr: sp[48]
+  Param[0]: i64 const:4
+6: Opcode: i64.const
+  Result[0]: i64 unused
+7: Opcode: local.set
+  Addr: sp[56]
+  Param[0]: i64 const:6
+8: Opcode: local.get
+  Addr: sp[32]
+  Result[0]: i64 unused
+9: Opcode: i64.extend8_s
+  Param[0]: i64 sp[32]
+  Result[0]: i64 sp[0]
+10: Opcode: local.get
+  Addr: sp[40]
+  Result[0]: i64 unused
+11: Opcode: i64.extend8_s
+  Param[0]: i64 sp[40]
+  Result[0]: i64 sp[8]
+12: Opcode: local.get
+  Addr: sp[48]
+  Result[0]: i64 unused
+13: Opcode: i64.extend16_s
+  Param[0]: i64 sp[48]
+  Result[0]: i64 sp[16]
+14: Opcode: local.get
+  Addr: sp[56]
+  Result[0]: i64 unused
+15: Opcode: i64.extend16_s
+  Param[0]: i64 sp[56]
+  Result[0]: i64 sp[24]
+16: Opcode: return
+  Param[0]: i64 sp[0]
+  Param[1]: i64 sp[8]
+  Param[2]: i64 sp[16]
+  Param[3]: i64 sp[24]
+
+[[[[[[[  Function   2  ]]]]]]]
+Local 0: mapped to: 0 range [1 - 4]
+Local 1: mapped to: 1 range [3 - 6]
+Number of locals reduced from 2 to 2
+0: Opcode: i64.const
+  Result[0]: i64
+1: Opcode: local.set
+  Index: 0
+  Param[0]: ref:0(0)
+2: Opcode: i64.const
+  Result[0]: i64
+3: Opcode: local.set
+  Index: 1
+  Param[0]: ref:2(0)
+4: Opcode: local.get
+  Index: 0
+  Result[0]: i64
+5: Opcode: i64.extend32_s
+  Param[0]: ref:4(0)
+  Result[0]: i64
+6: Opcode: local.get
+  Index: 1
+  Result[0]: i64
+7: Opcode: i64.extend32_s
+  Param[0]: ref:6(0)
+  Result[0]: i64
+8: Opcode: return
+  Param[0]: ref:5(0)
+  Param[1]: ref:7(0)
+------------------------------
+Frame size: 0, Arguments size: 32 (total: 32)
+0: Opcode: i64.const
+  Result[0]: i64 unused
+1: Opcode: local.set
+  Addr: sp[16]
+  Param[0]: i64 const:0
+2: Opcode: i64.const
+  Result[0]: i64 unused
+3: Opcode: local.set
+  Addr: sp[24]
+  Param[0]: i64 const:2
+4: Opcode: local.get
+  Addr: sp[16]
+  Result[0]: i64 unused
+5: Opcode: i64.extend32_s
+  Param[0]: i64 sp[16]
+  Result[0]: i64 sp[0]
+6: Opcode: local.get
+  Addr: sp[24]
+  Result[0]: i64 unused
+7: Opcode: i64.extend32_s
+  Param[0]: i64 sp[24]
+  Result[0]: i64 sp[8]
+8: Opcode: return
+  Param[0]: i64 sp[0]
+  Param[1]: i64 sp[8]
+
+test1() => i32:4294967168, i32:127, i32:4294934528, i32:32767
+test2() => i64:18446744073709551488, i64:127, i64:18446744073709518848, i64:32767
+test3() => i64:18446744071562067968, i64:2147483647

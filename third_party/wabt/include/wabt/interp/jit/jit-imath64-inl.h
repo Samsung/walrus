@@ -165,6 +165,22 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr) {
                  args[0].argw, args[1].arg, args[1].argw);
 }
 
+static void emitExtend(sljit_compiler* compiler,
+                       sljit_s32 opcode,
+                       sljit_s32 mov_opcode,
+                       JITArg* args) {
+  sljit_s32 reg = GET_TARGET_REG(args[1].arg, SLJIT_R0);
+
+  if (args[0].arg & SLJIT_MEM) {
+    sljit_emit_op1(compiler, mov_opcode, reg, 0, args[0].arg, args[0].argw);
+    args[0].arg = reg;
+    args[0].argw = 0;
+  }
+
+  sljit_emit_op1(compiler, opcode, reg, 0, args[0].arg, args[0].argw);
+  MOVE_FROM_REG(compiler, mov_opcode, args[1].arg, args[1].argw, reg);
+}
+
 static void emitUnary(sljit_compiler* compiler, Instruction* instr) {
   Operand* operands = instr->operands();
   JITArg args[2];
@@ -191,6 +207,21 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr) {
     case Opcode::I32Popcnt:
     case Opcode::I64Popcnt:
       // Not supported yet.
+      return;
+    case Opcode::I32Extend8S:
+      emitExtend(compiler, SLJIT_MOV32_S8, SLJIT_MOV32, args);
+      return;
+    case Opcode::I32Extend16S:
+      emitExtend(compiler, SLJIT_MOV32_S16, SLJIT_MOV32, args);
+      return;
+    case Opcode::I64Extend8S:
+      emitExtend(compiler, SLJIT_MOV_S8, SLJIT_MOV, args);
+      return;
+    case Opcode::I64Extend16S:
+      emitExtend(compiler, SLJIT_MOV_S16, SLJIT_MOV, args);
+      return;
+    case Opcode::I64Extend32S:
+      emitExtend(compiler, SLJIT_MOV_S32, SLJIT_MOV, args);
       return;
     default:
       WABT_UNREACHABLE;

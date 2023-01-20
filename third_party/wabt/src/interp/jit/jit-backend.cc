@@ -156,13 +156,13 @@ static void operandToArg(Operand* operand, JITArg& arg) {
 
 #define GET_TARGET_REG(arg, default_reg) \
   (((arg)&SLJIT_MEM) ? (default_reg) : (arg))
-#define MOVE_TO_REG(compiler, target_reg, arg, argw)                     \
-  if ((target_reg) != (arg)) {                                           \
-    sljit_emit_op1(compiler, SLJIT_MOV, (target_reg), 0, (arg), (argw)); \
+#define MOVE_TO_REG(compiler, mov_op, target_reg, arg, argw)          \
+  if ((target_reg) != (arg)) {                                        \
+    sljit_emit_op1(compiler, mov_op, (target_reg), 0, (arg), (argw)); \
   }
-#define MOVE_FROM_REG(compiler, arg, argw, source_reg)                   \
-  if ((source_reg) != (arg)) {                                           \
-    sljit_emit_op1(compiler, SLJIT_MOV, (arg), (argw), (source_reg), 0); \
+#define MOVE_FROM_REG(compiler, mov_op, arg, argw, source_reg)        \
+  if ((source_reg) != (arg)) {                                        \
+    sljit_emit_op1(compiler, mov_op, (arg), (argw), (source_reg), 0); \
   }
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -541,10 +541,11 @@ void JITCompiler::releaseFunctionList() {
 
 void JITCompiler::emitProlog(size_t index, CompileContext& context) {
   FunctionList& func = function_list_[index];
+  sljit_s32 saved_reg_count = 4;
 
   sljit_set_context(compiler_, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2),
-                    SLJIT_ARGS0(VOID), SLJIT_NUMBER_OF_SCRATCH_REGISTERS, 2,
-                    SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0,
+                    SLJIT_ARGS0(VOID), SLJIT_NUMBER_OF_SCRATCH_REGISTERS,
+                    saved_reg_count, SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0,
                     sizeof(ExecutionContext::CallFrame));
 
   context.trap_label = sljit_emit_label(compiler_);
@@ -564,8 +565,8 @@ void JITCompiler::emitProlog(size_t index, CompileContext& context) {
   func.entry_label->emit(compiler_);
 
   sljit_emit_enter(compiler_, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2),
-                   SLJIT_ARGS0(VOID), SLJIT_NUMBER_OF_SCRATCH_REGISTERS, 2,
-                   SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0,
+                   SLJIT_ARGS0(VOID), SLJIT_NUMBER_OF_SCRATCH_REGISTERS,
+                   saved_reg_count, SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0,
                    sizeof(ExecutionContext::CallFrame));
 
   // Setup new frame.

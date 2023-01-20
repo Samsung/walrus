@@ -449,6 +449,9 @@ Result BinaryReaderJIT::OnUnaryExpr(Opcode opcode) {
     case Opcode::I64Clz:
     case Opcode::I64Ctz:
     case Opcode::I64Popcnt:
+    case Opcode::I64Extend8S:
+    case Opcode::I64Extend16S:
+    case Opcode::I64Extend32S:
       result = LocationInfo::kEightByteSize;
       break;
     default:
