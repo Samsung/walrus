@@ -294,11 +294,41 @@ static void emitCall(sljit_compiler* compiler, CallInstruction* call_instr) {
   Operand* operand_end = operand + call_instr->paramCount();
   MoveContext move_context(compiler);
   JITArg from, to;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+  JITArgPair arg64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
 
   LocalsAllocator locals_allocator(call_instr->paramStart());
 
   while (operand < operand_end) {
     locals_allocator.allocate(operand->location.value_info);
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    if (!(operand->location.value_info & LocationInfo::kFloat) &&
+        (operand->location.value_info & LocationInfo::kSizeMask) == 2) {
+      operandToArgPair(operand, arg64);
+
+      from.arg = arg64.arg1;
+      from.argw = arg64.arg1w;
+      to.arg = SLJIT_MEM1(kFrameReg);
+      to.argw = static_cast<sljit_sw>(locals_allocator.last().value);
+
+      if (from.arg != to.arg || from.argw != to.argw) {
+        move_context.move(operand->location.value_info, from, to);
+      }
+
+      from.arg = arg64.arg2;
+      from.argw = arg64.arg2w;
+      to.argw += sizeof(sljit_sw);
+
+      if (from.arg != to.arg || from.argw != to.argw) {
+        move_context.move(operand->location.value_info, from, to);
+      }
+
+      operand++;
+      continue;
+    }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
 
     operandToArg(operand, from);
     to.arg = SLJIT_MEM1(kFrameReg);
@@ -326,6 +356,33 @@ static void emitCall(sljit_compiler* compiler, CallInstruction* call_instr) {
 
   while (operand < operand_end) {
     stack_allocator.push(operand->location.value_info);
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    if (!(operand->location.value_info & LocationInfo::kFloat) &&
+        (operand->location.value_info & LocationInfo::kSizeMask) == 2) {
+      operandToArgPair(operand, arg64);
+
+      from.arg = SLJIT_MEM1(kFrameReg);
+      from.argw = static_cast<sljit_sw>(stack_allocator.last().value);
+      to.arg = arg64.arg1;
+      to.argw = arg64.arg1w;
+
+      if (from.arg != to.arg || from.argw != to.argw) {
+        move_context.move(operand->location.value_info, from, to);
+      }
+
+      from.argw += sizeof(sljit_sw);
+      to.arg = arg64.arg2;
+      to.argw = arg64.arg2w;
+
+      if (from.arg != to.arg || from.argw != to.argw) {
+        move_context.move(operand->location.value_info, from, to);
+      }
+
+      operand++;
+      continue;
+    }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
 
     operandToArg(operand, to);
     from.arg = SLJIT_MEM1(kFrameReg);

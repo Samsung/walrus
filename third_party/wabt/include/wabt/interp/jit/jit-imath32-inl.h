@@ -292,8 +292,10 @@ static void emitShift64(sljit_compiler* compiler,
 
   MOVE_TO_REG(compiler, SLJIT_MOV, shift_into_reg, shift_into_arg,
               shift_into_argw);
+#if !(defined SLJIT_MASKED_SHIFT && SLJIT_MASKED_SHIFT)
   sljit_emit_op2(compiler, SLJIT_AND, shift_reg, 0, shift_reg, 0, SLJIT_IMM,
                  0x1f);
+#endif /* !SLJIT_MASKED_SHIFT32 */
   sljit_emit_shift_into(compiler, (op == SLJIT_SHL ? SLJIT_SHL : SLJIT_LSHR),
                         shift_into_reg, other_reg, 0, shift_reg, 0);
   sljit_emit_op2(compiler, op, other_result_arg, other_result_argw, other_reg,
@@ -375,8 +377,10 @@ static void emitRotate64(sljit_compiler* compiler,
   sljit_emit_op2(compiler, SLJIT_XOR, reg1, 0, reg1, 0, reg2, 0);
   sljit_set_label(jump1, sljit_emit_label(compiler));
 
+#if !(defined SLJIT_MASKED_SHIFT && SLJIT_MASKED_SHIFT)
   sljit_emit_op2(compiler, SLJIT_AND, rotate_reg, 0, rotate_reg, 0, SLJIT_IMM,
                  0x1f);
+#endif /* !SLJIT_MASKED_SHIFT32 */
   sljit_emit_op1(compiler, SLJIT_MOV, tmp_reg, 0, reg1, 0);
   sljit_emit_shift_into(compiler, op, reg1, reg2, 0, rotate_reg, 0);
   sljit_emit_shift_into(compiler, op, reg2, tmp_reg, 0, rotate_reg, 0);

@@ -1,0 +1,82 @@
+[[[[[[[  Function   0  ]]]]]]]
+Local 0: mapped to: 0 range [BEGIN - 0]
+Local 1: mapped to: 1 range [BEGIN - 3]
+Local 2: mapped to: 0 unused
+Number of locals reduced from 3 to 2
+0: Opcode: local.get
+  Index: 0
+  Result[0]: i64
+1: Opcode: i64.const
+  Result[0]: i64
+2: Opcode: i64.add
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: i64
+3: Opcode: local.get
+  Index: 1
+  Result[0]: i64
+4: Opcode: i64.const
+  Result[0]: i64
+5: Opcode: i64.sub
+  Param[0]: ref:3(0)
+  Param[1]: ref:4(0)
+  Result[0]: i64
+6: Opcode: return
+  Param[0]: ref:2(0)
+  Param[1]: ref:5(0)
+------------------------------
+Frame size: 0, Arguments size: 32 (total: 32)
+0: Opcode: local.get
+  Addr: sp[16]
+  Result[0]: i64 unused
+1: Opcode: i64.const
+  Result[0]: i64 unused
+2: Opcode: i64.add
+  Param[0]: i64 sp[16]
+  Param[1]: i64 const:1
+  Result[0]: i64 sp[0]
+3: Opcode: local.get
+  Addr: sp[24]
+  Result[0]: i64 unused
+4: Opcode: i64.const
+  Result[0]: i64 unused
+5: Opcode: i64.sub
+  Param[0]: i64 sp[24]
+  Param[1]: i64 const:4
+  Result[0]: i64 sp[8]
+6: Opcode: return
+  Param[0]: i64 sp[0]
+  Param[1]: i64 sp[8]
+
+[[[[[[[  Function   1  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: i64.const
+  Result[0]: i64
+1: Opcode: i64.const
+  Result[0]: i64
+2: Opcode: call
+  Frame size: 32, param start: 16
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: i64
+  Result[1]: i64
+3: Opcode: return
+  Param[0]: ref:2(0)
+  Param[1]: ref:2(1)
+------------------------------
+Frame size: 32, Arguments size: 16 (total: 48)
+0: Opcode: i64.const
+  Result[0]: i64 unused
+1: Opcode: i64.const
+  Result[0]: i64 unused
+2: Opcode: call
+  Frame size: 32, param start: 16
+  Param[0]: i64 const:0
+  Param[1]: i64 const:1
+  Result[0]: i64 sp[32]
+  Result[1]: i64 sp[40]
+3: Opcode: return
+  Param[0]: i64 sp[32]
+  Param[1]: i64 sp[40]
+
+test1() => i64:5862630359895, i64:2280627634722
