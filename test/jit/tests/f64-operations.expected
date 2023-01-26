@@ -1,0 +1,238 @@
+[[[[[[[  Function   0  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f32.const
+  Result[0]: f64
+2: Opcode: f64.max
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: f64
+3: Opcode: return
+  Param[0]: ref:2(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f32.const
+  Result[0]: f64 unused
+2: Opcode: f64.max
+  Param[0]: f64 const:0
+  Param[1]: f64 const:1
+  Result[0]: f64 sp[0]
+3: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   1  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f32.const
+  Result[0]: f64
+2: Opcode: f64.min
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: f64
+3: Opcode: return
+  Param[0]: ref:2(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f32.const
+  Result[0]: f64 unused
+2: Opcode: f64.min
+  Param[0]: f64 const:0
+  Param[1]: f64 const:1
+  Result[0]: f64 sp[0]
+3: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   2  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.sqrt
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.sqrt
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   3  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.ceil
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.ceil
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   4  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.floor
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.floor
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   5  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.trunc
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.trunc
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   6  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.nearest
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.nearest
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   7  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.abs
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.abs
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   8  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.abs
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.abs
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function   9  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f64.neg
+  Param[0]: ref:0(0)
+  Result[0]: f64
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f64.neg
+  Param[0]: f64 const:0
+  Result[0]: f64 sp[0]
+2: Opcode: return
+  Param[0]: f64 sp[0]
+
+[[[[[[[  Function  10  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f64
+1: Opcode: f32.const
+  Result[0]: f64
+2: Opcode: f64.copysign
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: f64
+3: Opcode: return
+  Param[0]: ref:2(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f64 unused
+1: Opcode: f32.const
+  Result[0]: f64 unused
+2: Opcode: f64.copysign
+  Param[0]: f64 const:0
+  Param[1]: f64 const:1
+  Result[0]: f64 sp[0]
+3: Opcode: return
+  Param[0]: f64 sp[0]
+
+test11() => f64:4.400000
+test12() => f64:3.300000
+test13() => f64:2.000000
+test14() => f64:4.000000
+test15() => f64:3.000000
+test16() => f64:3.000000
+test17() => f64:3.000000
+test18() => f64:3.300000
+test19() => f64:3.300000
+test20() => f64:3.300000
+test21() => f64:3.300000

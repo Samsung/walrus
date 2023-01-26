@@ -1,0 +1,49 @@
+(module
+(func (export "test11") (result f64)
+    f64.const 3.3
+    f64.const 4.4
+    f64.max
+)
+(func (export "test12") (result f64)
+    f64.const 3.3
+    f64.const 4.4
+    f64.min
+)
+(func (export "test13") (result f64)
+    f64.const 4.0
+    f64.sqrt
+)
+(func (export "test14") (result f64)
+    f64.const 3.3
+    f64.ceil
+)
+(func (export "test15") (result f64)
+    f64.const 3.3
+    f64.floor
+)
+(func (export "test16") (result f64)
+    f64.const 3.3
+    f64.trunc
+)
+(func (export "test17") (result f64)
+    f64.const 3.3
+    f64.nearest
+)
+(func (export "test18") (result f64)
+    f64.const 3.3
+    f64.abs
+)
+(func (export "test19") (result f64)
+    f64.const -3.3
+    f64.abs
+)
+(func (export "test20") (result f64)
+    f64.const -3.3
+    f64.neg
+)
+(func (export "test21") (result f64)
+    f64.const -3.3
+    f64.const 3.3
+    f64.copysign
+)
+)

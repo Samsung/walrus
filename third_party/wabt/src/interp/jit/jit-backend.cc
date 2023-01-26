@@ -15,6 +15,7 @@
  */
 
 #include "wabt/interp/jit/jit-backend.h"
+#include <math.h>
 #include "sljitLir.h"
 #include "wabt/interp/interp.h"
 #include "wabt/interp/jit/jit.h"
@@ -205,6 +206,8 @@ static void operandToArg(Operand* operand, JITArg& arg) {
 #else /* !SLJIT_32BIT_ARCHITECTURE */
 #include "wabt/interp/jit/jit-imath64-inl.h"
 #endif /* SLJIT_32BIT_ARCHITECTURE */
+
+#include "wabt/interp/jit/jit-fmath-inl.h"
 
 void CompileContext::emitSlowCases(sljit_compiler* compiler) {
   for (auto it : slow_cases) {
@@ -605,8 +608,16 @@ JITModuleDescriptor* JITCompiler::compile() {
         emitBinary(compiler_, item->asInstruction());
         break;
       }
+      case Instruction::BinaryFloat: {
+        emitFloatBinary(compiler_, item->asInstruction());
+        break;
+      }
       case Instruction::Unary: {
         emitUnary(compiler_, item->asInstruction());
+        break;
+      }
+      case Instruction::UnaryFloat: {
+        emitFloatUnary(compiler_, item->asInstruction());
         break;
       }
       case Instruction::Compare: {

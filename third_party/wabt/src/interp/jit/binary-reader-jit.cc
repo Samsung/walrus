@@ -155,9 +155,9 @@ class BinaryReaderJIT : public BinaryReaderNop {
   Result OnDropExpr() override;
   Result OnElseExpr() override;
   Result OnEndExpr() override;
-#if 0
   Result OnF32ConstExpr(uint32_t value_bits) override;
   Result OnF64ConstExpr(uint64_t value_bits) override;
+#if 0
   Result OnV128ConstExpr(v128 value_bits) override;
   Result OnGlobalGetExpr(Index global_index) override;
   Result OnGlobalSetExpr(Index global_index) override;
@@ -414,6 +414,7 @@ Result BinaryReaderJIT::OnBinaryExpr(Opcode opcode) {
   CHECK_RESULT(validator_.OnBinary(GetLocation(), opcode));
 
   ValueInfo result = LocationInfo::kFourByteSize;
+  Instruction::Group group = Instruction::Binary;
 
   switch (opcode) {
     case Opcode::I64Add:
@@ -433,18 +434,40 @@ Result BinaryReaderJIT::OnBinaryExpr(Opcode opcode) {
     case Opcode::I64ShrU:
       result = LocationInfo::kEightByteSize;
       break;
+    case Opcode::F32Add:
+    case Opcode::F32Sub:
+    case Opcode::F32Mul:
+    case Opcode::F32Div:
+    case Opcode::F32Max:
+    case Opcode::F32Min:
+    case Opcode::F32Copysign:
+      group = Instruction::BinaryFloat;
+      result |= LocationInfo::kFloat;
+      break;
+    case Opcode::F64Add:
+    case Opcode::F64Sub:
+    case Opcode::F64Mul:
+    case Opcode::F64Div:
+    case Opcode::F64Max:
+    case Opcode::F64Min:
+    case Opcode::F64Copysign:
+      group = Instruction::BinaryFloat;
+      result = LocationInfo::kEightByteSize | LocationInfo::kFloat;
+      break;
     default:
       break;
   }
 
-  compiler_.append(Instruction::Binary, opcode, 2, result);
+  compiler_.append(group, opcode, 2, result);
   return Result::Ok;
 }
 
 Result BinaryReaderJIT::OnUnaryExpr(Opcode opcode) {
   CHECK_RESULT(validator_.OnUnary(GetLocation(), opcode));
 
-  ValueInfo result = LocationInfo::kFourByteSize;
+  Instruction::Group group = Instruction::Unary;
+  ValueInfo result;
+
   switch (opcode) {
     case Opcode::I64Clz:
     case Opcode::I64Ctz:
@@ -454,11 +477,31 @@ Result BinaryReaderJIT::OnUnaryExpr(Opcode opcode) {
     case Opcode::I64Extend32S:
       result = LocationInfo::kEightByteSize;
       break;
+    case Opcode::F32Ceil:
+    case Opcode::F32Floor:
+    case Opcode::F32Trunc:
+    case Opcode::F32Nearest:
+    case Opcode::F32Sqrt:
+    case Opcode::F32Abs:
+    case Opcode::F32Neg:
+      group = Instruction::UnaryFloat;
+      result = LocationInfo::kFourByteSize | LocationInfo::kFloat;
+      break;
+    case Opcode::F64Ceil:
+    case Opcode::F64Floor:
+    case Opcode::F64Trunc:
+    case Opcode::F64Nearest:
+    case Opcode::F64Sqrt:
+    case Opcode::F64Abs:
+    case Opcode::F64Neg:
+      group = Instruction::UnaryFloat;
+      result = LocationInfo::kEightByteSize | LocationInfo::kFloat;
+      break;
     default:
       break;
   }
 
-  compiler_.append(Instruction::Unary, opcode, 1, result);
+  compiler_.append(group, opcode, 1, result);
   return Result::Ok;
 }
 
@@ -567,6 +610,28 @@ Result BinaryReaderJIT::OnEndExpr() {
   }
 
   compiler_.popLabel();
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnF32ConstExpr(uint32_t value) {
+  CHECK_RESULT(validator_.OnConst(GetLocation(), Type::F32));
+
+  Instruction* instr = compiler_.append(
+      Instruction::Immediate, Opcode::F32Const, 0, LocationInfo::kFourByteSize | LocationInfo::kFloat);
+  if (instr != nullptr) {
+    instr->value().value32 = value;
+  }
+  return Result::Ok;
+}
+
+Result BinaryReaderJIT::OnF64ConstExpr(uint64_t value) {
+  CHECK_RESULT(validator_.OnConst(GetLocation(), Type::F64));
+
+  Instruction* instr = compiler_.append(
+      Instruction::Immediate, Opcode::F32Const, 0, LocationInfo::kEightByteSize | LocationInfo::kFloat);
+  if (instr != nullptr) {
+    instr->value().value64 = value;
+  }
   return Result::Ok;
 }
 

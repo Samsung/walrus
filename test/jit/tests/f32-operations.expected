@@ -1,0 +1,212 @@
+[[[[[[[  Function   0  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.const
+  Result[0]: f32
+2: Opcode: f32.max
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: f32
+3: Opcode: return
+  Param[0]: ref:2(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.const
+  Result[0]: f32 unused
+2: Opcode: f32.max
+  Param[0]: f32 const:0
+  Param[1]: f32 const:1
+  Result[0]: f32 sp[0]
+3: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   1  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.const
+  Result[0]: f32
+2: Opcode: f32.min
+  Param[0]: ref:0(0)
+  Param[1]: ref:1(0)
+  Result[0]: f32
+3: Opcode: return
+  Param[0]: ref:2(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.const
+  Result[0]: f32 unused
+2: Opcode: f32.min
+  Param[0]: f32 const:0
+  Param[1]: f32 const:1
+  Result[0]: f32 sp[0]
+3: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   2  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.sqrt
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.sqrt
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   3  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.ceil
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.ceil
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   4  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.floor
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.floor
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   5  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.trunc
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.trunc
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   6  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.nearest
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.nearest
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   7  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.abs
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.abs
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   8  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.abs
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.abs
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+[[[[[[[  Function   9  ]]]]]]]
+Number of locals reduced from 0 to 0
+0: Opcode: f32.const
+  Result[0]: f32
+1: Opcode: f32.neg
+  Param[0]: ref:0(0)
+  Result[0]: f32
+2: Opcode: return
+  Param[0]: ref:1(0)
+------------------------------
+Frame size: 0, Arguments size: 16 (total: 16)
+0: Opcode: f32.const
+  Result[0]: f32 unused
+1: Opcode: f32.neg
+  Param[0]: f32 const:0
+  Result[0]: f32 sp[0]
+2: Opcode: return
+  Param[0]: f32 sp[0]
+
+test1() => f32:4.400000
+test2() => f32:3.300000
+test3() => f32:2.000000
+test4() => f32:4.000000
+test5() => f32:3.000000
+test6() => f32:3.000000
+test7() => f32:3.000000
+test8() => f32:3.300000
+test9() => f32:3.300000
+test10() => f32:3.300000

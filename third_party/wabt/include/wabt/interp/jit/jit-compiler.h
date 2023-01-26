@@ -63,8 +63,12 @@ class InstructionListItem {
     Call,
     // Binary operation (e.g. I32Add, I64Sub).
     Binary,
+    // Binary float operation
+    BinaryFloat,
     // Unary operation (e.g. I32Ctz, U64Clz).
     Unary,
+    // Unary float operation
+    UnaryFloat,
     // Compare operation. (e.g. I32Eqz, I64LtU)
     Compare,
     // Covert operation. (e.g. I64ExtendI32S, I32WrapI64)
