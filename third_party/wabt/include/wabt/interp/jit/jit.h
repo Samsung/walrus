@@ -61,11 +61,15 @@ struct ExecutionContext {
 
   enum ErrorCodes : uint32_t {
     NoError,
-    InstrError,
+    OutOfStackError,
+    DivisionError,
+    UnreachableError,
   };
 
   CallFrame* last_frame;
   ErrorCodes error;
+  uint64_t tmp1;
+  uint64_t tmp2;
 };
 
 class JITModuleDescriptor {
