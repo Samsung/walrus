@@ -162,10 +162,12 @@ jobs:
     - name: Run Tests
       working-directory: ./out/api_test/x64
       run: |
-        ./wasm-c-api-hello
+        ./wasm-c-api-callback
         ./wasm-c-api-global
-        ./wasm-c-api-table
+        ./wasm-c-api-hello
         ./wasm-c-api-memory
+        ./wasm-c-api-multi
+        ./wasm-c-api-table
 
   Coverity_scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
