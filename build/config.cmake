@@ -43,7 +43,7 @@ SET (WALRUS_CXXFLAGS
 
 IF (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -Wno-unused-but-set-variable -Wno-unused-but-set-parameter -Wno-mismatched-new-delete -Wno-attributes)
-ELSEIF (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
+ELSEIF (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
     SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -fno-fast-math -fno-unsafe-math-optimizations -fdenormal-fp-math=ieee -Wno-unsupported-floating-point-opt -Wno-parentheses-equality -Wno-dynamic-class-memaccess -Wno-deprecated-register -Wno-expansion-to-defined -Wno-return-type -Wno-overloaded-virtual -Wno-unused-private-field -Wno-deprecated-copy -Wno-atomic-alignment)
 ELSE()
     MESSAGE (FATAL_ERROR ${CMAKE_CXX_COMPILER_ID} " is Unsupported Compiler")
@@ -88,11 +88,9 @@ SET (WALRUS_LDFLAGS_SHAREDLIB -ldl)
 
 # STATIC_LIB FLAGS
 SET (WALRUS_CXXFLAGS_STATICLIB -fPIC -DWALRUS_EXPORT=)
-SET (WALRUS_LDFLAGS_STATICLIB -Wl,--gc-sections)
 
 # SHELL FLAGS
 SET (WALRUS_CXXFLAGS_SHELL -DWALRUS_EXPORT= -frtti -std=c++17)
-SET (WALRUS_LDFLAGS_SHELL -Wl,--gc-sections)
 
 #######################################################
 # FLAGS FOR TEST
