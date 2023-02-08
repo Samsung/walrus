@@ -10,7 +10,7 @@ env:
   RUNNER: tools/run-tests.py
 
 jobs:
-  Check_tidy:
+  check-tidy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -27,7 +27,33 @@ jobs:
     - name: Test
       run: tools/check_tidy.py
 
-  Clang_build:
+  build-on-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        brew update
+        brew install cmake ninja pkg-config
+    - name: Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=darwin -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        cmake -H. -Bout/mac/x64 $BUILD_OPTIONS
+        ninja -Cout/mac/x64
+    - name: Run Tests
+      run: |
+        # FIXME remove 2 try-catch test files because unwind errors triggered when throwing an exception in mac os 
+        rm $GITHUB_WORKSPACE/test/basic/trycatch.wast
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/try_catch.wast
+        # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by apple-clang
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
+        $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/x64/walrus"
+
+  build-by-clang:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -49,8 +75,14 @@ jobs:
       run: |
         CC=clang CXX=clang++ cmake -H. -Bout/clang/x64 $BUILD_OPTIONS
         ninja -Cout/clang/x64
+    - name: Run Tests
+      run: |
+        # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
+        $RUNNER --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
 
-  Linux_x86_test:
+  build-test-on-x86:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -69,7 +101,7 @@ jobs:
     - name: Run Tests
       run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
 
-  Linux_x64_test:
+  build-test-on-x64:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -88,7 +120,7 @@ jobs:
     - name: Run Tests
       run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
 
-  Linux_armv7_test:
+  build-test-on-armv7:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -115,7 +147,7 @@ jobs:
           ninja -Cout/debug
           python3 ./tools/run-tests.py --engine="./out/debug/walrus"
 
-  Linux_aarch64_test:
+  build-test-on-aarch64:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -142,7 +174,7 @@ jobs:
           ninja -Cout/release
           python3 ./tools/run-tests.py --engine="./out/release/walrus"
 
-  API_test:
+  built-test-wasm-c-api:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -169,7 +201,7 @@ jobs:
         ./wasm-c-api-multi
         ./wasm-c-api-table
 
-  Coverity_scan:
+  coverity-scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
