@@ -33,6 +33,7 @@ ModuleFunction::ModuleFunction(Module* module, FunctionType* functionType)
     , m_functionType(functionType)
     , m_requiredStackSize(std::max(m_functionType->paramStackSize(), m_functionType->resultStackSize()))
     , m_requiredStackSizeDueToLocal(0)
+    , m_jitFunction(nullptr)
 {
 }
 

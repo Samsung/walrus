@@ -8,6 +8,7 @@
 SET (WALRUS_ROOT ${PROJECT_SOURCE_DIR})
 SET (WALRUS_THIRD_PARTY_ROOT ${WALRUS_ROOT}/third_party)
 SET (GCUTIL_ROOT ${WALRUS_THIRD_PARTY_ROOT}/GCutil)
+SET (SLJIT_ROOT ${WALRUS_THIRD_PARTY_ROOT}/sljit)
 
 #######################################################
 # FLAGS FOR TARGET

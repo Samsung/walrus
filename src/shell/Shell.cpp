@@ -25,6 +25,9 @@ struct spectestseps : std::numpunct<char> {
     std::string do_grouping() const { return "\3"; }
 };
 
+static bool useJIT = false;
+static int jitVerbose = 0;
+
 using namespace Walrus;
 
 static void printI32(int32_t v)
@@ -191,7 +194,14 @@ private:
 static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances, SpecTestFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
+    std::pair<Optional<Module*>, Optional<String*>> parseResult;
+
+    if (useJIT) {
+        parseResult = WASMParser::parseBinaryJIT(store, filename, src.data(), src.size(), jitVerbose);
+    } else {
+        parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
+    }
+
     if (parseResult.second) {
         Trap::TrapResult tr;
         tr.exception = Exception::create(parseResult.second.value());
@@ -785,7 +795,23 @@ int main(int argc, char* argv[])
     SpecTestFunctionTypes functionTypes;
 
     for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            if (strcmp(argv[i], "--jit") == 0) {
+                useJIT = true;
+                continue;
+            }
+            if (strcmp(argv[i], "--jit-verbose") == 0) {
+                jitVerbose = 1;
+                continue;
+            }
+            if (strcmp(argv[i], "--jit-verbose-color") == 0) {
+                jitVerbose = 2;
+                continue;
+            }
+        }
+
         std::string filePath = argv[i];
+
         FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
             fseek(fp, 0, SEEK_END);

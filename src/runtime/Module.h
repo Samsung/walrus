@@ -22,13 +22,16 @@
 
 namespace wabt {
 class WASMBinaryReader;
-}
+class WASMBinaryReaderJIT;
+} // namespace wabt
 
 namespace Walrus {
 
 class Store;
 class Module;
 class Instance;
+class JITFunction;
+class JITModule;
 
 enum class SegmentMode {
     None,
@@ -206,6 +209,17 @@ public:
         return m_catchInfo;
     }
 
+    void setJITFunction(JITFunction* jitFunction)
+    {
+        ASSERT(m_jitFunction == nullptr);
+        m_jitFunction = jitFunction;
+    }
+
+    JITFunction* jitFunction()
+    {
+        return m_jitFunction;
+    }
+
 private:
     Module* m_module;
     FunctionType* m_functionType;
@@ -214,6 +228,7 @@ private:
     ValueTypeVector m_local;
     Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_byteCode;
     Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>> m_catchInfo;
+    JITFunction* m_jitFunction;
 };
 
 class Data : public gc {
@@ -292,6 +307,7 @@ private:
 
 class Module : public Object {
     friend class wabt::WASMBinaryReader;
+    friend class wabt::WASMBinaryReaderJIT;
 
 public:
     Module(Store* store)
@@ -299,6 +315,7 @@ public:
         , m_seenStartAttribute(false)
         , m_version(0)
         , m_start(0)
+        , m_jitModule(nullptr)
     {
     }
 
@@ -334,6 +351,17 @@ public:
         return m_exports;
     }
 
+    void setJITModule(JITModule* jitModule)
+    {
+        ASSERT(m_jitModule == nullptr);
+        m_jitModule = jitModule;
+    }
+
+    JITModule* jitModule()
+    {
+        return m_jitModule;
+    }
+
     Instance* instantiate(ExecutionState& state, const ObjectVector& imports);
 
     static FunctionType* initIndexFunctionType();
@@ -359,6 +387,7 @@ private:
     Vector<Element*, GCUtil::gc_malloc_allocator<Element*>> m_element;
     Vector<Data*, GCUtil::gc_malloc_allocator<Data*>> m_data;
     Vector<std::pair<GlobalType, Optional<ModuleFunction*>>, GCUtil::gc_malloc_allocator<std::pair<GlobalType, Optional<ModuleFunction*>>>> m_global;
+    JITModule* m_jitModule;
 };
 
 } // namespace Walrus
