@@ -28,6 +28,7 @@ class WASMParser {
 public:
     // returns <result, error>
     static std::pair<Optional<Module*>, std::string> parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len);
+    static std::pair<Optional<Module*>, std::string> parseBinaryJIT(Store* store, const std::string& filename, const uint8_t* data, size_t len, int verboseLevel);
 };
 
 } // namespace Walrus
