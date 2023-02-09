@@ -91,10 +91,21 @@ public:
     String* moduleName() const { return m_moduleName; }
     String* fieldName() const { return m_fieldName; }
 
+    const ObjectType* type() const
+    {
+        return m_type;
+    }
+
     const FunctionType* functionType() const
     {
         ASSERT(importType() == Type::Function);
         return static_cast<const FunctionType*>(m_type);
+    }
+
+    const GlobalType* globalType() const
+    {
+        ASSERT(importType() == Type::Global);
+        return static_cast<const GlobalType*>(m_type);
     }
 
     const TableType* tableType() const
@@ -318,10 +329,28 @@ public:
         return m_function[index];
     }
 
-    FunctionType* functionType(uint32_t index)
+    FunctionType* functionType(uint32_t index) const
     {
         ASSERT(index < m_functionTypes.size());
         return m_functionTypes[index];
+    }
+
+    TableType* tableType(uint32_t index) const
+    {
+        ASSERT(index < m_tableTypes.size());
+        return m_tableTypes[index];
+    }
+
+    MemoryType* memoryType(uint32_t index) const
+    {
+        ASSERT(index < m_memoryTypes.size());
+        return m_memoryTypes[index];
+    }
+
+    GlobalType* globalType(uint32_t index) const
+    {
+        ASSERT(index < m_global.size());
+        return const_cast<GlobalType*>(&m_global[index].first);
     }
 
     const Vector<ImportType*, GCUtil::gc_malloc_allocator<ImportType*>>& imports() const
