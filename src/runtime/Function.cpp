@@ -19,6 +19,7 @@
 #include "runtime/Function.h"
 #include "runtime/Store.h"
 #include "interpreter/Interpreter.h"
+#include "runtime/JITExec.h"
 #include "runtime/Module.h"
 #include "runtime/Value.h"
 
@@ -43,6 +44,12 @@ DefinedFunction::DefinedFunction(Instance* instance,
 
 void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
 {
+    if (moduleFunction()->jitFunction() != nullptr) {
+        const ValueTypeVector& resultTypeInfo = functionType()->result();
+        moduleFunction()->jitFunction()->call(state, argc, argv, result, resultTypeInfo);
+        return;
+    }
+
     ExecutionState newState(state, this);
     checkStackLimit(newState);
     ALLOCA(uint8_t, functionStackBase, m_moduleFunction->requiredStackSize(), isAlloca);
