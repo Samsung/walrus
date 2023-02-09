@@ -33,6 +33,7 @@ ModuleFunction::ModuleFunction(FunctionType* functionType)
     : m_functionType(functionType)
     , m_requiredStackSize(std::max(m_functionType->paramStackSize(), m_functionType->resultStackSize()))
     , m_requiredStackSizeDueToLocal(0)
+    , m_jitFunction(nullptr)
 {
 }
 
@@ -41,6 +42,7 @@ Module::Module(Store* store)
     , m_seenStartAttribute(false)
     , m_version(0)
     , m_start(0)
+    , m_jitModule(nullptr)
 {
     store->appendModule(this);
 }

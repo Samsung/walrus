@@ -22,6 +22,7 @@
 
 namespace wabt {
 class WASMBinaryReader;
+class WASMBinaryReaderJIT;
 }
 
 namespace Walrus {
@@ -29,6 +30,8 @@ namespace Walrus {
 class Store;
 class Module;
 class Instance;
+class JITFunction;
+class JITModule;
 
 enum class SegmentMode {
     None,
@@ -216,6 +219,17 @@ public:
         return m_catchInfo;
     }
 
+    void setJITFunction(JITFunction* jitFunction)
+    {
+        ASSERT(m_jitFunction == nullptr);
+        m_jitFunction = jitFunction;
+    }
+
+    JITFunction* jitFunction()
+    {
+        return m_jitFunction;
+    }
+
 private:
     FunctionType* m_functionType;
     uint32_t m_requiredStackSize;
@@ -223,6 +237,7 @@ private:
     ValueTypeVector m_local;
     Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
     Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
+    JITFunction* m_jitFunction;
 };
 
 class Data {
@@ -315,6 +330,7 @@ private:
 
 class Module : public Object {
     friend class wabt::WASMBinaryReader;
+    friend class wabt::WASMBinaryReaderJIT;
 
 public:
     Module(Store* store);
@@ -376,6 +392,17 @@ public:
         return m_exports;
     }
 
+    void setJITModule(JITModule* jitModule)
+    {
+        ASSERT(m_jitModule == nullptr);
+        m_jitModule = jitModule;
+    }
+
+    JITModule* jitModule()
+    {
+        return m_jitModule;
+    }
+
     Instance* instantiate(ExecutionState& state, const SharedObjectVector& imports);
 
 private:
@@ -398,6 +425,7 @@ private:
     TagTypeVector m_tagTypes;
 
     Vector<std::pair<GlobalType, Optional<ModuleFunction*>>, std::allocator<std::pair<GlobalType, Optional<ModuleFunction*>>>> m_globalInfos;
+    JITModule* m_jitModule;
 };
 
 } // namespace Walrus
