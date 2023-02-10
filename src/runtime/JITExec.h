@@ -53,12 +53,12 @@ class TrapHandlerList;
 
 // Header of instance const data
 struct InstanceConstData {
-    TrapHandlerList* trap_handlers;
+    TrapHandlerList* trapHandlers;
 };
 
 // Header of instance data
 struct InstanceData {
-    InstanceConstData* const_data;
+    InstanceConstData* constData;
 };
 
 struct ExecutionContext {
@@ -66,13 +66,13 @@ struct ExecutionContext {
     // chain (stored on the machine stack).
     struct CallFrame {
         // Previous call frame.
-        CallFrame* prev_frame;
+        CallFrame* prevFrame;
         // Start address of the data used by
         // the function (also stored in kFrameReg).
-        void* frame_start;
+        void* frameStart;
         // Function index if the lowest bit is set,
         // InstanceData otherwise
-        uintptr_t function_index;
+        uintptr_t functionIndex;
     };
 
     enum ErrorCodes : uint32_t {
@@ -83,9 +83,9 @@ struct ExecutionContext {
         UnreachableError,
     };
 
-    CallFrame* last_frame;
-    InstanceData* current_instance_data;
-    InstanceConstData* current_instance_const_data;
+    CallFrame* lastFrame;
+    InstanceData* currentInstanceData;
+    InstanceConstData* currentInstanceConstData;
     ErrorCodes error;
     uint64_t tmp1;
     uint64_t tmp2;
@@ -95,28 +95,28 @@ class JITModule : public gc {
 public:
     // Update JITCompiler::compile() after this definition is modified.
     typedef void (*ExportCall)(ExecutionContext* context,
-                               void* aligned_start,
-                               void* export_entry);
+                               void* alignedStart,
+                               void* exportEntry);
 
-    JITModule(InstanceConstData* instance_const_data, void* module_start)
-        : instance_const_data_(instance_const_data)
-        , module_start_(module_start)
+    JITModule(InstanceConstData* instanceConstData, void* moduleStart)
+        : m_instanceConstData(instanceConstData)
+        , m_moduleStart(moduleStart)
     {
     }
     ~JITModule();
 
     ExportCall exportCall()
     {
-        return reinterpret_cast<ExportCall>(module_start_);
+        return reinterpret_cast<ExportCall>(m_moduleStart);
     }
 
-    InstanceConstData* instanceConstData() { return instance_const_data_; }
+    InstanceConstData* instanceConstData() { return m_instanceConstData; }
 
 private:
     // Reference counted because it is often copied by wabt.
-    size_t ref_count_ = 1;
-    InstanceConstData* instance_const_data_;
-    void* module_start_;
+    size_t m_refCount = 1;
+    InstanceConstData* m_instanceConstData;
+    void* m_moduleStart;
 };
 
 class JITCompiler;
@@ -125,23 +125,23 @@ class JITFunction : public gc {
     friend class JITCompiler;
 
 public:
-    bool isCompiled() const { return export_entry_ != nullptr; }
+    bool isCompiled() const { return m_exportEntry != nullptr; }
     void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, const ValueTypeVector& resultTypeInfo) const;
 
-    void initSizes(uint32_t args_size, uint32_t frame_size)
+    void initSizes(uint32_t argsSize, uint32_t frameSize)
     {
-        args_size_ = args_size;
-        frame_size_ = frame_size;
+        m_argsSize = argsSize;
+        m_frameSize = frameSize;
     }
 
-    uint32_t argsSize() const { return args_size_; }
-    uint32_t frameSize() const { return frame_size_; }
+    uint32_t argsSize() const { return m_argsSize; }
+    uint32_t frameSize() const { return m_frameSize; }
 
 private:
-    void* export_entry_;
-    JITModule* module_;
-    uint32_t args_size_;
-    uint32_t frame_size_;
+    void* m_exportEntry;
+    JITModule* m_module;
+    uint32_t m_argsSize;
+    uint32_t m_frameSize;
 };
 
 } // namespace Walrus
