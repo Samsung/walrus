@@ -363,7 +363,7 @@ void WASMBinaryReaderJIT::OnSelectExpr(Index result_count, Type* result_types)
 void WASMBinaryReaderJIT::OnUnaryExpr(uint32_t opcode)
 {
     Walrus::Instruction::Group group = Walrus::Instruction::Unary;
-    Walrus::ValueInfo result;
+    Walrus::ValueInfo result = Walrus::LocationInfo::kFourByteSize;
 
     switch (opcode) {
     case Walrus::I64ClzOpcode:
