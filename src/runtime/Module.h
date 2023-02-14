@@ -47,22 +47,22 @@ public:
                 Tag };
 
     ImportType(Type t,
-               String* moduleName,
-               String* fieldName,
+               std::string& moduleName,
+               std::string& fieldName,
                const ObjectType* type)
         : m_importType(t)
-        , m_moduleName(std::move(moduleName))
-        , m_fieldName(std::move(fieldName))
+        , m_moduleName(moduleName)
+        , m_fieldName(fieldName)
         , m_type(type)
     {
     }
 
-    ImportType(String* moduleName,
-               String* fieldName,
+    ImportType(std::string& moduleName,
+               std::string& fieldName,
                const ObjectType* type)
         : m_importType(Function)
-        , m_moduleName(std::move(moduleName))
-        , m_fieldName(std::move(fieldName))
+        , m_moduleName(moduleName)
+        , m_fieldName(fieldName)
         , m_type(type)
     {
         switch (type->kind()) {
@@ -88,8 +88,8 @@ public:
     }
 
     Type importType() const { return m_importType; }
-    String* moduleName() const { return m_moduleName; }
-    String* fieldName() const { return m_fieldName; }
+    std::string& moduleName() { return m_moduleName; }
+    std::string& fieldName() { return m_fieldName; }
 
     const ObjectType* type() const
     {
@@ -122,8 +122,8 @@ public:
 
 private:
     Type m_importType;
-    String* m_moduleName;
-    String* m_fieldName;
+    std::string m_moduleName;
+    std::string m_fieldName;
     const ObjectType* m_type;
 };
 
@@ -137,7 +137,7 @@ public:
                 Tag };
 
     ExportType(Type type,
-               String* name,
+               std::string& name,
                uint32_t itemIndex)
         : m_exportType(type)
         , m_name(name)
@@ -146,7 +146,7 @@ public:
     }
 
     Type exportType() const { return m_exportType; }
-    String* name() const { return m_name; }
+    std::string& name() { return m_name; }
 
     uint32_t itemIndex() const
     {
@@ -155,7 +155,7 @@ public:
 
 private:
     Type m_exportType;
-    String* m_name;
+    std::string m_name;
     uint32_t m_itemIndex;
 };
 

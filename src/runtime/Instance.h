@@ -110,12 +110,12 @@ public:
     DataSegment& dataSegment(uint32_t index) { return m_dataSegment[index]; }
     ElementSegment& elementSegment(uint32_t index) { return m_elementSegment[index]; }
 
-    Optional<ExportType*> resolveExport(String* name);
-    Optional<Function*> resolveExportFunction(String* name);
-    Optional<Tag*> resolveExportTag(String* name);
-    Optional<Table*> resolveExportTable(String* name);
-    Optional<Memory*> resolveExportMemory(String* name);
-    Optional<Global*> resolveExportGlobal(String* name);
+    Optional<ExportType*> resolveExport(std::string& name);
+    Optional<Function*> resolveExportFunction(std::string& name);
+    Optional<Tag*> resolveExportTag(std::string& name);
+    Optional<Table*> resolveExportTable(std::string& name);
+    Optional<Memory*> resolveExportMemory(std::string& name);
+    Optional<Global*> resolveExportGlobal(std::string& name);
 
 private:
     Module* m_module;

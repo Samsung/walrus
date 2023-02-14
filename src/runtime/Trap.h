@@ -49,17 +49,7 @@ public:
     }
 
     TrapResult run(void (*runner)(ExecutionState&, void*), void* data);
-    static void throwException(ExecutionState& state, const char* message, size_t len);
-    template <const size_t srcLen>
-    static void throwException(ExecutionState& state, const char (&src)[srcLen])
-    {
-        throwException(state, src, srcLen - 1);
-    }
-    static void throwException(ExecutionState& state, String* message);
-    static void throwException(ExecutionState& state, const std::string& src)
-    {
-        throwException(state, src.data(), src.length());
-    }
+    static void throwException(ExecutionState& state, const std::string& message);
     static void throwException(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& userExceptionData);
     static void throwException(ExecutionState& state, std::unique_ptr<Exception>&& e);
 };

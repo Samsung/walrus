@@ -22,18 +22,17 @@
 
 namespace Walrus {
 
-class String;
 class Tag;
 
 class Exception : public gc {
 public:
     // we should use exception value as NoGC since bdwgc cannot find thrown value
-    static std::unique_ptr<Exception> create(String* m)
+    static std::unique_ptr<Exception> create(const std::string& m)
     {
         return std::unique_ptr<Exception>(new (NoGC) Exception(m));
     }
 
-    static std::unique_ptr<Exception> create(ExecutionState& state, String* m)
+    static std::unique_ptr<Exception> create(ExecutionState& state, const std::string& m)
     {
         return std::unique_ptr<Exception>(new (NoGC) Exception(state, m));
     }
@@ -45,7 +44,7 @@ public:
 
     bool isBuiltinException()
     {
-        return !!message();
+        return !m_message.empty();
     }
 
     bool isUserException()
@@ -53,7 +52,7 @@ public:
         return !!tag();
     }
 
-    Optional<String*> message() const
+    std::string& message()
     {
         return m_message;
     }
@@ -70,13 +69,13 @@ public:
 
 private:
     friend class Interpreter;
-    Exception(String* message)
+    Exception(const std::string& message)
+        : m_message(message)
     {
-        m_message = message;
     }
 
     Exception(ExecutionState& state);
-    Exception(ExecutionState& state, String* message)
+    Exception(ExecutionState& state, const std::string& message)
         : Exception(state)
     {
         m_message = message;
@@ -89,7 +88,7 @@ private:
         m_userExceptionData = std::move(userExceptionData);
     }
 
-    Optional<String*> m_message;
+    std::string m_message;
     Optional<Tag*> m_tag;
     Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_userExceptionData;
     Vector<std::pair<ExecutionState*, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<ExecutionState*, size_t>>> m_programCounterInfo;

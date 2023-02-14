@@ -434,8 +434,7 @@ public:
             new Walrus::ModuleFunction(m_module, ft));
         m_module->m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Function,
-            new Walrus::String(moduleName),
-            new Walrus::String(fieldName), ft));
+            moduleName, fieldName, ft));
     }
 
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) override
@@ -445,8 +444,7 @@ public:
         m_module->m_global.pushBack(std::make_pair(Walrus::GlobalType(toValueKind(type), mutable_), nullptr));
         m_module->m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Global,
-            new Walrus::String(moduleName),
-            new Walrus::String(fieldName), &m_module->m_global[globalIndex].first));
+            moduleName, fieldName, &m_module->m_global[globalIndex].first));
     }
 
     virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, size_t initialSize, size_t maximumSize) override
@@ -458,9 +456,7 @@ public:
         m_module->m_tableTypes.pushBack(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
         m_module->m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Table,
-            new Walrus::String(moduleName),
-            new Walrus::String(fieldName),
-            m_module->m_tableTypes[tableIndex]));
+            moduleName, fieldName, m_module->m_tableTypes[tableIndex]));
     }
 
     virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize) override
@@ -470,9 +466,7 @@ public:
         m_module->m_memoryTypes.pushBack(new Walrus::MemoryType(initialSize, maximumSize));
         m_module->m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Memory,
-            new Walrus::String(moduleName),
-            new Walrus::String(fieldName),
-            m_module->m_memoryTypes[memoryIndex]));
+            moduleName, fieldName, m_module->m_memoryTypes[memoryIndex]));
     }
 
     virtual void OnImportTag(Index importIndex, std::string moduleName, std::string fieldName, Index tagIndex, Index sigIndex) override
@@ -482,9 +476,7 @@ public:
         m_module->m_tagTypes.pushBack(new Walrus::TagType(sigIndex));
         m_module->m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Tag,
-            new Walrus::String(moduleName),
-            new Walrus::String(fieldName),
-            m_module->m_tagTypes[tagIndex]));
+            moduleName, fieldName, m_module->m_tagTypes[tagIndex]));
     }
 
     virtual void OnExportCount(Index count) override
@@ -495,7 +487,7 @@ public:
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) override
     {
         ASSERT(m_module->m_exports.size() == exportIndex);
-        m_module->m_exports.pushBack(new Walrus::ExportType(static_cast<Walrus::ExportType::Type>(kind), new Walrus::String(name), itemIndex));
+        m_module->m_exports.pushBack(new Walrus::ExportType(static_cast<Walrus::ExportType::Type>(kind), name, itemIndex));
     }
 
     /* Table section */
@@ -1887,17 +1879,17 @@ public:
 
 namespace Walrus {
 
-std::pair<Optional<Module*>, Optional<String*>> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len)
+std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len)
 {
     Module* module = new Module(store);
     wabt::WASMBinaryReader delegate(module);
 
     std::string error = ReadWasmBinary(filename, data, len, &delegate);
     if (error.length()) {
-        return std::make_pair(nullptr, new String(error));
+        return std::make_pair(nullptr, error);
     }
 
-    return std::make_pair(module, nullptr);
+    return std::make_pair(module, std::string());
 }
 
 } // namespace Walrus

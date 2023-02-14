@@ -59,7 +59,7 @@ void Memory::throwException(ExecutionState& state, uint32_t offset, uint32_t add
     str += std::to_string(offset + addend);
     str += "+";
     str += std::to_string(size);
-    Trap::throwException(state, str.data(), str.length());
+    Trap::throwException(state, str);
 }
 
 template <class T>
