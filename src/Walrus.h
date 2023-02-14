@@ -357,6 +357,5 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 
 #include "GCUtil.h"
 #include "util/Optional.h"
-#include "util/String.h"
 
 #endif
