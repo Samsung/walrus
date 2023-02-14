@@ -17,8 +17,6 @@
 #ifndef __WalrusInstance__
 #define __WalrusInstance__
 
-#include "runtime/Value.h"
-#include "runtime/Tag.h"
 #include "runtime/Object.h"
 
 namespace Walrus {
@@ -34,7 +32,7 @@ class Module;
 class ExportType;
 class Table;
 
-class DataSegment : public gc {
+class DataSegment {
 public:
     DataSegment(Data* data);
 
@@ -58,7 +56,7 @@ private:
     size_t m_sizeInByte;
 };
 
-class ElementSegment : public gc {
+class ElementSegment {
 public:
     ElementSegment(Element* elem);
 
@@ -81,9 +79,10 @@ class Instance : public Object {
     friend class Interpreter;
 
 public:
-    typedef Vector<Instance*, GCUtil::gc_malloc_allocator<Instance*>> InstanceVector;
+    typedef Vector<Instance*, std::allocator<Instance*>> InstanceVector;
 
     Instance(Module* module);
+    ~Instance();
 
     virtual Object::Kind kind() const override
     {
@@ -95,20 +94,18 @@ public:
         return true;
     }
 
-    Module* module() const { return m_module; }
-
     Function* function(uint32_t index) const { return m_function[index]; }
     Memory* memory(uint32_t index) const
     {
-        // now only one memory is allowed for each Instance
+        // now only one memory is allowed for each Instance/Module
         ASSERT(index == 0);
         return m_memory[index];
     }
     Table* table(uint32_t index) const { return m_table[index]; }
     Tag* tag(uint32_t index) const { return m_tag[index]; }
     Global* global(uint32_t index) const { return m_global[index]; }
-    DataSegment& dataSegment(uint32_t index) { return m_dataSegment[index]; }
-    ElementSegment& elementSegment(uint32_t index) { return m_elementSegment[index]; }
+    DataSegment& dataSegment(uint32_t index) { return m_dataSegments[index]; }
+    ElementSegment& elementSegment(uint32_t index) { return m_elementSegments[index]; }
 
     Optional<ExportType*> resolveExport(std::string& name);
     Optional<Function*> resolveExportFunction(std::string& name);
@@ -120,13 +117,14 @@ public:
 private:
     Module* m_module;
 
-    Vector<Function*, GCUtil::gc_malloc_allocator<Function*>> m_function;
-    Vector<Table*, GCUtil::gc_malloc_allocator<Table*>> m_table;
-    Vector<Memory*, GCUtil::gc_malloc_allocator<Memory*>> m_memory;
-    Vector<Global*, GCUtil::gc_malloc_allocator<Global*>> m_global;
-    Vector<DataSegment, GCUtil::gc_malloc_allocator<DataSegment>> m_dataSegment;
-    Vector<ElementSegment, GCUtil::gc_malloc_allocator<ElementSegment>> m_elementSegment;
-    Vector<Tag*, GCUtil::gc_malloc_allocator<Tag*>> m_tag;
+    Vector<Function*, std::allocator<Function*>> m_function;
+    Vector<Table*, std::allocator<Table*>> m_table;
+    Vector<Memory*, std::allocator<Memory*>> m_memory;
+    Vector<Global*, std::allocator<Global*>> m_global;
+    Vector<Tag*, std::allocator<Tag*>> m_tag;
+
+    Vector<DataSegment, std::allocator<DataSegment>> m_dataSegments;
+    Vector<ElementSegment, std::allocator<ElementSegment>> m_elementSegments;
 };
 } // namespace Walrus
 
