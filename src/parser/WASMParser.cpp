@@ -1896,6 +1896,7 @@ std::pair<Optional<Module*>, Optional<String*>> WASMParser::parseBinary(Store* s
     if (error.length()) {
         return std::make_pair(nullptr, new String(error));
     }
+
     return std::make_pair(module, nullptr);
 }
 

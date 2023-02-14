@@ -17,10 +17,16 @@
 #include "Walrus.h"
 
 #include "Instance.h"
-#include "runtime/Module.h"
+#include "runtime/Store.h"
 #include "runtime/Module.h"
 
 namespace Walrus {
+
+Instance::Instance(Module* module)
+    : m_module(module)
+{
+    module->store()->appendInstance(this);
+}
 
 Optional<ExportType*> Instance::resolveExport(String* name)
 {
