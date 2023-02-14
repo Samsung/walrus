@@ -65,6 +65,29 @@ Module::~Module()
     for (size_t i = 0; i < m_elements.size(); i++) {
         delete m_elements[i];
     }
+
+    for (size_t i = 0; i < m_functionTypes.size(); i++) {
+        delete m_functionTypes[i];
+    }
+
+    for (size_t i = 0; i < m_tableTypes.size(); i++) {
+        delete m_tableTypes[i];
+    }
+
+    for (size_t i = 0; i < m_memoryTypes.size(); i++) {
+        delete m_memoryTypes[i];
+    }
+
+    for (size_t i = 0; i < m_tagTypes.size(); i++) {
+        delete m_tagTypes[i];
+    }
+
+    for (size_t i = 0; i < m_globalInfos.size(); i++) {
+        if (m_globalInfos[i].second) {
+            delete m_globalInfos[i].second.value();
+            m_globalInfos[i].second.reset();
+        }
+    }
 }
 
 FunctionType* Module::initIndexFunctionType()
@@ -117,7 +140,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     instance->m_function.reserve(m_functions.size());
     instance->m_table.reserve(m_tableTypes.size());
     instance->m_memory.reserve(m_memoryTypes.size());
-    instance->m_global.reserve(m_global.size());
+    instance->m_global.reserve(m_globalInfos.size());
     instance->m_tag.reserve(m_tagTypes.size());
 
     size_t importFuncCount = 0;
@@ -224,9 +247,9 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     // init global
-    for (size_t i = importGlobCount; i < m_global.size(); i++) {
+    for (size_t i = importGlobCount; i < m_globalInfos.size(); i++) {
         ASSERT(i == instance->m_global.size());
-        auto& globalData = m_global[i];
+        auto& globalData = m_globalInfos[i];
         instance->m_global.pushBack(new Global(Value(globalData.first.type())));
 
         if (globalData.second) {
