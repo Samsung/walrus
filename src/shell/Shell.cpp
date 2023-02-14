@@ -777,8 +777,6 @@ int main(int argc, char* argv[])
     mallopt(M_MMAP_MAX, 1024 * 1024);
 #endif
 
-    GC_INIT();
-
     Engine* engine = new Engine();
     Store* store = new Store(engine);
 

@@ -30,6 +30,7 @@ public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
 
     Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte = std::numeric_limits<uint32_t>::max());
+    ~Memory();
 
     virtual Object::Kind kind() const override
     {

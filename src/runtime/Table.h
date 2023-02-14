@@ -101,7 +101,7 @@ private:
     uint32_t m_size;
     uint32_t m_maximumSize;
 
-    Vector<void*, GCUtil::gc_malloc_allocator<void*>> m_elements;
+    Vector<void*> m_elements;
 };
 
 } // namespace Walrus

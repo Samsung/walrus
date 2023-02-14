@@ -24,22 +24,21 @@ namespace Walrus {
 
 class Tag;
 
-class Exception : public gc {
+class Exception {
 public:
-    // we should use exception value as NoGC since bdwgc cannot find thrown value
     static std::unique_ptr<Exception> create(const std::string& m)
     {
-        return std::unique_ptr<Exception>(new (NoGC) Exception(m));
+        return std::unique_ptr<Exception>(new Exception(m));
     }
 
     static std::unique_ptr<Exception> create(ExecutionState& state, const std::string& m)
     {
-        return std::unique_ptr<Exception>(new (NoGC) Exception(state, m));
+        return std::unique_ptr<Exception>(new Exception(state, m));
     }
 
-    static std::unique_ptr<Exception> create(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& userExceptionData)
+    static std::unique_ptr<Exception> create(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
     {
-        return std::unique_ptr<Exception>(new (NoGC) Exception(state, tag, std::move(userExceptionData)));
+        return std::unique_ptr<Exception>(new Exception(state, tag, std::move(userExceptionData)));
     }
 
     bool isBuiltinException()
@@ -62,7 +61,7 @@ public:
         return m_tag;
     }
 
-    const Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>& userExceptionData() const
+    const Vector<uint8_t>& userExceptionData() const
     {
         return m_userExceptionData;
     }
@@ -81,7 +80,7 @@ private:
         m_message = message;
     }
 
-    Exception(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& userExceptionData)
+    Exception(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
         : Exception(state)
     {
         m_tag = tag;
@@ -90,8 +89,8 @@ private:
 
     std::string m_message;
     Optional<Tag*> m_tag;
-    Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_userExceptionData;
-    Vector<std::pair<ExecutionState*, size_t>, GCUtil::gc_malloc_atomic_allocator<std::pair<ExecutionState*, size_t>>> m_programCounterInfo;
+    Vector<uint8_t> m_userExceptionData;
+    Vector<std::pair<ExecutionState*, size_t>> m_programCounterInfo;
 };
 
 } // namespace Walrus
