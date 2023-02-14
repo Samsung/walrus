@@ -38,7 +38,7 @@ enum class SegmentMode {
 };
 
 // https://webassembly.github.io/spec/core/syntax/modules.html#syntax-import
-class ImportType : public gc {
+class ImportType {
 public:
     enum Type { Function,
                 Table,
@@ -127,7 +127,7 @@ private:
     const ObjectType* m_type;
 };
 
-class ExportType : public gc {
+class ExportType {
 public:
     // matches binary format, do not change
     enum Type { Function,
@@ -159,21 +159,20 @@ private:
     uint32_t m_itemIndex;
 };
 
-class ModuleFunction : public gc {
+class ModuleFunction {
     friend class wabt::WASMBinaryReader;
 
 public:
     struct CatchInfo {
         size_t m_tryStart;
         size_t m_tryEnd;
-        uint32_t m_tagIndex;
         size_t m_catchStartPosition;
         size_t m_stackSizeToBe;
+        uint32_t m_tagIndex;
     };
 
-    ModuleFunction(Module* module, FunctionType* functionType);
+    ModuleFunction(FunctionType* functionType);
 
-    Module* module() const { return m_module; }
     FunctionType* functionType() const { return m_functionType; }
     uint32_t requiredStackSize() const { return m_requiredStackSize; }
     uint32_t requiredStackSizeDueToLocal() const { return m_requiredStackSizeDueToLocal; }
@@ -212,47 +211,53 @@ public:
     void dumpByteCode();
 #endif
 
-    const Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>>& catchInfo() const
+    const Vector<CatchInfo, std::allocator<CatchInfo>>& catchInfo() const
     {
         return m_catchInfo;
     }
 
 private:
-    Module* m_module;
     FunctionType* m_functionType;
     uint32_t m_requiredStackSize;
     uint32_t m_requiredStackSizeDueToLocal;
     ValueTypeVector m_local;
-    Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_byteCode;
-    Vector<CatchInfo, GCUtil::gc_malloc_atomic_allocator<CatchInfo>> m_catchInfo;
+    Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
+    Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
 };
 
-class Data : public gc {
+class Data {
 public:
-    Data(ModuleFunction* moduleFunction, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& initData)
+    Data(ModuleFunction* moduleFunction, Vector<uint8_t, std::allocator<uint8_t>>&& initData)
         : m_moduleFunction(moduleFunction)
         , m_initData(std::move(initData))
     {
     }
 
+    ~Data()
+    {
+        ASSERT(!!m_moduleFunction);
+        delete m_moduleFunction;
+    }
+
     ModuleFunction* moduleFunction() const
     {
+        ASSERT(!!m_moduleFunction);
         return m_moduleFunction;
     }
 
-    const Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>& initData() const
+    const Vector<uint8_t, std::allocator<uint8_t>>& initData() const
     {
         return m_initData;
     }
 
 private:
     ModuleFunction* m_moduleFunction;
-    Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>> m_initData;
+    Vector<uint8_t, std::allocator<uint8_t>> m_initData;
 };
 
-class Element : public gc {
+class Element {
 public:
-    Element(SegmentMode mode, uint32_t tableIndex, ModuleFunction* moduleFunction, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
+    Element(SegmentMode mode, uint32_t tableIndex, ModuleFunction* moduleFunction, Vector<uint32_t, std::allocator<uint32_t>>&& functionIndex)
         : m_mode(mode)
         , m_tableIndex(tableIndex)
         , m_moduleFunction(moduleFunction)
@@ -260,12 +265,19 @@ public:
     {
     }
 
-    Element(SegmentMode mode, uint32_t tableIndex, Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>&& functionIndex)
+    Element(SegmentMode mode, uint32_t tableIndex, Vector<uint32_t, std::allocator<uint32_t>>&& functionIndex)
         : m_mode(mode)
         , m_tableIndex(tableIndex)
-        , m_moduleFunction()
+        , m_moduleFunction(nullptr)
         , m_functionIndex(std::move(functionIndex))
     {
+    }
+
+    ~Element()
+    {
+        if (m_moduleFunction) {
+            delete m_moduleFunction;
+        }
     }
 
     SegmentMode mode() const
@@ -286,10 +298,10 @@ public:
     ModuleFunction* moduleFunction()
     {
         ASSERT(hasModuleFunction());
-        return m_moduleFunction.value();
+        return m_moduleFunction;
     }
 
-    const Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>>& functionIndex() const
+    const Vector<uint32_t, std::allocator<uint32_t>>& functionIndex() const
     {
         return m_functionIndex;
     }
@@ -297,8 +309,8 @@ public:
 private:
     SegmentMode m_mode;
     uint32_t m_tableIndex;
-    Optional<ModuleFunction*> m_moduleFunction;
-    Vector<uint32_t, GCUtil::gc_malloc_atomic_allocator<uint32_t>> m_functionIndex;
+    ModuleFunction* m_moduleFunction;
+    Vector<uint32_t, std::allocator<uint32_t>> m_functionIndex;
 };
 
 class Module : public Object {
@@ -306,6 +318,8 @@ class Module : public Object {
 
 public:
     Module(Store* store);
+
+    ~Module();
 
     virtual Object::Kind kind() const override
     {
@@ -324,8 +338,8 @@ public:
 
     ModuleFunction* function(uint32_t index)
     {
-        ASSERT(index < m_function.size());
-        return m_function[index];
+        ASSERT(index < m_functions.size());
+        return m_functions[index];
     }
 
     FunctionType* functionType(uint32_t index) const
@@ -352,12 +366,12 @@ public:
         return const_cast<GlobalType*>(&m_global[index].first);
     }
 
-    const Vector<ImportType*, GCUtil::gc_malloc_allocator<ImportType*>>& imports() const
+    const Vector<ImportType*, std::allocator<ImportType*>>& imports() const
     {
         return m_imports;
     }
 
-    const Vector<ExportType*, GCUtil::gc_malloc_allocator<ExportType*>>& exports() const
+    const Vector<ExportType*, std::allocator<ExportType*>>& exports() const
     {
         return m_exports;
     }
@@ -373,19 +387,19 @@ private:
     uint32_t m_version;
     uint32_t m_start;
 
-    Vector<ImportType*, GCUtil::gc_malloc_allocator<ImportType*>> m_imports;
-    Vector<ExportType*, GCUtil::gc_malloc_allocator<ExportType*>> m_exports;
+    Vector<ImportType*, std::allocator<ImportType*>> m_imports;
+    Vector<ExportType*, std::allocator<ExportType*>> m_exports;
 
-    Vector<ModuleFunction*, GCUtil::gc_malloc_allocator<ModuleFunction*>>
-        m_function;
+    Vector<ModuleFunction*, std::allocator<ModuleFunction*>> m_functions;
+
+    Vector<Data*, std::allocator<Data*>> m_datas;
+    Vector<Element*, std::allocator<Element*>> m_elements;
 
     FunctionTypeVector m_functionTypes;
     TableTypeVector m_tableTypes;
     MemoryTypeVector m_memoryTypes;
     TagTypeVector m_tagTypes;
 
-    Vector<Element*, GCUtil::gc_malloc_allocator<Element*>> m_element;
-    Vector<Data*, GCUtil::gc_malloc_allocator<Data*>> m_data;
     Vector<std::pair<GlobalType, Optional<ModuleFunction*>>, GCUtil::gc_malloc_allocator<std::pair<GlobalType, Optional<ModuleFunction*>>>> m_global;
 };
 
