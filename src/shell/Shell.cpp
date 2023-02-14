@@ -189,7 +189,7 @@ private:
     FunctionTypeVector m_vector;
 };
 
-static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances, SpecTestFunctionTypes& functionTypes,
+static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
     auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
@@ -329,14 +329,13 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     }
 
     struct RunData {
-        Instance::InstanceVector& instances;
         Module* module;
         ObjectVector& importValues;
-    } data = { instances, module.value(), importValues };
+    } data = { module.value(), importValues };
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
-        data->instances.push_back(data->module->instantiate(state, data->importValues));
+        data->module->instantiate(state, data->importValues);
     },
                     &data);
 }
@@ -589,7 +588,7 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
     return registeredInstanceMap[moduleVar.name()];
 }
 
-static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, Instance::InstanceVector& instances, SpecTestFunctionTypes& functionTypes)
+static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes)
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
     if (!lexer) {
@@ -617,10 +616,10 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::ScriptModule: {
             auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
-            executeWASM(store, filename, buf->data, instances, functionTypes, &registeredInstanceMap);
-            instanceMap[commandCount] = instances.back();
+            executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            instanceMap[commandCount] = store->getLastInstance();
             if (moduleCommand->module.name.size()) {
-                registeredInstanceMap[moduleCommand->module.name] = instances.back();
+                registeredInstanceMap[moduleCommand->module.name] = store->getLastInstance();
             }
             break;
         }
@@ -677,7 +676,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             RELEASE_ASSERT(tsm);
             auto buf = readModuleData(&tsm->module);
-            auto trapResult = executeWASM(store, filename, buf->data, instances, functionTypes, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
             std::string& s = trapResult.exception->message();
             RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
@@ -713,7 +712,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, instances, functionTypes);
+            auto trapResult = executeWASM(store, filename, buf, functionTypes);
             RELEASE_ASSERT(trapResult.exception);
             std::string& actual = trapResult.exception->message();
             printf("assertModuleInvalid (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertModuleInvalid->text.data(), actual.data(), assertModuleInvalid->module->location().line);
@@ -736,7 +735,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, instances, functionTypes);
+            auto trapResult = executeWASM(store, filename, buf, functionTypes);
             RELEASE_ASSERT(trapResult.exception);
             break;
         }
@@ -780,7 +779,6 @@ int main(int argc, char* argv[])
     Engine* engine = new Engine();
     Store* store = new Store(engine);
 
-    Instance::InstanceVector instances;
     SpecTestFunctionTypes functionTypes;
 
     for (int i = 1; i < argc; i++) {
@@ -796,9 +794,9 @@ int main(int argc, char* argv[])
             fclose(fp);
 
             if (endsWith(filePath, "wasm")) {
-                executeWASM(store, filePath, buf, instances, functionTypes);
+                executeWASM(store, filePath, buf, functionTypes);
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
-                executeWAST(store, filePath, buf, instances, functionTypes);
+                executeWAST(store, filePath, buf, functionTypes);
             }
         } else {
             printf("Cannot open file %s\n", argv[i]);
@@ -809,6 +807,7 @@ int main(int argc, char* argv[])
     // finalize
     delete store;
     delete engine;
+    Store::finalize();
 
     return 0;
 }

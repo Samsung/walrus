@@ -378,9 +378,6 @@ public:
 
     Instance* instantiate(ExecutionState& state, const ObjectVector& imports);
 
-    static FunctionType* initIndexFunctionType();
-    static FunctionType* initGlobalFunctionType(Value::Type type);
-
 private:
     Store* m_store;
     bool m_seenStartAttribute;

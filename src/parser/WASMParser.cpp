@@ -518,7 +518,7 @@ public:
 
     virtual void BeginElemSegmentInitExpr(Index index) override
     {
-        beginFunction(new Walrus::ModuleFunction(Walrus::Module::initIndexFunctionType()));
+        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)));
     }
 
     virtual void EndElemSegmentInitExpr(Index index) override
@@ -581,7 +581,7 @@ public:
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
         ASSERT(index == m_module->m_datas.size());
-        beginFunction(new Walrus::ModuleFunction(Walrus::Module::initIndexFunctionType()));
+        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)));
     }
 
     virtual void BeginDataSegmentInitExpr(Index index) override
@@ -631,7 +631,7 @@ public:
 
     virtual void BeginGlobalInitExpr(Index index) override
     {
-        auto ft = Walrus::Module::initGlobalFunctionType(m_module->m_globalInfos[index].first.type());
+        auto ft = Walrus::Store::getDefaultFunctionType(m_module->m_globalInfos[index].first.type());
         m_module->m_globalInfos[index].second = new Walrus::ModuleFunction(ft);
         beginFunction(m_module->m_globalInfos[index].second.value());
     }

@@ -64,6 +64,7 @@ public:
         FuncRef,
         ExternRef,
         Void, // Void type should be located at end
+        NUM = Void
     };
 
     Value()

@@ -18,12 +18,14 @@
 #define __WalrusStore__
 
 #include "util/Vector.h"
+#include "runtime/Value.h"
 
 namespace Walrus {
 
 class Engine;
 class Module;
 class Instance;
+class FunctionType;
 
 class Store {
 public:
@@ -34,23 +36,35 @@ public:
 
     ~Store();
 
-    void appendModule(const Module* module)
+    static void finalize();
+    static FunctionType* getDefaultFunctionType(Value::Type type);
+
+    void appendModule(Module* module)
     {
         m_modules.push_back(module);
     }
 
-    void appendInstance(const Instance* instance)
+    void appendInstance(Instance* instance)
     {
         m_instances.push_back(instance);
     }
 
-    void deleteModule(const Module* module);
+    void deleteModule(Module* module);
+
+    Instance* getLastInstance()
+    {
+        ASSERT(m_instances.size());
+        return m_instances.back();
+    }
 
 private:
     Engine* m_engine;
 
-    Vector<const Module*> m_modules;
-    Vector<const Instance*> m_instances;
+    Vector<Module*> m_modules;
+    Vector<Instance*> m_instances;
+
+    // default FunctionTypes used for initialization of Data, Element and Global
+    static FunctionType* g_defaultFunctionTypes[Value::Type::NUM];
 };
 
 } // namespace Walrus
