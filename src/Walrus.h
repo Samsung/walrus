@@ -223,7 +223,6 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
 #include <tuple>
 
 #if defined(COMPILER_MSVC)
@@ -345,7 +344,7 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 
 #define ALLOCA(bytes, typenameWithoutPointer)                     \
     (typenameWithoutPointer*)(LIKELY(bytes < 512) ? alloca(bytes) \
-                                                  : GC_MALLOC(bytes))
+                                                  : nullptr)
 
 #if !defined(STACK_GROWS_DOWN) && !defined(STACK_GROWS_UP)
 #define STACK_GROWS_DOWN
@@ -355,7 +354,6 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #define STACK_LIMIT_FROM_BASE (1024 * 1024 * 3) // 3MB
 #endif
 
-#include "GCUtil.h"
 #include "util/Optional.h"
 
 #endif

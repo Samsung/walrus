@@ -17,6 +17,8 @@
 #ifndef __WalrusStore__
 #define __WalrusStore__
 
+#include "util/Vector.h"
+
 namespace Walrus {
 
 class Engine;
@@ -42,20 +44,13 @@ public:
         m_instances.push_back(instance);
     }
 
-    void deleteModule(const Module* module)
-    {
-        for (std::vector<const Module*>::iterator it = m_modules.begin(); it != m_modules.end(); it++) {
-            if (*it == module) {
-                m_modules.erase(it);
-            }
-        }
-    }
+    void deleteModule(const Module* module);
 
 private:
     Engine* m_engine;
 
-    std::vector<const Module*> m_modules;
-    std::vector<const Instance*> m_instances;
+    Vector<const Module*> m_modules;
+    Vector<const Instance*> m_instances;
 };
 
 } // namespace Walrus

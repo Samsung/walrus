@@ -30,5 +30,4 @@ Exception::Exception(ExecutionState& state)
         s = s->m_parent;
     }
 }
-
 } // namespace Walrus

@@ -102,31 +102,31 @@ FunctionType* Module::initGlobalFunctionType(Value::Type type)
     switch (type) {
     case Value::Type::I32:
         if (!info[type])
-            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
         break;
     case Value::Type::I64:
         if (!info[type])
-            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
         break;
     case Value::Type::F32:
         if (!info[type])
-            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
         break;
     case Value::Type::F64:
         if (!info[type])
-            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
         break;
     case Value::Type::V128:
         if (!info[type])
-            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
         break;
     case Value::Type::FuncRef:
         if (!info[type])
-            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
         break;
     case Value::Type::ExternRef:
         if (!info[type])
-            info[type] = new (NoGC) FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
+            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
         break;
     default:
         RELEASE_ASSERT_NOT_REACHED();
