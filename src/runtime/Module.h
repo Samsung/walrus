@@ -362,8 +362,8 @@ public:
 
     GlobalType* globalType(uint32_t index) const
     {
-        ASSERT(index < m_global.size());
-        return const_cast<GlobalType*>(&m_global[index].first);
+        ASSERT(index < m_globalInfos.size());
+        return const_cast<GlobalType*>(&m_globalInfos[index].first);
     }
 
     const Vector<ImportType*, std::allocator<ImportType*>>& imports() const
@@ -400,7 +400,7 @@ private:
     MemoryTypeVector m_memoryTypes;
     TagTypeVector m_tagTypes;
 
-    Vector<std::pair<GlobalType, Optional<ModuleFunction*>>, GCUtil::gc_malloc_allocator<std::pair<GlobalType, Optional<ModuleFunction*>>>> m_global;
+    Vector<std::pair<GlobalType, Optional<ModuleFunction*>>, std::allocator<std::pair<GlobalType, Optional<ModuleFunction*>>>> m_globalInfos;
 };
 
 } // namespace Walrus

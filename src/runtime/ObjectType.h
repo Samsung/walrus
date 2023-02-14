@@ -21,7 +21,7 @@
 
 namespace Walrus {
 
-class ObjectType : public gc {
+class ObjectType {
 public:
     enum Kind : uint8_t {
         Invalid,
@@ -48,31 +48,37 @@ public:
     FunctionType(ValueTypeVector* param,
                  ValueTypeVector* result)
         : ObjectType(ObjectType::FunctionKind)
-        , m_param(param)
-        , m_result(result)
-        , m_paramStackSize(computeStackSize(*m_param))
-        , m_resultStackSize(computeStackSize(*m_result))
+        , m_paramTypes(param)
+        , m_resultTypes(result)
+        , m_paramStackSize(computeStackSize(*m_paramTypes))
+        , m_resultStackSize(computeStackSize(*m_resultTypes))
     {
+    }
+
+    ~FunctionType()
+    {
+        delete m_paramTypes;
+        delete m_resultTypes;
     }
 
     FunctionType* clone() const
     {
         ValueTypeVector* param = new ValueTypeVector();
         ValueTypeVector* result = new ValueTypeVector();
-        param->reserve(m_param->size());
-        result->reserve(m_result->size());
-        for (size_t i = 0; i < m_param->size(); i++) {
-            param->push_back(m_param->at(i));
+        param->reserve(m_paramTypes->size());
+        result->reserve(m_resultTypes->size());
+        for (size_t i = 0; i < m_paramTypes->size(); i++) {
+            param->push_back(m_paramTypes->at(i));
         }
-        for (size_t i = 0; i < m_result->size(); i++) {
-            result->push_back(m_result->at(i));
+        for (size_t i = 0; i < m_resultTypes->size(); i++) {
+            result->push_back(m_resultTypes->at(i));
         }
 
         return new FunctionType(param, result);
     }
 
-    ValueTypeVector& param() const { return *m_param; }
-    ValueTypeVector& result() const { return *m_result; }
+    ValueTypeVector& param() const { return *m_paramTypes; }
+    ValueTypeVector& result() const { return *m_resultTypes; }
     size_t paramStackSize() const { return m_paramStackSize; }
     size_t resultStackSize() const { return m_resultStackSize; }
 
@@ -82,19 +88,19 @@ public:
             return true;
         }
 
-        if (m_param->size() != other->param().size()) {
+        if (m_paramTypes->size() != other->param().size()) {
             return false;
         }
 
-        if (memcmp(m_param->data(), other->param().data(), sizeof(Value::Type) * other->param().size())) {
+        if (memcmp(m_paramTypes->data(), other->param().data(), sizeof(Value::Type) * other->param().size())) {
             return false;
         }
 
-        if (m_result->size() != other->result().size()) {
+        if (m_resultTypes->size() != other->result().size()) {
             return false;
         }
 
-        if (memcmp(m_result->data(), other->result().data(), sizeof(Value::Type) * other->result().size())) {
+        if (memcmp(m_resultTypes->data(), other->result().data(), sizeof(Value::Type) * other->result().size())) {
             return false;
         }
 
@@ -102,8 +108,8 @@ public:
     }
 
 private:
-    ValueTypeVector* m_param;
-    ValueTypeVector* m_result;
+    ValueTypeVector* m_paramTypes;
+    ValueTypeVector* m_resultTypes;
     size_t m_paramStackSize;
     size_t m_resultStackSize;
 
@@ -201,11 +207,10 @@ private:
 };
 
 // ObjectType Vectors
-typedef Vector<FunctionType*, GCUtil::gc_malloc_allocator<FunctionType*>> FunctionTypeVector;
-typedef Vector<GlobalType*, GCUtil::gc_malloc_allocator<GlobalType*>> GlobalTypeVector;
-typedef Vector<TableType*, GCUtil::gc_malloc_allocator<TableType*>> TableTypeVector;
-typedef Vector<MemoryType*, GCUtil::gc_malloc_allocator<MemoryType*>> MemoryTypeVector;
-typedef Vector<TagType*, GCUtil::gc_malloc_allocator<TagType*>> TagTypeVector;
+typedef Vector<FunctionType*, std::allocator<FunctionType*>> FunctionTypeVector;
+typedef Vector<TableType*, std::allocator<TableType*>> TableTypeVector;
+typedef Vector<MemoryType*, std::allocator<MemoryType*>> MemoryTypeVector;
+typedef Vector<TagType*, std::allocator<TagType*>> TagTypeVector;
 
 } // namespace Walrus
 

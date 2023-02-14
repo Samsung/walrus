@@ -439,12 +439,12 @@ public:
 
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) override
     {
-        ASSERT(m_module->m_global.size() == globalIndex);
+        ASSERT(m_module->m_globalInfos.size() == globalIndex);
         ASSERT(m_module->m_imports.size() == importIndex);
-        m_module->m_global.push_back(std::make_pair(Walrus::GlobalType(toValueKind(type), mutable_), nullptr));
+        m_module->m_globalInfos.push_back(std::make_pair(Walrus::GlobalType(toValueKind(type), mutable_), nullptr));
         m_module->m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Global,
-            moduleName, fieldName, &m_module->m_global[globalIndex].first));
+            moduleName, fieldName, &m_module->m_globalInfos[globalIndex].first));
     }
 
     virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, size_t initialSize, size_t maximumSize) override
@@ -619,20 +619,20 @@ public:
 
     virtual void OnGlobalCount(Index count) override
     {
-        m_module->m_global.reserve(count);
+        m_module->m_globalInfos.reserve(count);
     }
 
     virtual void BeginGlobal(Index index, Type type, bool mutable_) override
     {
-        ASSERT(m_module->m_global.size() == index);
-        m_module->m_global.push_back(std::make_pair(Walrus::GlobalType(toValueKind(type), mutable_), nullptr));
+        ASSERT(m_module->m_globalInfos.size() == index);
+        m_module->m_globalInfos.push_back(std::make_pair(Walrus::GlobalType(toValueKind(type), mutable_), nullptr));
     }
 
     virtual void BeginGlobalInitExpr(Index index) override
     {
-        auto ft = Walrus::Module::initGlobalFunctionType(m_module->m_global[index].first.type());
-        m_module->m_global[index].second = new Walrus::ModuleFunction(ft);
-        beginFunction(m_module->m_global[index].second.value());
+        auto ft = Walrus::Module::initGlobalFunctionType(m_module->m_globalInfos[index].first.type());
+        m_module->m_globalInfos[index].second = new Walrus::ModuleFunction(ft);
+        beginFunction(m_module->m_globalInfos[index].second.value());
     }
 
     virtual void EndGlobalInitExpr(Index index) override
@@ -892,7 +892,7 @@ public:
 
     virtual void OnGlobalGetExpr(Index index) override
     {
-        auto sz = Walrus::valueSizeInStack(m_module->m_global[index].first.type());
+        auto sz = Walrus::valueSizeInStack(m_module->m_globalInfos[index].first.type());
         auto stackPos = pushVMStack(sz);
         if (sz == 4) {
             pushByteCode(Walrus::GlobalGet32(stackPos, index));
@@ -906,7 +906,7 @@ public:
     {
         auto stackPos = peekVMStack();
 
-        auto sz = Walrus::valueSizeInStack(m_module->m_global[index].first.type());
+        auto sz = Walrus::valueSizeInStack(m_module->m_globalInfos[index].first.type());
         if (sz == 4) {
             ASSERT(peekVMStackSize() == 4);
             pushByteCode(Walrus::GlobalSet32(stackPos, index));
