@@ -37,7 +37,7 @@ void Trap::throwException(ExecutionState& state, const std::string& message)
     throw Exception::create(state, message);
 }
 
-void Trap::throwException(ExecutionState& state, Tag* tag, Vector<uint8_t, GCUtil::gc_malloc_atomic_allocator<uint8_t>>&& userExceptionData)
+void Trap::throwException(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
 {
     throw Exception::create(state, tag, std::move(userExceptionData));
 }

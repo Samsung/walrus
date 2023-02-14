@@ -96,9 +96,9 @@ struct ComputeReservedCapacityFunctionWithLog2AndPercent {
 using VectorDefaultComputeReservedCapacityFunction = ComputeReservedCapacityFunctionWithPercent<>;
 
 template <typename T,
-          typename Allocator,
+          typename Allocator = std::allocator<T>,
           typename ComputeReservedCapacityFunction = VectorDefaultComputeReservedCapacityFunction>
-class Vector : public gc {
+class Vector {
 public:
     Vector()
         : m_buffer(nullptr)
@@ -434,18 +434,6 @@ public:
         return buf;
     }
 
-    void* operator new(size_t size)
-    {
-        static MAY_THREAD_LOCAL bool typeInited = false;
-        static MAY_THREAD_LOCAL GC_descr descr;
-        if (!typeInited) {
-            GC_word desc[GC_BITMAP_SIZE(Vector)] = { 0 };
-            GC_set_bit(desc, GC_WORD_OFFSET(Vector, m_buffer));
-            descr = GC_make_descriptor(desc, GC_WORD_LEN(Vector));
-            typeInited = true;
-        }
-        return GC_MALLOC_EXPLICITLY_TYPED(size, descr);
-    }
     void* operator new[](size_t size) = delete;
 
 protected:
@@ -455,9 +443,9 @@ protected:
 };
 
 template <typename T,
-          typename Allocator,
+          typename Allocator = std::allocator<T>,
           typename ComputeReservedCapacityFunction = VectorDefaultComputeReservedCapacityFunction>
-class VectorWithNoSize : public gc {
+class VectorWithNoSize {
 public:
     VectorWithNoSize()
         : m_buffer(nullptr)
@@ -543,127 +531,7 @@ public:
         }
     }
 
-    void* operator new(size_t size)
-    {
-        static MAY_THREAD_LOCAL bool typeInited = false;
-        static MAY_THREAD_LOCAL GC_descr descr;
-        if (!typeInited) {
-            GC_word desc[GC_BITMAP_SIZE(VectorWithNoSize)] = { 0 };
-            GC_set_bit(desc, GC_WORD_OFFSET(VectorWithNoSize, m_buffer));
-            descr = GC_make_descriptor(desc, GC_WORD_LEN(VectorWithNoSize));
-            typeInited = true;
-        }
-        return GC_MALLOC_EXPLICITLY_TYPED(size, descr);
-    }
     void* operator new[](size_t size) = delete;
-
-protected:
-    T* m_buffer;
-    size_t m_capacity;
-};
-
-template <typename T,
-          typename ComputeReservedCapacityFunction = VectorDefaultComputeReservedCapacityFunction>
-class VectorWithNoSizeUseGCRealloc : public gc {
-public:
-    VectorWithNoSizeUseGCRealloc()
-        : m_buffer(nullptr)
-        , m_capacity(0)
-    {
-    }
-
-    const VectorWithNoSizeUseGCRealloc<T, ComputeReservedCapacityFunction>&
-    operator=(
-        const VectorWithNoSizeUseGCRealloc<T, ComputeReservedCapacityFunction>&
-            other)
-        = delete;
-    VectorWithNoSizeUseGCRealloc(
-        const VectorWithNoSizeUseGCRealloc<T, ComputeReservedCapacityFunction>&
-            other,
-        const T& newItem)
-        = delete;
-    ~VectorWithNoSizeUseGCRealloc()
-    {
-        if (m_buffer) {
-            GC_FREE(m_buffer);
-        }
-    }
-
-    void pushBack(const T& val, size_t newSize)
-    {
-        if (m_capacity <= (newSize)) {
-            ComputeReservedCapacityFunction f;
-            m_capacity = f(newSize);
-            m_buffer = (T*)GC_REALLOC(m_buffer, sizeof(T) * m_capacity);
-        }
-        m_buffer[newSize - 1] = val;
-    }
-
-    size_t capacity() const { return m_capacity; }
-
-    T& operator[](const size_t idx) { return m_buffer[idx]; }
-
-    const T& operator[](const size_t idx) const { return m_buffer[idx]; }
-
-    T* data() { return m_buffer; }
-
-    const T* data() const { return m_buffer; }
-
-    void clear()
-    {
-        if (m_buffer) {
-            GC_FREE(m_buffer);
-        }
-        m_buffer = nullptr;
-        m_capacity = 0;
-    }
-
-    void fitSizeTo(size_t oldSize, size_t newSize, const T& val = T())
-    {
-        if (newSize) {
-            if (newSize > m_capacity) {
-                size_t newCapacity = newSize;
-                T* newBuffer = (T*)GC_REALLOC(m_buffer, sizeof(T) * newCapacity);
-
-                for (size_t i = oldSize; i < newSize; i++) {
-                    newBuffer[i] = val;
-                }
-
-                m_capacity = newCapacity;
-                m_buffer = newBuffer;
-            } else {
-                for (size_t i = oldSize; i < newSize; i++) {
-                    m_buffer[i] = val;
-                }
-            }
-        } else {
-            clear();
-        }
-    }
-
-    void resize(size_t oldSize, size_t newSize, const T& val = T())
-    {
-        if (newSize) {
-            if (newSize > m_capacity) {
-                ComputeReservedCapacityFunction f;
-                size_t newCapacity = f(newSize);
-                T* newBuffer = (T*)GC_REALLOC(m_buffer, sizeof(T) * newCapacity);
-
-                for (size_t i = oldSize; i < newSize; i++) {
-                    newBuffer[i] = val;
-                }
-
-                m_capacity = newCapacity;
-                m_buffer = newBuffer;
-            } else {
-                for (size_t i = oldSize; i < newSize; i++) {
-                    m_buffer[i] = val;
-                }
-            }
-        } else {
-            clear();
-        }
-    }
 
 protected:
     T* m_buffer;
@@ -675,7 +543,7 @@ protected:
 template <unsigned int InlineStorageSize,
           typename T,
           typename ExternalStorageAllocator>
-class VectorWithInlineStorage : public gc {
+class VectorWithInlineStorage {
 public:
     VectorWithInlineStorage()
         : m_useExternalStorage(false)

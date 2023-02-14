@@ -18,6 +18,7 @@
 #include "parser/WASMParser.h"
 #include "interpreter/ByteCode.h"
 #include "interpreter/Opcode.h"
+#include "runtime/Store.h"
 #include "runtime/Module.h"
 
 #include "wabt/walrus/binary-reader-walrus.h"
@@ -1886,6 +1887,8 @@ std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, 
 
     std::string error = ReadWasmBinary(filename, data, len, &delegate);
     if (error.length()) {
+        // remove invalid module
+        store->deleteModule(module);
         return std::make_pair(nullptr, error);
     }
 
