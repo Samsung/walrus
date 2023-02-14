@@ -101,6 +101,7 @@ private:
     uint32_t m_size;
     uint32_t m_maximumSize;
 
+    // FIXME handle references of Function objects
     Vector<void*> m_elements;
 };
 

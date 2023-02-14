@@ -18,8 +18,12 @@
 #include "runtime/Store.h"
 #include "runtime/Module.h"
 #include "runtime/Instance.h"
+#include "runtime/ObjectType.h"
 
 namespace Walrus {
+
+FunctionType* Store::g_defaultFunctionTypes[Value::Type::NUM];
+
 Store::~Store()
 {
     // deallocate Modules and Instances
@@ -32,7 +36,54 @@ Store::~Store()
     }
 }
 
-void Store::deleteModule(const Module* module)
+void Store::finalize()
+{
+    for (size_t i = 0; i < Value::Type::NUM; i++) {
+        if (g_defaultFunctionTypes[i]) {
+            delete g_defaultFunctionTypes[i];
+        }
+    }
+}
+
+FunctionType* Store::getDefaultFunctionType(Value::Type type)
+{
+    switch (type) {
+    case Value::Type::I32:
+        if (!g_defaultFunctionTypes[type])
+            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
+        break;
+    case Value::Type::I64:
+        if (!g_defaultFunctionTypes[type])
+            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
+        break;
+    case Value::Type::F32:
+        if (!g_defaultFunctionTypes[type])
+            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
+        break;
+    case Value::Type::F64:
+        if (!g_defaultFunctionTypes[type])
+            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
+        break;
+    case Value::Type::V128:
+        if (!g_defaultFunctionTypes[type])
+            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
+        break;
+    case Value::Type::FuncRef:
+        if (!g_defaultFunctionTypes[type])
+            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
+        break;
+    case Value::Type::ExternRef:
+        if (!g_defaultFunctionTypes[type])
+            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+
+    return g_defaultFunctionTypes[type];
+}
+
+void Store::deleteModule(Module* module)
 {
     for (size_t i = 0; i < m_modules.size(); i++)
         if (m_modules[i] == module) {
