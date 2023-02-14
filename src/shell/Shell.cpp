@@ -778,7 +778,7 @@ int main(int argc, char* argv[])
 
     GC_INIT();
 
-    Engine* engine = new Engine;
+    Engine* engine = new Engine();
     Store* store = new Store(engine);
 
     Instance::InstanceVector instances;
@@ -806,6 +806,10 @@ int main(int argc, char* argv[])
             return -1;
         }
     }
+
+    // finalize
+    delete store;
+    delete engine;
 
     return 0;
 }

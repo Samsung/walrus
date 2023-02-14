@@ -23,6 +23,7 @@
 
 namespace Walrus {
 
+class Store;
 class Data;
 class Element;
 class Function;
@@ -82,10 +83,7 @@ class Instance : public Object {
 public:
     typedef Vector<Instance*, GCUtil::gc_malloc_allocator<Instance*>> InstanceVector;
 
-    Instance(Module* module)
-        : m_module(module)
-    {
-    }
+    Instance(Module* module);
 
     virtual Object::Kind kind() const override
     {

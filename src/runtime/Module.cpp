@@ -36,6 +36,15 @@ ModuleFunction::ModuleFunction(Module* module, FunctionType* functionType)
 {
 }
 
+Module::Module(Store* store)
+    : m_store(store)
+    , m_seenStartAttribute(false)
+    , m_version(0)
+    , m_start(0)
+{
+    store->appendModule(this);
+}
+
 FunctionType* Module::initIndexFunctionType()
 {
     return initGlobalFunctionType(Value::I32);
