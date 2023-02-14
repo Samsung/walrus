@@ -28,9 +28,8 @@
 
 namespace Walrus {
 
-ModuleFunction::ModuleFunction(Module* module, FunctionType* functionType)
-    : m_module(module)
-    , m_functionType(functionType)
+ModuleFunction::ModuleFunction(FunctionType* functionType)
+    : m_functionType(functionType)
     , m_requiredStackSize(std::max(m_functionType->paramStackSize(), m_functionType->resultStackSize()))
     , m_requiredStackSizeDueToLocal(0)
 {
@@ -43,6 +42,29 @@ Module::Module(Store* store)
     , m_start(0)
 {
     store->appendModule(this);
+}
+
+Module::~Module()
+{
+    for (size_t i = 0; i < m_imports.size(); i++) {
+        delete m_imports[i];
+    }
+
+    for (size_t i = 0; i < m_exports.size(); i++) {
+        delete m_exports[i];
+    }
+
+    for (size_t i = 0; i < m_functions.size(); i++) {
+        delete m_functions[i];
+    }
+
+    for (size_t i = 0; i < m_datas.size(); i++) {
+        delete m_datas[i];
+    }
+
+    for (size_t i = 0; i < m_elements.size(); i++) {
+        delete m_elements[i];
+    }
 }
 
 FunctionType* Module::initIndexFunctionType()
@@ -92,7 +114,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
 {
     Instance* instance = new Instance(this);
 
-    instance->m_function.reserve(m_function.size());
+    instance->m_function.reserve(m_functions.size());
     instance->m_table.reserve(m_tableTypes.size());
     instance->m_memory.reserve(m_memoryTypes.size());
     instance->m_global.reserve(m_global.size());
@@ -178,7 +200,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     // init defined function
-    for (size_t i = importFuncCount; i < m_function.size(); i++) {
+    for (size_t i = importFuncCount; i < m_functions.size(); i++) {
         ASSERT(i == instance->m_function.size());
         instance->m_function.push_back(new DefinedFunction(instance, function(i)));
     }
@@ -229,8 +251,8 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     // init table(elem segment)
-    instance->m_elementSegment.reserve(m_element.size());
-    for (auto elem : m_element) {
+    instance->m_elementSegment.reserve(m_elements.size());
+    for (auto elem : m_elements) {
         instance->m_elementSegment.pushBack(ElementSegment(elem));
 
         if (elem->mode() == SegmentMode::Active) {
@@ -279,8 +301,8 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     // init memory
-    instance->m_dataSegment.reserve(m_data.size());
-    for (auto init : m_data) {
+    instance->m_dataSegment.reserve(m_datas.size());
+    for (auto init : m_datas) {
         instance->m_dataSegment.pushBack(DataSegment(init));
         struct RunData {
             Data* init;
@@ -327,7 +349,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
 #if !defined(NDEBUG)
 void ModuleFunction::dumpByteCode()
 {
-    printf("module %p, function type %p\n", m_module, m_functionType);
+    printf("function type %p\n", m_functionType);
     printf("requiredStackSize %u, requiredStackSizeDueToLocal %u\n", m_requiredStackSize, m_requiredStackSizeDueToLocal);
 
     size_t idx = 0;
