@@ -192,9 +192,9 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
     auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
-    if (parseResult.second) {
+    if (!parseResult.second.empty()) {
         Trap::TrapResult tr;
-        tr.exception = Exception::create(parseResult.second.value());
+        tr.exception = Exception::create(parseResult.second);
         return tr;
     }
     auto module = parseResult.first;
@@ -225,15 +225,15 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
 
     for (size_t i = 0; i < importTypes.size(); i++) {
         auto import = importTypes[i];
-        if (import->moduleName()->equals("spectest")) {
-            if (import->fieldName()->equals("print")) {
+        if (import->moduleName() == "spectest") {
+            if (import->fieldName() == "print") {
                 auto ft = functionTypes[SpecTestFunctionTypes::NONE];
                 importValues.pushBack(new ImportedFunction(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("print_i32")) {
+            } else if (import->fieldName() == "print_i32") {
                 auto ft = functionTypes[SpecTestFunctionTypes::I32];
                 importValues.pushBack(new ImportedFunction(
                     ft,
@@ -241,7 +241,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         printI32(argv[0].asI32());
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("print_i64")) {
+            } else if (import->fieldName() == "print_i64") {
                 auto ft = functionTypes[SpecTestFunctionTypes::I64];
                 importValues.pushBack(new ImportedFunction(
                     ft,
@@ -249,7 +249,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         printI64(argv[0].asI64());
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("print_f32")) {
+            } else if (import->fieldName() == "print_f32") {
                 auto ft = functionTypes[SpecTestFunctionTypes::F32];
                 importValues.pushBack(new ImportedFunction(
                     ft,
@@ -257,7 +257,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         printF32(argv[0].asF32());
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("print_f64")) {
+            } else if (import->fieldName() == "print_f64") {
                 auto ft = functionTypes[SpecTestFunctionTypes::F64];
                 importValues.pushBack(new ImportedFunction(
                     ft,
@@ -265,7 +265,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         printF64(argv[0].asF64());
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("print_i32_f32")) {
+            } else if (import->fieldName() == "print_i32_f32") {
                 auto ft = functionTypes[SpecTestFunctionTypes::I32F32];
                 importValues.pushBack(new ImportedFunction(
                     ft,
@@ -274,7 +274,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         printF32(argv[1].asF32());
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("print_f64_f64")) {
+            } else if (import->fieldName() == "print_f64_f64") {
                 auto ft = functionTypes[SpecTestFunctionTypes::F64F64];
                 importValues.pushBack(new ImportedFunction(
                     ft,
@@ -283,17 +283,17 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         printF64(argv[1].asF64());
                     },
                     nullptr));
-            } else if (import->fieldName()->equals("global_i32")) {
+            } else if (import->fieldName() == "global_i32") {
                 importValues.pushBack(new Global(Value(int32_t(666))));
-            } else if (import->fieldName()->equals("global_i64")) {
+            } else if (import->fieldName() == "global_i64") {
                 importValues.pushBack(new Global(Value(int64_t(666))));
-            } else if (import->fieldName()->equals("global_f32")) {
+            } else if (import->fieldName() == "global_f32") {
                 importValues.pushBack(new Global(Value(float(0x44268000))));
-            } else if (import->fieldName()->equals("global_f64")) {
+            } else if (import->fieldName() == "global_f64") {
                 importValues.pushBack(new Global(Value(double(0x4084d00000000000))));
-            } else if (import->fieldName()->equals("table")) {
+            } else if (import->fieldName() == "table") {
                 importValues.pushBack(new Table(Value::Type::FuncRef, 10, 20));
-            } else if (import->fieldName()->equals("memory")) {
+            } else if (import->fieldName() == "memory") {
                 importValues.pushBack(new Memory(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
             } else {
                 // import wrong value for test
@@ -305,7 +305,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             }
         } else if (registeredInstanceMap) {
-            auto iter = registeredInstanceMap->find(std::string(import->moduleName()->buffer(), import->moduleName()->length()));
+            auto iter = registeredInstanceMap->find(import->moduleName());
             if (iter != registeredInstanceMap->end()) {
                 Instance* instance = iter->second;
                 auto e = instance->resolveExport(import->fieldName());
@@ -548,7 +548,7 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
     }
     if (expectedException) {
         RELEASE_ASSERT(trapResult.exception);
-        std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
+        std::string& s = trapResult.exception->message();
         RELEASE_ASSERT(s.find(expectedException) == 0);
         printf("invoke %s(", action->name.data());
         printConstVector(action->args);
@@ -625,15 +625,15 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertReturn: {
             auto* assertReturn = static_cast<wabt::AssertReturnCommand*>(command.get());
-            auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExport(new Walrus::String(assertReturn->action->name));
+            auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExport(assertReturn->action->name);
             RELEASE_ASSERT(value);
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertReturn->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
                 executeInvokeAction(action, fn, assertReturn->expected, nullptr);
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
                 auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
-                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(new Walrus::String(action->name)).value()->value();
+                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(action->name).value()->value();
                 RELEASE_ASSERT(equals(v, assertReturn->expected[0]))
                 printf("get %s", action->name.data());
                 printf(" expect value(");
@@ -646,11 +646,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertTrap: {
             auto* assertTrap = static_cast<wabt::AssertTrapCommand*>(command.get());
-            auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertTrap->action->name)).value();
+            auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertTrap->action->name).value();
             RELEASE_ASSERT(value);
             if (assertTrap->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertTrap->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), assertTrap->text.data());
             } else {
                 ASSERT_NOT_REACHED();
@@ -659,11 +659,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertException: {
             auto* assertException = static_cast<wabt::AssertExceptionCommand*>(command.get());
-            auto value = fetchInstance(assertException->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertException->action->name)).value();
+            auto value = fetchInstance(assertException->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertException->action->name).value();
             RELEASE_ASSERT(value);
             if (assertException->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertException->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), nullptr, true);
             } else {
                 ASSERT_NOT_REACHED();
@@ -677,7 +677,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             RELEASE_ASSERT(tsm);
             auto buf = readModuleData(&tsm->module);
             auto trapResult = executeWASM(store, filename, buf->data, instances, functionTypes, &registeredInstanceMap);
-            std::string s(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
+            std::string& s = trapResult.exception->message();
             RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
             break;
@@ -689,11 +689,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::Action: {
             auto* actionCommand = static_cast<wabt::ActionCommand*>(command.get());
-            auto value = fetchInstance(actionCommand->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(actionCommand->action->name)).value();
+            auto value = fetchInstance(actionCommand->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(actionCommand->action->name).value();
             RELEASE_ASSERT(value);
             if (actionCommand->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(actionCommand->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), nullptr);
             } else {
                 ASSERT_NOT_REACHED();
@@ -714,7 +714,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             }
             auto trapResult = executeWASM(store, filename, buf, instances, functionTypes);
             RELEASE_ASSERT(trapResult.exception);
-            std::string actual(trapResult.exception->message()->buffer(), trapResult.exception->message()->length());
+            std::string& actual = trapResult.exception->message();
             printf("assertModuleInvalid (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertModuleInvalid->text.data(), actual.data(), assertModuleInvalid->module->location().line);
             break;
         }
@@ -741,11 +741,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertExhaustion: {
             auto* assertExhaustion = static_cast<wabt::AssertExhaustionCommand*>(command.get());
-            auto value = fetchInstance(assertExhaustion->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(assertExhaustion->action->name)).value();
+            auto value = fetchInstance(assertExhaustion->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertExhaustion->action->name).value();
             RELEASE_ASSERT(value);
             if (assertExhaustion->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertExhaustion->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(new Walrus::String(action->name)).value();
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
                 executeInvokeAction(action, fn, wabt::ConstVector(), assertExhaustion->text.data());
             } else {
                 ASSERT_NOT_REACHED();

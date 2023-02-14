@@ -28,10 +28,10 @@ Instance::Instance(Module* module)
     module->store()->appendInstance(this);
 }
 
-Optional<ExportType*> Instance::resolveExport(String* name)
+Optional<ExportType*> Instance::resolveExport(std::string& name)
 {
     for (auto me : m_module->exports()) {
-        if (me->name()->equals(name)) {
+        if (me->name() == name) {
             return me;
         }
     }
@@ -39,7 +39,7 @@ Optional<ExportType*> Instance::resolveExport(String* name)
     return nullptr;
 }
 
-Optional<Function*> Instance::resolveExportFunction(String* name)
+Optional<Function*> Instance::resolveExportFunction(std::string& name)
 {
     auto me = resolveExport(name);
     if (me && me->exportType() == ExportType::Function) {
@@ -49,7 +49,7 @@ Optional<Function*> Instance::resolveExportFunction(String* name)
     return nullptr;
 }
 
-Optional<Tag*> Instance::resolveExportTag(String* name)
+Optional<Tag*> Instance::resolveExportTag(std::string& name)
 {
     auto me = resolveExport(name);
     if (me && me->exportType() == ExportType::Tag) {
@@ -59,7 +59,7 @@ Optional<Tag*> Instance::resolveExportTag(String* name)
     return nullptr;
 }
 
-Optional<Table*> Instance::resolveExportTable(String* name)
+Optional<Table*> Instance::resolveExportTable(std::string& name)
 {
     auto me = resolveExport(name);
     if (me && me->exportType() == ExportType::Table) {
@@ -69,7 +69,7 @@ Optional<Table*> Instance::resolveExportTable(String* name)
     return nullptr;
 }
 
-Optional<Memory*> Instance::resolveExportMemory(String* name)
+Optional<Memory*> Instance::resolveExportMemory(std::string& name)
 {
     auto me = resolveExport(name);
     if (me && me->exportType() == ExportType::Memory) {
@@ -79,7 +79,7 @@ Optional<Memory*> Instance::resolveExportMemory(String* name)
     return nullptr;
 }
 
-Optional<Global*> Instance::resolveExportGlobal(String* name)
+Optional<Global*> Instance::resolveExportGlobal(std::string& name)
 {
     auto me = resolveExport(name);
     if (me && me->exportType() == ExportType::Global) {
