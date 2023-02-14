@@ -17,23 +17,45 @@
 #ifndef __WalrusStore__
 #define __WalrusStore__
 
-#include "util/String.h"
-#include "runtime/Value.h"
-#include "runtime/Engine.h"
-
 namespace Walrus {
 
 class Engine;
+class Module;
+class Instance;
 
-class Store : public gc {
+class Store {
 public:
     Store(Engine* engine)
         : m_engine(engine)
     {
     }
 
+    ~Store();
+
+    void appendModule(const Module* module)
+    {
+        m_modules.push_back(module);
+    }
+
+    void appendInstance(const Instance* instance)
+    {
+        m_instances.push_back(instance);
+    }
+
+    void deleteModule(const Module* module)
+    {
+        for (std::vector<const Module*>::iterator it = m_modules.begin(); it != m_modules.end(); it++) {
+            if (*it == module) {
+                m_modules.erase(it);
+            }
+        }
+    }
+
 private:
     Engine* m_engine;
+
+    std::vector<const Module*> m_modules;
+    std::vector<const Instance*> m_instances;
 };
 
 } // namespace Walrus

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-present Samsung Electronics Co., Ltd
+ * Copyright (c) 2023-present Samsung Electronics Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "Walrus.h"
 
-#ifndef __WalrusEngine__
-#define __WalrusEngine__
+#include "runtime/Store.h"
+#include "runtime/Module.h"
+#include "runtime/Instance.h"
 
 namespace Walrus {
+Store::~Store()
+{
+    for (size_t i = 0; i < m_modules.size(); i++) {
+        delete m_modules[i];
+    }
 
-class Engine {
-};
+    for (size_t i = 0; i < m_instances.size(); i++) {
+        delete m_instances[i];
+    }
+}
+
 
 } // namespace Walrus
-
-#endif // __WalrusEngine__

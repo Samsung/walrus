@@ -305,13 +305,7 @@ class Module : public Object {
     friend class wabt::WASMBinaryReader;
 
 public:
-    Module(Store* store)
-        : m_store(store)
-        , m_seenStartAttribute(false)
-        , m_version(0)
-        , m_start(0)
-    {
-    }
+    Module(Store* store);
 
     virtual Object::Kind kind() const override
     {
@@ -321,6 +315,11 @@ public:
     virtual bool isModule() const override
     {
         return true;
+    }
+
+    Store* store() const
+    {
+        return m_store;
     }
 
     ModuleFunction* function(uint32_t index)
