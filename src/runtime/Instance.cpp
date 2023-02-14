@@ -19,6 +19,11 @@
 #include "Instance.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
+#include "runtime/Function.h"
+#include "runtime/Table.h"
+#include "runtime/Memory.h"
+#include "runtime/Global.h"
+#include "runtime/Tag.h"
 
 namespace Walrus {
 
@@ -26,6 +31,29 @@ Instance::Instance(Module* module)
     : m_module(module)
 {
     module->store()->appendInstance(this);
+}
+
+Instance::~Instance()
+{
+    for (size_t i = 0; i < m_function.size(); i++) {
+        delete m_function[i];
+    }
+
+    for (size_t i = 0; i < m_table.size(); i++) {
+        delete m_table[i];
+    }
+
+    for (size_t i = 0; i < m_memory.size(); i++) {
+        delete m_memory[i];
+    }
+
+    for (size_t i = 0; i < m_global.size(); i++) {
+        delete m_global[i];
+    }
+
+    for (size_t i = 0; i < m_tag.size(); i++) {
+        delete m_tag[i];
+    }
 }
 
 Optional<ExportType*> Instance::resolveExport(std::string& name)

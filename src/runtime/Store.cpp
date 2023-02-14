@@ -22,6 +22,7 @@
 namespace Walrus {
 Store::~Store()
 {
+    // deallocate Modules and Instances
     for (size_t i = 0; i < m_modules.size(); i++) {
         delete m_modules[i];
     }
