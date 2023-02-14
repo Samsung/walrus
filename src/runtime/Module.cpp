@@ -15,14 +15,15 @@
  */
 #include "Walrus.h"
 
-#include "runtime/Module.h"
-#include "runtime/Function.h"
-#include "runtime/Instance.h"
 #include "runtime/Store.h"
-#include "runtime/Trap.h"
-#include "runtime/Memory.h"
-#include "runtime/Table.h"
+#include "runtime/Module.h"
+#include "runtime/Instance.h"
+#include "runtime/Function.h"
 #include "runtime/Global.h"
+#include "runtime/Table.h"
+#include "runtime/Memory.h"
+#include "runtime/Tag.h"
+#include "runtime/Trap.h"
 #include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 
@@ -274,9 +275,9 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     // init table(elem segment)
-    instance->m_elementSegment.reserve(m_elements.size());
+    instance->m_elementSegments.reserve(m_elements.size());
     for (auto elem : m_elements) {
-        instance->m_elementSegment.pushBack(ElementSegment(elem));
+        instance->m_elementSegments.pushBack(ElementSegment(elem));
 
         if (elem->mode() == SegmentMode::Active) {
             uint32_t index = 0;
@@ -317,16 +318,16 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                 }
             }
 
-            instance->m_elementSegment.back().drop();
+            instance->m_elementSegments.back().drop();
         } else if (elem->mode() == SegmentMode::Declared) {
-            instance->m_elementSegment.back().drop();
+            instance->m_elementSegments.back().drop();
         }
     }
 
     // init memory
-    instance->m_dataSegment.reserve(m_datas.size());
+    instance->m_dataSegments.reserve(m_datas.size());
     for (auto init : m_datas) {
-        instance->m_dataSegment.pushBack(DataSegment(init));
+        instance->m_dataSegments.pushBack(DataSegment(init));
         struct RunData {
             Data* init;
             Instance* instance;

@@ -98,7 +98,7 @@ protected:
             Trap::throwException(state, "call stack exhausted");
         }
     }
-    virtual ~Function() {}
+
     const FunctionType* m_functionType;
 };
 

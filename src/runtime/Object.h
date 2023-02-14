@@ -30,7 +30,7 @@ class Memory;
 class Trap;
 class Tag;
 
-class Object : public gc {
+class Object {
 public:
     virtual ~Object() {}
 
@@ -137,7 +137,7 @@ public:
     }
 };
 
-typedef Vector<Object*, GCUtil::gc_malloc_allocator<Object*>> ObjectVector;
+typedef Vector<Object*, std::allocator<Object*>> ObjectVector;
 
 } // namespace Walrus
 
