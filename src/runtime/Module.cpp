@@ -91,49 +91,6 @@ Module::~Module()
     }
 }
 
-FunctionType* Module::initIndexFunctionType()
-{
-    return initGlobalFunctionType(Value::I32);
-}
-
-FunctionType* Module::initGlobalFunctionType(Value::Type type)
-{
-    static FunctionType* info[Value::Type::Void];
-    switch (type) {
-    case Value::Type::I32:
-        if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
-        break;
-    case Value::Type::I64:
-        if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
-        break;
-    case Value::Type::F32:
-        if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
-        break;
-    case Value::Type::F64:
-        if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
-        break;
-    case Value::Type::V128:
-        if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
-        break;
-    case Value::Type::FuncRef:
-        if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
-        break;
-    case Value::Type::ExternRef:
-        if (!info[type])
-            info[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
-        break;
-    default:
-        RELEASE_ASSERT_NOT_REACHED();
-    }
-    return info[type];
-}
-
 Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports)
 {
     Instance* instance = new Instance(this);
