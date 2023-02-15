@@ -201,7 +201,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     auto module = parseResult.first;
     const auto& importTypes = module->imports();
 
-    ObjectVector importValues;
+    SharedObjectVector importValues;
     importValues.reserve(importTypes.size());
     /*
         (module ;; spectest host module(https://github.com/WebAssembly/spec/tree/main/interpreter)
@@ -229,14 +229,14 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         if (import->moduleName() == "spectest") {
             if (import->fieldName() == "print") {
                 auto ft = functionTypes[SpecTestFunctionTypes::NONE];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i32") {
                 auto ft = functionTypes[SpecTestFunctionTypes::I32];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printI32(argv[0].asI32());
@@ -244,7 +244,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             } else if (import->fieldName() == "print_i64") {
                 auto ft = functionTypes[SpecTestFunctionTypes::I64];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printI64(argv[0].asI64());
@@ -252,7 +252,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             } else if (import->fieldName() == "print_f32") {
                 auto ft = functionTypes[SpecTestFunctionTypes::F32];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printF32(argv[0].asF32());
@@ -260,7 +260,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             } else if (import->fieldName() == "print_f64") {
                 auto ft = functionTypes[SpecTestFunctionTypes::F64];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printF64(argv[0].asF64());
@@ -268,7 +268,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             } else if (import->fieldName() == "print_i32_f32") {
                 auto ft = functionTypes[SpecTestFunctionTypes::I32F32];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printI32(argv[0].asI32());
@@ -277,7 +277,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             } else if (import->fieldName() == "print_f64_f64") {
                 auto ft = functionTypes[SpecTestFunctionTypes::F64F64];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                         printF64(argv[0].asF64());
@@ -285,21 +285,21 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "global_i32") {
-                importValues.push_back(new Global(Value(int32_t(666))));
+                importValues.push_back(std::make_shared<Global>(Value(int32_t(666))));
             } else if (import->fieldName() == "global_i64") {
-                importValues.push_back(new Global(Value(int64_t(666))));
+                importValues.push_back(std::make_shared<Global>(Value(int64_t(666))));
             } else if (import->fieldName() == "global_f32") {
-                importValues.push_back(new Global(Value(float(0x44268000))));
+                importValues.push_back(std::make_shared<Global>(Value(float(0x44268000))));
             } else if (import->fieldName() == "global_f64") {
-                importValues.push_back(new Global(Value(double(0x4084d00000000000))));
+                importValues.push_back(std::make_shared<Global>(Value(double(0x4084d00000000000))));
             } else if (import->fieldName() == "table") {
-                importValues.push_back(new Table(Value::Type::FuncRef, 10, 20));
+                importValues.push_back(std::make_shared<Table>(Value::Type::FuncRef, 10, 20));
             } else if (import->fieldName() == "memory") {
-                importValues.push_back(new Memory(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
+                importValues.push_back(std::make_shared<Memory>(1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
             } else {
                 // import wrong value for test
                 auto ft = functionTypes[SpecTestFunctionTypes::INVALID];
-                importValues.push_back(new ImportedFunction(
+                importValues.push_back(std::make_shared<ImportedFunction>(
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
                     },
@@ -309,18 +309,18 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             auto iter = registeredInstanceMap->find(import->moduleName());
             if (iter != registeredInstanceMap->end()) {
                 Instance* instance = iter->second;
-                auto e = instance->resolveExport(import->fieldName());
+                auto e = instance->resolveExportType(import->fieldName());
                 RELEASE_ASSERT(e);
                 if (e->exportType() == ExportType::Function) {
-                    importValues.push_back(instance->resolveExportFunction(import->fieldName()).value());
+                    importValues.push_back(instance->resolveExportFunction(import->fieldName()));
                 } else if (e->exportType() == ExportType::Tag) {
-                    importValues.push_back(instance->resolveExportTag(import->fieldName()).value());
+                    importValues.push_back(instance->resolveExportTag(import->fieldName()));
                 } else if (e->exportType() == ExportType::Table) {
-                    importValues.push_back(instance->resolveExportTable(import->fieldName()).value());
+                    importValues.push_back(instance->resolveExportTable(import->fieldName()));
                 } else if (e->exportType() == ExportType::Memory) {
-                    importValues.push_back(instance->resolveExportMemory(import->fieldName()).value());
+                    importValues.push_back(instance->resolveExportMemory(import->fieldName()));
                 } else if (e->exportType() == ExportType::Global) {
-                    importValues.push_back(instance->resolveExportGlobal(import->fieldName()).value());
+                    importValues.push_back(instance->resolveExportGlobal(import->fieldName()));
                 } else {
                     RELEASE_ASSERT_NOT_REACHED();
                 }
@@ -330,7 +330,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
 
     struct RunData {
         Module* module;
-        ObjectVector& importValues;
+        SharedObjectVector& importValues;
     } data = { module.value(), importValues };
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {
@@ -625,15 +625,15 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertReturn: {
             auto* assertReturn = static_cast<wabt::AssertReturnCommand*>(command.get());
-            auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExport(assertReturn->action->name);
+            auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExportType(assertReturn->action->name);
             RELEASE_ASSERT(value);
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertReturn->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
-                executeInvokeAction(action, fn, assertReturn->expected, nullptr);
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
+                executeInvokeAction(action, fn.get(), assertReturn->expected, nullptr);
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
                 auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
-                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(action->name).value()->value();
+                auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(action->name)->value();
                 RELEASE_ASSERT(equals(v, assertReturn->expected[0]))
                 printf("get %s", action->name.data());
                 printf(" expect value(");
@@ -646,12 +646,12 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertTrap: {
             auto* assertTrap = static_cast<wabt::AssertTrapCommand*>(command.get());
-            auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertTrap->action->name).value();
+            auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertTrap->action->name);
             RELEASE_ASSERT(value);
             if (assertTrap->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertTrap->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
-                executeInvokeAction(action, fn, wabt::ConstVector(), assertTrap->text.data());
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
+                executeInvokeAction(action, fn.get(), wabt::ConstVector(), assertTrap->text.data());
             } else {
                 ASSERT_NOT_REACHED();
             }
@@ -659,12 +659,12 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertException: {
             auto* assertException = static_cast<wabt::AssertExceptionCommand*>(command.get());
-            auto value = fetchInstance(assertException->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertException->action->name).value();
+            auto value = fetchInstance(assertException->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertException->action->name);
             RELEASE_ASSERT(value);
             if (assertException->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertException->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
-                executeInvokeAction(action, fn, wabt::ConstVector(), nullptr, true);
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
+                executeInvokeAction(action, fn.get(), wabt::ConstVector(), nullptr, true);
             } else {
                 ASSERT_NOT_REACHED();
             }
@@ -689,12 +689,12 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::Action: {
             auto* actionCommand = static_cast<wabt::ActionCommand*>(command.get());
-            auto value = fetchInstance(actionCommand->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(actionCommand->action->name).value();
+            auto value = fetchInstance(actionCommand->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(actionCommand->action->name);
             RELEASE_ASSERT(value);
             if (actionCommand->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(actionCommand->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
-                executeInvokeAction(action, fn, wabt::ConstVector(), nullptr);
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
+                executeInvokeAction(action, fn.get(), wabt::ConstVector(), nullptr);
             } else {
                 ASSERT_NOT_REACHED();
             }
@@ -741,12 +741,12 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         }
         case wabt::CommandType::AssertExhaustion: {
             auto* assertExhaustion = static_cast<wabt::AssertExhaustionCommand*>(command.get());
-            auto value = fetchInstance(assertExhaustion->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertExhaustion->action->name).value();
+            auto value = fetchInstance(assertExhaustion->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertExhaustion->action->name);
             RELEASE_ASSERT(value);
             if (assertExhaustion->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertExhaustion->action.get());
-                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name).value();
-                executeInvokeAction(action, fn, wabt::ConstVector(), assertExhaustion->text.data());
+                auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
+                executeInvokeAction(action, fn.get(), wabt::ConstVector(), assertExhaustion->text.data());
             } else {
                 ASSERT_NOT_REACHED();
             }

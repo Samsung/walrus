@@ -25,7 +25,7 @@ namespace Walrus {
 
 class DataSegment;
 
-class Memory : public Object {
+class Memory : public Extern {
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
 

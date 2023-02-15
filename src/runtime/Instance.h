@@ -94,34 +94,36 @@ public:
         return true;
     }
 
-    Function* function(uint32_t index) const { return m_function[index]; }
+    Function* function(uint32_t index) const { return m_functions[index].get(); }
     Memory* memory(uint32_t index) const
     {
         // now only one memory is allowed for each Instance/Module
         ASSERT(index == 0);
-        return m_memory[index];
+        return m_memories[index].get();
     }
-    Table* table(uint32_t index) const { return m_table[index]; }
-    Tag* tag(uint32_t index) const { return m_tag[index]; }
-    Global* global(uint32_t index) const { return m_global[index]; }
+    Table* table(uint32_t index) const { return m_tables[index].get(); }
+    Tag* tag(uint32_t index) const { return m_tags[index].get(); }
+    Global* global(uint32_t index) const { return m_globals[index].get(); }
+
     DataSegment& dataSegment(uint32_t index) { return m_dataSegments[index]; }
     ElementSegment& elementSegment(uint32_t index) { return m_elementSegments[index]; }
 
-    Optional<ExportType*> resolveExport(std::string& name);
-    Optional<Function*> resolveExportFunction(std::string& name);
-    Optional<Tag*> resolveExportTag(std::string& name);
-    Optional<Table*> resolveExportTable(std::string& name);
-    Optional<Memory*> resolveExportMemory(std::string& name);
-    Optional<Global*> resolveExportGlobal(std::string& name);
+    Optional<ExportType*> resolveExportType(std::string& name);
+
+    std::shared_ptr<Function> resolveExportFunction(std::string& name);
+    std::shared_ptr<Tag> resolveExportTag(std::string& name);
+    std::shared_ptr<Table> resolveExportTable(std::string& name);
+    std::shared_ptr<Memory> resolveExportMemory(std::string& name);
+    std::shared_ptr<Global> resolveExportGlobal(std::string& name);
 
 private:
     Module* m_module;
 
-    Vector<Function*, std::allocator<Function*>> m_function;
-    Vector<Table*, std::allocator<Table*>> m_table;
-    Vector<Memory*, std::allocator<Memory*>> m_memory;
-    Vector<Global*, std::allocator<Global*>> m_global;
-    Vector<Tag*, std::allocator<Tag*>> m_tag;
+    std::vector<std::shared_ptr<Function>> m_functions;
+    std::vector<std::shared_ptr<Table>> m_tables;
+    std::vector<std::shared_ptr<Memory>> m_memories;
+    std::vector<std::shared_ptr<Global>> m_globals;
+    std::vector<std::shared_ptr<Tag>> m_tags;
 
     Vector<DataSegment, std::allocator<DataSegment>> m_dataSegments;
     Vector<ElementSegment, std::allocator<ElementSegment>> m_elementSegments;

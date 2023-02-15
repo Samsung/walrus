@@ -224,6 +224,7 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #include <unordered_map>
 #include <unordered_set>
 #include <tuple>
+#include <vector>
 
 #if defined(COMPILER_MSVC)
 #include <stddef.h>
@@ -342,9 +343,10 @@ if (f.type == Type::B) { puts("failed in msvc."); }
     static void operator delete(void*) = delete;  \
     static void operator delete[](void*) = delete;
 
-#define ALLOCA(bytes, typenameWithoutPointer)                     \
-    (typenameWithoutPointer*)(LIKELY(bytes < 512) ? alloca(bytes) \
-                                                  : nullptr)
+#define ALLOCA(Type, Result, Bytes, Success)                       \
+    Type* Result = (Type*)(LIKELY(Bytes < 512) ? alloca(Bytes)     \
+                                               : new char[Bytes]); \
+    bool Success = LIKELY(Bytes < 512) ? true : false;
 
 #if !defined(STACK_GROWS_DOWN) && !defined(STACK_GROWS_UP)
 #define STACK_GROWS_DOWN

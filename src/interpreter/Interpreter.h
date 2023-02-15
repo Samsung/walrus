@@ -38,13 +38,15 @@ private:
                                           size_t programCounter,
                                           uint8_t* bp,
                                           Instance* instance,
-                                          Memory** memories,
-                                          Table** tables,
-                                          Global** globals);
+                                          const std::vector<std::shared_ptr<Memory>>& memories,
+                                          const std::vector<std::shared_ptr<Table>>& tables,
+                                          const std::vector<std::shared_ptr<Global>>& globals);
+
     static void callOperation(ExecutionState& state,
                               size_t& programCounter,
                               uint8_t* bp,
                               Instance* instance);
+
     static void callIndirectOperation(ExecutionState& state,
                                       size_t& programCounter,
                                       uint8_t* bp,

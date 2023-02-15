@@ -137,7 +137,13 @@ public:
     }
 };
 
+// Extern objects could be shared with other Module
+// Need to have a reference counter
+class Extern : public Object {
+};
+
 typedef Vector<Object*, std::allocator<Object*>> ObjectVector;
+typedef std::vector<std::shared_ptr<Object>> SharedObjectVector;
 
 } // namespace Walrus
 
