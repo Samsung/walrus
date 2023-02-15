@@ -47,8 +47,8 @@ public:
                 Tag };
 
     ImportType(Type t,
-               std::string& moduleName,
-               std::string& fieldName,
+               const std::string& moduleName,
+               const std::string& fieldName,
                const ObjectType* type)
         : m_importType(t)
         , m_moduleName(moduleName)
@@ -57,8 +57,8 @@ public:
     {
     }
 
-    ImportType(std::string& moduleName,
-               std::string& fieldName,
+    ImportType(const std::string& moduleName,
+               const std::string& fieldName,
                const ObjectType* type)
         : m_importType(Function)
         , m_moduleName(moduleName)
