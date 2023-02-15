@@ -94,6 +94,8 @@ public:
         return true;
     }
 
+    Module* module() const { return m_module; }
+
     Function* function(uint32_t index) const { return m_functions[index].get(); }
     Memory* memory(uint32_t index) const
     {
@@ -104,6 +106,17 @@ public:
     Table* table(uint32_t index) const { return m_tables[index].get(); }
     Tag* tag(uint32_t index) const { return m_tags[index].get(); }
     Global* global(uint32_t index) const { return m_globals[index].get(); }
+
+    std::shared_ptr<Function>& functionPtr(uint32_t index) { return m_functions[index]; }
+    std::shared_ptr<Memory>& memoryPtr(uint32_t index)
+    {
+        // now only one memory is allowed for each Instance/Module
+        ASSERT(index == 0);
+        return m_memories[index];
+    }
+    std::shared_ptr<Table>& tablePtr(uint32_t index) { return m_tables[index]; }
+    std::shared_ptr<Tag>& tagPtr(uint32_t index) { return m_tags[index]; }
+    std::shared_ptr<Global>& globalPtr(uint32_t index) { return m_globals[index]; }
 
     DataSegment& dataSegment(uint32_t index) { return m_dataSegments[index]; }
     ElementSegment& elementSegment(uint32_t index) { return m_elementSegments[index]; }

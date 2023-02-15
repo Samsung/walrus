@@ -36,17 +36,13 @@ using namespace Walrus;
 #define own
 
 // Structures
-struct wasm_gc : public gc {
-    // for marking of GC objects
-};
-
-struct wasm_importtype_t : public wasm_gc {
-    wasm_importtype_t(const ImportType* type, String* m, String* n, own wasm_externtype_t* et)
+struct wasm_importtype_t {
+    wasm_importtype_t(const ImportType* type, std::string& m, std::string& n, own wasm_externtype_t* et)
         : importType(type)
         , externType(et)
     {
-        wasm_byte_vec_new(&module, m->length(), m->buffer());
-        wasm_byte_vec_new(&name, n->length(), n->buffer());
+        wasm_byte_vec_new(&module, m.length(), m.data());
+        wasm_byte_vec_new(&name, n.length(), n.data());
     }
 
     wasm_importtype_t(const ImportType* type, own wasm_name_t* m, own wasm_name_t* n, own wasm_externtype_t* et)
@@ -71,11 +67,11 @@ struct wasm_importtype_t : public wasm_gc {
     own wasm_externtype_t* externType;
 };
 
-struct wasm_exporttype_t : public wasm_gc {
-    wasm_exporttype_t(String* n, own wasm_externtype_t* t)
+struct wasm_exporttype_t {
+    wasm_exporttype_t(std::string& n, own wasm_externtype_t* t)
         : type(t)
     {
-        wasm_byte_vec_new(&name, n->length(), n->buffer());
+        wasm_byte_vec_new(&name, n.length(), n.data());
     }
 
     wasm_exporttype_t(own wasm_name_t* n, own wasm_externtype_t* t)
@@ -105,7 +101,7 @@ struct wasm_engine_t {
 
     ~wasm_engine_t()
     {
-        GC_FREE(engine);
+        delete engine;
         engine = nullptr;
     }
 
@@ -126,8 +122,9 @@ struct wasm_store_t {
 
     ~wasm_store_t()
     {
-        GC_FREE(store);
+        delete store;
         store = nullptr;
+        Store::finalize();
     }
 
     Store* get() const
@@ -148,7 +145,7 @@ struct wasm_valtype_t {
     Value::Type type;
 };
 
-struct wasm_externtype_t : public wasm_gc {
+struct wasm_externtype_t {
     wasm_externtype_t(const ObjectType* t)
         : type(t)
     {
@@ -247,7 +244,7 @@ struct wasm_memorytype_t : wasm_externtype_t {
     wasm_limits_t limits;
 };
 
-struct wasm_ref_t : public wasm_gc {
+struct wasm_ref_t {
     wasm_ref_t(const Object* o)
         : obj(o)
     {
@@ -269,14 +266,18 @@ struct wasm_ref_t : public wasm_gc {
 };
 
 struct wasm_extern_t : wasm_ref_t {
-    wasm_extern_t(const Object* ptr, const ObjectType* type)
-        : wasm_ref_t(ptr)
+    wasm_extern_t(const std::shared_ptr<Object>& ptr, const ObjectType* type)
+        : wasm_ref_t(ptr.get())
+        , sharedPtr(ptr)
         , objectType(type)
     {
     }
 
     virtual ~wasm_extern_t() {}
 
+    std::shared_ptr<Object>& getSharedPtr() { return sharedPtr; }
+
+    std::shared_ptr<Object> sharedPtr;
     const ObjectType* objectType;
 };
 
@@ -294,8 +295,8 @@ struct wasm_module_t : wasm_ref_t {
 };
 
 struct wasm_func_t : wasm_extern_t {
-    wasm_func_t(const Function* func, const wasm_functype_t* ft)
-        : wasm_extern_t(func, ft->get())
+    wasm_func_t(const std::shared_ptr<Function>& func, const wasm_functype_t* ft)
+        : wasm_extern_t(std::static_pointer_cast<Object>(func), ft->get())
     {
     }
 
@@ -313,8 +314,8 @@ struct wasm_func_t : wasm_extern_t {
 };
 
 struct wasm_global_t : wasm_extern_t {
-    wasm_global_t(const Global* glob, const wasm_globaltype_t* gt)
-        : wasm_extern_t(glob, gt->get())
+    wasm_global_t(const std::shared_ptr<Global>& glob, const wasm_globaltype_t* gt)
+        : wasm_extern_t(std::static_pointer_cast<Object>(glob), gt->get())
     {
     }
 
@@ -332,8 +333,8 @@ struct wasm_global_t : wasm_extern_t {
 };
 
 struct wasm_table_t : wasm_extern_t {
-    wasm_table_t(const Table* table, const wasm_tabletype_t* tt)
-        : wasm_extern_t(table, tt->get())
+    wasm_table_t(const std::shared_ptr<Table> table, const wasm_tabletype_t* tt)
+        : wasm_extern_t(std::static_pointer_cast<Object>(table), tt->get())
     {
     }
 
@@ -351,8 +352,8 @@ struct wasm_table_t : wasm_extern_t {
 };
 
 struct wasm_memory_t : wasm_extern_t {
-    wasm_memory_t(const Memory* mem, const wasm_memorytype_t* mt)
-        : wasm_extern_t(mem, mt->get())
+    wasm_memory_t(const std::shared_ptr<Memory> mem, const wasm_memorytype_t* mt)
+        : wasm_extern_t(std::static_pointer_cast<Object>(mem), mt->get())
     {
     }
 
@@ -533,8 +534,8 @@ extern "C" {
 own wasm_importtype_t* wasm_importtype_new(
     own wasm_name_t* module, own wasm_name_t* name, own wasm_externtype_t* type)
 {
-    ImportType* importType = new ImportType(new String(module->data, module->size),
-                                            new String(name->data, name->size),
+    ImportType* importType = new ImportType(std::string(module->data, module->size),
+                                            std::string(name->data, name->size),
                                             type->get());
 
     return new wasm_importtype_t(importType, module, name, type);
@@ -585,14 +586,7 @@ own wasm_config_t* wasm_config_new()
 // Engine
 own wasm_engine_t* wasm_engine_new()
 {
-    // FIXME initialize GC
-    static MAY_THREAD_LOCAL bool GCInited = false;
-    if (!GCInited) {
-        GC_INIT();
-        GCInited = true;
-    }
-
-    return new wasm_engine_t(new (NoGC) Engine());
+    return new wasm_engine_t(new Engine());
 }
 
 own wasm_engine_t* wasm_engine_new_with_config(own wasm_config_t*)
@@ -606,7 +600,7 @@ own wasm_engine_t* wasm_engine_new_with_config(own wasm_config_t*)
 own wasm_store_t* wasm_store_new(wasm_engine_t* engine)
 {
     ASSERT(engine);
-    return new wasm_store_t(new (NoGC) Store(engine->get()));
+    return new wasm_store_t(new Store(engine->get()));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -792,7 +786,7 @@ bool wasm_module_validate(wasm_store_t* store, const wasm_byte_vec_t* binary)
 
 void wasm_module_imports(const wasm_module_t* module, own wasm_importtype_vec_t* out)
 {
-    const Vector<ImportType*, GCUtil::gc_malloc_allocator<ImportType*>>& importTypes = module->get()->imports();
+    const Vector<ImportType*, std::allocator<ImportType*>>& importTypes = module->get()->imports();
 
     wasm_importtype_vec_new_uninitialized(out, importTypes.size());
     own wasm_externtype_t* type;
@@ -823,7 +817,7 @@ void wasm_module_imports(const wasm_module_t* module, own wasm_importtype_vec_t*
 void wasm_module_exports(const wasm_module_t* module, own wasm_exporttype_vec_t* out)
 {
     const Module* mod = module->get();
-    const Vector<ExportType*, GCUtil::gc_malloc_allocator<ExportType*>>& exportTypes = mod->exports();
+    const Vector<ExportType*, std::allocator<ExportType*>>& exportTypes = mod->exports();
 
     wasm_exporttype_vec_new_uninitialized(out, exportTypes.size());
     own wasm_externtype_t* type;
@@ -886,7 +880,7 @@ static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
 own wasm_func_t* wasm_func_new(
     wasm_store_t* store, const wasm_functype_t* ft, wasm_func_callback_t callback)
 {
-    Function* func = new ImportedFunction(
+    std::shared_ptr<Function> func = std::make_shared<ImportedFunction>(
         ToWalrusFunctionType(ft),
         [=](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
             wasm_val_vec_t params, results;
@@ -918,7 +912,7 @@ own wasm_func_t* wasm_func_new_with_env(
     void* env, void (*finalizer)(void*))
 {
     // TODO: finalizer
-    Function* func = new ImportedFunction(
+    std::shared_ptr<Function> func = std::make_shared<ImportedFunction>(
         ToWalrusFunctionType(ft),
         [=](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
             wasm_val_vec_t params, results;
@@ -1008,9 +1002,9 @@ own wasm_trap_t* wasm_func_call(
     if (trapResult.exception) {
         // FIXME
         own wasm_message_t msg;
-        if (trapResult.exception->message()) {
-            String* exceptionMsg = trapResult.exception->message().value();
-            wasm_byte_vec_new(&msg, exceptionMsg->length(), exceptionMsg->buffer());
+        if (trapResult.exception->message().length()) {
+            std::string& exceptionMsg = trapResult.exception->message();
+            wasm_byte_vec_new(&msg, exceptionMsg.length(), exceptionMsg.data());
         } else {
             wasm_byte_vec_new_empty(&msg);
         }
@@ -1028,7 +1022,7 @@ own wasm_trap_t* wasm_func_call(
 own wasm_global_t* wasm_global_new(
     wasm_store_t* store, const wasm_globaltype_t* gt, const wasm_val_t* val)
 {
-    Global* glob = new Global(ToWalrusValue(*val));
+    std::shared_ptr<Global> glob = std::make_shared<Global>(ToWalrusValue(*val));
     return new wasm_global_t(glob, gt);
 }
 
@@ -1051,7 +1045,7 @@ void wasm_global_set(wasm_global_t* glob, const wasm_val_t* val)
 own wasm_table_t* wasm_table_new(
     wasm_store_t* store, const wasm_tabletype_t* tt, wasm_ref_t* init)
 {
-    Table* table = new Table(tt->valtype.type, tt->limits.min, tt->limits.max);
+    std::shared_ptr<Table> table = std::make_shared<Table>(tt->valtype.type, tt->limits.min, tt->limits.max);
     return new wasm_table_t(table, tt);
 }
 
@@ -1103,7 +1097,7 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
 // Memory Instances
 own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
-    Memory* mem = new Memory(mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE);
+    std::shared_ptr<Memory> mem = std::make_shared<Memory>(mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE);
     return new wasm_memory_t(mem, mt);
 }
 
@@ -1175,13 +1169,13 @@ own wasm_instance_t* wasm_instance_new(
 {
     struct RunData {
         Module* module;
-        ObjectVector importValues;
+        SharedObjectVector importValues;
         Instance* instance;
-    } data = { module->get(), ObjectVector(), nullptr };
+    } data = { module->get(), SharedObjectVector(), nullptr };
 
     data.importValues.reserve(imports->size);
     for (size_t i = 0; i < imports->size; i++) {
-        data.importValues.push_back(const_cast<Object*>(imports->data[i]->get()));
+        data.importValues.push_back(imports->data[i]->getSharedPtr());
     }
 
     Walrus::Trap trap;
@@ -1202,33 +1196,33 @@ own wasm_instance_t* wasm_instance_new(
 
 void wasm_instance_exports(const wasm_instance_t* ins, own wasm_extern_vec_t* out)
 {
-    const Instance* instance = ins->get();
-    const Vector<ExportType*, GCUtil::gc_malloc_allocator<ExportType*>>& exports = instance->module()->exports();
+    Instance* instance = const_cast<Instance*>(ins->get());
+    const Vector<ExportType*, std::allocator<ExportType*>>& exports = instance->module()->exports();
 
     wasm_extern_vec_new_uninitialized(out, exports.size());
     for (size_t i = 0; i < exports.size(); i++) {
-        Object* item;
+        std::shared_ptr<Object> item;
         ObjectType* type;
         uint32_t itemIndex = exports[i]->itemIndex();
         switch (exports[i]->exportType()) {
         case ExportType::Function: {
-            Function* func = instance->function(itemIndex);
-            item = func;
+            std::shared_ptr<Function>& func = instance->functionPtr(itemIndex);
+            item = std::static_pointer_cast<Object>(func);
             type = const_cast<FunctionType*>(func->functionType());
             break;
         }
         case ExportType::Table: {
-            item = instance->table(itemIndex);
+            item = std::static_pointer_cast<Object>(instance->tablePtr(itemIndex));
             type = instance->module()->tableType(itemIndex);
             break;
         }
         case ExportType::Memory: {
-            item = instance->memory(itemIndex);
+            item = std::static_pointer_cast<Object>(instance->memoryPtr(itemIndex));
             type = instance->module()->memoryType(itemIndex);
             break;
         }
         case ExportType::Global: {
-            item = instance->global(itemIndex);
+            item = std::static_pointer_cast<Object>(instance->globalPtr(itemIndex));
             type = instance->module()->globalType(itemIndex);
             break;
         }
