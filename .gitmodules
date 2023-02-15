@@ -14,10 +14,6 @@
 	path = third_party/wabt/uvwasi
 	url = https://github.com/nodejs/uvwasi
 	ignore = untracked
-[submodule "third_party/GCutil"]
-	path = third_party/GCutil
-	url = https://github.com/Samsung/gcutil.git
-	ignore = untracked
 [submodule "third_party/wasm-c-api"]
 	path = third_party/wasm-c-api
 	url = https://github.com/WebAssembly/wasm-c-api
