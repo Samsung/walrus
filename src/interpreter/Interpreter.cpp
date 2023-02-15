@@ -50,7 +50,7 @@ OpcodeTable::OpcodeTable()
     b.m_opcodeInAddress = const_cast<void*>(FillByteCodeOpcodeAddress[0]);
 #endif
     size_t pc = reinterpret_cast<size_t>(&b);
-    Interpreter::interpret(dummyState, pc, nullptr, nullptr, nullptr, nullptr, nullptr);
+    Interpreter::interpret(dummyState, pc, nullptr, nullptr, std::vector<std::shared_ptr<Memory>>(), std::vector<std::shared_ptr<Table>>(), std::vector<std::shared_ptr<Global>>());
 #endif
 }
 
@@ -63,7 +63,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
     Instance* instance = df->instance();
     while (true) {
         try {
-            return interpret(state, programCounter, bp, instance, instance->m_memory.data(), instance->m_table.data(), instance->m_global.data());
+            return interpret(state, programCounter, bp, instance, instance->m_memories, instance->m_tables, instance->m_globals);
         } catch (std::unique_ptr<Exception>& e) {
             for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
                 if (e->m_programCounterInfo[i - 1].first == &state) {
@@ -212,9 +212,9 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
                                             size_t programCounter,
                                             uint8_t* bp,
                                             Instance* instance,
-                                            Memory** memories,
-                                            Table** tables,
-                                            Global** globals)
+                                            const std::vector<std::shared_ptr<Memory>>& memories,
+                                            const std::vector<std::shared_ptr<Table>>& tables,
+                                            const std::vector<std::shared_ptr<Global>>& globals)
 {
     state.m_programCounterPointer = &programCounter;
 
@@ -610,7 +610,7 @@ NextInstruction:
         :
     {
         GlobalGet32* code = (GlobalGet32*)programCounter;
-        ASSERT(code->index() < instance->m_global.size());
+        ASSERT(code->index() < instance->m_globals.size());
         globals[code->index()]->value().writeNBytesToMemory<4>(bp + code->dstOffset());
         ADD_PROGRAM_COUNTER(GlobalGet32);
         NEXT_INSTRUCTION();
@@ -620,7 +620,7 @@ NextInstruction:
         :
     {
         GlobalGet64* code = (GlobalGet64*)programCounter;
-        ASSERT(code->index() < instance->m_global.size());
+        ASSERT(code->index() < instance->m_globals.size());
         globals[code->index()]->value().writeNBytesToMemory<8>(bp + code->dstOffset());
         ADD_PROGRAM_COUNTER(GlobalGet64);
         NEXT_INSTRUCTION();
@@ -630,7 +630,7 @@ NextInstruction:
         :
     {
         GlobalSet32* code = (GlobalSet32*)programCounter;
-        ASSERT(code->index() < instance->m_global.size());
+        ASSERT(code->index() < instance->m_globals.size());
         Value& val = globals[code->index()]->value();
         val.readFromStack<4>(bp + code->srcOffset());
         ADD_PROGRAM_COUNTER(GlobalSet32);
@@ -641,7 +641,7 @@ NextInstruction:
         :
     {
         GlobalSet64* code = (GlobalSet64*)programCounter;
-        ASSERT(code->index() < instance->m_global.size());
+        ASSERT(code->index() < instance->m_globals.size());
         Value& val = globals[code->index()]->value();
         val.readFromStack<8>(bp + code->srcOffset());
         ADD_PROGRAM_COUNTER(GlobalSet64);
@@ -686,7 +686,7 @@ NextInstruction:
         :
     {
         MemoryGrow* code = (MemoryGrow*)programCounter;
-        Memory* m = memories[0];
+        Memory* m = memories[0].get();
         auto oldSize = m->sizeInPageSize();
         if (m->grow(readValue<int32_t>(bp, code->srcOffset()) * (uint64_t)Memory::s_memoryPageSize)) {
             writeValue<int32_t>(bp, code->dstOffset(), oldSize);
@@ -701,7 +701,7 @@ NextInstruction:
         :
     {
         MemoryInit* code = (MemoryInit*)programCounter;
-        Memory* m = memories[0];
+        Memory* m = memories[0].get();
         DataSegment& sg = instance->dataSegment(code->segmentIndex());
         auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         auto srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
@@ -715,7 +715,7 @@ NextInstruction:
         :
     {
         MemoryCopy* code = (MemoryCopy*)programCounter;
-        Memory* m = memories[0];
+        Memory* m = memories[0].get();
         auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         auto srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
         auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
@@ -728,7 +728,7 @@ NextInstruction:
         :
     {
         MemoryFill* code = (MemoryFill*)programCounter;
-        Memory* m = memories[0];
+        Memory* m = memories[0].get();
         auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         auto value = readValue<int32_t>(bp, code->srcOffsets()[1]);
         auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
@@ -751,8 +751,8 @@ NextInstruction:
         :
     {
         TableGet* code = (TableGet*)programCounter;
-        ASSERT(code->tableIndex() < instance->m_table.size());
-        Table* table = tables[code->tableIndex()];
+        ASSERT(code->tableIndex() < instance->m_tables.size());
+        Table* table = tables[code->tableIndex()].get();
         void* val = table->getElement(state, readValue<uint32_t>(bp, code->srcOffset()));
         writeValue(bp, code->dstOffset(), val);
 
@@ -764,8 +764,8 @@ NextInstruction:
         :
     {
         TableSet* code = (TableSet*)programCounter;
-        ASSERT(code->tableIndex() < instance->m_table.size());
-        Table* table = tables[code->tableIndex()];
+        ASSERT(code->tableIndex() < instance->m_tables.size());
+        Table* table = tables[code->tableIndex()].get();
         void* ptr = readValue<void*>(bp, code->src1Offset());
         table->setElement(state, readValue<uint32_t>(bp, code->src0Offset()), ptr);
 
@@ -777,8 +777,8 @@ NextInstruction:
         :
     {
         TableGrow* code = (TableGrow*)programCounter;
-        ASSERT(code->tableIndex() < instance->m_table.size());
-        Table* table = tables[code->tableIndex()];
+        ASSERT(code->tableIndex() < instance->m_tables.size());
+        Table* table = tables[code->tableIndex()].get();
         size_t size = table->size();
 
         uint64_t newSize = (uint64_t)readValue<uint32_t>(bp, code->src1Offset()) + size;
@@ -800,8 +800,8 @@ NextInstruction:
         :
     {
         TableSize* code = (TableSize*)programCounter;
-        ASSERT(code->tableIndex() < instance->m_table.size());
-        Table* table = tables[code->tableIndex()];
+        ASSERT(code->tableIndex() < instance->m_tables.size());
+        Table* table = tables[code->tableIndex()].get();
         size_t size = table->size();
         writeValue<uint32_t>(bp, code->dstOffset(), size);
 
@@ -813,10 +813,10 @@ NextInstruction:
         :
     {
         TableCopy* code = (TableCopy*)programCounter;
-        ASSERT(code->dstIndex() < instance->m_table.size());
-        ASSERT(code->srcIndex() < instance->m_table.size());
-        Table* dstTable = tables[code->dstIndex()];
-        Table* srcTable = tables[code->srcIndex()];
+        ASSERT(code->dstIndex() < instance->m_tables.size());
+        ASSERT(code->srcIndex() < instance->m_tables.size());
+        Table* dstTable = tables[code->dstIndex()].get();
+        Table* srcTable = tables[code->srcIndex()].get();
 
         uint32_t dstIndex = readValue<uint32_t>(bp, code->srcOffsets()[0]);
         uint32_t srcIndex = readValue<uint32_t>(bp, code->srcOffsets()[1]);
@@ -832,8 +832,8 @@ NextInstruction:
         :
     {
         TableFill* code = (TableFill*)programCounter;
-        ASSERT(code->tableIndex() < instance->m_table.size());
-        Table* table = tables[code->tableIndex()];
+        ASSERT(code->tableIndex() < instance->m_tables.size());
+        Table* table = tables[code->tableIndex()].get();
 
         int32_t index = readValue<int32_t>(bp, code->srcOffsets()[0]);
         void* ptr = readValue<void*>(bp, code->srcOffsets()[1]);
@@ -854,8 +854,8 @@ NextInstruction:
         int32_t srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
         int32_t size = readValue<int32_t>(bp, code->srcOffsets()[2]);
 
-        ASSERT(code->tableIndex() < instance->m_table.size());
-        Table* table = tables[code->tableIndex()];
+        ASSERT(code->tableIndex() < instance->m_tables.size());
+        Table* table = tables[code->tableIndex()].get();
         table->init(state, instance, &sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();
@@ -971,7 +971,7 @@ NEVER_INLINE void Interpreter::callOperation(
     Function* target = instance->function(code->index());
     const FunctionType* ft = target->functionType();
     const ValueTypeVector& param = ft->param();
-    Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
+    ALLOCA(Value, paramVector, sizeof(Value) * param.size(), isAllocaParam);
 
     size_t c = 0;
     for (size_t i = 0; i < param.size(); i++) {
@@ -979,7 +979,7 @@ NEVER_INLINE void Interpreter::callOperation(
     }
 
     const ValueTypeVector& result = ft->result();
-    Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
+    ALLOCA(Value, resultVector, sizeof(Value) * result.size(), isAllocaResult);
     size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     target->call(state, param.size(), paramVector, resultVector);
@@ -987,6 +987,13 @@ NEVER_INLINE void Interpreter::callOperation(
     for (size_t i = 0; i < result.size(); i++) {
         uint8_t* resultStackPointer = bp + code->stackOffsets()[c++];
         resultVector[i].writeToMemory(resultStackPointer);
+    }
+
+    if (UNLIKELY(!isAllocaParam)) {
+        delete[] paramVector;
+    }
+    if (UNLIKELY(!isAllocaResult)) {
+        delete[] resultVector;
     }
 
     programCounter += sizeof(Call) + codeExtraOffsetsSize;
@@ -1014,7 +1021,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         Trap::throwException(state, "indirect call type mismatch");
     }
     const ValueTypeVector& param = ft->param();
-    Value* paramVector = ALLOCA(sizeof(Value) * param.size(), Value);
+    ALLOCA(Value, paramVector, sizeof(Value) * param.size(), isAllocaParam);
 
     size_t c = 0;
     for (size_t i = 0; i < param.size(); i++) {
@@ -1022,7 +1029,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
 
     const ValueTypeVector& result = ft->result();
-    Value* resultVector = ALLOCA(sizeof(Value) * result.size(), Value);
+    ALLOCA(Value, resultVector, sizeof(Value) * result.size(), isAllocaResult);
     size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     target->call(state, param.size(), paramVector, resultVector);
@@ -1030,6 +1037,13 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     for (size_t i = 0; i < result.size(); i++) {
         uint8_t* resultStackPointer = bp + code->stackOffsets()[c++];
         resultVector[i].writeToMemory(resultStackPointer);
+    }
+
+    if (UNLIKELY(!isAllocaParam)) {
+        delete[] paramVector;
+    }
+    if (UNLIKELY(!isAllocaResult)) {
+        delete[] resultVector;
     }
 
     programCounter += sizeof(CallIndirect) + codeExtraOffsetsSize;

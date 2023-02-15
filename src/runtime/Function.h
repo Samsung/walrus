@@ -29,7 +29,7 @@ class ModuleFunction;
 class DefinedFunction;
 class ImportedFunction;
 
-class Function : public Object {
+class Function : public Extern {
 public:
     Function(FunctionType* functionType)
         : m_functionType(functionType)

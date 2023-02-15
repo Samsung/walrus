@@ -376,7 +376,7 @@ public:
         return m_exports;
     }
 
-    Instance* instantiate(ExecutionState& state, const ObjectVector& imports);
+    Instance* instantiate(ExecutionState& state, const SharedObjectVector& imports);
 
 private:
     Store* m_store;

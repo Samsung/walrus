@@ -91,15 +91,15 @@ Module::~Module()
     }
 }
 
-Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports)
+Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& imports)
 {
     Instance* instance = new Instance(this);
 
-    instance->m_function.reserve(m_functions.size());
-    instance->m_table.reserve(m_tableTypes.size());
-    instance->m_memory.reserve(m_memoryTypes.size());
-    instance->m_global.reserve(m_globalInfos.size());
-    instance->m_tag.reserve(m_tagTypes.size());
+    instance->m_functions.reserve(m_functions.size());
+    instance->m_tables.reserve(m_tableTypes.size());
+    instance->m_memories.reserve(m_memoryTypes.size());
+    instance->m_globals.reserve(m_globalInfos.size());
+    instance->m_tags.reserve(m_tagTypes.size());
 
     size_t importFuncCount = 0;
     size_t importTableCount = 0;
@@ -122,7 +122,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             if (!imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType())) {
                 Trap::throwException(state, "imported function type mismatch");
             }
-            instance->m_function.push_back(imports[i]->asFunction());
+            instance->m_functions.push_back(std::dynamic_pointer_cast<Function>(imports[i]));
             importFuncCount++;
             break;
         }
@@ -138,7 +138,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                     || imports[i]->asTable()->maximumSize() > m_imports[i]->tableType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_table.push_back(imports[i]->asTable());
+            instance->m_tables.push_back(std::dynamic_pointer_cast<Table>(imports[i]));
             importTableCount++;
             break;
         }
@@ -153,7 +153,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                     || imports[i]->asMemory()->maximumSizeInPageSize() > m_imports[i]->memoryType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_memory.push_back(imports[i]->asMemory());
+            instance->m_memories.push_back(std::dynamic_pointer_cast<Memory>(imports[i]));
             importMemCount++;
             break;
         }
@@ -161,7 +161,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             if (imports[i]->kind() != Object::GlobalKind) {
                 Trap::throwException(state, "incompatible import type");
             }
-            instance->m_global.push_back(imports[i]->asGlobal());
+            instance->m_globals.push_back(std::dynamic_pointer_cast<Global>(imports[i]));
             importGlobCount++;
             break;
         }
@@ -169,7 +169,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             if (imports[i]->kind() != Object::TagKind) {
                 Trap::throwException(state, "incompatible import type");
             }
-            instance->m_tag.push_back(reinterpret_cast<Tag*>(imports[i]->asTag()));
+            instance->m_tags.push_back(std::dynamic_pointer_cast<Tag>(imports[i]));
             importTagCount++;
             break;
         }
@@ -182,33 +182,33 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
 
     // init defined function
     for (size_t i = importFuncCount; i < m_functions.size(); i++) {
-        ASSERT(i == instance->m_function.size());
-        instance->m_function.push_back(new DefinedFunction(instance, function(i)));
+        ASSERT(i == instance->m_functions.size());
+        instance->m_functions.push_back(std::make_shared<DefinedFunction>(instance, function(i)));
     }
 
     // init table
     for (size_t i = importTableCount; i < m_tableTypes.size(); i++) {
-        ASSERT(i == instance->m_table.size());
-        instance->m_table.pushBack(new Table(m_tableTypes[i]->type(), m_tableTypes[i]->initialSize(), m_tableTypes[i]->maximumSize()));
+        ASSERT(i == instance->m_tables.size());
+        instance->m_tables.push_back(std::make_shared<Table>(m_tableTypes[i]->type(), m_tableTypes[i]->initialSize(), m_tableTypes[i]->maximumSize()));
     }
 
     // init memory
     for (size_t i = importMemCount; i < m_memoryTypes.size(); i++) {
-        ASSERT(i == instance->m_memory.size());
-        instance->m_memory.pushBack(new Memory(m_memoryTypes[i]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i]->maximumSize() * Memory::s_memoryPageSize));
+        ASSERT(i == instance->m_memories.size());
+        instance->m_memories.push_back(std::make_shared<Memory>(m_memoryTypes[i]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i]->maximumSize() * Memory::s_memoryPageSize));
     }
 
     // init tag
     for (size_t i = importTagCount; i < m_tagTypes.size(); i++) {
-        ASSERT(i == instance->m_tag.size());
-        instance->m_tag.push_back(new Tag(m_functionTypes[m_tagTypes[i]->sigIndex()]));
+        ASSERT(i == instance->m_tags.size());
+        instance->m_tags.push_back(std::make_shared<Tag>(m_functionTypes[m_tagTypes[i]->sigIndex()]));
     }
 
     // init global
     for (size_t i = importGlobCount; i < m_globalInfos.size(); i++) {
-        ASSERT(i == instance->m_global.size());
+        ASSERT(i == instance->m_globals.size());
         auto& globalData = m_globalInfos[i];
-        instance->m_global.pushBack(new Global(Value(globalData.first.type())));
+        instance->m_globals.push_back(std::make_shared<Global>(Value(globalData.first.type())));
 
         if (globalData.second) {
             struct RunData {
@@ -220,12 +220,16 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
-                uint8_t* functionStackBase = ALLOCA(data->mf->requiredStackSize(), uint8_t);
+                ALLOCA(uint8_t, functionStackBase, data->mf->requiredStackSize(), isAlloca);
 
                 DefinedFunction fakeFunction(data->instance, data->mf);
                 ExecutionState newState(state, &fakeFunction);
                 auto resultOffset = Interpreter::interpret(newState, functionStackBase);
-                data->instance->m_global.back()->setValue(Value(data->type, functionStackBase + resultOffset[0]));
+                data->instance->m_globals.back()->setValue(Value(data->type, functionStackBase + resultOffset[0]));
+
+                if (UNLIKELY(!isAlloca)) {
+                    delete[] functionStackBase;
+                }
             },
                      &data);
         }
@@ -234,7 +238,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     // init table(elem segment)
     instance->m_elementSegments.reserve(m_elements.size());
     for (auto elem : m_elements) {
-        instance->m_elementSegments.pushBack(ElementSegment(elem));
+        instance->m_elementSegments.push_back(ElementSegment(elem));
 
         if (elem->mode() == SegmentMode::Active) {
             uint32_t index = 0;
@@ -248,7 +252,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                 Walrus::Trap trap;
                 trap.run([](Walrus::ExecutionState& state, void* d) {
                     RunData* data = reinterpret_cast<RunData*>(d);
-                    uint8_t* functionStackBase = ALLOCA(data->elem->moduleFunction()->requiredStackSize(), uint8_t);
+                    ALLOCA(uint8_t, functionStackBase, data->elem->moduleFunction()->requiredStackSize(), isAlloca);
 
                     DefinedFunction fakeFunction(data->instance,
                                                  data->elem->moduleFunction());
@@ -257,19 +261,23 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
                     auto resultOffset = Interpreter::interpret(newState, functionStackBase);
                     Value offset(Value::I32, functionStackBase + resultOffset[0]);
                     data->index = offset.asI32();
+
+                    if (UNLIKELY(!isAlloca)) {
+                        delete[] functionStackBase;
+                    }
                 },
                          &data);
             }
 
-            if (UNLIKELY(elem->tableIndex() >= instance->m_table.size() || index >= instance->m_table[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_table[elem->tableIndex()]->size())) {
+            if (UNLIKELY(elem->tableIndex() >= instance->m_tables.size() || index >= instance->m_tables[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
                 Trap::throwException(state, "out of bounds table access");
             }
 
             const auto& fi = elem->functionIndex();
-            Table* table = instance->m_table[elem->tableIndex()];
+            Table* table = instance->m_tables[elem->tableIndex()].get();
             for (size_t i = 0; i < fi.size(); i++) {
                 if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                    table->setElement(state, i + index, instance->m_function[fi[i]]);
+                    table->setElement(state, i + index, instance->m_functions[fi[i]].get());
                 } else {
                     table->setElement(state, i + index, reinterpret_cast<void*>(Value::NullBits));
                 }
@@ -284,7 +292,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     // init memory
     instance->m_dataSegments.reserve(m_datas.size());
     for (auto init : m_datas) {
-        instance->m_dataSegments.pushBack(DataSegment(init));
+        instance->m_dataSegments.push_back(DataSegment(init));
         struct RunData {
             Data* init;
             Instance* instance;
@@ -294,7 +302,7 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
         auto result = trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
             if (data->init->moduleFunction()->currentByteCodeSize()) {
-                uint8_t* functionStackBase = ALLOCA(data->init->moduleFunction()->requiredStackSize(), uint8_t);
+                ALLOCA(uint8_t, functionStackBase, data->init->moduleFunction()->requiredStackSize(), isAlloca);
 
                 DefinedFunction fakeFunction(data->instance,
                                              data->init->moduleFunction());
@@ -302,6 +310,11 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
 
                 auto resultOffset = Interpreter::interpret(newState, functionStackBase);
                 Value offset(Value::I32, functionStackBase + resultOffset[0]);
+
+                if (UNLIKELY(!isAlloca)) {
+                    delete[] functionStackBase;
+                }
+
                 Memory* m = data->instance->memory(0);
                 const auto& initData = data->init->initData();
                 if (m->sizeInByte() >= initData.size() && (offset.asI32() + initData.size()) <= m->sizeInByte() && offset.asI32() >= 0) {
@@ -319,9 +332,9 @@ Instance* Module::instantiate(ExecutionState& state, const ObjectVector& imports
     }
 
     if (m_seenStartAttribute) {
-        ASSERT(instance->m_function[m_start]->functionType()->param().size() == 0);
-        ASSERT(instance->m_function[m_start]->functionType()->result().size() == 0);
-        instance->m_function[m_start]->call(state, 0, nullptr, nullptr);
+        ASSERT(instance->m_functions[m_start]->functionType()->param().size() == 0);
+        ASSERT(instance->m_functions[m_start]->functionType()->result().size() == 0);
+        instance->m_functions[m_start]->call(state, 0, nullptr, nullptr);
     }
 
     return instance;

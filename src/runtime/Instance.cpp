@@ -35,28 +35,30 @@ Instance::Instance(Module* module)
 
 Instance::~Instance()
 {
-    for (size_t i = 0; i < m_function.size(); i++) {
-        delete m_function[i];
+    /*
+    for (size_t i = 0; i < m_functions.size(); i++) {
+        delete m_functions[i];
     }
 
-    for (size_t i = 0; i < m_table.size(); i++) {
-        delete m_table[i];
+    for (size_t i = 0; i < m_tables.size(); i++) {
+        delete m_tables[i];
     }
 
-    for (size_t i = 0; i < m_memory.size(); i++) {
-        delete m_memory[i];
+    for (size_t i = 0; i < m_memories.size(); i++) {
+        delete m_memories[i];
     }
 
-    for (size_t i = 0; i < m_global.size(); i++) {
-        delete m_global[i];
+    for (size_t i = 0; i < m_globals.size(); i++) {
+        delete m_globals[i];
     }
 
-    for (size_t i = 0; i < m_tag.size(); i++) {
-        delete m_tag[i];
+    for (size_t i = 0; i < m_tags.size(); i++) {
+        delete m_tags[i];
     }
+    */
 }
 
-Optional<ExportType*> Instance::resolveExport(std::string& name)
+Optional<ExportType*> Instance::resolveExportType(std::string& name)
 {
     for (auto me : m_module->exports()) {
         if (me->name() == name) {
@@ -67,54 +69,54 @@ Optional<ExportType*> Instance::resolveExport(std::string& name)
     return nullptr;
 }
 
-Optional<Function*> Instance::resolveExportFunction(std::string& name)
+std::shared_ptr<Function> Instance::resolveExportFunction(std::string& name)
 {
-    auto me = resolveExport(name);
+    auto me = resolveExportType(name);
     if (me && me->exportType() == ExportType::Function) {
-        return m_function[me->itemIndex()];
+        return m_functions[me->itemIndex()];
     }
 
-    return nullptr;
+    return std::shared_ptr<Function>();
 }
 
-Optional<Tag*> Instance::resolveExportTag(std::string& name)
+std::shared_ptr<Tag> Instance::resolveExportTag(std::string& name)
 {
-    auto me = resolveExport(name);
+    auto me = resolveExportType(name);
     if (me && me->exportType() == ExportType::Tag) {
-        return m_tag[me->itemIndex()];
+        return m_tags[me->itemIndex()];
     }
 
-    return nullptr;
+    return std::shared_ptr<Tag>();
 }
 
-Optional<Table*> Instance::resolveExportTable(std::string& name)
+std::shared_ptr<Table> Instance::resolveExportTable(std::string& name)
 {
-    auto me = resolveExport(name);
+    auto me = resolveExportType(name);
     if (me && me->exportType() == ExportType::Table) {
-        return m_table[me->itemIndex()];
+        return m_tables[me->itemIndex()];
     }
 
-    return nullptr;
+    return std::shared_ptr<Table>();
 }
 
-Optional<Memory*> Instance::resolveExportMemory(std::string& name)
+std::shared_ptr<Memory> Instance::resolveExportMemory(std::string& name)
 {
-    auto me = resolveExport(name);
+    auto me = resolveExportType(name);
     if (me && me->exportType() == ExportType::Memory) {
-        return m_memory[me->itemIndex()];
+        return m_memories[me->itemIndex()];
     }
 
-    return nullptr;
+    return std::shared_ptr<Memory>();
 }
 
-Optional<Global*> Instance::resolveExportGlobal(std::string& name)
+std::shared_ptr<Global> Instance::resolveExportGlobal(std::string& name)
 {
-    auto me = resolveExport(name);
+    auto me = resolveExportType(name);
     if (me && me->exportType() == ExportType::Global) {
-        return m_global[me->itemIndex()];
+        return m_globals[me->itemIndex()];
     }
 
-    return nullptr;
+    return std::shared_ptr<Global>();
 }
 
 DataSegment::DataSegment(Data* d)

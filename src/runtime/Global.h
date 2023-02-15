@@ -21,7 +21,7 @@
 
 namespace Walrus {
 
-class Global : public Object {
+class Global : public Extern {
 public:
     Global(const Value& value)
         : m_value(value)
