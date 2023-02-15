@@ -29,7 +29,7 @@ void JITFunction::call(ExecutionState& state,
                        Value* result,
                        const ValueTypeVector& resultTypeInfo) const
 {
-    ASSERT(export_entry_);
+    ASSERT(m_exportEntry);
 
     size_t size = 4096;
 
@@ -41,10 +41,10 @@ void JITFunction::call(ExecutionState& state,
 
     ExecutionContext* context = reinterpret_cast<ExecutionContext*>(start);
 
-    context->last_frame = nullptr;
+    context->lastFrame = nullptr;
     context->error = ExecutionContext::NoError;
-    context->current_instance_data = nullptr;
-    context->current_instance_const_data = module_->instanceConstData();
+    context->currentInstanceData = nullptr;
+    context->currentInstanceConstData = m_module->instanceConstData();
 
     void* args = reinterpret_cast<void*>(start + size - argsSize());
     StackAllocator stackAllocator;
@@ -65,7 +65,7 @@ void JITFunction::call(ExecutionState& state,
         }
     }
 
-    module_->exportCall()(context + 1, args, export_entry_);
+    m_module->exportCall()(context + 1, args, m_exportEntry);
 
     if (context->error != ExecutionContext::NoError) {
         switch (context->error) {

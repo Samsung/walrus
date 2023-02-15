@@ -30,8 +30,8 @@ Index Instruction::resultCount()
     }
 
     if (group() == Call) {
-        CallInstruction* call_instr = reinterpret_cast<CallInstruction*>(this);
-        return call_instr->functionType()->result().size();
+        CallInstruction* callInstr = reinterpret_cast<CallInstruction*>(this);
+        return callInstr->functionType()->result().size();
     }
 
     return 1;
@@ -186,62 +186,62 @@ CallInstruction* JITCompiler::appendCall(OpcodeKind opcode, FunctionType* functi
         return nullptr;
     }
 
-    Index param_count = functionType->param().size();
-    Index result_count = functionType->result().size();
+    Index paramCount = functionType->param().size();
+    Index resultCount = functionType->result().size();
 
-    m_stackDepth -= param_count;
-    m_stackDepth += result_count;
+    m_stackDepth -= paramCount;
+    m_stackDepth += resultCount;
 
-    CallInstruction* call_instr;
-    switch (param_count + result_count) {
+    CallInstruction* callInstr;
+    switch (paramCount + resultCount) {
     case 0:
-        call_instr = new CallInstruction(opcode, 0, functionType, nullptr, nullptr);
+        callInstr = new CallInstruction(opcode, 0, functionType, nullptr, nullptr);
         break;
     case 1:
-        call_instr = new SimpleCallInstruction<1>(opcode, functionType, m_last);
+        callInstr = new SimpleCallInstruction<1>(opcode, functionType, m_last);
         break;
     case 2:
-        call_instr = new SimpleCallInstruction<2>(opcode, functionType, m_last);
+        callInstr = new SimpleCallInstruction<2>(opcode, functionType, m_last);
         break;
     case 3:
-        call_instr = new SimpleCallInstruction<3>(opcode, functionType, m_last);
+        callInstr = new SimpleCallInstruction<3>(opcode, functionType, m_last);
         break;
     case 4:
-        call_instr = new SimpleCallInstruction<4>(opcode, functionType, m_last);
+        callInstr = new SimpleCallInstruction<4>(opcode, functionType, m_last);
         break;
     default:
-        call_instr = new ComplexCallInstruction(opcode, functionType, m_last);
+        callInstr = new ComplexCallInstruction(opcode, functionType, m_last);
         break;
     }
 
-    call_instr->m_resultCount = static_cast<uint8_t>((result_count > 255) ? 255 : result_count);
+    callInstr->m_resultCount = static_cast<uint8_t>((resultCount > 255) ? 255 : resultCount);
 
-    StackAllocator stack_allocator;
+    StackAllocator stackAllocator;
 
-    if (result_count > 0) {
-        Operand* results = call_instr->results();
+    if (resultCount > 0) {
+        Operand* results = callInstr->results();
 
-        for (Index i = 0; i < result_count; i++) {
-            ValueInfo value_info = LocationInfo::typeToValueInfo(functionType->result()[i]);
+        for (Index i = 0; i < resultCount; i++) {
+            ValueInfo valueInfo = LocationInfo::typeToValueInfo(functionType->result()[i]);
 
             results[i].location.type = Operand::Stack;
-            results[i].location.valueInfo = value_info;
-            stack_allocator.push(value_info);
+            results[i].location.valueInfo = valueInfo;
+            stackAllocator.push(valueInfo);
         }
     }
 
-    call_instr->m_paramStart = stack_allocator.size();
+    callInstr->m_paramStart = stackAllocator.size();
 
-    LocalsAllocator locals_allocator(stack_allocator.size());
+    LocalsAllocator localsAllocator(stackAllocator.size());
 
     for (auto it : functionType->param()) {
-        locals_allocator.allocate(LocationInfo::typeToValueInfo(it));
+        localsAllocator.allocate(LocationInfo::typeToValueInfo(it));
     }
 
-    call_instr->m_frameSize = StackAllocator::alignedSize(locals_allocator.size());
+    callInstr->m_frameSize = StackAllocator::alignedSize(localsAllocator.size());
 
-    append(call_instr);
-    return call_instr;
+    append(callInstr);
+    return callInstr;
 }
 
 void JITCompiler::appendBranch(OpcodeKind opcode, Index depth)
@@ -288,14 +288,14 @@ void JITCompiler::appendElseLabel()
         label->m_branches.push_back(branch);
     }
 
-    ElseBlock& else_block = m_elseBlocks.back();
+    ElseBlock& elseBlock = m_elseBlocks.back();
 
-    label = new Label(else_block.resultCount, else_block.preservedCount, m_last);
+    label = new Label(elseBlock.resultCount, elseBlock.preservedCount, m_last);
     label->addInfo(Label::kAfterUncondBranch);
     append(label);
-    m_stackDepth = else_block.preservedCount + else_block.resultCount;
+    m_stackDepth = elseBlock.preservedCount + elseBlock.resultCount;
 
-    Instruction* branch = else_block.branch;
+    Instruction* branch = elseBlock.branch;
     assert(branch->opcode() == InterpBrUnlessOpcode);
 
     branch->value().targetLabel = label;
@@ -441,15 +441,15 @@ void JITCompiler::appendFunction(JITFunction* jitFunc, bool isExternal)
     m_functionList.push_back(FunctionList(jitFunc, entryLabel, isExternal));
 }
 
-static const char* flagsToType(ValueInfo value_info)
+static const char* flagsToType(ValueInfo valueInfo)
 {
-    ValueInfo size = value_info & LocationInfo::kSizeMask;
+    ValueInfo size = valueInfo & LocationInfo::kSizeMask;
 
-    if (value_info & LocationInfo::kReference) {
+    if (valueInfo & LocationInfo::kReference) {
         return (size == LocationInfo::kEightByteSize) ? "ref8" : "ref4";
     }
 
-    if (value_info & LocationInfo::kFloat) {
+    if (valueInfo & LocationInfo::kFloat) {
         return (size == LocationInfo::kEightByteSize) ? "f64" : "f32";
     }
 
