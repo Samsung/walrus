@@ -26,22 +26,22 @@ class ReduceMovesContext {
 public:
     struct StackItem {
         StackItem()
-            : expected_group(WABT_JIT_INVALID_INSTRUCTION)
+            : expectedGroup(WABT_JIT_INVALID_INSTRUCTION)
         {
         }
 
-        // Possible values for expected_group:
+        // Possible values for expectedGroup:
         //   instruction - head of a LocalSet or LocalGet group (might be dead)
         //   nullptr - dead group
         //   WABT_JIT_INVALID_INSTRUCTION - unknown group
-        Instruction* expected_group;
-        std::vector<Label*> label_deps;
+        Instruction* expectedGroup;
+        std::vector<Label*> labelDeps;
     };
 
     struct InitGroups {
-        InitGroups(Instruction* head_instr)
-            : head_instr(head_instr)
-            , is_dead_group(false)
+        InitGroups(Instruction* headInstr)
+            : headInstr(headInstr)
+            , isDeadGroup(false)
         {
         }
 
@@ -51,74 +51,74 @@ public:
 
         void reset()
         {
-            head_instr = nullptr;
-            is_dead_group = false;
+            headInstr = nullptr;
+            isDeadGroup = false;
         }
 
-        Instruction* head_instr;
-        bool is_dead_group;
+        Instruction* headInstr;
+        bool isDeadGroup;
     };
 
     ReduceMovesContext(Label* label)
         : m_preservedCount(label->preservedCount())
     {
-        stack_.resize(label->stackSize());
+        m_stack.resize(label->stackSize());
     }
 
-    std::vector<StackItem>* stack() { return &stack_; }
-    StackItem& stackItem(size_t index) { return stack_[index]; }
+    std::vector<StackItem>* stack() { return &m_stack; }
+    StackItem& stackItem(size_t index) { return m_stack[index]; }
 
-    void update(std::vector<InstructionListItem*>& item_stack);
+    void update(std::vector<InstructionListItem*>& itemStack);
     static Instruction* getHead(Instruction* instr);
     static void checkStack(Instruction* instr,
                            std::vector<InstructionListItem*>& stack);
 
 private:
     Index m_preservedCount;
-    std::vector<StackItem> stack_;
+    std::vector<StackItem> m_stack;
 };
 
-void ReduceMovesContext::update(std::vector<InstructionListItem*>& item_stack)
+void ReduceMovesContext::update(std::vector<InstructionListItem*>& itemStack)
 {
-    assert(item_stack.size() >= stack_.size());
+    assert(itemStack.size() >= m_stack.size());
 
-    size_t size = stack_.size();
+    size_t size = m_stack.size();
     size_t current = 0;
 
     for (size_t i = 0; i < size; i++, current++) {
         if (current == m_preservedCount) {
             // These items are ignored when the branch is executed.
-            current += item_stack.size() - stack_.size();
+            current += itemStack.size() - m_stack.size();
         }
 
-        InstructionListItem* item = item_stack[current];
-        StackItem& stack_item = stack_[i];
+        InstructionListItem* item = itemStack[current];
+        StackItem& stackItem = m_stack[i];
 
         if (item == nullptr) {
-            if (stack_item.expected_group != nullptr && stack_item.expected_group != WABT_JIT_INVALID_INSTRUCTION) {
-                stack_item.expected_group->addInfo(Instruction::kKeepInstruction);
+            if (stackItem.expectedGroup != nullptr && stackItem.expectedGroup != WABT_JIT_INVALID_INSTRUCTION) {
+                stackItem.expectedGroup->addInfo(Instruction::kKeepInstruction);
             }
 
-            stack_item.expected_group = nullptr;
+            stackItem.expectedGroup = nullptr;
             continue;
         }
 
         if (item->isInstruction()) {
-            assert(stack_item.expected_group == nullptr || stack_item.expected_group == WABT_JIT_INVALID_INSTRUCTION || stack_item.expected_group == item);
+            assert(stackItem.expectedGroup == nullptr || stackItem.expectedGroup == WABT_JIT_INVALID_INSTRUCTION || stackItem.expectedGroup == item);
             assert(!(item->asInstruction()->info() & Instruction::kKeepInstruction));
 
-            if (stack_item.expected_group == WABT_JIT_INVALID_INSTRUCTION) {
-                stack_item.expected_group = item->asInstruction();
-            } else if (stack_item.expected_group == nullptr) {
+            if (stackItem.expectedGroup == WABT_JIT_INVALID_INSTRUCTION) {
+                stackItem.expectedGroup = item->asInstruction();
+            } else if (stackItem.expectedGroup == nullptr) {
                 item->asInstruction()->addInfo(Instruction::kKeepInstruction);
-                item_stack[current] = nullptr;
+                itemStack[current] = nullptr;
             }
             continue;
         }
 
         bool found = false;
 
-        for (auto it : stack_item.label_deps) {
+        for (auto it : stackItem.labelDeps) {
             if (it == item) {
                 found = true;
                 break;
@@ -126,7 +126,7 @@ void ReduceMovesContext::update(std::vector<InstructionListItem*>& item_stack)
         }
 
         if (!found) {
-            stack_item.label_deps.push_back(item->asLabel());
+            stackItem.labelDeps.push_back(item->asLabel());
         }
     }
 }
@@ -136,25 +136,25 @@ Instruction* ReduceMovesContext::getHead(Instruction* instr)
     assert(instr->group() == Instruction::LocalMove || instr->group() == Instruction::Immediate);
     assert(instr->info() & Instruction::kHasParent);
 
-    Instruction* head_instr = instr;
+    Instruction* headInstr = instr;
 
     do {
-        head_instr = head_instr->value().parent;
-    } while (head_instr->info() & Instruction::kHasParent);
+        headInstr = headInstr->value().parent;
+    } while (headInstr->info() & Instruction::kHasParent);
 
-    instr->value().parent = head_instr;
-    return head_instr;
+    instr->value().parent = headInstr;
+    return headInstr;
 }
 
 void ReduceMovesContext::checkStack(Instruction* instr,
                                     std::vector<InstructionListItem*>& stack)
 {
-    Instruction* head_instr = instr;
-    if (head_instr->asInstruction()->info() & Instruction::kHasParent) {
-        head_instr = ReduceMovesContext::getHead(head_instr);
+    Instruction* headInstr = instr;
+    if (headInstr->asInstruction()->info() & Instruction::kHasParent) {
+        headInstr = ReduceMovesContext::getHead(headInstr);
     }
 
-    Index local_index = head_instr->value().localIndex;
+    Index localIndex = headInstr->value().localIndex;
     size_t end = stack.size();
     OpcodeKind discarded = LocalGetOpcode;
 
@@ -163,14 +163,14 @@ void ReduceMovesContext::checkStack(Instruction* instr,
     }
 
     for (size_t i = 0; i < end; i++) {
-        InstructionListItem* stack_item = stack[i];
+        InstructionListItem* stackItem = stack[i];
 
-        if (stack_item != nullptr && stack_item->isInstruction()) {
-            Instruction* stack_instr = stack_item->asInstruction();
+        if (stackItem != nullptr && stackItem->isInstruction()) {
+            Instruction* stack_instr = stackItem->asInstruction();
 
             assert(!(stack_instr->info() & Instruction::kHasParent));
 
-            if (stack_instr->value().localIndex == local_index && stack_instr->opcode() != discarded) {
+            if (stack_instr->value().localIndex == localIndex && stack_instr->opcode() != discarded) {
                 stack_instr->addInfo(Instruction::kKeepInstruction);
                 stack[i] = nullptr;
             }
@@ -180,61 +180,61 @@ void ReduceMovesContext::checkStack(Instruction* instr,
 
 void ReduceMovesContext::InitGroups::updateLocalGet(Instruction* instr)
 {
-    assert(head_instr == nullptr || !(head_instr->info() & Instruction::kHasParent));
-    assert(!is_dead_group || head_instr == nullptr);
+    assert(headInstr == nullptr || !(headInstr->info() & Instruction::kHasParent));
+    assert(!isDeadGroup || headInstr == nullptr);
 
     if (instr->opcode() != LocalGetOpcode) {
-        is_dead_group = true;
+        isDeadGroup = true;
     } else {
         if (instr->info() & Instruction::kHasParent) {
             instr = ReduceMovesContext::getHead(instr);
         }
 
         if (instr->info() & Instruction::kKeepInstruction) {
-            is_dead_group = true;
-        } else if (is_dead_group) {
-            head_instr = instr;
+            isDeadGroup = true;
+        } else if (isDeadGroup) {
+            headInstr = instr;
         }
     }
 
-    if (is_dead_group) {
+    if (isDeadGroup) {
         // The instr is not LocalGetOpcode, already has the
-        // kKeepInstruction flag, or moved to head_instr.
-        if (head_instr != nullptr) {
-            head_instr->addInfo(Instruction::kKeepInstruction);
-            head_instr = nullptr;
+        // kKeepInstruction flag, or moved to headInstr.
+        if (headInstr != nullptr) {
+            headInstr->addInfo(Instruction::kKeepInstruction);
+            headInstr = nullptr;
         }
         return;
     }
 
-    if (head_instr == nullptr || head_instr == instr) {
-        head_instr = instr;
+    if (headInstr == nullptr || headInstr == instr) {
+        headInstr = instr;
         return;
     }
 
-    if (instr->value().localIndex == head_instr->value().localIndex) {
+    if (instr->value().localIndex == headInstr->value().localIndex) {
         // Combine only alive groups.
-        instr->value().parent = head_instr;
+        instr->value().parent = headInstr;
         instr->addInfo(Instruction::kHasParent);
         return;
     }
 
-    is_dead_group = true;
+    isDeadGroup = true;
     instr->addInfo(Instruction::kKeepInstruction);
-    head_instr->addInfo(Instruction::kKeepInstruction);
-    head_instr = nullptr;
+    headInstr->addInfo(Instruction::kKeepInstruction);
+    headInstr = nullptr;
 }
 
 void ReduceMovesContext::InitGroups::updateLocalSet(Instruction* instr,
                                                     Index index)
 {
-    assert(head_instr == nullptr || !(head_instr->info() & Instruction::kHasParent));
-    assert(is_dead_group == (head_instr == nullptr));
+    assert(headInstr == nullptr || !(headInstr->info() & Instruction::kHasParent));
+    assert(isDeadGroup == (headInstr == nullptr));
 
     Operand* result = instr->getResult(index);
 
     if (result->item == nullptr) {
-        if (!is_dead_group && (instr->opcode() == LocalGetOpcode || instr->group() == Instruction::Immediate)) {
+        if (!isDeadGroup && (instr->opcode() == LocalGetOpcode || instr->group() == Instruction::Immediate)) {
             if (instr->info() & Instruction::kHasParent) {
                 instr = ReduceMovesContext::getHead(instr);
             }
@@ -242,27 +242,27 @@ void ReduceMovesContext::InitGroups::updateLocalSet(Instruction* instr,
             /* Ignore alive sets. */
             if (!(instr->info() & Instruction::kKeepInstruction)) {
                 /* Alive sets cover all paths. */
-                head_instr->addInfo(Instruction::kKeepInstruction);
-                head_instr = nullptr;
-                is_dead_group = true;
+                headInstr->addInfo(Instruction::kKeepInstruction);
+                headInstr = nullptr;
+                isDeadGroup = true;
             }
         }
 
-        if (is_dead_group) {
+        if (isDeadGroup) {
             result->item = WABT_JIT_INVALID_INSTRUCTION;
         } else {
-            result->item = head_instr;
+            result->item = headInstr;
         }
         return;
     }
 
     if (result->item == WABT_JIT_INVALID_INSTRUCTION) {
-        if (!is_dead_group) {
-            head_instr->addInfo(Instruction::kKeepInstruction);
-            head_instr = nullptr;
+        if (!isDeadGroup) {
+            headInstr->addInfo(Instruction::kKeepInstruction);
+            headInstr = nullptr;
         }
 
-        is_dead_group = true;
+        isDeadGroup = true;
         return;
     }
 
@@ -273,75 +273,75 @@ void ReduceMovesContext::InitGroups::updateLocalSet(Instruction* instr,
         result->item = instr;
     }
 
-    if (is_dead_group) {
+    if (isDeadGroup) {
         instr->addInfo(Instruction::kKeepInstruction);
         return;
     }
 
-    if (!(instr->info() & Instruction::kKeepInstruction) && instr->value().localIndex == head_instr->value().localIndex) {
+    if (!(instr->info() & Instruction::kKeepInstruction) && instr->value().localIndex == headInstr->value().localIndex) {
         // Combine only alive groups.
-        if (instr != head_instr) {
-            instr->value().parent = head_instr;
+        if (instr != headInstr) {
+            instr->value().parent = headInstr;
             instr->addInfo(Instruction::kHasParent);
-            result->item = head_instr;
+            result->item = headInstr;
         }
         return;
     }
 
-    is_dead_group = true;
+    isDeadGroup = true;
     result->item = WABT_JIT_INVALID_INSTRUCTION;
 
     instr->addInfo(Instruction::kKeepInstruction);
-    head_instr->addInfo(Instruction::kKeepInstruction);
-    head_instr = nullptr;
+    headInstr->addInfo(Instruction::kKeepInstruction);
+    headInstr = nullptr;
 }
 
 void ReduceMovesContext::InitGroups::updateImmediate(Instruction* instr)
 {
-    assert(head_instr == nullptr || !(head_instr->info() & Instruction::kHasParent));
-    assert(!is_dead_group || head_instr == nullptr);
+    assert(headInstr == nullptr || !(headInstr->info() & Instruction::kHasParent));
+    assert(!isDeadGroup || headInstr == nullptr);
 
     if (instr->group() != Instruction::Immediate) {
-        is_dead_group = true;
+        isDeadGroup = true;
     } else {
         if (instr->info() & Instruction::kHasParent) {
             instr = ReduceMovesContext::getHead(instr);
         }
 
         if (instr->info() & Instruction::kKeepInstruction) {
-            is_dead_group = true;
-        } else if (is_dead_group) {
-            head_instr = instr;
+            isDeadGroup = true;
+        } else if (isDeadGroup) {
+            headInstr = instr;
         }
     }
 
-    if (is_dead_group) {
+    if (isDeadGroup) {
         // The instr is not immediate, already has the
-        // kKeepInstruction flag, or moved to head_instr.
-        if (head_instr != nullptr) {
-            head_instr->addInfo(Instruction::kKeepInstruction);
-            head_instr = nullptr;
+        // kKeepInstruction flag, or moved to headInstr.
+        if (headInstr != nullptr) {
+            headInstr->addInfo(Instruction::kKeepInstruction);
+            headInstr = nullptr;
         }
         return;
     }
 
-    if (head_instr == nullptr || head_instr == instr) {
-        head_instr = instr;
+    if (headInstr == nullptr || headInstr == instr) {
+        headInstr = instr;
         return;
     }
 
-    assert(instr->opcode() == head_instr->opcode());
+    assert(instr->opcode() == headInstr->opcode());
 
     bool same = false;
 
     switch (instr->opcode()) {
     case I32ConstOpcode:
     case F32ConstOpcode:
-        same = instr->value().value32 == head_instr->value().value32;
+        same = instr->value().value32 == headInstr->value().value32;
         break;
     case I64ConstOpcode:
     case F64ConstOpcode:
-        same = instr->value().value64 == head_instr->value().value64;
+        same = instr->value().value64 == headInstr->value().value64;
         break;
     default:
         WABT_UNREACHABLE;
@@ -349,15 +349,15 @@ void ReduceMovesContext::InitGroups::updateImmediate(Instruction* instr)
 
     if (same) {
         // Combine only alive groups.
-        instr->value().parent = head_instr;
+        instr->value().parent = headInstr;
         instr->addInfo(Instruction::kHasParent);
         return;
     }
 
-    is_dead_group = true;
+    isDeadGroup = true;
     instr->addInfo(Instruction::kKeepInstruction);
-    head_instr->addInfo(Instruction::kKeepInstruction);
-    head_instr = nullptr;
+    headInstr->addInfo(Instruction::kKeepInstruction);
+    headInstr = nullptr;
 }
 
 void JITCompiler::reduceLocalAndConstantMoves()
@@ -403,18 +403,18 @@ void JITCompiler::reduceLocalAndConstantMoves()
         Operand* operand = instr->params();
 
         for (Index i = instr->paramCount(); i > 0; --i) {
-            ReduceMovesContext::InitGroups init_local_get(nullptr);
-            ReduceMovesContext::InitGroups init_immediate(nullptr);
+            ReduceMovesContext::InitGroups initLocalGet(nullptr);
+            ReduceMovesContext::InitGroups initImmediate(nullptr);
 
             if (!operand->item->isLabel()) {
-                init_local_get.updateLocalGet(operand->item->asInstruction());
-                init_immediate.updateImmediate(operand->item->asInstruction());
+                initLocalGet.updateLocalGet(operand->item->asInstruction());
+                initImmediate.updateImmediate(operand->item->asInstruction());
             } else {
                 const Label::DependencyList& deps = operand->item->asLabel()->dependencies(operand->index);
 
                 for (auto it : deps) {
-                    init_local_get.updateLocalGet(it.instr);
-                    init_immediate.updateImmediate(it.instr);
+                    initLocalGet.updateLocalGet(it.instr);
+                    initImmediate.updateImmediate(it.instr);
                 }
             }
             operand++;
@@ -440,19 +440,19 @@ void JITCompiler::reduceLocalAndConstantMoves()
         Instruction* instr = item->asInstruction();
 
         assert(!(instr->info() & Instruction::kHasParent));
-        ReduceMovesContext::InitGroups init_groups(instr);
+        ReduceMovesContext::InitGroups initGroups(instr);
 
         Operand* param = instr->getParam(0);
 
         if (!param->item->isLabel()) {
-            init_groups.updateLocalSet(param->item->asInstruction(), param->index);
+            initGroups.updateLocalSet(param->item->asInstruction(), param->index);
             continue;
         }
 
         const Label::DependencyList& deps = param->item->asLabel()->dependencies(param->index);
 
         for (auto it : deps) {
-            init_groups.updateLocalSet(it.instr, it.index);
+            initGroups.updateLocalSet(it.instr, it.index);
         }
     }
 
@@ -461,7 +461,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
     //   label - unknown group
     //   nullptr - dead group
     std::vector<InstructionListItem*> stack;
-    bool update_stack = true;
+    bool updateStack = true;
 
     // Phase 2: check instruction blocks.
     for (InstructionListItem* item = m_first; item != nullptr;
@@ -469,7 +469,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
         if (item->isLabel()) {
             Label* label = item->asLabel();
 
-            if (update_stack) {
+            if (updateStack) {
                 label->m_reduceMovesCtx->update(stack);
             }
 
@@ -480,7 +480,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
                 stack[i] = label;
             }
 
-            update_stack = true;
+            updateStack = true;
             continue;
         }
 
@@ -495,14 +495,14 @@ void JITCompiler::reduceLocalAndConstantMoves()
         }
 
         if (instr->opcode() == LocalGetOpcode) {
-            Instruction* head_instr = instr;
+            Instruction* headInstr = instr;
 
-            if (head_instr->info() & Instruction::kHasParent) {
-                head_instr = ReduceMovesContext::getHead(head_instr);
+            if (headInstr->info() & Instruction::kHasParent) {
+                headInstr = ReduceMovesContext::getHead(headInstr);
             }
 
-            if (!(head_instr->info() & Instruction::kKeepInstruction)) {
-                stack.push_back(head_instr);
+            if (!(headInstr->info() & Instruction::kKeepInstruction)) {
+                stack.push_back(headInstr);
                 continue;
             }
         }
@@ -514,17 +514,17 @@ void JITCompiler::reduceLocalAndConstantMoves()
                 if (result->item == nullptr || result->item == WABT_JIT_INVALID_INSTRUCTION) {
                     stack.push_back(nullptr);
                 } else {
-                    Instruction* head_instr = result->item->asInstruction();
+                    Instruction* headInstr = result->item->asInstruction();
 
-                    assert(head_instr->group() == Instruction::LocalMove);
+                    assert(headInstr->group() == Instruction::LocalMove);
 
-                    if (head_instr->info() & Instruction::kHasParent) {
-                        head_instr = ReduceMovesContext::getHead(head_instr);
-                        result->item = head_instr;
+                    if (headInstr->info() & Instruction::kHasParent) {
+                        headInstr = ReduceMovesContext::getHead(headInstr);
+                        result->item = headInstr;
                     }
 
-                    if (!(head_instr->info() & Instruction::kKeepInstruction)) {
-                        stack.push_back(head_instr);
+                    if (!(headInstr->info() & Instruction::kKeepInstruction)) {
+                        stack.push_back(headInstr);
                     } else {
                         result->item = nullptr;
                         stack.push_back(nullptr);
@@ -540,20 +540,20 @@ void JITCompiler::reduceLocalAndConstantMoves()
             instr->value().targetLabel->m_reduceMovesCtx->update(stack);
 
             if (instr->opcode() == BrOpcode) {
-                update_stack = false;
+                updateStack = false;
             }
         } else if (instr->opcode() == BrTableOpcode) {
             Label** label = instr->asBrTable()->targetLabels();
             Label** end = label + instr->value().targetLabelCount;
-            std::set<Label*> updated_labels;
+            std::set<Label*> updatedLabels;
 
             while (label < end) {
-                if (updated_labels.insert(*label).second) {
+                if (updatedLabels.insert(*label).second) {
                     (*label)->m_reduceMovesCtx->update(stack);
                 }
                 label++;
             }
-            update_stack = false;
+            updateStack = false;
         }
     }
 
@@ -572,60 +572,60 @@ void JITCompiler::reduceLocalAndConstantMoves()
         size_t end = stack->size();
         for (size_t i = 0; i < end; ++i) {
             ReduceMovesContext::StackItem& item = (*stack)[i];
-            Instruction* expected_group = item.expected_group;
+            Instruction* expectedGroup = item.expectedGroup;
 
-            if (expected_group == nullptr) {
+            if (expectedGroup == nullptr) {
                 continue;
             }
 
-            std::vector<Label*> unprocessed_labels;
-            std::set<Label*> processed_labels;
+            std::vector<Label*> unprocessedLabels;
+            std::set<Label*> processedLabels;
 
-            if (expected_group != WABT_JIT_INVALID_INSTRUCTION) {
-                assert(!(expected_group->info() & Instruction::kHasParent));
+            if (expectedGroup != WABT_JIT_INVALID_INSTRUCTION) {
+                assert(!(expectedGroup->info() & Instruction::kHasParent));
 
-                if (expected_group->info() & Instruction::kKeepInstruction) {
-                    item.expected_group = nullptr;
+                if (expectedGroup->info() & Instruction::kKeepInstruction) {
+                    item.expectedGroup = nullptr;
                     continue;
                 }
             }
 
-            for (auto it : item.label_deps) {
-                if (processed_labels.insert(it).second) {
-                    unprocessed_labels.push_back(it);
+            for (auto it : item.labelDeps) {
+                if (processedLabels.insert(it).second) {
+                    unprocessedLabels.push_back(it);
                 }
             }
 
-            while (!unprocessed_labels.empty()) {
-                Label* label = unprocessed_labels.back();
-                unprocessed_labels.pop_back();
+            while (!unprocessedLabels.empty()) {
+                Label* label = unprocessedLabels.back();
+                unprocessedLabels.pop_back();
 
-                ReduceMovesContext::StackItem& current_item = label->m_reduceMovesCtx->stackItem(i);
+                ReduceMovesContext::StackItem& currentItem = label->m_reduceMovesCtx->stackItem(i);
 
-                if (current_item.expected_group == nullptr) {
-                    item.expected_group = nullptr;
+                if (currentItem.expectedGroup == nullptr) {
+                    item.expectedGroup = nullptr;
 
-                    if (expected_group != WABT_JIT_INVALID_INSTRUCTION) {
-                        expected_group->addInfo(Instruction::kKeepInstruction);
+                    if (expectedGroup != WABT_JIT_INVALID_INSTRUCTION) {
+                        expectedGroup->addInfo(Instruction::kKeepInstruction);
                     }
                     break;
                 }
 
-                if (expected_group == WABT_JIT_INVALID_INSTRUCTION) {
-                    expected_group = current_item.expected_group;
-                    item.expected_group = expected_group;
+                if (expectedGroup == WABT_JIT_INVALID_INSTRUCTION) {
+                    expectedGroup = currentItem.expectedGroup;
+                    item.expectedGroup = expectedGroup;
                 }
 
-                assert(current_item.expected_group == expected_group);
+                assert(currentItem.expectedGroup == expectedGroup);
 
-                for (auto it : item.label_deps) {
-                    if (processed_labels.insert(it).second) {
-                        unprocessed_labels.push_back(it);
+                for (auto it : item.labelDeps) {
+                    if (processedLabels.insert(it).second) {
+                        unprocessedLabels.push_back(it);
                     }
                 }
             }
 
-            assert(item.expected_group != WABT_JIT_INVALID_INSTRUCTION);
+            assert(item.expectedGroup != WABT_JIT_INVALID_INSTRUCTION);
         }
     }
 
@@ -633,22 +633,22 @@ void JITCompiler::reduceLocalAndConstantMoves()
     for (InstructionListItem* item = m_first; item != nullptr;
          item = item->next()) {
         if (item->isLabel()) {
-            std::vector<ReduceMovesContext::StackItem>* context_stack = item->asLabel()->m_reduceMovesCtx->stack();
+            std::vector<ReduceMovesContext::StackItem>* contextStack = item->asLabel()->m_reduceMovesCtx->stack();
 
-            size_t size = context_stack->size();
+            size_t size = contextStack->size();
             size_t start = size - item->asLabel()->m_dependencies.size();
             stack.resize(size - start);
 
             for (size_t i = start; i < size; ++i) {
-                Instruction* expected_group = (*context_stack)[i].expected_group;
+                Instruction* expectedGroup = (*contextStack)[i].expectedGroup;
 
-                assert(expected_group != WABT_JIT_INVALID_INSTRUCTION);
+                assert(expectedGroup != WABT_JIT_INVALID_INSTRUCTION);
 
-                if (expected_group != nullptr && (expected_group->info() & Instruction::kKeepInstruction)) {
-                    expected_group = nullptr;
+                if (expectedGroup != nullptr && (expectedGroup->info() & Instruction::kKeepInstruction)) {
+                    expectedGroup = nullptr;
                 }
 
-                stack[i - start] = expected_group;
+                stack[i - start] = expectedGroup;
             }
 
             delete item->asLabel()->m_reduceMovesCtx;
@@ -679,7 +679,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
         }
     }
 
-    // Phase 5: restore local_index.
+    // Phase 5: restore localIndex.
     for (InstructionListItem* item = m_first; item != nullptr;
          item = item->next()) {
         if (item->isLabel()) {
@@ -693,12 +693,12 @@ void JITCompiler::reduceLocalAndConstantMoves()
         }
 
         if (instr->info() & Instruction::kHasParent) {
-            Instruction* head_instr = ReduceMovesContext::getHead(instr);
+            Instruction* headInstr = ReduceMovesContext::getHead(instr);
 
-            assert((head_instr->info() & Instruction::kKeepInstruction) || !(instr->info() & Instruction::kKeepInstruction));
+            assert((headInstr->info() & Instruction::kKeepInstruction) || !(instr->info() & Instruction::kKeepInstruction));
 
-            instr->setInfo(head_instr->info() & Instruction::kKeepInstruction);
-            instr->value() = head_instr->value();
+            instr->setInfo(headInstr->info() & Instruction::kKeepInstruction);
+            instr->value() = headInstr->value();
         }
 
         if (instr->info() & Instruction::kKeepInstruction) {
@@ -713,15 +713,15 @@ void JITCompiler::reduceLocalAndConstantMoves()
         }
 
         Operand* param = instr->getParam(0);
-        Index local_index = instr->value().localIndex;
+        Index localIndex = instr->value().localIndex;
 
         if (!param->item->isLabel()) {
             Operand* result = param->item->asInstruction()->getResult(param->index);
 
-            assert(result->location.type == Operand::Stack || (result->location.type == Operand::LocalSet && result->localIndex == local_index));
+            assert(result->location.type == Operand::Stack || (result->location.type == Operand::LocalSet && result->localIndex == localIndex));
 
             result->location.type = Operand::LocalSet;
-            result->localIndex = local_index;
+            result->localIndex = localIndex;
             continue;
         }
 
@@ -730,10 +730,10 @@ void JITCompiler::reduceLocalAndConstantMoves()
         for (auto it : deps) {
             Operand* result = it.instr->getResult(it.index);
 
-            assert(result->location.type == Operand::Stack || (result->location.type == Operand::LocalSet && result->localIndex == local_index));
+            assert(result->location.type == Operand::Stack || (result->location.type == Operand::LocalSet && result->localIndex == localIndex));
 
             result->location.type = Operand::LocalSet;
-            result->localIndex = local_index;
+            result->localIndex = localIndex;
         }
     }
 }

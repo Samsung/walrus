@@ -109,7 +109,7 @@ public:
     virtual void BeginFunctionBody(Index index, Offset size) override;
 
     virtual void OnLocalDeclCount(Index count) override {}
-    virtual void OnLocalDecl(Index decl_index, Index count, Type type) override;
+    virtual void OnLocalDecl(Index declIndex, Index count, Type type) override;
 
     virtual void OnStartReadInstructions() override {}
 
@@ -147,12 +147,12 @@ public:
     virtual void OnMemoryFillExpr(Index memidx) override {}
     virtual void OnDataDropExpr(Index segmentIndex) override {}
     virtual void OnMemorySizeExpr(Index memidx) override {}
-    virtual void OnTableGetExpr(Index table_index) override {}
-    virtual void OnTableSetExpr(Index table_index) override {}
-    virtual void OnTableGrowExpr(Index table_index) override {}
-    virtual void OnTableSizeExpr(Index table_index) override {}
+    virtual void OnTableGetExpr(Index tableIndex) override {}
+    virtual void OnTableSetExpr(Index tableIndex) override {}
+    virtual void OnTableGrowExpr(Index tableIndex) override {}
+    virtual void OnTableSizeExpr(Index tableIndex) override {}
     virtual void OnTableCopyExpr(Index dst_index, Index src_index) override {}
-    virtual void OnTableFillExpr(Index table_index) override {}
+    virtual void OnTableFillExpr(Index tableIndex) override {}
     virtual void OnElemDropExpr(Index segmentIndex) override {}
     virtual void OnTableInitExpr(Index segmentIndex, Index tableIndex) override {}
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override {}
@@ -167,7 +167,7 @@ public:
     virtual void EndFunctionBody(Index index) override;
 
 private:
-    void pushLabel(Walrus::OpcodeKind opcode, Type sig_type);
+    void pushLabel(Walrus::OpcodeKind opcode, Type sigType);
 
     Walrus::JITCompiler m_compiler;
     Walrus::Module* m_module;
@@ -184,20 +184,20 @@ WASMBinaryReaderJIT::WASMBinaryReaderJIT(Walrus::Module* module, int verboseLeve
 {
 }
 
-void WASMBinaryReaderJIT::pushLabel(Walrus::OpcodeKind opcode, Type sig_type)
+void WASMBinaryReaderJIT::pushLabel(Walrus::OpcodeKind opcode, Type sigType)
 {
-    Index param_count = 0;
-    Index result_count = 0;
+    Index paramCount = 0;
+    Index resultCount = 0;
 
-    if (sig_type.IsIndex()) {
-        Walrus::FunctionType* functionType = m_module->functionType(sig_type);
-        param_count = functionType->param().size();
-        result_count = functionType->result().size();
-    } else if (sig_type != Type::Void) {
-        result_count = 1;
+    if (sigType.IsIndex()) {
+        Walrus::FunctionType* functionType = m_module->functionType(sigType);
+        paramCount = functionType->param().size();
+        resultCount = functionType->result().size();
+    } else if (sigType != Type::Void) {
+        resultCount = 1;
     }
 
-    m_compiler.pushLabel(opcode, param_count, result_count);
+    m_compiler.pushLabel(opcode, paramCount, resultCount);
 }
 
 void WASMBinaryReaderJIT::EndModule()
@@ -266,16 +266,16 @@ void WASMBinaryReaderJIT::BeginFunctionBody(Index index, Offset size)
     }
 }
 
-void WASMBinaryReaderJIT::OnLocalDecl(Index decl_index, Index count, Type type)
+void WASMBinaryReaderJIT::OnLocalDecl(Index declIndex, Index count, Type type)
 {
     if (count <= 0) {
         return;
     }
 
-    Walrus::ValueInfo value_info = Walrus::LocationInfo::typeToValueInfo(toValueKind(type));
+    Walrus::ValueInfo valueInfo = Walrus::LocationInfo::typeToValueInfo(toValueKind(type));
 
     do {
-        m_compiler.locals().push_back(value_info);
+        m_compiler.locals().push_back(valueInfo);
     } while (--count != 0);
 }
 
@@ -353,7 +353,7 @@ void WASMBinaryReaderJIT::OnBinaryExpr(uint32_t opcode)
     m_compiler.append(group, static_cast<Walrus::OpcodeKind>(opcode), 2, result);
 }
 
-void WASMBinaryReaderJIT::OnSelectExpr(Index result_count, Type* result_types)
+void WASMBinaryReaderJIT::OnSelectExpr(Index resultCount, Type* resultTypes)
 {
     /* The result type is unknown, set by buildParamDependencies(). */
     m_compiler.append(Walrus::Instruction::Any, Walrus::SelectOpcode, 3,
@@ -430,25 +430,25 @@ void WASMBinaryReaderJIT::OnBrIfExpr(Index depth)
     m_compiler.appendBranch(Walrus::BrIfOpcode, depth);
 }
 
-void WASMBinaryReaderJIT::OnBrTableExpr(Index num_targets,
-                                        Index* target_depths,
-                                        Index default_target_depth)
+void WASMBinaryReaderJIT::OnBrTableExpr(Index numTargets,
+                                        Index* targetDepths,
+                                        Index defaultTargetDepth)
 {
-    m_compiler.appendBrTable(num_targets, target_depths, default_target_depth);
+    m_compiler.appendBrTable(numTargets, targetDepths, defaultTargetDepth);
 }
 
 void WASMBinaryReaderJIT::OnCallExpr(Index index)
 {
     Walrus::FunctionType* functionType = m_module->function(index)->functionType();
 
-    Walrus::CallInstruction* call_instr = m_compiler.appendCall(Walrus::CallOpcode, functionType);
+    Walrus::CallInstruction* callInstr = m_compiler.appendCall(Walrus::CallOpcode, functionType);
 
-    if (call_instr != nullptr) {
-        call_instr->value().funcIndex = index;
+    if (callInstr != nullptr) {
+        callInstr->value().funcIndex = index;
     }
 }
 
-void WASMBinaryReaderJIT::OnCallIndirectExpr(Index sig_index, Index table_index)
+void WASMBinaryReaderJIT::OnCallIndirectExpr(Index sigIndex, Index tableIndex)
 {
 }
 
@@ -503,9 +503,9 @@ void WASMBinaryReaderJIT::OnI64ConstExpr(uint64_t value)
     }
 }
 
-void WASMBinaryReaderJIT::OnIfExpr(Type sig_type)
+void WASMBinaryReaderJIT::OnIfExpr(Type sigType)
 {
-    pushLabel(Walrus::IfOpcode, sig_type);
+    pushLabel(Walrus::IfOpcode, sigType);
 }
 
 void WASMBinaryReaderJIT::OnLocalGetExpr(Index localIndex)
@@ -538,9 +538,9 @@ void WASMBinaryReaderJIT::OnLocalTeeExpr(Index localIndex)
     }
 }
 
-void WASMBinaryReaderJIT::OnLoopExpr(Type sig_type)
+void WASMBinaryReaderJIT::OnLoopExpr(Type sigType)
 {
-    pushLabel(Walrus::LoopOpcode, sig_type);
+    pushLabel(Walrus::LoopOpcode, sigType);
 }
 
 void WASMBinaryReaderJIT::OnUnreachableExpr()
@@ -569,20 +569,20 @@ void WASMBinaryReaderJIT::EndFunctionBody(Index index)
     m_compiler.reduceLocalAndConstantMoves();
     m_compiler.optimizeBlocks();
 
-    Walrus::JITFunction* jit_func = new Walrus::JITFunction();
-    m_module->function(m_functionBodyIndex)->setJITFunction(jit_func);
-    m_compiler.computeOperandLocations(jit_func, functionType->result());
+    Walrus::JITFunction* jitFunc = new Walrus::JITFunction();
+    m_module->function(m_functionBodyIndex)->setJITFunction(jitFunc);
+    m_compiler.computeOperandLocations(jitFunc, functionType->result());
 
     if (m_compiler.verboseLevel() >= 1) {
         printf("------------------------------\n");
         printf("Frame size: %d, Arguments size: %d (total: %d)\n",
-               jit_func->frameSize(), jit_func->argsSize(),
-               jit_func->frameSize() + jit_func->argsSize());
+               jitFunc->frameSize(), jitFunc->argsSize(),
+               jitFunc->frameSize() + jitFunc->argsSize());
         m_compiler.dump(true);
         printf("\n");
     }
 
-    m_compiler.appendFunction(jit_func, m_functionIsExported[m_functionBodyIndex]);
+    m_compiler.appendFunction(jitFunc, m_functionIsExported[m_functionBodyIndex]);
 
     m_compiler.clear();
 }
