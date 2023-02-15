@@ -23,7 +23,7 @@ namespace Walrus {
 
 class FunctionType;
 
-class Tag : public Object {
+class Tag : public Extern {
 public:
     Tag(FunctionType* functionType)
         : m_functionType(functionType)

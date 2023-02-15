@@ -25,7 +25,7 @@ namespace Walrus {
 class ElementSegment;
 class Instance;
 
-class Table : public Object {
+class Table : public Extern {
 public:
     Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize);
 
