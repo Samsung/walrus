@@ -46,21 +46,21 @@ public:
     };
 
     struct StackItem {
-        std::vector<Dependency> inst_deps;
-        std::vector<Dependency> label_deps;
+        std::vector<Dependency> instDeps;
+        std::vector<Dependency> labelDeps;
     };
 
     DependencyGenContext(Label* label)
         : m_preservedCount(label->preservedCount())
-        , start_index_(0)
+        , m_startIndex(0)
     {
-        stack_.resize(label->stackSize());
+        m_stack.resize(label->stackSize());
     }
 
-    size_t startIndex() { return start_index_; }
-    void setStartIndex(size_t value) { start_index_ = value; }
-    std::vector<StackItem>* stack() { return &stack_; }
-    StackItem& stackItem(size_t index) { return stack_[index]; }
+    size_t startIndex() { return m_startIndex; }
+    void setStartIndex(size_t value) { m_startIndex = value; }
+    std::vector<StackItem>* stack() { return &m_stack; }
+    StackItem& stackItem(size_t index) { return m_stack[index]; }
 
     void update(std::vector<Operand>& deps);
 
@@ -70,29 +70,29 @@ private:
                        Index index);
 
     Index m_preservedCount;
-    size_t start_index_;
-    std::vector<StackItem> stack_;
+    size_t m_startIndex;
+    std::vector<StackItem> m_stack;
 };
 
 void DependencyGenContext::update(std::vector<Operand>& deps)
 {
-    assert(deps.size() >= stack_.size());
+    assert(deps.size() >= m_stack.size());
 
-    size_t size = stack_.size();
+    size_t size = m_stack.size();
     size_t current = 0;
 
     for (size_t i = 0; i < size; i++, current++) {
         if (current == m_preservedCount) {
             // These items are ignored when the branch is executed.
-            current += deps.size() - stack_.size();
+            current += deps.size() - m_stack.size();
         }
 
         Operand& dep = deps[current];
 
         if (dep.item->isInstruction()) {
-            append(stack_[i].inst_deps, dep.item, dep.index);
+            append(m_stack[i].instDeps, dep.item, dep.index);
         } else {
-            append(stack_[i].label_deps, dep.item, dep.index);
+            append(m_stack[i].labelDeps, dep.item, dep.index);
         }
     }
 
@@ -112,36 +112,36 @@ void DependencyGenContext::append(std::vector<Dependency>& list,
     list.push_back(Dependency(item, index));
 }
 
-static void findSelectResult(Instruction* select_instr)
+static void findSelectResult(Instruction* selectInstr)
 {
     /* Must depend on an instruction which is placed before. */
-    assert(!(select_instr->info() & Instruction::kHasResultValueInfo));
+    assert(!(selectInstr->info() & Instruction::kHasResultValueInfo));
 
-    ValueInfo value_info = LocationInfo::kNone;
-    Operand* operand = select_instr->getParam(0);
+    ValueInfo valueInfo = LocationInfo::kNone;
+    Operand* operand = selectInstr->getParam(0);
 
     if (operand->item->isLabel()) {
         const Label::DependencyList& deps = operand->item->asLabel()->dependencies(operand->index);
 
         for (auto it : deps) {
             if (it.instr->opcode() != SelectOpcode || (it.instr->info() & Instruction::kHasResultValueInfo)) {
-                value_info = it.instr->getResult(it.index)->location.valueInfo;
+                valueInfo = it.instr->getResult(it.index)->location.valueInfo;
                 break;
             }
         }
 
-        assert(value_info != LocationInfo::kNone);
+        assert(valueInfo != LocationInfo::kNone);
     } else {
         Instruction* instr = operand->item->asInstruction();
 
         assert(instr->opcode() != SelectOpcode || (instr->info() & Instruction::kHasResultValueInfo));
 
-        value_info = instr->getResult(operand->index)->location.valueInfo;
-        assert(value_info != LocationInfo::kNone);
+        valueInfo = instr->getResult(operand->index)->location.valueInfo;
+        assert(valueInfo != LocationInfo::kNone);
     }
 
-    select_instr->getResult(0)->location.valueInfo = value_info;
-    select_instr->addInfo(Instruction::kHasResultValueInfo);
+    selectInstr->getResult(0)->location.valueInfo = valueInfo;
+    selectInstr->addInfo(Instruction::kHasResultValueInfo);
 }
 
 void JITCompiler::buildParamDependencies()
@@ -154,40 +154,40 @@ void JITCompiler::buildParamDependencies()
         }
     }
 
-    bool update_deps = true;
-    size_t start_index = 0;
-    std::vector<Operand> current_deps;
+    bool updateDeps = true;
+    size_t startIndex = 0;
+    std::vector<Operand> currentDeps;
 
     // Phase 1: the direct dependencies are computed for instructions
     // and labels (only labels can have multiple dependencies).
     for (InstructionListItem* item = m_first; item != nullptr;
          item = item->next()) {
         if (item->isLabel()) {
-            if (start_index > 0) {
-                assert(current_deps[0].item->isLabel());
-                Label* label = current_deps[0].item->asLabel();
-                label->m_dependencyCtx->setStartIndex(start_index);
+            if (startIndex > 0) {
+                assert(currentDeps[0].item->isLabel());
+                Label* label = currentDeps[0].item->asLabel();
+                label->m_dependencyCtx->setStartIndex(startIndex);
             }
 
             // Build a dependency list which refers to the last label.
             Label* label = item->asLabel();
 
-            if (update_deps) {
-                label->m_dependencyCtx->update(current_deps);
-                current_deps.clear();
+            if (updateDeps) {
+                label->m_dependencyCtx->update(currentDeps);
+                currentDeps.clear();
             }
 
-            start_index = label->m_dependencyCtx->stack()->size();
+            startIndex = label->m_dependencyCtx->stack()->size();
 
-            current_deps.resize(start_index);
+            currentDeps.resize(startIndex);
 
-            for (size_t i = 0; i < start_index; ++i) {
-                Operand& dep = current_deps[i];
+            for (size_t i = 0; i < startIndex; ++i) {
+                Operand& dep = currentDeps[i];
                 dep.item = label;
                 dep.index = i;
             }
 
-            update_deps = true;
+            updateDeps = true;
             continue;
         }
 
@@ -198,13 +198,13 @@ void JITCompiler::buildParamDependencies()
         Operand* param = instr->params() + end;
 
         for (Index i = end; i > 0; --i) {
-            *(--param) = current_deps.back();
-            current_deps.pop_back();
+            *(--param) = currentDeps.back();
+            currentDeps.pop_back();
 
             if (param->item->isLabel()) {
                 // Values are consumed top to bottom.
-                assert(start_index == param->index + 1);
-                start_index = param->index;
+                assert(startIndex == param->index + 1);
+                startIndex = param->index;
             }
         }
 
@@ -216,36 +216,36 @@ void JITCompiler::buildParamDependencies()
             end = instr->resultCount();
             for (Index i = 0; i < end; ++i) {
                 dep.index = i;
-                current_deps.push_back(dep);
+                currentDeps.push_back(dep);
             }
         }
 
         if (instr->group() == Instruction::DirectBranch) {
             Label* label = instr->value().targetLabel;
-            label->m_dependencyCtx->update(current_deps);
+            label->m_dependencyCtx->update(currentDeps);
 
             if (instr->opcode() == BrOpcode) {
-                update_deps = false;
+                updateDeps = false;
             }
         } else if (instr->group() == Instruction::BrTable) {
             Label** label = instr->asBrTable()->targetLabels();
             Label** end = label + instr->value().targetLabelCount;
-            std::set<Label*> updated_labels;
+            std::set<Label*> updatedLabels;
 
             while (label < end) {
-                if (updated_labels.insert(*label).second) {
-                    (*label)->m_dependencyCtx->update(current_deps);
+                if (updatedLabels.insert(*label).second) {
+                    (*label)->m_dependencyCtx->update(currentDeps);
                 }
                 label++;
             }
-            update_deps = false;
+            updateDeps = false;
         }
     }
 
     // Phase 2: the indirect instruction
     // references are computed for labels.
-    std::vector<DependencyGenContext::StackItem>* last_stack = nullptr;
-    Index last_start_index = 0;
+    std::vector<DependencyGenContext::StackItem>* lastStack = nullptr;
+    Index lastStartIndex = 0;
 
     for (InstructionListItem* item = m_first; item != nullptr;
          item = item->next()) {
@@ -255,18 +255,18 @@ void JITCompiler::buildParamDependencies()
 
             for (Index i = instr->paramCount(); i > 0; --i) {
                 if (param->item->isLabel()) {
-                    assert(param->item->asLabel()->m_dependencyCtx->stack() == last_stack);
-                    assert(param->index >= last_start_index);
+                    assert(param->item->asLabel()->m_dependencyCtx->stack() == lastStack);
+                    assert(param->index >= lastStartIndex);
 
-                    std::vector<DependencyGenContext::Dependency> inst_deps = (*last_stack)[param->index].inst_deps;
+                    std::vector<DependencyGenContext::Dependency> instDeps = (*lastStack)[param->index].instDeps;
 
-                    if (inst_deps.size() == 1) {
+                    if (instDeps.size() == 1) {
                         // A single reference is copied into the instruction.
-                        param->item = inst_deps[0].item;
-                        param->index = inst_deps[0].index;
+                        param->item = instDeps[0].item;
+                        param->index = instDeps[0].index;
                     } else {
-                        // References below last_start_index are deleted.
-                        param->index -= last_start_index;
+                        // References below lastStartIndex are deleted.
+                        param->index -= lastStartIndex;
                     }
                 }
                 param++;
@@ -276,48 +276,48 @@ void JITCompiler::buildParamDependencies()
 
         DependencyGenContext* context = item->asLabel()->m_dependencyCtx;
 
-        last_stack = context->stack();
-        last_start_index = static_cast<Index>(context->startIndex());
-        size_t end = last_stack->size();
+        lastStack = context->stack();
+        lastStartIndex = static_cast<Index>(context->startIndex());
+        size_t end = lastStack->size();
 
-        for (size_t i = last_start_index; i < end; ++i) {
-            std::vector<DependencyGenContext::Dependency> unprocessed_labels;
-            std::set<DependencyGenContext::Dependency> processed_deps;
-            std::vector<DependencyGenContext::Dependency>& inst_deps = (*last_stack)[i].inst_deps;
+        for (size_t i = lastStartIndex; i < end; ++i) {
+            std::vector<DependencyGenContext::Dependency> unprocessedLabels;
+            std::set<DependencyGenContext::Dependency> processedDeps;
+            std::vector<DependencyGenContext::Dependency>& instDeps = (*lastStack)[i].instDeps;
 
-            for (auto it : inst_deps) {
-                processed_deps.insert(it);
+            for (auto it : instDeps) {
+                processedDeps.insert(it);
             }
 
-            for (auto it : (*last_stack)[i].label_deps) {
-                processed_deps.insert(it);
-                unprocessed_labels.push_back(it);
+            for (auto it : (*lastStack)[i].labelDeps) {
+                processedDeps.insert(it);
+                unprocessedLabels.push_back(it);
             }
 
-            (*last_stack)[i].label_deps.clear();
+            (*lastStack)[i].labelDeps.clear();
 
-            while (!unprocessed_labels.empty()) {
-                DependencyGenContext::Dependency& dep = unprocessed_labels.back();
+            while (!unprocessedLabels.empty()) {
+                DependencyGenContext::Dependency& dep = unprocessedLabels.back();
                 DependencyGenContext::StackItem& item = dep.item->asLabel()->m_dependencyCtx->stackItem(dep.index);
 
-                unprocessed_labels.pop_back();
+                unprocessedLabels.pop_back();
 
-                for (auto it : item.inst_deps) {
-                    if (processed_deps.insert(it).second) {
-                        inst_deps.push_back(it);
+                for (auto it : item.instDeps) {
+                    if (processedDeps.insert(it).second) {
+                        instDeps.push_back(it);
                     }
                 }
 
-                for (auto it : item.label_deps) {
-                    if (processed_deps.insert(it).second) {
-                        unprocessed_labels.push_back(it);
+                for (auto it : item.labelDeps) {
+                    if (processedDeps.insert(it).second) {
+                        unprocessedLabels.push_back(it);
                     }
                 }
             }
 
             // At least one instruction dependency
             // must be present if the input is valid.
-            assert(inst_deps.size() > 0);
+            assert(instDeps.size() > 0);
         }
     }
 
@@ -338,24 +338,24 @@ void JITCompiler::buildParamDependencies()
         Label* label = item->asLabel();
         DependencyGenContext* context = label->m_dependencyCtx;
         std::vector<DependencyGenContext::StackItem>* stack = context->stack();
-        size_t start_index = context->startIndex();
+        size_t startIndex = context->startIndex();
         size_t end = stack->size();
 
         // Single item dependencies are
         // moved into the corresponding oeprand data.
-        label->m_dependencies.resize(end - start_index);
+        label->m_dependencies.resize(end - startIndex);
 
-        for (size_t i = start_index; i < end; ++i) {
-            assert((*stack)[i].label_deps.empty());
+        for (size_t i = startIndex; i < end; ++i) {
+            assert((*stack)[i].labelDeps.empty());
 
-            Label::DependencyList& list = label->m_dependencies[i - start_index];
+            Label::DependencyList& list = label->m_dependencies[i - startIndex];
 
-            size_t size = (*stack)[i].inst_deps.size();
+            size_t size = (*stack)[i].instDeps.size();
 
             if (size > 1) {
                 list.reserve(size);
 
-                for (auto it : (*stack)[i].inst_deps) {
+                for (auto it : (*stack)[i].instDeps) {
                     list.push_back(Label::Dependency(it.item->asInstruction(), it.index));
                 }
             }
@@ -378,15 +378,15 @@ void JITCompiler::optimizeBlocks()
 
         switch (item->group()) {
         case Instruction::Call: {
-            CallInstruction* call_instr = reinterpret_cast<CallInstruction*>(item);
+            CallInstruction* callInstr = reinterpret_cast<CallInstruction*>(item);
 
-            LocalsAllocator locals_allocator(call_instr->paramStart());
+            LocalsAllocator localsAllocator(callInstr->paramStart());
 
-            for (auto it : call_instr->functionType()->param()) {
-                locals_allocator.allocate(LocationInfo::typeToValueInfo(it));
+            for (auto it : callInstr->functionType()->param()) {
+                localsAllocator.allocate(LocationInfo::typeToValueInfo(it));
             }
 
-            Index end = call_instr->paramCount();
+            Index end = callInstr->paramCount();
             size_t size = stack.size();
 
             for (Index i = 0; i < end; ++i) {
@@ -397,7 +397,7 @@ void JITCompiler::optimizeBlocks()
 
                     if (operand->location.type == Operand::Stack) {
                         operand->location.type = Operand::CallArg;
-                        operand->value = locals_allocator.get(i).value;
+                        operand->value = localsAllocator.get(i).value;
                     }
                 }
             }
@@ -451,12 +451,12 @@ static StackAllocator* cloneAllocator(Label* label, StackAllocator* other)
 
     StackAllocator* allocator = new StackAllocator(other, label->preservedCount());
 
-    std::vector<LocationInfo>& other_values = other->values();
+    std::vector<LocationInfo>& otherValues = other->values();
     Index end = label->resultCount();
-    Index current = other_values.size() - end;
+    Index current = otherValues.size() - end;
 
     for (Index i = 0; i < end; i++, current++) {
-        LocationInfo& info = other_values[current];
+        LocationInfo& info = otherValues[current];
 
         if (info.status & LocationInfo::kIsOffset) {
             allocator->push(info.valueInfo);
@@ -468,31 +468,31 @@ static StackAllocator* cloneAllocator(Label* label, StackAllocator* other)
     return allocator;
 }
 
-void JITCompiler::computeOperandLocations(JITFunction* jit_func,
+void JITCompiler::computeOperandLocations(JITFunction* jitFunc,
                                           ValueTypeVector& results)
 {
     // Build space for results first.
-    StackAllocator* stack_allocator = new StackAllocator();
+    StackAllocator* m_stackAllocator = new StackAllocator();
 
     for (auto it : results) {
-        stack_allocator->push(LocationInfo::typeToValueInfo(it));
+        m_stackAllocator->push(LocationInfo::typeToValueInfo(it));
     }
 
-    Index locals_start = stack_allocator->size();
-    LocalsAllocator locals_allocator(locals_start);
+    Index localsStart = m_stackAllocator->size();
+    LocalsAllocator localsAllocator(localsStart);
 
     size_t size = m_locals.size();
 
     for (size_t i = 0; i < size; i++) {
-        locals_allocator.allocate(m_locals[i]);
+        localsAllocator.allocate(m_locals[i]);
     }
 
-    Index max_stack_size = locals_allocator.size();
-    Index args_size = StackAllocator::alignedSize(max_stack_size);
-    Index total_frame_size = args_size;
-    Index max_call_frame_size = 0;
+    Index maxMStackSize = localsAllocator.size();
+    Index argsSize = StackAllocator::alignedSize(maxMStackSize);
+    Index totalFrameSize = argsSize;
+    Index maxCallFrameSize = 0;
 
-    stack_allocator->skipRange(locals_start, max_stack_size);
+    m_stackAllocator->skipRange(localsStart, maxMStackSize);
 
     // Compute stack allocation.
     for (InstructionListItem* item = m_first; item != nullptr;
@@ -508,25 +508,25 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
         if (item->isLabel()) {
             Label* label = item->asLabel();
 
-            max_call_frame_size += StackAllocator::alignedSize(max_stack_size);
-            if (max_call_frame_size > total_frame_size) {
-                total_frame_size = max_call_frame_size;
+            maxCallFrameSize += StackAllocator::alignedSize(maxMStackSize);
+            if (maxCallFrameSize > totalFrameSize) {
+                totalFrameSize = maxCallFrameSize;
             }
 
-            max_call_frame_size = 0;
-            max_stack_size = 0;
+            maxCallFrameSize = 0;
+            maxMStackSize = 0;
 
             if (label->m_stackAllocator == nullptr) {
                 // Avoid cloning the allocator when a block
                 // can be executed after the previous block.
                 assert(!(label->info() & Label::kAfterUncondBranch));
-                label->m_stackAllocator = stack_allocator;
+                label->m_stackAllocator = m_stackAllocator;
                 continue;
             }
 
             assert(label->info() & Label::kAfterUncondBranch);
-            delete stack_allocator;
-            stack_allocator = item->asLabel()->m_stackAllocator;
+            delete m_stackAllocator;
+            m_stackAllocator = item->asLabel()->m_stackAllocator;
             continue;
         }
 
@@ -537,7 +537,7 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
         Operand* operand = instr->params() + end;
 
         for (Index i = end; i > 0; --i) {
-            const LocationInfo& location = stack_allocator->values().back();
+            const LocationInfo& location = m_stackAllocator->values().back();
 
             --operand;
 
@@ -568,7 +568,7 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
             }
 
             operand->location.valueInfo = location.valueInfo;
-            stack_allocator->pop();
+            m_stackAllocator->pop();
         }
 
         // Push results next.
@@ -579,44 +579,44 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
             for (Index i = 0; i < end; ++i) {
                 switch (operand->location.type) {
                 case Operand::Stack: {
-                    stack_allocator->push(operand->location.valueInfo);
-                    operand->value = stack_allocator->values().back().value;
+                    m_stackAllocator->push(operand->location.valueInfo);
+                    operand->value = m_stackAllocator->values().back().value;
                     break;
                 }
                 case Operand::Register: {
-                    stack_allocator->pushReg(operand->value,
-                                             operand->location.valueInfo);
+                    m_stackAllocator->pushReg(operand->value,
+                                              operand->location.valueInfo);
                     break;
                 }
                 case Operand::CallArg: {
                     operand->location.type = Operand::CallArg;
-                    stack_allocator->pushCallArg(operand->value,
-                                                 operand->location.valueInfo);
+                    m_stackAllocator->pushCallArg(operand->value,
+                                                  operand->location.valueInfo);
                     break;
                 }
                 case Operand::Immediate: {
                     assert(instr->group() == Instruction::Immediate);
-                    stack_allocator->pushImmediate(operand->location.valueInfo);
+                    m_stackAllocator->pushImmediate(operand->location.valueInfo);
                     operand->location.type = Operand::Unused;
                     operand->value = 0;
                     break;
                 }
                 case Operand::LocalSet: {
                     operand->location.type = Operand::Stack;
-                    operand->value = locals_allocator.get(operand->localIndex).value;
-                    stack_allocator->pushUnused(operand->location.valueInfo);
+                    operand->value = localsAllocator.get(operand->localIndex).value;
+                    m_stackAllocator->pushUnused(operand->location.valueInfo);
                     break;
                 }
                 case Operand::LocalGet: {
                     assert(instr->opcode() == LocalGetOpcode);
                     operand->location.type = Operand::Unused;
-                    Index offset = locals_allocator.get(instr->value().localIndex).value;
-                    stack_allocator->pushLocal(offset, operand->location.valueInfo);
+                    Index offset = localsAllocator.get(instr->value().localIndex).value;
+                    m_stackAllocator->pushLocal(offset, operand->location.valueInfo);
                     break;
                 }
                 default: {
                     assert(operand->location.type == Operand::Unused);
-                    stack_allocator->pushUnused(operand->location.valueInfo);
+                    m_stackAllocator->pushUnused(operand->location.valueInfo);
                     break;
                 }
                 }
@@ -624,8 +624,8 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
                 operand++;
             }
 
-            if (max_stack_size < stack_allocator->size()) {
-                max_stack_size = stack_allocator->size();
+            if (maxMStackSize < m_stackAllocator->size()) {
+                maxMStackSize = m_stackAllocator->size();
             }
         }
 
@@ -633,7 +633,7 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
         case Instruction::DirectBranch: {
             Label* label = instr->value().targetLabel;
             if ((label->info() & Label::kAfterUncondBranch) && label->m_stackAllocator == nullptr) {
-                label->m_stackAllocator = cloneAllocator(label, stack_allocator);
+                label->m_stackAllocator = cloneAllocator(label, m_stackAllocator);
             }
             break;
         }
@@ -643,7 +643,7 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
 
             while (label < end) {
                 if (((*label)->info() & Label::kAfterUncondBranch) && (*label)->m_stackAllocator == nullptr) {
-                    (*label)->m_stackAllocator = cloneAllocator(*label, stack_allocator);
+                    (*label)->m_stackAllocator = cloneAllocator(*label, m_stackAllocator);
                 }
                 label++;
             }
@@ -652,8 +652,8 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
         case Instruction::Call: {
             Index frame_size = instr->asCall()->frameSize();
 
-            if (max_call_frame_size < frame_size) {
-                max_call_frame_size = frame_size;
+            if (maxCallFrameSize < frame_size) {
+                maxCallFrameSize = frame_size;
             }
             break;
         }
@@ -663,18 +663,18 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
         }
     }
 
-    assert(stack_allocator->empty() || m_last->group() != Instruction::Return);
-    delete stack_allocator;
+    assert(m_stackAllocator->empty() || m_last->group() != Instruction::Return);
+    delete m_stackAllocator;
 
-    max_call_frame_size += StackAllocator::alignedSize(max_stack_size);
-    if (max_call_frame_size > total_frame_size) {
-        total_frame_size = max_call_frame_size;
+    maxCallFrameSize += StackAllocator::alignedSize(maxMStackSize);
+    if (maxCallFrameSize > totalFrameSize) {
+        totalFrameSize = maxCallFrameSize;
     }
 
-    assert(total_frame_size >= args_size && StackAllocator::alignedSize(total_frame_size) == total_frame_size);
-    jit_func->initSizes(args_size, total_frame_size - args_size);
+    assert(totalFrameSize >= argsSize && StackAllocator::alignedSize(totalFrameSize) == totalFrameSize);
+    jitFunc->initSizes(argsSize, totalFrameSize - argsSize);
 
-    Index args_start = total_frame_size - args_size;
+    Index argsStart = totalFrameSize - argsSize;
 
     for (InstructionListItem* item = m_first; item != nullptr;
          item = item->next()) {
@@ -686,36 +686,36 @@ void JITCompiler::computeOperandLocations(JITFunction* jit_func,
 
         // Pop params from the stack first.
         Operand* operand = instr->operands();
-        Operand* operand_end = operand + instr->paramCount() + instr->resultCount();
+        Operand* operandEnd = operand + instr->paramCount() + instr->resultCount();
 
         if (instr->group() == Instruction::LocalMove) {
-            assert(operand + 1 == operand_end);
+            assert(operand + 1 == operandEnd);
 
-            Index value = locals_allocator.get(instr->value().localIndex).value;
+            Index value = localsAllocator.get(instr->value().localIndex).value;
 
-            if (value < args_size) {
-                value += args_start;
+            if (value < argsSize) {
+                value += argsStart;
             } else {
                 Index length = LocationInfo::length(operand->location.valueInfo);
 
-                assert(total_frame_size >= value + length);
-                value = total_frame_size - value - length;
+                assert(totalFrameSize >= value + length);
+                value = totalFrameSize - value - length;
             }
 
             instr->value().value = value;
         }
 
-        while (operand < operand_end) {
+        while (operand < operandEnd) {
             if (operand->location.type == Operand::CallArg) {
                 operand->location.type = Operand::Stack;
             } else if (operand->location.type == Operand::Stack) {
-                if (operand->value < args_size) {
-                    operand->value += args_start;
+                if (operand->value < argsSize) {
+                    operand->value += argsStart;
                 } else {
                     Index length = LocationInfo::length(operand->location.valueInfo);
 
                     assert(operand->value >= operand->value + length);
-                    operand->value = total_frame_size - operand->value - length;
+                    operand->value = totalFrameSize - operand->value - length;
                 }
             }
 

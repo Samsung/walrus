@@ -21,19 +21,19 @@ using f64Function2Param = std::add_pointer<sljit_f64(sljit_f64, sljit_f64)>::typ
 using f32Function1Param = std::add_pointer<sljit_f32(sljit_f32)>::type;
 using f64Function1Param = std::add_pointer<sljit_f64(sljit_f64)>::type;
 
-#define MOVE_FROM_FREG(compiler, mov_op, arg, argw, source_reg)            \
-    if ((source_reg) != (arg)) {                                           \
-        sljit_emit_fop1(compiler, mov_op, (arg), (argw), (source_reg), 0); \
+#define MOVE_FROM_FREG(compiler, movOp, arg, argw, sourceReg)            \
+    if ((sourceReg) != (arg)) {                                          \
+        sljit_emit_fop1(compiler, movOp, (arg), (argw), (sourceReg), 0); \
     }
-#define MOVE_TO_FREG(compiler, mov_op, target_reg, arg, argw)              \
-    if ((target_reg) != (arg)) {                                           \
-        sljit_emit_fop1(compiler, mov_op, (target_reg), 0, (arg), (argw)); \
+#define MOVE_TO_FREG(compiler, movOp, targetReg, arg, argw)              \
+    if ((targetReg) != (arg)) {                                          \
+        sljit_emit_fop1(compiler, movOp, (targetReg), 0, (arg), (argw)); \
     }
 
 static void floatOperandToArg(sljit_compiler* compiler,
                               Operand* operand,
                               JITArg& arg,
-                              sljit_s32 src_reg)
+                              sljit_s32 srcReg)
 {
     if (operand->location.type != Operand::Immediate) {
         operandToArg(operand, arg);
@@ -41,9 +41,9 @@ static void floatOperandToArg(sljit_compiler* compiler,
     }
 
     Instruction* instr = operand->item->asInstruction();
-    ASSERT(src_reg != 0);
+    ASSERT(srcReg != 0);
 
-    arg.arg = src_reg;
+    arg.arg = srcReg;
     arg.argw = 0;
 
     if ((operand->location.valueInfo & LocationInfo::kSizeMask) == 1) {
@@ -299,7 +299,7 @@ static void emitFloatSelect(sljit_compiler* compiler,
 {
     Operand* operands = instr->operands();
     bool is32 = (operands->location.valueInfo & LocationInfo::kSizeMask) == 1;
-    sljit_s32 mov_opcode = is32 ? SLJIT_MOV_F32 : SLJIT_MOV_F64;
+    sljit_s32 movOpcode = is32 ? SLJIT_MOV_F32 : SLJIT_MOV_F64;
     JITArg args[3];
 
     floatOperandToArg(compiler, operands + 0, args[0], SLJIT_FR0);
@@ -316,11 +316,11 @@ static void emitFloatSelect(sljit_compiler* compiler,
         type = SLJIT_NOT_ZERO;
     }
 
-    sljit_s32 target_reg = GET_TARGET_REG(args[2].arg, SLJIT_FR0);
+    sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, SLJIT_FR0);
 
-    MOVE_TO_FREG(compiler, mov_opcode, target_reg, args[0].arg, args[0].argw);
+    MOVE_TO_FREG(compiler, movOpcode, targetReg, args[0].arg, args[0].argw);
     sljit_jump* jump = sljit_emit_jump(compiler, type);
-    MOVE_TO_FREG(compiler, mov_opcode, target_reg, args[1].arg, args[1].argw);
+    MOVE_TO_FREG(compiler, movOpcode, targetReg, args[1].arg, args[1].argw);
     sljit_set_label(jump, sljit_emit_label(compiler));
-    MOVE_FROM_FREG(compiler, mov_opcode, args[2].arg, args[2].argw, target_reg);
+    MOVE_FROM_FREG(compiler, movOpcode, args[2].arg, args[2].argw, targetReg);
 }

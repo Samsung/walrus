@@ -28,39 +28,39 @@ public:
     static const size_t shift = 5;
 
     SetLocalContext(size_t size)
-        : _initialized(getSize(size))
+        : m_initialized(getSize(size))
     {
     }
 
-    void set(size_t i) { _initialized[i >> shift] |= 1 << (i & mask); }
+    void set(size_t i) { m_initialized[i >> shift] |= 1 << (i & mask); }
     bool get(size_t i)
     {
-        return (_initialized[i >> shift] & (1 << (i & mask))) != 0;
+        return (m_initialized[i >> shift] & (1 << (i & mask))) != 0;
     }
-    SetLocalContext* clone() { return new SetLocalContext(_initialized); }
+    SetLocalContext* clone() { return new SetLocalContext(m_initialized); }
     void updateTarget(SetLocalContext* target);
 
 private:
     SetLocalContext(std::vector<uint32_t>& other)
-        : _initialized(other)
+        : m_initialized(other)
     {
     }
 
     size_t getSize(size_t size) { return (size + mask) & ~mask; }
 
     // First initializetion of a local variable.
-    std::vector<uint32_t> _initialized;
+    std::vector<uint32_t> m_initialized;
 };
 
 void SetLocalContext::updateTarget(SetLocalContext* target)
 {
-    assert(_initialized.size() == target->_initialized.size());
+    assert(m_initialized.size() == target->m_initialized.size());
 
-    size_t end = _initialized.size();
-    std::vector<uint32_t>& target_initialized = target->_initialized;
+    size_t end = m_initialized.size();
+    std::vector<uint32_t>& targetInitialized = target->m_initialized;
 
     for (size_t i = 0; i < end; i++) {
-        target_initialized[i] &= _initialized[i];
+        targetInitialized[i] &= m_initialized[i];
     }
 }
 
@@ -84,28 +84,28 @@ struct LocalRange {
     size_t index;
 };
 
-void JITCompiler::checkLocals(size_t params_size)
+void JITCompiler::checkLocals(size_t paramsSize)
 {
-    size_t locals_size = m_locals.size();
-    SetLocalContext* current = new SetLocalContext(locals_size);
+    size_t localsSize = m_locals.size();
+    SetLocalContext* current = new SetLocalContext(localsSize);
 
-    std::vector<LocalRange> local_ranges;
-    std::vector<bool> local_uninitialized(locals_size);
+    std::vector<LocalRange> localRanges;
+    std::vector<bool> localUninitialized(localsSize);
 
-    local_ranges.reserve(locals_size);
+    localRanges.reserve(localsSize);
 
-    for (size_t i = 0; i < locals_size; i++) {
-        local_ranges.push_back(LocalRange(i));
+    for (size_t i = 0; i < localsSize; i++) {
+        localRanges.push_back(LocalRange(i));
     }
 
     // Phase 1: compute the start and end regions of all locals,
     // and compute whether the local is accessible from the entry
     // point of the function
 
-    size_t instr_index = 0;
+    size_t instrIndex = 0;
     for (InstructionListItem* item = m_first; item != nullptr;
          item = item->next()) {
-        instr_index++;
+        instrIndex++;
 
         if (item->isLabel()) {
             Label* label = item->asLabel();
@@ -123,7 +123,7 @@ void JITCompiler::checkLocals(size_t params_size)
                 current = label->m_setLocalCtx;
             }
 
-            label->m_instrIndex = instr_index;
+            label->m_instrIndex = instrIndex;
             continue;
         }
 
@@ -131,19 +131,19 @@ void JITCompiler::checkLocals(size_t params_size)
 
         switch (instr->group()) {
         case Instruction::LocalMove: {
-            Index local_index = instr->value().localIndex;
-            LocalRange& range = local_ranges[local_index];
+            Index localIndex = instr->value().localIndex;
+            LocalRange& range = localRanges[localIndex];
 
             if (range.start == 0) {
-                range.start = instr_index;
+                range.start = instrIndex;
             }
 
-            range.end = instr_index;
+            range.end = instrIndex;
 
             if (instr->opcode() == LocalSetOpcode) {
-                current->set(local_index);
-            } else if (!current->get(local_index)) {
-                local_uninitialized[local_index] = true;
+                current->set(localIndex);
+            } else if (!current->get(localIndex)) {
+                localUninitialized[localIndex] = true;
             }
             break;
         }
@@ -168,10 +168,10 @@ void JITCompiler::checkLocals(size_t params_size)
         case Instruction::BrTable: {
             Label** label = instr->asBrTable()->targetLabels();
             Label** end = label + instr->value().targetLabelCount;
-            std::set<Label*> updated_labels;
+            std::set<Label*> updatedLabels;
 
             while (label < end) {
-                if (updated_labels.insert(*label).second) {
+                if (updatedLabels.insert(*label).second) {
                     if (!((*label)->info() & Label::kCheckLocalsReached)) {
                         if ((*label)->info() & Label::kCheckLocalsHasContext) {
                             current->updateTarget((*label)->m_setLocalCtx);
@@ -196,22 +196,22 @@ void JITCompiler::checkLocals(size_t params_size)
 
     delete current;
 
-    for (size_t i = 0; i < params_size; i++) {
-        local_ranges[i].start = 0;
+    for (size_t i = 0; i < paramsSize; i++) {
+        localRanges[i].start = 0;
     }
 
-    for (size_t i = params_size; i < locals_size; i++) {
-        if (local_uninitialized[i]) {
-            local_ranges[i].start = 0;
+    for (size_t i = paramsSize; i < localsSize; i++) {
+        if (localUninitialized[i]) {
+            localRanges[i].start = 0;
         }
     }
 
     // Phase 2: extend the range ends with intersecting backward jumps
 
-    instr_index = 0;
+    instrIndex = 0;
     for (InstructionListItem* item = m_first; item != nullptr;
          item = item->next()) {
-        instr_index++;
+        instrIndex++;
 
         switch (item->group()) {
         case InstructionListItem::CodeLabel: {
@@ -220,14 +220,14 @@ void JITCompiler::checkLocals(size_t params_size)
         }
         case Instruction::DirectBranch: {
             Instruction* instr = item->asInstruction();
-            size_t label_instr_index = instr->value().targetLabel->m_instrIndex;
+            size_t labelInstrIndex = instr->value().targetLabel->m_instrIndex;
 
-            if (label_instr_index <= instr_index) {
-                for (size_t i = 0; i < locals_size; i++) {
-                    LocalRange& range = local_ranges[i];
+            if (labelInstrIndex <= instrIndex) {
+                for (size_t i = 0; i < localsSize; i++) {
+                    LocalRange& range = localRanges[i];
 
-                    if (range.end < instr_index && label_instr_index <= range.end && range.start <= label_instr_index) {
-                        range.end = instr_index;
+                    if (range.end < instrIndex && labelInstrIndex <= range.end && range.start <= labelInstrIndex) {
+                        range.end = instrIndex;
                     }
                 }
             }
@@ -237,18 +237,18 @@ void JITCompiler::checkLocals(size_t params_size)
             Instruction* instr = item->asInstruction();
             Label** label = instr->asBrTable()->targetLabels();
             Label** end = label + instr->value().targetLabelCount;
-            std::set<Label*> updated_labels;
+            std::set<Label*> updatedLabels;
 
             while (label < end) {
-                if (updated_labels.insert(*label).second) {
-                    size_t label_instr_index = (*label)->m_instrIndex;
+                if (updatedLabels.insert(*label).second) {
+                    size_t labelInstrIndex = (*label)->m_instrIndex;
 
-                    if (label_instr_index <= instr_index) {
-                        for (size_t i = 0; i < locals_size; i++) {
-                            LocalRange& range = local_ranges[i];
+                    if (labelInstrIndex <= instrIndex) {
+                        for (size_t i = 0; i < localsSize; i++) {
+                            LocalRange& range = localRanges[i];
 
-                            if (range.end < instr_index && label_instr_index <= range.end && range.start <= label_instr_index) {
-                                range.end = instr_index;
+                            if (range.end < instrIndex && labelInstrIndex <= range.end && range.start <= labelInstrIndex) {
+                                range.end = instrIndex;
                             }
                         }
                     }
@@ -262,50 +262,50 @@ void JITCompiler::checkLocals(size_t params_size)
         }
     }
 
-    std::sort(local_ranges.begin() + params_size, local_ranges.end());
+    std::sort(localRanges.begin() + paramsSize, localRanges.end());
 
     // Phase 3: assign new local indicies to the existing locals
 
-    std::vector<ValueInfo> new_locals;
-    std::vector<size_t> new_locals_end;
+    std::vector<ValueInfo> newLocals;
+    std::vector<size_t> newLocalsEnd;
     std::vector<size_t> remap;
 
-    remap.resize(locals_size);
+    remap.resize(localsSize);
 
-    for (size_t i = 0; i < locals_size; i++) {
-        LocalRange& range = local_ranges[i];
+    for (size_t i = 0; i < localsSize; i++) {
+        LocalRange& range = localRanges[i];
 
-        if (range.end == 0 && range.index >= params_size) {
+        if (range.end == 0 && range.index >= paramsSize) {
             continue;
         }
 
         ValueInfo type = m_locals[range.index];
-        size_t end = new_locals.size();
-        size_t new_id = 0;
+        size_t end = newLocals.size();
+        size_t newId = 0;
 
-        while (new_id < end) {
-            if (new_locals_end[new_id] < range.start && type == new_locals[new_id]) {
-                new_locals_end[new_id] = range.end;
+        while (newId < end) {
+            if (newLocalsEnd[newId] < range.start && type == newLocals[newId]) {
+                newLocalsEnd[newId] = range.end;
                 break;
             }
-            new_id++;
+            newId++;
         }
 
-        remap[range.index] = new_id;
+        remap[range.index] = newId;
 
-        if (new_id < end) {
+        if (newId < end) {
             continue;
         }
 
-        new_locals.push_back(type);
-        new_locals_end.push_back(range.end);
+        newLocals.push_back(type);
+        newLocalsEnd.push_back(range.end);
     }
 
     // Phase 4: remap values
 
     if (verboseLevel() >= 1) {
-        for (size_t i = 0; i < locals_size; i++) {
-            LocalRange& range = local_ranges[i];
+        for (size_t i = 0; i < localsSize; i++) {
+            LocalRange& range = localRanges[i];
             printf("Local %d: mapped to: %d ", static_cast<int>(range.index),
                    static_cast<int>(remap[range.index]));
 
@@ -320,7 +320,7 @@ void JITCompiler::checkLocals(size_t params_size)
         }
 
         printf("Number of locals reduced from %d to %d\n",
-               static_cast<int>(locals_size), static_cast<int>(new_locals.size()));
+               static_cast<int>(localsSize), static_cast<int>(newLocals.size()));
     }
 
     for (InstructionListItem* item = m_last; item != nullptr;
@@ -331,7 +331,7 @@ void JITCompiler::checkLocals(size_t params_size)
         }
     }
 
-    m_locals = new_locals;
+    m_locals = newLocals;
 }
 
 } // namespace Walrus

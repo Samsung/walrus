@@ -85,7 +85,7 @@ public:
     }
     void pushReg(Index reg, ValueInfo valueInfo)
     {
-       m_values.push_back(LocationInfo(reg, LocationInfo::kIsRegister, valueInfo));
+        m_values.push_back(LocationInfo(reg, LocationInfo::kIsRegister, valueInfo));
     }
     void pushCallArg(Index offset, ValueInfo valueInfo)
     {
