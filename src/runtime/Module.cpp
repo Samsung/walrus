@@ -122,7 +122,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
             if (!imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType())) {
                 Trap::throwException(state, "imported function type mismatch");
             }
-            instance->m_functions.push_back(std::dynamic_pointer_cast<Function>(imports[i]));
+            instance->m_functions.push_back(std::static_pointer_cast<Function>(imports[i]));
             importFuncCount++;
             break;
         }
@@ -138,7 +138,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
                     || imports[i]->asTable()->maximumSize() > m_imports[i]->tableType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_tables.push_back(std::dynamic_pointer_cast<Table>(imports[i]));
+            instance->m_tables.push_back(std::static_pointer_cast<Table>(imports[i]));
             importTableCount++;
             break;
         }
@@ -153,7 +153,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
                     || imports[i]->asMemory()->maximumSizeInPageSize() > m_imports[i]->memoryType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_memories.push_back(std::dynamic_pointer_cast<Memory>(imports[i]));
+            instance->m_memories.push_back(std::static_pointer_cast<Memory>(imports[i]));
             importMemCount++;
             break;
         }
@@ -161,7 +161,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
             if (imports[i]->kind() != Object::GlobalKind) {
                 Trap::throwException(state, "incompatible import type");
             }
-            instance->m_globals.push_back(std::dynamic_pointer_cast<Global>(imports[i]));
+            instance->m_globals.push_back(std::static_pointer_cast<Global>(imports[i]));
             importGlobCount++;
             break;
         }
@@ -169,7 +169,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
             if (imports[i]->kind() != Object::TagKind) {
                 Trap::throwException(state, "incompatible import type");
             }
-            instance->m_tags.push_back(std::dynamic_pointer_cast<Tag>(imports[i]));
+            instance->m_tags.push_back(std::static_pointer_cast<Tag>(imports[i]));
             importTagCount++;
             break;
         }

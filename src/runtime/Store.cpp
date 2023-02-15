@@ -27,12 +27,12 @@ FunctionType* Store::g_defaultFunctionTypes[Value::Type::NUM];
 Store::~Store()
 {
     // deallocate Modules and Instances
-    for (size_t i = 0; i < m_modules.size(); i++) {
-        delete m_modules[i];
-    }
-
     for (size_t i = 0; i < m_instances.size(); i++) {
         delete m_instances[i];
+    }
+
+    for (size_t i = 0; i < m_modules.size(); i++) {
+        delete m_modules[i];
     }
 }
 
