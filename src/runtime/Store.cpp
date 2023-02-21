@@ -34,6 +34,8 @@ Store::~Store()
     for (size_t i = 0; i < m_modules.size(); i++) {
         delete m_modules[i];
     }
+
+    Store::finalize();
 }
 
 void Store::finalize()
