@@ -807,7 +807,6 @@ int main(int argc, char* argv[])
     // finalize
     delete store;
     delete engine;
-    Store::finalize();
 
     return 0;
 }
