@@ -350,7 +350,7 @@ inline void Value::readFromStack(uint8_t* ptr)
     }
 }
 
-typedef Vector<Value> ValueVector;
+typedef Vector<Value, std::allocator<Value>> ValueVector;
 typedef Vector<Value::Type, std::allocator<Value::Type>> ValueTypeVector;
 
 } // namespace Walrus

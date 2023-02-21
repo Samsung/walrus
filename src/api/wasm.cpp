@@ -37,17 +37,15 @@ using namespace Walrus;
 
 // Structures
 struct wasm_importtype_t {
-    wasm_importtype_t(const ImportType* type, std::string& m, std::string& n, own wasm_externtype_t* et)
-        : importType(type)
-        , externType(et)
+    wasm_importtype_t(std::string& m, std::string& n, own wasm_externtype_t* et)
+        : externType(et)
     {
         wasm_byte_vec_new(&module, m.length(), m.data());
         wasm_byte_vec_new(&name, n.length(), n.data());
     }
 
-    wasm_importtype_t(const ImportType* type, own wasm_name_t* m, own wasm_name_t* n, own wasm_externtype_t* et)
-        : importType(type)
-        , module(*m)
+    wasm_importtype_t(own wasm_name_t* m, own wasm_name_t* n, own wasm_externtype_t* et)
+        : module(*m)
         , name(*n)
         , externType(et)
     {
@@ -55,13 +53,11 @@ struct wasm_importtype_t {
 
     virtual ~wasm_importtype_t()
     {
-        importType = nullptr;
         wasm_name_delete(&module);
         wasm_name_delete(&name);
         wasm_externtype_delete(externType);
     }
 
-    const ImportType* importType;
     own wasm_name_t module;
     own wasm_name_t name;
     own wasm_externtype_t* externType;
@@ -102,7 +98,6 @@ struct wasm_engine_t {
     ~wasm_engine_t()
     {
         delete engine;
-        engine = nullptr;
     }
 
     Engine* get() const
@@ -123,8 +118,6 @@ struct wasm_store_t {
     ~wasm_store_t()
     {
         delete store;
-        store = nullptr;
-        Store::finalize();
     }
 
     Store* get() const
@@ -146,7 +139,7 @@ struct wasm_valtype_t {
 };
 
 struct wasm_externtype_t {
-    wasm_externtype_t(const ObjectType* t)
+    wasm_externtype_t(own const ObjectType* t)
         : type(t)
     {
     }
@@ -154,7 +147,7 @@ struct wasm_externtype_t {
     virtual ~wasm_externtype_t()
     {
         ASSERT(type);
-        type = nullptr;
+        delete type;
     }
 
     virtual wasm_externtype_t* clone() const = 0;
@@ -165,18 +158,18 @@ struct wasm_externtype_t {
         return type;
     }
 
-    const ObjectType* type;
+    own const ObjectType* type;
 };
 
 struct wasm_functype_t : wasm_externtype_t {
-    wasm_functype_t(const FunctionType* type, own wasm_valtype_vec_t* params, own wasm_valtype_vec_t* results)
+    wasm_functype_t(own const FunctionType* type, own wasm_valtype_vec_t* params, own wasm_valtype_vec_t* results)
         : wasm_externtype_t(type)
         , params(*params)
         , results(*results)
     {
     }
 
-    wasm_functype_t(const FunctionType* type);
+    wasm_functype_t(own const FunctionType* type);
 
     virtual ~wasm_functype_t()
     {
@@ -195,7 +188,7 @@ struct wasm_functype_t : wasm_externtype_t {
 };
 
 struct wasm_globaltype_t : wasm_externtype_t {
-    wasm_globaltype_t(const GlobalType* type)
+    wasm_globaltype_t(own const GlobalType* type)
         : wasm_externtype_t(type)
         , valtype(type->type())
     {
@@ -211,7 +204,7 @@ struct wasm_globaltype_t : wasm_externtype_t {
 };
 
 struct wasm_tabletype_t : wasm_externtype_t {
-    wasm_tabletype_t(const TableType* type)
+    wasm_tabletype_t(own const TableType* type)
         : wasm_externtype_t(type)
         , valtype(type->type())
         , limits{ type->initialSize(), type->maximumSize() }
@@ -229,7 +222,7 @@ struct wasm_tabletype_t : wasm_externtype_t {
 };
 
 struct wasm_memorytype_t : wasm_externtype_t {
-    wasm_memorytype_t(const MemoryType* type)
+    wasm_memorytype_t(own const MemoryType* type)
         : wasm_externtype_t(type)
         , limits{ type->initialSize() / (uint32_t)MEMORY_PAGE_SIZE, type->maximumSize() / (uint32_t)MEMORY_PAGE_SIZE }
     {
@@ -250,11 +243,7 @@ struct wasm_ref_t {
     {
     }
 
-    virtual ~wasm_ref_t()
-    {
-        ASSERT(obj);
-        obj = nullptr;
-    }
+    virtual ~wasm_ref_t() {}
 
     const Object* get() const
     {
@@ -282,7 +271,7 @@ struct wasm_extern_t : wasm_ref_t {
 };
 
 struct wasm_module_t : wasm_ref_t {
-    wasm_module_t(const Module* module)
+    wasm_module_t(own const Module* module)
         : wasm_ref_t(module)
     {
     }
@@ -371,7 +360,7 @@ struct wasm_memory_t : wasm_extern_t {
 };
 
 struct wasm_instance_t : wasm_ref_t {
-    wasm_instance_t(const Instance* ins)
+    wasm_instance_t(own const Instance* ins)
         : wasm_ref_t(ins)
     {
     }
@@ -384,10 +373,15 @@ struct wasm_instance_t : wasm_ref_t {
 };
 
 struct wasm_trap_t : wasm_ref_t {
-    wasm_trap_t(const Trap* t, const wasm_message_t* msg)
+    wasm_trap_t(own const Trap* t, const wasm_message_t* msg)
         : wasm_ref_t(t)
     {
         wasm_byte_vec_copy(&message, msg);
+    }
+
+    virtual ~wasm_trap_t()
+    {
+        delete obj;
     }
 
     const Trap* get() const
@@ -472,10 +466,12 @@ static wasm_val_t FromWalrusValue(const Value& val)
         break;
     case Value::Type::FuncRef:
         result.kind = WASM_FUNCREF;
+        // FIXME reference count
         result.of.ref = new wasm_ref_t(val.asFunction());
         break;
     case Value::Type::ExternRef:
         result.kind = WASM_ANYREF;
+        // FIXME reference count
         result.of.ref = new wasm_ref_t(val.asObject());
         break;
     default:
@@ -521,7 +517,7 @@ static void ToWalrusValues(Value* results, const wasm_val_t* values, const uint3
 }
 
 // Rest of Structure Methods
-wasm_functype_t::wasm_functype_t(const FunctionType* type)
+wasm_functype_t::wasm_functype_t(own const FunctionType* type)
     : wasm_externtype_t(type)
 {
     FromWalrusValueTypes(type->param(), &params);
@@ -534,11 +530,7 @@ extern "C" {
 own wasm_importtype_t* wasm_importtype_new(
     own wasm_name_t* module, own wasm_name_t* name, own wasm_externtype_t* type)
 {
-    ImportType* importType = new ImportType(std::string(module->data, module->size),
-                                            std::string(name->data, name->size),
-                                            type->get());
-
-    return new wasm_importtype_t(importType, module, name, type);
+    return new wasm_importtype_t(module, name, type);
 }
 
 const wasm_name_t* wasm_importtype_module(const wasm_importtype_t* importType)
@@ -618,7 +610,7 @@ wasm_valkind_t wasm_valtype_kind(const wasm_valtype_t* type)
 }
 
 // Function Types
-static ValueTypeVector* ToWalrusValueTypes(const wasm_valtype_vec_t* types)
+own static ValueTypeVector* ToWalrusValueTypes(const wasm_valtype_vec_t* types)
 {
     ValueTypeVector* result = new ValueTypeVector();
     result->reserve(types->size);
@@ -674,6 +666,8 @@ own wasm_tabletype_t* wasm_tabletype_new(
     own wasm_valtype_t* valtype, const wasm_limits_t* limits)
 {
     TableType* type = new TableType(valtype->type, limits->min, limits->max);
+    wasm_valtype_delete(valtype);
+
     return new wasm_tabletype_t(type);
 }
 
@@ -734,6 +728,7 @@ void wasm_val_copy(own wasm_val_t* out, const wasm_val_t* src)
 {
     if (wasm_valkind_is_ref(src->kind)) {
         out->kind = src->kind;
+        // FIXME ref count
         out->of.ref = src->of.ref ? new wasm_ref_t(src->of.ref->get()) : nullptr;
     } else {
         *out = *src;
@@ -742,7 +737,6 @@ void wasm_val_copy(own wasm_val_t* out, const wasm_val_t* src)
 
 // References
 // Frames
-// TODO
 
 // Traps
 own wasm_trap_t* wasm_trap_new(wasm_store_t* store, const wasm_message_t* message)
@@ -795,22 +789,22 @@ void wasm_module_imports(const wasm_module_t* module, own wasm_importtype_vec_t*
         ImportType* importType = importTypes[i];
         switch (importType->importType()) {
         case ImportType::Function:
-            type = new wasm_functype_t(importType->functionType());
+            type = new wasm_functype_t(importType->functionType()->clone());
             break;
         case ImportType::Global:
-            type = new wasm_globaltype_t(importType->globalType());
+            type = new wasm_globaltype_t(importType->globalType()->clone());
             break;
         case ImportType::Table:
-            type = new wasm_tabletype_t(importType->tableType());
+            type = new wasm_tabletype_t(importType->tableType()->clone());
             break;
         case ImportType::Memory:
-            type = new wasm_memorytype_t(importType->memoryType());
+            type = new wasm_memorytype_t(importType->memoryType()->clone());
             break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
             break;
         }
-        out->data[i] = new wasm_importtype_t(importType, importType->moduleName(), importType->fieldName(), type);
+        out->data[i] = new wasm_importtype_t(importType->moduleName(), importType->fieldName(), type);
     }
 }
 
@@ -826,16 +820,17 @@ void wasm_module_exports(const wasm_module_t* module, own wasm_exporttype_vec_t*
         uint32_t itemIndex = exportTypes[i]->itemIndex();
         switch (exportTypes[i]->exportType()) {
         case ExportType::Function:
-            type = new wasm_functype_t(mod->functionType(itemIndex));
+            // FIXME function type index may be wrong
+            type = new wasm_functype_t(mod->functionType(itemIndex)->clone());
             break;
         case ExportType::Global:
-            type = new wasm_globaltype_t(mod->globalType(itemIndex));
+            type = new wasm_globaltype_t(mod->globalType(itemIndex)->clone());
             break;
         case ExportType::Table:
-            type = new wasm_tabletype_t(mod->tableType(itemIndex));
+            type = new wasm_tabletype_t(mod->tableType(itemIndex)->clone());
             break;
         case ExportType::Memory:
-            type = new wasm_memorytype_t(mod->memoryType(itemIndex));
+            type = new wasm_memorytype_t(mod->memoryType(itemIndex)->clone());
             break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
@@ -904,7 +899,7 @@ own wasm_func_t* wasm_func_new(
         },
         reinterpret_cast<void*>(ft->results.size));
 
-    return new wasm_func_t(func, ft);
+    return new wasm_func_t(func, static_cast<const wasm_functype_t*>(ft->clone()));
 }
 
 own wasm_func_t* wasm_func_new_with_env(
@@ -936,7 +931,7 @@ own wasm_func_t* wasm_func_new_with_env(
         },
         reinterpret_cast<void*>(ft->results.size));
 
-    return new wasm_func_t(func, ft);
+    return new wasm_func_t(func, static_cast<const wasm_functype_t*>(ft->clone()));
 }
 
 static own wasm_functype_t* FromWalrusFunctionType(const FunctionType* ft)
@@ -1023,12 +1018,12 @@ own wasm_global_t* wasm_global_new(
     wasm_store_t* store, const wasm_globaltype_t* gt, const wasm_val_t* val)
 {
     std::shared_ptr<Global> glob = std::make_shared<Global>(ToWalrusValue(*val));
-    return new wasm_global_t(glob, gt);
+    return new wasm_global_t(glob, static_cast<wasm_globaltype_t*>(gt->clone()));
 }
 
 own wasm_globaltype_t* wasm_global_type(const wasm_global_t* glob)
 {
-    return new wasm_globaltype_t(glob->type());
+    return new wasm_globaltype_t(glob->type()->clone());
 }
 
 void wasm_global_get(const wasm_global_t* glob, own wasm_val_t* out)
@@ -1046,12 +1041,12 @@ own wasm_table_t* wasm_table_new(
     wasm_store_t* store, const wasm_tabletype_t* tt, wasm_ref_t* init)
 {
     std::shared_ptr<Table> table = std::make_shared<Table>(tt->valtype.type, tt->limits.min, tt->limits.max);
-    return new wasm_table_t(table, tt);
+    return new wasm_table_t(table, static_cast<wasm_tabletype_t*>(tt->clone()));
 }
 
 own wasm_tabletype_t* wasm_table_type(const wasm_table_t* table)
 {
-    return new wasm_tabletype_t(table->type());
+    return new wasm_tabletype_t(table->type()->clone());
 }
 
 own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t index)
@@ -1066,6 +1061,7 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
         return nullptr;
     }
 
+    // FIXME ref count
     return new wasm_ref_t(val.asObject());
 }
 
@@ -1098,12 +1094,12 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
 own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
     std::shared_ptr<Memory> mem = std::make_shared<Memory>(mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE);
-    return new wasm_memory_t(mem, mt);
+    return new wasm_memory_t(mem, static_cast<wasm_memorytype_t*>(mt->clone()));
 }
 
 own wasm_memorytype_t* wasm_memory_type(const wasm_memory_t* mem)
 {
-    return new wasm_memorytype_t(mem->type());
+    return new wasm_memorytype_t(mem->type()->clone());
 }
 
 byte_t* wasm_memory_data(wasm_memory_t* mem)
@@ -1149,13 +1145,13 @@ own wasm_externtype_t* wasm_extern_type(const wasm_extern_t* ext)
 {
     switch (ext->get()->kind()) {
     case Object::FunctionKind:
-        return new wasm_functype_t(static_cast<const wasm_func_t*>(ext)->type());
+        return new wasm_functype_t(static_cast<const wasm_func_t*>(ext)->type()->clone());
     case Object::GlobalKind:
-        return new wasm_globaltype_t(static_cast<const wasm_global_t*>(ext)->type());
+        return new wasm_globaltype_t(static_cast<const wasm_global_t*>(ext)->type()->clone());
     case Object::TableKind:
-        return new wasm_tabletype_t(static_cast<const wasm_table_t*>(ext)->type());
+        return new wasm_tabletype_t(static_cast<const wasm_table_t*>(ext)->type()->clone());
     case Object::MemoryKind:
-        return new wasm_memorytype_t(static_cast<const wasm_memory_t*>(ext)->type());
+        return new wasm_memorytype_t(static_cast<const wasm_memory_t*>(ext)->type()->clone());
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return nullptr;
