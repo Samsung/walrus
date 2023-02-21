@@ -21,6 +21,7 @@
 #include "runtime/JITExec.h"
 #include "runtime/Module.h"
 #include "runtime/Store.h"
+#include "runtime/Memory.h"
 
 #include "wabt/walrus/binary-reader-walrus.h"
 
@@ -68,8 +69,8 @@ public:
     virtual void OnExportCount(Index count) override {}
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) override;
 
-    virtual void OnMemoryCount(Index count) override {}
-    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) override {}
+    virtual void OnMemoryCount(Index count) override;
+    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) override;
 
     virtual void OnDataSegmentCount(Index count) override {}
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override {}
@@ -146,17 +147,17 @@ public:
     virtual void OnMemoryCopyExpr(Index srcMemIndex, Index dstMemIndex) override {}
     virtual void OnMemoryFillExpr(Index memidx) override {}
     virtual void OnDataDropExpr(Index segmentIndex) override {}
-    virtual void OnMemorySizeExpr(Index memidx) override {}
-    virtual void OnTableGetExpr(Index tableIndex) override {}
-    virtual void OnTableSetExpr(Index tableIndex) override {}
-    virtual void OnTableGrowExpr(Index tableIndex) override {}
-    virtual void OnTableSizeExpr(Index tableIndex) override {}
+    virtual void OnMemorySizeExpr(Index memidx) override;
+    virtual void OnTableGetExpr(Index table_index) override {}
+    virtual void OnTableSetExpr(Index table_index) override {}
+    virtual void OnTableGrowExpr(Index table_index) override {}
+    virtual void OnTableSizeExpr(Index table_index) override {}
     virtual void OnTableCopyExpr(Index dst_index, Index src_index) override {}
     virtual void OnTableFillExpr(Index tableIndex) override {}
     virtual void OnElemDropExpr(Index segmentIndex) override {}
     virtual void OnTableInitExpr(Index segmentIndex, Index tableIndex) override {}
-    virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override {}
-    virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override {}
+    virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override;
+    virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override;
     virtual void OnReturnExpr() override {}
     virtual void OnRefFuncExpr(Index func_index) override {}
     virtual void OnRefNullExpr(Type type) override {}
@@ -583,6 +584,67 @@ void WASMBinaryReaderJIT::EndFunctionBody(Index index)
     m_compiler.appendFunction(jitFunc, m_functionIsExported[m_functionBodyIndex]);
 
     m_compiler.clear();
+}
+
+void WASMBinaryReaderJIT::OnMemoryCount(Index count)
+{
+    m_compiler.memories().reserve(count);
+}
+
+void WASMBinaryReaderJIT::OnMemory(Index index, size_t initialSize, size_t maximumSize)
+{
+    Walrus::Memory* memory = new Walrus::Memory(initialSize * Walrus::Memory::s_memoryPageSize, maximumSize * Walrus::Memory::s_memoryPageSize);
+    m_compiler.memoryPushBack(memory);
+    m_compiler.memoryPtr = memory->buffer();
+    m_compiler.memorySize = memory->sizeInByte();
+}
+
+void WASMBinaryReaderJIT::OnMemorySizeExpr(Index memidx)
+{
+    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::Memory, Walrus::MemorySizeOpcode, 0, Walrus::LocationInfo::kFourByteSize);
+
+    if (instr != nullptr) {
+        instr->value().memory.memPtr = m_compiler.memoryPtr;
+        instr->value().memory.memSize = m_compiler.memorySize;
+    }
+}
+
+void WASMBinaryReaderJIT::OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset)
+{
+    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::Memory, static_cast<Walrus::OpcodeKind>(opcode), 2);
+
+    if (instr != nullptr) {
+        instr->value().memory.offset = offset;
+        instr->value().memory.memPtr = m_compiler.memoryPtr;
+        instr->value().memory.memSize = m_compiler.memorySize;
+    }
+}
+
+void WASMBinaryReaderJIT::OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset)
+{
+    Walrus::Instruction* instr;
+    Walrus::ValueInfo valueInfo = Walrus::LocationInfo::kFourByteSize;
+    switch (opcode) {
+    case Walrus::I64LoadOpcode:
+    case Walrus::I64Load32SOpcode:
+    case Walrus::I64Load32UOpcode:
+    case Walrus::I64Load16SOpcode:
+    case Walrus::I64Load16UOpcode:
+    case Walrus::I64Load8SOpcode:
+    case Walrus::I64Load8UOpcode:
+        valueInfo = Walrus::LocationInfo::kEightByteSize;
+        break;
+    default:
+        break;
+    }
+
+    instr = m_compiler.append(Walrus::Instruction::Memory, static_cast<Walrus::OpcodeKind>(opcode), 1, valueInfo);
+
+    if (instr != nullptr) {
+        instr->value().memory.offset = offset;
+        instr->value().memory.memPtr = m_compiler.memoryPtr;
+        instr->value().memory.memSize = m_compiler.memorySize;
+    }
 }
 
 } // namespace wabt

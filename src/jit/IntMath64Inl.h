@@ -567,3 +567,114 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 }
+
+void emitMemory(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operand = instr->operands();
+
+    sljit_sw memType = 0;
+    sljit_u8 size = 0;
+    struct sljit_jump *cmp, *cmpCarry;
+    CompileContext* context = CompileContext::get(compiler);
+
+    JITArg args[2];
+
+    for (Index i = 0; i < (instr->paramCount() + instr->resultCount()); ++i) {
+        operandToArg(operand, args[i]);
+        operand++;
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(context->compiler->memoryPtr));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R4, 0, SLJIT_IMM, context->compiler->memorySize);
+
+    switch (instr->opcode()) {
+    case Walrus::I32Load8SOpcode:
+        memType = SLJIT_MOV32_S8;
+        size = 1;
+        break;
+    case Walrus::I32Store8Opcode:
+    case Walrus::I32Load8UOpcode:
+        memType = SLJIT_MOV32_U8;
+        size = 1;
+        break;
+    case Walrus::I32Load16SOpcode:
+        memType = SLJIT_MOV32_S16;
+        size = 2;
+        break;
+    case Walrus::I32Load16UOpcode:
+    case Walrus::I32Store16Opcode:
+        memType = SLJIT_MOV32_U16;
+        size = 2;
+        break;
+    case Walrus::I32LoadOpcode:
+    case Walrus::I32StoreOpcode:
+        memType = SLJIT_MOV32;
+        size = 4;
+        break;
+    case Walrus::I64Load8SOpcode:
+        memType = SLJIT_MOV_S8;
+        size = 1;
+        break;
+    case Walrus::I64Load8UOpcode:
+    case Walrus::I64Store8Opcode:
+        memType = SLJIT_MOV_U8;
+        size = 1;
+        break;
+    case Walrus::I64Load16SOpcode:
+        memType = SLJIT_MOV_S16;
+        size = 2;
+        break;
+    case Walrus::I64Load16UOpcode:
+    case Walrus::I64Store16Opcode:
+        memType = SLJIT_MOV_U16;
+        size = 2;
+        break;
+    case Walrus::I64Load32SOpcode:
+        memType = SLJIT_MOV_S32;
+        size = 4;
+        break;
+    case Walrus::I64Load32UOpcode:
+    case Walrus::I64Store32Opcode:
+        memType = SLJIT_MOV_U32;
+        size = 4;
+        break;
+    case Walrus::I64LoadOpcode:
+    case Walrus::I64StoreOpcode:
+        memType = SLJIT_MOV;
+        size = 8;
+        break;
+    case Walrus::MemorySizeOpcode:
+        sljit_emit_op1(compiler, SLJIT_DIV_UW, SLJIT_R3, 0, SLJIT_IMM, WABT_PAGE_SIZE);
+        sljit_emit_op1(compiler, SLJIT_MOV, args[0].arg, args[0].argw, SLJIT_R3, 0);
+        return;
+    default:
+        WABT_UNREACHABLE;
+        break;
+    }
+
+    sljit_emit_op2(compiler, SLJIT_ADD32, SLJIT_R1, 0, args[0].arg, args[0].argw, SLJIT_IMM, instr->value().memory.offset + size);
+
+    sljit_emit_op2(compiler, SLJIT_SUB | SLJIT_SET_CARRY, SLJIT_R0, 0,
+                   SLJIT_R4, 0,
+                   SLJIT_IMM, instr->value().memory.offset);
+    cmpCarry = sljit_emit_jump(compiler, SLJIT_CARRY);
+
+    cmp = sljit_emit_cmp(compiler, SLJIT_LESS, SLJIT_R1, 0, SLJIT_R4, 0);
+
+    sljit_set_label(cmpCarry, sljit_emit_label(compiler));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, Walrus::ExecutionContext::MemoryOutOfBoundsError);
+    sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+
+    sljit_set_label(cmp, sljit_emit_label(compiler));
+
+    sljit_emit_op2(compiler, SLJIT_ADD32, SLJIT_R1, 0, args[0].arg, args[0].argw, SLJIT_IMM, instr->value().memory.offset);
+
+    sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_R3, 0);
+    if (instr->opcode() >= Walrus::I32StoreOpcode && instr->opcode() <= Walrus::I64Store32Opcode) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, args[1].arg, args[1].argw);
+        sljit_emit_op1(compiler, memType, SLJIT_MEM1(SLJIT_R1), 0, args[1].arg, args[1].argw);
+    } else {
+        sljit_emit_op1(compiler, memType, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_R1), 0);
+        sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_R2, 0);
+    }
+}

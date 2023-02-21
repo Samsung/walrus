@@ -74,6 +74,8 @@ public:
         CompareFloat,
         // Covert operation. (e.g. I64ExtendI32S, I32WrapI64)
         Convert,
+        // Memory operation. (e.g. I32Load, I64Store)
+        Memory,
     };
 
     virtual ~InstructionListItem() {}
@@ -178,6 +180,12 @@ union InstructionValue {
     size_t targetLabelCount;
     // For immediate and local groups.
     Instruction* parent;
+    // For memory instructions.
+    struct {
+        uint32_t offset;
+        uint32_t memSize;
+        void* memPtr;
+    } memory;
 };
 
 #define WABT_JIT_INVALID_INSTRUCTION reinterpret_cast<Instruction*>(1)
@@ -200,7 +208,6 @@ public:
     }
 
     InstructionValue& value() { return m_value; }
-
     // Params and results are stored in the same operands
     // array, where params come first followed by results.
     Operand* operands() { return m_operands; }
@@ -440,6 +447,9 @@ public:
         releaseFunctionList();
     }
 
+    void* memoryPtr;
+    uint32_t memorySize;
+
     int verboseLevel() { return m_verboseLevel; }
     InstructionListItem* first() { return m_first; }
     InstructionListItem* last() { return m_last; }
@@ -463,6 +473,9 @@ public:
     size_t labelCount() { return m_labelStack.size(); }
     ValueInfo local(size_t i) { return m_locals[i]; }
     std::vector<ValueInfo>& locals() { return m_locals; }
+    std::vector<Walrus::Memory*> memories() { return m_memories; }
+    Walrus::Memory* memory(size_t i) { return m_memories.at(i); }
+    void memoryPushBack(Walrus::Memory* memory) { m_memories.push_back(memory); }
 
     void appendFunction(JITFunction* jitFunc, bool isExternal);
     void dump(bool afterStackComputation);
@@ -533,6 +546,7 @@ private:
     std::vector<ElseBlock> m_elseBlocks;
     std::vector<ValueInfo> m_locals;
     std::vector<FunctionList> m_functionList;
+    std::vector<Walrus::Memory*> m_memories;
 };
 
 } // namespace Walrus

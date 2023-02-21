@@ -77,6 +77,9 @@ void JITFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, 
         case ExecutionContext::UnreachableError:
             Trap::throwException(state, "unreachable executed");
             return;
+        case ExecutionContext::MemoryOutOfBoundsError:
+            Trap::throwException(state, "out of bounds memory access");
+            return;
         default:
             Trap::throwException(state, "unknown exception");
             return;
@@ -91,6 +94,7 @@ void JITFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, 
         result[resultIndex] = Value(resultType, reinterpret_cast<uint8_t*>(args) + offsets[resultIndex].value);
         resultIndex++;
     }
+
     free(data);
 }
 

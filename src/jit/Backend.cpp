@@ -18,6 +18,7 @@
 
 #include "runtime/JITExec.h"
 #include "jit/Compiler.h"
+#include "runtime/Memory.h"
 
 #include <math.h>
 #include <map>
@@ -672,6 +673,10 @@ JITModule* JITCompiler::compile()
         }
         case Instruction::Convert: {
             emitConvert(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::Memory: {
+            emitMemory(m_compiler, item->asInstruction());
             break;
         }
         default: {

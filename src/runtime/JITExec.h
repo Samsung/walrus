@@ -81,6 +81,7 @@ struct ExecutionContext {
         DivideByZeroError,
         IntegerOverflowError,
         UnreachableError,
+        MemoryOutOfBoundsError,
     };
 
     CallFrame* lastFrame;
