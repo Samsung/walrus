@@ -65,9 +65,7 @@ public:
     void update(std::vector<Operand>& deps);
 
 private:
-    static void append(std::vector<Dependency>& list,
-                       InstructionListItem* item,
-                       Index index);
+    static void append(std::vector<Dependency>& list, InstructionListItem* item, Index index);
 
     Index m_preservedCount;
     size_t m_startIndex;
@@ -99,9 +97,7 @@ void DependencyGenContext::update(std::vector<Operand>& deps)
     assert(current == deps.size() || size == m_preservedCount);
 }
 
-void DependencyGenContext::append(std::vector<Dependency>& list,
-                                  InstructionListItem* item,
-                                  Index index)
+void DependencyGenContext::append(std::vector<Dependency>& list, InstructionListItem* item, Index index)
 {
     for (auto it : list) {
         if (it.item == item && it.index == index) {
@@ -146,8 +142,7 @@ static void findSelectResult(Instruction* selectInstr)
 
 void JITCompiler::buildParamDependencies()
 {
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             Label* label = item->asLabel();
             label->m_dependencyCtx = new DependencyGenContext(label);
@@ -160,8 +155,7 @@ void JITCompiler::buildParamDependencies()
 
     // Phase 1: the direct dependencies are computed for instructions
     // and labels (only labels can have multiple dependencies).
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             if (startIndex > 0) {
                 assert(currentDeps[0].item->isLabel());
@@ -247,8 +241,7 @@ void JITCompiler::buildParamDependencies()
     std::vector<DependencyGenContext::StackItem>* lastStack = nullptr;
     Index lastStartIndex = 0;
 
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (!item->isLabel()) {
             Instruction* instr = item->asInstruction();
             Operand* param = instr->params();
@@ -323,8 +316,7 @@ void JITCompiler::buildParamDependencies()
 
     // Phase 3: The indirect references for labels are
     // collected, and all temporary structures are deleted.
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (!item->isLabel()) {
             if (item->group() == Instruction::Any && item->asInstruction()->opcode() == SelectOpcode) {
                 // Label data has been computed.
@@ -369,8 +361,7 @@ void JITCompiler::optimizeBlocks()
 {
     std::vector<Label::Dependency> stack;
 
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             stack.clear();
             continue;
@@ -468,8 +459,7 @@ static StackAllocator* cloneAllocator(Label* label, StackAllocator* other)
     return allocator;
 }
 
-void JITCompiler::computeOperandLocations(JITFunction* jitFunc,
-                                          ValueTypeVector& results)
+void JITCompiler::computeOperandLocations(JITFunction* jitFunc, ValueTypeVector& results)
 {
     // Build space for results first.
     StackAllocator* m_stackAllocator = new StackAllocator();
@@ -495,16 +485,14 @@ void JITCompiler::computeOperandLocations(JITFunction* jitFunc,
     m_stackAllocator->skipRange(localsStart, maxMStackSize);
 
     // Compute stack allocation.
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             Label* label = item->asLabel();
             label->m_stackAllocator = nullptr;
         }
     }
 
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             Label* label = item->asLabel();
 
@@ -584,14 +572,12 @@ void JITCompiler::computeOperandLocations(JITFunction* jitFunc,
                     break;
                 }
                 case Operand::Register: {
-                    m_stackAllocator->pushReg(operand->value,
-                                              operand->location.valueInfo);
+                    m_stackAllocator->pushReg(operand->value, operand->location.valueInfo);
                     break;
                 }
                 case Operand::CallArg: {
                     operand->location.type = Operand::CallArg;
-                    m_stackAllocator->pushCallArg(operand->value,
-                                                  operand->location.valueInfo);
+                    m_stackAllocator->pushCallArg(operand->value, operand->location.valueInfo);
                     break;
                 }
                 case Operand::Immediate: {
@@ -676,8 +662,7 @@ void JITCompiler::computeOperandLocations(JITFunction* jitFunc,
 
     Index argsStart = totalFrameSize - argsSize;
 
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             continue;
         }

@@ -230,11 +230,7 @@ public:
     }
 
 protected:
-    explicit Instruction(Group group,
-                         OpcodeKind opcode,
-                         Index paramCount,
-                         Operand* operands,
-                         InstructionListItem* prev)
+    explicit Instruction(Group group, OpcodeKind opcode, Index paramCount, Operand* operands, InstructionListItem* prev)
         : InstructionListItem(group, prev)
         , m_opcode(opcode)
         , m_paramCount(paramCount)
@@ -278,18 +274,13 @@ class SimpleInstruction : public Instruction {
     friend class JITCompiler;
 
 protected:
-    explicit SimpleInstruction(Group group,
-                               OpcodeKind opcode,
-                               Index paramCount,
-                               InstructionListItem* prev)
+    explicit SimpleInstruction(Group group, OpcodeKind opcode, Index paramCount, InstructionListItem* prev)
         : Instruction(group, opcode, paramCount, m_inlineOperands, prev)
     {
         assert(paramCount == n || paramCount + 1 == n);
     }
 
-    explicit SimpleInstruction(Group group,
-                               OpcodeKind opcode,
-                               InstructionListItem* prev)
+    explicit SimpleInstruction(Group group, OpcodeKind opcode, InstructionListItem* prev)
         : Instruction(group, opcode, n, m_inlineOperands, prev)
     {
     }
@@ -305,11 +296,7 @@ public:
     ~ComplexInstruction() override;
 
 protected:
-    explicit ComplexInstruction(Group group,
-                                OpcodeKind opcode,
-                                Index paramCount,
-                                Index operandCount,
-                                InstructionListItem* prev)
+    explicit ComplexInstruction(Group group, OpcodeKind opcode, Index paramCount, Index operandCount, InstructionListItem* prev)
         : Instruction(group, opcode, paramCount, new Operand[operandCount], prev)
     {
         assert(operandCount >= paramCount && operandCount > 4);
@@ -329,11 +316,7 @@ public:
     Index paramStart() { return m_paramStart; }
 
 protected:
-    explicit CallInstruction(OpcodeKind opcode,
-                             Index paramCount,
-                             FunctionType* functionType,
-                             Operand* operands,
-                             InstructionListItem* prev)
+    explicit CallInstruction(OpcodeKind opcode, Index paramCount, FunctionType* functionType, Operand* operands, InstructionListItem* prev)
         : Instruction(Instruction::Call, opcode, paramCount, operands, prev)
         , m_functionType(functionType)
     {
@@ -350,9 +333,7 @@ class SimpleCallInstruction : public CallInstruction {
     friend class JITCompiler;
 
 private:
-    explicit SimpleCallInstruction(OpcodeKind opcode,
-                                   FunctionType* functionType,
-                                   InstructionListItem* prev);
+    explicit SimpleCallInstruction(OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev);
 
     Operand m_inlineOperands[n];
 };
@@ -364,9 +345,7 @@ public:
     ~ComplexCallInstruction() override;
 
 private:
-    explicit ComplexCallInstruction(OpcodeKind opcode,
-                                    FunctionType* functionType,
-                                    InstructionListItem* prev);
+    explicit ComplexCallInstruction(OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev);
 };
 
 class DependencyGenContext;
@@ -419,9 +398,7 @@ public:
     void emit(sljit_compiler* compiler);
 
 private:
-    explicit Label(Index resultCount,
-                   Index preservedCount,
-                   InstructionListItem* prev)
+    explicit Label(Index resultCount, Index preservedCount, InstructionListItem* prev)
         : InstructionListItem(CodeLabel, prev)
         , m_resultCount(resultCount)
         , m_preservedCount(preservedCount)
@@ -467,19 +444,12 @@ public:
 
     void clear();
 
-    Instruction* append(Instruction::Group group,
-                        OpcodeKind opcode,
-                        Index paramCount);
-    Instruction* append(Instruction::Group group,
-                        OpcodeKind opcode,
-                        Index paramCount,
-                        ValueInfo result);
+    Instruction* append(Instruction::Group group, OpcodeKind opcode, Index paramCount);
+    Instruction* append(Instruction::Group group, OpcodeKind opcode, Index paramCount, ValueInfo result);
     CallInstruction* appendCall(OpcodeKind opcode, FunctionType* functionType);
     void appendBranch(OpcodeKind opcode, Index depth);
     void appendElseLabel();
-    void appendBrTable(Index numTargets,
-                       Index* targetDepths,
-                       Index defaultTargetDepth);
+    void appendBrTable(Index numTargets, Index* targetDepths, Index defaultTargetDepth);
     void appendUnreachable()
     {
         append(Instruction::Any, UnreachableOpcode, 0);
@@ -538,11 +508,7 @@ private:
     InstructionListItem* remove(InstructionListItem* item);
     void replace(InstructionListItem* item, InstructionListItem* newItem);
 
-    Instruction* appendInternal(Instruction::Group group,
-                                OpcodeKind opcode,
-                                Index paramCount,
-                                Index operandCount,
-                                ValueInfo result);
+    Instruction* appendInternal(Instruction::Group group, OpcodeKind opcode, Index paramCount, Index operandCount, ValueInfo result);
 
     // Backend operations.
     void releaseFunctionList();

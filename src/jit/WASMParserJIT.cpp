@@ -205,11 +205,7 @@ void WASMBinaryReaderJIT::EndModule()
     m_module->setJITModule(m_compiler.compile());
 }
 
-void WASMBinaryReaderJIT::OnFuncType(Index index,
-                                     Index paramCount,
-                                     Type* paramTypes,
-                                     Index resultCount,
-                                     Type* resultTypes)
+void WASMBinaryReaderJIT::OnFuncType(Index index, Index paramCount, Type* paramTypes, Index resultCount, Type* resultTypes)
 {
     Walrus::ValueTypeVector* param = new Walrus::ValueTypeVector();
     param->reserve(paramCount);
@@ -356,8 +352,7 @@ void WASMBinaryReaderJIT::OnBinaryExpr(uint32_t opcode)
 void WASMBinaryReaderJIT::OnSelectExpr(Index resultCount, Type* resultTypes)
 {
     /* The result type is unknown, set by buildParamDependencies(). */
-    m_compiler.append(Walrus::Instruction::Any, Walrus::SelectOpcode, 3,
-                      Walrus::LocationInfo::kFourByteSize);
+    m_compiler.append(Walrus::Instruction::Any, Walrus::SelectOpcode, 3, Walrus::LocationInfo::kFourByteSize);
 }
 
 void WASMBinaryReaderJIT::OnUnaryExpr(uint32_t opcode)
@@ -430,9 +425,7 @@ void WASMBinaryReaderJIT::OnBrIfExpr(Index depth)
     m_compiler.appendBranch(Walrus::BrIfOpcode, depth);
 }
 
-void WASMBinaryReaderJIT::OnBrTableExpr(Index numTargets,
-                                        Index* targetDepths,
-                                        Index defaultTargetDepth)
+void WASMBinaryReaderJIT::OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth)
 {
     m_compiler.appendBrTable(numTargets, targetDepths, defaultTargetDepth);
 }
@@ -469,8 +462,7 @@ void WASMBinaryReaderJIT::OnEndExpr()
 
 void WASMBinaryReaderJIT::OnF32ConstExpr(uint32_t value)
 {
-    Walrus::Instruction* instr = m_compiler.append(
-        Walrus::Instruction::Immediate, Walrus::F32ConstOpcode, 0, Walrus::LocationInfo::kFourByteSize | Walrus::LocationInfo::kFloat);
+    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::Immediate, Walrus::F32ConstOpcode, 0, Walrus::LocationInfo::kFourByteSize | Walrus::LocationInfo::kFloat);
     if (instr != nullptr) {
         instr->value().value32 = value;
     }
@@ -478,8 +470,7 @@ void WASMBinaryReaderJIT::OnF32ConstExpr(uint32_t value)
 
 void WASMBinaryReaderJIT::OnF64ConstExpr(uint64_t value)
 {
-    Walrus::Instruction* instr = m_compiler.append(
-        Walrus::Instruction::Immediate, Walrus::F32ConstOpcode, 0, Walrus::LocationInfo::kEightByteSize | Walrus::LocationInfo::kFloat);
+    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::Immediate, Walrus::F32ConstOpcode, 0, Walrus::LocationInfo::kEightByteSize | Walrus::LocationInfo::kFloat);
     if (instr != nullptr) {
         instr->value().value64 = value;
     }
@@ -487,8 +478,7 @@ void WASMBinaryReaderJIT::OnF64ConstExpr(uint64_t value)
 
 void WASMBinaryReaderJIT::OnI32ConstExpr(uint32_t value)
 {
-    Walrus::Instruction* instr = m_compiler.append(
-        Walrus::Instruction::Immediate, Walrus::I32ConstOpcode, 0, Walrus::LocationInfo::kFourByteSize);
+    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::Immediate, Walrus::I32ConstOpcode, 0, Walrus::LocationInfo::kFourByteSize);
     if (instr != nullptr) {
         instr->value().value32 = value;
     }
@@ -496,8 +486,7 @@ void WASMBinaryReaderJIT::OnI32ConstExpr(uint32_t value)
 
 void WASMBinaryReaderJIT::OnI64ConstExpr(uint64_t value)
 {
-    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::Immediate, Walrus::I64ConstOpcode, 0,
-                                                   Walrus::LocationInfo::kEightByteSize);
+    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::Immediate, Walrus::I64ConstOpcode, 0, Walrus::LocationInfo::kEightByteSize);
     if (instr != nullptr) {
         instr->value().value64 = value;
     }
@@ -510,8 +499,7 @@ void WASMBinaryReaderJIT::OnIfExpr(Type sigType)
 
 void WASMBinaryReaderJIT::OnLocalGetExpr(Index localIndex)
 {
-    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::LocalMove, Walrus::LocalGetOpcode, 0,
-                                                   m_compiler.local(localIndex));
+    Walrus::Instruction* instr = m_compiler.append(Walrus::Instruction::LocalMove, Walrus::LocalGetOpcode, 0, m_compiler.local(localIndex));
     if (instr != nullptr) {
         instr->value().localIndex = localIndex;
     }
@@ -531,8 +519,7 @@ void WASMBinaryReaderJIT::OnLocalTeeExpr(Index localIndex)
 
     if (instr != nullptr) {
         instr->value().localIndex = localIndex;
-        instr = m_compiler.append(Walrus::Instruction::LocalMove, Walrus::LocalGetOpcode, 0,
-                                  m_compiler.local(localIndex));
+        instr = m_compiler.append(Walrus::Instruction::LocalMove, Walrus::LocalGetOpcode, 0, m_compiler.local(localIndex));
         assert(instr != nullptr);
         instr->value().localIndex = localIndex;
     }
@@ -552,8 +539,7 @@ void WASMBinaryReaderJIT::EndFunctionBody(Index index)
 {
     Walrus::FunctionType* functionType = m_module->function(m_functionBodyIndex)->functionType();
 
-    m_compiler.append(Walrus::Instruction::Return, Walrus::ReturnOpcode,
-                      functionType->result().size());
+    m_compiler.append(Walrus::Instruction::Return, Walrus::ReturnOpcode, functionType->result().size());
 
     if (m_compiler.verboseLevel() >= 1) {
         printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(index));
@@ -575,9 +561,7 @@ void WASMBinaryReaderJIT::EndFunctionBody(Index index)
 
     if (m_compiler.verboseLevel() >= 1) {
         printf("------------------------------\n");
-        printf("Frame size: %d, Arguments size: %d (total: %d)\n",
-               jitFunc->frameSize(), jitFunc->argsSize(),
-               jitFunc->frameSize() + jitFunc->argsSize());
+        printf("Frame size: %d, Arguments size: %d (total: %d)\n", jitFunc->frameSize(), jitFunc->argsSize(), jitFunc->frameSize() + jitFunc->argsSize());
         m_compiler.dump(true);
         printf("\n");
     }

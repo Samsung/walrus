@@ -80,10 +80,7 @@ public:
         SignedDivide32,
     };
 
-    SlowCase(Type type,
-             sljit_jump* jump_from,
-             sljit_label* resume_label,
-             Instruction* instr)
+    SlowCase(Type type, sljit_jump* jump_from, sljit_label* resume_label, Instruction* instr)
         : m_type(type)
         , m_jumpFrom(jump_from)
         , m_resumeLabel(resume_label)
@@ -162,8 +159,7 @@ private:
     std::vector<sljit_uw> m_trapList;
 };
 
-static sljit_uw SLJIT_FUNC getTrapHandler(ExecutionContext* context,
-                                          sljit_uw returnAddr)
+static sljit_uw SLJIT_FUNC getTrapHandler(ExecutionContext* context, sljit_uw returnAddr)
 {
     return context->currentInstanceConstData->trapHandlers->find(returnAddr);
 }
@@ -247,8 +243,7 @@ void SlowCase::emit(sljit_compiler* compiler)
     case Type::SignedDivide32:
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     case Type::SignedDivide: {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM,
-                       ExecutionContext::DivideByZeroError);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
 
         sljit_s32 current_flags = SLJIT_CURRENT_FLAGS_SUB | SLJIT_CURRENT_FLAGS_COMPARE | SLJIT_SET_LESS_EQUAL | SLJIT_SET_Z;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -277,8 +272,7 @@ void SlowCase::emit(sljit_compiler* compiler)
         sljit_jump* cmp = sljit_emit_cmp(compiler, type, SLJIT_R0, 0, SLJIT_IMM, intMin);
         sljit_set_label(cmp, m_resumeLabel);
 
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM,
-                       ExecutionContext::IntegerOverflowError);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
 
         jump = sljit_emit_jump(compiler, SLJIT_JUMP);
         sljit_set_label(jump, context->trapLabel);
@@ -347,8 +341,7 @@ void MoveContext::move(ValueInfo value_info, JITArg from, JITArg to)
     sljit_s32 op;
 
     if (value_info & LocationInfo::kFloat) {
-        op = (value_info & LocationInfo::kEightByteSize) ? SLJIT_MOV_F64
-                                                         : SLJIT_MOV_F32;
+        op = (value_info & LocationInfo::kEightByteSize) ? SLJIT_MOV_F64 : SLJIT_MOV_F32;
     } else {
         op = (value_info & LocationInfo::kEightByteSize) ? SLJIT_MOV : SLJIT_MOV32;
     }
@@ -365,11 +358,9 @@ void MoveContext::move(ValueInfo value_info, JITArg from, JITArg to)
 
     if (m_reg[m_index] != 0) {
         if ((m_op[m_index] | SLJIT_32) == SLJIT_MOV_F32) {
-            sljit_emit_fop1(m_compiler, m_op[m_index], m_target[m_index].arg,
-                            m_target[m_index].argw, m_reg[m_index], 0);
+            sljit_emit_fop1(m_compiler, m_op[m_index], m_target[m_index].arg, m_target[m_index].argw, m_reg[m_index], 0);
         } else {
-            sljit_emit_op1(m_compiler, m_op[m_index], m_target[m_index].arg,
-                           m_target[m_index].argw, m_reg[m_index], 0);
+            sljit_emit_op1(m_compiler, m_op[m_index], m_target[m_index].arg, m_target[m_index].argw, m_reg[m_index], 0);
         }
     }
 
@@ -394,11 +385,9 @@ void MoveContext::done()
     for (int i = 0; i < m_delaySize; i++) {
         if (m_reg[m_index] != 0) {
             if ((m_op[m_index] | SLJIT_32) == SLJIT_MOV_F32) {
-                sljit_emit_fop1(m_compiler, m_op[m_index], m_target[m_index].arg,
-                                m_target[m_index].argw, m_reg[m_index], 0);
+                sljit_emit_fop1(m_compiler, m_op[m_index], m_target[m_index].arg, m_target[m_index].argw, m_reg[m_index], 0);
             } else {
-                sljit_emit_op1(m_compiler, m_op[m_index], m_target[m_index].arg,
-                               m_target[m_index].argw, m_reg[m_index], 0);
+                sljit_emit_op1(m_compiler, m_op[m_index], m_target[m_index].arg, m_target[m_index].argw, m_reg[m_index], 0);
             }
         }
 
@@ -586,18 +575,15 @@ JITModule* JITCompiler::compile()
     // Context stored in SLJIT_S0 (kContextReg)
     // Frame stored in SLJIT_S1 (kFrameReg)
     sljit_emit_enter(m_compiler, 0, SLJIT_ARGS3(VOID, P, P, P_R), 3, 2, 0, 0, 0);
-    sljit_emit_icall(m_compiler, SLJIT_CALL_REG_ARG, SLJIT_ARGS0(VOID), SLJIT_R2,
-                     0);
+    sljit_emit_icall(m_compiler, SLJIT_CALL_REG_ARG, SLJIT_ARGS0(VOID), SLJIT_R2, 0);
     sljit_label* returnToLabel = sljit_emit_label(m_compiler);
     sljit_emit_return_void(m_compiler);
 
-    compileContext.trapBlocks.push_back(
-        TrapBlock(sljit_emit_label(m_compiler), returnToLabel));
+    compileContext.trapBlocks.push_back(TrapBlock(sljit_emit_label(m_compiler), returnToLabel));
 
     size_t currentFunction = 0;
 
-    for (InstructionListItem* item = m_functionListFirst; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_functionListFirst; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             Label* label = item->asLabel();
 
@@ -668,10 +654,8 @@ JITModule* JITCompiler::compile()
                 break;
             }
             case UnreachableOpcode: {
-                sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM,
-                               ExecutionContext::UnreachableError);
-                sljit_set_label(sljit_emit_jump(m_compiler, SLJIT_JUMP),
-                                compileContext.trapLabel);
+                sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::UnreachableError);
+                sljit_set_label(sljit_emit_jump(m_compiler, SLJIT_JUMP), compileContext.trapLabel);
                 break;
             }
             default: {
@@ -746,22 +730,18 @@ void JITCompiler::emitProlog(size_t index, CompileContext& context)
     FunctionList& func = m_functionList[index];
     sljit_s32 savedRegCount = 4;
 
-    sljit_set_context(m_compiler, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2),
-                      SLJIT_ARGS0(VOID), SLJIT_NUMBER_OF_SCRATCH_REGISTERS,
-                      savedRegCount, SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0,
-                      sizeof(ExecutionContext::CallFrame));
+    sljit_set_context(m_compiler, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2), SLJIT_ARGS0(VOID),
+                      SLJIT_NUMBER_OF_SCRATCH_REGISTERS, savedRegCount,
+                      SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0, sizeof(ExecutionContext::CallFrame));
 
     context.trapLabel = sljit_emit_label(m_compiler);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_U32, SLJIT_MEM1(kContextReg),
-                   OffsetOfContextField(error), SLJIT_R2, 0);
+    sljit_emit_op1(m_compiler, SLJIT_MOV_U32, SLJIT_MEM1(kContextReg), OffsetOfContextField(error), SLJIT_R2, 0);
 
     context.returnToLabel = sljit_emit_label(m_compiler);
 
     sljit_emit_op_dst(m_compiler, SLJIT_GET_RETURN_ADDRESS, SLJIT_R1, 0);
-    sljit_emit_op2(m_compiler, SLJIT_SUB, SLJIT_R0, 0, kContextReg, 0, SLJIT_IMM,
-                   sizeof(ExecutionContext));
-    sljit_emit_icall(m_compiler, SLJIT_CALL, SLJIT_ARGS2(W, W, W), SLJIT_IMM,
-                     GET_FUNC_ADDR(sljit_sw, getTrapHandler));
+    sljit_emit_op2(m_compiler, SLJIT_SUB, SLJIT_R0, 0, kContextReg, 0, SLJIT_IMM, sizeof(ExecutionContext));
+    sljit_emit_icall(m_compiler, SLJIT_CALL, SLJIT_ARGS2(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, getTrapHandler));
     sljit_emit_return_to(m_compiler, SLJIT_R0, 0);
 
     if (func.isExported) {
@@ -770,34 +750,25 @@ void JITCompiler::emitProlog(size_t index, CompileContext& context)
 
     func.entryLabel->emit(m_compiler);
 
-    sljit_emit_enter(m_compiler, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2),
-                     SLJIT_ARGS0(VOID), SLJIT_NUMBER_OF_SCRATCH_REGISTERS,
-                     savedRegCount, SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0,
-                     sizeof(ExecutionContext::CallFrame));
+    sljit_emit_enter(m_compiler, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2), SLJIT_ARGS0(VOID),
+                     SLJIT_NUMBER_OF_SCRATCH_REGISTERS, savedRegCount,
+                     SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0, sizeof(ExecutionContext::CallFrame));
 
     // Setup new frame.
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg),
-                   OffsetOfContextField(lastFrame));
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(lastFrame));
 
     if (func.jitFunc->frameSize() > 0) {
-        sljit_emit_op2(m_compiler, SLJIT_SUB, kFrameReg, 0, kFrameReg, 0, SLJIT_IMM,
-                       static_cast<sljit_sw>(func.jitFunc->frameSize()));
+        sljit_emit_op2(m_compiler, SLJIT_SUB, kFrameReg, 0, kFrameReg, 0, SLJIT_IMM, static_cast<sljit_sw>(func.jitFunc->frameSize()));
 
-        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM,
-                       ExecutionContext::OutOfStackError);
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::OutOfStackError);
         sljit_jump* cmp = sljit_emit_cmp(m_compiler, SLJIT_LESS, kFrameReg, 0, kContextReg, 0);
         sljit_set_label(cmp, context.trapLabel);
     }
 
     sljit_get_local_base(m_compiler, SLJIT_R1, 0, 0);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(kContextReg),
-                   OffsetOfContextField(lastFrame), SLJIT_R1, 0);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP),
-                   offsetof(ExecutionContext::CallFrame, frameStart), kFrameReg,
-                   0);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP),
-                   offsetof(ExecutionContext::CallFrame, prevFrame), SLJIT_R0,
-                   0);
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(kContextReg), OffsetOfContextField(lastFrame), SLJIT_R1, 0);
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), offsetof(ExecutionContext::CallFrame, frameStart), kFrameReg, 0);
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), offsetof(ExecutionContext::CallFrame, prevFrame), SLJIT_R0, 0);
 }
 
 sljit_label* JITCompiler::emitEpilog(size_t index, CompileContext& context)
@@ -805,14 +776,11 @@ sljit_label* JITCompiler::emitEpilog(size_t index, CompileContext& context)
     FunctionList& func = m_functionList[index];
 
     // Restore previous frame.
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP),
-                   offsetof(ExecutionContext::CallFrame, prevFrame));
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), offsetof(ExecutionContext::CallFrame, prevFrame));
     if (func.jitFunc->frameSize() > 0) {
-        sljit_emit_op2(m_compiler, SLJIT_ADD, kFrameReg, 0, kFrameReg, 0, SLJIT_IMM,
-                       static_cast<sljit_sw>(func.jitFunc->frameSize()));
+        sljit_emit_op2(m_compiler, SLJIT_ADD, kFrameReg, 0, kFrameReg, 0, SLJIT_IMM, static_cast<sljit_sw>(func.jitFunc->frameSize()));
     }
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(kContextReg),
-                   OffsetOfContextField(lastFrame), SLJIT_R0, 0);
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(kContextReg), OffsetOfContextField(lastFrame), SLJIT_R0, 0);
 
     sljit_emit_return_void(m_compiler);
 
