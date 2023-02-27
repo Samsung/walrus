@@ -30,10 +30,7 @@ using f64Function1Param = std::add_pointer<sljit_f64(sljit_f64)>::type;
         sljit_emit_fop1(compiler, movOp, (targetReg), 0, (arg), (argw)); \
     }
 
-static void floatOperandToArg(sljit_compiler* compiler,
-                              Operand* operand,
-                              JITArg& arg,
-                              sljit_s32 srcReg)
+static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 srcReg)
 {
     if (operand->location.type != Operand::Immediate) {
         operandToArg(operand, arg);
@@ -47,20 +44,15 @@ static void floatOperandToArg(sljit_compiler* compiler,
     arg.argw = 0;
 
     if ((operand->location.valueInfo & LocationInfo::kSizeMask) == 1) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM,
-                       static_cast<sljit_s32>(instr->value().value32));
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_s32>(instr->value().value32));
         sljit_emit_fcopy(compiler, SLJIT_COPY32_TO_F32, arg.arg, SLJIT_R0);
     } else {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM,
-                       static_cast<sljit_sw>(instr->value().value64 >> 32));
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM,
-                       static_cast<sljit_sw>(instr->value().value64));
-        sljit_emit_fcopy(compiler, SLJIT_COPY_TO_F64, arg.arg,
-                         SLJIT_REG_PAIR(SLJIT_R0, SLJIT_R1));
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(instr->value().value64 >> 32));
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(instr->value().value64));
+        sljit_emit_fcopy(compiler, SLJIT_COPY_TO_F64, arg.arg, SLJIT_REG_PAIR(SLJIT_R0, SLJIT_R1));
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM,
-                       static_cast<sljit_sw>(instr->value().value64));
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(instr->value().value64));
         sljit_emit_fcopy(compiler, SLJIT_COPY_TO_F64, arg.arg, SLJIT_R0);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     }
@@ -197,20 +189,15 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
     if (f32Func) {
         MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR0, args[0].arg, args[0].argw);
         MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR1, args[1].arg, args[1].argw);
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F32, F32, F32),
-                         SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f32Func));
-        MOVE_FROM_FREG(compiler, SLJIT_MOV_F32, args[2].arg, args[2].argw,
-                       SLJIT_FR0);
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F32, F32, F32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f32Func));
+        MOVE_FROM_FREG(compiler, SLJIT_MOV_F32, args[2].arg, args[2].argw, SLJIT_FR0);
     } else if (f64Func) {
         MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR0, args[0].arg, args[0].argw);
         MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR1, args[1].arg, args[1].argw);
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F64, F64, F64),
-                         SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
-        MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[2].arg, args[2].argw,
-                       SLJIT_FR0);
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F64, F64, F64), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
+        MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[2].arg, args[2].argw, SLJIT_FR0);
     } else {
-        sljit_emit_fop2(compiler, opcode, args[2].arg, args[2].argw, args[0].arg,
-                        args[0].argw, args[1].arg, args[1].argw);
+        sljit_emit_fop2(compiler, opcode, args[2].arg, args[2].argw, args[0].arg, args[0].argw, args[1].arg, args[1].argw);
     }
 }
 
@@ -277,25 +264,18 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
 
     if (f32Func) {
         MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR0, args[0].arg, args[0].argw);
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F32, F32), SLJIT_IMM,
-                         GET_FUNC_ADDR(sljit_sw, f32Func));
-        MOVE_FROM_FREG(compiler, SLJIT_MOV_F32, args[1].arg, args[1].argw,
-                       SLJIT_FR0);
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F32, F32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f32Func));
+        MOVE_FROM_FREG(compiler, SLJIT_MOV_F32, args[1].arg, args[1].argw, SLJIT_FR0);
     } else if (f64Func) {
         MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR0, args[0].arg, args[0].argw);
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F64, F64), SLJIT_IMM,
-                         GET_FUNC_ADDR(sljit_sw, f64Func));
-        MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[1].arg, args[1].argw,
-                       SLJIT_FR0);
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F64, F64), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
+        MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[1].arg, args[1].argw, SLJIT_FR0);
     } else {
-        sljit_emit_fop1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg,
-                        0);
+        sljit_emit_fop1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg, 0);
     }
 }
 
-static void emitFloatSelect(sljit_compiler* compiler,
-                            Instruction* instr,
-                            sljit_s32 type)
+static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
 {
     Operand* operands = instr->operands();
     bool is32 = (operands->location.valueInfo & LocationInfo::kSizeMask) == 1;
@@ -310,8 +290,7 @@ static void emitFloatSelect(sljit_compiler* compiler,
         JITArg cond;
 
         operandToArg(operands + 2, cond);
-        sljit_emit_op2u(compiler, SLJIT_SUB32 | SLJIT_SET_Z, cond.arg, cond.argw,
-                        SLJIT_IMM, 0);
+        sljit_emit_op2u(compiler, SLJIT_SUB32 | SLJIT_SET_Z, cond.arg, cond.argw, SLJIT_IMM, 0);
 
         type = SLJIT_NOT_ZERO;
     }
