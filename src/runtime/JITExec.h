@@ -94,9 +94,7 @@ struct ExecutionContext {
 class JITModule {
 public:
     // Update JITCompiler::compile() after this definition is modified.
-    typedef void (*ExportCall)(ExecutionContext* context,
-                               void* alignedStart,
-                               void* exportEntry);
+    typedef void (*ExportCall)(ExecutionContext* context, void* alignedStart, void* exportEntry);
 
     JITModule(InstanceConstData* instanceConstData, void* moduleStart)
         : m_instanceConstData(instanceConstData)

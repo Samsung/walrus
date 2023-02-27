@@ -70,8 +70,7 @@ public:
 
     void update(std::vector<InstructionListItem*>& itemStack);
     static Instruction* getHead(Instruction* instr);
-    static void checkStack(Instruction* instr,
-                           std::vector<InstructionListItem*>& stack);
+    static void checkStack(Instruction* instr, std::vector<InstructionListItem*>& stack);
 
 private:
     Index m_preservedCount;
@@ -146,8 +145,7 @@ Instruction* ReduceMovesContext::getHead(Instruction* instr)
     return headInstr;
 }
 
-void ReduceMovesContext::checkStack(Instruction* instr,
-                                    std::vector<InstructionListItem*>& stack)
+void ReduceMovesContext::checkStack(Instruction* instr, std::vector<InstructionListItem*>& stack)
 {
     Instruction* headInstr = instr;
     if (headInstr->asInstruction()->info() & Instruction::kHasParent) {
@@ -225,8 +223,7 @@ void ReduceMovesContext::InitGroups::updateLocalGet(Instruction* instr)
     headInstr = nullptr;
 }
 
-void ReduceMovesContext::InitGroups::updateLocalSet(Instruction* instr,
-                                                    Index index)
+void ReduceMovesContext::InitGroups::updateLocalSet(Instruction* instr, Index index)
 {
     assert(headInstr == nullptr || !(headInstr->info() & Instruction::kHasParent));
     assert(isDeadGroup == (headInstr == nullptr));
@@ -390,8 +387,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
         }
     }
 
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             Label* label = item->asLabel();
             label->m_reduceMovesCtx = new ReduceMovesContext(label);
@@ -431,8 +427,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
     }
 
     // Phase 1: initialize live groups using data dependencies.
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->group() != Instruction::LocalMove || item->asInstruction()->opcode() != LocalSetOpcode) {
             continue;
         }
@@ -464,8 +459,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
     bool updateStack = true;
 
     // Phase 2: check instruction blocks.
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             Label* label = item->asLabel();
 
@@ -560,8 +554,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
     stack.clear();
 
     // Phase 3: check invalid sets.
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isInstruction()) {
             continue;
         }
@@ -630,8 +623,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
     }
 
     // Phase 4: check instruction blocks again.
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             std::vector<ReduceMovesContext::StackItem>* contextStack = item->asLabel()->m_reduceMovesCtx->stack();
 
@@ -680,8 +672,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
     }
 
     // Phase 5: restore localIndex.
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
             continue;
         }
@@ -706,9 +697,7 @@ void JITCompiler::reduceLocalAndConstantMoves()
         }
 
         if (instr->opcode() != LocalSetOpcode) {
-            instr->getResult(0)->location.type = (instr->opcode() == LocalGetOpcode)
-                ? Operand::LocalGet
-                : Operand::Immediate;
+            instr->getResult(0)->location.type = (instr->opcode() == LocalGetOpcode) ? Operand::LocalGet : Operand::Immediate;
             continue;
         }
 

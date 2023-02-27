@@ -103,8 +103,7 @@ void JITCompiler::checkLocals(size_t paramsSize)
     // point of the function
 
     size_t instrIndex = 0;
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         instrIndex++;
 
         if (item->isLabel()) {
@@ -209,8 +208,7 @@ void JITCompiler::checkLocals(size_t paramsSize)
     // Phase 2: extend the range ends with intersecting backward jumps
 
     instrIndex = 0;
-    for (InstructionListItem* item = m_first; item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         instrIndex++;
 
         switch (item->group()) {
@@ -306,25 +304,21 @@ void JITCompiler::checkLocals(size_t paramsSize)
     if (verboseLevel() >= 1) {
         for (size_t i = 0; i < localsSize; i++) {
             LocalRange& range = localRanges[i];
-            printf("Local %d: mapped to: %d ", static_cast<int>(range.index),
-                   static_cast<int>(remap[range.index]));
+            printf("Local %d: mapped to: %d ", static_cast<int>(range.index), static_cast<int>(remap[range.index]));
 
             if (range.end == 0) {
                 printf("unused\n");
             } else if (range.start == 0) {
                 printf("range [BEGIN - %d]\n", static_cast<int>(range.end - 1));
             } else {
-                printf("range [%d - %d]\n", static_cast<int>(range.start - 1),
-                       static_cast<int>(range.end - 1));
+                printf("range [%d - %d]\n", static_cast<int>(range.start - 1), static_cast<int>(range.end - 1));
             }
         }
 
-        printf("Number of locals reduced from %d to %d\n",
-               static_cast<int>(localsSize), static_cast<int>(newLocals.size()));
+        printf("Number of locals reduced from %d to %d\n", static_cast<int>(localsSize), static_cast<int>(newLocals.size()));
     }
 
-    for (InstructionListItem* item = m_last; item != nullptr;
-         item = item->prev()) {
+    for (InstructionListItem* item = m_last; item != nullptr; item = item->prev()) {
         if (item->group() == Instruction::LocalMove) {
             Instruction* instr = item->asInstruction();
             instr->value().localIndex = remap[instr->value().localIndex];

@@ -23,11 +23,7 @@
 
 namespace Walrus {
 
-void JITFunction::call(ExecutionState& state,
-                       const uint32_t argc,
-                       Value* argv,
-                       Value* result,
-                       const ValueTypeVector& resultTypeInfo) const
+void JITFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, const ValueTypeVector& resultTypeInfo) const
 {
     ASSERT(m_exportEntry);
 

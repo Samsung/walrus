@@ -48,27 +48,14 @@ ComplexInstruction::~ComplexInstruction()
 }
 
 template <int n>
-SimpleCallInstruction<n>::SimpleCallInstruction(OpcodeKind opcode,
-                                                FunctionType* functionType,
-                                                InstructionListItem* prev)
-    : CallInstruction(opcode,
-                      functionType->param().size(),
-                      functionType,
-                      m_inlineOperands,
-                      prev)
+SimpleCallInstruction<n>::SimpleCallInstruction(OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev)
+    : CallInstruction(opcode, functionType->param().size(), functionType, m_inlineOperands, prev)
 {
     assert(functionType->param().size() + functionType->result().size() == n);
 }
 
-ComplexCallInstruction::ComplexCallInstruction(OpcodeKind opcode,
-                                               FunctionType* functionType,
-                                               InstructionListItem* prev)
-    : CallInstruction(
-        opcode,
-        functionType->param().size(),
-        functionType,
-        new Operand[functionType->param().size() + functionType->result().size()],
-        prev)
+ComplexCallInstruction::ComplexCallInstruction(OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev)
+    : CallInstruction(opcode, functionType->param().size(), functionType, new Operand[functionType->param().size() + functionType->result().size()], prev)
 {
     assert(functionType->param().size() + functionType->result().size() > 4);
 }
@@ -78,13 +65,8 @@ ComplexCallInstruction::~ComplexCallInstruction()
     delete[] params();
 }
 
-BrTableInstruction::BrTableInstruction(size_t targetLabelCount,
-                                       InstructionListItem* prev)
-    : Instruction(Instruction::BrTable,
-                  BrTableOpcode,
-                  1,
-                  &m_inlineParam,
-                  prev)
+BrTableInstruction::BrTableInstruction(size_t targetLabelCount, InstructionListItem* prev)
+    : Instruction(Instruction::BrTable, BrTableOpcode, 1, &m_inlineParam, prev)
 {
     m_targetLabels = new Label*[targetLabelCount];
     value().targetLabelCount = targetLabelCount;
@@ -163,18 +145,12 @@ void JITCompiler::clear()
     }
 }
 
-Instruction* JITCompiler::append(Instruction::Group group,
-                                 OpcodeKind op,
-                                 Index paramCount)
+Instruction* JITCompiler::append(Instruction::Group group, OpcodeKind op, Index paramCount)
 {
-    return appendInternal(group, op, paramCount, paramCount,
-                          LocationInfo::kNone);
+    return appendInternal(group, op, paramCount, paramCount, LocationInfo::kNone);
 }
 
-Instruction* JITCompiler::append(Instruction::Group group,
-                                 OpcodeKind op,
-                                 Index paramCount,
-                                 ValueInfo result)
+Instruction* JITCompiler::append(Instruction::Group group, OpcodeKind op, Index paramCount, ValueInfo result)
 {
     assert(result != LocationInfo::kNone);
     return appendInternal(group, op, paramCount, paramCount + 1, result);
@@ -303,9 +279,7 @@ void JITCompiler::appendElseLabel()
     m_elseBlocks.pop_back();
 }
 
-void JITCompiler::appendBrTable(Index numTargets,
-                                Index* targetDepths,
-                                Index defaultTargetDepth)
+void JITCompiler::appendBrTable(Index numTargets, Index* targetDepths, Index defaultTargetDepth)
 {
     if (m_stackDepth == wabt::kInvalidIndex) {
         return;
@@ -332,9 +306,7 @@ void JITCompiler::appendBrTable(Index numTargets,
     label->append(branch);
 }
 
-void JITCompiler::pushLabel(OpcodeKind opcode,
-                            Index paramCount,
-                            Index resultCount)
+void JITCompiler::pushLabel(OpcodeKind opcode, Index paramCount, Index resultCount)
 {
     InstructionListItem* prev = nullptr;
 
@@ -363,8 +335,7 @@ void JITCompiler::pushLabel(OpcodeKind opcode,
     } else if (opcode == IfOpcode) {
         label->addInfo(Label::kCanHaveElse);
 
-        Instruction* branch = new SimpleInstruction<1>(
-            Instruction::DirectBranch, InterpBrUnlessOpcode, m_last);
+        Instruction* branch = new SimpleInstruction<1>(Instruction::DirectBranch, InterpBrUnlessOpcode, m_last);
         m_elseBlocks.push_back(ElseBlock(branch, paramCount, m_stackDepth - paramCount));
         append(branch);
     }
@@ -466,8 +437,7 @@ void JITCompiler::dump(bool afterStackComputation)
     bool enableColors = (verboseLevel() >= 2);
     int counter = 0;
 
-    for (InstructionListItem* item = first(); item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = first(); item != nullptr; item = item->next()) {
         instrIndex[item] = counter++;
     }
 
@@ -476,8 +446,7 @@ void JITCompiler::dump(bool afterStackComputation)
     const char* labelText = enableColors ? "\033[1;36m" : "";
     const char* unusedText = enableColors ? "\033[1;33m" : "";
 
-    for (InstructionListItem* item = first(); item != nullptr;
-         item = item->next()) {
+    for (InstructionListItem* item = first(); item != nullptr; item = item->next()) {
         if (item->isInstruction()) {
             Instruction* instr = item->asInstruction();
             printf("%s%d%s: ", instrText, instrIndex[item], defaultText);
@@ -502,8 +471,7 @@ void JITCompiler::dump(bool afterStackComputation)
                 break;
             }
             case Instruction::Call: {
-                printf("  Frame size: %d, param start: %d\n",
-                       instr->asCall()->frameSize(), instr->asCall()->paramStart());
+                printf("  Frame size: %d, param start: %d\n", instr->asCall()->frameSize(), instr->asCall()->paramStart());
                 break;
             }
             case Instruction::BrTable: {
@@ -575,9 +543,7 @@ void JITCompiler::dump(bool afterStackComputation)
 
             Label* label = item->asLabel();
 
-            printf("Label: resultCount: %d preservedCount: %d\n",
-                   static_cast<int>(label->resultCount()),
-                   static_cast<int>(label->preservedCount()));
+            printf("Label: resultCount: %d preservedCount: %d\n", static_cast<int>(label->resultCount()), static_cast<int>(label->preservedCount()));
 
             for (auto it : label->branches()) {
                 printf("  Jump from: %s%d%s\n", instrText, instrIndex[it], defaultText);
@@ -588,8 +554,7 @@ void JITCompiler::dump(bool afterStackComputation)
             for (size_t i = 0; i < size; ++i) {
                 printf("  Param[%d]\n", static_cast<int>(i));
                 for (auto dependencyIt : label->dependencies(i)) {
-                    printf("    %s%d%s(%d) instruction\n", instrText, instrIndex[dependencyIt.instr],
-                           defaultText, static_cast<int>(dependencyIt.index));
+                    printf("    %s%d%s(%d) instruction\n", instrText, instrIndex[dependencyIt.instr], defaultText, static_cast<int>(dependencyIt.index));
                 }
             }
         }
@@ -633,8 +598,7 @@ InstructionListItem* JITCompiler::remove(InstructionListItem* item)
     return next;
 }
 
-void JITCompiler::replace(InstructionListItem* item,
-                          InstructionListItem* newItem)
+void JITCompiler::replace(InstructionListItem* item, InstructionListItem* newItem)
 {
     assert(item != newItem);
 
@@ -663,11 +627,7 @@ void JITCompiler::replace(InstructionListItem* item,
     delete item;
 }
 
-Instruction* JITCompiler::appendInternal(Instruction::Group group,
-                                         OpcodeKind op,
-                                         Index paramCount,
-                                         Index operandCount,
-                                         ValueInfo result)
+Instruction* JITCompiler::appendInternal(Instruction::Group group, OpcodeKind op, Index paramCount, Index operandCount, ValueInfo result)
 {
     if (m_stackDepth == wabt::kInvalidIndex) {
         return nullptr;
