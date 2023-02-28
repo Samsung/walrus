@@ -297,9 +297,15 @@ static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_
 
     sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, SLJIT_FR0);
 
-    MOVE_TO_FREG(compiler, movOpcode, targetReg, args[0].arg, args[0].argw);
-    sljit_jump* jump = sljit_emit_jump(compiler, type);
-    MOVE_TO_FREG(compiler, movOpcode, targetReg, args[1].arg, args[1].argw);
-    sljit_set_label(jump, sljit_emit_label(compiler));
+    if (!IS_SOURCE_REG(args[1].arg)) {
+        sljit_emit_fop1(compiler, movOpcode, targetReg, 0, args[1].arg, args[1].argw);
+        args[1].arg = targetReg;
+    }
+
+    if (is32) {
+        type |= SLJIT_32;
+    }
+
+    sljit_emit_fselect(compiler, type, targetReg, args[0].arg, args[0].argw, args[1].arg);
     MOVE_FROM_FREG(compiler, movOpcode, args[2].arg, args[2].argw, targetReg);
 }

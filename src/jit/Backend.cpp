@@ -78,6 +78,8 @@ public:
     enum class Type {
         SignedDivide,
         SignedDivide32,
+        SignedModulo,
+        SignedModulo32,
     };
 
     SlowCase(Type type, sljit_jump* jump_from, sljit_label* resume_label, Instruction* instr)
@@ -254,8 +256,7 @@ void SlowCase::emit(sljit_compiler* compiler)
 
         sljit_set_current_flags(compiler, current_flags);
         /* Division by zero. */
-        sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_EQUAL);
-        sljit_set_label(jump, context->trapLabel);
+        sljit_set_label(sljit_emit_jump(compiler, SLJIT_EQUAL), context->trapLabel);
 
         sljit_s32 type = SLJIT_NOT_EQUAL;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -273,9 +274,33 @@ void SlowCase::emit(sljit_compiler* compiler)
         sljit_set_label(cmp, m_resumeLabel);
 
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
+        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+        return;
+    }
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+    case Type::SignedModulo32:
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+    case Type::SignedModulo: {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
 
-        jump = sljit_emit_jump(compiler, SLJIT_JUMP);
-        sljit_set_label(jump, context->trapLabel);
+        sljit_s32 current_flags = SLJIT_CURRENT_FLAGS_SUB | SLJIT_CURRENT_FLAGS_COMPARE | SLJIT_SET_LESS_EQUAL | SLJIT_SET_Z;
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        if (m_type == Type::SignedModulo32) {
+            current_flags |= SLJIT_32;
+        }
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+
+        sljit_set_current_flags(compiler, current_flags);
+        /* Division by zero. */
+        sljit_set_label(sljit_emit_jump(compiler, SLJIT_EQUAL), context->trapLabel);
+
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        sljit_emit_op1(compiler, (m_type == Type::SignedModulo32) ? SLJIT_MOV32 : SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, 0);
+#else /* !SLJIT_64BIT_ARCHITECTURE */
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, 0);
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+
+        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), m_resumeLabel);
         return;
     }
     default: {

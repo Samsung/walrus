@@ -78,16 +78,23 @@ enum DivRemOptions : sljit_s32 {
 static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args, sljit_s32 options)
 {
     CompileContext* context = CompileContext::get(compiler);
+    sljit_s32 movOpcode = (options & DivRem32) ? SLJIT_MOV32 : SLJIT_MOV;
 
-    if ((args[1].arg & SLJIT_IMM) && args[1].argw == 0) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
-        return;
+    if (args[1].arg & SLJIT_IMM) {
+        if (args[1].argw == 0) {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
+            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+            return;
+        } else if (args[1].argw == -1 && opcode == SLJIT_DIVMOD_SW) {
+            sljit_emit_op1(compiler, movOpcode, args[2].arg, args[2].argw, SLJIT_IMM, 0);
+            return;
+        }
     }
 
-    sljit_s32 movOpcode = (options & DivRem32) ? SLJIT_MOV32 : SLJIT_MOV;
     MOVE_TO_REG(compiler, movOpcode, SLJIT_R1, args[1].arg, args[1].argw);
     MOVE_TO_REG(compiler, movOpcode, SLJIT_R0, args[0].arg, args[0].argw);
+
+    sljit_jump* moduloJumpFrom = nullptr;
 
     if (args[1].arg & SLJIT_IMM) {
         if ((options & DivRemSigned) && args[1].argw == -1) {
@@ -111,15 +118,19 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
         sljit_emit_op2(compiler, addOpcode, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, 1);
         sljit_emit_op2u(compiler, subOpcode | SLJIT_SET_LESS_EQUAL | SLJIT_SET_Z, SLJIT_R1, 0, SLJIT_IMM, 1);
 
-        sljit_jump* jumpFrom = sljit_emit_jump(compiler, SLJIT_LESS_EQUAL);
-        sljit_label* resumeLabel = sljit_emit_label(compiler);
+        moduloJumpFrom = sljit_emit_jump(compiler, SLJIT_LESS_EQUAL);
 
-        SlowCase::Type type = SlowCase::Type::SignedDivide;
-        if (options & DivRem32) {
-            type = SlowCase::Type::SignedDivide32;
+        if (!(options & DivRemRemainder)) {
+            sljit_label* resumeLabel = sljit_emit_label(compiler);
+            SlowCase::Type type = SlowCase::Type::SignedDivide;
+
+            if (options & DivRem32) {
+                type = SlowCase::Type::SignedDivide32;
+            }
+
+            context->add(new SlowCase(type, moduloJumpFrom, resumeLabel, nullptr));
+            moduloJumpFrom = nullptr;
         }
-
-        context->add(new SlowCase(type, jumpFrom, resumeLabel, nullptr));
 
         sljit_emit_op2(compiler, subOpcode, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, 1);
     } else {
@@ -135,6 +146,17 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
     }
 
     sljit_emit_op0(compiler, opcode);
+
+    if (moduloJumpFrom != nullptr) {
+        sljit_label* resumeLabel = sljit_emit_label(compiler);
+        SlowCase::Type type = SlowCase::Type::SignedModulo;
+
+        if (options & DivRem32) {
+            type = SlowCase::Type::SignedModulo32;
+        }
+
+        context->add(new SlowCase(type, moduloJumpFrom, resumeLabel, nullptr));
+    }
 
     sljit_s32 resultReg = (options & DivRemRemainder) ? SLJIT_R1 : SLJIT_R0;
     MOVE_FROM_REG(compiler, movOpcode, args[2].arg, args[2].argw, resultReg);
@@ -171,7 +193,7 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
         emitDivRem(compiler, SLJIT_DIVMOD_S32, args, DivRem32 | DivRemSigned | DivRemRemainder);
         return;
     case I32RemUOpcode:
-        emitDivRem(compiler, SLJIT_DIVMOD_U32, args, DivRem32 | DivRemSigned | DivRemRemainder);
+        emitDivRem(compiler, SLJIT_DIVMOD_U32, args, DivRem32 | DivRemRemainder);
         return;
     case I32RotlOpcode:
         opcode = SLJIT_ROTL32;
@@ -216,7 +238,7 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
         emitDivRem(compiler, SLJIT_DIVMOD_SW, args, DivRemSigned | DivRemRemainder);
         return;
     case I64RemUOpcode:
-        emitDivRem(compiler, SLJIT_DIVMOD_UW, args, DivRemSigned | DivRemRemainder);
+        emitDivRem(compiler, SLJIT_DIVMOD_UW, args, DivRemRemainder);
         return;
     case I64RotlOpcode:
         opcode = SLJIT_ROTL;
@@ -248,6 +270,28 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
     }
 
     sljit_emit_op2(compiler, opcode, args[2].arg, args[2].argw, args[0].arg, args[0].argw, args[1].arg, args[1].argw);
+}
+
+static sljit_s32 popcnt32(sljit_s32 arg)
+{
+    return __builtin_popcount(arg);
+}
+
+static sljit_sw popcnt64(sljit_sw arg)
+{
+    return __builtin_popcountl(arg);
+}
+
+static void emitPopcnt(sljit_compiler* compiler, OpcodeKind opcode, JITArg* args)
+{
+    sljit_s32 movOpcode = (opcode == I32PopcntOpcode) ? SLJIT_MOV32 : SLJIT_MOV;
+
+    MOVE_TO_REG(compiler, movOpcode, SLJIT_R0, args[0].arg, args[0].argw);
+
+    sljit_sw funcAddr = (opcode == I32PopcntOpcode) ? GET_FUNC_ADDR(sljit_sw, popcnt32) : GET_FUNC_ADDR(sljit_sw, popcnt64);
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(W, W), SLJIT_IMM, funcAddr);
+
+    MOVE_FROM_REG(compiler, movOpcode, args[1].arg, args[1].argw, SLJIT_R0);
 }
 
 static void emitExtend(sljit_compiler* compiler, sljit_s32 opcode, sljit_s32 bigEndianIncrease, JITArg* args)
@@ -293,7 +337,7 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
         break;
     case I32PopcntOpcode:
     case I64PopcntOpcode:
-        // Not supported yet.
+        emitPopcnt(compiler, instr->opcode(), args);
         return;
     case I32Extend8SOpcode:
         emitExtend(compiler, SLJIT_MOV32_S8, 3, args);
@@ -358,16 +402,18 @@ static void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 t
         type = SLJIT_NOT_ZERO;
     }
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(args[0].arg, SLJIT_R1);
     sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, SLJIT_R0);
 
     if (is32) {
         type |= SLJIT_32;
     }
 
-    MOVE_TO_REG(compiler, movOpcode, sourceReg, args[0].arg, args[0].argw);
-    MOVE_TO_REG(compiler, movOpcode, targetReg, args[1].arg, args[1].argw);
-    sljit_emit_cmov(compiler, type, targetReg, sourceReg, 0);
+    if (!IS_SOURCE_REG(args[1].arg)) {
+        sljit_emit_op1(compiler, movOpcode, targetReg, 0, args[1].arg, args[1].argw);
+        args[1].arg = targetReg;
+    }
+
+    sljit_emit_select(compiler, type, targetReg, args[0].arg, args[0].argw, args[1].arg);
     MOVE_FROM_REG(compiler, movOpcode, args[2].arg, args[2].argw, targetReg);
     return;
 }
