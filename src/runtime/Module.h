@@ -23,7 +23,7 @@
 namespace wabt {
 class WASMBinaryReader;
 class WASMBinaryReaderJIT;
-}
+} // namespace wabt
 
 namespace Walrus {
 
