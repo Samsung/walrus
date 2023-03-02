@@ -32,6 +32,8 @@ public:
         TagKind,
     };
 
+    virtual ~ObjectType() {}
+
     Kind kind() const { return m_kind; }
 
 protected:
