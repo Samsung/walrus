@@ -255,16 +255,19 @@ struct wasm_ref_t {
 };
 
 struct wasm_extern_t : wasm_ref_t {
-    wasm_extern_t(const std::shared_ptr<Object>& ptr, const ObjectType* type)
+    wasm_extern_t(const std::shared_ptr<Object>& ptr, own const ObjectType* type)
         : wasm_ref_t(ptr.get())
         , sharedPtr(ptr)
         , objectType(type)
     {
     }
 
-    virtual ~wasm_extern_t() {}
+    virtual ~wasm_extern_t()
+    {
+        delete objectType;
+    }
 
-    std::shared_ptr<Object>& getSharedPtr() { return sharedPtr; }
+    const std::shared_ptr<Object>& getSharedPtr() const { return sharedPtr; }
 
     std::shared_ptr<Object> sharedPtr;
     const ObjectType* objectType;
@@ -284,8 +287,13 @@ struct wasm_module_t : wasm_ref_t {
 };
 
 struct wasm_func_t : wasm_extern_t {
+    wasm_func_t(const wasm_func_t& other)
+        : wasm_extern_t(std::static_pointer_cast<Object>(other.getSharedPtr()), other.type()->clone())
+    {
+    }
+
     wasm_func_t(const std::shared_ptr<Function>& func, const wasm_functype_t* ft)
-        : wasm_extern_t(std::static_pointer_cast<Object>(func), ft->get())
+        : wasm_extern_t(std::static_pointer_cast<Object>(func), static_cast<const FunctionType*>(ft->get())->clone())
     {
     }
 
@@ -303,8 +311,13 @@ struct wasm_func_t : wasm_extern_t {
 };
 
 struct wasm_global_t : wasm_extern_t {
+    wasm_global_t(const wasm_global_t& other)
+        : wasm_extern_t(std::static_pointer_cast<Object>(other.getSharedPtr()), other.type()->clone())
+    {
+    }
+
     wasm_global_t(const std::shared_ptr<Global>& glob, const wasm_globaltype_t* gt)
-        : wasm_extern_t(std::static_pointer_cast<Object>(glob), gt->get())
+        : wasm_extern_t(std::static_pointer_cast<Object>(glob), static_cast<const GlobalType*>(gt->get())->clone())
     {
     }
 
@@ -322,8 +335,13 @@ struct wasm_global_t : wasm_extern_t {
 };
 
 struct wasm_table_t : wasm_extern_t {
+    wasm_table_t(const wasm_table_t& other)
+        : wasm_extern_t(std::static_pointer_cast<Object>(other.getSharedPtr()), other.type()->clone())
+    {
+    }
+
     wasm_table_t(const std::shared_ptr<Table> table, const wasm_tabletype_t* tt)
-        : wasm_extern_t(std::static_pointer_cast<Object>(table), tt->get())
+        : wasm_extern_t(std::static_pointer_cast<Object>(table), static_cast<const TableType*>(tt->get())->clone())
     {
     }
 
@@ -341,8 +359,13 @@ struct wasm_table_t : wasm_extern_t {
 };
 
 struct wasm_memory_t : wasm_extern_t {
+    wasm_memory_t(const wasm_memory_t& other)
+        : wasm_extern_t(std::static_pointer_cast<Object>(other.getSharedPtr()), other.type()->clone())
+    {
+    }
+
     wasm_memory_t(const std::shared_ptr<Memory> mem, const wasm_memorytype_t* mt)
-        : wasm_extern_t(std::static_pointer_cast<Object>(mem), mt->get())
+        : wasm_extern_t(std::static_pointer_cast<Object>(mem), static_cast<const MemoryType*>(mt->get())->clone())
     {
     }
 
@@ -899,7 +922,7 @@ own wasm_func_t* wasm_func_new(
         },
         reinterpret_cast<void*>(ft->results.size));
 
-    return new wasm_func_t(func, static_cast<const wasm_functype_t*>(ft->clone()));
+    return new wasm_func_t(func, ft);
 }
 
 own wasm_func_t* wasm_func_new_with_env(
@@ -931,7 +954,7 @@ own wasm_func_t* wasm_func_new_with_env(
         },
         reinterpret_cast<void*>(ft->results.size));
 
-    return new wasm_func_t(func, static_cast<const wasm_functype_t*>(ft->clone()));
+    return new wasm_func_t(func, ft);
 }
 
 static own wasm_functype_t* FromWalrusFunctionType(const FunctionType* ft)
@@ -1018,7 +1041,7 @@ own wasm_global_t* wasm_global_new(
     wasm_store_t* store, const wasm_globaltype_t* gt, const wasm_val_t* val)
 {
     std::shared_ptr<Global> glob = std::make_shared<Global>(ToWalrusValue(*val));
-    return new wasm_global_t(glob, static_cast<wasm_globaltype_t*>(gt->clone()));
+    return new wasm_global_t(glob, gt);
 }
 
 own wasm_globaltype_t* wasm_global_type(const wasm_global_t* glob)
@@ -1041,7 +1064,7 @@ own wasm_table_t* wasm_table_new(
     wasm_store_t* store, const wasm_tabletype_t* tt, wasm_ref_t* init)
 {
     std::shared_ptr<Table> table = std::make_shared<Table>(tt->valtype.type, tt->limits.min, tt->limits.max);
-    return new wasm_table_t(table, static_cast<wasm_tabletype_t*>(tt->clone()));
+    return new wasm_table_t(table, tt);
 }
 
 own wasm_tabletype_t* wasm_table_type(const wasm_table_t* table)
@@ -1094,7 +1117,7 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
 own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
     std::shared_ptr<Memory> mem = std::make_shared<Memory>(mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE);
-    return new wasm_memory_t(mem, static_cast<wasm_memorytype_t*>(mt->clone()));
+    return new wasm_memory_t(mem, mt);
 }
 
 own wasm_memorytype_t* wasm_memory_type(const wasm_memory_t* mem)
@@ -1204,22 +1227,22 @@ void wasm_instance_exports(const wasm_instance_t* ins, own wasm_extern_vec_t* ou
         case ExportType::Function: {
             std::shared_ptr<Function>& func = instance->functionPtr(itemIndex);
             item = std::static_pointer_cast<Object>(func);
-            type = const_cast<FunctionType*>(func->functionType());
+            type = const_cast<FunctionType*>(func->functionType()->clone());
             break;
         }
         case ExportType::Table: {
             item = std::static_pointer_cast<Object>(instance->tablePtr(itemIndex));
-            type = instance->module()->tableType(itemIndex);
+            type = instance->module()->tableType(itemIndex)->clone();
             break;
         }
         case ExportType::Memory: {
             item = std::static_pointer_cast<Object>(instance->memoryPtr(itemIndex));
-            type = instance->module()->memoryType(itemIndex);
+            type = instance->module()->memoryType(itemIndex)->clone();
             break;
         }
         case ExportType::Global: {
             item = std::static_pointer_cast<Object>(instance->globalPtr(itemIndex));
-            type = instance->module()->globalType(itemIndex);
+            type = instance->module()->globalType(itemIndex)->clone();
             break;
         }
         default: {
