@@ -63,22 +63,6 @@ public:
         delete m_resultTypes;
     }
 
-    FunctionType* clone() const
-    {
-        ValueTypeVector* param = new ValueTypeVector();
-        ValueTypeVector* result = new ValueTypeVector();
-        param->reserve(m_paramTypes->size());
-        result->reserve(m_resultTypes->size());
-        for (size_t i = 0; i < m_paramTypes->size(); i++) {
-            param->push_back(m_paramTypes->at(i));
-        }
-        for (size_t i = 0; i < m_resultTypes->size(); i++) {
-            result->push_back(m_resultTypes->at(i));
-        }
-
-        return new FunctionType(param, result);
-    }
-
     ValueTypeVector& param() const { return *m_paramTypes; }
     ValueTypeVector& result() const { return *m_resultTypes; }
     size_t paramStackSize() const { return m_paramStackSize; }
@@ -134,11 +118,6 @@ public:
     {
     }
 
-    GlobalType* clone() const
-    {
-        return new GlobalType(m_type, m_mutable);
-    }
-
     Value::Type type() const { return m_type; }
     bool isMutable() const { return m_mutable; }
 
@@ -155,11 +134,6 @@ public:
         , m_initialSize(initSize)
         , m_maximumSize(maxSize)
     {
-    }
-
-    TableType* clone() const
-    {
-        return new TableType(m_type, m_initialSize, m_maximumSize);
     }
 
     Value::Type type() const { return m_type; }
@@ -179,11 +153,6 @@ public:
         , m_initialSize(initSize)
         , m_maximumSize(maxSize)
     {
-    }
-
-    MemoryType* clone() const
-    {
-        return new MemoryType(m_initialSize, m_maximumSize);
     }
 
     uint32_t initialSize() const { return m_initialSize; }
