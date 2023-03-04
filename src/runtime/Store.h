@@ -25,6 +25,7 @@ namespace Walrus {
 class Engine;
 class Module;
 class Instance;
+class Extern;
 class FunctionType;
 
 class Store {
@@ -49,6 +50,11 @@ public:
         m_instances.push_back(instance);
     }
 
+    void appendExtern(Extern* ext)
+    {
+        m_externs.push_back(ext);
+    }
+
     void deleteModule(Module* module);
 
     Instance* getLastInstance()
@@ -62,6 +68,7 @@ private:
 
     Vector<Module*> m_modules;
     Vector<Instance*> m_instances;
+    Vector<Extern*> m_externs;
 
     // default FunctionTypes used for initialization of Data, Element and Global
     static FunctionType* g_defaultFunctionTypes[Value::Type::NUM];

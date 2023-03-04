@@ -533,8 +533,10 @@ static Value ToWalrusValue(const wasm_val_t& val)
     case WASM_F64:
         return Value(val.of.f64);
     case WASM_ANYREF:
+        // FIXME reference count
         return Value(const_cast<Object*>(val.of.ref->get()));
     case WASM_FUNCREF:
+        // FIXME reference count
         return Value(static_cast<Function*>(const_cast<Object*>(val.of.ref->get())));
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -545,6 +547,8 @@ static Value ToWalrusValue(const wasm_val_t& val)
 static void FromWalrusValues(wasm_val_t* results, const Value* values, const uint32_t num)
 {
     for (uint32_t i = 0; i < num; i++) {
+        // values have numbers only
+        ASSERT((values[i].type() != Value::Type::FuncRef) && (values[i].type() != Value::Type::ExternRef));
         results[i] = FromWalrusValue(values[i]);
     }
 }
@@ -552,6 +556,8 @@ static void FromWalrusValues(wasm_val_t* results, const Value* values, const uin
 static void ToWalrusValues(Value* results, const wasm_val_t* values, const uint32_t num)
 {
     for (uint32_t i = 0; i < num; i++) {
+        // values have numbers only
+        ASSERT((values[i].kind != WASM_ANYREF) && (values[i].kind != WASM_FUNCREF));
         results[i] = ToWalrusValue(values[i]);
     }
 }
@@ -830,8 +836,7 @@ void wasm_module_exports(const wasm_module_t* module, own wasm_exporttype_vec_t*
         uint32_t itemIndex = exportTypes[i]->itemIndex();
         switch (exportTypes[i]->exportType()) {
         case ExportType::Function:
-            // FIXME function type index may be wrong
-            type = new wasm_functype_t(mod->functionType(itemIndex));
+            type = new wasm_functype_t(mod->function(itemIndex)->functionType());
             break;
         case ExportType::Global:
             type = new wasm_globaltype_t(mod->globalType(itemIndex));

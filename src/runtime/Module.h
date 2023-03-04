@@ -336,7 +336,7 @@ public:
         return m_store;
     }
 
-    ModuleFunction* function(uint32_t index)
+    ModuleFunction* function(uint32_t index) const
     {
         ASSERT(index < m_functions.size());
         return m_functions[index];
@@ -376,7 +376,7 @@ public:
         return m_exports;
     }
 
-    Instance* instantiate(ExecutionState& state, const SharedObjectVector& imports);
+    Instance* instantiate(ExecutionState& state, const ExternVector& imports);
 
 private:
     Store* m_store;

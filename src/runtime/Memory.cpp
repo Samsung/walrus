@@ -16,11 +16,19 @@
 #include "Walrus.h"
 
 #include "Memory.h"
+#include "Store.h"
 #include "runtime/Trap.h"
 #include "runtime/Instance.h"
 #include "runtime/Module.h"
 
 namespace Walrus {
+
+Memory* Memory::createMemory(Store* store, uint32_t initialSizeInByte, uint32_t maximumSizeInByte)
+{
+    Memory* mem = new Memory(initialSizeInByte, maximumSizeInByte);
+    store->appendExtern(mem);
+    return mem;
+}
 
 Memory::Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte)
     : m_sizeInByte(initialSizeInByte)

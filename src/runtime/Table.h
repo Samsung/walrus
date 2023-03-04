@@ -22,12 +22,13 @@
 
 namespace Walrus {
 
+class Store;
 class ElementSegment;
 class Instance;
 
 class Table : public Extern {
 public:
-    Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize);
+    static Table* createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize);
 
     virtual Object::Kind kind() const override
     {
@@ -94,6 +95,8 @@ public:
     void init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
 private:
+    Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize);
+
     void throwException(ExecutionState& state) const;
 
     // Table has elements of reference type (FuncRef | ExternRef)

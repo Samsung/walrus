@@ -91,7 +91,7 @@ Module::~Module()
     }
 }
 
-Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& imports)
+Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports)
 {
     Instance* instance = new Instance(this);
 
@@ -122,7 +122,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
             if (!imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType())) {
                 Trap::throwException(state, "imported function type mismatch");
             }
-            instance->m_functions.push_back(std::static_pointer_cast<Function>(imports[i]));
+            instance->m_functions.push_back(imports[i]->asFunction());
             importFuncCount++;
             break;
         }
@@ -138,7 +138,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
                     || imports[i]->asTable()->maximumSize() > m_imports[i]->tableType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_tables.push_back(std::static_pointer_cast<Table>(imports[i]));
+            instance->m_tables.push_back(imports[i]->asTable());
             importTableCount++;
             break;
         }
@@ -153,7 +153,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
                     || imports[i]->asMemory()->maximumSizeInPageSize() > m_imports[i]->memoryType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_memories.push_back(std::static_pointer_cast<Memory>(imports[i]));
+            instance->m_memories.push_back(imports[i]->asMemory());
             importMemCount++;
             break;
         }
@@ -161,7 +161,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
             if (imports[i]->kind() != Object::GlobalKind) {
                 Trap::throwException(state, "incompatible import type");
             }
-            instance->m_globals.push_back(std::static_pointer_cast<Global>(imports[i]));
+            instance->m_globals.push_back(imports[i]->asGlobal());
             importGlobCount++;
             break;
         }
@@ -169,7 +169,7 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
             if (imports[i]->kind() != Object::TagKind) {
                 Trap::throwException(state, "incompatible import type");
             }
-            instance->m_tags.push_back(std::static_pointer_cast<Tag>(imports[i]));
+            instance->m_tags.push_back(imports[i]->asTag());
             importTagCount++;
             break;
         }
@@ -183,32 +183,32 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
     // init defined function
     for (size_t i = importFuncCount; i < m_functions.size(); i++) {
         ASSERT(i == instance->m_functions.size());
-        instance->m_functions.push_back(std::make_shared<DefinedFunction>(instance, function(i)));
+        instance->m_functions.push_back(DefinedFunction::createDefinedFunction(m_store, instance, function(i)));
     }
 
     // init table
     for (size_t i = importTableCount; i < m_tableTypes.size(); i++) {
         ASSERT(i == instance->m_tables.size());
-        instance->m_tables.push_back(std::make_shared<Table>(m_tableTypes[i]->type(), m_tableTypes[i]->initialSize(), m_tableTypes[i]->maximumSize()));
+        instance->m_tables.push_back(Table::createTable(m_store, m_tableTypes[i]->type(), m_tableTypes[i]->initialSize(), m_tableTypes[i]->maximumSize()));
     }
 
     // init memory
     for (size_t i = importMemCount; i < m_memoryTypes.size(); i++) {
         ASSERT(i == instance->m_memories.size());
-        instance->m_memories.push_back(std::make_shared<Memory>(m_memoryTypes[i]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i]->maximumSize() * Memory::s_memoryPageSize));
+        instance->m_memories.push_back(Memory::createMemory(m_store, m_memoryTypes[i]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i]->maximumSize() * Memory::s_memoryPageSize));
     }
 
     // init tag
     for (size_t i = importTagCount; i < m_tagTypes.size(); i++) {
         ASSERT(i == instance->m_tags.size());
-        instance->m_tags.push_back(std::make_shared<Tag>(m_functionTypes[m_tagTypes[i]->sigIndex()]));
+        instance->m_tags.push_back(Tag::createTag(m_store, m_functionTypes[m_tagTypes[i]->sigIndex()]));
     }
 
     // init global
     for (size_t i = importGlobCount; i < m_globalInfos.size(); i++) {
         ASSERT(i == instance->m_globals.size());
         auto& globalData = m_globalInfos[i];
-        instance->m_globals.push_back(std::make_shared<Global>(Value(globalData.first.type())));
+        instance->m_globals.push_back(Global::createGlobal(m_store, Value(globalData.first.type())));
 
         if (globalData.second) {
             struct RunData {
@@ -274,10 +274,10 @@ Instance* Module::instantiate(ExecutionState& state, const SharedObjectVector& i
             }
 
             const auto& fi = elem->functionIndex();
-            Table* table = instance->m_tables[elem->tableIndex()].get();
+            Table* table = instance->m_tables[elem->tableIndex()];
             for (size_t i = 0; i < fi.size(); i++) {
                 if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                    table->setElement(state, i + index, instance->m_functions[fi[i]].get());
+                    table->setElement(state, i + index, instance->m_functions[fi[i]]);
                 } else {
                     table->setElement(state, i + index, reinterpret_cast<void*>(Value::NullBits));
                 }

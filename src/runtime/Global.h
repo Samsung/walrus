@@ -17,15 +17,18 @@
 #ifndef __WalrusGlobal__
 #define __WalrusGlobal__
 
+#include "runtime/Store.h"
 #include "runtime/Object.h"
 
 namespace Walrus {
 
 class Global : public Extern {
 public:
-    Global(const Value& value)
-        : m_value(value)
+    static Global* createGlobal(Store* store, const Value& value)
     {
+        Global* glob = new Global(value);
+        store->appendExtern(glob);
+        return glob;
     }
 
     virtual Object::Kind kind() const override
@@ -55,6 +58,11 @@ public:
     }
 
 private:
+    Global(const Value& value)
+        : m_value(value)
+    {
+    }
+
     Value m_value;
 };
 
