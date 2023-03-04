@@ -17,6 +17,7 @@
 #ifndef __WalrusTag__
 #define __WalrusTag__
 
+#include "runtime/Store.h"
 #include "runtime/Object.h"
 
 namespace Walrus {
@@ -25,9 +26,11 @@ class FunctionType;
 
 class Tag : public Extern {
 public:
-    Tag(FunctionType* functionType)
-        : m_functionType(functionType)
+    static Tag* createTag(Store* store, FunctionType* functionType)
     {
+        Tag* tag = new Tag(functionType);
+        store->appendExtern(tag);
+        return tag;
     }
 
     virtual Object::Kind kind() const override
@@ -46,6 +49,11 @@ public:
     }
 
 private:
+    Tag(FunctionType* functionType)
+        : m_functionType(functionType)
+    {
+    }
+
     const FunctionType* m_functionType;
 };
 

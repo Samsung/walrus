@@ -138,12 +138,32 @@ public:
 };
 
 // Extern objects could be shared with other Module
-// Need to have a reference counter
 class Extern : public Object {
+public:
+#ifndef NDEBUG
+    // count the total number of created Extern objects
+    static size_t g_externCount;
+#endif
+
+    virtual ~Extern()
+    {
+#ifndef NDEBUG
+        ASSERT(g_externCount);
+        g_externCount--;
+#endif
+    }
+
+protected:
+    Extern()
+    {
+#ifndef NDEBUG
+        g_externCount++;
+#endif
+    }
 };
 
-typedef Vector<Object*, std::allocator<Object*>> ObjectVector;
-typedef std::vector<std::shared_ptr<Object>> SharedObjectVector;
+typedef Vector<Object*> ObjectVector;
+typedef Vector<Extern*> ExternVector;
 
 } // namespace Walrus
 

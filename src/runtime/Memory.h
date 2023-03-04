@@ -23,13 +23,15 @@
 
 namespace Walrus {
 
+class Store;
 class DataSegment;
 
 class Memory : public Extern {
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
 
-    Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte = std::numeric_limits<uint32_t>::max());
+    static Memory* createMemory(Store* store, uint32_t initialSizeInByte, uint32_t maximumSizeInByte = std::numeric_limits<uint32_t>::max());
+
     ~Memory();
 
     virtual Object::Kind kind() const override
@@ -110,6 +112,8 @@ public:
     void fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size);
 
 private:
+    Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte);
+
     void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
     inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const
     {
