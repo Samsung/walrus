@@ -23,6 +23,7 @@
 
 namespace Walrus {
 
+class Store;
 class Instance;
 class FunctionType;
 class ModuleFunction;
@@ -31,11 +32,6 @@ class ImportedFunction;
 
 class Function : public Extern {
 public:
-    Function(FunctionType* functionType)
-        : m_functionType(functionType)
-    {
-    }
-
     virtual Object::Kind kind() const override
     {
         return Object::FunctionKind;
@@ -71,6 +67,11 @@ public:
     }
 
 protected:
+    Function(FunctionType* functionType)
+        : m_functionType(functionType)
+    {
+    }
+
 #if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
     static inline void* currentStackPointer()
     {
@@ -104,9 +105,12 @@ protected:
 
 
 class DefinedFunction : public Function {
+    friend class Module;
+
 public:
-    DefinedFunction(Instance* instance,
-                    ModuleFunction* moduleFunction);
+    static DefinedFunction* createDefinedFunction(Store* store,
+                                                  Instance* instance,
+                                                  ModuleFunction* moduleFunction);
 
     ModuleFunction* moduleFunction() const { return m_moduleFunction; }
     Instance* instance() const { return m_instance; }
@@ -118,6 +122,9 @@ public:
     virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) override;
 
 protected:
+    DefinedFunction(Instance* instance,
+                    ModuleFunction* moduleFunction);
+
     Instance* m_instance;
     ModuleFunction* m_moduleFunction;
 };
@@ -126,6 +133,18 @@ class ImportedFunction : public Function {
 public:
     typedef std::function<void(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data)> ImportedFunctionCallback;
 
+    static ImportedFunction* createImportedFunction(Store* store,
+                                                    FunctionType* functionType,
+                                                    ImportedFunctionCallback callback,
+                                                    void* data);
+
+    virtual bool isImportedFunction() const override
+    {
+        return true;
+    }
+    virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) override;
+
+protected:
     ImportedFunction(FunctionType* functionType,
                      ImportedFunctionCallback callback,
                      void* data)
@@ -135,13 +154,6 @@ public:
     {
     }
 
-    virtual bool isImportedFunction() const override
-    {
-        return true;
-    }
-    virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) override;
-
-protected:
     ImportedFunctionCallback m_callback;
     void* m_data;
 };

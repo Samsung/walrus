@@ -22,6 +22,9 @@
 
 namespace Walrus {
 
+#ifndef NDEBUG
+size_t Extern::g_externCount;
+#endif
 FunctionType* Store::g_defaultFunctionTypes[Value::Type::NUM];
 
 Store::~Store()
@@ -35,6 +38,10 @@ Store::~Store()
         delete m_modules[i];
     }
 
+    for (size_t i = 0; i < m_externs.size(); i++) {
+        delete m_externs[i];
+    }
+
     Store::finalize();
 }
 
@@ -45,6 +52,11 @@ void Store::finalize()
             delete g_defaultFunctionTypes[i];
         }
     }
+
+#ifndef NDEBUG
+    // check if all Extern objects has been deallocated
+    ASSERT(Extern::g_externCount == 0);
+#endif
 }
 
 FunctionType* Store::getDefaultFunctionType(Value::Type type)

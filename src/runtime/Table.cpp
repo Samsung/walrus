@@ -16,11 +16,20 @@
 #include "Walrus.h"
 
 #include "Table.h"
+#include "Store.h"
 #include "runtime/Trap.h"
 #include "runtime/Instance.h"
 #include "runtime/Module.h"
 
 namespace Walrus {
+
+Table* Table::createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize)
+{
+    Table* tbl = new Table(type, initialSize, maximumSize);
+    store->appendExtern(tbl);
+
+    return tbl;
+}
 
 Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize)
     : m_type(type)

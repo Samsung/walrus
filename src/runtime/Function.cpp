@@ -17,11 +17,21 @@
 #include "Walrus.h"
 
 #include "runtime/Function.h"
+#include "runtime/Store.h"
 #include "interpreter/Interpreter.h"
 #include "runtime/Module.h"
 #include "runtime/Value.h"
 
 namespace Walrus {
+
+DefinedFunction* DefinedFunction::createDefinedFunction(Store* store,
+                                                        Instance* instance,
+                                                        ModuleFunction* moduleFunction)
+{
+    DefinedFunction* func = new DefinedFunction(instance, moduleFunction);
+    store->appendExtern(func);
+    return func;
+}
 
 DefinedFunction::DefinedFunction(Instance* instance,
                                  ModuleFunction* moduleFunction)
@@ -85,6 +95,18 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
     if (UNLIKELY(!isAlloca)) {
         delete[] functionStackBase;
     }
+}
+
+ImportedFunction* ImportedFunction::createImportedFunction(Store* store,
+                                                           FunctionType* functionType,
+                                                           ImportedFunctionCallback callback,
+                                                           void* data)
+{
+    ImportedFunction* func = new ImportedFunction(functionType,
+                                                  callback,
+                                                  data);
+    store->appendExtern(func);
+    return func;
 }
 
 void ImportedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
