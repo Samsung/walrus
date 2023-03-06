@@ -27,6 +27,28 @@
 
 namespace Walrus {
 
+Instance* Instance::newInstance(Module* module)
+{
+    // Must follow the order in Module::instantiate.
+    size_t numberOfRefs = module->numberOfMemoryTypes() + module->numberOfGlobalTypes()
+        + module->numberOfTableTypes() + module->numberOfFunctions() + module->numberOfTagTypes();
+
+    void* result = malloc(alignedSize() + numberOfRefs * sizeof(void*));
+
+    // Placement new.
+    new (result) Instance(module);
+
+    // Initialize data.
+    return reinterpret_cast<Instance*>(result);
+}
+
+void Instance::freeInstance(Instance* instance)
+{
+    instance->~Instance();
+
+    free(reinterpret_cast<void*>(instance));
+}
+
 Instance::Instance(Module* module)
     : m_module(module)
 {

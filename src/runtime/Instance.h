@@ -81,7 +81,8 @@ class Instance : public Object {
 public:
     typedef Vector<Instance*, std::allocator<Instance*>> InstanceVector;
 
-    Instance(Module* module);
+    static Instance* newInstance(Module* module);
+    static void freeInstance(Instance* instance);
 
     virtual Object::Kind kind() const override
     {
@@ -117,16 +118,26 @@ public:
     Memory* resolveExportMemory(std::string& name);
     Global* resolveExportGlobal(std::string& name);
 
-    const VectorWithFixedSize<Function*>& functions() { return m_functions; }
+    const Function* const* functions() { return m_functions; }
 
 private:
+    Instance(Module* module);
+    ~Instance() {}
+
+    static size_t alignedSize()
+    {
+        return (sizeof(Instance) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
+    }
+
     Module* m_module;
 
-    VectorWithFixedSize<Function*> m_functions;
-    VectorWithFixedSize<Table*> m_tables;
-    VectorWithFixedSize<Memory*> m_memories;
-    VectorWithFixedSize<Global*> m_globals;
-    VectorWithFixedSize<Tag*> m_tags;
+    // The initialization in Module::instantiate and Instance::newInstance must follow this order.
+    // Ordered in use frequency order.
+    Memory** m_memories;
+    Global** m_globals;
+    Table** m_tables;
+    Function** m_functions;
+    Tag** m_tags;
 
     VectorWithFixedSize<DataSegment, std::allocator<DataSegment>> m_dataSegments;
     VectorWithFixedSize<ElementSegment, std::allocator<ElementSegment>> m_elementSegments;

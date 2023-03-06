@@ -338,6 +338,11 @@ public:
         return m_store;
     }
 
+    size_t numberOfFunctions()
+    {
+        return m_functions.size();
+    }
+
     ModuleFunction* function(uint32_t index) const
     {
         ASSERT(index < m_functions.size());
@@ -350,10 +355,20 @@ public:
         return m_functionTypes[index];
     }
 
+    size_t numberOfTableTypes()
+    {
+        return m_tableTypes.size();
+    }
+
     TableType* tableType(uint32_t index) const
     {
         ASSERT(index < m_tableTypes.size());
         return m_tableTypes[index];
+    }
+
+    size_t numberOfMemoryTypes()
+    {
+        return m_memoryTypes.size();
     }
 
     MemoryType* memoryType(uint32_t index) const
@@ -362,10 +377,20 @@ public:
         return m_memoryTypes[index];
     }
 
+    size_t numberOfGlobalTypes()
+    {
+        return m_globalTypes.size();
+    }
+
     GlobalType* globalType(uint32_t index) const
     {
         ASSERT(index < m_globalTypes.size());
         return m_globalTypes[index];
+    }
+
+    size_t numberOfTagTypes()
+    {
+        return m_tagTypes.size();
     }
 
     const VectorWithFixedSize<ImportType*, std::allocator<ImportType*>>& imports() const
