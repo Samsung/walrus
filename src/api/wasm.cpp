@@ -1240,8 +1240,10 @@ uint32_t wasm_instance_func_index(const wasm_instance_t* ins, const wasm_func_t*
     Instance* instance = const_cast<Instance*>(ins->get());
     Function* func = f->get();
 
-    const VectorWithFixedSize<Function*>& funcs = instance->functions();
-    for (size_t i = 0; i < funcs.size(); i++) {
+    const Function* const* funcs = instance->functions();
+    size_t size = instance->module()->numberOfFunctions();
+
+    for (size_t i = 0; i < size; i++) {
         if (funcs[i] == func) {
             return i;
         }

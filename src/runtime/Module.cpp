@@ -101,13 +101,20 @@ Module::~Module()
 
 Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports)
 {
-    Instance* instance = new Instance(this);
+    Instance* instance = Instance::newInstance(this);
 
-    instance->m_functions.reserve(m_functions.size());
-    instance->m_globals.reserve(m_globalTypes.size());
-    instance->m_tables.reserve(m_tableTypes.size());
-    instance->m_memories.reserve(m_memoryTypes.size());
-    instance->m_tags.reserve(m_tagTypes.size());
+    void** references = reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+
+    // Must follow the order in Instance::newInstance.
+    instance->m_memories = reinterpret_cast<Memory**>(references);
+    references += numberOfMemoryTypes();
+    instance->m_globals = reinterpret_cast<Global**>(references);
+    references += numberOfGlobalTypes();
+    instance->m_tables = reinterpret_cast<Table**>(references);
+    references += numberOfTableTypes();
+    instance->m_functions = reinterpret_cast<Function**>(references);
+    references += numberOfFunctions();
+    instance->m_tags = reinterpret_cast<Tag**>(references);
 
     size_t funcIndex = 0;
     size_t globIndex = 0;
@@ -185,35 +192,30 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
     // init defined function
     while (funcIndex < m_functions.size()) {
-        ASSERT(funcIndex < instance->m_functions.size());
         instance->m_functions[funcIndex] = DefinedFunction::createDefinedFunction(m_store, instance, function(funcIndex));
         funcIndex++;
     }
 
     // init table
     while (tableIndex < m_tableTypes.size()) {
-        ASSERT(tableIndex < instance->m_tables.size());
         instance->m_tables[tableIndex] = Table::createTable(m_store, m_tableTypes[tableIndex]->type(), m_tableTypes[tableIndex]->initialSize(), m_tableTypes[tableIndex]->maximumSize());
         tableIndex++;
     }
 
     // init memory
     while (memIndex < m_memoryTypes.size()) {
-        ASSERT(memIndex < instance->m_memories.size());
         instance->m_memories[memIndex] = Memory::createMemory(m_store, m_memoryTypes[memIndex]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[memIndex]->maximumSize() * Memory::s_memoryPageSize);
         memIndex++;
     }
 
     // init tag
     while (tagIndex < m_tagTypes.size()) {
-        ASSERT(tagIndex < instance->m_tags.size());
         instance->m_tags[tagIndex] = Tag::createTag(m_store, m_functionTypes[m_tagTypes[tagIndex]->sigIndex()]);
         tagIndex++;
     }
 
     // init global
     while (globIndex < m_globalTypes.size()) {
-        ASSERT(globIndex < instance->m_globals.size());
         GlobalType* globalType = m_globalTypes[globIndex];
         instance->m_globals[globIndex] = Global::createGlobal(m_store, Value(globalType->type()));
 
@@ -280,7 +282,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                          &data);
             }
 
-            if (UNLIKELY(elem->tableIndex() >= instance->m_tables.size() || index >= instance->m_tables[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
+            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || index >= instance->m_tables[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
                 Trap::throwException(state, "out of bounds table access");
             }
 
@@ -345,11 +347,11 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
 #ifndef NDEBUG
     // check total size of data in vector
-    ASSERT(funcIndex == m_functions.size() && funcIndex == instance->m_functions.size());
-    ASSERT(globIndex == m_globalTypes.size() && globIndex == instance->m_globals.size());
-    ASSERT(tableIndex == m_tableTypes.size() && tableIndex == instance->m_tables.size());
-    ASSERT(memIndex == m_memoryTypes.size() && memIndex == instance->m_memories.size());
-    ASSERT(tagIndex == m_tagTypes.size() && tagIndex == instance->m_tags.size());
+    ASSERT(funcIndex == numberOfFunctions());
+    ASSERT(globIndex == numberOfGlobalTypes());
+    ASSERT(tableIndex == numberOfTableTypes());
+    ASSERT(memIndex == numberOfMemoryTypes());
+    ASSERT(tagIndex == numberOfTagTypes());
     ASSERT(m_datas.size() == instance->m_dataSegments.size());
     ASSERT(m_elements.size() == instance->m_elementSegments.size());
 #endif
