@@ -926,7 +926,7 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
-static void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
+void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
 {
     Operand* operands = instr->operands();
     JITArg cond;

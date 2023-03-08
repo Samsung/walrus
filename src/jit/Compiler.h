@@ -70,6 +70,8 @@ public:
         UnaryFloat,
         // Compare operation. (e.g. I32Eqz, I64LtU)
         Compare,
+        // Compare operation. (e.g. F32Eq, F64Lt)
+        CompareFloat,
         // Covert operation. (e.g. I64ExtendI32S, I32WrapI64)
         Convert,
     };
