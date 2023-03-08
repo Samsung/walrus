@@ -342,6 +342,20 @@ void WASMBinaryReaderJIT::OnBinaryExpr(uint32_t opcode)
     case Walrus::I64GeUOpcode:
         group = Walrus::Instruction::Compare;
         break;
+    case Walrus::F32EqOpcode:
+    case Walrus::F64EqOpcode:
+    case Walrus::F32NeOpcode:
+    case Walrus::F64NeOpcode:
+    case Walrus::F32LtOpcode:
+    case Walrus::F64LtOpcode:
+    case Walrus::F32GtOpcode:
+    case Walrus::F64GtOpcode:
+    case Walrus::F32LeOpcode:
+    case Walrus::F64LeOpcode:
+    case Walrus::F32GeOpcode:
+    case Walrus::F64GeOpcode:
+        group = Walrus::Instruction::CompareFloat;
+        break;
     default:
         break;
     }

@@ -664,6 +664,12 @@ JITModule* JITCompiler::compile()
             }
             break;
         }
+        case Instruction::CompareFloat: {
+            if (emitFloatCompare(m_compiler, item->asInstruction())) {
+                item = item->next();
+            }
+            break;
+        }
         case Instruction::Convert: {
             emitConvert(m_compiler, item->asInstruction());
             break;
