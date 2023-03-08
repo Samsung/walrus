@@ -16,6 +16,8 @@
 
 /* Only included by jit-backend.cc */
 
+void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type);
+
 using f32Function2Param = std::add_pointer<sljit_f32(sljit_f32, sljit_f32)>::type;
 using f64Function2Param = std::add_pointer<sljit_f64(sljit_f64, sljit_f64)>::type;
 using f32Function1Param = std::add_pointer<sljit_f32(sljit_f32)>::type;
@@ -308,4 +310,102 @@ static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_
 
     sljit_emit_fselect(compiler, type, targetReg, args[0].arg, args[0].argw, args[1].arg);
     MOVE_FROM_FREG(compiler, movOpcode, args[2].arg, args[2].argw, targetReg);
+}
+
+static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operand = instr->operands();
+    sljit_s32 opcode, type;
+    JITArg params[3];
+
+    for (Index i = 0; i < instr->paramCount(); ++i, operand++) {
+        floatOperandToArg(compiler, operand, params[i], SLJIT_FR(i));
+    }
+
+    switch (instr->opcode()) {
+    case F32EqOpcode:
+        opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_EQUAL;
+        type = SLJIT_ORDERED_EQUAL;
+        break;
+    case F32NeOpcode:
+        opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_NOT_EQUAL;
+        type = SLJIT_ORDERED_NOT_EQUAL;
+        break;
+    case F32LtOpcode:
+        opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_LESS;
+        type = SLJIT_ORDERED_LESS;
+        break;
+    case F32LeOpcode:
+        opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_LESS_EQUAL;
+        type = SLJIT_ORDERED_LESS_EQUAL;
+        break;
+    case F32GtOpcode:
+        opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_GREATER;
+        type = SLJIT_ORDERED_GREATER;
+        break;
+    case F32GeOpcode:
+        opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_GREATER_EQUAL;
+        type = SLJIT_ORDERED_GREATER_EQUAL;
+        break;
+    case F64EqOpcode:
+        opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_EQUAL;
+        type = SLJIT_ORDERED_EQUAL;
+        break;
+    case F64NeOpcode:
+        opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_NOT_EQUAL;
+        type = SLJIT_ORDERED_NOT_EQUAL;
+        break;
+    case F64LtOpcode:
+        opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_LESS;
+        type = SLJIT_ORDERED_LESS;
+        break;
+    case F64LeOpcode:
+        opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_LESS_EQUAL;
+        type = SLJIT_ORDERED_LESS_EQUAL;
+        break;
+    case F64GtOpcode:
+        opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_GREATER;
+        type = SLJIT_ORDERED_GREATER;
+        break;
+    case F64GeOpcode:
+        opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_GREATER_EQUAL;
+        type = SLJIT_ORDERED_GREATER_EQUAL;
+        break;
+    default:
+        WABT_UNREACHABLE;
+    }
+
+    if (operand->location.type != Operand::Unused || instr->next()->asInstruction()->opcode() == SelectOpcode) {
+        sljit_emit_fop1(compiler, opcode, params[0].arg, params[0].argw,
+                        params[1].arg, params[1].argw);
+    }
+
+    if (operand->location.type != Operand::Unused) {
+        floatOperandToArg(compiler, operand, params[0], SLJIT_FR0);
+        sljit_emit_op_flags(compiler, SLJIT_MOV32, params[0].arg, params[0].argw,
+                            type);
+        return false;
+    }
+
+    Instruction* next_instr = instr->next()->asInstruction();
+
+    if (next_instr->opcode() == SelectOpcode) {
+        emitSelect(compiler, next_instr, type);
+        return true;
+    }
+
+    assert(next_instr->opcode() == BrIfOpcode || next_instr->opcode() == InterpBrUnlessOpcode);
+
+    if (next_instr->opcode() == InterpBrUnlessOpcode) {
+        type ^= 0x1;
+    }
+
+    if ((operand[-1].location.valueInfo & LocationInfo::kSizeMask) == 1) {
+        type |= SLJIT_32;
+    }
+
+    sljit_jump* jump = sljit_emit_fcmp(compiler, type, params[0].arg, params[0].argw,
+                                       params[1].arg, params[1].argw);
+    next_instr->value().targetLabel->jumpFrom(jump);
+    return true;
 }

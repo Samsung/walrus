@@ -376,7 +376,7 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
 }
 
-static void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
+void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
 {
     Operand* operands = instr->operands();
     assert(instr->opcode() == SelectOpcode && instr->paramCount() == 3);
