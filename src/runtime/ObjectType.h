@@ -116,6 +116,20 @@ public:
         , m_type(type)
         , m_mutable(mut)
     {
+#ifndef NDEBUG
+        switch (type) {
+        case Value::I32:
+        case Value::I64:
+        case Value::F32:
+        case Value::F64:
+        case Value::FuncRef:
+        case Value::ExternRef:
+            return;
+        default:
+            ASSERT_NOT_REACHED();
+            return;
+        }
+#endif
     }
 
     Value::Type type() const { return m_type; }
