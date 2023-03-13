@@ -340,6 +340,19 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     return instance;
 }
 
+void Module::postParsing()
+{
+    // shrink Vectors
+    m_functions.shrinkToFit();
+
+    m_functionTypes.shrinkToFit();
+    m_tableTypes.shrinkToFit();
+    m_memoryTypes.shrinkToFit();
+    m_tagTypes.shrinkToFit();
+
+    m_globalInfos.shrinkToFit();
+}
+
 #if !defined(NDEBUG)
 void ModuleFunction::dumpByteCode()
 {

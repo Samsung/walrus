@@ -38,9 +38,9 @@ private:
                                           size_t programCounter,
                                           uint8_t* bp,
                                           Instance* instance,
-                                          const Vector<Memory*>& memories,
-                                          const Vector<Table*>& tables,
-                                          const Vector<Global*>& globals);
+                                          const VectorWithFixedSize<Memory*>& memories,
+                                          const VectorWithFixedSize<Table*>& tables,
+                                          const VectorWithFixedSize<Global*>& globals);
 
     static void callOperation(ExecutionState& state,
                               size_t& programCounter,

@@ -120,14 +120,14 @@ public:
 private:
     Module* m_module;
 
-    Vector<Function*> m_functions;
-    Vector<Table*> m_tables;
-    Vector<Memory*> m_memories;
-    Vector<Global*> m_globals;
-    Vector<Tag*> m_tags;
+    VectorWithFixedSize<Function*> m_functions;
+    VectorWithFixedSize<Table*> m_tables;
+    VectorWithFixedSize<Memory*> m_memories;
+    VectorWithFixedSize<Global*> m_globals;
+    VectorWithFixedSize<Tag*> m_tags;
 
-    Vector<DataSegment, std::allocator<DataSegment>> m_dataSegments;
-    Vector<ElementSegment, std::allocator<ElementSegment>> m_elementSegments;
+    VectorWithFixedSize<DataSegment, std::allocator<DataSegment>> m_dataSegments;
+    VectorWithFixedSize<ElementSegment, std::allocator<ElementSegment>> m_elementSegments;
 };
 } // namespace Walrus
 

@@ -363,18 +363,22 @@ public:
     GlobalType* globalType(uint32_t index) const
     {
         ASSERT(index < m_globalInfos.size());
+        // m_globalInfos vector should be shrinked ahead
+        ASSERT(m_globalInfos.isShrinked());
         return const_cast<GlobalType*>(&m_globalInfos[index].first);
     }
 
-    const Vector<ImportType*, std::allocator<ImportType*>>& imports() const
+    const VectorWithFixedSize<ImportType*, std::allocator<ImportType*>>& imports() const
     {
         return m_imports;
     }
 
-    const Vector<ExportType*, std::allocator<ExportType*>>& exports() const
+    const VectorWithFixedSize<ExportType*, std::allocator<ExportType*>>& exports() const
     {
         return m_exports;
     }
+
+    void postParsing();
 
     Instance* instantiate(ExecutionState& state, const ExternVector& imports);
 
@@ -384,13 +388,13 @@ private:
     uint32_t m_version;
     uint32_t m_start;
 
-    Vector<ImportType*, std::allocator<ImportType*>> m_imports;
-    Vector<ExportType*, std::allocator<ExportType*>> m_exports;
+    VectorWithFixedSize<ImportType*, std::allocator<ImportType*>> m_imports;
+    VectorWithFixedSize<ExportType*, std::allocator<ExportType*>> m_exports;
 
     Vector<ModuleFunction*, std::allocator<ModuleFunction*>> m_functions;
 
-    Vector<Data*, std::allocator<Data*>> m_datas;
-    Vector<Element*, std::allocator<Element*>> m_elements;
+    VectorWithFixedSize<Data*, std::allocator<Data*>> m_datas;
+    VectorWithFixedSize<Element*, std::allocator<Element*>> m_elements;
 
     FunctionTypeVector m_functionTypes;
     TableTypeVector m_tableTypes;
