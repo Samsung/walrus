@@ -21,6 +21,7 @@
 #include "interpreter/Interpreter.h"
 #include "runtime/Module.h"
 #include "runtime/Value.h"
+#include "runtime/JITExec.h"
 
 namespace Walrus {
 
@@ -98,7 +99,13 @@ void DefinedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCo
         ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
     }
 
-    auto resultOffsets = Interpreter::interpret(newState, functionStackBase);
+    ByteCodeStackOffset* resultOffsets;
+
+    if (m_moduleFunction->jitFunction() != nullptr) {
+        resultOffsets = m_moduleFunction->jitFunction()->call(newState, functionStackBase);
+    } else {
+        resultOffsets = Interpreter::interpret(newState, functionStackBase);
+    }
 
     offsets += parameterOffsetCount;
     for (size_t i = 0; i < resultOffsetCount; i++) {
