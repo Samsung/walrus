@@ -20,6 +20,7 @@
 #include "runtime/ExecutionState.h"
 #include "runtime/Function.h"
 #include "runtime/Instance.h"
+#include "runtime/JITExec.h"
 #include "runtime/Module.h"
 #include "runtime/Tag.h"
 #include "interpreter/ByteCode.h"
@@ -54,7 +55,10 @@ private:
 
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
         ByteCodeStackOffset* resultOffsets;
-        if (considerException) {
+
+        if (m_moduleFunction->jitFunction() != nullptr) {
+            resultOffsets = m_moduleFunction->jitFunction()->call(newState, functionStackBase);
+        } else if (considerException) {
             while (true) {
                 try {
                     resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
