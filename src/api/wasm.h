@@ -87,7 +87,8 @@ typedef double float64_t;
     size_t, own wasm_##name##_t ptr_or_none const[]); \
   WASM_API_EXTERN void wasm_##name##_vec_copy( \
     own wasm_##name##_vec_t* out, const wasm_##name##_vec_t*); \
-  WASM_API_EXTERN void wasm_##name##_vec_delete(own wasm_##name##_vec_t*);
+  WASM_API_EXTERN void wasm_##name##_vec_delete(own wasm_##name##_vec_t*);  \
+  WASM_API_EXTERN void wasm_##name##_vec_delete_with_size(own wasm_##name##_vec_t*, size_t);
 
 
 // Byte vectors
@@ -372,7 +373,6 @@ WASM_API_EXTERN uint32_t wasm_frame_func_index(const wasm_frame_t*);
 WASM_API_EXTERN size_t wasm_frame_func_offset(const wasm_frame_t*);
 WASM_API_EXTERN size_t wasm_frame_module_offset(const wasm_frame_t*);
 
-
 // Traps
 
 typedef wasm_name_t wasm_message_t;  // null terminated
@@ -522,6 +522,7 @@ WASM_API_EXTERN own wasm_instance_t* wasm_instance_new(
 
 WASM_API_EXTERN void wasm_instance_exports(const wasm_instance_t*, own wasm_extern_vec_t* out);
 
+WASM_API_EXTERN uint32_t wasm_instance_func_index(const wasm_instance_t*, const wasm_func_t*);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Convenience
