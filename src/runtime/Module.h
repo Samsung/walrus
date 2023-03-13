@@ -29,6 +29,8 @@ namespace Walrus {
 class Store;
 class Module;
 class Instance;
+class JITFunction;
+class JITModule;
 
 struct WASMParsingResult;
 
@@ -174,6 +176,7 @@ public:
     };
 
     ModuleFunction(FunctionType* functionType);
+    ~ModuleFunction();
 
     bool hasTryCatch() const { return m_hasTryCatch; }
     uint16_t requiredStackSize() const { return m_requiredStackSize; }
@@ -218,6 +221,17 @@ public:
         return m_catchInfo;
     }
 
+    void setJITFunction(JITFunction* jitFunction)
+    {
+        ASSERT(m_jitFunction == nullptr);
+        m_jitFunction = jitFunction;
+    }
+
+    JITFunction* jitFunction()
+    {
+        return m_jitFunction;
+    }
+
 private:
     bool m_hasTryCatch;
     uint16_t m_requiredStackSize;
@@ -229,6 +243,7 @@ private:
     Vector<std::pair<Value, size_t>, std::allocator<std::pair<Value, size_t>>> m_constantDebugData;
 #endif
     Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
+    JITFunction* m_jitFunction;
 };
 
 class Data {
@@ -321,6 +336,7 @@ private:
 
 class Module : public Object {
     friend class wabt::WASMBinaryReader;
+    friend class JITCompiler;
 
 public:
     Module(Store* store, WASMParsingResult& result);
@@ -411,6 +427,8 @@ public:
 
     Instance* instantiate(ExecutionState& state, const ExternVector& imports);
 
+    void jitCompile(int verboseLevel);
+
 private:
     Store* m_store;
     bool m_seenStartAttribute;
@@ -430,6 +448,7 @@ private:
     TableTypeVector m_tableTypes;
     MemoryTypeVector m_memoryTypes;
     TagTypeVector m_tagTypes;
+    JITModule* m_jitModule;
 };
 
 } // namespace Walrus
