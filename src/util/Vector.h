@@ -346,20 +346,26 @@ public:
 
     void shrinkToFit()
     {
+        ASSERT(m_size <= m_capacity);
         if (m_size != m_capacity) {
             if (m_size) {
+                ASSERT(m_buffer);
                 T* newBuffer = Allocator().allocate(m_size);
                 VectorCopier<T>::copy(newBuffer, m_buffer, m_size);
 
-                size_t oldC = m_capacity;
-                m_capacity = m_size;
-                if (m_buffer)
-                    Allocator().deallocate(m_buffer, oldC);
+                Allocator().deallocate(m_buffer, m_capacity);
+
                 m_buffer = newBuffer;
+                m_capacity = m_size;
             } else {
                 clear();
             }
         }
+    }
+
+    bool isShrinked() const
+    {
+        return m_size == m_capacity;
     }
 
     void reserve(size_t newCapacity)
@@ -443,91 +449,94 @@ protected:
 };
 
 template <typename T,
-          typename Allocator = std::allocator<T>,
-          typename ComputeReservedCapacityFunction = VectorDefaultComputeReservedCapacityFunction>
-class VectorWithNoSize {
+          typename Allocator = std::allocator<T>>
+class VectorWithFixedSize {
 public:
-    VectorWithNoSize()
+    VectorWithFixedSize()
         : m_buffer(nullptr)
+        , m_size(0)
         , m_capacity(0)
     {
+        // uninitialized
     }
 
-    const VectorWithNoSize<T, Allocator, ComputeReservedCapacityFunction>&
-    operator=(
-        const VectorWithNoSize<T, Allocator, ComputeReservedCapacityFunction>&
-            other)
-        = delete;
-    VectorWithNoSize(
-        const VectorWithNoSize<T, Allocator, ComputeReservedCapacityFunction>&
-            other,
-        const T& newItem)
-        = delete;
-    ~VectorWithNoSize()
+    VectorWithFixedSize(size_t newCapacity)
+        : m_buffer(nullptr)
+        , m_size(0)
+        , m_capacity(newCapacity)
     {
-        if (m_buffer)
-            Allocator().deallocate(m_buffer, m_capacity);
-    }
-
-    void pushBack(const T& val, size_t newSize)
-    {
-        if (m_capacity <= (newSize)) {
-            size_t oldc = m_capacity;
-            ComputeReservedCapacityFunction f;
-            m_capacity = f(newSize);
-            T* newBuffer = Allocator().allocate(m_capacity);
-            VectorCopier<T>::copy(newBuffer, m_buffer, newSize - 1);
-
-            if (m_buffer)
-                Allocator().deallocate(m_buffer, oldc);
-            m_buffer = newBuffer;
+        if (newCapacity) {
+            m_buffer = Allocator().allocate(newCapacity);
         }
-        m_buffer[newSize - 1] = val;
     }
 
+    const VectorWithFixedSize<T, Allocator>& operator=(
+        const VectorWithFixedSize<T, Allocator>& other)
+        = delete;
+    VectorWithFixedSize(const VectorWithFixedSize<T, Allocator>& other,
+                        const T& newItem)
+        = delete;
+
+    ~VectorWithFixedSize()
+    {
+        clear();
+    }
+
+    void pushBack(const T& val)
+    {
+        ASSERT(m_size < m_capacity);
+        m_buffer[m_size] = val;
+        m_size++;
+    }
+
+    void push_back(const T& val) { pushBack(val); }
+
+    size_t size() const { return m_size; }
     size_t capacity() const { return m_capacity; }
 
-    T& operator[](const size_t idx) { return m_buffer[idx]; }
+    T& operator[](const size_t idx)
+    {
+        ASSERT(idx < m_size);
+        return m_buffer[idx];
+    }
 
-    const T& operator[](const size_t idx) const { return m_buffer[idx]; }
+    const T& operator[](const size_t idx) const
+    {
+        ASSERT(idx < m_size);
+        return m_buffer[idx];
+    }
 
     T* data() { return m_buffer; }
-
     const T* data() const { return m_buffer; }
+
+    T& back()
+    {
+        ASSERT(m_size);
+        return m_buffer[m_size - 1];
+    }
+
+    using iterator = T*;
+    constexpr iterator begin() const { return m_buffer; }
+    constexpr iterator end() const { return m_buffer + m_size; }
 
     void clear()
     {
         if (m_buffer) {
+            ASSERT(m_capacity);
             Allocator().deallocate(m_buffer, m_capacity);
         }
         m_buffer = nullptr;
+        m_size = 0;
         m_capacity = 0;
     }
 
-    void resize(size_t oldSize, size_t newSize, const T& val = T())
+    void reserve(size_t newCapacity)
     {
-        if (newSize) {
-            if (newSize > m_capacity) {
-                ComputeReservedCapacityFunction f;
-                size_t newCapacity = f(newSize);
-                T* newBuffer = Allocator().allocate(newCapacity);
-                VectorCopier<T>::copy(newBuffer, m_buffer, std::min(oldSize, newSize));
-
-                for (size_t i = oldSize; i < newSize; i++) {
-                    newBuffer[i] = val;
-                }
-
-                if (m_buffer)
-                    Allocator().deallocate(m_buffer, m_capacity);
-                m_capacity = newCapacity;
-                m_buffer = newBuffer;
-            } else {
-                for (size_t i = oldSize; i < newSize; i++) {
-                    m_buffer[i] = val;
-                }
-            }
-        } else {
-            clear();
+        // reserve should be called for uninitialized Vector
+        ASSERT(!m_buffer && !m_size && !m_capacity);
+        if (newCapacity) {
+            m_buffer = Allocator().allocate(newCapacity);
+            m_capacity = newCapacity;
         }
     }
 
@@ -535,6 +544,7 @@ public:
 
 protected:
     T* m_buffer;
+    size_t m_size;
     size_t m_capacity;
 };
 
