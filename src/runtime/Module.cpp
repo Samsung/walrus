@@ -24,6 +24,7 @@
 #include "runtime/Memory.h"
 #include "runtime/Tag.h"
 #include "runtime/Trap.h"
+#include "runtime/JITExec.h"
 #include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 #include "parser/WASMParser.h"
@@ -34,6 +35,7 @@ ModuleFunction::ModuleFunction(FunctionType* functionType)
     : m_hasTryCatch(false)
     , m_requiredStackSize(std::max(functionType->paramStackSize(), functionType->resultStackSize()))
     , m_functionType(functionType)
+    , m_jitFunction(nullptr)
 {
 }
 
@@ -52,8 +54,16 @@ Module::Module(Store* store, WASMParsingResult& result)
     , m_tableTypes(std::move(result.m_tableTypes))
     , m_memoryTypes(std::move(result.m_memoryTypes))
     , m_tagTypes(std::move(result.m_tagTypes))
+    , m_jitModule(nullptr)
 {
     store->appendModule(this);
+}
+
+ModuleFunction::~ModuleFunction()
+{
+    if (m_jitFunction != nullptr) {
+        delete m_jitFunction;
+    }
 }
 
 Module::~Module()
@@ -96,6 +106,10 @@ Module::~Module()
 
     for (size_t i = 0; i < m_tagTypes.size(); i++) {
         delete m_tagTypes[i];
+    }
+
+    if (m_jitModule != nullptr) {
+        delete m_jitModule;
     }
 }
 

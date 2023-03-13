@@ -37,6 +37,9 @@ struct ArgParser {
     std::vector<std::string> fileNames;
 };
 
+static bool useJIT = false;
+static int jitVerbose = 0;
+
 using namespace Walrus;
 
 static void printI32(int32_t v)
@@ -116,7 +119,12 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         tr.exception = Exception::create(parseResult.second);
         return tr;
     }
+
     auto module = parseResult.first;
+    if (useJIT) {
+        module->jitCompile(jitVerbose);
+    }
+
     const auto& importTypes = module->imports();
 
     ExternVector importValues;
@@ -952,6 +960,14 @@ static void parseArguments(int argc, char* argv[], ArgParser& argParser)
 
             std::advance(it, 1);
             argParser.exportToRun = nonstd::to_string(*it);
+        } else if (*it == "--jit") {
+            useJIT = true;
+        } else if (*it == "--jit-verbose") {
+            jitVerbose = 1;
+        } else if (*it == "--jit-verbose-color") {
+            jitVerbose = 2;
+        } else if (auto arg = std::string(*it); endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
+            argParser.fileNames.emplace_back(*it);
         } else {
             auto arg = nonstd::to_string(*it);
             if (endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
