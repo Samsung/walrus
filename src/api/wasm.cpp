@@ -262,6 +262,7 @@ struct wasm_ref_t {
     wasm_ref_t(const Object* o)
         : obj(o)
     {
+        ASSERT(!!o);
     }
 
     virtual ~wasm_ref_t() {}
@@ -419,6 +420,12 @@ struct wasm_trap_t : wasm_ref_t {
         : wasm_ref_t(t)
     {
         wasm_byte_vec_copy(&message, msg);
+    }
+
+    wasm_trap_t(own const Trap* t, const std::string& msg)
+        : wasm_ref_t(t)
+    {
+        wasm_byte_vec_new(&message, msg.length(), msg.data());
     }
 
     virtual ~wasm_trap_t()
@@ -780,6 +787,9 @@ void wasm_trap_trace(const wasm_trap_t*, own wasm_frame_vec_t* out)
 own wasm_module_t* wasm_module_new(wasm_store_t* store, const wasm_byte_vec_t* binary)
 {
     auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size);
+    if (!parseResult.first.hasValue()) {
+        return nullptr;
+    }
     return new wasm_module_t(parseResult.first.unwrap());
 }
 
@@ -1177,7 +1187,8 @@ own wasm_instance_t* wasm_instance_new(
                                &data);
 
     if (trapResult.exception) {
-        // TODO
+        // FIXME
+        *outTrap = new wasm_trap_t(new Trap(), trapResult.exception->message());
         return nullptr;
     }
 
@@ -1221,6 +1232,22 @@ void wasm_instance_exports(const wasm_instance_t* ins, own wasm_extern_vec_t* ou
         }
         }
     }
+}
+
+// FIXME
+uint32_t wasm_instance_func_index(const wasm_instance_t* ins, const wasm_func_t* f)
+{
+    Instance* instance = const_cast<Instance*>(ins->get());
+    Function* func = f->get();
+
+    const VectorWithFixedSize<Function*>& funcs = instance->functions();
+    for (size_t i = 0; i < funcs.size(); i++) {
+        if (funcs[i] == func) {
+            return i;
+        }
+    }
+
+    return wasm_limits_max_default;
 }
 
 // Vector Types
@@ -1298,31 +1325,39 @@ void wasm_val_vec_delete(own wasm_val_vec_t* vec)
     vec->size = 0;
 }
 
-#define WASM_IMPL_VEC_OWN(name)                                           \
-    WASM_IMPL_VEC_BASE(name, *)                                           \
-    void wasm_##name##_vec_new(own wasm_##name##_vec_t* vec, size_t size, \
-                               own wasm_##name##_t* const src[])          \
-    {                                                                     \
-        wasm_##name##_vec_new_uninitialized(vec, size);                   \
-        for (size_t i = 0; i < size; ++i) {                               \
-            vec->data[i] = src[i];                                        \
-        }                                                                 \
-    }                                                                     \
-    void wasm_##name##_vec_copy(own wasm_##name##_vec_t* out,             \
-                                const wasm_##name##_vec_t* vec)           \
-    {                                                                     \
-        wasm_##name##_vec_new_uninitialized(out, vec->size);              \
-        for (size_t i = 0; i < vec->size; ++i) {                          \
-            out->data[i] = wasm_##name##_copy(vec->data[i]);              \
-        }                                                                 \
-    }                                                                     \
-    void wasm_##name##_vec_delete(wasm_##name##_vec_t* vec)               \
-    {                                                                     \
-        for (size_t i = 0; i < vec->size; ++i) {                          \
-            delete vec->data[i];                                          \
-        }                                                                 \
-        delete[] vec->data;                                               \
-        vec->size = 0;                                                    \
+#define WASM_IMPL_VEC_OWN(name)                                                    \
+    WASM_IMPL_VEC_BASE(name, *)                                                    \
+    void wasm_##name##_vec_new(own wasm_##name##_vec_t* vec, size_t size,          \
+                               own wasm_##name##_t* const src[])                   \
+    {                                                                              \
+        wasm_##name##_vec_new_uninitialized(vec, size);                            \
+        for (size_t i = 0; i < size; ++i) {                                        \
+            vec->data[i] = src[i];                                                 \
+        }                                                                          \
+    }                                                                              \
+    void wasm_##name##_vec_copy(own wasm_##name##_vec_t* out,                      \
+                                const wasm_##name##_vec_t* vec)                    \
+    {                                                                              \
+        wasm_##name##_vec_new_uninitialized(out, vec->size);                       \
+        for (size_t i = 0; i < vec->size; ++i) {                                   \
+            out->data[i] = wasm_##name##_copy(vec->data[i]);                       \
+        }                                                                          \
+    }                                                                              \
+    void wasm_##name##_vec_delete(wasm_##name##_vec_t* vec)                        \
+    {                                                                              \
+        for (size_t i = 0; i < vec->size; ++i) {                                   \
+            delete vec->data[i];                                                   \
+        }                                                                          \
+        delete[] vec->data;                                                        \
+        vec->size = 0;                                                             \
+    }                                                                              \
+    void wasm_##name##_vec_delete_with_size(wasm_##name##_vec_t* vec, size_t size) \
+    {                                                                              \
+        for (size_t i = 0; i < size; ++i) {                                        \
+            delete vec->data[i];                                                   \
+        }                                                                          \
+        delete[] vec->data;                                                        \
+        vec->size = 0;                                                             \
     }
 
 //WASM_IMPL_VEC_OWN(frame);
