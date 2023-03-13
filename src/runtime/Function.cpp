@@ -21,6 +21,7 @@
 #include "interpreter/Interpreter.h"
 #include "runtime/Module.h"
 #include "runtime/Value.h"
+#include "runtime/JITExec.h"
 
 namespace Walrus {
 
@@ -88,7 +89,13 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
     auto localSize = m_moduleFunction->requiredStackSizeDueToLocal();
     memset(functionStackPointer, 0, localSize);
 
-    auto resultOffsets = Interpreter::interpret(newState, functionStackBase);
+    ByteCodeStackOffset* resultOffsets;
+
+    if (m_moduleFunction->jitFunction() != nullptr) {
+        resultOffsets = m_moduleFunction->jitFunction()->call(newState, functionStackBase);
+    } else {
+        resultOffsets = Interpreter::interpret(newState, functionStackBase);
+    }
 
     const FunctionType* ft = functionType();
     const ValueTypeVector& resultTypeInfo = ft->result();
