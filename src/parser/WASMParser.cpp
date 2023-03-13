@@ -1892,6 +1892,7 @@ std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, 
         return std::make_pair(nullptr, error);
     }
 
+    module->postParsing();
     return std::make_pair(module, std::string());
 }
 

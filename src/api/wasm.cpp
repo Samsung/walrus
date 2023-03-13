@@ -794,7 +794,7 @@ bool wasm_module_validate(wasm_store_t* store, const wasm_byte_vec_t* binary)
 
 void wasm_module_imports(const wasm_module_t* module, own wasm_importtype_vec_t* out)
 {
-    const Vector<ImportType*, std::allocator<ImportType*>>& importTypes = module->get()->imports();
+    const VectorWithFixedSize<ImportType*, std::allocator<ImportType*>>& importTypes = module->get()->imports();
 
     wasm_importtype_vec_new_uninitialized(out, importTypes.size());
     own wasm_externtype_t* type;
@@ -825,7 +825,7 @@ void wasm_module_imports(const wasm_module_t* module, own wasm_importtype_vec_t*
 void wasm_module_exports(const wasm_module_t* module, own wasm_exporttype_vec_t* out)
 {
     const Module* mod = module->get();
-    const Vector<ExportType*, std::allocator<ExportType*>>& exportTypes = mod->exports();
+    const VectorWithFixedSize<ExportType*, std::allocator<ExportType*>>& exportTypes = mod->exports();
 
     wasm_exporttype_vec_new_uninitialized(out, exportTypes.size());
     own wasm_externtype_t* type;
@@ -1188,7 +1188,7 @@ own wasm_instance_t* wasm_instance_new(
 void wasm_instance_exports(const wasm_instance_t* ins, own wasm_extern_vec_t* out)
 {
     Instance* instance = const_cast<Instance*>(ins->get());
-    const Vector<ExportType*, std::allocator<ExportType*>>& exports = instance->module()->exports();
+    const VectorWithFixedSize<ExportType*, std::allocator<ExportType*>>& exports = instance->module()->exports();
 
     wasm_extern_vec_new_uninitialized(out, exports.size());
     for (size_t i = 0; i < exports.size(); i++) {
