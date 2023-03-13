@@ -29,6 +29,8 @@ namespace Walrus {
 class Store;
 class Module;
 class Instance;
+class JITFunction;
+class JITModule;
 
 struct WASMParsingResult;
 
@@ -174,6 +176,7 @@ public:
     };
 
     ModuleFunction(FunctionType* functionType);
+    ~ModuleFunction();
 
     FunctionType* functionType() const { return m_functionType; }
     uint32_t requiredStackSize() const { return m_requiredStackSize; }
@@ -218,6 +221,17 @@ public:
         return m_catchInfo;
     }
 
+    void setJITFunction(JITFunction* jitFunction)
+    {
+        ASSERT(m_jitFunction == nullptr);
+        m_jitFunction = jitFunction;
+    }
+
+    JITFunction* jitFunction()
+    {
+        return m_jitFunction;
+    }
+
 private:
     FunctionType* m_functionType;
     uint32_t m_requiredStackSize;
@@ -225,6 +239,7 @@ private:
     ValueTypeVector m_local;
     Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
     Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
+    JITFunction* m_jitFunction;
 };
 
 class Data {
@@ -317,6 +332,7 @@ private:
 
 class Module : public Object {
     friend class wabt::WASMBinaryReader;
+    friend class JITCompiler;
 
 public:
     Module(Store* store, WASMParsingResult& result);
@@ -382,6 +398,8 @@ public:
 
     Instance* instantiate(ExecutionState& state, const ExternVector& imports);
 
+    void jitCompile(int verboseLevel);
+
 private:
     Store* m_store;
     bool m_seenStartAttribute;
@@ -401,6 +419,7 @@ private:
     TableTypeVector m_tableTypes;
     MemoryTypeVector m_memoryTypes;
     TagTypeVector m_tagTypes;
+    JITModule* m_jitModule;
 };
 
 } // namespace Walrus

@@ -26,6 +26,9 @@ struct spectestseps : std::numpunct<char> {
     std::string do_grouping() const { return "\3"; }
 };
 
+static bool useJIT = false;
+static int jitVerbose = 0;
+
 using namespace Walrus;
 
 static void printI32(int32_t v)
@@ -207,7 +210,12 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         tr.exception = Exception::create(parseResult.second);
         return tr;
     }
+
     auto module = parseResult.first;
+    if (useJIT) {
+        module->jitCompile(jitVerbose);
+    }
+
     const auto& importTypes = module->imports();
 
     ExternVector importValues;
@@ -799,6 +807,21 @@ int main(int argc, char* argv[])
     SpecTestFunctionTypes functionTypes;
 
     for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            if (strcmp(argv[i], "--jit") == 0) {
+                useJIT = true;
+                continue;
+            }
+            if (strcmp(argv[i], "--jit-verbose") == 0) {
+                jitVerbose = 1;
+                continue;
+            }
+            if (strcmp(argv[i], "--jit-verbose-color") == 0) {
+                jitVerbose = 2;
+                continue;
+            }
+        }
+
         std::string filePath = argv[i];
         FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
