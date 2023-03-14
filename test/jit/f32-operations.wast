@@ -156,6 +156,24 @@
 
     select
 )
+
+(func (export "test17") (result i32 i32 i32 i32)
+    f32.const -0x0p+0
+    f32.const -nan
+    f32.ne
+
+    f32.const -0x0p+0
+    f32.const -nan:0x200000
+    f32.ne
+
+    f32.const -0x1p-149
+    f32.const -0x1p-149
+    f32.ne
+
+    f32.const 0x0p+0
+    f32.const nan
+    f32.ne
+)
 )
 
 (assert_return (invoke "test1") (f32.const 4.4))
@@ -174,3 +192,4 @@
 (assert_return (invoke "test14") (i32.const 0) (i32.const 1) (i32.const 0))
 (assert_return (invoke "test15") (f32.const 6.6))
 (assert_return (invoke "test16") (i32.const 6))
+(assert_return (invoke "test17") (i32.const 1) (i32.const 1) (i32.const 0) (i32.const 1))
