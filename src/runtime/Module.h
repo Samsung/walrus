@@ -362,10 +362,8 @@ public:
 
     GlobalType* globalType(uint32_t index) const
     {
-        ASSERT(index < m_globalInfos.size());
-        // m_globalInfos vector should be shrinked ahead
-        ASSERT(m_globalInfos.isShrinked());
-        return const_cast<GlobalType*>(&m_globalInfos[index].first);
+        ASSERT(index < m_globalTypes.size());
+        return m_globalTypes[index];
     }
 
     const VectorWithFixedSize<ImportType*, std::allocator<ImportType*>>& imports() const
@@ -397,11 +395,10 @@ private:
     VectorWithFixedSize<Element*, std::allocator<Element*>> m_elements;
 
     FunctionTypeVector m_functionTypes;
+    GlobalTypeVector m_globalTypes;
     TableTypeVector m_tableTypes;
     MemoryTypeVector m_memoryTypes;
     TagTypeVector m_tagTypes;
-
-    Vector<std::pair<GlobalType, Optional<ModuleFunction*>>, std::allocator<std::pair<GlobalType, Optional<ModuleFunction*>>>> m_globalInfos;
 };
 
 } // namespace Walrus
