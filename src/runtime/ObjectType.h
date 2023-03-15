@@ -21,6 +21,8 @@
 
 namespace Walrus {
 
+class ModuleFunction;
+
 class ObjectType {
 public:
     enum Kind : uint8_t {
@@ -68,30 +70,7 @@ public:
     size_t paramStackSize() const { return m_paramStackSize; }
     size_t resultStackSize() const { return m_resultStackSize; }
 
-    bool equals(const FunctionType* other) const
-    {
-        if (this == other) {
-            return true;
-        }
-
-        if (m_paramTypes->size() != other->param().size()) {
-            return false;
-        }
-
-        if (memcmp(m_paramTypes->data(), other->param().data(), sizeof(Value::Type) * other->param().size())) {
-            return false;
-        }
-
-        if (m_resultTypes->size() != other->result().size()) {
-            return false;
-        }
-
-        if (memcmp(m_resultTypes->data(), other->result().data(), sizeof(Value::Type) * other->result().size())) {
-            return false;
-        }
-
-        return true;
-    }
+    bool equals(const FunctionType* other) const;
 
 private:
     ValueTypeVector* m_paramTypes;
@@ -111,33 +90,23 @@ private:
 
 class GlobalType : public ObjectType {
 public:
-    GlobalType(Value::Type type, bool mut)
-        : ObjectType(ObjectType::GlobalKind)
-        , m_type(type)
-        , m_mutable(mut)
-    {
-#ifndef NDEBUG
-        switch (type) {
-        case Value::I32:
-        case Value::I64:
-        case Value::F32:
-        case Value::F64:
-        case Value::FuncRef:
-        case Value::ExternRef:
-            return;
-        default:
-            ASSERT_NOT_REACHED();
-            return;
-        }
-#endif
-    }
+    GlobalType(Value::Type type, bool mut);
+    ~GlobalType();
 
     Value::Type type() const { return m_type; }
     bool isMutable() const { return m_mutable; }
+    ModuleFunction* function() const { return m_function; }
+
+    inline void setFunction(ModuleFunction* func)
+    {
+        ASSERT(!m_function);
+        m_function = func;
+    }
 
 private:
     Value::Type m_type;
     bool m_mutable;
+    ModuleFunction* m_function;
 };
 
 class TableType : public ObjectType {
@@ -193,6 +162,7 @@ private:
 
 // ObjectType Vectors
 typedef Vector<FunctionType*, std::allocator<FunctionType*>> FunctionTypeVector;
+typedef Vector<GlobalType*, std::allocator<GlobalType*>> GlobalTypeVector;
 typedef Vector<TableType*, std::allocator<TableType*>> TableTypeVector;
 typedef Vector<MemoryType*, std::allocator<MemoryType*>> MemoryTypeVector;
 typedef Vector<TagType*, std::allocator<TagType*>> TagTypeVector;
