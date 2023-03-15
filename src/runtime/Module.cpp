@@ -71,6 +71,10 @@ Module::~Module()
         delete m_functionTypes[i];
     }
 
+    for (size_t i = 0; i < m_globalTypes.size(); i++) {
+        delete m_globalTypes[i];
+    }
+
     for (size_t i = 0; i < m_tableTypes.size(); i++) {
         delete m_tableTypes[i];
     }
@@ -82,13 +86,6 @@ Module::~Module()
     for (size_t i = 0; i < m_tagTypes.size(); i++) {
         delete m_tagTypes[i];
     }
-
-    for (size_t i = 0; i < m_globalInfos.size(); i++) {
-        if (m_globalInfos[i].second) {
-            delete m_globalInfos[i].second.value();
-            m_globalInfos[i].second.reset();
-        }
-    }
 }
 
 Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports)
@@ -98,7 +95,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     instance->m_functions.reserve(m_functions.size());
     instance->m_tables.reserve(m_tableTypes.size());
     instance->m_memories.reserve(m_memoryTypes.size());
-    instance->m_globals.reserve(m_globalInfos.size());
+    instance->m_globals.reserve(m_globalTypes.size());
     instance->m_tags.reserve(m_tagTypes.size());
 
     size_t importFuncCount = 0;
@@ -205,18 +202,18 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     }
 
     // init global
-    for (size_t i = importGlobCount; i < m_globalInfos.size(); i++) {
+    for (size_t i = importGlobCount; i < m_globalTypes.size(); i++) {
         ASSERT(i == instance->m_globals.size());
-        auto& globalData = m_globalInfos[i];
-        instance->m_globals.push_back(Global::createGlobal(m_store, Value(globalData.first.type())));
+        GlobalType* globalType = m_globalTypes[i];
+        instance->m_globals.push_back(Global::createGlobal(m_store, Value(globalType->type())));
 
-        if (globalData.second) {
+        if (globalType->function()) {
             struct RunData {
                 Instance* instance;
                 Module* module;
                 Value::Type type;
                 ModuleFunction* mf;
-            } data = { instance, this, globalData.first.type(), globalData.second.value() };
+            } data = { instance, this, globalType->type(), globalType->function() };
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
@@ -346,11 +343,10 @@ void Module::postParsing()
     m_functions.shrinkToFit();
 
     m_functionTypes.shrinkToFit();
+    m_globalTypes.shrinkToFit();
     m_tableTypes.shrinkToFit();
     m_memoryTypes.shrinkToFit();
     m_tagTypes.shrinkToFit();
-
-    m_globalInfos.shrinkToFit();
 }
 
 #if !defined(NDEBUG)
