@@ -117,7 +117,6 @@ public:
     Memory* resolveExportMemory(std::string& name);
     Global* resolveExportGlobal(std::string& name);
 
-
     const VectorWithFixedSize<Function*>& functions() { return m_functions; }
 
 private:

@@ -97,13 +97,4 @@ FunctionType* Store::getDefaultFunctionType(Value::Type type)
     return g_defaultFunctionTypes[type];
 }
 
-void Store::deleteModule(Module* module)
-{
-    for (size_t i = 0; i < m_modules.size(); i++)
-        if (m_modules[i] == module) {
-            delete m_modules[i];
-            m_modules.erase(i);
-        }
-}
-
 } // namespace Walrus

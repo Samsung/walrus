@@ -96,9 +96,15 @@ struct ComputeReservedCapacityFunctionWithLog2AndPercent {
 using VectorDefaultComputeReservedCapacityFunction = ComputeReservedCapacityFunctionWithPercent<>;
 
 template <typename T,
+          typename Allocator>
+class VectorWithFixedSize;
+
+template <typename T,
           typename Allocator = std::allocator<T>,
           typename ComputeReservedCapacityFunction = VectorDefaultComputeReservedCapacityFunction>
 class Vector {
+    friend class VectorWithFixedSize<T, Allocator>;
+
 public:
     Vector()
         : m_buffer(nullptr)
@@ -455,18 +461,25 @@ public:
     VectorWithFixedSize()
         : m_buffer(nullptr)
         , m_size(0)
-        , m_capacity(0)
     {
         // uninitialized
     }
 
-    VectorWithFixedSize(size_t newCapacity)
+    VectorWithFixedSize(Vector<T, Allocator>&& other)
         : m_buffer(nullptr)
-        , m_size(0)
-        , m_capacity(newCapacity)
+        , m_size(other.m_size)
     {
-        if (newCapacity) {
-            m_buffer = Allocator().allocate(newCapacity);
+        if (m_size) {
+            if (other.m_size == other.m_capacity) {
+                m_buffer = other.m_buffer;
+                other.m_buffer = nullptr;
+                other.m_size = 0;
+                other.m_capacity = 0;
+            } else {
+                m_buffer = Allocator().allocate(m_size);
+                VectorCopier<T>::copy(m_buffer, other.m_buffer, m_size);
+                other.clear();
+            }
         }
     }
 
@@ -482,17 +495,7 @@ public:
         clear();
     }
 
-    void pushBack(const T& val)
-    {
-        ASSERT(m_size < m_capacity);
-        m_buffer[m_size] = val;
-        m_size++;
-    }
-
-    void push_back(const T& val) { pushBack(val); }
-
     size_t size() const { return m_size; }
-    size_t capacity() const { return m_capacity; }
 
     T& operator[](const size_t idx)
     {
@@ -509,12 +512,6 @@ public:
     T* data() { return m_buffer; }
     const T* data() const { return m_buffer; }
 
-    T& back()
-    {
-        ASSERT(m_size);
-        return m_buffer[m_size - 1];
-    }
-
     using iterator = T*;
     constexpr iterator begin() const { return m_buffer; }
     constexpr iterator end() const { return m_buffer + m_size; }
@@ -522,21 +519,20 @@ public:
     void clear()
     {
         if (m_buffer) {
-            ASSERT(m_capacity);
-            Allocator().deallocate(m_buffer, m_capacity);
+            ASSERT(m_size);
+            Allocator().deallocate(m_buffer, m_size);
         }
         m_buffer = nullptr;
         m_size = 0;
-        m_capacity = 0;
     }
 
-    void reserve(size_t newCapacity)
+    void reserve(size_t newSize)
     {
         // reserve should be called for uninitialized Vector
-        ASSERT(!m_buffer && !m_size && !m_capacity);
-        if (newCapacity) {
-            m_buffer = Allocator().allocate(newCapacity);
-            m_capacity = newCapacity;
+        ASSERT(!m_buffer && !m_size);
+        if (newSize) {
+            m_buffer = Allocator().allocate(newSize);
+            m_size = newSize;
         }
     }
 
@@ -545,7 +541,6 @@ public:
 protected:
     T* m_buffer;
     size_t m_size;
-    size_t m_capacity;
 };
 
 // Vector for special purpose
