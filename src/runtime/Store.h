@@ -55,8 +55,6 @@ public:
         m_externs.push_back(ext);
     }
 
-    void deleteModule(Module* module);
-
     Instance* getLastInstance()
     {
         ASSERT(m_instances.size());

@@ -161,11 +161,11 @@ private:
 };
 
 // ObjectType Vectors
-typedef Vector<FunctionType*, std::allocator<FunctionType*>> FunctionTypeVector;
-typedef Vector<GlobalType*, std::allocator<GlobalType*>> GlobalTypeVector;
-typedef Vector<TableType*, std::allocator<TableType*>> TableTypeVector;
-typedef Vector<MemoryType*, std::allocator<MemoryType*>> MemoryTypeVector;
-typedef Vector<TagType*, std::allocator<TagType*>> TagTypeVector;
+typedef VectorWithFixedSize<FunctionType*, std::allocator<FunctionType*>> FunctionTypeVector;
+typedef VectorWithFixedSize<GlobalType*, std::allocator<GlobalType*>> GlobalTypeVector;
+typedef VectorWithFixedSize<TableType*, std::allocator<TableType*>> TableTypeVector;
+typedef VectorWithFixedSize<MemoryType*, std::allocator<MemoryType*>> MemoryTypeVector;
+typedef VectorWithFixedSize<TagType*, std::allocator<TagType*>> TagTypeVector;
 
 } // namespace Walrus
 
