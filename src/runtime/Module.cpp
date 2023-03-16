@@ -26,6 +26,7 @@
 #include "runtime/Trap.h"
 #include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
+#include "parser/WASMParser.h"
 
 namespace Walrus {
 
@@ -36,11 +37,21 @@ ModuleFunction::ModuleFunction(FunctionType* functionType)
 {
 }
 
-Module::Module(Store* store)
+Module::Module(Store* store, WASMParsingResult& result)
     : m_store(store)
-    , m_seenStartAttribute(false)
-    , m_version(0)
-    , m_start(0)
+    , m_seenStartAttribute(result.m_seenStartAttribute)
+    , m_version(result.m_version)
+    , m_start(result.m_start)
+    , m_imports(std::move(result.m_imports))
+    , m_exports(std::move(result.m_exports))
+    , m_functions(std::move(result.m_functions))
+    , m_datas(std::move(result.m_datas))
+    , m_elements(std::move(result.m_elements))
+    , m_functionTypes(std::move(result.m_functionTypes))
+    , m_globalTypes(std::move(result.m_globalTypes))
+    , m_tableTypes(std::move(result.m_tableTypes))
+    , m_memoryTypes(std::move(result.m_memoryTypes))
+    , m_tagTypes(std::move(result.m_tagTypes))
 {
     store->appendModule(this);
 }
@@ -93,16 +104,16 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     Instance* instance = new Instance(this);
 
     instance->m_functions.reserve(m_functions.size());
+    instance->m_globals.reserve(m_globalTypes.size());
     instance->m_tables.reserve(m_tableTypes.size());
     instance->m_memories.reserve(m_memoryTypes.size());
-    instance->m_globals.reserve(m_globalTypes.size());
     instance->m_tags.reserve(m_tagTypes.size());
 
-    size_t importFuncCount = 0;
-    size_t importTableCount = 0;
-    size_t importMemCount = 0;
-    size_t importGlobCount = 0;
-    size_t importTagCount = 0;
+    size_t funcIndex = 0;
+    size_t globIndex = 0;
+    size_t tableIndex = 0;
+    size_t memIndex = 0;
+    size_t tagIndex = 0;
 
     if (imports.size() < m_imports.size()) {
         Trap::throwException(state, "Insufficient import");
@@ -119,8 +130,14 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             if (!imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType())) {
                 Trap::throwException(state, "imported function type mismatch");
             }
-            instance->m_functions.push_back(imports[i]->asFunction());
-            importFuncCount++;
+            instance->m_functions[funcIndex++] = imports[i]->asFunction();
+            break;
+        }
+        case ImportType::Global: {
+            if (imports[i]->kind() != Object::GlobalKind) {
+                Trap::throwException(state, "incompatible import type");
+            }
+            instance->m_globals[globIndex++] = imports[i]->asGlobal();
             break;
         }
         case ImportType::Table: {
@@ -135,8 +152,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                     || imports[i]->asTable()->maximumSize() > m_imports[i]->tableType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_tables.push_back(imports[i]->asTable());
-            importTableCount++;
+            instance->m_tables[tableIndex++] = imports[i]->asTable();
             break;
         }
         case ImportType::Memory: {
@@ -150,24 +166,14 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                     || imports[i]->asMemory()->maximumSizeInPageSize() > m_imports[i]->memoryType()->maximumSize())
                     Trap::throwException(state, "incompatible import type");
             }
-            instance->m_memories.push_back(imports[i]->asMemory());
-            importMemCount++;
-            break;
-        }
-        case ImportType::Global: {
-            if (imports[i]->kind() != Object::GlobalKind) {
-                Trap::throwException(state, "incompatible import type");
-            }
-            instance->m_globals.push_back(imports[i]->asGlobal());
-            importGlobCount++;
+            instance->m_memories[memIndex++] = imports[i]->asMemory();
             break;
         }
         case ImportType::Tag: {
             if (imports[i]->kind() != Object::TagKind) {
                 Trap::throwException(state, "incompatible import type");
             }
-            instance->m_tags.push_back(imports[i]->asTag());
-            importTagCount++;
+            instance->m_tags[tagIndex++] = imports[i]->asTag();
             break;
         }
         default: {
@@ -178,34 +184,38 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     }
 
     // init defined function
-    for (size_t i = importFuncCount; i < m_functions.size(); i++) {
-        ASSERT(i == instance->m_functions.size());
-        instance->m_functions.push_back(DefinedFunction::createDefinedFunction(m_store, instance, function(i)));
+    while (funcIndex < m_functions.size()) {
+        ASSERT(funcIndex < instance->m_functions.size());
+        instance->m_functions[funcIndex] = DefinedFunction::createDefinedFunction(m_store, instance, function(funcIndex));
+        funcIndex++;
     }
 
     // init table
-    for (size_t i = importTableCount; i < m_tableTypes.size(); i++) {
-        ASSERT(i == instance->m_tables.size());
-        instance->m_tables.push_back(Table::createTable(m_store, m_tableTypes[i]->type(), m_tableTypes[i]->initialSize(), m_tableTypes[i]->maximumSize()));
+    while (tableIndex < m_tableTypes.size()) {
+        ASSERT(tableIndex < instance->m_tables.size());
+        instance->m_tables[tableIndex] = Table::createTable(m_store, m_tableTypes[tableIndex]->type(), m_tableTypes[tableIndex]->initialSize(), m_tableTypes[tableIndex]->maximumSize());
+        tableIndex++;
     }
 
     // init memory
-    for (size_t i = importMemCount; i < m_memoryTypes.size(); i++) {
-        ASSERT(i == instance->m_memories.size());
-        instance->m_memories.push_back(Memory::createMemory(m_store, m_memoryTypes[i]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[i]->maximumSize() * Memory::s_memoryPageSize));
+    while (memIndex < m_memoryTypes.size()) {
+        ASSERT(memIndex < instance->m_memories.size());
+        instance->m_memories[memIndex] = Memory::createMemory(m_store, m_memoryTypes[memIndex]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[memIndex]->maximumSize() * Memory::s_memoryPageSize);
+        memIndex++;
     }
 
     // init tag
-    for (size_t i = importTagCount; i < m_tagTypes.size(); i++) {
-        ASSERT(i == instance->m_tags.size());
-        instance->m_tags.push_back(Tag::createTag(m_store, m_functionTypes[m_tagTypes[i]->sigIndex()]));
+    while (tagIndex < m_tagTypes.size()) {
+        ASSERT(tagIndex < instance->m_tags.size());
+        instance->m_tags[tagIndex] = Tag::createTag(m_store, m_functionTypes[m_tagTypes[tagIndex]->sigIndex()]);
+        tagIndex++;
     }
 
     // init global
-    for (size_t i = importGlobCount; i < m_globalTypes.size(); i++) {
-        ASSERT(i == instance->m_globals.size());
-        GlobalType* globalType = m_globalTypes[i];
-        instance->m_globals.push_back(Global::createGlobal(m_store, Value(globalType->type())));
+    while (globIndex < m_globalTypes.size()) {
+        ASSERT(globIndex < instance->m_globals.size());
+        GlobalType* globalType = m_globalTypes[globIndex];
+        instance->m_globals[globIndex] = Global::createGlobal(m_store, Value(globalType->type()));
 
         if (globalType->function()) {
             struct RunData {
@@ -213,7 +223,8 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Module* module;
                 Value::Type type;
                 ModuleFunction* mf;
-            } data = { instance, this, globalType->type(), globalType->function() };
+                size_t index;
+            } data = { instance, this, globalType->type(), globalType->function(), globIndex };
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
@@ -222,7 +233,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 DefinedFunction fakeFunction(data->instance, data->mf);
                 ExecutionState newState(state, &fakeFunction);
                 auto resultOffset = Interpreter::interpret(newState, functionStackBase);
-                data->instance->m_globals.back()->setValue(Value(data->type, functionStackBase + resultOffset[0]));
+                data->instance->m_globals[data->index]->setValue(Value(data->type, functionStackBase + resultOffset[0]));
 
                 if (UNLIKELY(!isAlloca)) {
                     delete[] functionStackBase;
@@ -230,12 +241,15 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             },
                      &data);
         }
+
+        globIndex++;
     }
 
     // init table(elem segment)
     instance->m_elementSegments.reserve(m_elements.size());
-    for (auto elem : m_elements) {
-        instance->m_elementSegments.push_back(ElementSegment(elem));
+    for (size_t i = 0; i < m_elements.size(); i++) {
+        Element* elem = m_elements[i];
+        instance->m_elementSegments[i] = ElementSegment(elem);
 
         if (elem->mode() == SegmentMode::Active) {
             uint32_t index = 0;
@@ -280,16 +294,17 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 }
             }
 
-            instance->m_elementSegments.back().drop();
+            instance->m_elementSegments[i].drop();
         } else if (elem->mode() == SegmentMode::Declared) {
-            instance->m_elementSegments.back().drop();
+            instance->m_elementSegments[i].drop();
         }
     }
 
     // init memory
     instance->m_dataSegments.reserve(m_datas.size());
-    for (auto init : m_datas) {
-        instance->m_dataSegments.push_back(DataSegment(init));
+    for (size_t i = 0; i < m_datas.size(); i++) {
+        Data* init = m_datas[i];
+        instance->m_dataSegments[i] = DataSegment(init);
         struct RunData {
             Data* init;
             Instance* instance;
@@ -328,6 +343,17 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         }
     }
 
+#ifndef NDEBUG
+    // check total size of data in vector
+    ASSERT(funcIndex == m_functions.size() && funcIndex == instance->m_functions.size());
+    ASSERT(globIndex == m_globalTypes.size() && globIndex == instance->m_globals.size());
+    ASSERT(tableIndex == m_tableTypes.size() && tableIndex == instance->m_tables.size());
+    ASSERT(memIndex == m_memoryTypes.size() && memIndex == instance->m_memories.size());
+    ASSERT(tagIndex == m_tagTypes.size() && tagIndex == instance->m_tags.size());
+    ASSERT(m_datas.size() == instance->m_dataSegments.size());
+    ASSERT(m_elements.size() == instance->m_elementSegments.size());
+#endif
+
     if (m_seenStartAttribute) {
         ASSERT(instance->m_functions[m_start]->functionType()->param().size() == 0);
         ASSERT(instance->m_functions[m_start]->functionType()->result().size() == 0);
@@ -335,18 +361,6 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     }
 
     return instance;
-}
-
-void Module::postParsing()
-{
-    // shrink Vectors
-    m_functions.shrinkToFit();
-
-    m_functionTypes.shrinkToFit();
-    m_globalTypes.shrinkToFit();
-    m_tableTypes.shrinkToFit();
-    m_memoryTypes.shrinkToFit();
-    m_tagTypes.shrinkToFit();
 }
 
 #if !defined(NDEBUG)

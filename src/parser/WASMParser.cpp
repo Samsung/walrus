@@ -164,9 +164,9 @@ private:
             , m_functionStackSizeSoFar(binaryReader.m_functionStackSizeSoFar)
             , m_shouldRestoreVMStackAtEnd(false)
         {
-            if (returnValueType.IsIndex() && binaryReader.m_module->functionType(returnValueType)->param().size()) {
+            if (returnValueType.IsIndex() && binaryReader.m_result.m_functionTypes[returnValueType]->param().size()) {
                 // record parameter positions
-                auto& param = binaryReader.m_module->functionType(returnValueType)->param();
+                auto& param = binaryReader.m_result.m_functionTypes[returnValueType]->param();
                 auto endIter = binaryReader.m_vmStack.rbegin() + param.size();
                 auto iter = binaryReader.m_vmStack.rbegin();
                 while (iter != endIter) {
@@ -189,8 +189,6 @@ private:
             m_position = binaryReader.m_currentFunction->currentByteCodeSize();
         }
     };
-
-    Walrus::Module* m_module;
 
     size_t* m_readerOffsetPointer;
     size_t m_codeStartOffset;
@@ -235,6 +233,8 @@ private:
     Walrus::Optional<Walrus::ModuleFunction*> m_elementModuleFunction;
     Walrus::Vector<uint32_t, std::allocator<uint32_t>> m_elementFunctionIndex;
     Walrus::SegmentMode m_segmentMode;
+
+    Walrus::WASMParsingResult m_result;
 
     virtual void OnSetOffsetAddress(size_t* ptr) override
     {
@@ -359,9 +359,8 @@ private:
     }
 
 public:
-    WASMBinaryReader(Walrus::Module* module)
-        : m_module(module)
-        , m_readerOffsetPointer(nullptr)
+    WASMBinaryReader()
+        : m_readerOffsetPointer(nullptr)
         , m_codeStartOffset(0)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
@@ -388,7 +387,7 @@ public:
 
     virtual void BeginModule(uint32_t version) override
     {
-        m_module->m_version = version;
+        m_result.m_version = version;
     }
 
     virtual void EndModule() override {}
@@ -413,13 +412,13 @@ public:
         for (size_t i = 0; i < resultCount; i++) {
             result->push_back(toValueKind(resultTypes[i]));
         }
-        ASSERT(index == m_module->m_functionTypes.size());
-        m_module->m_functionTypes.push_back(new Walrus::FunctionType(param, result));
+        ASSERT(index == m_result.m_functionTypes.size());
+        m_result.m_functionTypes.push_back(new Walrus::FunctionType(param, result));
     }
 
     virtual void OnImportCount(Index count) override
     {
-        m_module->m_imports.reserve(count);
+        m_result.m_imports.reserve(count);
     }
 
     virtual void OnImportFunc(Index importIndex,
@@ -428,85 +427,85 @@ public:
                               Index funcIndex,
                               Index sigIndex) override
     {
-        ASSERT(m_module->m_functions.size() == funcIndex);
-        ASSERT(m_module->m_imports.size() == importIndex);
-        Walrus::FunctionType* ft = m_module->functionType(sigIndex);
-        m_module->m_functions.push_back(
+        ASSERT(m_result.m_functions.size() == funcIndex);
+        ASSERT(m_result.m_imports.size() == importIndex);
+        Walrus::FunctionType* ft = m_result.m_functionTypes[sigIndex];
+        m_result.m_functions.push_back(
             new Walrus::ModuleFunction(ft));
-        m_module->m_imports.push_back(new Walrus::ImportType(
+        m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Function,
             moduleName, fieldName, ft));
     }
 
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) override
     {
-        ASSERT(globalIndex == m_module->m_globalTypes.size());
-        ASSERT(m_module->m_imports.size() == importIndex);
-        m_module->m_globalTypes.push_back(new Walrus::GlobalType(toValueKind(type), mutable_));
-        m_module->m_imports.push_back(new Walrus::ImportType(
+        ASSERT(globalIndex == m_result.m_globalTypes.size());
+        ASSERT(m_result.m_imports.size() == importIndex);
+        m_result.m_globalTypes.push_back(new Walrus::GlobalType(toValueKind(type), mutable_));
+        m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Global,
-            moduleName, fieldName, m_module->m_globalTypes[globalIndex]));
+            moduleName, fieldName, m_result.m_globalTypes[globalIndex]));
     }
 
     virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, size_t initialSize, size_t maximumSize) override
     {
-        ASSERT(tableIndex == m_module->m_tableTypes.size());
-        ASSERT(m_module->m_imports.size() == importIndex);
+        ASSERT(tableIndex == m_result.m_tableTypes.size());
+        ASSERT(m_result.m_imports.size() == importIndex);
         ASSERT(type == Type::FuncRef || type == Type::ExternRef);
 
-        m_module->m_tableTypes.push_back(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
-        m_module->m_imports.push_back(new Walrus::ImportType(
+        m_result.m_tableTypes.push_back(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
+        m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Table,
-            moduleName, fieldName, m_module->m_tableTypes[tableIndex]));
+            moduleName, fieldName, m_result.m_tableTypes[tableIndex]));
     }
 
     virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize) override
     {
-        ASSERT(memoryIndex == m_module->m_memoryTypes.size());
-        ASSERT(m_module->m_imports.size() == importIndex);
-        m_module->m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize));
-        m_module->m_imports.push_back(new Walrus::ImportType(
+        ASSERT(memoryIndex == m_result.m_memoryTypes.size());
+        ASSERT(m_result.m_imports.size() == importIndex);
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize));
+        m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Memory,
-            moduleName, fieldName, m_module->m_memoryTypes[memoryIndex]));
+            moduleName, fieldName, m_result.m_memoryTypes[memoryIndex]));
     }
 
     virtual void OnImportTag(Index importIndex, std::string moduleName, std::string fieldName, Index tagIndex, Index sigIndex) override
     {
-        ASSERT(tagIndex == m_module->m_tagTypes.size());
-        ASSERT(m_module->m_imports.size() == importIndex);
-        m_module->m_tagTypes.push_back(new Walrus::TagType(sigIndex));
-        m_module->m_imports.push_back(new Walrus::ImportType(
+        ASSERT(tagIndex == m_result.m_tagTypes.size());
+        ASSERT(m_result.m_imports.size() == importIndex);
+        m_result.m_tagTypes.push_back(new Walrus::TagType(sigIndex));
+        m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Tag,
-            moduleName, fieldName, m_module->m_tagTypes[tagIndex]));
+            moduleName, fieldName, m_result.m_tagTypes[tagIndex]));
     }
 
     virtual void OnExportCount(Index count) override
     {
-        m_module->m_exports.reserve(count);
+        m_result.m_exports.reserve(count);
     }
 
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) override
     {
-        ASSERT(m_module->m_exports.size() == exportIndex);
-        m_module->m_exports.push_back(new Walrus::ExportType(static_cast<Walrus::ExportType::Type>(kind), name, itemIndex));
+        ASSERT(m_result.m_exports.size() == exportIndex);
+        m_result.m_exports.push_back(new Walrus::ExportType(static_cast<Walrus::ExportType::Type>(kind), name, itemIndex));
     }
 
     /* Table section */
     virtual void OnTableCount(Index count) override
     {
-        m_module->m_tableTypes.reserve(count);
+        m_result.m_tableTypes.reserve(count);
     }
 
     virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) override
     {
-        ASSERT(index == m_module->m_tableTypes.size());
+        ASSERT(index == m_result.m_tableTypes.size());
         ASSERT(type == Type::FuncRef || type == Type::ExternRef);
-        m_module->m_tableTypes.push_back(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
+        m_result.m_tableTypes.push_back(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
     }
 
     virtual void OnElemSegmentCount(Index count) override
     {
-        m_module->m_elements.reserve(count);
+        m_result.m_elements.reserve(count);
     }
 
     virtual void BeginElemSegment(Index index, Index tableIndex, uint8_t flags) override
@@ -548,11 +547,11 @@ public:
 
     virtual void EndElemSegment(Index index) override
     {
-        ASSERT(m_module->m_elements.size() == index);
+        ASSERT(m_result.m_elements.size() == index);
         if (m_elementModuleFunction) {
-            m_module->m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, m_elementModuleFunction.value(), std::move(m_elementFunctionIndex)));
+            m_result.m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, m_elementModuleFunction.value(), std::move(m_elementFunctionIndex)));
         } else {
-            m_module->m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, std::move(m_elementFunctionIndex)));
+            m_result.m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, std::move(m_elementFunctionIndex)));
         }
 
         m_elementModuleFunction = nullptr;
@@ -564,23 +563,23 @@ public:
     /* Memory section */
     virtual void OnMemoryCount(Index count) override
     {
-        m_module->m_memoryTypes.reserve(count);
+        m_result.m_memoryTypes.reserve(count);
     }
 
     virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) override
     {
-        ASSERT(index == m_module->m_memoryTypes.size());
-        m_module->m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize));
+        ASSERT(index == m_result.m_memoryTypes.size());
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize));
     }
 
     virtual void OnDataSegmentCount(Index count) override
     {
-        m_module->m_datas.reserve(count);
+        m_result.m_datas.reserve(count);
     }
 
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
-        ASSERT(index == m_module->m_datas.size());
+        ASSERT(index == m_result.m_datas.size());
         beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)));
     }
 
@@ -600,40 +599,41 @@ public:
 
     virtual void EndDataSegment(Index index) override
     {
-        m_module->m_datas.push_back(new Walrus::Data(m_currentFunction, std::move(m_memoryInitData)));
+        ASSERT(index == m_result.m_datas.size());
+        m_result.m_datas.push_back(new Walrus::Data(m_currentFunction, std::move(m_memoryInitData)));
         endFunction();
     }
 
     /* Function section */
     virtual void OnFunctionCount(Index count) override
     {
-        m_module->m_functions.reserve(count);
+        m_result.m_functions.reserve(count);
     }
 
     virtual void OnFunction(Index index, Index sigIndex) override
     {
         ASSERT(m_currentFunction == nullptr);
         ASSERT(m_currentFunctionType == nullptr);
-        ASSERT(m_module->m_functions.size() == index);
-        m_module->m_functions.push_back(new Walrus::ModuleFunction(m_module->functionType(sigIndex)));
+        ASSERT(m_result.m_functions.size() == index);
+        m_result.m_functions.push_back(new Walrus::ModuleFunction(m_result.m_functionTypes[sigIndex]));
     }
 
     virtual void OnGlobalCount(Index count) override
     {
-        m_module->m_globalTypes.reserve(count);
+        m_result.m_globalTypes.reserve(count);
     }
 
     virtual void BeginGlobal(Index index, Type type, bool mutable_) override
     {
-        ASSERT(m_module->m_globalTypes.size() == index);
-        m_module->m_globalTypes.push_back(new Walrus::GlobalType(toValueKind(type), mutable_));
+        ASSERT(m_result.m_globalTypes.size() == index);
+        m_result.m_globalTypes.push_back(new Walrus::GlobalType(toValueKind(type), mutable_));
     }
 
     virtual void BeginGlobalInitExpr(Index index) override
     {
-        auto ft = Walrus::Store::getDefaultFunctionType(m_module->m_globalTypes[index]->type());
+        auto ft = Walrus::Store::getDefaultFunctionType(m_result.m_globalTypes[index]->type());
         Walrus::ModuleFunction* mf = new Walrus::ModuleFunction(ft);
-        m_module->m_globalTypes[index]->setFunction(mf);
+        m_result.m_globalTypes[index]->setFunction(mf);
         beginFunction(mf);
     }
 
@@ -652,25 +652,25 @@ public:
 
     virtual void OnTagCount(Index count) override
     {
-        m_module->m_tagTypes.reserve(count);
+        m_result.m_tagTypes.reserve(count);
     }
 
     virtual void OnTagType(Index index, Index sigIndex) override
     {
-        ASSERT(index == m_module->m_tagTypes.size());
-        m_module->m_tagTypes.push_back(new Walrus::TagType(sigIndex));
+        ASSERT(index == m_result.m_tagTypes.size());
+        m_result.m_tagTypes.push_back(new Walrus::TagType(sigIndex));
     }
 
     virtual void OnStartFunction(Index funcIndex) override
     {
-        m_module->m_seenStartAttribute = true;
-        m_module->m_start = funcIndex;
+        m_result.m_seenStartAttribute = true;
+        m_result.m_start = funcIndex;
     }
 
     virtual void BeginFunctionBody(Index index, Offset size) override
     {
         ASSERT(m_currentFunction == nullptr);
-        beginFunction(m_module->function(index));
+        beginFunction(m_result.m_functions[index]);
     }
 
     virtual void OnLocalDeclCount(Index count) override
@@ -708,7 +708,7 @@ public:
 
     virtual void OnCallExpr(uint32_t index) override
     {
-        auto functionType = m_module->function(index)->functionType();
+        auto functionType = m_result.m_functions[index]->functionType();
         auto callPos = m_currentFunction->currentByteCodeSize();
         pushByteCode(Walrus::Call(index
 #if !defined(NDEBUG)
@@ -735,7 +735,7 @@ public:
     virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) override
     {
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
-        auto functionType = m_module->functionType(sigIndex);
+        auto functionType = m_result.m_functionTypes[sigIndex];
         auto callPos = m_currentFunction->currentByteCodeSize();
         pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType));
         m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (functionType->param().size() + functionType->result().size()));
@@ -894,7 +894,7 @@ public:
 
     virtual void OnGlobalGetExpr(Index index) override
     {
-        auto sz = Walrus::valueSizeInStack(m_module->m_globalTypes[index]->type());
+        auto sz = Walrus::valueSizeInStack(m_result.m_globalTypes[index]->type());
         auto stackPos = pushVMStack(sz);
         if (sz == 4) {
             pushByteCode(Walrus::GlobalGet32(stackPos, index));
@@ -908,7 +908,7 @@ public:
     {
         auto stackPos = peekVMStack();
 
-        auto sz = Walrus::valueSizeInStack(m_module->m_globalTypes[index]->type());
+        auto sz = Walrus::valueSizeInStack(m_result.m_globalTypes[index]->type());
         if (sz == 4) {
             ASSERT(peekVMStackSize() == 4);
             pushByteCode(Walrus::GlobalSet32(stackPos, index));
@@ -976,7 +976,7 @@ public:
         if (blockInfo.m_shouldRestoreVMStackAtEnd) {
             restoreVMStackBy(blockInfo);
         } else if (blockInfo.m_returnValueType.IsIndex()) {
-            auto ft = m_module->functionType(blockInfo.m_returnValueType);
+            auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];
             if (ft->param().size()) {
                 restoreVMStackBy(blockInfo);
             } else {
@@ -995,7 +995,7 @@ public:
     void keepSubResultsIfNeeds()
     {
         BlockInfo& blockInfo = m_blockInfo.back();
-        if ((blockInfo.m_returnValueType.IsIndex() && m_module->functionType(blockInfo.m_returnValueType)->result().size())
+        if ((blockInfo.m_returnValueType.IsIndex() && m_result.m_functionTypes[blockInfo.m_returnValueType]->result().size())
             || blockInfo.m_returnValueType != Type::Void) {
             blockInfo.m_shouldRestoreVMStackAtEnd = true;
             auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
@@ -1069,13 +1069,13 @@ public:
 
                 if (iter->m_blockType == BlockInfo::Loop) {
                     if (iter->m_returnValueType.IsIndex()) {
-                        auto ft = m_module->functionType(iter->m_returnValueType);
+                        auto ft = m_result.m_functionTypes[iter->m_returnValueType];
                         dropValueSize += ft->paramStackSize();
                         parameterSize += ft->paramStackSize();
                     }
                 } else {
                     if (iter->m_returnValueType.IsIndex()) {
-                        auto ft = m_module->functionType(iter->m_returnValueType);
+                        auto ft = m_result.m_functionTypes[iter->m_returnValueType];
                         const auto& result = ft->result();
                         for (size_t i = 0; i < result.size(); i++) {
                             parameterSize += Walrus::valueSizeInStack(result[i]);
@@ -1316,12 +1316,12 @@ public:
         pushByteCode(Walrus::Throw(tagIndex
 #if !defined(NDEBUG)
                                    ,
-                                   tagIndex != std::numeric_limits<Index>::max() ? m_module->functionType(m_module->m_tagTypes[tagIndex]->sigIndex()) : nullptr
+                                   tagIndex != std::numeric_limits<Index>::max() ? m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()] : nullptr
 #endif
                                    ));
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            auto functionType = m_module->functionType(m_module->m_tagTypes[tagIndex]->sigIndex());
+            auto functionType = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()];
             auto& param = functionType->param();
             m_currentFunction->expandByteCode(sizeof(uint16_t) * param.size());
             Walrus::Throw* code = m_currentFunction->peekByteCode<Walrus::Throw>(pos);
@@ -1366,7 +1366,7 @@ public:
         m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentFunction->currentByteCodeSize(), tagIndex });
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            auto functionType = m_module->functionType(m_module->m_tagTypes[tagIndex]->sigIndex());
+            auto functionType = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()];
             for (size_t i = 0; i < functionType->param().size(); i++) {
                 pushVMStack(Walrus::valueSizeInStack(functionType->param()[i]));
             }
@@ -1604,7 +1604,7 @@ public:
                 }
                 restoreVMStackBy(blockInfo);
                 if (blockInfo.m_returnValueType.IsIndex()) {
-                    auto ft = m_module->functionType(blockInfo.m_returnValueType);
+                    auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];
                     const auto& param = ft->param();
                     for (size_t i = 0; i < param.size(); i++) {
                         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(param[param.size() - i - 1]));
@@ -1653,7 +1653,7 @@ public:
         }
 #endif
 
-        ASSERT(m_currentFunction == m_module->function(index));
+        ASSERT(m_currentFunction == m_result.m_functions[index]);
         endFunction();
     }
 
@@ -1875,6 +1875,8 @@ public:
             return false;
         }
     }
+
+    Walrus::WASMParsingResult& parsingResult() { return m_result; }
 };
 
 } // namespace wabt
@@ -1883,17 +1885,14 @@ namespace Walrus {
 
 std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len)
 {
-    Module* module = new Module(store);
-    wabt::WASMBinaryReader delegate(module);
+    wabt::WASMBinaryReader delegate;
 
     std::string error = ReadWasmBinary(filename, data, len, &delegate);
     if (error.length()) {
-        // remove invalid module
-        store->deleteModule(module);
         return std::make_pair(nullptr, error);
     }
 
-    module->postParsing();
+    Module* module = new Module(store, delegate.parsingResult());
     return std::make_pair(module, std::string());
 }
 

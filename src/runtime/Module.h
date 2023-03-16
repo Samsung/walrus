@@ -30,6 +30,8 @@ class Store;
 class Module;
 class Instance;
 
+struct WASMParsingResult;
+
 enum class SegmentMode {
     None,
     Active,
@@ -317,7 +319,7 @@ class Module : public Object {
     friend class wabt::WASMBinaryReader;
 
 public:
-    Module(Store* store);
+    Module(Store* store, WASMParsingResult& result);
 
     ~Module();
 
@@ -389,7 +391,7 @@ private:
     VectorWithFixedSize<ImportType*, std::allocator<ImportType*>> m_imports;
     VectorWithFixedSize<ExportType*, std::allocator<ExportType*>> m_exports;
 
-    Vector<ModuleFunction*, std::allocator<ModuleFunction*>> m_functions;
+    VectorWithFixedSize<ModuleFunction*, std::allocator<ModuleFunction*>> m_functions;
 
     VectorWithFixedSize<Data*, std::allocator<Data*>> m_datas;
     VectorWithFixedSize<Element*, std::allocator<Element*>> m_elements;
