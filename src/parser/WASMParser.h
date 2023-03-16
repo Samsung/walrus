@@ -28,6 +28,10 @@ struct WASMParsingResult {
     // should be allocated in the stack
     MAKE_STACK_ALLOCATED();
 
+    WASMParsingResult();
+
+    void clear();
+
     bool m_seenStartAttribute;
     uint32_t m_version;
     uint32_t m_start;

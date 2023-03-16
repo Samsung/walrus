@@ -181,6 +181,13 @@ public:
         ASSERT(index == INDEX_NUM);
     }
 
+    ~SpecTestFunctionTypes()
+    {
+        for (size_t i = 0; i < m_vector.size(); i++) {
+            delete m_vector[i];
+        }
+    }
+
     FunctionType* operator[](const size_t idx)
     {
         ASSERT(idx < m_vector.size());
