@@ -379,6 +379,8 @@ public:
         // clear stack first! because vmStack refer localInfo
         m_vmStack.clear();
         m_localInfo.clear();
+
+        m_result.clear();
     }
 
     // should be allocated on the stack
@@ -1882,6 +1884,56 @@ public:
 } // namespace wabt
 
 namespace Walrus {
+
+WASMParsingResult::WASMParsingResult()
+    : m_seenStartAttribute(false)
+    , m_version(0)
+    , m_start(0)
+{
+}
+
+void WASMParsingResult::clear()
+{
+    for (size_t i = 0; i < m_imports.size(); i++) {
+        delete m_imports[i];
+    }
+
+    for (size_t i = 0; i < m_exports.size(); i++) {
+        delete m_exports[i];
+    }
+
+    for (size_t i = 0; i < m_functions.size(); i++) {
+        delete m_functions[i];
+    }
+
+    for (size_t i = 0; i < m_datas.size(); i++) {
+        delete m_datas[i];
+    }
+
+    for (size_t i = 0; i < m_elements.size(); i++) {
+        delete m_elements[i];
+    }
+
+    for (size_t i = 0; i < m_functionTypes.size(); i++) {
+        delete m_functionTypes[i];
+    }
+
+    for (size_t i = 0; i < m_globalTypes.size(); i++) {
+        delete m_globalTypes[i];
+    }
+
+    for (size_t i = 0; i < m_tableTypes.size(); i++) {
+        delete m_tableTypes[i];
+    }
+
+    for (size_t i = 0; i < m_memoryTypes.size(); i++) {
+        delete m_memoryTypes[i];
+    }
+
+    for (size_t i = 0; i < m_tagTypes.size(); i++) {
+        delete m_tagTypes[i];
+    }
+}
 
 std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len)
 {
