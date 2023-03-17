@@ -161,6 +161,24 @@
 
     select
 )
+
+(func (export "test28") (result i32 i32 i32 i32)
+    f64.const -0x0p+0
+    f64.const -nan
+    f64.ne
+
+    f64.const -0x0p+0
+    f64.const -nan:0x200000
+    f64.ne
+
+    f64.const -0x1p-149
+    f64.const -0x1p-149
+    f64.ne
+
+    f64.const 0x0p+0
+    f64.const nan
+    f64.ne
+)
 )
 
 (assert_return (invoke "test11") (f64.const 4.4))
@@ -180,3 +198,4 @@
 (assert_return (invoke "test25") (i32.const 0) (i32.const 1) (i32.const 0))
 (assert_return (invoke "test26") (f64.const 6.6))
 (assert_return (invoke "test27") (i32.const 6))
+(assert_return (invoke "test28") (i32.const 1) (i32.const 1) (i32.const 0) (i32.const 1))
