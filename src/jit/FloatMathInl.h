@@ -328,8 +328,8 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
         type = SLJIT_ORDERED_EQUAL;
         break;
     case F32NeOpcode:
-        opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_NOT_EQUAL;
-        type = SLJIT_ORDERED_NOT_EQUAL;
+        opcode = SLJIT_CMP_F32 | SLJIT_SET_UNORDERED_OR_NOT_EQUAL;
+        type = SLJIT_UNORDERED_OR_NOT_EQUAL;
         break;
     case F32LtOpcode:
         opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_LESS;
@@ -352,8 +352,8 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
         type = SLJIT_ORDERED_EQUAL;
         break;
     case F64NeOpcode:
-        opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_NOT_EQUAL;
-        type = SLJIT_ORDERED_NOT_EQUAL;
+        opcode = SLJIT_CMP_F64 | SLJIT_SET_UNORDERED_OR_NOT_EQUAL;
+        type = SLJIT_UNORDERED_OR_NOT_EQUAL;
         break;
     case F64LtOpcode:
         opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_LESS;
