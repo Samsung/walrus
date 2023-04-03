@@ -72,6 +72,8 @@ public:
         CompareFloat,
         // Covert operation. (e.g. I64ExtendI32S, I32WrapI64)
         Convert,
+        // Move operation. (e.g. Move32, Move64)
+        Move,
     };
 
     virtual ~InstructionListItem() {}
