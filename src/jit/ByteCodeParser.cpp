@@ -334,6 +334,30 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(const64->dstOffset());
             break;
         }
+        case Move32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move32Opcode, 2, 0);
+
+            Move32* move32 = reinterpret_cast<Move32*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(move32->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(move32->dstOffset());
+            break;
+        }
+        case Move64Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move64Opcode, 2, 0);
+
+            Move64* move64 = reinterpret_cast<Move64*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(move64->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(move64->dstOffset());
+            break;
+        }
         case EndOpcode: {
             uint32_t size = function->functionType()->result().size();
 
