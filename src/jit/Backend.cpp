@@ -392,6 +392,18 @@ static void emitBrTable(sljit_compiler* compiler, BrTableInstruction* instr)
     context->branchTableOffset = reinterpret_cast<sljit_uw>(target);
 }
 
+static void emitMove32(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operands = instr->operands();
+    JITArg src;
+    JITArg dst;
+
+    operandToArg(operands, src);
+    operandToArg(operands + 1, dst);
+
+    sljit_emit_op1(compiler, SLJIT_MOV32, dst.arg, dst.argw, src.arg, src.argw);
+}
+
 JITModule::~JITModule()
 {
     delete m_instanceConstData->trapHandlers;
@@ -520,6 +532,14 @@ JITModule* JITCompiler::compile()
         }
         case Instruction::Convert: {
             emitConvert(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::Move: {
+            if (item->asInstruction()->opcode() == Move32Opcode) {
+                emitMove32(m_compiler, item->asInstruction());
+            } else {
+                emitMove64(m_compiler, item->asInstruction());
+            }
             break;
         }
         default: {
