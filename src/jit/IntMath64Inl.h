@@ -541,3 +541,15 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 }
+
+static void emitMove64(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operands = instr->operands();
+    JITArg src;
+    JITArg dst;
+
+    operandToArg(operands, src);
+    operandToArg(operands + 1, dst);
+
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, src.arg, src.argw);
+}
