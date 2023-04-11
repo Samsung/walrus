@@ -455,35 +455,39 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 
-    Instruction* nextInstr = instr->next()->asInstruction();
+    Instruction* nextInstr = nullptr;
     bool isSelect = false;
 
-    ASSERT(nextInstr != nullptr);
+    ASSERT(instr->next() != nullptr);
 
-    switch (nextInstr->opcode()) {
-    case JumpIfTrueOpcode:
-    case JumpIfFalseOpcode:
-        if (nextInstr->getParam(0)->item == instr) {
-            if (nextInstr->opcode() == JumpIfFalseOpcode) {
-                type ^= 0x1;
+    if (instr->next()->isInstruction()) {
+        nextInstr = instr->next()->asInstruction();
+
+        switch (nextInstr->opcode()) {
+        case JumpIfTrueOpcode:
+        case JumpIfFalseOpcode:
+            if (nextInstr->getParam(0)->item == instr) {
+                if (nextInstr->opcode() == JumpIfFalseOpcode) {
+                    type ^= 0x1;
+                }
+
+                if (instr->info() & Instruction::kIs32Bit) {
+                    type |= SLJIT_32;
+                }
+
+                sljit_jump* jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+                nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
+                return true;
             }
-
-            if (instr->info() & Instruction::kIs32Bit) {
-                type |= SLJIT_32;
+            break;
+        case SelectOpcode:
+            if (nextInstr->getParam(2)->item == instr) {
+                isSelect = true;
             }
-
-            sljit_jump* jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
-            nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
-            return true;
+            break;
+        default:
+            break;
         }
-        break;
-    case SelectOpcode:
-        if (nextInstr->getParam(2)->item == instr) {
-            isSelect = true;
-        }
-        break;
-    default:
-        break;
     }
 
     if (instr->info() & Instruction::kIs32Bit) {
