@@ -42,25 +42,24 @@ static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg
     Instruction* instr = operand->item->asInstruction();
     ASSERT(srcReg != 0);
 
-    arg.arg = srcReg;
-    arg.argw = 0;
-
     if (instr->opcode() == Const32Opcode) {
-        uint32_t value32 = reinterpret_cast<Const32*>(instr->byteCode())->value();
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_s32>(value32));
-        sljit_emit_fcopy(compiler, SLJIT_COPY32_TO_F32, arg.arg, SLJIT_R0);
+        union {
+            uint32_t value;
+            sljit_f32 number;
+        } u;
+
+        u.value = reinterpret_cast<Const32*>(instr->byteCode())->value();
+        sljit_emit_fset32(compiler, srcReg, u.number);
         return;
     }
 
-    uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(value64 >> 32));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(value64));
-    sljit_emit_fcopy(compiler, SLJIT_COPY_TO_F64, arg.arg, SLJIT_REG_PAIR(SLJIT_R0, SLJIT_R1));
-#else /* !SLJIT_32BIT_ARCHITECTURE */
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(value64));
-    sljit_emit_fcopy(compiler, SLJIT_COPY_TO_F64, arg.arg, SLJIT_R0);
-#endif /* SLJIT_32BIT_ARCHITECTURE */
+    union {
+        uint64_t value;
+        sljit_f64 number;
+    } u;
+
+    u.value = reinterpret_cast<Const64*>(instr->byteCode())->value();
+    sljit_emit_fset64(compiler, srcReg, u.number);
 }
 
 // Float operations.
@@ -379,7 +378,7 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
     }
 
     Instruction* nextInstr = instr->next()->asInstruction();
-    bool isSelect;
+    bool isSelect = false;
 
     ASSERT(nextInstr != nullptr);
 

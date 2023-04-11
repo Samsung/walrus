@@ -270,6 +270,11 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             paramCount = 1;
             break;
         }
+        case NopOpcode:
+        case UnreachableOpcode: {
+            compiler->append(byteCode, group, opcode, 0, 0);
+            break;
+        }
         case JumpOpcode: {
             Jump* jump = reinterpret_cast<Jump*>(byteCode);
             compiler->appendBranch(jump, opcode, labels[COMPUTE_OFFSET(idx, jump->offset())], 0);
@@ -335,7 +340,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case Move32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move32Opcode, 2, 0);
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move32Opcode, 1, 1);
 
             Move32* move32 = reinterpret_cast<Move32*>(byteCode);
             Operand* operands = instr->operands();
@@ -347,7 +352,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case Move64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move64Opcode, 2, 0);
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move64Opcode, 1, 1);
 
             Move64* move64 = reinterpret_cast<Move64*>(byteCode);
             Operand* operands = instr->operands();
