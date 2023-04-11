@@ -552,6 +552,10 @@ JITModule* JITCompiler::compile()
                 emitSelect(m_compiler, item->asInstruction(), -1);
                 break;
             }
+            case NopOpcode: {
+                sljit_emit_op0(m_compiler, SLJIT_NOP);
+                break;
+            }
             case UnreachableOpcode: {
                 sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::UnreachableError);
                 sljit_set_label(sljit_emit_jump(m_compiler, SLJIT_JUMP), compileContext.trapLabel);
