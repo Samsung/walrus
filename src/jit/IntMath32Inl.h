@@ -994,26 +994,30 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 
-    Instruction* nextInstr = instr->next()->asInstruction();
+    Instruction* nextInstr = nullptr;
     bool isBranch = false;
     bool isSelect = false;
 
-    ASSERT(nextInstr != nullptr);
+    ASSERT(instr->next() != nullptr);
 
-    switch (nextInstr->opcode()) {
-    case JumpIfTrueOpcode:
-    case JumpIfFalseOpcode:
-        if (nextInstr->getParam(0)->item == instr) {
-            isBranch = true;
+    if (instr->next()->isInstruction()) {
+        nextInstr = instr->next()->asInstruction();
+
+        switch (nextInstr->opcode()) {
+        case JumpIfTrueOpcode:
+        case JumpIfFalseOpcode:
+            if (nextInstr->getParam(0)->item == instr) {
+                isBranch = true;
+            }
+            break;
+        case SelectOpcode:
+            if (nextInstr->getParam(2)->item == instr) {
+                isSelect = true;
+            }
+            break;
+        default:
+            break;
         }
-        break;
-    case SelectOpcode:
-        if (nextInstr->getParam(2)->item == instr) {
-            isSelect = true;
-        }
-        break;
-    default:
-        break;
     }
 
     if (!(instr->info() & Instruction::kIs32Bit)) {
