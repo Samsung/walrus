@@ -177,7 +177,7 @@ void JITCompiler::appendBranch(ByteCode* byteCode, OpcodeKind opcode, Label* lab
     if (opcode == JumpOpcode) {
         branch = new ExtendedInstruction(byteCode, Instruction::DirectBranch, JumpOpcode, 0, nullptr, m_last);
     } else {
-        branch = new SimpleExtendedInstruction<1>(byteCode, Instruction::DirectBranch, opcode, 0, m_last);
+        branch = new SimpleExtendedInstruction<1>(byteCode, Instruction::DirectBranch, opcode, 1, m_last);
 
         Operand* operands = branch->operands();
         operands[0].item = nullptr;
