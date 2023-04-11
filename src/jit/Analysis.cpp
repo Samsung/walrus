@@ -26,6 +26,7 @@ class DependencyGenContext {
 public:
     static const uint8_t kOptReferenced = 1 << 0;
     static const uint8_t kOptHasAnyInstruction = 1 << 1;
+    static const uint8_t kOptDependencyComputed = 1 << 2;
 
     struct StackItem {
         StackItem()
@@ -33,8 +34,7 @@ public:
         {
         }
 
-        std::vector<InstructionListItem*> instDeps;
-        std::vector<InstructionListItem*> labelDeps;
+        std::set<InstructionListItem*> dependencies;
         uint8_t options;
     };
 
@@ -52,17 +52,6 @@ private:
     std::vector<StackItem> m_stack;
 };
 
-static void insertDependency(std::vector<InstructionListItem*>& list, InstructionListItem* dependency)
-{
-    for (auto it : list) {
-        if (it == dependency) {
-            return;
-        }
-    }
-
-    list.push_back(dependency);
-}
-
 void DependencyGenContext::update(std::vector<InstructionListItem*>& dependencies)
 {
     assert(dependencies.size() == m_stack.size());
@@ -77,17 +66,13 @@ void DependencyGenContext::update(std::vector<InstructionListItem*>& dependencie
             continue;
         }
 
-        if (dependency->isInstruction()) {
-            insertDependency(m_stack[i].instDeps, dependency);
-        } else {
-            insertDependency(m_stack[i].labelDeps, dependency);
-        }
+        m_stack[i].dependencies.insert(dependency);
     }
 }
 
-static bool isSameConst(std::vector<InstructionListItem*>& instDeps)
+static bool isSameConst(std::vector<Instruction*>& instDeps)
 {
-    Instruction* constInstr = instDeps[0]->asInstruction();
+    Instruction* constInstr = instDeps[0];
 
     if (constInstr->group() != Instruction::Immediate) {
         return false;
@@ -98,7 +83,7 @@ static bool isSameConst(std::vector<InstructionListItem*>& instDeps)
         size_t end = instDeps.size();
 
         for (size_t i = 1; i < end; i++) {
-            Instruction* instr = instDeps[i]->asInstruction();
+            Instruction* instr = instDeps[i];
 
             if (instr->opcode() != Const32Opcode || reinterpret_cast<Const32*>(instr->byteCode())->value() != value) {
                 return false;
@@ -112,7 +97,7 @@ static bool isSameConst(std::vector<InstructionListItem*>& instDeps)
     size_t end = instDeps.size();
 
     for (size_t i = 1; i < end; i++) {
-        Instruction* instr = instDeps[i]->asInstruction();
+        Instruction* instr = instDeps[i];
 
         if (instr->opcode() != Const64Opcode || reinterpret_cast<Const64*>(instr->byteCode())->value() != value) {
             return false;
@@ -126,8 +111,7 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
 {
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
-            Label* label = item->asLabel();
-            label->m_dependencyCtx = new DependencyGenContext(requiredStackSize);
+            item->asLabel()->m_dependencyCtx = new DependencyGenContext(requiredStackSize);
         }
     }
 
@@ -226,14 +210,16 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
 
                     ASSERT(item.options & DependencyGenContext::kOptReferenced);
 
-                    if (item.options & DependencyGenContext::kOptHasAnyInstruction) {
-                        if (item.instDeps.size() == 0) {
-                            item.options &= (uint8_t)~DependencyGenContext::kOptHasAnyInstruction;
+                    if (!(item.options & DependencyGenContext::kOptDependencyComputed)) {
+                        // Exactly one item is present in the list, which is stored in
+                        // the instruction, not in the label to reduce memory consumption.
+                        if (item.options & DependencyGenContext::kOptHasAnyInstruction) {
+                            ASSERT(item.dependencies.begin() == item.dependencies.end());
+                            param->item = nullptr;
+                        } else {
+                            ASSERT(++item.dependencies.begin() == item.dependencies.end());
+                            param->item = *item.dependencies.begin();
                         }
-                    } else if (item.instDeps.size() == 1) {
-                        // A single reference is copied into the instruction.
-                        param->item = item.instDeps[0];
-                        item.options &= (uint8_t)~DependencyGenContext::kOptHasAnyInstruction;
                     }
                 }
                 param++;
@@ -241,30 +227,43 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
             continue;
         }
 
-        lastStack = item->asLabel()->m_dependencyCtx->stack();
+        Label* currentLabel = item->asLabel();
+        lastStack = currentLabel->m_dependencyCtx->stack();
 
-        for (uint32_t i = 0; i < requiredStackSize; ++i) {
+        // Compute the required size first
+        ASSERT(requiredStackSize == lastStack->size())
+        size_t end = requiredStackSize;
+
+        while (end > 0) {
+            if ((*lastStack)[end - 1].options & DependencyGenContext::kOptReferenced) {
+                break;
+            }
+            end--;
+        }
+
+        currentLabel->m_dependencies.resize(end);
+
+        for (uint32_t i = 0; i < end; ++i) {
             DependencyGenContext::StackItem& currentItem = (*lastStack)[i];
+
+            ASSERT(!(currentItem.options & DependencyGenContext::kOptDependencyComputed));
 
             if (!(currentItem.options & DependencyGenContext::kOptReferenced)) {
                 continue;
             }
 
             std::vector<Label*> unprocessedLabels;
-            std::set<InstructionListItem*> processedDeps;
-            std::vector<InstructionListItem*>& instDeps = currentItem.instDeps;
-            bool hasAnyInstruction = false;
+            Label::DependencyList instrDependencies;
+            std::set<InstructionListItem*>& dependencies = currentItem.dependencies;
+            bool hasAnyInstruction = (currentItem.options & DependencyGenContext::kOptHasAnyInstruction) != 0;
 
-            for (auto it : instDeps) {
-                processedDeps.insert(it);
+            for (auto it : dependencies) {
+                if (it->isLabel()) {
+                    unprocessedLabels.push_back(it->asLabel());
+                } else {
+                    instrDependencies.push_back(it->asInstruction());
+                }
             }
-
-            for (auto it : currentItem.labelDeps) {
-                processedDeps.insert(it);
-                unprocessedLabels.push_back(it->asLabel());
-            }
-
-            currentItem.labelDeps.clear();
 
             while (!unprocessedLabels.empty()) {
                 Label* label = unprocessedLabels.back();
@@ -272,15 +271,23 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
 
                 unprocessedLabels.pop_back();
 
-                for (auto it : item.instDeps) {
-                    if (processedDeps.insert(it).second) {
-                        instDeps.push_back(it);
+                if (item.options & DependencyGenContext::kOptDependencyComputed) {
+                    for (auto it : label->dependencies(i)) {
+                        if (it == nullptr) {
+                            hasAnyInstruction = true;
+                        } else if (dependencies.insert(it).second) {
+                            instrDependencies.push_back(it);
+                        }
                     }
-                }
-
-                for (auto it : item.labelDeps) {
-                    if (processedDeps.insert(it).second) {
-                        unprocessedLabels.push_back(it->asLabel());
+                } else {
+                    for (auto it : item.dependencies) {
+                        if (dependencies.insert(it).second) {
+                            if (it->isLabel()) {
+                                unprocessedLabels.push_back(it->asLabel());
+                            } else {
+                                instrDependencies.push_back(it->asInstruction());
+                            }
+                        }
                     }
                 }
 
@@ -289,81 +296,60 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
                 }
             }
 
+            dependencies.clear();
+
             if (hasAnyInstruction) {
                 currentItem.options |= DependencyGenContext::kOptHasAnyInstruction;
-            } else if (!(currentItem.options & DependencyGenContext::kOptHasAnyInstruction)) {
+            } else {
                 // At least one instruction dependency
                 // must be present if the input is valid.
-                assert(instDeps.size() > 0);
+                assert(instrDependencies.size() > 0);
 
-                if (isSameConst(instDeps)) {
-                    instDeps.resize(1);
+                if (isSameConst(instrDependencies)) {
+                    dependencies.insert(instrDependencies[0]);
                     continue;
                 }
             }
 
-            for (auto it : instDeps) {
+            size_t size = instrDependencies.size();
+
+            if (hasAnyInstruction) {
+                if (size == 0) {
+                    // One unknown instruction is present.
+                    continue;
+                }
+                size++;
+            } else if (size == 1) {
+                dependencies.insert(instrDependencies[0]);
+                continue;
+            }
+
+            ASSERT(size > 0);
+
+            currentItem.options |= DependencyGenContext::kOptDependencyComputed;
+
+            Label::DependencyList& list = currentLabel->m_dependencies[i];
+            list.reserve(size);
+
+            for (auto it : instrDependencies) {
+                list.push_back(it);
+
                 if (it->group() == Instruction::Immediate) {
                     it->addInfo(Instruction::kKeepInstruction);
                 }
             }
+
+            if (hasAnyInstruction) {
+                list.push_back(nullptr);
+            }
         }
     }
 
-    // Phase 3: The indirect references for labels are
-    // collected, and all temporary structures are deleted.
+    // Cleanup
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
-        if (!item->isLabel()) {
-            continue;
+        if (item->isLabel()) {
+            delete item->asLabel()->m_dependencyCtx;
         }
-
-        // Copy the final dependency data into
-        // the dependency list of the label.
-        Label* label = item->asLabel();
-        DependencyGenContext* context = label->m_dependencyCtx;
-        std::vector<DependencyGenContext::StackItem>* stack = context->stack();
-        size_t end = stack->size();
-
-        while (end > 0) {
-            if ((*stack)[end - 1].options & DependencyGenContext::kOptReferenced) {
-                break;
-            }
-            end--;
-        }
-
-        // Single item dependencies are
-        // moved into the corresponding operand data.
-        label->m_dependencies.resize(end);
-
-        for (size_t i = 0; i < end; ++i) {
-            DependencyGenContext::StackItem& item = (*stack)[i];
-
-            if (!(item.options & DependencyGenContext::kOptReferenced)) {
-                continue;
-            }
-
-            assert(item.labelDeps.empty());
-
-            Label::DependencyList& list = label->m_dependencies[i];
-
-            size_t size = item.instDeps.size();
-
-            if (item.options & DependencyGenContext::kOptHasAnyInstruction) {
-                size++;
-            }
-
-            list.reserve(size);
-
-            if (item.options & DependencyGenContext::kOptHasAnyInstruction) {
-                list.push_back(nullptr);
-            }
-
-            for (auto it : item.instDeps) {
-                list.push_back(it->asInstruction());
-            }
-        }
-
-        delete context;
     }
 }
 
