@@ -207,8 +207,6 @@ enum OpcodeKind : size_t {
     WABT_OPCODE(___, ___, I32, ___, 0, 0xfc, 0x0f, TableGrow, "table.grow", "")                \
     WABT_OPCODE(___, ___, ___, ___, 0, 0xfc, 0x10, TableSize, "table.size", "")                \
     WABT_OPCODE(___, I32, ___, I32, 0, 0xfc, 0x11, TableFill, "table.fill", "")                \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xd0, RefNull, "ref.null", "")                       \
-    WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xd1, RefIsNull, "ref.is_null", "")                  \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xd2, RefFunc, "ref.func", "")                       \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe7, Move32, "move_32", "")                         \
     WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe8, Move64, "move_64", "")                         \

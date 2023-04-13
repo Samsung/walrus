@@ -1550,14 +1550,22 @@ public:
 
     virtual void OnRefNullExpr(Type type) override
     {
-        auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
-        pushByteCode(Walrus::RefNull(toValueKind(type), dst));
+        ASSERT(sizeof(uintptr_t) == 4 || sizeof(uintptr_t) == 8);
+        Walrus::ByteCodeStackOffset dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
+
+        if (sizeof(uintptr_t) == 4) {
+            pushByteCode(Walrus::Const32(dst, Walrus::Value::Null));
+        } else {
+            pushByteCode(Walrus::Const64(dst, Walrus::Value::Null));
+        }
     }
 
     virtual void OnRefIsNullExpr() override
     {
+        ASSERT(sizeof(uintptr_t) == 4 || sizeof(uintptr_t) == 8);
         auto src = popVMStack();
-        pushByteCode(Walrus::RefIsNull(src, pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32))));
+        auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
+        pushByteCode(Walrus::UnaryOperation(sizeof(uintptr_t) == 4 ? Walrus::I32EqzOpcode : Walrus::I64EqzOpcode, src, dst));
     }
 
     virtual void OnNopExpr() override

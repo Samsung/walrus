@@ -880,28 +880,6 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(RefNull)
-        :
-    {
-        RefNull* code = (RefNull*)programCounter;
-        Value(code->type(), Value::Null).writeToMemory(code->dstOffset() + bp);
-
-        ADD_PROGRAM_COUNTER(RefNull);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(RefIsNull)
-        :
-    {
-        RefIsNull* code = (RefIsNull*)programCounter;
-
-        Value val(reinterpret_cast<Function*>(readValue<void*>(bp, code->srcOffset())));
-        writeValue(bp, code->dstOffset(), (int32_t)val.isNull());
-
-        ADD_PROGRAM_COUNTER(RefIsNull);
-        NEXT_INSTRUCTION();
-    }
-
     DEFINE_OPCODE(Throw)
         :
     {

@@ -51,7 +51,7 @@ public:
     // https://webassembly.github.io/spec/core/syntax/types.html
 
     // RefNull
-    static constexpr uintptr_t NullBits = ~uintptr_t(0);
+    static constexpr uintptr_t NullBits = uintptr_t(0);
     enum RefNull { Null };
     enum ForceInit { Force };
 
