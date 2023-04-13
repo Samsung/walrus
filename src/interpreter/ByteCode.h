@@ -1251,69 +1251,6 @@ private:
     ByteCodeStackOffset m_dstOffset;
 };
 
-class RefNull : public ByteCode {
-public:
-    RefNull(Value::Type type, ByteCodeStackOffset dstOffset)
-        : ByteCode(OpcodeKind::RefNullOpcode)
-        , m_type(type)
-        , m_dstOffset(dstOffset)
-    {
-    }
-
-    Value::Type type() const { return m_type; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        if (m_type == Value::FuncRef) {
-            printf("funcref");
-        } else {
-            ASSERT(m_type == Value::ExternRef);
-            printf("externref");
-        }
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(RefNull);
-    }
-#endif
-
-private:
-    Value::Type m_type;
-    ByteCodeStackOffset m_dstOffset;
-};
-
-class RefIsNull : public ByteCode {
-public:
-    RefIsNull(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(OpcodeKind::RefIsNullOpcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(RefIsNull);
-    }
-#endif
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
-};
-
 class GlobalGet32 : public ByteCode {
 public:
     GlobalGet32(ByteCodeStackOffset dstOffset, uint32_t index)
