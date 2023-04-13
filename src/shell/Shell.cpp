@@ -391,13 +391,15 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
             return Walrus::Value(Walrus::Value::FuncRef, Walrus::Value::Null);
         }
-        return Walrus::Value(Walrus::Value::FuncRef, c.ref_bits(), Walrus::Value::Force);
+        // Add one similar to wabt interpreter.
+        return Walrus::Value(Walrus::Value::FuncRef, c.ref_bits() + 1, Walrus::Value::Force);
     }
     case wabt::Type::ExternRef: {
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
             return Walrus::Value(Walrus::Value::ExternRef, Walrus::Value::Null);
         }
-        return Walrus::Value(Walrus::Value::ExternRef, c.ref_bits(), Walrus::Value::Force);
+        // Add one similar to wabt interpreter.
+        return Walrus::Value(Walrus::Value::ExternRef, c.ref_bits() + 1, Walrus::Value::Force);
     }
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -463,9 +465,9 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         if (c.ref_bits() == constNull.ref_bits()) {
             // check RefNull
             return v.isNull();
-        } else {
-            return c.ref_bits() == reinterpret_cast<uintptr_t>(v.asExternal());
         }
+        // Add one similar to wabt interpreter.
+        return (c.ref_bits() + 1) == reinterpret_cast<uintptr_t>(v.asExternal());
     } else if (c.type() == wabt::Type::FuncRef && v.type() == Walrus::Value::FuncRef) {
         // FIXME value of c.ref_bits() for RefNull
         wabt::Const constNull;
@@ -473,9 +475,9 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         if (c.ref_bits() == constNull.ref_bits()) {
             // check RefNull
             return v.isNull();
-        } else {
-            return c.ref_bits() == reinterpret_cast<uintptr_t>(v.asFunction());
         }
+        // Add one similar to wabt interpreter.
+        return (c.ref_bits() + 1) == reinterpret_cast<uintptr_t>(v.asFunction());
     }
     return false;
 }
