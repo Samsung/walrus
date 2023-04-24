@@ -17,6 +17,7 @@
 #include "Walrus.h"
 
 #include "runtime/JITExec.h"
+#include "runtime/Memory.h"
 #include "jit/Compiler.h"
 
 #include <math.h>
@@ -71,6 +72,17 @@ struct TrapBlock {
     sljit_label* handlerLabel;
 };
 
+class JITFieldAccessor {
+public:
+    static sljit_sw memorySizeInByteOffset() {
+        return offsetof(Memory, m_sizeInByte);
+    }
+
+    static sljit_sw memoryBufferOffset() {
+        return offsetof(Memory, m_buffer);
+    }
+};
+
 class SlowCase {
 public:
     enum class Type {
@@ -103,6 +115,7 @@ struct CompileContext {
     CompileContext(JITCompiler* compiler)
         : compiler(compiler)
         , trapLabel(nullptr)
+        , memoryTrapLabel(nullptr)
     {
     }
 
@@ -117,6 +130,7 @@ struct CompileContext {
 
     JITCompiler* compiler;
     sljit_label* trapLabel;
+    sljit_label* memoryTrapLabel;
     sljit_label* returnToLabel;
     sljit_uw branchTableOffset;
     std::vector<TrapBlock> trapBlocks;
@@ -211,6 +225,8 @@ static void operandToArg(Operand* operand, JITArg& arg)
 #else /* !SLJIT_32BIT_ARCHITECTURE */
 #include "IntMath64Inl.h"
 #endif /* SLJIT_32BIT_ARCHITECTURE */
+
+#include "MemoryInl.h"
 
 void CompileContext::emitSlowCases(sljit_compiler* compiler)
 {
@@ -534,6 +550,18 @@ JITModule* JITCompiler::compile()
             emitConvert(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::Load: {
+            emitLoad(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::Store: {
+            emitStore(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::Memory: {
+            emitMemory(m_compiler, item->asInstruction());
+            break;
+        }
         case Instruction::Move: {
             if (item->asInstruction()->opcode() == Move32Opcode) {
                 emitMove32(m_compiler, item->asInstruction());
@@ -550,6 +578,10 @@ JITModule* JITCompiler::compile()
             }
             case SelectOpcode: {
                 emitSelect(m_compiler, item->asInstruction(), -1);
+                break;
+            }
+            case DataDropOpcode: {
+                emitDataDrop(m_compiler, item->asInstruction());
                 break;
             }
             case NopOpcode: {
@@ -650,6 +682,9 @@ void JITCompiler::emitProlog(size_t index, CompileContext& context)
     sljit_set_context(m_compiler, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2), SLJIT_ARGS0(P),
                       SLJIT_NUMBER_OF_SCRATCH_REGISTERS, savedRegCount,
                       SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0, sizeof(ExecutionContext::CallFrame));
+
+    context.memoryTrapLabel = sljit_emit_label(m_compiler);
+    sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::OutOfBoundsMemAccessError);
 
     context.trapLabel = sljit_emit_label(m_compiler);
     sljit_emit_op1(m_compiler, SLJIT_MOV_U32, SLJIT_MEM1(kContextReg), OffsetOfContextField(error), SLJIT_R2, 0);
