@@ -17,16 +17,17 @@
 #include "Walrus.h"
 
 #include "runtime/JITExec.h"
+#include "runtime/Instance.h"
 #include "runtime/Trap.h"
 #include "runtime/Value.h"
 
 namespace Walrus {
 
-ByteCodeStackOffset* JITFunction::call(ExecutionState& state, uint8_t* bp) const
+ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance, uint8_t* bp) const
 {
     ASSERT(m_exportEntry);
 
-    ExecutionContext context(m_module->instanceConstData());
+    ExecutionContext context(m_module->instanceConstData(), state, instance);
     ByteCodeStackOffset* resultOffsets = m_module->exportCall()(&context, bp, m_exportEntry);
 
     if (context.error != ExecutionContext::NoError) {
@@ -39,6 +40,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, uint8_t* bp) const
             return resultOffsets;
         case ExecutionContext::IntegerOverflowError:
             Trap::throwException(state, "integer overflow");
+            return resultOffsets;
+        case ExecutionContext::OutOfBoundsMemAccessError:
+            Trap::throwException(state, "out of bounds memory access");
             return resultOffsets;
         case ExecutionContext::UnreachableError:
             Trap::throwException(state, "unreachable executed");

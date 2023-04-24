@@ -88,7 +88,7 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
     ByteCodeStackOffset* resultOffsets;
 
     if (m_moduleFunction->jitFunction() != nullptr) {
-        resultOffsets = m_moduleFunction->jitFunction()->call(newState, functionStackBase);
+        resultOffsets = m_moduleFunction->jitFunction()->call(newState, m_instance, functionStackBase);
     } else {
         resultOffsets = Interpreter::interpret(newState, functionStackBase);
     }
