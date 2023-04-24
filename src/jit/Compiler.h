@@ -72,6 +72,12 @@ public:
         CompareFloat,
         // Covert operation. (e.g. I64ExtendI32S, I32WrapI64)
         Convert,
+        // Load operation. (e.g. Load32, I64Load16S)
+        Load,
+        // Store operation. (e.g. Store64, F32Store)
+        Store,
+        // Memory management operation. (e.g. MemorySize, MemoryInit)
+        Memory,
         // Move operation. (e.g. Move32, Move64)
         Move,
     };
