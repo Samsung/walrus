@@ -18,9 +18,11 @@
 #define __WalrusJITExec__
 
 #include "interpreter/ByteCode.h"
+#include "runtime/Instance.h"
 
 namespace Walrus {
 
+class Memory;
 class TrapHandlerList;
 
 // Header of instance const data
@@ -44,18 +46,25 @@ struct ExecutionContext {
         OutOfStackError,
         DivideByZeroError,
         IntegerOverflowError,
+        OutOfBoundsMemAccessError,
         UnreachableError,
     };
 
-    ExecutionContext(InstanceConstData* currentInstanceConstData)
+    ExecutionContext(InstanceConstData* currentInstanceConstData, ExecutionState& state, Instance* instance)
         : lastFrame(nullptr)
         , currentInstanceConstData(currentInstanceConstData)
+        , state(state)
+        , instance(instance)
+        , memory0(instance->memory(0))
         , error(NoError)
     {
     }
 
     CallFrame* lastFrame;
     InstanceConstData* currentInstanceConstData;
+    ExecutionState& state;
+    Instance* instance;
+    Memory* memory0;
     ErrorCodes error;
     uint64_t tmp1;
     uint64_t tmp2;
@@ -106,7 +115,7 @@ public:
     }
 
     bool isCompiled() const { return m_exportEntry != nullptr; }
-    ByteCodeStackOffset* call(ExecutionState& state, uint8_t* bp) const;
+    ByteCodeStackOffset* call(ExecutionState& state, Instance* instance, uint8_t* bp) const;
 
 private:
     void* m_exportEntry;

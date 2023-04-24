@@ -270,6 +270,158 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             paramCount = 1;
             break;
         }
+        case Load32Opcode: {
+            Load32* loadOperation = reinterpret_cast<Load32*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            break;
+        }
+        case Load64Opcode: {
+            Load64* loadOperation = reinterpret_cast<Load64*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            break;
+        }
+        case I32LoadOpcode:
+        case I32Load8SOpcode:
+        case I32Load8UOpcode:
+        case I32Load16SOpcode:
+        case I32Load16UOpcode:
+        case I64LoadOpcode:
+        case I64Load8SOpcode:
+        case I64Load8UOpcode:
+        case I64Load16SOpcode:
+        case I64Load16UOpcode:
+        case I64Load32SOpcode:
+        case I64Load32UOpcode:
+        case F32LoadOpcode:
+        case F64LoadOpcode: {
+            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            break;
+        }
+        case Store32Opcode: {
+            Store32* storeOperation = reinterpret_cast<Store32*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            break;
+        }
+        case Store64Opcode: {
+            Store64* storeOperation = reinterpret_cast<Store64*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            break;
+        }
+        case I32StoreOpcode:
+        case I32Store8Opcode:
+        case I32Store16Opcode:
+        case I64StoreOpcode:
+        case I64Store8Opcode:
+        case I64Store16Opcode:
+        case I64Store32Opcode:
+        case F32StoreOpcode:
+        case F64StoreOpcode: {
+            MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            break;
+        }
+        case MemorySizeOpcode: {
+            MemorySize* memorySize = reinterpret_cast<MemorySize*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 0, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(memorySize->dstOffset());
+            break;
+        }
+        case MemoryInitOpcode: {
+            MemoryInit* memoryInit = reinterpret_cast<MemoryInit*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(memoryInit->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(memoryInit->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(memoryInit->srcOffsets()[2]);
+            break;
+        }
+        case MemoryCopyOpcode: {
+            MemoryCopy* memoryCopy = reinterpret_cast<MemoryCopy*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(memoryCopy->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(memoryCopy->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(memoryCopy->srcOffsets()[2]);
+            break;
+        }
+        case MemoryFillOpcode: {
+            MemoryFill* memoryFill = reinterpret_cast<MemoryFill*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(memoryFill->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(memoryFill->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(memoryFill->srcOffsets()[2]);
+            break;
+        }
+        case MemoryGrowOpcode: {
+            MemoryGrow* memoryGrow = reinterpret_cast<MemoryGrow*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 1, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(memoryGrow->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(memoryGrow->dstOffset());
+            break;
+        }
+        case DataDropOpcode:
         case NopOpcode:
         case UnreachableOpcode: {
             compiler->append(byteCode, group, opcode, 0, 0);
@@ -439,6 +591,10 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
 void Module::jitCompile(int verboseLevel)
 {
     size_t functionCount = m_functions.size();
+
+    if (functionCount == 0) {
+        return;
+    }
 
     JITCompiler compiler(verboseLevel);
 

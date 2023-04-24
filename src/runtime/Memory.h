@@ -27,6 +27,7 @@ class Store;
 class DataSegment;
 
 class Memory : public Extern {
+    friend class JITFieldAccessor;
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
 
