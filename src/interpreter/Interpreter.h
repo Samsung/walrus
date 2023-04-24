@@ -57,7 +57,7 @@ private:
         ByteCodeStackOffset* resultOffsets;
 
         if (m_moduleFunction->jitFunction() != nullptr) {
-            resultOffsets = m_moduleFunction->jitFunction()->call(newState, functionStackBase);
+            resultOffsets = m_moduleFunction->jitFunction()->call(newState, function->instance(), functionStackBase);
         } else if (considerException) {
             while (true) {
                 try {

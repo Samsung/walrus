@@ -39,6 +39,9 @@ static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg
         return;
     }
 
+    arg.arg = srcReg;
+    arg.argw = 0;
+
     Instruction* instr = operand->item->asInstruction();
     ASSERT(srcReg != 0);
 
@@ -320,7 +323,9 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 opcode, type;
     JITArg params[3];
 
-    for (uint32_t i = 0; i < instr->paramCount(); ++i, operand++) {
+    ASSERT(instr->paramCount() == 2);
+
+    for (uint32_t i = 0; i < 2; ++i, operand++) {
         floatOperandToArg(compiler, operand, params[i], SLJIT_FR(i));
     }
 
