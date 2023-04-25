@@ -44,6 +44,7 @@ COLOR_RESET = '\033[0m'
 
 RUNNERS = {}
 DEFAULT_RUNNERS = []
+jit = False
 
 
 class runner(object):
@@ -99,11 +100,11 @@ def run(args, cwd=None, env=None, stdout=None, checkresult=True, report=False):
 def readfile(filename):
     with open(filename, 'r') as f:
         return f.readlines()
-    
+
 def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
-        proc = Popen([engine, file], stdout=PIPE)
+        proc = Popen([engine, file], stdout=PIPE) if not jit else Popen([engine, '--jit', file], stdout=PIPE)
         out, _ = proc.communicate()
 
         if is_fail and proc.returncode or not is_fail and not proc.returncode:
@@ -151,13 +152,34 @@ def run_basic_tests(engine):
     if fail_total > 0:
         raise Exception("basic wasm-test-core failed")
 
+
+@runner('jit', default=True)
+def run_basic_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'jit')
+
+    print('Running jit tests:')
+    xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("basic wasm-test-core failed")
+
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
                         help='path to the engine to be tested (default: %(default)s)')
     parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
+    parser.add_argument('--jit', action='store_true', help='test with JIT')
     args = parser.parse_args()
+    global jit
+    jit = args.jit
 
     for suite in args.suite:
         if suite not in RUNNERS:

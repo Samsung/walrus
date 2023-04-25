@@ -525,19 +525,23 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         }
         return;
     case I64ExtendI32SOpcode:
-        if (!(args[0].arg & SLJIT_MEM)) {
-            sljit_emit_op1(compiler, SLJIT_MOV_S32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
-        } else {
+        if (SLJIT_IS_IMM(args[0].arg)) {
+            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, args[0].arg, static_cast<sljit_s32>(args[0].argw));
+        } else if (SLJIT_IS_MEM(args[0].arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV_S32, SLJIT_R0, 0, args[0].arg, args[0].argw);
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_R0, 0);
+        } else {
+            sljit_emit_op1(compiler, SLJIT_MOV_S32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
         }
         return;
     case I64ExtendI32UOpcode:
-        if (!(args[0].arg & SLJIT_MEM)) {
-            sljit_emit_op1(compiler, SLJIT_MOV_U32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
-        } else {
+        if (SLJIT_IS_IMM(args[0].arg)) {
+            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, args[0].arg, static_cast<sljit_u32>(args[0].argw));
+        } else if (SLJIT_IS_MEM(args[0].arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R0, 0, args[0].arg, args[0].argw);
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_R0, 0);
+        } else {
+            sljit_emit_op1(compiler, SLJIT_MOV_U32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
         }
         return;
     default:
