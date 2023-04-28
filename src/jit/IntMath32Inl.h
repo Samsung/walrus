@@ -1117,7 +1117,13 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         operandToArg(operand, param);
         operandToArgPair(operand + 1, result);
 
-        sljit_s32 param_reg = GET_TARGET_REG(param.arg, SLJIT_R0);
+        if (SLJIT_IS_IMM(param.arg)) {
+            sljit_emit_op1(compiler, SLJIT_MOV, result.arg1, result.arg1w, SLJIT_IMM, param.argw);
+            sljit_emit_op1(compiler, SLJIT_MOV, result.arg2, result.arg2w, SLJIT_IMM, param.argw >> 31);
+            return;
+        }
+
+        sljit_s32 param_reg = GET_SOURCE_REG(param.arg, SLJIT_R0);
         MOVE_TO_REG(compiler, SLJIT_MOV, param_reg, param.arg, param.argw);
         MOVE_FROM_REG(compiler, SLJIT_MOV, result.arg1, result.arg1w, param_reg);
         sljit_emit_op2(compiler, SLJIT_ASHR, result.arg2, result.arg2w, param_reg, 0, SLJIT_IMM, 31);
