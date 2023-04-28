@@ -270,6 +270,21 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             paramCount = 1;
             break;
         }
+        case SelectOpcode: {
+            auto instr = compiler->append(byteCode, group, opcode, 3, 1);
+            auto select = reinterpret_cast<Select*>(byteCode);
+            auto operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(select->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(select->src1Offset());
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(select->condOffset());
+            operands[3].item = nullptr;
+            operands[3].offset = STACK_OFFSET(select->dstOffset());
+            break;
+        }
         case Load32Opcode: {
             Load32* loadOperation = reinterpret_cast<Load32*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
