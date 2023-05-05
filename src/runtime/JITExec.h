@@ -46,6 +46,7 @@ struct ExecutionContext {
         OutOfStackError,
         DivideByZeroError,
         IntegerOverflowError,
+        InvalidConversionToIntegerError,
         OutOfBoundsMemAccessError,
         UnreachableError,
     };
