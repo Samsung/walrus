@@ -496,8 +496,8 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
         JITArg srcArg;
 
         for (int i = 0; i < 3; i++) {
-             operandToArg(params + i, srcArg);
-             sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R(i), 0, srcArg.arg, srcArg.argw);
+            operandToArg(params + i, srcArg);
+            sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R(i), 0, srcArg.arg, srcArg.argw);
         }
 
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
