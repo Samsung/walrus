@@ -72,6 +72,8 @@ public:
         CompareFloat,
         // Covert operation. (e.g. I64ExtendI32S, I32WrapI64)
         Convert,
+        // Covert to/from float operation. (e.g. I32TruncSatF32U, F64ConvertI32S)
+        ConvertFloat,
         // Load operation. (e.g. Load32, I64Load16S)
         Load,
         // Store operation. (e.g. Store64, F32Store)
