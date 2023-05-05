@@ -41,6 +41,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::IntegerOverflowError:
             Trap::throwException(state, "integer overflow");
             return resultOffsets;
+        case ExecutionContext::InvalidConversionToIntegerError:
+            Trap::throwException(state, "invalid conversion to integer");
+            return resultOffsets;
         case ExecutionContext::OutOfBoundsMemAccessError:
             Trap::throwException(state, "out of bounds memory access");
             return resultOffsets;

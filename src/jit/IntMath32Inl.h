@@ -527,8 +527,8 @@ static void emitDivRem64(sljit_compiler* compiler, sljit_s32 opcode, JITArgPair*
         break;
     }
 
-    sljit_s32 type = isImm ? SLJIT_ARGS3(VOID, W, W, W) : SLJIT_ARGS3(W, W, W, W);
-    sljit_emit_icall(compiler, SLJIT_CALL, type, SLJIT_IMM, addr);
+    sljit_s32 argTypes = isImm ? SLJIT_ARGS3(VOID, W, W, W) : SLJIT_ARGS3(W, W, W, W);
+    sljit_emit_icall(compiler, SLJIT_CALL, argTypes, SLJIT_IMM, addr);
 
     if (!isImm) {
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
