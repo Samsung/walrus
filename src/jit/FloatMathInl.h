@@ -244,6 +244,9 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
     case F32AbsOpcode:
         opcode = SLJIT_ABS_F32;
         break;
+    case F32DemoteF64Opcode:
+        opcode = SLJIT_CONV_F32_FROM_F64;
+        break;
     case F64CeilOpcode:
         f64Func = ceil;
         break;
@@ -264,6 +267,9 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
         break;
     case F64AbsOpcode:
         opcode = SLJIT_ABS_F64;
+        break;
+    case F64PromoteF32Opcode:
+        opcode = SLJIT_CONV_F64_FROM_F32;
         break;
     default:
         RELEASE_ASSERT_NOT_REACHED();

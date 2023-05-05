@@ -19,6 +19,7 @@
 #include "runtime/JITExec.h"
 #include "runtime/Memory.h"
 #include "jit/Compiler.h"
+#include "util/MathOperation.h"
 
 #include <math.h>
 #include <map>
@@ -74,11 +75,13 @@ struct TrapBlock {
 
 class JITFieldAccessor {
 public:
-    static sljit_sw memorySizeInByteOffset() {
+    static sljit_sw memorySizeInByteOffset()
+    {
         return offsetof(Memory, m_sizeInByte);
     }
 
-    static sljit_sw memoryBufferOffset() {
+    static sljit_sw memoryBufferOffset()
+    {
         return offsetof(Memory, m_buffer);
     }
 };
@@ -226,6 +229,7 @@ static void operandToArg(Operand* operand, JITArg& arg)
 #include "IntMath64Inl.h"
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
+#include "FloatConvInl.h"
 #include "MemoryInl.h"
 
 void CompileContext::emitSlowCases(sljit_compiler* compiler)
@@ -548,6 +552,10 @@ JITModule* JITCompiler::compile()
         }
         case Instruction::Convert: {
             emitConvert(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::ConvertFloat: {
+            emitConvertFloat(m_compiler, item->asInstruction());
             break;
         }
         case Instruction::Load: {
