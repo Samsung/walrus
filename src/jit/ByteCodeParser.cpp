@@ -247,7 +247,9 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case F64NearestOpcode:
         case F64SqrtOpcode:
         case F64AbsOpcode:
-        case F64NegOpcode: {
+        case F64NegOpcode:
+        case F32DemoteF64Opcode:
+        case F64PromoteF32Opcode: {
             group = Instruction::UnaryFloat;
             paramCount = 1;
             break;
@@ -270,6 +272,34 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             paramCount = 1;
             break;
         }
+        case I32TruncF32SOpcode:
+        case I32TruncF32UOpcode:
+        case I32TruncF64SOpcode:
+        case I32TruncF64UOpcode:
+        case I64TruncF32SOpcode:
+        case I64TruncF32UOpcode:
+        case I64TruncF64SOpcode:
+        case I64TruncF64UOpcode:
+        case I32TruncSatF32SOpcode:
+        case I32TruncSatF32UOpcode:
+        case I32TruncSatF64SOpcode:
+        case I32TruncSatF64UOpcode:
+        case I64TruncSatF32SOpcode:
+        case I64TruncSatF32UOpcode:
+        case I64TruncSatF64SOpcode:
+        case I64TruncSatF64UOpcode:
+        case F32ConvertI32SOpcode:
+        case F32ConvertI32UOpcode:
+        case F32ConvertI64SOpcode:
+        case F32ConvertI64UOpcode:
+        case F64ConvertI32SOpcode:
+        case F64ConvertI32UOpcode:
+        case F64ConvertI64SOpcode:
+        case F64ConvertI64UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            break;
+        }
         case SelectOpcode: {
             auto instr = compiler->append(byteCode, group, opcode, 3, 1);
             auto select = reinterpret_cast<Select*>(byteCode);
@@ -285,19 +315,9 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[3].offset = STACK_OFFSET(select->dstOffset());
             break;
         }
-        case Load32Opcode: {
-            Load32* loadOperation = reinterpret_cast<Load32*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-
-            Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
-            break;
-        }
+        case Load32Opcode:
         case Load64Opcode: {
-            Load64* loadOperation = reinterpret_cast<Load64*>(byteCode);
+            SimpleLoad* loadOperation = reinterpret_cast<SimpleLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
 
             Operand* operands = instr->operands();
@@ -331,19 +351,9 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
             break;
         }
-        case Store32Opcode: {
-            Store32* storeOperation = reinterpret_cast<Store32*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-
-            Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
-            break;
-        }
+        case Store32Opcode:
         case Store64Opcode: {
-            Store64* storeOperation = reinterpret_cast<Store64*>(byteCode);
+            SimpleStore* storeOperation = reinterpret_cast<SimpleStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
 
             Operand* operands = instr->operands();
