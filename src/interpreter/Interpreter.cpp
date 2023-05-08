@@ -346,42 +346,42 @@ NextInstruction:
     DEFINE_OPCODE(Load32)
         :
     {
-        Load32* code = (Load32*)programCounter;
+        SimpleLoad* code = (SimpleLoad*)programCounter;
         uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
         memories[0]->load(state, offset, reinterpret_cast<uint32_t*>(bp + code->dstOffset()));
-        ADD_PROGRAM_COUNTER(Load32);
+        ADD_PROGRAM_COUNTER(SimpleLoad);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(Load64)
         :
     {
-        Load64* code = (Load64*)programCounter;
+        SimpleLoad* code = (SimpleLoad*)programCounter;
         uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
         memories[0]->load(state, offset, reinterpret_cast<uint64_t*>(bp + code->dstOffset()));
-        ADD_PROGRAM_COUNTER(Load64);
+        ADD_PROGRAM_COUNTER(SimpleLoad);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(Store32)
         :
     {
-        Store32* code = (Store32*)programCounter;
+        SimpleStore* code = (SimpleStore*)programCounter;
         uint32_t value = readValue<uint32_t>(bp, code->src1Offset());
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
         memories[0]->store(state, offset, value);
-        ADD_PROGRAM_COUNTER(Store32);
+        ADD_PROGRAM_COUNTER(SimpleStore);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(Store64)
         :
     {
-        Store64* code = (Store64*)programCounter;
+        SimpleStore* code = (SimpleStore*)programCounter;
         uint64_t value = readValue<uint64_t>(bp, code->src1Offset());
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
         memories[0]->store(state, offset, value);
-        ADD_PROGRAM_COUNTER(Store64);
+        ADD_PROGRAM_COUNTER(SimpleStore);
         NEXT_INSTRUCTION();
     }
 
