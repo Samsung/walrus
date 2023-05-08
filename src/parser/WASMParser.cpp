@@ -1518,9 +1518,9 @@ public:
         auto src = popVMStack();
         auto dst = pushVMStack(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
         if ((opcode == Walrus::I32LoadOpcode || opcode == Walrus::F32LoadOpcode) && offset == 0) {
-            pushByteCode(Walrus::Load32(src, dst));
+            pushByteCode(Walrus::SimpleLoad(Walrus::Load32Opcode, src, dst));
         } else if ((opcode == Walrus::I64LoadOpcode || opcode == Walrus::F64LoadOpcode) && offset == 0) {
-            pushByteCode(Walrus::Load64(src, dst));
+            pushByteCode(Walrus::SimpleLoad(Walrus::Load64Opcode, src, dst));
         } else {
             pushByteCode(Walrus::MemoryLoad(code, offset, src, dst));
         }
@@ -1534,9 +1534,9 @@ public:
         ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStackSize());
         auto src0 = popVMStack();
         if ((opcode == Walrus::I32StoreOpcode || opcode == Walrus::F32StoreOpcode) && offset == 0) {
-            pushByteCode(Walrus::Store32(src0, src1));
+            pushByteCode(Walrus::SimpleStore(Walrus::Store32Opcode, src0, src1));
         } else if ((opcode == Walrus::I64StoreOpcode || opcode == Walrus::F64StoreOpcode) && offset == 0) {
-            pushByteCode(Walrus::Store64(src0, src1));
+            pushByteCode(Walrus::SimpleStore(Walrus::Store64Opcode, src0, src1));
         } else {
             pushByteCode(Walrus::MemoryStore(code, offset, src0, src1));
         }
