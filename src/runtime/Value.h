@@ -47,6 +47,8 @@ size_t stackAllocatedSize()
 }
 
 class Value {
+    friend class JITFieldAccessor;
+
 public:
     // https://webassembly.github.io/spec/core/syntax/types.html
 
