@@ -380,13 +380,14 @@ protected:
     ByteCodeStackOffset m_dstOffset;
 };
 
-class Load32 : public ByteCode {
+class SimpleLoad : public ByteCode {
 public:
-    Load32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(OpcodeKind::Load32Opcode)
+    SimpleLoad(OpcodeKind opcode, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : ByteCode(opcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
+        ASSERT(opcode == Load32Opcode || opcode == Load64Opcode);
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
@@ -401,50 +402,23 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(Load32);
+        return sizeof(SimpleLoad);
     }
 #endif
+
 protected:
     ByteCodeStackOffset m_srcOffset;
     ByteCodeStackOffset m_dstOffset;
 };
 
-class Load64 : public ByteCode {
+class SimpleStore : public ByteCode {
 public:
-    Load64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(OpcodeKind::Load64Opcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Load64);
-    }
-#endif
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
-};
-
-class Store32 : public ByteCode {
-public:
-    Store32(ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCode(OpcodeKind::Store32Opcode)
+    SimpleStore(OpcodeKind opcode, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
+        : ByteCode(opcode)
         , m_src0Offset(src0)
         , m_src1Offset(src1)
     {
+        ASSERT(opcode == Store32Opcode || opcode == Store64Opcode);
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
@@ -459,38 +433,10 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(Store32);
+        return sizeof(SimpleStore);
     }
 #endif
-protected:
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-};
 
-class Store64 : public ByteCode {
-public:
-    Store64(ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCode(OpcodeKind::Store64Opcode)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-    {
-    }
-
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-
-#if !defined(NDEBUG)
-    virtual void dump(size_t pos)
-    {
-        DUMP_BYTECODE_OFFSET(src0Offset);
-        DUMP_BYTECODE_OFFSET(src1Offset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Store64);
-    }
-#endif
 protected:
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
