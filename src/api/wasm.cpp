@@ -20,7 +20,6 @@
 #include "Walrus.h"
 #include "wasm.h"
 
-#include "runtime/Engine.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
 #include "runtime/Function.h"
@@ -87,26 +86,6 @@ struct wasm_exporttype_t {
 };
 
 struct wasm_config_t {
-};
-
-struct wasm_engine_t {
-    wasm_engine_t(Engine* e)
-        : engine(e)
-    {
-    }
-
-    ~wasm_engine_t()
-    {
-        delete engine;
-    }
-
-    Engine* get() const
-    {
-        ASSERT(engine);
-        return engine;
-    }
-
-    Engine* engine;
 };
 
 struct wasm_store_t {

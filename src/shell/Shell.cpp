@@ -5,7 +5,6 @@
 #include <inttypes.h>
 
 #include "Walrus.h"
-#include "runtime/Engine.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
 #include "runtime/Instance.h"
@@ -795,8 +794,7 @@ int main(int argc, char* argv[])
     mallopt(M_MMAP_MAX, 1024 * 1024);
 #endif
 
-    Engine* engine = new Engine();
-    Store* store = new Store(engine);
+    Store* store = new Store();
 
     SpecTestFunctionTypes functionTypes;
 
@@ -825,7 +823,6 @@ int main(int argc, char* argv[])
 
     // finalize
     delete store;
-    delete engine;
 
     return 0;
 }

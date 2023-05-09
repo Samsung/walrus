@@ -30,8 +30,7 @@ class FunctionType;
 
 class Store {
 public:
-    Store(Engine* engine)
-        : m_engine(engine)
+    Store()
     {
     }
 
