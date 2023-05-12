@@ -217,7 +217,7 @@ protected:
 
 class Call : public ByteCode {
 public:
-    Call(uint32_t index
+    Call(uint32_t index, uint32_t offsetsSize
 #if !defined(NDEBUG)
          ,
          FunctionType* functionType
@@ -225,6 +225,7 @@ public:
          )
         : ByteCode(OpcodeKind::CallOpcode)
         , m_index(index)
+        , m_offsetsSize(offsetsSize)
 #if !defined(NDEBUG)
         , m_functionType(functionType)
 #endif
@@ -235,6 +236,11 @@ public:
     ByteCodeStackOffset* stackOffsets() const
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call));
+    }
+
+    uint32_t offsetsSize()
+    {
+        return m_offsetsSize;
     }
 
 #if !defined(NDEBUG)
@@ -258,12 +264,13 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(Call) + sizeof(ByteCodeStackOffset) * m_functionType->param().size() + sizeof(ByteCodeStackOffset) * m_functionType->result().size();
+        return sizeof(Call) + sizeof(ByteCodeStackOffset) * offsetsSize();
     }
 #endif
 
 protected:
     uint32_t m_index;
+    uint32_t m_offsetsSize;
 #if !defined(NDEBUG)
     FunctionType* m_functionType;
 #endif
@@ -1319,17 +1326,10 @@ protected:
 
 class Throw : public ByteCode {
 public:
-    Throw(uint32_t index
-#if !defined(NDEBUG)
-          ,
-          FunctionType* functionType
-#endif
-          )
+    Throw(uint32_t index, uint32_t offsetsSize)
         : ByteCode(OpcodeKind::ThrowOpcode)
         , m_tagIndex(index)
-#if !defined(NDEBUG)
-        , m_functionType(functionType)
-#endif
+        , m_offsetsSize(offsetsSize)
     {
     }
 
@@ -1339,16 +1339,21 @@ public:
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Throw));
     }
 
+    uint32_t offsetsSize()
+    {
+        return m_offsetsSize;
+    }
+
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
         printf("tagIndex: %" PRId32 " ",
                m_tagIndex);
 
-        if (m_functionType) {
+        if (m_tagIndex != std::numeric_limits<uint32_t>::max()) {
             auto arr = dataOffsets();
             printf("resultOffsets: ");
-            for (size_t i = 0; i < m_functionType->result().size(); i++) {
+            for (size_t i = 0; i < offsetsSize(); i++) {
                 printf("%" PRIu32 " ", (uint32_t)arr[i]);
             }
             printf(" ");
@@ -1357,15 +1362,13 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(Throw) + (m_functionType ? sizeof(ByteCodeStackOffset) * m_functionType->result().size() : 0);
+        return sizeof(Throw) + sizeof(ByteCodeStackOffset) * offsetsSize();
     }
 #endif
 
 protected:
     uint32_t m_tagIndex;
-#if !defined(NDEBUG)
-    FunctionType* m_functionType;
-#endif
+    uint32_t m_offsetsSize;
 };
 
 class Unreachable : public ByteCode {
@@ -1391,15 +1394,9 @@ protected:
 
 class End : public ByteCode {
 public:
-    End(
-#if !defined(NDEBUG)
-        FunctionType* functionType
-#endif
-        )
+    End(uint32_t offsetsSize)
         : ByteCode(OpcodeKind::EndOpcode)
-#if !defined(NDEBUG)
-        , m_functionType(functionType)
-#endif
+        , m_offsetsSize(offsetsSize)
     {
     }
 
@@ -1408,12 +1405,17 @@ public:
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(End));
     }
 
+    uint32_t offsetsSize()
+    {
+        return m_offsetsSize;
+    }
+
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
         auto arr = resultOffsets();
         printf("resultOffsets: ");
-        for (size_t i = 0; i < m_functionType->result().size(); i++) {
+        for (size_t i = 0; i < offsetsSize(); i++) {
             printf("%" PRIu32 " ", arr[i]);
         }
         printf(" ");
@@ -1421,12 +1423,12 @@ public:
 
     virtual size_t byteCodeSize()
     {
-        return sizeof(End) + sizeof(ByteCodeStackOffset) * m_functionType->result().size();
+        return sizeof(End) + sizeof(ByteCodeStackOffset) * offsetsSize();
     }
+#endif
 
 protected:
-    FunctionType* m_functionType;
-#endif
+    uint32_t m_offsetsSize;
 };
 
 } // namespace Walrus

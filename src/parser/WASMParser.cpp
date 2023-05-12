@@ -712,9 +712,9 @@ public:
     {
         auto functionType = m_result.m_functions[index]->functionType();
         auto callPos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::Call(index
+        pushByteCode(Walrus::Call(index, functionType->param().size() + functionType->result().size()
 #if !defined(NDEBUG)
-                                  ,
+                                             ,
                                   functionType
 #endif
                                   ));
@@ -1161,11 +1161,7 @@ public:
             return;
         }
         auto pos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::End(
-#if !defined(NDEBUG)
-            m_currentFunctionType
-#endif
-            ));
+        pushByteCode(Walrus::End(m_currentFunctionType->result().size()));
 
         auto& result = m_currentFunctionType->result();
         m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * result.size());
@@ -1315,12 +1311,13 @@ public:
     virtual void OnThrowExpr(Index tagIndex) override
     {
         auto pos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::Throw(tagIndex
-#if !defined(NDEBUG)
-                                   ,
-                                   tagIndex != std::numeric_limits<Index>::max() ? m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()] : nullptr
-#endif
-                                   ));
+        uint32_t offsetsSize = 0;
+
+        if (tagIndex != std::numeric_limits<Index>::max()) {
+            offsetsSize = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()]->result().size();
+        }
+
+        pushByteCode(Walrus::Throw(tagIndex, offsetsSize));
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()];
