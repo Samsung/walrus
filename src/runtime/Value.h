@@ -37,8 +37,8 @@ public:
 template <typename T>
 size_t stackAllocatedSize()
 {
-    if (sizeof(T) < sizeof(size_t) && sizeof(T) % sizeof(size_t)) {
-        return sizeof(size_t);
+    if (sizeof(T) < sizeof(size_t)) {
+        return sizeof(T);
     } else if (sizeof(T) > sizeof(size_t) && sizeof(T) % sizeof(size_t)) {
         return sizeof(size_t) * ((sizeof(T) / sizeof(size_t)) + 1);
     } else {
