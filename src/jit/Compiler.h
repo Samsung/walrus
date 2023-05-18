@@ -82,6 +82,10 @@ public:
         Memory,
         // Move operation. (e.g. Move32, Move64)
         Move,
+        // GlobalGet operation (e.g. GlobalGet32, GlobalGet64)
+        GlobalGet,
+        // GlobalSet operation (e.g. GlobalSet32, GlobalSet64)
+        GlobalSet,
     };
 
     virtual ~InstructionListItem() {}
@@ -397,12 +401,13 @@ class JITCompiler {
 public:
     static const uint32_t kHasCondMov = 1 << 0;
 
-    JITCompiler(int verboseLevel)
+    JITCompiler(Module* module, int verboseLevel)
         : m_first(nullptr)
         , m_last(nullptr)
         , m_functionListFirst(nullptr)
         , m_functionListLast(nullptr)
         , m_compiler(nullptr)
+        , m_module(module)
         , m_branchTableSize(0)
         , m_verboseLevel(verboseLevel)
         , m_options(0)
@@ -416,6 +421,7 @@ public:
         releaseFunctionList();
     }
 
+    Module* module() { return m_module; }
     int verboseLevel() { return m_verboseLevel; }
     uint32_t options() { return m_options; }
     InstructionListItem* first() { return m_first; }
@@ -484,6 +490,7 @@ private:
     InstructionListItem* m_functionListLast;
 
     sljit_compiler* m_compiler;
+    Module* m_module;
     size_t m_branchTableSize;
     int m_verboseLevel;
     uint32_t m_options;
