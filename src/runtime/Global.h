@@ -23,6 +23,8 @@
 namespace Walrus {
 
 class Global : public Extern {
+    friend class JITFieldAccessor;
+
 public:
     static Global* createGlobal(Store* store, const Value& value)
     {
