@@ -1,0 +1,56 @@
+(module
+
+(global $a (mut i32) (i32.const 1))
+(global $b (mut i64) (i64.const 2))
+(global (;2;) i32 (i32.const 3))
+(global (;3;) i64 (i64.const 4))
+(global $c (mut f32) (f32.const 5.5))
+(global $d (mut f64) (f64.const 6.6))
+(global (;6;) f32 (f32.const 7.7))
+(global (;7;) f64 (f64.const 8.8))
+
+(func (export "global_a") (result i32) global.get $a )
+(func (export "global_b") (result i64) global.get $b )
+(func (export "global_c") (result f32) global.get $c )
+(func (export "global_d") (result f64) global.get $d )
+
+(func (export "global_2") (result i32) global.get 2 )
+(func (export "global_3") (result i64) global.get 3 )
+(func (export "global_6") (result f32) global.get 6 )
+(func (export "global_7") (result f64) global.get 7 )
+
+(func (export "global_set_a") (param i32) (global.set $a (local.get 0)) )
+(func (export "global_set_b") (param i64) (global.set $b (local.get 0)) )
+(func (export "global_set_c") (param f32) (global.set $c (local.get 0)) )
+(func (export "global_set_d") (param f64) (global.set $d (local.get 0)) )
+
+(global $r externref (ref.null extern))
+(global $mr externref (ref.null extern))
+(global $fr funcref (ref.null func))
+
+(func (export "global_r") (result externref) global.get $r )
+(func (export "global_mr") (result externref) global.get $mr )
+(func (export "global_fr") (result funcref) global.get $fr )
+
+)
+
+(assert_return (invoke "global_a" ) (i32.const 1))
+(assert_return (invoke "global_b" ) (i64.const 2))
+(assert_return (invoke "global_c" ) (f32.const 5.5))
+(assert_return (invoke "global_d" ) (f64.const 6.6))
+(assert_return (invoke "global_2" ) (i32.const 3))
+(assert_return (invoke "global_3" ) (i64.const 4))
+(assert_return (invoke "global_6" ) (f32.const 7.7))
+(assert_return (invoke "global_7" ) (f64.const 8.8))
+(assert_return (invoke "global_set_a" (i32.const 11)))
+(assert_return (invoke "global_a" ) (i32.const 11))
+(assert_return (invoke "global_set_b" (i64.const 22)))
+(assert_return (invoke "global_b" ) (i64.const 22))
+(assert_return (invoke "global_set_c" (f32.const 55.5)))
+(assert_return (invoke "global_c" ) (f32.const 55.5))
+(assert_return (invoke "global_set_d" (f64.const 66.6)))
+(assert_return (invoke "global_d" ) (f64.const 66.6))
+
+(assert_return (invoke "global_r") (ref.null extern))
+(assert_return (invoke "global_mr") (ref.null extern))
+(assert_return (invoke "global_fr") ( ref.null func))
