@@ -18,8 +18,10 @@
 
 #include "runtime/JITExec.h"
 #include "runtime/Memory.h"
+#include "runtime/Global.h"
 #include "jit/Compiler.h"
 #include "util/MathOperation.h"
+#include "runtime/Instance.h"
 
 #include <math.h>
 #include <map>
@@ -84,6 +86,11 @@ public:
     {
         return offsetof(Memory, m_buffer);
     }
+
+    static sljit_sw globalValueOffset()
+    {
+        return offsetof(Global, m_value) + offsetof(Value, m_i32);
+    }
 };
 
 class SlowCase {
@@ -120,6 +127,8 @@ struct CompileContext {
         , trapLabel(nullptr)
         , memoryTrapLabel(nullptr)
     {
+        sljit_sw offset = Instance::alignedSize();
+        globalsStart = offset + sizeof(void*) * compiler->module()->numberOfMemoryTypes();
     }
 
     static CompileContext* get(sljit_compiler* compiler)
@@ -136,6 +145,7 @@ struct CompileContext {
     sljit_label* memoryTrapLabel;
     sljit_label* returnToLabel;
     sljit_uw branchTableOffset;
+    sljit_sw globalsStart;
     std::vector<TrapBlock> trapBlocks;
     std::vector<SlowCase*> slowCases;
     std::vector<sljit_jump*> earlyReturns;
@@ -424,6 +434,42 @@ static void emitMove32(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV32, dst.arg, dst.argw, src.arg, src.argw);
 }
 
+static void emitGlobalGet32(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    Operand* operands = instr->operands();
+    JITArg dst;
+
+    operandToArg(operands, dst);
+
+    GlobalGet32* globalGet = reinterpret_cast<GlobalGet32*>(instr->byteCode());
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalGet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset());
+}
+
+static void emitGlobalSet32(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    Operand* operands = instr->operands();
+    JITArg src;
+
+    operandToArg(operands, src);
+
+    GlobalSet32* globalSet = reinterpret_cast<GlobalSet32*>(instr->byteCode());
+
+    if (SLJIT_IS_MEM(src.arg)) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, src.arg, src.argw);
+        src.arg = SLJIT_R1;
+        src.argw = 0;
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalSet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+}
+
 JITModule::~JITModule()
 {
     delete m_instanceConstData->trapHandlers;
@@ -568,6 +614,22 @@ JITModule* JITCompiler::compile()
         }
         case Instruction::Memory: {
             emitMemory(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GlobalGet: {
+            if (item->asInstruction()->opcode() == GlobalGet32Opcode) {
+                emitGlobalGet32(m_compiler, item->asInstruction());
+            } else {
+                emitGlobalGet64(m_compiler, item->asInstruction());
+            }
+            break;
+        }
+        case Instruction::GlobalSet: {
+            if (item->asInstruction()->opcode() == GlobalSet32Opcode) {
+                emitGlobalSet32(m_compiler, item->asInstruction());
+            } else {
+                emitGlobalSet64(m_compiler, item->asInstruction());
+            }
             break;
         }
         case Instruction::Move: {
