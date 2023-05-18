@@ -540,6 +540,46 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(move64->dstOffset());
             break;
         }
+        case GlobalGet32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, GlobalGet32Opcode, 0, 1);
+
+            GlobalGet32* globalGet32 = reinterpret_cast<GlobalGet32*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(globalGet32->dstOffset());
+            break;
+        }
+        case GlobalGet64Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, GlobalGet64Opcode, 0, 1);
+
+            GlobalGet64* globalGet64 = reinterpret_cast<GlobalGet64*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(globalGet64->dstOffset());
+            break;
+        }
+        case GlobalSet32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, GlobalSet32Opcode, 1, 0);
+
+            GlobalSet32* globalSet32 = reinterpret_cast<GlobalSet32*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(globalSet32->srcOffset());
+            break;
+        }
+        case GlobalSet64Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, GlobalSet64Opcode, 1, 0);
+
+            GlobalSet64* globalSet64 = reinterpret_cast<GlobalSet64*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(globalSet64->srcOffset());
+            break;
+        }
         case EndOpcode: {
             uint32_t size = function->functionType()->result().size();
 
@@ -621,7 +661,7 @@ void Module::jitCompile(int verboseLevel)
         return;
     }
 
-    JITCompiler compiler(verboseLevel);
+    JITCompiler compiler(this, verboseLevel);
 
     for (size_t i = 0; i < functionCount; i++) {
         if (verboseLevel >= 1) {
