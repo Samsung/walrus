@@ -78,6 +78,8 @@ public:
         Load,
         // Store operation. (e.g. Store64, F32Store)
         Store,
+        // Table operation. (e.g. TableInit, TableGet)
+        Table,
         // Memory management operation. (e.g. MemorySize, MemoryInit)
         Memory,
         // Move operation. (e.g. Move32, Move64)
