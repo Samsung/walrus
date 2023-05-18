@@ -94,6 +94,11 @@ public:
         return true;
     }
 
+    static size_t alignedSize()
+    {
+        return (sizeof(Instance) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
+    }
+
     Module* module() const { return m_module; }
 
     Function* function(uint32_t index) const { return m_functions[index]; }
@@ -123,11 +128,6 @@ public:
 private:
     Instance(Module* module);
     ~Instance() {}
-
-    static constexpr size_t alignedSize()
-    {
-        return (sizeof(Instance) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
-    }
 
     Module* m_module;
 
