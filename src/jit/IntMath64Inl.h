@@ -561,3 +561,39 @@ static void emitMove64(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, src.arg, src.argw);
 }
+
+static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    Operand* operands = instr->operands();
+    JITArg dst;
+
+    operandToArg(operands, dst);
+
+    GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
+
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalGet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset());
+}
+
+static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    Operand* operands = instr->operands();
+    JITArg src;
+
+    operandToArg(operands, src);
+
+    GlobalSet64* globalSet = reinterpret_cast<GlobalSet64*>(instr->byteCode());
+
+    if (SLJIT_IS_MEM(src.arg)) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, src.arg, src.argw);
+        src.arg = SLJIT_R1;
+        src.argw = 0;
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalSet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+}

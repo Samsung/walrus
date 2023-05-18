@@ -1159,3 +1159,44 @@ static void emitMove64(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg1, dst.arg1w, src.arg1, src.arg1w);
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg2, dst.arg2w, src.arg2, src.arg2w);
 }
+
+static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    Operand* operands = instr->operands();
+    JITArgPair dst;
+
+    operandToArgPair(operands, dst);
+
+    GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
+
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalGet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg1, dst.arg1w, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset() + WORD_LOW_OFFSET);
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg2, dst.arg2w, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset() + WORD_HIGH_OFFSET);
+}
+
+static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    Operand* operands = instr->operands();
+    JITArgPair src;
+
+    operandToArgPair(operands, src);
+
+    GlobalSet32* globalSet = reinterpret_cast<GlobalSet32*>(instr->byteCode());
+
+    if (SLJIT_IS_MEM(src.arg1)) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, src.arg1, src.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, src.arg2, src.arg2w);
+        src.arg1 = SLJIT_R1;
+        src.arg1w = 0;
+        src.arg2 = SLJIT_R2;
+        src.arg2w = 0;
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalSet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset() + WORD_LOW_OFFSET, src.arg1, src.arg1w);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset() + WORD_HIGH_OFFSET, src.arg2, src.arg2w);
+}
