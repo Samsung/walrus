@@ -341,7 +341,6 @@ inline size_t valueSizeInStack(Value::Type type)
 template <const size_t size>
 inline void Value::readFromStack(uint8_t* ptr)
 {
-    ASSERT(valueSizeInStack(m_type) == size);
     if (size == 4) {
         m_i32 = *reinterpret_cast<int32_t*>(ptr);
     } else {

@@ -896,27 +896,24 @@ public:
 
     virtual void OnGlobalGetExpr(Index index) override
     {
-        auto sz = Walrus::valueSizeInStack(m_result.m_globalTypes[index]->type());
-        auto stackPos = pushVMStack(sz);
-        if (sz == 4) {
+        auto type = m_result.m_globalTypes[index]->type();
+        auto stackSize = Walrus::valueSizeInStack(type);
+        auto stackPos = pushVMStack(stackSize);
+        if (type == Walrus::Value::Type::I32 || type == Walrus::Value::Type::F32) {
             pushByteCode(Walrus::GlobalGet32(stackPos, index));
         } else {
-            ASSERT(sz == 8);
             pushByteCode(Walrus::GlobalGet64(stackPos, index));
         }
     }
 
     virtual void OnGlobalSetExpr(Index index) override
     {
+        auto type = m_result.m_globalTypes[index]->type();
+        auto stackSize = Walrus::valueSizeInStack(type);
         auto stackPos = peekVMStack();
-
-        auto sz = Walrus::valueSizeInStack(m_result.m_globalTypes[index]->type());
-        if (sz == 4) {
-            ASSERT(peekVMStackSize() == 4);
+        if (type == Walrus::Value::Type::I32 || type == Walrus::Value::Type::F32) {
             pushByteCode(Walrus::GlobalSet32(stackPos, index));
         } else {
-            ASSERT(sz == 8);
-            ASSERT(peekVMStackSize() == 8);
             pushByteCode(Walrus::GlobalSet64(stackPos, index));
         }
         popVMStack();
