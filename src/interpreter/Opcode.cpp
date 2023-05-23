@@ -22,7 +22,7 @@ namespace Walrus {
 
 ByteCodeInfo g_byteCodeInfo[OpcodeKind::InvalidOpcode] = {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
-                    text, decomp)                                            \
+                    text, decomp, size)                                      \
     { name##Opcode,                                                          \
       ByteCodeInfo::rtype,                                                   \
       { ByteCodeInfo::type1, ByteCodeInfo::type2, ByteCodeInfo::type3 },     \

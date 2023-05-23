@@ -23,7 +23,7 @@ namespace Walrus {
 
 enum OpcodeKind : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
-                    text, decomp)                                            \
+                    text, decomp, size)                                      \
     name##Opcode,
 #include "interpreter/opcode.def"
 #undef WABT_OPCODE

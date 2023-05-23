@@ -1339,7 +1339,7 @@ public:
         uint32_t offsetsSize = 0;
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            offsetsSize = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()]->result().size();
+            offsetsSize = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()]->param().size();
         }
 
         pushByteCode(Walrus::Throw(tagIndex, offsetsSize));
