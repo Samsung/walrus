@@ -378,7 +378,7 @@ void ModuleFunction::dumpByteCode()
         printf("%s ", g_byteCodeInfo[code->opcode()].m_name);
         code->dump(idx);
         printf("\n");
-        idx += code->byteCodeSize();
+        idx += code->getSize();
     }
 }
 #endif

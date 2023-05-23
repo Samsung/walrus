@@ -47,6 +47,7 @@ public:
     }
 #endif
 
+    size_t getSize();
 
 #if !defined(NDEBUG)
     virtual ~ByteCode()
@@ -55,11 +56,6 @@ public:
 
     virtual void dump(size_t pos)
     {
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(ByteCode);
     }
 #endif
 
@@ -109,11 +105,6 @@ public:
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("value: %" PRId32, m_value);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Const32);
-    }
 #endif
 
 protected:
@@ -140,11 +131,6 @@ public:
     {
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("value: %" PRIu64, m_value);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Const64);
     }
 #endif
 
@@ -173,11 +159,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffset[1]);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(BinaryOperation);
-    }
 #endif
 
 protected:
@@ -202,11 +183,6 @@ public:
     {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(UnaryOperation);
     }
 #endif
 
@@ -261,11 +237,6 @@ public:
         }
         printf(" ");
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Call) + sizeof(ByteCodeStackOffset) * offsetsSize();
-    }
 #endif
 
 protected:
@@ -314,11 +285,6 @@ public:
         }
         printf(" ");
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * m_functionType->param().size() + sizeof(ByteCodeStackOffset) * m_functionType->result().size();
-    }
 #endif
 
 protected:
@@ -345,11 +311,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Move32);
-    }
 #endif
 
 protected:
@@ -374,11 +335,6 @@ public:
     {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Move64);
     }
 #endif
 
@@ -406,11 +362,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(SimpleLoad);
-    }
 #endif
 
 protected:
@@ -437,11 +388,6 @@ public:
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(SimpleStore);
-    }
 #endif
 
 protected:
@@ -467,11 +413,6 @@ public:
     virtual void dump(size_t pos)
     {
         printf("dst: %" PRId32, (int32_t)pos + m_offset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Jump);
     }
 #endif
 
@@ -501,11 +442,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffset);
         printf("dst: %" PRId32, (int32_t)pos + m_offset);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(JumpIfTrue);
-    }
 #endif
 
 protected:
@@ -534,11 +470,6 @@ public:
     {
         DUMP_BYTECODE_OFFSET(srcOffset);
         printf("dst: %" PRId32, (int32_t)pos + m_offset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(JumpIfFalse);
     }
 #endif
 
@@ -575,11 +506,6 @@ public:
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
         DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Select);
     }
 #endif
 
@@ -624,11 +550,6 @@ public:
             printf("%zu->%" PRId32 " ", i, jumpOffsets()[i]);
         }
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(BrTable) + sizeof(int32_t) * m_tableSize;
-    }
 #endif
 
 protected:
@@ -652,11 +573,6 @@ public:
     virtual void dump(size_t pos)
     {
         DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(MemorySize);
     }
 #endif
 
@@ -692,11 +608,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
         printf("segmentIndex: %" PRIu32, m_segmentIndex);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(MemoryInit);
-    }
 #endif
 
 protected:
@@ -726,11 +637,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(MemoryCopy);
-    }
 #endif
 protected:
     ByteCodeStackOffset m_srcOffsets[3];
@@ -757,11 +663,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(MemoryFill);
-    }
 #endif
 protected:
     ByteCodeStackOffset m_srcOffsets[3];
@@ -784,11 +685,6 @@ public:
     virtual void dump(size_t pos)
     {
         printf("segmentIndex: %" PRIu32, m_segmentIndex);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(DataDrop);
     }
 #endif
 
@@ -814,10 +710,6 @@ public:
     {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(MemoryGrow);
     }
 #endif
 
@@ -845,11 +737,6 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(MemoryLoad);
-    }
-
     virtual void dump(size_t pos)
     {
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -882,11 +769,6 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(MemoryStore);
-    }
-
     virtual void dump(size_t pos)
     {
         DUMP_BYTECODE_OFFSET(src0Offset);
@@ -921,11 +803,6 @@ public:
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("tableIndex: %" PRIu32, m_tableIndex);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(TableGet);
-    }
 #endif
 
 protected:
@@ -954,11 +831,6 @@ public:
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
         printf("tableIndex: %" PRIu32, m_tableIndex);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(TableSet);
     }
 #endif
 
@@ -992,11 +864,6 @@ public:
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("tableIndex: %" PRIu32, m_tableIndex);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(TableGrow);
-    }
 #endif
 
 protected:
@@ -1023,11 +890,6 @@ public:
     {
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("tableIndex: %" PRIu32, m_tableIndex);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(TableSize);
     }
 #endif
 
@@ -1061,11 +923,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
         printf("dstIndex: %" PRIu32 " srcIndex: %" PRIu32, m_dstIndex, m_srcIndex);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(TableCopy);
-    }
 #endif
 
 protected:
@@ -1095,11 +952,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
         printf("tableIndex: %" PRIu32, m_tableIndex);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(TableFill);
     }
 #endif
 
@@ -1132,11 +984,6 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
         printf("tableIndex: %" PRIu32 " segmentIndex: %" PRIu32, m_tableIndex, m_segmentIndex);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(TableInit);
-    }
 #endif
 
 protected:
@@ -1163,11 +1010,6 @@ public:
     {
         printf("segmentIndex: %" PRIu32, m_segmentIndex);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(ElemDrop);
-    }
 #endif
 
 protected:
@@ -1191,11 +1033,6 @@ public:
     {
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("funcIndex: %" PRIu32, m_funcIndex);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(RefFunc);
     }
 #endif
 
@@ -1222,11 +1059,6 @@ public:
         printf("index: %" PRId32,
                m_index);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(GlobalGet32);
-    }
 #endif
 
 protected:
@@ -1251,11 +1083,6 @@ public:
     {
         printf("index: %" PRId32,
                m_index);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(GlobalGet64);
     }
 #endif
 
@@ -1282,11 +1109,6 @@ public:
         printf("index: %" PRId32,
                m_index);
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(GlobalSet32);
-    }
 #endif
 
 protected:
@@ -1311,11 +1133,6 @@ public:
     {
         printf("index: %" PRId32,
                m_index);
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(GlobalSet64);
     }
 #endif
 
@@ -1359,11 +1176,6 @@ public:
             printf(" ");
         }
     }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Throw) + sizeof(ByteCodeStackOffset) * offsetsSize();
-    }
 #endif
 
 protected:
@@ -1381,11 +1193,6 @@ public:
 #if !defined(NDEBUG)
     virtual void dump(size_t pos)
     {
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(Unreachable);
     }
 #endif
 
@@ -1419,11 +1226,6 @@ public:
             printf("%" PRIu32 " ", arr[i]);
         }
         printf(" ");
-    }
-
-    virtual size_t byteCodeSize()
-    {
-        return sizeof(End) + sizeof(ByteCodeStackOffset) * offsetsSize();
     }
 #endif
 
