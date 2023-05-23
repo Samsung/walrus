@@ -603,10 +603,7 @@ public:
 
     ByteCodeStackOffset condOffset() const { return m_condOffset; }
     int32_t defaultOffset() const { return m_defaultOffset; }
-    void setDefaultOffset(int32_t offset)
-    {
-        m_defaultOffset = offset;
-    }
+    static inline size_t offsetOfDefault() { return offsetof(BrTable, m_defaultOffset); }
 
     uint32_t tableSize() const { return m_tableSize; }
     int32_t* jumpOffsets() const
