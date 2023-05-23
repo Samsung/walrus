@@ -150,7 +150,13 @@ private:
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
         struct JumpToEndBrInfo {
-            bool m_isJumpIf;
+            enum JumpToEndType {
+                IsJump,
+                IsJumpIf,
+                IsBrTable,
+            };
+
+            JumpToEndType m_type;
             size_t m_position;
         };
 
@@ -962,7 +968,7 @@ public:
         auto stackPos = popVMStack();
 
         BlockInfo b(BlockInfo::IfElse, sigType, *this);
-        b.m_jumpToEndBrInfo.push_back({ true, b.m_position });
+        b.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, b.m_position });
         m_blockInfo.push_back(b);
         pushByteCode(Walrus::JumpIfFalse(stackPos));
     }
@@ -1012,7 +1018,7 @@ public:
         keepSubResultsIfNeeds();
         BlockInfo& blockInfo = m_blockInfo.back();
         blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
-        blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+        blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
         pushByteCode(Walrus::Jump());
         ASSERT(blockInfo.m_blockType == BlockInfo::IfElse);
         restoreVMStackRegardToPartOfBlockEnd(blockInfo);
@@ -1210,7 +1216,7 @@ public:
             generateMoveValuesCodeRegardToDrop(dropSize);
         }
         if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
-            blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
         }
         pushByteCode(Walrus::Jump(offset));
 
@@ -1243,7 +1249,7 @@ public:
             generateMoveValuesCodeRegardToDrop(dropSize);
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
             if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
-                blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
             }
             pushByteCode(Walrus::Jump(offset));
             m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(pos)
@@ -1251,10 +1257,46 @@ public:
         } else {
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
             if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
-                blockInfo.m_jumpToEndBrInfo.push_back({ true, m_currentFunction->currentByteCodeSize() });
+                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentFunction->currentByteCodeSize() });
             }
             pushByteCode(Walrus::JumpIfTrue(stackPos, offset));
         }
+    }
+
+    void emitBrTableCase(size_t brTableCode, Index depth, size_t jumpOffset)
+    {
+        int32_t offset = (int32_t)(m_currentFunction->currentByteCodeSize() - brTableCode);
+
+        if (m_blockInfo.size() == depth) {
+            // this case acts like return
+#if !defined(NDEBUG)
+            for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
+                ASSERT((m_vmStack.rbegin() + i)->m_size == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+            }
+#endif
+            *(int32_t*)(m_currentFunction->peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
+            generateEndCode();
+            return;
+        }
+
+        auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
+
+        if (UNLIKELY(dropSize.second)) {
+            *(int32_t*)(m_currentFunction->peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
+            OnBrExpr(depth);
+            return;
+        }
+
+        auto& blockInfo = findBlockInfoInBr(depth);
+
+        offset = (int32_t)(blockInfo.m_position - brTableCode);
+
+        if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
+            offset = jumpOffset;
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsBrTable, brTableCode + jumpOffset });
+        }
+
+        *(int32_t*)(m_currentFunction->peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
     }
 
     virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
@@ -1267,31 +1309,14 @@ public:
 
         if (numTargets) {
             m_currentFunction->expandByteCode(sizeof(int32_t) * numTargets);
-            std::vector<size_t> offsets;
 
             for (Index i = 0; i < numTargets; i++) {
-                offsets.push_back(m_currentFunction->currentByteCodeSize() - brTableCode);
-                if (m_blockInfo.size() == targetDepths[i]) {
-                    // this case acts like return
-                    for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-                        ASSERT((m_vmStack.rbegin() + i)->m_size == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
-                    }
-                    generateEndCode();
-                } else {
-                    OnBrExpr(targetDepths[i]);
-                }
-            }
-
-            for (Index i = 0; i < numTargets; i++) {
-                m_currentFunction->peekByteCode<Walrus::BrTable>(brTableCode)->jumpOffsets()[i] = offsets[i];
+                emitBrTableCase(brTableCode, targetDepths[i], sizeof(Walrus::BrTable) + i * sizeof(int32_t));
             }
         }
 
         // generate default
-        size_t pos = m_currentFunction->currentByteCodeSize();
-        OnBrExpr(defaultTargetDepth);
-        m_currentFunction->peekByteCode<Walrus::BrTable>(brTableCode)->setDefaultOffset(pos - brTableCode);
-
+        emitBrTableCase(brTableCode, defaultTargetDepth, Walrus::BrTable::offsetOfDefault());
         stopToGenerateByteCodeWhileBlockEnd();
     }
 
@@ -1354,11 +1379,11 @@ public:
         if (m_catchInfo.size() && m_catchInfo.back().m_tryCatchBlockDepth == m_blockInfo.size()) {
             // not first catch
             tryEnd = m_catchInfo.back().m_tryEnd;
-            blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
             pushByteCode(Walrus::Jump());
         } else {
             // first catch
-            blockInfo.m_jumpToEndBrInfo.push_back({ false, m_currentFunction->currentByteCodeSize() });
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
             pushByteCode(Walrus::Jump());
         }
 
@@ -1628,11 +1653,20 @@ public:
             }
 
             for (size_t i = 0; i < blockInfo.m_jumpToEndBrInfo.size(); i++) {
-                if (blockInfo.m_jumpToEndBrInfo[i].m_isJumpIf) {
+                switch (blockInfo.m_jumpToEndBrInfo[i].m_type) {
+                case BlockInfo::JumpToEndBrInfo::IsJump:
+                    m_currentFunction->peekByteCode<Walrus::Jump>(blockInfo.m_jumpToEndBrInfo[i].m_position)->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
+                    break;
+                case BlockInfo::JumpToEndBrInfo::IsJumpIf:
                     m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_jumpToEndBrInfo[i].m_position)
                         ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
-                } else {
-                    m_currentFunction->peekByteCode<Walrus::Jump>(blockInfo.m_jumpToEndBrInfo[i].m_position)->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
+                    break;
+                default:
+                    ASSERT(blockInfo.m_jumpToEndBrInfo[i].m_type == BlockInfo::JumpToEndBrInfo::IsBrTable);
+
+                    int32_t* offset = m_currentFunction->peekByteCode<int32_t>(blockInfo.m_jumpToEndBrInfo[i].m_position);
+                    *offset = m_currentFunction->currentByteCodeSize() + (size_t)*offset - blockInfo.m_jumpToEndBrInfo[i].m_position;
+                    break;
                 }
             }
         } else {
