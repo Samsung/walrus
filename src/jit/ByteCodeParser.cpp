@@ -382,6 +382,96 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
             break;
         }
+        case TableInitOpcode: {
+            auto tableInit = reinterpret_cast<TableInit*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(tableInit->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(tableInit->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(tableInit->srcOffsets()[2]);
+            break;
+        }
+        case TableSizeOpcode: {
+            auto tableSize = reinterpret_cast<TableSize*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 0, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(tableSize->dstOffset());
+            break;
+        }
+        case TableCopyOpcode: {
+            auto tableCopy = reinterpret_cast<TableCopy*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(tableCopy->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(tableCopy->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(tableCopy->srcOffsets()[2]);
+            break;
+        }
+        case TableFillOpcode: {
+            auto tableFill = reinterpret_cast<TableFill*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(tableFill->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(tableFill->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(tableFill->srcOffsets()[2]);
+            break;
+        }
+        case TableGrowOpcode: {
+            auto tableGrow = reinterpret_cast<TableGrow*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(tableGrow->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(tableGrow->src1Offset());
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(tableGrow->dstOffset());
+            break;
+        }
+        case TableSetOpcode: {
+            auto tableSet = reinterpret_cast<TableSet*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(tableSet->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(tableSet->src1Offset());
+            break;
+        }
+        case TableGetOpcode: {
+            auto tableGet = reinterpret_cast<TableGet*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 1, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(tableGet->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(tableGet->dstOffset());
+            break;
+        }
         case MemorySizeOpcode: {
             MemorySize* memorySize = reinterpret_cast<MemorySize*>(byteCode);
 
