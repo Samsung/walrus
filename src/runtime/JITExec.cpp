@@ -47,6 +47,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::OutOfBoundsMemAccessError:
             Trap::throwException(state, "out of bounds memory access");
             return resultOffsets;
+        case ExecutionContext::OutOfBoundsTableAccessError:
+            Trap::throwException(state, "out of bounds table access");
+            return resultOffsets;
         case ExecutionContext::UnreachableError:
             Trap::throwException(state, "unreachable executed");
             return resultOffsets;
