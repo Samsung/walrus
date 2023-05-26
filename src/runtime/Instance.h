@@ -77,6 +77,7 @@ private:
 class Instance : public Object {
     friend class Module;
     friend class Interpreter;
+    friend class JITFieldAccessor;
 
 public:
     typedef Vector<Instance*, std::allocator<Instance*>> InstanceVector;
