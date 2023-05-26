@@ -27,6 +27,8 @@ class ElementSegment;
 class Instance;
 
 class Table : public Extern {
+    friend class JITFieldAccessor;
+
 public:
     static Table* createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize);
 
