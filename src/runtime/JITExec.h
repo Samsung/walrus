@@ -48,6 +48,7 @@ struct ExecutionContext {
         IntegerOverflowError,
         InvalidConversionToIntegerError,
         OutOfBoundsMemAccessError,
+        OutOfBoundsTableAccessError,
         UnreachableError,
     };
 

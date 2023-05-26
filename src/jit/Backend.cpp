@@ -19,6 +19,7 @@
 #include "runtime/JITExec.h"
 #include "runtime/Memory.h"
 #include "runtime/Global.h"
+#include "runtime/Table.h"
 #include "jit/Compiler.h"
 #include "util/MathOperation.h"
 #include "runtime/Instance.h"
@@ -91,6 +92,16 @@ public:
     {
         return offsetof(Global, m_value) + offsetof(Value, m_i32);
     }
+
+    static sljit_sw tableSizeOffset()
+    {
+        return offsetof(Table, m_size);
+    }
+
+    static sljit_sw tableElements()
+    {
+        return offsetof(Table, m_elements);
+    }
 };
 
 class SlowCase {
@@ -129,6 +140,7 @@ struct CompileContext {
     {
         sljit_sw offset = Instance::alignedSize();
         globalsStart = offset + sizeof(void*) * compiler->module()->numberOfMemoryTypes();
+        tableStart = globalsStart + compiler->module()->numberOfGlobalTypes() * sizeof(void*);
     }
 
     static CompileContext* get(sljit_compiler* compiler)
@@ -146,6 +158,7 @@ struct CompileContext {
     sljit_label* returnToLabel;
     sljit_uw branchTableOffset;
     sljit_sw globalsStart;
+    sljit_sw tableStart;
     std::vector<TrapBlock> trapBlocks;
     std::vector<SlowCase*> slowCases;
     std::vector<sljit_jump*> earlyReturns;
@@ -241,6 +254,7 @@ static void operandToArg(Operand* operand, JITArg& arg)
 
 #include "FloatConvInl.h"
 #include "MemoryInl.h"
+#include "TableInl.h"
 
 void CompileContext::emitSlowCases(sljit_compiler* compiler)
 {
@@ -612,6 +626,10 @@ JITModule* JITCompiler::compile()
             emitStore(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::Table: {
+            emitTable(m_compiler, item->asInstruction());
+            break;
+        }
         case Instruction::Memory: {
             emitMemory(m_compiler, item->asInstruction());
             break;
@@ -648,6 +666,10 @@ JITModule* JITCompiler::compile()
             }
             case SelectOpcode: {
                 emitSelect(m_compiler, item->asInstruction(), -1);
+                break;
+            }
+            case ElemDropOpcode: {
+                emitElemDrop(m_compiler, item->asInstruction());
                 break;
             }
             case DataDropOpcode: {
