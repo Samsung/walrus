@@ -74,7 +74,8 @@ public:
     template <typename T>
     void load(ExecutionState& state, uint32_t offset, uint32_t addend, T* out) const
     {
-        checkAccess(state, offset, addend, sizeof(T));
+        checkAccess(state, offset, sizeof(T), addend);
+
         memcpyEndianAware(out, m_buffer, sizeof(T), m_sizeInByte, 0, offset + addend, sizeof(T));
     }
 
@@ -92,7 +93,8 @@ public:
     template <typename T>
     void store(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
     {
-        checkAccess(state, offset, addend, sizeof(T));
+        checkAccess(state, offset, sizeof(T), addend);
+
         memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(T), offset + addend, 0, sizeof(T));
     }
 
@@ -115,19 +117,20 @@ private:
     Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte);
 
     void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
-    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const
+    inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
-        if (UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte))) {
+        return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
+    }
+    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const
+    {
+        if (!this->checkAccess(offset, size, addend)) {
             throwException(state, offset, addend, size);
         }
     }
-    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size) const
-    {
-        const auto s = offset + size;
-        if (UNLIKELY(s > m_sizeInByte || s < offset)) {
-            throwException(state, offset, 0, size);
-        }
-    }
+
+    inline void initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    inline void copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size);
+    inline void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
     uint32_t m_sizeInByte;
     uint32_t m_maximumSizeInByte;
