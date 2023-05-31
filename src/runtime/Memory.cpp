@@ -101,11 +101,32 @@ private:
 
 void Memory::init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
-    checkAccess(state, dstStart, 0, srcSize);
+    checkAccess(state, dstStart, srcSize);
+
     if (srcStart >= source->sizeInByte() || srcStart + srcSize > source->sizeInByte()) {
         throwException(state, srcStart, srcStart + srcSize, srcSize);
     }
 
+    this->initMemory(source, dstStart, srcStart, srcSize);
+}
+
+void Memory::copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size)
+{
+    checkAccess(state, srcStart, size);
+    checkAccess(state, dstStart, size);
+
+    this->copyMemory(dstStart, srcStart, size);
+}
+
+void Memory::fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size)
+{
+    checkAccess(state, start, size);
+
+    this->fillMemory(start, value, size);
+}
+
+void Memory::initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+{
     auto data = source->data()->initData();
     std::copy(source->data()->initData().begin() + srcStart, source->data()->initData().begin() + srcStart + srcSize,
 #if defined(WALRUS_BIG_ENDIAN)
@@ -115,11 +136,8 @@ void Memory::init(ExecutionState& state, DataSegment* source, uint32_t dstStart,
 #endif
 }
 
-void Memory::copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size)
+void Memory::copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size)
 {
-    checkAccess(state, srcStart, 0, size);
-    checkAccess(state, dstStart, 0, size);
-
 #if defined(WALRUS_BIG_ENDIAN)
     auto srcBegin = m_buffer + m_sizeInByte + srcStart - size;
     auto dstBegin = m_buffer + m_sizeInByte + dstStart - size;
@@ -136,9 +154,8 @@ void Memory::copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, u
     }
 }
 
-void Memory::fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size)
+void Memory::fillMemory(uint32_t start, uint8_t value, uint32_t size)
 {
-    checkAccess(state, start, 0, size);
 #if defined(WALRUS_BIG_ENDIAN)
     std::fill(m_buffer + m_sizeInByte - start - size, m_buffer + m_sizeInByte - start, value);
 #else

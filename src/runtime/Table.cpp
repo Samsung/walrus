@@ -39,42 +39,6 @@ Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize)
     m_elements.resize(initialSize, reinterpret_cast<void*>(Value::NullBits));
 }
 
-void Table::copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
-{
-    if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)m_size))) {
-        throwException(state);
-    }
-
-    while (n > 0) {
-        if (dstIndex <= srcIndex) {
-            m_elements[dstIndex] = srcTable->getElement(state, srcIndex);
-            dstIndex++;
-            srcIndex++;
-        } else {
-            m_elements[dstIndex + n - 1] = srcTable->getElement(state, srcIndex + n - 1);
-        }
-        n--;
-    }
-}
-
-void Table::fill(ExecutionState& state, uint32_t n, void* value, uint32_t index)
-{
-    if ((uint64_t)index + (uint64_t)n > (uint64_t)m_size) {
-        throwException(state);
-    }
-
-    while (n > 0) {
-        m_elements[index] = value;
-        n--;
-        index++;
-    }
-}
-
-void Table::throwException(ExecutionState& state) const
-{
-    Trap::throwException(state, "out of bounds table access");
-}
-
 void Table::init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
     if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)m_size)) {
@@ -87,15 +51,68 @@ void Table::init(ExecutionState& state, Instance* instance, ElementSegment* sour
         Trap::throwException(state, "type mismatch");
     }
 
+    this->initTable(instance, source, dstStart, srcStart, srcSize);
+}
+
+void Table::copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
+{
+    if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)m_size))) {
+        throwException(state);
+    }
+
+    this->copyTable(srcTable, n, srcIndex, dstIndex);
+}
+
+void Table::fill(ExecutionState& state, uint32_t n, void* value, uint32_t index)
+{
+    if ((uint64_t)index + (uint64_t)n > (uint64_t)m_size) {
+        throwException(state);
+    }
+
+    this->fillTable(n, value, index);
+}
+
+void Table::throwException(ExecutionState& state) const
+{
+    Trap::throwException(state, "out of bounds table access");
+}
+
+void Table::initTable(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+{
     const auto& f = source->element()->functionIndex();
     uint32_t end = dstStart + srcSize;
+
     for (uint32_t i = dstStart; i < end; i++) {
         auto idx = f[srcStart++];
+
         if (idx != std::numeric_limits<uint32_t>::max()) {
             m_elements[i] = instance->function(idx);
         } else {
             m_elements[i] = reinterpret_cast<void*>(Value::NullBits);
         }
+    }
+}
+
+void Table::copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
+{
+    while (n > 0) {
+        if (dstIndex <= srcIndex) {
+            m_elements[dstIndex] = srcTable->uncheckedGetElement(srcIndex);
+            dstIndex++;
+            srcIndex++;
+        } else {
+            m_elements[dstIndex + n - 1] = srcTable->uncheckedGetElement(srcIndex + n - 1);
+        }
+        n--;
+    }
+}
+
+void Table::fillTable(uint32_t n, void* value, uint32_t index)
+{
+    while (n > 0) {
+        m_elements[index] = value;
+        n--;
+        index++;
     }
 }
 
