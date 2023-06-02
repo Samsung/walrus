@@ -19,6 +19,7 @@
 
 #include "interpreter/Opcode.h"
 #include "interpreter/ByteCode.h"
+#include "runtime/Module.h"
 
 // Backend compiler structures.
 struct sljit_compiler;

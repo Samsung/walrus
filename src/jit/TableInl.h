@@ -32,13 +32,15 @@ static void emitLoad3Arguments(sljit_compiler* compiler, Operand* params)
 static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, ExecutionContext* context)
 {
     auto table = context->instance->table(context->tmp1);
+    auto source = (context->instance->elementSegment(*(sljit_u32*)&context->tmp2));
 
-    try {
-        table->init(context->state, context->instance, &(context->instance->elementSegment(*(sljit_u32*)&context->tmp2)), dstStart, srcStart, srcSize);
-    } catch (std::unique_ptr<Exception>& e) {
+    if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)srcSize)
+        || UNLIKELY(!source.element() || (srcStart + srcSize) > source.element()->functionIndex().size())
+        || UNLIKELY(table->type() != Value::Type::FuncRef)) {
         return ExecutionContext::OutOfBoundsTableAccessError;
     }
 
+    table->initTable(context->instance, &source, dstStart, srcStart, srcSize);
     return ExecutionContext::NoError;
 }
 
@@ -47,12 +49,11 @@ static sljit_sw copyTable(uint32_t dstIndex, uint32_t srcIndex, uint32_t n, Exec
     auto srcTable = context->instance->table(context->tmp1);
     auto dstTable = context->instance->table(context->tmp2);
 
-    try {
-        dstTable->copy(context->state, srcTable, n, srcIndex, dstIndex);
-    } catch (std::unique_ptr<Exception>& e) {
+    if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)dstTable->size()))) {
         return ExecutionContext::OutOfBoundsTableAccessError;
     }
 
+    dstTable->copyTable(srcTable, n, srcIndex, dstIndex);
     return ExecutionContext::NoError;
 }
 
@@ -60,12 +61,11 @@ static sljit_sw fillTable(uint32_t index, void* ptr, uint32_t n, ExecutionContex
 {
     auto srcTable = context->instance->table(context->tmp1);
 
-    try {
-        srcTable->fill(context->state, n, ptr, index);
-    } catch (std::unique_ptr<Exception>& e) {
+    if ((uint64_t)index + (uint64_t)n > (uint64_t)srcTable->size()) {
         return ExecutionContext::OutOfBoundsTableAccessError;
     }
 
+    srcTable->fillTable(n, ptr, index);
     return ExecutionContext::NoError;
 }
 
