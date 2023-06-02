@@ -428,34 +428,37 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
 static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, ExecutionContext* context)
 {
-    try {
-        uint32_t segmentIndex = *(sljit_u32*)&context->tmp1;
-        DataSegment& sg = context->instance->dataSegment(segmentIndex);
+    DataSegment& sg = context->instance->dataSegment(*(sljit_u32*)&context->tmp1);
 
-        context->memory0->init(context->state, &sg, dstStart, srcStart, srcSize);
-    } catch (std::unique_ptr<Exception>& e) {
+    if (!context->memory0->checkAccess(dstStart, srcSize)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
+
+    if (srcStart >= sg.sizeInByte() || srcStart + srcSize > sg.sizeInByte()) {
+        return ExecutionContext::OutOfBoundsMemAccessError;
+    }
+
+    context->memory0->initMemory(&sg, dstStart, srcStart, srcSize);
     return ExecutionContext::NoError;
 }
 
 static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, ExecutionContext* context)
 {
-    try {
-        context->memory0->copy(context->state, dstStart, srcStart, size);
-    } catch (std::unique_ptr<Exception>& e) {
+    if (!context->memory0->checkAccess(srcStart, size) || !context->memory0->checkAccess(dstStart, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
+
+    context->memory0->copyMemory(dstStart, srcStart, size);
     return ExecutionContext::NoError;
 }
 
 static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, ExecutionContext* context)
 {
-    try {
-        context->memory0->fill(context->state, start, static_cast<uint8_t>(value), size);
-    } catch (std::unique_ptr<Exception>& e) {
+    if (!context->memory0->checkAccess(start, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
+
+    context->memory0->fillMemory(start, value, size);
     return ExecutionContext::NoError;
 }
 
