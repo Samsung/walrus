@@ -74,7 +74,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         }
         }
 
-        idx += byteCode->byteCodeSize();
+        idx += byteCode->getSize();
     }
 
     std::map<size_t, Label*>::iterator it;
@@ -537,6 +537,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case DataDropOpcode:
+        case ElemDropOpcode:
         case NopOpcode:
         case UnreachableOpcode: {
             compiler->append(byteCode, group, opcode, 0, 0);
@@ -684,7 +685,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
                 param++;
             }
 
-            idx += byteCode->byteCodeSize();
+            idx += byteCode->getSize();
 
             if (idx != endIdx) {
                 instr->addInfo(Instruction::kEarlyReturn);
@@ -727,7 +728,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(unaryOperation->dstOffset());
         }
 
-        idx += byteCode->byteCodeSize();
+        idx += byteCode->getSize();
     }
 
     compiler->buildParamDependencies(STACK_OFFSET(function->requiredStackSize()));
