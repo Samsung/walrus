@@ -231,7 +231,7 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
         lastStack = currentLabel->m_dependencyCtx->stack();
 
         // Compute the required size first
-        ASSERT(requiredStackSize == lastStack->size())
+        ASSERT(requiredStackSize == lastStack->size());
         size_t end = requiredStackSize;
 
         while (end > 0) {

@@ -115,24 +115,25 @@ public:
     void copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size);
     void fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size);
 
-private:
-    Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte);
+    void initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size);
+    void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
-    void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
     inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
         return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
     }
+
+private:
+    Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte);
+
+    void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
     inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
         if (!this->checkAccess(offset, size, addend)) {
             throwException(state, offset, addend, size);
         }
     }
-
-    inline void initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
-    inline void copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size);
-    inline void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
     uint32_t m_sizeInByte;
     uint32_t m_maximumSizeInByte;

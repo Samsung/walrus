@@ -96,14 +96,14 @@ public:
     void fill(ExecutionState& state, uint32_t n, void* value, uint32_t index);
     void init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
+    void initTable(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
+    void fillTable(uint32_t n, void* value, uint32_t index);
+
 private:
     Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize);
 
     void throwException(ExecutionState& state) const;
-
-    void initTable(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
-    void copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
-    void fillTable(uint32_t n, void* value, uint32_t index);
 
     // Table has elements of reference type (FuncRef | ExternRef)
     Value::Type m_type;
