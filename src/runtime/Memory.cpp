@@ -34,6 +34,7 @@ Memory::Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte)
     : m_sizeInByte(initialSizeInByte)
     , m_maximumSizeInByte(maximumSizeInByte)
     , m_buffer(reinterpret_cast<uint8_t*>(calloc(1, initialSizeInByte)))
+    , m_targetBuffers(nullptr)
 {
     RELEASE_ASSERT(m_buffer);
 }
@@ -54,6 +55,15 @@ bool Memory::grow(uint64_t growSizeInByte)
             free(m_buffer);
             m_buffer = newBuffer;
             m_sizeInByte = newSizeInByte;
+
+            TargetBuffer* targetBuffer = m_targetBuffers;
+
+            while (targetBuffer != nullptr) {
+                targetBuffer->sizeInByte = sizeInByte();
+                targetBuffer->buffer = buffer();
+                targetBuffer = targetBuffer->prev;
+            }
+
             return true;
         }
     } else if (newSizeInByte == m_sizeInByte) {

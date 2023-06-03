@@ -18,6 +18,7 @@
 
 #include "runtime/JITExec.h"
 #include "runtime/Instance.h"
+#include "runtime/Module.h"
 #include "runtime/Trap.h"
 #include "runtime/Value.h"
 
@@ -28,7 +29,18 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
     ASSERT(m_exportEntry);
 
     ExecutionContext context(m_module->instanceConstData(), state, instance);
+    Memory* memory0 = nullptr;
+
+    if (instance->module()->numberOfMemoryTypes() > 0) {
+        memory0 = instance->memory(0);
+        memory0->push(&context.memory0);
+    }
+
     ByteCodeStackOffset* resultOffsets = m_module->exportCall()(&context, bp, m_exportEntry);
+
+    if (memory0 != nullptr) {
+        memory0->pop(&context.memory0);
+    }
 
     if (context.error != ExecutionContext::NoError) {
         switch (context.error) {

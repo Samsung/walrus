@@ -19,6 +19,7 @@
 
 #include "interpreter/ByteCode.h"
 #include "runtime/Instance.h"
+#include "runtime/Memory.h"
 
 namespace Walrus {
 
@@ -57,7 +58,6 @@ struct ExecutionContext {
         , currentInstanceConstData(currentInstanceConstData)
         , state(state)
         , instance(instance)
-        , memory0(instance->memory(0))
         , error(NoError)
     {
     }
@@ -66,7 +66,7 @@ struct ExecutionContext {
     InstanceConstData* currentInstanceConstData;
     ExecutionState& state;
     Instance* instance;
-    Memory* memory0;
+    Memory::TargetBuffer memory0;
     ErrorCodes error;
     uint64_t tmp1;
     uint64_t tmp2;
