@@ -40,6 +40,7 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte)
     , m_reservedSizeInByte(0)
     , m_maximumSizeInByte(maximumSizeInByte)
     , m_buffer(nullptr)
+    , m_targetBuffers(nullptr)
 {
     ASSERT(initialSizeInByte <= std::numeric_limits<size_t>::max());
 #if defined(WALRUS_USE_MMAP)
@@ -115,6 +116,14 @@ bool Memory::grow(uint64_t growSizeInByte)
         m_buffer = newBuffer;
         m_sizeInByte = newSizeInByte;
 #endif
+
+        TargetBuffer* targetBuffer = m_targetBuffers;
+
+        while (targetBuffer != nullptr) {
+            targetBuffer->sizeInByte = sizeInByte();
+            targetBuffer->buffer = buffer();
+            targetBuffer = targetBuffer->prev;
+        }
         return true;
     } else if (newSizeInByte == m_sizeInByte) {
         return true;
