@@ -78,16 +78,6 @@ struct TrapBlock {
 
 class JITFieldAccessor {
 public:
-    static sljit_sw memorySizeInByteOffset()
-    {
-        return offsetof(Memory, m_sizeInByte);
-    }
-
-    static sljit_sw memoryBufferOffset()
-    {
-        return offsetof(Memory, m_buffer);
-    }
-
     static sljit_sw globalValueOffset()
     {
         return offsetof(Global, m_value) + offsetof(Value, m_i32);
@@ -137,10 +127,18 @@ struct CompileContext {
         : compiler(compiler)
         , trapLabel(nullptr)
         , memoryTrapLabel(nullptr)
+        , initialMemorySize(0)
+        , maximumMemorySize(0)
     {
         sljit_sw offset = Instance::alignedSize();
         globalsStart = offset + sizeof(void*) * compiler->module()->numberOfMemoryTypes();
         tableStart = globalsStart + compiler->module()->numberOfGlobalTypes() * sizeof(void*);
+
+        if (compiler->module()->numberOfMemoryTypes() > 0) {
+            MemoryType* memoryType = compiler->module()->memoryType(0);
+            initialMemorySize = memoryType->initialSize() * Memory::s_memoryPageSize;
+            maximumMemorySize = memoryType->maximumSize() * Memory::s_memoryPageSize;
+        }
     }
 
     static CompileContext* get(sljit_compiler* compiler)
@@ -159,6 +157,8 @@ struct CompileContext {
     sljit_uw branchTableOffset;
     sljit_sw globalsStart;
     sljit_sw tableStart;
+    uint32_t initialMemorySize;
+    uint32_t maximumMemorySize;
     std::vector<TrapBlock> trapBlocks;
     std::vector<SlowCase*> slowCases;
     std::vector<sljit_jump*> earlyReturns;
