@@ -27,12 +27,21 @@ class Store;
 class DataSegment;
 
 class Memory : public Extern {
-    friend class JITFieldAccessor;
-
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
 
+<<<<<<< HEAD
     static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte);
+=======
+    // Caching memory target for fast access.
+    struct TargetBuffer {
+        TargetBuffer* prev;
+        uint32_t sizeInByte;
+        uint8_t* buffer;
+    };
+
+    static Memory* createMemory(Store* store, uint32_t initialSizeInByte, uint32_t maximumSizeInByte = std::numeric_limits<uint32_t>::max());
+>>>>>>> Optimize memory access
 
     ~Memory();
 
@@ -123,6 +132,19 @@ private:
         return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
     }
 
+    inline void push(TargetBuffer* targetBuffer)
+    {
+        targetBuffer->prev = m_targetBuffers;
+        targetBuffer->sizeInByte = sizeInByte();
+        targetBuffer->buffer = buffer();
+        m_targetBuffers = targetBuffer;
+    }
+
+    inline void pop(TargetBuffer* targetBuffer)
+    {
+        m_targetBuffers = targetBuffer->prev;
+    }
+
 private:
     Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte);
 
@@ -141,6 +163,7 @@ private:
     uint64_t m_sizeInByte;
     uint64_t m_maximumSizeInByte;
     uint8_t* m_buffer;
+    TargetBuffer* m_targetBuffers;
 };
 
 } // namespace Walrus
