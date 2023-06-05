@@ -79,9 +79,12 @@ struct Label {
     LabelKind kind;
 };
 
-static Features getFeatures() {
+static Features getFeatures()
+{
     Features features;
     features.enable_exceptions();
+    // TODO: should use command line flag for this (--enable-threads)
+    features.enable_threads();
     return features;
 }
 
@@ -454,36 +457,47 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnOpcodeBlockSig(Type sig_type) override {
+    Result OnOpcodeBlockSig(Type sig_type) override
+    {
         if (WABT_UNLIKELY(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd())) {
             m_externalDelegate->setResumeGenerateByteCodeAfterNBlockEnd(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd() + 1);
         }
         return Result::Ok;
     }
-    Result OnOpcodeType(Type type) override {
+    Result OnOpcodeType(Type type) override
+    {
         return Result::Ok;
     }
-    Result OnAtomicLoadExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
+    Result OnAtomicLoadExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override
+    {
         CHECK_RESULT(m_validator.OnAtomicLoad(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnAtomicLoadExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
-    Result OnAtomicStoreExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
+    Result OnAtomicStoreExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override
+    {
         CHECK_RESULT(m_validator.OnAtomicStore(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnAtomicStoreExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
-    Result OnAtomicRmwExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
+    Result OnAtomicRmwExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override
+    {
         CHECK_RESULT(m_validator.OnAtomicRmw(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnAtomicRmwExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
-    Result OnAtomicRmwCmpxchgExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
+    Result OnAtomicRmwCmpxchgExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override
+    {
         CHECK_RESULT(m_validator.OnAtomicRmwCmpxchg(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnAtomicCmpxchgExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
-    Result OnAtomicWaitExpr(Opcode opcode, Index memidx, Address align_log2, Address offset) override {
+    Result OnAtomicWaitExpr(Opcode opcode, Index memidx, Address align_log2, Address offset) override
+    {
         CHECK_RESULT(m_validator.OnAtomicWait(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(align_log2)));
         abort();
         return Result::Ok;

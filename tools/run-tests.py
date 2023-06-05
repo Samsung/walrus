@@ -151,6 +151,23 @@ def run_basic_tests(engine):
     if fail_total > 0:
         raise Exception("basic wasm-test-core failed")
 
+@runner('wasm-test-threads', default=True)
+def run_basic_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-threads', 'core')
+
+    print('Running wasm-test-threads tests:')
+    xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("basic wasm-test-core failed")
+
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,

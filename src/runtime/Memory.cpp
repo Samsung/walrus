@@ -71,6 +71,11 @@ void Memory::throwException(ExecutionState& state, uint32_t offset, uint32_t add
     Trap::throwException(state, str);
 }
 
+void Memory::throwException(ExecutionState& state, const char* str) const
+{
+    Trap::throwException(state, str);
+}
+
 template <class T>
 class ReverseArrayIterator {
 public:

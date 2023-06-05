@@ -142,6 +142,10 @@ public:
     virtual void OnElemDropExpr(Index segmentIndex) = 0;
     virtual void OnTableInitExpr(Index segmentIndex, Index tableIndex) = 0;
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnAtomicStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnAtomicRmwExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnAtomicCmpxchgExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnReturnExpr() = 0;
     virtual void OnRefFuncExpr(Index func_index) = 0;

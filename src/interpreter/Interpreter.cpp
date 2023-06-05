@@ -277,6 +277,61 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                                \
     }
 
+#define ATOMIC_MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
+    DEFINE_OPCODE(opcodeName)                                                             \
+        :                                                                                 \
+    {                                                                                     \
+        AtomicLoad* code = (AtomicLoad*)programCounter;                                   \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());                     \
+        nativeReadTypeName value;                                                         \
+        memories[0]->atomicLoad(state, offset, code->offset(), &value);                   \
+        writeValue<nativeWriteTypeName>(bp, code->dstOffset(), value);                    \
+        ADD_PROGRAM_COUNTER(AtomicLoad);                                                  \
+        NEXT_INSTRUCTION();                                                               \
+    }
+
+#define ATOMIC_MEMORY_STORE_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
+    DEFINE_OPCODE(opcodeName)                                                              \
+        :                                                                                  \
+    {                                                                                      \
+        AtomicStore* code = (AtomicStore*)programCounter;                                  \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                     \
+        nativeWriteTypeName value = readValue<nativeReadTypeName>(bp, code->src1Offset()); \
+        memories[0]->atomicStore(state, offset, code->offset(), value);                    \
+        ADD_PROGRAM_COUNTER(AtomicStore);                                                  \
+        NEXT_INSTRUCTION();                                                                \
+    }
+
+#define ATOMIC_MEMORY_RMW_OPERATION(opcodeName, nativeParameterTypeName, nativeWriteTypeName, operationName) \
+    DEFINE_OPCODE(opcodeName)                                                                                \
+        :                                                                                                    \
+    {                                                                                                        \
+        AtomicRmw* code = (AtomicRmw*)programCounter;                                                        \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset()[0]);                                     \
+        nativeWriteTypeName value = readValue<nativeParameterTypeName>(bp, code->srcOffset()[1]);            \
+        nativeWriteTypeName oldValue;                                                                        \
+        memories[0]->atomicRmw(state, offset, code->offset(), value, &oldValue, operationName);              \
+        writeValue<nativeParameterTypeName>(bp, code->dstOffset(), oldValue);                                \
+        ADD_PROGRAM_COUNTER(AtomicRmw);                                                                      \
+        NEXT_INSTRUCTION();                                                                                  \
+    }
+
+#define ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(opcodeName, nativeParameterTypeName, nativeWriteTypeName)                                  \
+    DEFINE_OPCODE(opcodeName)                                                                                                          \
+        :                                                                                                                              \
+    {                                                                                                                                  \
+        AtomicCmpxchg* code = (AtomicCmpxchg*)programCounter;                                                                          \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset()[0]);                                                               \
+        nativeWriteTypeName expectedValue = readValue<nativeParameterTypeName>(bp, code->srcOffset()[1]);                              \
+        nativeWriteTypeName value = readValue<nativeParameterTypeName>(bp, code->srcOffset()[2]);                                      \
+        nativeWriteTypeName oldValue;                                                                                                  \
+        memories[0]->atomicRmwCmpxchg(                                                                                                 \
+            state, offset, code->offset(), value, expectedValue, &oldValue,                                                            \
+            readValue<nativeWriteTypeName>(bp, code->srcOffset()[1]) == readValue<nativeParameterTypeName>(bp, code->srcOffset()[1])); \
+        writeValue<nativeParameterTypeName>(bp, code->dstOffset(), oldValue);                                                          \
+        ADD_PROGRAM_COUNTER(AtomicCmpxchg);                                                                                            \
+        NEXT_INSTRUCTION();                                                                                                            \
+    }
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 #if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
@@ -672,6 +727,78 @@ NextInstruction:
     MEMORY_STORE_OPERATION(I64Store8, int64_t, int8_t)
     MEMORY_STORE_OPERATION(F32Store, float, float)
     MEMORY_STORE_OPERATION(F64Store, double, double)
+
+    ATOMIC_MEMORY_LOAD_OPERATION(I64AtomicLoad, int64_t, int64_t)
+    ATOMIC_MEMORY_LOAD_OPERATION(I64AtomicLoad8U, uint8_t, int64_t)
+    ATOMIC_MEMORY_LOAD_OPERATION(I64AtomicLoad16U, uint16_t, int64_t)
+    ATOMIC_MEMORY_LOAD_OPERATION(I64AtomicLoad32U, uint32_t, int64_t)
+    ATOMIC_MEMORY_LOAD_OPERATION(I32AtomicLoad, int32_t, int32_t)
+    ATOMIC_MEMORY_LOAD_OPERATION(I32AtomicLoad8U, uint8_t, int32_t)
+    ATOMIC_MEMORY_LOAD_OPERATION(I32AtomicLoad16U, uint16_t, int32_t)
+
+    ATOMIC_MEMORY_STORE_OPERATION(I64AtomicStore, int64_t, int64_t)
+    ATOMIC_MEMORY_STORE_OPERATION(I64AtomicStore8, int64_t, uint8_t)
+    ATOMIC_MEMORY_STORE_OPERATION(I64AtomicStore16, int64_t, uint16_t)
+    ATOMIC_MEMORY_STORE_OPERATION(I64AtomicStore32, int64_t, uint32_t)
+    ATOMIC_MEMORY_STORE_OPERATION(I32AtomicStore, int32_t, int32_t)
+    ATOMIC_MEMORY_STORE_OPERATION(I32AtomicStore8, int32_t, uint8_t)
+    ATOMIC_MEMORY_STORE_OPERATION(I32AtomicStore16, int32_t, uint16_t)
+
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmwAdd, int64_t, int64_t, Memory::atomicRmwOperation::Add)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw8AddU, int64_t, uint8_t, Memory::atomicRmwOperation::Add)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw16AddU, int64_t, uint16_t, Memory::atomicRmwOperation::Add)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw32AddU, int64_t, uint32_t, Memory::atomicRmwOperation::Add)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmwAdd, int32_t, int32_t, Memory::atomicRmwOperation::Add)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw8AddU, int32_t, uint8_t, Memory::atomicRmwOperation::Add)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw16AddU, int32_t, uint16_t, Memory::atomicRmwOperation::Add)
+
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmwSub, int64_t, int64_t, Memory::atomicRmwOperation::Sub)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw8SubU, int64_t, uint8_t, Memory::atomicRmwOperation::Sub)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw16SubU, int64_t, uint16_t, Memory::atomicRmwOperation::Sub)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw32SubU, int64_t, uint32_t, Memory::atomicRmwOperation::Sub)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmwSub, int32_t, int32_t, Memory::atomicRmwOperation::Sub)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw8SubU, int32_t, uint8_t, Memory::atomicRmwOperation::Sub)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw16SubU, int32_t, uint16_t, Memory::atomicRmwOperation::Sub)
+
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmwAnd, int64_t, int64_t, Memory::atomicRmwOperation::And)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw8AndU, int64_t, uint8_t, Memory::atomicRmwOperation::And)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw16AndU, int64_t, uint16_t, Memory::atomicRmwOperation::And)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw32AndU, int64_t, uint32_t, Memory::atomicRmwOperation::And)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmwAnd, int32_t, int32_t, Memory::atomicRmwOperation::And)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw8AndU, int32_t, uint8_t, Memory::atomicRmwOperation::And)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw16AndU, int32_t, uint16_t, Memory::atomicRmwOperation::And)
+
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmwOr, int64_t, int64_t, Memory::atomicRmwOperation::Or)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw8OrU, int64_t, uint8_t, Memory::atomicRmwOperation::Or)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw16OrU, int64_t, uint16_t, Memory::atomicRmwOperation::Or)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw32OrU, int64_t, uint32_t, Memory::atomicRmwOperation::Or)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmwOr, int32_t, int32_t, Memory::atomicRmwOperation::Or)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw8OrU, int32_t, uint8_t, Memory::atomicRmwOperation::Or)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw16OrU, int32_t, uint16_t, Memory::atomicRmwOperation::Or)
+
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmwXor, int64_t, int64_t, Memory::atomicRmwOperation::Xor)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw8XorU, int64_t, uint8_t, Memory::atomicRmwOperation::Xor)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw16XorU, int64_t, uint16_t, Memory::atomicRmwOperation::Xor)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw32XorU, int64_t, uint32_t, Memory::atomicRmwOperation::Xor)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmwXor, int32_t, int32_t, Memory::atomicRmwOperation::Xor)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw8XorU, int32_t, uint8_t, Memory::atomicRmwOperation::Xor)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw16XorU, int32_t, uint16_t, Memory::atomicRmwOperation::Xor)
+
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmwXchg, int64_t, int64_t, Memory::atomicRmwOperation::Xchg)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw8XchgU, int64_t, uint8_t, Memory::atomicRmwOperation::Xchg)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw16XchgU, int64_t, uint16_t, Memory::atomicRmwOperation::Xchg)
+    ATOMIC_MEMORY_RMW_OPERATION(I64AtomicRmw32XchgU, int64_t, uint32_t, Memory::atomicRmwOperation::Xchg)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmwXchg, int32_t, int32_t, Memory::atomicRmwOperation::Xchg)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw8XchgU, int32_t, uint8_t, Memory::atomicRmwOperation::Xchg)
+    ATOMIC_MEMORY_RMW_OPERATION(I32AtomicRmw16XchgU, int32_t, uint16_t, Memory::atomicRmwOperation::Xchg)
+
+    ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(I64AtomicRmwCmpxchg, int64_t, int64_t)
+    ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(I64AtomicRmw8CmpxchgU, int64_t, uint8_t)
+    ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(I64AtomicRmw16CmpxchgU, int64_t, uint16_t)
+    ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(I64AtomicRmw32CmpxchgU, int64_t, uint32_t)
+    ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(I32AtomicRmwCmpxchg, int32_t, int32_t)
+    ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(I32AtomicRmw8CmpxchgU, int32_t, uint8_t)
+    ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(I32AtomicRmw16CmpxchgU, int32_t, uint16_t)
 
     DEFINE_OPCODE(MemorySize)
         :
