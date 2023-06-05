@@ -164,6 +164,12 @@ public:
     virtual void OnLoadZeroExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnSimdShuffleOpExpr(int opcode, uint8_t* value) = 0;
 
+    // Extended Features
+    virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnAtomicStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnAtomicRmwExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnAtomicCmpxchgExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+
     bool shouldContinueToGenerateByteCode() const
     {
         return m_shouldContinueToGenerateByteCode;

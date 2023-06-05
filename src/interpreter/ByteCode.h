@@ -505,6 +505,90 @@ class FunctionType;
     F(V128Load64Zero)                    \
     F(I8X16Shuffle)
 
+// Extended Features
+#if defined(ENABLE_EXTENDED_FEATURES)
+#define FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F) \
+    F(I32AtomicLoad, uint32_t, uint32_t)    \
+    F(I64AtomicLoad, uint64_t, uint64_t)    \
+    F(I32AtomicLoad8U, uint8_t, uint32_t)   \
+    F(I32AtomicLoad16U, uint16_t, uint32_t) \
+    F(I64AtomicLoad8U, uint8_t, uint64_t)   \
+    F(I64AtomicLoad16U, uint16_t, uint64_t) \
+    F(I64AtomicLoad32U, uint32_t, uint64_t)
+
+#define FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F) \
+    F(I32AtomicStore, uint32_t, uint32_t)    \
+    F(I64AtomicStore, uint64_t, uint64_t)    \
+    F(I32AtomicStore8, uint32_t, uint8_t)    \
+    F(I32AtomicStore16, uint32_t, uint16_t)  \
+    F(I64AtomicStore8, uint64_t, uint8_t)    \
+    F(I64AtomicStore16, uint64_t, uint16_t)  \
+    F(I64AtomicStore32, uint64_t, uint32_t)
+
+#define FOR_EACH_BYTECODE_ATOMIC_RMW_OP(F)                                \
+    F(I64AtomicRmwAdd, uint64_t, uint64_t, Memory::AtomicRmwOp::Add)      \
+    F(I64AtomicRmw8AddU, uint64_t, uint8_t, Memory::AtomicRmwOp::Add)     \
+    F(I64AtomicRmw16AddU, uint64_t, uint16_t, Memory::AtomicRmwOp::Add)   \
+    F(I64AtomicRmw32AddU, uint64_t, uint32_t, Memory::AtomicRmwOp::Add)   \
+    F(I32AtomicRmwAdd, uint32_t, uint32_t, Memory::AtomicRmwOp::Add)      \
+    F(I32AtomicRmw8AddU, uint32_t, uint8_t, Memory::AtomicRmwOp::Add)     \
+    F(I32AtomicRmw16AddU, uint32_t, uint16_t, Memory::AtomicRmwOp::Add)   \
+                                                                          \
+    F(I64AtomicRmwSub, uint64_t, uint64_t, Memory::AtomicRmwOp::Sub)      \
+    F(I64AtomicRmw8SubU, uint64_t, uint8_t, Memory::AtomicRmwOp::Sub)     \
+    F(I64AtomicRmw16SubU, uint64_t, uint16_t, Memory::AtomicRmwOp::Sub)   \
+    F(I64AtomicRmw32SubU, uint64_t, uint32_t, Memory::AtomicRmwOp::Sub)   \
+    F(I32AtomicRmwSub, uint32_t, uint32_t, Memory::AtomicRmwOp::Sub)      \
+    F(I32AtomicRmw8SubU, uint32_t, uint8_t, Memory::AtomicRmwOp::Sub)     \
+    F(I32AtomicRmw16SubU, uint32_t, uint16_t, Memory::AtomicRmwOp::Sub)   \
+                                                                          \
+    F(I64AtomicRmwAnd, uint64_t, uint64_t, Memory::AtomicRmwOp::And)      \
+    F(I64AtomicRmw8AndU, uint64_t, uint8_t, Memory::AtomicRmwOp::And)     \
+    F(I64AtomicRmw16AndU, uint64_t, uint16_t, Memory::AtomicRmwOp::And)   \
+    F(I64AtomicRmw32AndU, uint64_t, uint32_t, Memory::AtomicRmwOp::And)   \
+    F(I32AtomicRmwAnd, uint32_t, uint32_t, Memory::AtomicRmwOp::And)      \
+    F(I32AtomicRmw8AndU, uint32_t, uint8_t, Memory::AtomicRmwOp::And)     \
+    F(I32AtomicRmw16AndU, uint32_t, uint16_t, Memory::AtomicRmwOp::And)   \
+                                                                          \
+    F(I64AtomicRmwOr, uint64_t, uint64_t, Memory::AtomicRmwOp::Or)        \
+    F(I64AtomicRmw8OrU, uint64_t, uint8_t, Memory::AtomicRmwOp::Or)       \
+    F(I64AtomicRmw16OrU, uint64_t, uint16_t, Memory::AtomicRmwOp::Or)     \
+    F(I64AtomicRmw32OrU, uint64_t, uint32_t, Memory::AtomicRmwOp::Or)     \
+    F(I32AtomicRmwOr, uint32_t, uint32_t, Memory::AtomicRmwOp::Or)        \
+    F(I32AtomicRmw8OrU, uint32_t, uint8_t, Memory::AtomicRmwOp::Or)       \
+    F(I32AtomicRmw16OrU, uint32_t, uint16_t, Memory::AtomicRmwOp::Or)     \
+                                                                          \
+    F(I64AtomicRmwXor, uint64_t, uint64_t, Memory::AtomicRmwOp::Xor)      \
+    F(I64AtomicRmw8XorU, uint64_t, uint8_t, Memory::AtomicRmwOp::Xor)     \
+    F(I64AtomicRmw16XorU, uint64_t, uint16_t, Memory::AtomicRmwOp::Xor)   \
+    F(I64AtomicRmw32XorU, uint64_t, uint32_t, Memory::AtomicRmwOp::Xor)   \
+    F(I32AtomicRmwXor, uint32_t, uint32_t, Memory::AtomicRmwOp::Xor)      \
+    F(I32AtomicRmw8XorU, uint32_t, uint8_t, Memory::AtomicRmwOp::Xor)     \
+    F(I32AtomicRmw16XorU, uint32_t, uint16_t, Memory::AtomicRmwOp::Xor)   \
+                                                                          \
+    F(I64AtomicRmwXchg, uint64_t, uint64_t, Memory::AtomicRmwOp::Xchg)    \
+    F(I64AtomicRmw8XchgU, uint64_t, uint8_t, Memory::AtomicRmwOp::Xchg)   \
+    F(I64AtomicRmw16XchgU, uint64_t, uint16_t, Memory::AtomicRmwOp::Xchg) \
+    F(I64AtomicRmw32XchgU, uint64_t, uint32_t, Memory::AtomicRmwOp::Xchg) \
+    F(I32AtomicRmwXchg, uint32_t, uint32_t, Memory::AtomicRmwOp::Xchg)    \
+    F(I32AtomicRmw8XchgU, uint32_t, uint8_t, Memory::AtomicRmwOp::Xchg)   \
+    F(I32AtomicRmw16XchgU, uint32_t, uint16_t, Memory::AtomicRmwOp::Xchg)
+
+#define FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(F) \
+    F(I32AtomicRmwCmpxchg, uint32_t, uint32_t)     \
+    F(I64AtomicRmwCmpxchg, uint64_t, uint64_t)     \
+    F(I32AtomicRmw8CmpxchgU, uint32_t, uint8_t)    \
+    F(I32AtomicRmw16CmpxchgU, uint32_t, uint16_t)  \
+    F(I64AtomicRmw8CmpxchgU, uint64_t, uint8_t)    \
+    F(I64AtomicRmw16CmpxchgU, uint64_t, uint16_t)  \
+    F(I64AtomicRmw32CmpxchgU, uint64_t, uint32_t)
+#else // Extended Features
+#define FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F)
+#define FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F)
+#define FOR_EACH_BYTECODE_ATOMIC_RMW_OP(F)
+#define FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(F)
+#endif // Extended Features
+
 #define FOR_EACH_BYTECODE(F)                   \
     FOR_EACH_BYTECODE_OP(F)                    \
     FOR_EACH_BYTECODE_BINARY_OP(F)             \
@@ -524,7 +608,11 @@ class FunctionType;
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)    \
     FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(F)  \
     FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(F)  \
-    FOR_EACH_BYTECODE_SIMD_ETC_OP(F)
+    FOR_EACH_BYTECODE_SIMD_ETC_OP(F)           \
+    FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F)        \
+    FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F)       \
+    FOR_EACH_BYTECODE_ATOMIC_RMW_OP(F)         \
+    FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(F)
 
 class ByteCode {
 public:
@@ -1550,10 +1638,10 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                          \
-    void dump(size_t pos)                                                                                                                         \
-    {                                                                                                                                             \
-        printf(#name " src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
+#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                           \
+    void dump(size_t pos)                                                                                                                          \
+    {                                                                                                                                              \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
     }
 #else
 #define DEFINE_STORE_BYTECODE_DUMP(name)
@@ -1570,10 +1658,10 @@ protected:
     };
 
 #if !defined(NDEBUG)
-#define DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)                                                                                                                                    \
-    void dump(size_t pos)                                                                                                                                                             \
-    {                                                                                                                                                                                 \
-        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
+#define DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)                                                                                                                                     \
+    void dump(size_t pos)                                                                                                                                                              \
+    {                                                                                                                                                                                  \
+        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
     }
 #else
 #define DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)
@@ -1631,6 +1719,106 @@ protected:
     };
 
 
+class AtomicRmw : public ByteCode {
+public:
+    AtomicRmw(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
+        : ByteCode(opcode)
+        , m_offset(offset)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_dstOffset(dst)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_dstOffset;
+};
+
+class AtomicRmwCmpxchg : public ByteCode {
+public:
+    AtomicRmwCmpxchg(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
+        : ByteCode(opcode)
+        , m_offset(offset)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_src2Offset(src2)
+        , m_dstOffset(dst)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_src2Offset;
+    ByteCodeStackOffset m_dstOffset;
+};
+
+#if !defined(NDEBUG)
+#define DEFINE_RMW_BYTECODE_DUMP(name)                                                                                                                                                     \
+    void dump(size_t pos)                                                                                                                                                                  \
+    {                                                                                                                                                                                      \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+    }
+#else
+#define DEFINE_RMW_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_RMW_BYTECODE(name, paramType, writeType, operationName)                                     \
+    class name : public AtomicRmw {                                                                        \
+    public:                                                                                                \
+        name(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst) \
+            : AtomicRmw(Opcode::name##Opcode, offset, src0, src1, dst)                                     \
+        {                                                                                                  \
+        }                                                                                                  \
+        DEFINE_RMW_BYTECODE_DUMP(name)                                                                     \
+    };
+
+#if !defined(NDEBUG)
+#define DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)                                                                                                                                                                                       \
+    void dump(size_t pos)                                                                                                                                                                                                            \
+    {                                                                                                                                                                                                                                \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_src2Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+    }
+#else
+#define DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_RMW_CMPXCHG_BYTECODE(name, paramType, writeType)                                                                      \
+    class name : public AtomicRmwCmpxchg {                                                                                           \
+    public:                                                                                                                          \
+        name(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst) \
+            : AtomicRmwCmpxchg(Opcode::name##Opcode, offset, src0, src1, src2, dst)                                                  \
+        {                                                                                                                            \
+        }                                                                                                                            \
+        DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)                                                                                       \
+    };
+
+
 FOR_EACH_BYTECODE_LOAD_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_STORE_OP(DEFINE_STORE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(DEFINE_LOAD_BYTECODE)
@@ -1639,10 +1827,16 @@ FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(DEFINE_SIMD_LOAD_LANE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(DEFINE_SIMD_STORE_LANE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(DEFINE_SIMD_EXTRACT_LANE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(DEFINE_SIMD_REPLACE_LANE_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(DEFINE_LOAD_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_STORE_OP(DEFINE_STORE_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_RMW_OP(DEFINE_RMW_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(DEFINE_RMW_CMPXCHG_BYTECODE)
 #undef DEFINE_LOAD_BYTECODE_DUMP
 #undef DEFINE_LOAD_BYTECODE
 #undef DEFINE_STORE_BYTECODE_DUMP
 #undef DEFINE_STORE_BYTECODE
+#undef DEFINE_RMW_BYTECODE_DUMP
+#undef DEFINE_RMW_BYTECODE
 
 // FOR_EACH_BYTECODE_SIMD_ETC_OP
 class V128BitSelect : public ByteCode {

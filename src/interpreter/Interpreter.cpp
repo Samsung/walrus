@@ -697,6 +697,66 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                   \
     }
 
+#define ATOMIC_MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)   \
+    DEFINE_OPCODE(opcodeName)                                           \
+        :                                                               \
+    {                                                                   \
+        MemoryLoad* code = (MemoryLoad*)programCounter;                 \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());   \
+        readType value;                                                 \
+        memories[0]->atomicLoad(state, offset, code->offset(), &value); \
+        writeValue<writeType>(bp, code->dstOffset(), value);            \
+        ADD_PROGRAM_COUNTER(MemoryLoad);                                \
+        NEXT_INSTRUCTION();                                             \
+    }
+
+#define ATOMIC_MEMORY_STORE_OPERATION(opcodeName, readType, writeType)  \
+    DEFINE_OPCODE(opcodeName)                                           \
+        :                                                               \
+    {                                                                   \
+        MemoryStore* code = (MemoryStore*)programCounter;               \
+        writeType value = readValue<readType>(bp, code->src1Offset());  \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());  \
+        memories[0]->atomicStore(state, offset, code->offset(), value); \
+        ADD_PROGRAM_COUNTER(MemoryStore);                               \
+        NEXT_INSTRUCTION();                                             \
+    }
+
+#define ATOMIC_MEMORY_RMW_OPERATION(opcodeName, R, T, operationName)                       \
+    DEFINE_OPCODE(opcodeName)                                                              \
+        :                                                                                  \
+    {                                                                                      \
+        AtomicRmw* code = (AtomicRmw*)programCounter;                                      \
+        T value = static_cast<T>(readValue<R>(bp, code->src1Offset()));                    \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                     \
+        T old;                                                                             \
+        memories[0]->atomicRmw(state, offset, code->offset(), value, &old, operationName); \
+        writeValue<R>(bp, code->dstOffset(), static_cast<R>(old));                         \
+        ADD_PROGRAM_COUNTER(AtomicRmw);                                                    \
+        NEXT_INSTRUCTION();                                                                \
+    }
+
+#define ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(opcodeName, T, V)                                    \
+    DEFINE_OPCODE(opcodeName)                                                                    \
+        :                                                                                        \
+    {                                                                                            \
+        AtomicRmwCmpxchg* code = (AtomicRmwCmpxchg*)programCounter;                              \
+        V replace = static_cast<V>(readValue<T>(bp, code->src2Offset()));                        \
+        T expectValue = readValue<T>(bp, code->src1Offset());                                    \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                           \
+        V old;                                                                                   \
+        if (expectValue > std::numeric_limits<V>::max()) {                                       \
+            memories[0]->atomicLoad(state, offset, code->offset(), &old);                        \
+        } else {                                                                                 \
+            V expect = static_cast<V>(expectValue);                                              \
+            memories[0]->atomicRmwCmpxchg(state, offset, code->offset(), expect, replace, &old); \
+        }                                                                                        \
+        writeValue<T>(bp, code->dstOffset(), static_cast<T>(old));                               \
+        ADD_PROGRAM_COUNTER(AtomicRmwCmpxchg);                                                   \
+        NEXT_INSTRUCTION();                                                                      \
+    }
+
+
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 #if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
     if (UNLIKELY((((ByteCode*)programCounter)->m_opcodeInAddress) == NULL)) {
@@ -971,6 +1031,10 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(SIMD_MEMORY_STORE_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(SIMD_EXTRACT_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(SIMD_REPLACE_LANE_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(ATOMIC_MEMORY_LOAD_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_STORE_OP(ATOMIC_MEMORY_STORE_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_RMW_OP(ATOMIC_MEMORY_RMW_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION)
 
     // FOR_EACH_BYTECODE_SIMD_ETC_OP
     DEFINE_OPCODE(V128BitSelect)

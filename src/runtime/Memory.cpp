@@ -232,4 +232,14 @@ void Memory::fillMemory(uint32_t start, uint8_t value, uint32_t size)
 #endif
 }
 
+#if defined(ENABLE_EXTENDED_FEATURES)
+void Memory::checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend) const
+{
+    checkAccess(state, offset, size, addend);
+    if (UNLIKELY((offset + addend) % size != 0)) {
+        Trap::throwException(state, "unaligned atomic");
+    }
+}
+#endif
+
 } // namespace Walrus
