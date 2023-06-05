@@ -154,7 +154,6 @@ def run_jit_tests(engine):
     if fail_total > 0:
         raise Exception("basic wasm-test-core failed")
 
-
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,

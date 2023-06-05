@@ -20,6 +20,9 @@
 #include "util/BitOperation.h"
 #include "runtime/ExecutionState.h"
 #include "runtime/Object.h"
+#if defined(ENABLE_EXTENDED_FEATURES)
+#include <atomic>
+#endif
 
 namespace Walrus {
 
@@ -132,6 +135,69 @@ public:
 #endif
     }
 
+#if defined(ENABLE_EXTENDED_FEATURES)
+    enum AtomicRmwOp{
+        Add,
+        Sub,
+        And,
+        Or,
+        Xor,
+        Xchg
+    };
+
+    template <typename T>
+    void atomicLoad(ExecutionState& state, uint32_t offset, uint32_t addend, T* out) const
+    {
+        checkAtomicAccess(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        *out = shared->load(std::memory_order_relaxed);
+    }
+
+    template <typename T>
+    void atomicStore(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
+    {
+        checkAtomicAccess(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        shared->store(val);
+    }
+
+    template <typename T>
+    void atomicRmw(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val, T* out, AtomicRmwOp operation) const
+    {
+        checkAtomicAccess(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        switch (operation) {
+        case Add:
+            *out = shared->fetch_add(val);
+            break;
+        case Sub:
+            *out = shared->fetch_sub(val);
+            break;
+        case And:
+            *out = shared->fetch_and(val);
+            break;
+        case Or:
+            *out = shared->fetch_or(val);
+            break;
+        case Xor:
+            *out = shared->fetch_xor(val);
+            break;
+        case Xchg:
+            *out = shared->exchange(val);
+            break;
+        }
+    }
+
+    template <typename T>
+    void atomicRmwCmpxchg(ExecutionState& state, uint32_t offset, uint32_t addend, T expect, const T& replace, T* out) const
+    {
+        checkAtomicAccess(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        shared->compare_exchange_weak(expect, replace);
+        *out = expect;
+    }
+#endif
+
 #ifdef CPU_ARM32
 
 #define defineUnalignedStore(TYPE)                                                              \
@@ -178,12 +244,17 @@ private:
     Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte);
 
     void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
+
     inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
         if (!this->checkAccess(offset, size, addend)) {
             throwException(state, offset, addend, size);
         }
     }
+
+#if defined(ENABLE_EXTENDED_FEATURES)
+    void checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const;
+#endif
 
     uint64_t m_sizeInByte;
     uint64_t m_reservedSizeInByte;

@@ -2160,6 +2160,116 @@ public:
         }
     }
 
+    // Extended Features
+#if defined(ENABLE_EXTENDED_FEATURES)
+    virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        auto src = popVMStack();
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, ...)                  \
+    case WASMOpcode::name##Opcode: {                        \
+        pushByteCode(Walrus::name(offset, src, dst), code); \
+        break;                                              \
+    }
+
+            FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+
+    virtual void OnAtomicStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
+        auto src1 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        auto src0 = popVMStack();
+        switch (code) {
+#define GENERATE_STORE_CODE_CASE(name, ...)                   \
+    case WASMOpcode::name##Opcode: {                          \
+        pushByteCode(Walrus::name(offset, src0, src1), code); \
+        break;                                                \
+    }
+
+            FOR_EACH_BYTECODE_ATOMIC_STORE_OP(GENERATE_STORE_CODE_CASE)
+#undef GENERATE_STORE_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+
+    virtual void OnAtomicRmwExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
+        auto src1 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+#define GENERATE_RMW_CODE_CASE(name, ...)                          \
+    case WASMOpcode::name##Opcode: {                               \
+        pushByteCode(Walrus::name(offset, src0, src1, dst), code); \
+        break;                                                     \
+    }
+
+            FOR_EACH_BYTECODE_ATOMIC_RMW_OP(GENERATE_RMW_CODE_CASE)
+#undef GENERATE_RMW_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+
+    virtual void OnAtomicCmpxchgExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[2]) == peekVMStackValueType());
+        auto src2 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
+        auto src1 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+#define GENERATE_RMW_CMPXCHG_CODE_CASE(name, ...)                        \
+    case WASMOpcode::name##Opcode: {                                     \
+        pushByteCode(Walrus::name(offset, src0, src1, src2, dst), code); \
+        break;                                                           \
+    }
+
+            FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(GENERATE_RMW_CMPXCHG_CODE_CASE)
+#undef GENERATE_RMW_CMPXCHG_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+#else // Extended Features
+    virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        ASSERT_NOT_REACHED();
+    }
+
+    virtual void OnAtomicStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        ASSERT_NOT_REACHED();
+    }
+
+    virtual void OnAtomicRmwExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        ASSERT_NOT_REACHED();
+    }
+
+    virtual void OnAtomicCmpxchgExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        ASSERT_NOT_REACHED();
+    }
+#endif // Extended Features
+
     virtual void OnRefFuncExpr(Index func_index) override
     {
         auto dst = computeExprResultPosition(Walrus::Value::Type::FuncRef);
