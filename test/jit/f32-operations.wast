@@ -145,6 +145,11 @@
     f32.const nan
     f32.ne
 )
+
+(func (export "test16") (result f32)
+    f32.const -nan
+    f32.floor
+)
 )
 
 (assert_return (invoke "test1") (f32.const 4.4))
@@ -162,3 +167,4 @@
 (assert_return (invoke "test13") (i32.const 0))
 (assert_return (invoke "test14") (i32.const 0) (i32.const 1) (i32.const 0))
 (assert_return (invoke "test15") (i32.const 1) (i32.const 1) (i32.const 0) (i32.const 1))
+(assert_return (invoke "test16") (f32.const nan:canonical))
