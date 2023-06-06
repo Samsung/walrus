@@ -67,6 +67,60 @@ static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg
 
 // Float operations.
 // TODO Canonical NaN
+static sljit_f32 floatFloor(sljit_f32 operand)
+{
+    if (std::isnan(operand)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    return std::floor(operand);
+}
+
+static sljit_f64 floatFloor(sljit_f64 operand)
+{
+    if (std::isnan(operand)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    return std::floor(operand);
+}
+
+static sljit_f32 floatCeil(sljit_f32 operand)
+{
+    if (std::isnan(operand)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    return std::ceil(operand);
+}
+
+static sljit_f64 floatCeil(sljit_f64 operand)
+{
+    if (std::isnan(operand)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    return std::ceil(operand);
+}
+
+static sljit_f32 floatTrunc(sljit_f32 operand)
+{
+    if (std::isnan(operand)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    return std::trunc(operand);
+}
+
+static sljit_f64 floatTrunc(sljit_f64 operand)
+{
+    if (std::isnan(operand)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    return std::trunc(operand);
+}
+
 static sljit_f32 floatNearest(sljit_f32 val)
 {
     return std::nearbyint(val);
@@ -224,13 +278,13 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case F32CeilOpcode:
-        f32Func = ceil;
+        f32Func = floatCeil;
         break;
     case F32FloorOpcode:
-        f32Func = floor;
+        f32Func = floatFloor;
         break;
     case F32TruncOpcode:
-        f32Func = trunc;
+        f32Func = floatTrunc;
         break;
     case F32NearestOpcode:
         f32Func = floatNearest;
@@ -248,13 +302,13 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_CONV_F32_FROM_F64;
         break;
     case F64CeilOpcode:
-        f64Func = ceil;
+        f64Func = floatCeil;
         break;
     case F64FloorOpcode:
-        f64Func = floor;
+        f64Func = floatFloor;
         break;
     case F64TruncOpcode:
-        f64Func = trunc;
+        f64Func = floatTrunc;
         break;
     case F64NearestOpcode:
         f64Func = floatNearest;
@@ -280,7 +334,7 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F32, F32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f32Func));
         MOVE_FROM_FREG(compiler, SLJIT_MOV_F32, args[1].arg, args[1].argw, SLJIT_FR0);
     } else if (f64Func) {
-        MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR0, args[0].arg, args[0].argw);
+        MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR0, args[0].arg, args[0].argw);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F64, F64), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
         MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[1].arg, args[1].argw, SLJIT_FR0);
     } else {
