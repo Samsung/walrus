@@ -322,6 +322,18 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             }
+        } else if (import->moduleName() == "wasi_snapshot_preview1") {
+            // TODO wasi
+            if (import->fieldName() == "proc_exit") {
+                auto ft = functionTypes[SpecTestFunctionTypes::I32];
+                importValues.push_back(ImportedFunction::createImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
+                        // Do nothing
+                    },
+                    nullptr));
+            }
         } else if (registeredInstanceMap) {
             auto iter = registeredInstanceMap->find(import->moduleName());
             if (iter != registeredInstanceMap->end()) {
@@ -813,7 +825,11 @@ int main(int argc, char* argv[])
             fclose(fp);
 
             if (endsWith(filePath, "wasm")) {
-                executeWASM(store, filePath, buf, functionTypes);
+                auto trapResult = executeWASM(store, filePath, buf, functionTypes);
+                if (trapResult.exception) {
+                    fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
+                    return -1;
+                }
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
                 executeWAST(store, filePath, buf, functionTypes);
             }
