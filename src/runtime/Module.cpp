@@ -368,18 +368,29 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 #if !defined(NDEBUG)
 void ModuleFunction::dumpByteCode()
 {
-    printf("function type %p\n", m_functionType);
-    printf("requiredStackSize %u, requiredStackSizeDueToLocal %u\n", m_requiredStackSize, m_requiredStackSizeDueToLocal);
+    printf("%-34s: %-10p\n", "function type", m_functionType);
+    printf("%-34s: %u bytes\n", "required stack size", m_requiredStackSize);
+    printf("%-34s: %u bytes\n", "required stack size due to local", m_requiredStackSize);
+    printf("%-34s: %zu bytes\n", "pointer size", sizeof(void*));
+    printf("%-34s: %zu bytes", "bytecode size", m_byteCode.size());
+    if (m_byteCode.size() % sizeof(void*) == 0)
+        printf(" (pointer-aligned)");
+    printf("\n");
+
+    printf("\n");
 
     size_t idx = 0;
+    if (m_byteCode.size() > 0)
+        printf("%-20s%-15s%-10s\n", "address (decimal)", "bytecode", "size (bytes)");
     while (idx < m_byteCode.size()) {
         ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
-        printf("%zu: ", idx);
-        printf("%s ", g_byteCodeInfo[code->opcode()].m_name);
+        printf("%16zd    %-15s%-10zd   ", idx, g_byteCodeInfo[code->opcode()].m_name, code->getSize());
         code->dump(idx);
         printf("\n");
         idx += code->getSize();
     }
+
+    printf("\n");
 }
 #endif
 
