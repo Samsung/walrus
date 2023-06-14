@@ -148,29 +148,29 @@ class FunctionType;
     F(F64Gt, gt, double, int32_t)                 \
     F(F64Ge, ge, double, int32_t)
 
-#define FOR_EACH_BYTECODE_UNARY_OP(F)           \
-    F(I32Clz, clz, uint32_t, uint32_t)          \
-    F(I32Ctz, ctz, uint32_t, uint32_t)          \
-    F(I32Popcnt, popCount, uint32_t, uint32_t)  \
-    F(I32Eqz, intEqz, uint32_t, uint32_t)       \
-    F(F32Sqrt, floatSqrt, float, float)         \
-    F(F32Ceil, floatCeil, float, float)         \
-    F(F32Floor, floatFloor, float, float)       \
-    F(F32Trunc, floatTrunc, float, float)       \
-    F(F32Nearest, floatNearest, float, float)   \
-    F(F32Abs, floatAbs, float, float)           \
-    F(F32Neg, floatNeg, float, float)           \
-    F(I64Clz, clz, uint64_t, uint64_t)          \
-    F(I64Ctz, ctz, uint64_t, uint64_t)          \
-    F(I64Popcnt, popCount, uint64_t, uint64_t)  \
-    F(I64Eqz, intEqz, uint64_t, uint32_t)       \
-    F(F64Sqrt, floatSqrt, double, double)       \
-    F(F64Ceil, floatCeil, double, double)       \
-    F(F64Floor, floatFloor, double, double)     \
-    F(F64Trunc, floatTrunc, double, double)     \
-    F(F64Nearest, floatNearest, double, double) \
-    F(F64Abs, floatAbs, double, double)         \
-    F(F64Neg, floatNeg, double, double)
+#define FOR_EACH_BYTECODE_UNARY_OP(F)   \
+    F(I32Clz, clz, uint32_t)            \
+    F(I32Ctz, ctz, uint32_t)            \
+    F(I32Popcnt, popCount, uint32_t)    \
+    F(I32Eqz, intEqz, uint32_t)         \
+    F(F32Sqrt, floatSqrt, float)        \
+    F(F32Ceil, floatCeil, float)        \
+    F(F32Floor, floatFloor, float)      \
+    F(F32Trunc, floatTrunc, float)      \
+    F(F32Nearest, floatNearest, float)  \
+    F(F32Abs, floatAbs, float)          \
+    F(F32Neg, floatNeg, float)          \
+    F(I64Clz, clz, uint64_t)            \
+    F(I64Ctz, ctz, uint64_t)            \
+    F(I64Popcnt, popCount, uint64_t)    \
+    F(I64Eqz, intEqz, uint64_t)         \
+    F(F64Sqrt, floatSqrt, double)       \
+    F(F64Ceil, floatCeil, double)       \
+    F(F64Floor, floatFloor, double)     \
+    F(F64Trunc, floatTrunc, double)     \
+    F(F64Nearest, floatNearest, double) \
+    F(F64Abs, floatAbs, double)         \
+    F(F64Neg, floatNeg, double)
 
 #define FOR_EACH_BYTECODE_UNARY_OP_2(F)                                 \
     F(I64Extend8S, intExtend, uint64_t, uint64_t, uint64_t, 7)          \
@@ -235,26 +235,20 @@ class FunctionType;
     F(F32Store, float, float)         \
     F(F64Store, double, double)
 
+#define FOR_EACH_BYTECODE(F)        \
+    FOR_EACH_BYTECODE_OP(F)         \
+    FOR_EACH_BYTECODE_BINARY_OP(F)  \
+    FOR_EACH_BYTECODE_UNARY_OP(F)   \
+    FOR_EACH_BYTECODE_UNARY_OP_2(F) \
+    FOR_EACH_BYTECODE_LOAD_OP(F)    \
+    FOR_EACH_BYTECODE_STORE_OP(F)
+
 class ByteCode {
 public:
     // clang-format off
     enum Opcode : uint32_t {
-#define DECLARE_BYTECODE(name) name##Opcode,
-        FOR_EACH_BYTECODE_OP(DECLARE_BYTECODE)
-#undef DECLARE_BYTECODE
-
-#define DECLARE_BYTECODE(name, op, paramType, returnType) name##Opcode,
-        FOR_EACH_BYTECODE_BINARY_OP(DECLARE_BYTECODE)
-        FOR_EACH_BYTECODE_UNARY_OP(DECLARE_BYTECODE)
-#undef DECLARE_BYTECODE
-
-#define DECLARE_BYTECODE(name, op, paramType, returnType, T1, T2) name##Opcode,
-        FOR_EACH_BYTECODE_UNARY_OP_2(DECLARE_BYTECODE)
-#undef DECLARE_BYTECODE
-
-#define DECLARE_BYTECODE(name, readType, writeType) name##Opcode,
-        FOR_EACH_BYTECODE_LOAD_OP(DECLARE_BYTECODE)
-        FOR_EACH_BYTECODE_STORE_OP(DECLARE_BYTECODE)
+#define DECLARE_BYTECODE(name, ...) name##Opcode,
+        FOR_EACH_BYTECODE(DECLARE_BYTECODE)
 #undef DECLARE_BYTECODE
         OpcodeKindEnd,
     };
@@ -425,17 +419,7 @@ protected:
 #define DEFINE_UNARY_BYTECODE_DUMP(name)
 #endif
 
-#define DEFINE_UNARY_BYTECODE(name, op, paramType, returnType)             \
-    class name : public UnaryOperation {                                   \
-    public:                                                                \
-        name(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
-            : UnaryOperation(Opcode::name##Opcode, srcOffset, dstOffset)   \
-        {                                                                  \
-        }                                                                  \
-        DEFINE_UNARY_BYTECODE_DUMP(name)                                   \
-    };
-
-#define DEFINE_UNARY_BYTECODE_2(name, op, paramType, returnType, T1, T2)   \
+#define DEFINE_UNARY_BYTECODE(name, ...)                                   \
     class name : public UnaryOperation {                                   \
     public:                                                                \
         name(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
@@ -447,12 +431,11 @@ protected:
 
 FOR_EACH_BYTECODE_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP(DEFINE_UNARY_BYTECODE)
-FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE_2)
+FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE)
 #undef DEFINE_BINARY_BYTECODE_DUMP
 #undef DEFINE_BINARY_BYTECODE
 #undef DEFINE_UNARY_BYTECODE_DUMP
 #undef DEFINE_UNARY_BYTECODE
-#undef DEFINE_UNARY_BYTECODE_2
 
 class Call : public ByteCode {
 public:

@@ -22,19 +22,8 @@ namespace Walrus {
 
 // clang-format off
 static const uint8_t g_byteCodeSize[ByteCode::OpcodeKindEnd] = {
-#define DECLARE_BYTECODE_SIZE(name) sizeof(name),
-    FOR_EACH_BYTECODE_OP(DECLARE_BYTECODE_SIZE)
-#undef DECLARE_BYTECODE_SIZE
-#define DECLARE_BYTECODE_SIZE(name, op, paramType, returnType) sizeof(name),
-    FOR_EACH_BYTECODE_BINARY_OP(DECLARE_BYTECODE_SIZE)
-    FOR_EACH_BYTECODE_UNARY_OP(DECLARE_BYTECODE_SIZE)
-#undef DECLARE_BYTECODE_SIZE
-#define DECLARE_BYTECODE_SIZE(name, op, paramType, returnType, T1, T2) sizeof(name),
-    FOR_EACH_BYTECODE_UNARY_OP_2(DECLARE_BYTECODE_SIZE)
-#undef DECLARE_BYTECODE_SIZE
-#define DECLARE_BYTECODE_SIZE(name, readType, writeType) sizeof(name),
-    FOR_EACH_BYTECODE_LOAD_OP(DECLARE_BYTECODE_SIZE)
-    FOR_EACH_BYTECODE_STORE_OP(DECLARE_BYTECODE_SIZE)
+#define DECLARE_BYTECODE_SIZE(name, ...) sizeof(name),
+    FOR_EACH_BYTECODE(DECLARE_BYTECODE_SIZE)
 #undef DECLARE_BYTECODE_SIZE
 };
 // clang-format on
