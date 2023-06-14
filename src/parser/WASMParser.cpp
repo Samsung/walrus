@@ -26,7 +26,7 @@ namespace wabt {
 
 enum class WASMOpcode : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
-                    text, decomp, size)                                      \
+                    text, decomp)                                            \
     name##Opcode,
 #include "parser/opcode.def"
 #undef WABT_OPCODE
@@ -78,7 +78,7 @@ struct WASMCodeInfo {
 
 WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
-                    text, decomp, size)                                      \
+                    text, decomp)                                            \
     { WASMOpcode::name##Opcode,                                              \
       WASMCodeInfo::rtype,                                                   \
       { WASMCodeInfo::type1, WASMCodeInfo::type2, WASMCodeInfo::type3 },     \
