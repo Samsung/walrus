@@ -1785,20 +1785,14 @@ public:
     void generateUnaryCode(WASMOpcode code, size_t src, size_t dst)
     {
         switch (code) {
-#define GENERATE_UNARY_CODE_CASE(name, op, paramType, returnType) \
-    case WASMOpcode::name##Opcode: {                              \
-        pushByteCode(Walrus::name(src, dst), code);               \
-        break;                                                    \
+#define GENERATE_UNARY_CODE_CASE(name, ...)         \
+    case WASMOpcode::name##Opcode: {                \
+        pushByteCode(Walrus::name(src, dst), code); \
+        break;                                      \
     }
             FOR_EACH_BYTECODE_UNARY_OP(GENERATE_UNARY_CODE_CASE)
+            FOR_EACH_BYTECODE_UNARY_OP_2(GENERATE_UNARY_CODE_CASE)
 #undef GENERATE_UNARY_CODE_CASE
-#define GENERATE_UNARY_CODE_CASE_2(name, op, paramType, returnType, T1, T2) \
-    case WASMOpcode::name##Opcode: {                                        \
-        pushByteCode(Walrus::name(src, dst), code);                         \
-        break;                                                              \
-    }
-            FOR_EACH_BYTECODE_UNARY_OP_2(GENERATE_UNARY_CODE_CASE_2)
-#undef GENERATE_UNARY_CODE_CASE_2
         default:
             ASSERT_NOT_REACHED();
             break;
