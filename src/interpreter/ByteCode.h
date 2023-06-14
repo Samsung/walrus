@@ -263,16 +263,6 @@ public:
     Opcode opcode() const;
     size_t getSize();
 
-#if !defined(NDEBUG)
-    virtual ~ByteCode()
-    {
-    }
-
-    virtual void dump(size_t pos)
-    {
-    }
-#endif
-
 protected:
     friend class Interpreter;
     friend class ByteCodeTable;
@@ -318,7 +308,7 @@ public:
     uint32_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("const32 ");
         DUMP_BYTECODE_OFFSET(dstOffset);
@@ -346,7 +336,7 @@ public:
     uint64_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("const64 ");
         DUMP_BYTECODE_OFFSET(dstOffset);
@@ -373,7 +363,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
     }
 #endif
@@ -385,7 +375,7 @@ protected:
 
 #if !defined(NDEBUG)
 #define DEFINE_BINARY_BYTECODE_DUMP(name)                                                                                                             \
-    virtual void dump(size_t pos)                                                                                                                     \
+    void dump(size_t pos)                                                                                                                             \
     {                                                                                                                                                 \
         printf(#name "src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset[0], (uint32_t)m_srcOffset[1], (uint32_t)m_dstOffset); \
     }
@@ -415,7 +405,7 @@ public:
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
     }
 #endif
@@ -427,7 +417,7 @@ protected:
 
 #if !defined(NDEBUG)
 #define DEFINE_UNARY_BYTECODE_DUMP(name)                                                               \
-    virtual void dump(size_t pos)                                                                      \
+    void dump(size_t pos)                                                                              \
     {                                                                                                  \
         printf(#name " src: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset); \
     }
@@ -493,7 +483,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("call ");
         printf("index: %" PRId32 " ", m_index);
@@ -540,7 +530,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("call_indirect ");
         printf("tableIndex: %" PRId32 " ", m_tableIndex);
@@ -581,7 +571,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("move32 ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -607,7 +597,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("move64 ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -633,7 +623,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("load32 ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -659,7 +649,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("load64 ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -685,7 +675,7 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("store32 ");
         DUMP_BYTECODE_OFFSET(src0Offset);
@@ -711,7 +701,7 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("store64 ");
         DUMP_BYTECODE_OFFSET(src0Offset);
@@ -739,7 +729,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("jump dst: %" PRId32, (int32_t)pos + m_offset);
     }
@@ -766,7 +756,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("jump_if_true ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -796,7 +786,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("jump_if_false ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -831,7 +821,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("select ");
         DUMP_BYTECODE_OFFSET(condOffset);
@@ -851,11 +841,11 @@ protected:
 
 class BrTable : public ByteCode {
 public:
-    BrTable(ByteCodeStackOffset condOffset, uint32_t m_tableSize)
+    BrTable(ByteCodeStackOffset condOffset, uint32_t tableSize)
         : ByteCode(Opcode::BrTableOpcode)
         , m_condOffset(condOffset)
         , m_defaultOffset(0)
-        , m_tableSize(m_tableSize)
+        , m_tableSize(tableSize)
     {
     }
 
@@ -870,7 +860,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("br_table ");
         DUMP_BYTECODE_OFFSET(condOffset);
@@ -900,7 +890,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("memory.size ");
         DUMP_BYTECODE_OFFSET(dstOffset);
@@ -932,7 +922,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("memory.init ");
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
@@ -963,7 +953,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("memory.copy ");
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
@@ -990,7 +980,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("memory.fill ");
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
@@ -1016,7 +1006,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("data.drop ");
         printf("segmentIndex: %" PRIu32, m_segmentIndex);
@@ -1041,7 +1031,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("memory.grow ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -1070,7 +1060,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
     }
 #endif
@@ -1081,10 +1071,10 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                                       \
-    virtual void dump(size_t pos)                                                                                                             \
-    {                                                                                                                                         \
-        printf(#name "src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+#define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                                        \
+    void dump(size_t pos)                                                                                                                      \
+    {                                                                                                                                          \
+        printf(#name " src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
     }
 #else
 #define DEFINE_LOAD_BYTECODE_DUMP(name)
@@ -1116,7 +1106,7 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
     }
 #endif
@@ -1127,10 +1117,10 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                         \
-    virtual void dump(size_t pos)                                                                                                                \
-    {                                                                                                                                            \
-        printf(#name "src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
+#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                          \
+    void dump(size_t pos)                                                                                                                         \
+    {                                                                                                                                             \
+        printf(#name " src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
     }
 #else
 #define DEFINE_STORE_BYTECODE_DUMP(name)
@@ -1168,7 +1158,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("table.get ");
         DUMP_BYTECODE_OFFSET(srcOffset);
@@ -1198,7 +1188,7 @@ public:
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("table.set ");
         DUMP_BYTECODE_OFFSET(src0Offset);
@@ -1230,7 +1220,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("table.grow ");
         DUMP_BYTECODE_OFFSET(src0Offset);
@@ -1260,7 +1250,7 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("table.size ");
         DUMP_BYTECODE_OFFSET(dstOffset);
@@ -1291,7 +1281,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("table.copy ");
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
@@ -1322,7 +1312,7 @@ public:
         return m_srcOffsets;
     }
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("table.fill ");
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
@@ -1354,7 +1344,7 @@ public:
         return m_srcOffsets;
     }
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("table.init ");
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
@@ -1384,7 +1374,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("elem.drop segmentIndex: %" PRIu32, m_segmentIndex);
     }
@@ -1407,7 +1397,7 @@ public:
     uint32_t funcIndex() const { return m_funcIndex; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("ref.func ");
         DUMP_BYTECODE_OFFSET(dstOffset);
@@ -1433,7 +1423,7 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("global.get32 ");
         printf("index: %" PRId32,
@@ -1459,7 +1449,7 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("global.get64 ");
         printf("index: %" PRId32,
@@ -1485,7 +1475,7 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("global.set32 ");
         printf("index: %" PRId32,
@@ -1511,7 +1501,7 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("global.set64 ");
         printf("index: %" PRId32,
@@ -1545,7 +1535,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("throw tagIndex: %" PRId32 " ",
                m_tagIndex);
@@ -1574,7 +1564,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("unreachable");
     }
@@ -1602,7 +1592,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         auto arr = resultOffsets();
         printf("end resultOffsets: ");
@@ -1625,7 +1615,7 @@ public:
     }
 
 #if !defined(NDEBUG)
-    virtual void dump(size_t pos)
+    void dump(size_t pos)
     {
         printf("fill opcode table");
     }
