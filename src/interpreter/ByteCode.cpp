@@ -16,20 +16,49 @@
 
 #include "Walrus.h"
 #include "interpreter/ByteCode.h"
-#include "interpreter/Opcode.h"
 #include "runtime/ObjectType.h"
 
 namespace Walrus {
 
-extern ByteCodeInfo g_byteCodeInfo[OpcodeKind::InvalidOpcode];
-
-static const uint8_t g_byteCodeSize[OpcodeKind::InvalidOpcode] = {
-#define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
-                    text, decomp, size)                                      \
-    size,
-#include "interpreter/opcode.def"
-#undef WABT_OPCODE
+// clang-format off
+static const uint8_t g_byteCodeSize[ByteCode::OpcodeKindEnd] = {
+#define DECLARE_BYTECODE_SIZE(name) sizeof(name),
+    FOR_EACH_BYTECODE_OP(DECLARE_BYTECODE_SIZE)
+#undef DECLARE_BYTECODE_SIZE
+#define DECLARE_BYTECODE_SIZE(name, op, paramType, returnType) sizeof(name),
+    FOR_EACH_BYTECODE_BINARY_OP(DECLARE_BYTECODE_SIZE)
+    FOR_EACH_BYTECODE_UNARY_OP(DECLARE_BYTECODE_SIZE)
+#undef DECLARE_BYTECODE_SIZE
+#define DECLARE_BYTECODE_SIZE(name, op, paramType, returnType, T1, T2) sizeof(name),
+    FOR_EACH_BYTECODE_UNARY_OP_2(DECLARE_BYTECODE_SIZE)
+#undef DECLARE_BYTECODE_SIZE
+#define DECLARE_BYTECODE_SIZE(name, readType, writeType) sizeof(name),
+    FOR_EACH_BYTECODE_LOAD_OP(DECLARE_BYTECODE_SIZE)
+    FOR_EACH_BYTECODE_STORE_OP(DECLARE_BYTECODE_SIZE)
+#undef DECLARE_BYTECODE_SIZE
 };
+// clang-format on
+
+ByteCode::ByteCode(ByteCode::Opcode opcode)
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+    : m_opcodeInAddress(g_byteCodeTable.m_addressTable[opcode])
+#else
+    : m_opcode(opcode)
+#endif
+{
+}
+
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+ByteCode::Opcode ByteCode::opcode() const
+{
+    return static_cast<Opcode>(g_byteCodeTable.m_addressToOpcodeTable[m_opcodeInAddress]);
+}
+#else
+ByteCode::Opcode ByteCode::opcode() const
+{
+    return m_opcode;
+}
+#endif
 
 size_t ByteCode::getSize()
 {

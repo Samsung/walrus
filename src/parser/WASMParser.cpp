@@ -17,13 +17,75 @@
 
 #include "parser/WASMParser.h"
 #include "interpreter/ByteCode.h"
-#include "interpreter/Opcode.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
 
 #include "wabt/walrus/binary-reader-walrus.h"
 
 namespace wabt {
+
+enum class WASMOpcode : size_t {
+#define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
+                    text, decomp, size)                                      \
+    name##Opcode,
+#include "parser/opcode.def"
+#undef WABT_OPCODE
+    OpcodeKindEnd,
+};
+
+struct WASMCodeInfo {
+    enum CodeType { ___,
+                    I32,
+                    I64,
+                    F32,
+                    F64,
+                    V128 };
+    WASMOpcode m_code;
+    CodeType m_resultType;
+    CodeType m_paramTypes[3];
+    const char* m_name;
+
+    size_t stackShrinkSize() const
+    {
+        ASSERT(m_code != WASMOpcode::OpcodeKindEnd);
+        return codeTypeToMemorySize(m_paramTypes[0]) + codeTypeToMemorySize(m_paramTypes[1]) + codeTypeToMemorySize(m_paramTypes[2]);
+    }
+
+    size_t stackGrowSize() const
+    {
+        ASSERT(m_code != WASMOpcode::OpcodeKindEnd);
+        return codeTypeToMemorySize(m_resultType);
+    }
+
+    static size_t codeTypeToMemorySize(CodeType tp)
+    {
+        switch (tp) {
+        case I32:
+            return Walrus::stackAllocatedSize<int32_t>();
+        case F32:
+            return Walrus::stackAllocatedSize<float>();
+        case I64:
+            return Walrus::stackAllocatedSize<int64_t>();
+        case F64:
+            return Walrus::stackAllocatedSize<double>();
+        case V128:
+            return 16;
+        default:
+            return 0;
+        }
+    }
+};
+
+WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
+#define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
+                    text, decomp, size)                                      \
+    { WASMOpcode::name##Opcode,                                              \
+      WASMCodeInfo::rtype,                                                   \
+      { WASMCodeInfo::type1, WASMCodeInfo::type2, WASMCodeInfo::type3 },     \
+      text },
+#include "parser/opcode.def"
+#undef WABT_OPCODE
+};
 
 static Walrus::Value::Type toValueKind(Type type)
 {
@@ -204,7 +266,7 @@ private:
     uint32_t m_initialFunctionStackSize;
     uint32_t m_functionStackSizeSoFar;
     uint32_t m_lastByteCodePosition;
-    Walrus::OpcodeKind m_lastByteCode;
+    WASMOpcode m_lastPushedOpcode;
     uint32_t m_lastOpcode[2];
 
     std::vector<VMStackInfo> m_vmStack;
@@ -266,7 +328,7 @@ private:
 
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
         m_lastByteCodePosition = 0;
-        m_lastByteCode = Walrus::OpcodeKind::InvalidOpcode;
+        m_lastPushedOpcode = WASMOpcode::OpcodeKindEnd;
         m_lastOpcode[0] = m_lastOpcode[1] = 0;
 
         m_vmStack.clear();
@@ -331,7 +393,7 @@ private:
         }
         m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
         m_lastByteCodePosition = 0;
-        m_lastByteCode = Walrus::OpcodeKind::InvalidOpcode;
+        m_lastPushedOpcode = WASMOpcode::OpcodeKindEnd;
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
@@ -345,10 +407,10 @@ private:
     }
 
     template <typename CodeType>
-    void pushByteCode(const CodeType& code)
+    void pushByteCode(const CodeType& code, WASMOpcode opcode)
     {
         m_lastByteCodePosition = m_currentFunction->currentByteCodeSize();
-        m_lastByteCode = code.opcode();
+        m_lastPushedOpcode = opcode;
         m_currentFunction->pushByteCode(code);
     }
 
@@ -373,7 +435,7 @@ public:
         , m_initialFunctionStackSize(0)
         , m_functionStackSizeSoFar(0)
         , m_lastByteCodePosition(0)
-        , m_lastByteCode(Walrus::OpcodeKind::InvalidOpcode)
+        , m_lastPushedOpcode(WASMOpcode::OpcodeKindEnd)
         , m_lastOpcode{ 0, 0 }
         , m_elementTableIndex(0)
         , m_segmentMode(Walrus::SegmentMode::None)
@@ -723,7 +785,8 @@ public:
                                              ,
                                   functionType
 #endif
-                                  ));
+                                  ),
+                     WASMOpcode::CallOpcode);
 
         m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (functionType->param().size() + functionType->result().size()));
         auto code = m_currentFunction->peekByteCode<Walrus::Call>(callPos);
@@ -745,7 +808,7 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto functionType = m_result.m_functionTypes[sigIndex];
         auto callPos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType));
+        pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType), WASMOpcode::CallIndirectOpcode);
         m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (functionType->param().size() + functionType->result().size()));
 
         auto code = m_currentFunction->peekByteCode<Walrus::CallIndirect>(callPos);
@@ -764,22 +827,22 @@ public:
 
     virtual void OnI32ConstExpr(uint32_t value) override
     {
-        pushByteCode(Walrus::Const32(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32)), value));
+        pushByteCode(Walrus::Const32(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32)), value), WASMOpcode::I32ConstOpcode);
     }
 
     virtual void OnI64ConstExpr(uint64_t value) override
     {
-        pushByteCode(Walrus::Const64(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I64)), value));
+        pushByteCode(Walrus::Const64(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I64)), value), WASMOpcode::I64ConstOpcode);
     }
 
     virtual void OnF32ConstExpr(uint32_t value) override
     {
-        pushByteCode(Walrus::Const32(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F32)), value));
+        pushByteCode(Walrus::Const32(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F32)), value), WASMOpcode::F32ConstOpcode);
     }
 
     virtual void OnF64ConstExpr(uint64_t value) override
     {
-        pushByteCode(Walrus::Const64(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F64)), value));
+        pushByteCode(Walrus::Const64(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F64)), value), WASMOpcode::F64ConstOpcode);
     }
 
     std::pair<uint32_t, uint32_t> resolveLocalOffsetAndSize(Index localIndex)
@@ -844,11 +907,11 @@ public:
             // we should check last opcode and bytecode are same
             // because some opcode omitted by optimization
             // eg) (i32.add) (local.get 0) ;; local.get 0 can be omitted by direct access
-            if (m_lastOpcode[1] == m_lastByteCode && isBinaryOperationOpcode(m_lastByteCode)) {
+            if (m_lastOpcode[1] == static_cast<uint32_t>(m_lastPushedOpcode) && isBinaryOperation(m_lastPushedOpcode)) {
                 m_currentFunction->peekByteCode<Walrus::BinaryOperation>(m_lastByteCodePosition)->setDstOffset(localOffsetAndSize.first);
-            } else if (m_lastByteCode == Walrus::Const32Opcode) {
+            } else if (m_lastPushedOpcode == WASMOpcode::Const32Opcode) {
                 m_currentFunction->peekByteCode<Walrus::Const32>(m_lastByteCodePosition)->setDstOffset(localOffsetAndSize.first);
-            } else if (m_lastByteCode == Walrus::Const64Opcode) {
+            } else if (m_lastPushedOpcode == WASMOpcode::Const64Opcode) {
                 m_currentFunction->peekByteCode<Walrus::Const64>(m_lastByteCodePosition)->setDstOffset(localOffsetAndSize.first);
             } else {
                 return false;
@@ -905,10 +968,10 @@ public:
         auto sz = Walrus::valueSizeInStack(m_result.m_globalTypes[index]->type());
         auto stackPos = pushVMStack(sz);
         if (sz == 4) {
-            pushByteCode(Walrus::GlobalGet32(stackPos, index));
+            pushByteCode(Walrus::GlobalGet32(stackPos, index), WASMOpcode::GlobalGetOpcode);
         } else {
             ASSERT(sz == 8);
-            pushByteCode(Walrus::GlobalGet64(stackPos, index));
+            pushByteCode(Walrus::GlobalGet64(stackPos, index), WASMOpcode::GlobalGetOpcode);
         }
     }
 
@@ -919,11 +982,11 @@ public:
         auto sz = Walrus::valueSizeInStack(m_result.m_globalTypes[index]->type());
         if (sz == 4) {
             ASSERT(peekVMStackSize() == 4);
-            pushByteCode(Walrus::GlobalSet32(stackPos, index));
+            pushByteCode(Walrus::GlobalSet32(stackPos, index), WASMOpcode::GlobalSetOpcode);
         } else {
             ASSERT(sz == 8);
             ASSERT(peekVMStackSize() == 8);
-            pushByteCode(Walrus::GlobalSet64(stackPos, index));
+            pushByteCode(Walrus::GlobalSet64(stackPos, index), WASMOpcode::GlobalSetOpcode);
         }
         popVMStack();
     }
@@ -935,30 +998,31 @@ public:
 
     virtual void OnBinaryExpr(uint32_t opcode) override
     {
-        auto code = static_cast<Walrus::OpcodeKind>(opcode);
-        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStackSize());
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize());
         auto src1 = popVMStack();
-        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[1]) == peekVMStackSize());
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackSize());
         auto src0 = popVMStack();
-        auto dst = pushVMStack(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
-        pushByteCode(Walrus::BinaryOperation(code, src0, src1, dst));
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
+        generateBinaryCode(code, src0, src1, dst);
     }
 
     virtual void OnUnaryExpr(uint32_t opcode) override
     {
-        auto code = static_cast<Walrus::OpcodeKind>(opcode);
-        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStackSize());
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize());
         auto src = popVMStack();
-        auto dst = pushVMStack(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
-        case Walrus::OpcodeKind::I32ReinterpretF32Opcode:
-        case Walrus::OpcodeKind::I64ReinterpretF64Opcode:
-        case Walrus::OpcodeKind::F32ReinterpretI32Opcode:
-        case Walrus::OpcodeKind::F64ReinterpretI64Opcode:
-            generateMoveCodeIfNeeds(src, dst, Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
+        case WASMOpcode::I32ReinterpretF32Opcode:
+        case WASMOpcode::I64ReinterpretF64Opcode:
+        case WASMOpcode::F32ReinterpretI32Opcode:
+        case WASMOpcode::F64ReinterpretI64Opcode:
+            generateMoveCodeIfNeeds(src, dst, WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
             break;
         default:
-            pushByteCode(Walrus::UnaryOperation(code, src, dst));
+            generateUnaryCode(code, src, dst);
+            break;
         }
     }
 
@@ -970,7 +1034,7 @@ public:
         BlockInfo b(BlockInfo::IfElse, sigType, *this);
         b.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, b.m_position });
         m_blockInfo.push_back(b);
-        pushByteCode(Walrus::JumpIfFalse(stackPos));
+        pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::IfOpcode);
     }
 
     void restoreVMStackBy(const BlockInfo& blockInfo)
@@ -1019,7 +1083,7 @@ public:
         BlockInfo& blockInfo = m_blockInfo.back();
         blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
         blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
-        pushByteCode(Walrus::Jump());
+        pushByteCode(Walrus::Jump(), WASMOpcode::ElseOpcode);
         ASSERT(blockInfo.m_blockType == BlockInfo::IfElse);
         restoreVMStackRegardToPartOfBlockEnd(blockInfo);
         m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
@@ -1108,10 +1172,10 @@ public:
     {
         if (srcPosition != dstPosition) {
             if (size == 4) {
-                pushByteCode(Walrus::Move32(srcPosition, dstPosition));
+                pushByteCode(Walrus::Move32(srcPosition, dstPosition), WASMOpcode::Move32Opcode);
             } else {
                 ASSERT(size == 8);
-                pushByteCode(Walrus::Move64(srcPosition, dstPosition));
+                pushByteCode(Walrus::Move64(srcPosition, dstPosition), WASMOpcode::Move64Opcode);
             }
         }
     }
@@ -1167,7 +1231,7 @@ public:
             return;
         }
         auto pos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::End(m_currentFunctionType->result().size()));
+        pushByteCode(Walrus::End(m_currentFunctionType->result().size()), WASMOpcode::EndOpcode);
 
         auto& result = m_currentFunctionType->result();
         m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * result.size());
@@ -1218,7 +1282,7 @@ public:
         if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
         }
-        pushByteCode(Walrus::Jump(offset));
+        pushByteCode(Walrus::Jump(offset), WASMOpcode::BrOpcode);
 
         stopToGenerateByteCodeWhileBlockEnd();
     }
@@ -1230,7 +1294,7 @@ public:
             ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
             auto stackPos = popVMStack();
             size_t pos = m_currentFunction->currentByteCodeSize();
-            pushByteCode(Walrus::JumpIfFalse(stackPos, sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End) + sizeof(uint16_t) * m_currentFunctionType->result().size()));
+            pushByteCode(Walrus::JumpIfFalse(stackPos, sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End) + sizeof(uint16_t) * m_currentFunctionType->result().size()), WASMOpcode::BrIfOpcode);
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 ASSERT((m_vmStack.rbegin() + i)->m_size == Walrus::valueSizeInStack(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
             }
@@ -1245,13 +1309,13 @@ public:
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
         if (dropSize.second) {
             size_t pos = m_currentFunction->currentByteCodeSize();
-            pushByteCode(Walrus::JumpIfFalse(stackPos));
+            pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
             generateMoveValuesCodeRegardToDrop(dropSize);
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
             if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
                 blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
             }
-            pushByteCode(Walrus::Jump(offset));
+            pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
             m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(pos)
                 ->setOffset(m_currentFunction->currentByteCodeSize() - pos);
         } else {
@@ -1259,7 +1323,7 @@ public:
             if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
                 blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentFunction->currentByteCodeSize() });
             }
-            pushByteCode(Walrus::JumpIfTrue(stackPos, offset));
+            pushByteCode(Walrus::JumpIfTrue(stackPos, offset), WASMOpcode::BrIfOpcode);
         }
     }
 
@@ -1305,7 +1369,7 @@ public:
         auto stackPos = popVMStack();
 
         size_t brTableCode = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::BrTable(stackPos, numTargets));
+        pushByteCode(Walrus::BrTable(stackPos, numTargets), WASMOpcode::BrTableOpcode);
 
         if (numTargets) {
             m_currentFunction->expandByteCode(sizeof(int32_t) * numTargets);
@@ -1330,7 +1394,7 @@ public:
         auto src1 = popVMStack();
         auto src0 = popVMStack();
         auto dst = pushVMStack(size);
-        pushByteCode(Walrus::Select(stackPos, size, src0, src1, dst));
+        pushByteCode(Walrus::Select(stackPos, size, src0, src1, dst), WASMOpcode::SelectOpcode);
     }
 
     virtual void OnThrowExpr(Index tagIndex) override
@@ -1342,7 +1406,7 @@ public:
             offsetsSize = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()]->param().size();
         }
 
-        pushByteCode(Walrus::Throw(tagIndex, offsetsSize));
+        pushByteCode(Walrus::Throw(tagIndex, offsetsSize), WASMOpcode::ThrowOpcode);
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = m_result.m_functionTypes[m_result.m_tagTypes[tagIndex]->sigIndex()];
@@ -1380,11 +1444,11 @@ public:
             // not first catch
             tryEnd = m_catchInfo.back().m_tryEnd;
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
-            pushByteCode(Walrus::Jump());
+            pushByteCode(Walrus::Jump(), WASMOpcode::CatchOpcode);
         } else {
             // first catch
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
-            pushByteCode(Walrus::Jump());
+            pushByteCode(Walrus::Jump(), WASMOpcode::CatchOpcode);
         }
 
         m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentFunction->currentByteCodeSize(), tagIndex });
@@ -1416,7 +1480,7 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src0 = popVMStack();
 
-        pushByteCode(Walrus::MemoryInit(memidx, segmentIndex, src0, src1, src2));
+        pushByteCode(Walrus::MemoryInit(memidx, segmentIndex, src0, src1, src2), WASMOpcode::MemoryInitOpcode);
     }
 
     virtual void OnMemoryCopyExpr(Index srcMemIndex, Index dstMemIndex) override
@@ -1428,7 +1492,7 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src0 = popVMStack();
 
-        pushByteCode(Walrus::MemoryCopy(srcMemIndex, dstMemIndex, src0, src1, src2));
+        pushByteCode(Walrus::MemoryCopy(srcMemIndex, dstMemIndex, src0, src1, src2), WASMOpcode::MemoryCopyOpcode);
     }
 
     virtual void OnMemoryFillExpr(Index memidx) override
@@ -1440,12 +1504,12 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src0 = popVMStack();
 
-        pushByteCode(Walrus::MemoryFill(memidx, src0, src1, src2));
+        pushByteCode(Walrus::MemoryFill(memidx, src0, src1, src2), WASMOpcode::MemoryFillOpcode);
     }
 
     virtual void OnDataDropExpr(Index segmentIndex) override
     {
-        pushByteCode(Walrus::DataDrop(segmentIndex));
+        pushByteCode(Walrus::DataDrop(segmentIndex), WASMOpcode::DataDropOpcode);
     }
 
     virtual void OnMemoryGrowExpr(Index memidx) override
@@ -1453,13 +1517,13 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src = popVMStack();
         auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
-        pushByteCode(Walrus::MemoryGrow(memidx, src, dst));
+        pushByteCode(Walrus::MemoryGrow(memidx, src, dst), WASMOpcode::MemoryGrowOpcode);
     }
 
     virtual void OnMemorySizeExpr(Index memidx) override
     {
         auto stackPos = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
-        pushByteCode(Walrus::MemorySize(memidx, stackPos));
+        pushByteCode(Walrus::MemorySize(memidx, stackPos), WASMOpcode::MemorySizeOpcode);
     }
 
     virtual void OnTableGetExpr(Index tableIndex) override
@@ -1467,7 +1531,7 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src = popVMStack();
         auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
-        pushByteCode(Walrus::TableGet(tableIndex, src, dst));
+        pushByteCode(Walrus::TableGet(tableIndex, src, dst), WASMOpcode::TableGetOpcode);
     }
 
     virtual void OnTableSetExpr(Index table_index) override
@@ -1476,7 +1540,7 @@ public:
         auto src1 = popVMStack();
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableSet(table_index, src0, src1));
+        pushByteCode(Walrus::TableSet(table_index, src0, src1), WASMOpcode::TableSetOpcode);
     }
 
     virtual void OnTableGrowExpr(Index table_index) override
@@ -1486,13 +1550,13 @@ public:
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::FuncRef)));
         auto src0 = popVMStack();
         auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
-        pushByteCode(Walrus::TableGrow(table_index, src0, src1, dst));
+        pushByteCode(Walrus::TableGrow(table_index, src0, src1, dst), WASMOpcode::TableGrowOpcode);
     }
 
     virtual void OnTableSizeExpr(Index table_index) override
     {
         auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
-        pushByteCode(Walrus::TableSize(table_index, dst));
+        pushByteCode(Walrus::TableSize(table_index, dst), WASMOpcode::TableSizeOpcode);
     }
 
     virtual void OnTableCopyExpr(Index dst_index, Index src_index) override
@@ -1503,7 +1567,7 @@ public:
         auto src1 = popVMStack();
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableCopy(dst_index, src_index, src0, src1, src2));
+        pushByteCode(Walrus::TableCopy(dst_index, src_index, src0, src1, src2), WASMOpcode::TableCopyOpcode);
     }
 
     virtual void OnTableFillExpr(Index table_index) override
@@ -1514,12 +1578,12 @@ public:
         auto src1 = popVMStack();
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableFill(table_index, src0, src1, src2));
+        pushByteCode(Walrus::TableFill(table_index, src0, src1, src2), WASMOpcode::TableFillOpcode);
     }
 
     virtual void OnElemDropExpr(Index segmentIndex) override
     {
-        pushByteCode(Walrus::ElemDrop(segmentIndex));
+        pushByteCode(Walrus::ElemDrop(segmentIndex), WASMOpcode::ElemDropOpcode);
     }
 
     virtual void OnTableInitExpr(Index segmentIndex, Index tableIndex) override
@@ -1530,44 +1594,44 @@ public:
         auto src1 = popVMStack();
         ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableInit(tableIndex, segmentIndex, src0, src1, src2));
+        pushByteCode(Walrus::TableInit(tableIndex, segmentIndex, src0, src1, src2), WASMOpcode::TableInitOpcode);
     }
 
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
-        auto code = static_cast<Walrus::OpcodeKind>(opcode);
-        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStackSize());
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize());
         auto src = popVMStack();
-        auto dst = pushVMStack(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_resultType));
-        if ((opcode == Walrus::I32LoadOpcode || opcode == Walrus::F32LoadOpcode) && offset == 0) {
-            pushByteCode(Walrus::SimpleLoad(Walrus::Load32Opcode, src, dst));
-        } else if ((opcode == Walrus::I64LoadOpcode || opcode == Walrus::F64LoadOpcode) && offset == 0) {
-            pushByteCode(Walrus::SimpleLoad(Walrus::Load64Opcode, src, dst));
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
+        if ((opcode == (int)WASMOpcode::I32LoadOpcode || opcode == (int)WASMOpcode::F32LoadOpcode) && offset == 0) {
+            pushByteCode(Walrus::Load32(src, dst), code);
+        } else if ((opcode == (int)WASMOpcode::I64LoadOpcode || opcode == (int)WASMOpcode::F64LoadOpcode) && offset == 0) {
+            pushByteCode(Walrus::Load64(src, dst), code);
         } else {
-            pushByteCode(Walrus::MemoryLoad(code, offset, src, dst));
+            generateMemoryLoadCode(code, offset, src, dst);
         }
     }
 
     virtual void OnStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
-        auto code = static_cast<Walrus::OpcodeKind>(opcode);
-        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[1]) == peekVMStackSize());
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackSize());
         auto src1 = popVMStack();
-        ASSERT(Walrus::ByteCodeInfo::byteCodeTypeToMemorySize(Walrus::g_byteCodeInfo[code].m_paramTypes[0]) == peekVMStackSize());
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize());
         auto src0 = popVMStack();
-        if ((opcode == Walrus::I32StoreOpcode || opcode == Walrus::F32StoreOpcode) && offset == 0) {
-            pushByteCode(Walrus::SimpleStore(Walrus::Store32Opcode, src0, src1));
-        } else if ((opcode == Walrus::I64StoreOpcode || opcode == Walrus::F64StoreOpcode) && offset == 0) {
-            pushByteCode(Walrus::SimpleStore(Walrus::Store64Opcode, src0, src1));
+        if ((opcode == (int)WASMOpcode::I32StoreOpcode || opcode == (int)WASMOpcode::F32StoreOpcode) && offset == 0) {
+            pushByteCode(Walrus::Store32(src0, src1), code);
+        } else if ((opcode == (int)WASMOpcode::I64StoreOpcode || opcode == (int)WASMOpcode::F64StoreOpcode) && offset == 0) {
+            pushByteCode(Walrus::Store64(src0, src1), code);
         } else {
-            pushByteCode(Walrus::MemoryStore(code, offset, src0, src1));
+            generateMemoryStoreCode(code, offset, src0, src1);
         }
     }
 
     virtual void OnRefFuncExpr(Index func_index) override
     {
         auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
-        pushByteCode(Walrus::RefFunc(func_index, dst));
+        pushByteCode(Walrus::RefFunc(func_index, dst), WASMOpcode::RefFuncOpcode);
     }
 
     virtual void OnRefNullExpr(Type type) override
@@ -1576,9 +1640,9 @@ public:
         Walrus::ByteCodeStackOffset dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::FuncRef));
 
         if (sizeof(uintptr_t) == 4) {
-            pushByteCode(Walrus::Const32(dst, Walrus::Value::Null));
+            pushByteCode(Walrus::Const32(dst, Walrus::Value::Null), WASMOpcode::Const32Opcode);
         } else {
-            pushByteCode(Walrus::Const64(dst, Walrus::Value::Null));
+            pushByteCode(Walrus::Const64(dst, Walrus::Value::Null), WASMOpcode::Const64Opcode);
         }
     }
 
@@ -1587,7 +1651,11 @@ public:
         ASSERT(sizeof(uintptr_t) == 4 || sizeof(uintptr_t) == 8);
         auto src = popVMStack();
         auto dst = pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::I32));
-        pushByteCode(Walrus::UnaryOperation(sizeof(uintptr_t) == 4 ? Walrus::I32EqzOpcode : Walrus::I64EqzOpcode, src, dst));
+        if (sizeof(uintptr_t) == 4) {
+            pushByteCode(Walrus::I32Eqz(src, dst), WASMOpcode::RefIsNullOpcode);
+        } else {
+            pushByteCode(Walrus::I64Eqz(src, dst), WASMOpcode::RefIsNullOpcode);
+        }
     }
 
     virtual void OnNopExpr() override
@@ -1676,7 +1744,7 @@ public:
 
     virtual void OnUnreachableExpr() override
     {
-        pushByteCode(Walrus::Unreachable());
+        pushByteCode(Walrus::Unreachable(), WASMOpcode::UnreachableOpcode);
         stopToGenerateByteCodeWhileBlockEnd();
     }
 
@@ -1698,219 +1766,84 @@ public:
         endFunction();
     }
 
-    // NOTE walrus and wabt use same opcode
-    bool isBinaryOperationOpcode(uint32_t opcode)
+    void generateBinaryCode(WASMOpcode code, size_t src0, size_t src1, size_t dst)
+    {
+        switch (code) {
+#define GENERATE_BINARY_CODE_CASE(name, op, paramType, returnType) \
+    case WASMOpcode::name##Opcode: {                               \
+        pushByteCode(Walrus::name(src0, src1, dst), code);         \
+        break;                                                     \
+    }
+            FOR_EACH_BYTECODE_BINARY_OP(GENERATE_BINARY_CODE_CASE)
+#undef GENERATE_BINARY_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+
+    void generateUnaryCode(WASMOpcode code, size_t src, size_t dst)
+    {
+        switch (code) {
+#define GENERATE_UNARY_CODE_CASE(name, op, paramType, returnType) \
+    case WASMOpcode::name##Opcode: {                              \
+        pushByteCode(Walrus::name(src, dst), code);               \
+        break;                                                    \
+    }
+            FOR_EACH_BYTECODE_UNARY_OP(GENERATE_UNARY_CODE_CASE)
+#undef GENERATE_UNARY_CODE_CASE
+#define GENERATE_UNARY_CODE_CASE_2(name, op, paramType, returnType, T1, T2) \
+    case WASMOpcode::name##Opcode: {                                        \
+        pushByteCode(Walrus::name(src, dst), code);                         \
+        break;                                                              \
+    }
+            FOR_EACH_BYTECODE_UNARY_OP_2(GENERATE_UNARY_CODE_CASE_2)
+#undef GENERATE_UNARY_CODE_CASE_2
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+
+    void generateMemoryLoadCode(WASMOpcode code, size_t offset, size_t src, size_t dst)
+    {
+        switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, readType, writeType)  \
+    case WASMOpcode::name##Opcode: {                        \
+        pushByteCode(Walrus::name(offset, src, dst), code); \
+        break;                                              \
+    }
+            FOR_EACH_BYTECODE_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+
+    void generateMemoryStoreCode(WASMOpcode code, size_t offset, size_t src0, size_t src1)
+    {
+        switch (code) {
+#define GENERATE_STORE_CODE_CASE(name, readType, writeType)   \
+    case WASMOpcode::name##Opcode: {                          \
+        pushByteCode(Walrus::name(offset, src0, src1), code); \
+        break;                                                \
+    }
+            FOR_EACH_BYTECODE_STORE_OP(GENERATE_STORE_CODE_CASE)
+#undef GENERATE_STORE_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+
+    bool isBinaryOperation(WASMOpcode opcode)
     {
         switch (opcode) {
-        case Walrus::OpcodeKind::I32AddOpcode:
-        case Walrus::OpcodeKind::I32SubOpcode:
-        case Walrus::OpcodeKind::I32MulOpcode:
-        case Walrus::OpcodeKind::I32DivSOpcode:
-        case Walrus::OpcodeKind::I32DivUOpcode:
-        case Walrus::OpcodeKind::I32RemSOpcode:
-        case Walrus::OpcodeKind::I32RemUOpcode:
-        case Walrus::OpcodeKind::I32AndOpcode:
-        case Walrus::OpcodeKind::I32OrOpcode:
-        case Walrus::OpcodeKind::I32XorOpcode:
-        case Walrus::OpcodeKind::I32ShlOpcode:
-        case Walrus::OpcodeKind::I32ShrUOpcode:
-        case Walrus::OpcodeKind::I32ShrSOpcode:
-        case Walrus::OpcodeKind::I32RotrOpcode:
-        case Walrus::OpcodeKind::I32RotlOpcode:
-        case Walrus::OpcodeKind::I64AddOpcode:
-        case Walrus::OpcodeKind::I64SubOpcode:
-        case Walrus::OpcodeKind::I64MulOpcode:
-        case Walrus::OpcodeKind::I64DivSOpcode:
-        case Walrus::OpcodeKind::I64DivUOpcode:
-        case Walrus::OpcodeKind::I64RemSOpcode:
-        case Walrus::OpcodeKind::I64RemUOpcode:
-        case Walrus::OpcodeKind::I64AndOpcode:
-        case Walrus::OpcodeKind::I64OrOpcode:
-        case Walrus::OpcodeKind::I64XorOpcode:
-        case Walrus::OpcodeKind::I64ShlOpcode:
-        case Walrus::OpcodeKind::I64ShrUOpcode:
-        case Walrus::OpcodeKind::I64ShrSOpcode:
-        case Walrus::OpcodeKind::I64RotrOpcode:
-        case Walrus::OpcodeKind::I64RotlOpcode:
-        case Walrus::OpcodeKind::F32AddOpcode:
-        case Walrus::OpcodeKind::F32SubOpcode:
-        case Walrus::OpcodeKind::F32MulOpcode:
-        case Walrus::OpcodeKind::F32DivOpcode:
-        case Walrus::OpcodeKind::F32MinOpcode:
-        case Walrus::OpcodeKind::F32MaxOpcode:
-        case Walrus::OpcodeKind::F32CopysignOpcode:
-        case Walrus::OpcodeKind::F64AddOpcode:
-        case Walrus::OpcodeKind::F64SubOpcode:
-        case Walrus::OpcodeKind::F64MulOpcode:
-        case Walrus::OpcodeKind::F64DivOpcode:
-        case Walrus::OpcodeKind::F64MinOpcode:
-        case Walrus::OpcodeKind::F64MaxOpcode:
-        case Walrus::OpcodeKind::F64CopysignOpcode:
-        case Walrus::OpcodeKind::I8X16AddOpcode:
-        case Walrus::OpcodeKind::I16X8AddOpcode:
-        case Walrus::OpcodeKind::I32X4AddOpcode:
-        case Walrus::OpcodeKind::I64X2AddOpcode:
-        case Walrus::OpcodeKind::I8X16SubOpcode:
-        case Walrus::OpcodeKind::I16X8SubOpcode:
-        case Walrus::OpcodeKind::I32X4SubOpcode:
-        case Walrus::OpcodeKind::I64X2SubOpcode:
-        case Walrus::OpcodeKind::I16X8MulOpcode:
-        case Walrus::OpcodeKind::I32X4MulOpcode:
-        case Walrus::OpcodeKind::I64X2MulOpcode:
-        case Walrus::OpcodeKind::I8X16AddSatSOpcode:
-        case Walrus::OpcodeKind::I8X16AddSatUOpcode:
-        case Walrus::OpcodeKind::I16X8AddSatSOpcode:
-        case Walrus::OpcodeKind::I16X8AddSatUOpcode:
-        case Walrus::OpcodeKind::I8X16SubSatSOpcode:
-        case Walrus::OpcodeKind::I8X16SubSatUOpcode:
-        case Walrus::OpcodeKind::I16X8SubSatSOpcode:
-        case Walrus::OpcodeKind::I16X8SubSatUOpcode:
-        case Walrus::OpcodeKind::I8X16MinSOpcode:
-        case Walrus::OpcodeKind::I16X8MinSOpcode:
-        case Walrus::OpcodeKind::I32X4MinSOpcode:
-        case Walrus::OpcodeKind::I8X16MinUOpcode:
-        case Walrus::OpcodeKind::I16X8MinUOpcode:
-        case Walrus::OpcodeKind::I32X4MinUOpcode:
-        case Walrus::OpcodeKind::I8X16MaxSOpcode:
-        case Walrus::OpcodeKind::I16X8MaxSOpcode:
-        case Walrus::OpcodeKind::I32X4MaxSOpcode:
-        case Walrus::OpcodeKind::I8X16MaxUOpcode:
-        case Walrus::OpcodeKind::I16X8MaxUOpcode:
-        case Walrus::OpcodeKind::I32X4MaxUOpcode:
-        case Walrus::OpcodeKind::I8X16ShlOpcode:
-        case Walrus::OpcodeKind::I16X8ShlOpcode:
-        case Walrus::OpcodeKind::I32X4ShlOpcode:
-        case Walrus::OpcodeKind::I64X2ShlOpcode:
-        case Walrus::OpcodeKind::I8X16ShrSOpcode:
-        case Walrus::OpcodeKind::I8X16ShrUOpcode:
-        case Walrus::OpcodeKind::I16X8ShrSOpcode:
-        case Walrus::OpcodeKind::I16X8ShrUOpcode:
-        case Walrus::OpcodeKind::I32X4ShrSOpcode:
-        case Walrus::OpcodeKind::I32X4ShrUOpcode:
-        case Walrus::OpcodeKind::I64X2ShrSOpcode:
-        case Walrus::OpcodeKind::I64X2ShrUOpcode:
-        case Walrus::OpcodeKind::V128AndOpcode:
-        case Walrus::OpcodeKind::V128OrOpcode:
-        case Walrus::OpcodeKind::V128XorOpcode:
-        case Walrus::OpcodeKind::F32X4MinOpcode:
-        case Walrus::OpcodeKind::F32X4PMinOpcode:
-        case Walrus::OpcodeKind::F64X2MinOpcode:
-        case Walrus::OpcodeKind::F64X2PMinOpcode:
-        case Walrus::OpcodeKind::F32X4MaxOpcode:
-        case Walrus::OpcodeKind::F32X4PMaxOpcode:
-        case Walrus::OpcodeKind::F64X2MaxOpcode:
-        case Walrus::OpcodeKind::F64X2PMaxOpcode:
-        case Walrus::OpcodeKind::F32X4AddOpcode:
-        case Walrus::OpcodeKind::F64X2AddOpcode:
-        case Walrus::OpcodeKind::F32X4SubOpcode:
-        case Walrus::OpcodeKind::F64X2SubOpcode:
-        case Walrus::OpcodeKind::F32X4DivOpcode:
-        case Walrus::OpcodeKind::F64X2DivOpcode:
-        case Walrus::OpcodeKind::F32X4MulOpcode:
-        case Walrus::OpcodeKind::F64X2MulOpcode:
-        case Walrus::OpcodeKind::I8X16SwizzleOpcode:
-        case Walrus::OpcodeKind::I8X16NarrowI16X8SOpcode:
-        case Walrus::OpcodeKind::I8X16NarrowI16X8UOpcode:
-        case Walrus::OpcodeKind::I16X8NarrowI32X4SOpcode:
-        case Walrus::OpcodeKind::I16X8NarrowI32X4UOpcode:
-        case Walrus::OpcodeKind::V128AndnotOpcode:
-        case Walrus::OpcodeKind::I8X16AvgrUOpcode:
-        case Walrus::OpcodeKind::I16X8AvgrUOpcode:
-        case Walrus::OpcodeKind::I16X8ExtmulLowI8X16SOpcode:
-        case Walrus::OpcodeKind::I16X8ExtmulHighI8X16SOpcode:
-        case Walrus::OpcodeKind::I16X8ExtmulLowI8X16UOpcode:
-        case Walrus::OpcodeKind::I16X8ExtmulHighI8X16UOpcode:
-        case Walrus::OpcodeKind::I32X4ExtmulLowI16X8SOpcode:
-        case Walrus::OpcodeKind::I32X4ExtmulHighI16X8SOpcode:
-        case Walrus::OpcodeKind::I32X4ExtmulLowI16X8UOpcode:
-        case Walrus::OpcodeKind::I32X4ExtmulHighI16X8UOpcode:
-        case Walrus::OpcodeKind::I64X2ExtmulLowI32X4SOpcode:
-        case Walrus::OpcodeKind::I64X2ExtmulHighI32X4SOpcode:
-        case Walrus::OpcodeKind::I64X2ExtmulLowI32X4UOpcode:
-        case Walrus::OpcodeKind::I64X2ExtmulHighI32X4UOpcode:
-        case Walrus::OpcodeKind::I16X8Q15mulrSatSOpcode:
-        case Walrus::OpcodeKind::I32X4DotI16X8SOpcode:
-        // compare opcodes
-        case Walrus::OpcodeKind::I32EqOpcode:
-        case Walrus::OpcodeKind::I32NeOpcode:
-        case Walrus::OpcodeKind::I32LtSOpcode:
-        case Walrus::OpcodeKind::I32LeSOpcode:
-        case Walrus::OpcodeKind::I32LtUOpcode:
-        case Walrus::OpcodeKind::I32LeUOpcode:
-        case Walrus::OpcodeKind::I32GtSOpcode:
-        case Walrus::OpcodeKind::I32GeSOpcode:
-        case Walrus::OpcodeKind::I32GtUOpcode:
-        case Walrus::OpcodeKind::I32GeUOpcode:
-        case Walrus::OpcodeKind::I64EqOpcode:
-        case Walrus::OpcodeKind::I64NeOpcode:
-        case Walrus::OpcodeKind::I64LtSOpcode:
-        case Walrus::OpcodeKind::I64LeSOpcode:
-        case Walrus::OpcodeKind::I64LtUOpcode:
-        case Walrus::OpcodeKind::I64LeUOpcode:
-        case Walrus::OpcodeKind::I64GtSOpcode:
-        case Walrus::OpcodeKind::I64GeSOpcode:
-        case Walrus::OpcodeKind::I64GtUOpcode:
-        case Walrus::OpcodeKind::I64GeUOpcode:
-        case Walrus::OpcodeKind::F32EqOpcode:
-        case Walrus::OpcodeKind::F32NeOpcode:
-        case Walrus::OpcodeKind::F32LtOpcode:
-        case Walrus::OpcodeKind::F32LeOpcode:
-        case Walrus::OpcodeKind::F32GtOpcode:
-        case Walrus::OpcodeKind::F32GeOpcode:
-        case Walrus::OpcodeKind::F64EqOpcode:
-        case Walrus::OpcodeKind::F64NeOpcode:
-        case Walrus::OpcodeKind::F64LtOpcode:
-        case Walrus::OpcodeKind::F64LeOpcode:
-        case Walrus::OpcodeKind::F64GtOpcode:
-        case Walrus::OpcodeKind::F64GeOpcode:
-        case Walrus::OpcodeKind::I8X16EqOpcode:
-        case Walrus::OpcodeKind::I16X8EqOpcode:
-        case Walrus::OpcodeKind::I32X4EqOpcode:
-        case Walrus::OpcodeKind::I64X2EqOpcode:
-        case Walrus::OpcodeKind::F32X4EqOpcode:
-        case Walrus::OpcodeKind::F64X2EqOpcode:
-        case Walrus::OpcodeKind::I8X16NeOpcode:
-        case Walrus::OpcodeKind::I16X8NeOpcode:
-        case Walrus::OpcodeKind::I32X4NeOpcode:
-        case Walrus::OpcodeKind::I64X2NeOpcode:
-        case Walrus::OpcodeKind::F32X4NeOpcode:
-        case Walrus::OpcodeKind::F64X2NeOpcode:
-        case Walrus::OpcodeKind::I8X16LtSOpcode:
-        case Walrus::OpcodeKind::I8X16LtUOpcode:
-        case Walrus::OpcodeKind::I16X8LtSOpcode:
-        case Walrus::OpcodeKind::I16X8LtUOpcode:
-        case Walrus::OpcodeKind::I32X4LtSOpcode:
-        case Walrus::OpcodeKind::I32X4LtUOpcode:
-        case Walrus::OpcodeKind::I64X2LtSOpcode:
-        case Walrus::OpcodeKind::F32X4LtOpcode:
-        case Walrus::OpcodeKind::F64X2LtOpcode:
-        case Walrus::OpcodeKind::I8X16LeSOpcode:
-        case Walrus::OpcodeKind::I8X16LeUOpcode:
-        case Walrus::OpcodeKind::I16X8LeSOpcode:
-        case Walrus::OpcodeKind::I16X8LeUOpcode:
-        case Walrus::OpcodeKind::I32X4LeSOpcode:
-        case Walrus::OpcodeKind::I32X4LeUOpcode:
-        case Walrus::OpcodeKind::I64X2LeSOpcode:
-        case Walrus::OpcodeKind::F32X4LeOpcode:
-        case Walrus::OpcodeKind::F64X2LeOpcode:
-        case Walrus::OpcodeKind::I8X16GtSOpcode:
-        case Walrus::OpcodeKind::I8X16GtUOpcode:
-        case Walrus::OpcodeKind::I16X8GtSOpcode:
-        case Walrus::OpcodeKind::I16X8GtUOpcode:
-        case Walrus::OpcodeKind::I32X4GtSOpcode:
-        case Walrus::OpcodeKind::I32X4GtUOpcode:
-        case Walrus::OpcodeKind::I64X2GtSOpcode:
-        case Walrus::OpcodeKind::F32X4GtOpcode:
-        case Walrus::OpcodeKind::F64X2GtOpcode:
-        case Walrus::OpcodeKind::I8X16GeSOpcode:
-        case Walrus::OpcodeKind::I8X16GeUOpcode:
-        case Walrus::OpcodeKind::I16X8GeSOpcode:
-        case Walrus::OpcodeKind::I16X8GeUOpcode:
-        case Walrus::OpcodeKind::I32X4GeSOpcode:
-        case Walrus::OpcodeKind::I32X4GeUOpcode:
-        case Walrus::OpcodeKind::I64X2GeSOpcode:
-        case Walrus::OpcodeKind::F32X4GeOpcode:
-        case Walrus::OpcodeKind::F64X2GeOpcode:
+#define GENERATE_BINARY_CODE_CASE(name, op, paramType, returnType) \
+    case WASMOpcode::name##Opcode:
+            FOR_EACH_BYTECODE_BINARY_OP(GENERATE_BINARY_CODE_CASE)
+#undef GENERATE_BINARY_CODE_CASE
             return true;
         default:
             return false;

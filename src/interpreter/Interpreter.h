@@ -33,7 +33,7 @@ public:
                                           uint8_t* bp);
 
 private:
-    friend class OpcodeTable;
+    friend class ByteCodeTable;
     static ByteCodeStackOffset* interpret(ExecutionState& state,
                                           size_t programCounter,
                                           uint8_t* bp,
