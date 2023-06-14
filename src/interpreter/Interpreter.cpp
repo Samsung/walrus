@@ -200,23 +200,9 @@ R doConvert(ExecutionState& state, T val)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 static void initAddressToOpcodeTable()
 {
-#define REGISTER_TABLE(name) \
+#define REGISTER_TABLE(name, ...) \
     g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
-    FOR_EACH_BYTECODE_OP(REGISTER_TABLE)
-#undef REGISTER_TABLE
-#define REGISTER_TABLE(name, op, paramType, returnType) \
-    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
-    FOR_EACH_BYTECODE_BINARY_OP(REGISTER_TABLE)
-    FOR_EACH_BYTECODE_UNARY_OP(REGISTER_TABLE)
-#undef REGISTER_TABLE
-#define REGISTER_TABLE(name, op, paramType, returnType, T1, T2) \
-    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
-    FOR_EACH_BYTECODE_UNARY_OP_2(REGISTER_TABLE)
-#undef REGISTER_TABLE
-#define REGISTER_TABLE(name, readType, writeType) \
-    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
-    FOR_EACH_BYTECODE_LOAD_OP(REGISTER_TABLE)
-    FOR_EACH_BYTECODE_STORE_OP(REGISTER_TABLE)
+    FOR_EACH_BYTECODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
 }
 #endif
@@ -245,14 +231,14 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                 \
     }
 
-#define UNARY_OPERATION(name, op, paramType, returnType)                                                \
-    DEFINE_OPCODE(name)                                                                                 \
-        :                                                                                               \
-    {                                                                                                   \
-        name* code = (name*)programCounter;                                                             \
-        writeValue<returnType>(bp, code->dstOffset(), op(readValue<paramType>(bp, code->srcOffset()))); \
-        ADD_PROGRAM_COUNTER(name);                                                                      \
-        NEXT_INSTRUCTION();                                                                             \
+#define UNARY_OPERATION(name, op, type)                                                      \
+    DEFINE_OPCODE(name)                                                                      \
+        :                                                                                    \
+    {                                                                                        \
+        name* code = (name*)programCounter;                                                  \
+        writeValue<type>(bp, code->dstOffset(), op(readValue<type>(bp, code->srcOffset()))); \
+        ADD_PROGRAM_COUNTER(name);                                                           \
+        NEXT_INSTRUCTION();                                                                  \
     }
 
 #define UNARY_OPERATION_2(name, op, paramType, returnType, T1, T2)                                                     \
@@ -775,23 +761,9 @@ NextInstruction:
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
         asm volatile("FillByteCodeOpcodeTableAsmLbl:");
 
-#define REGISTER_TABLE(name) \
+#define REGISTER_TABLE(name, ...) \
     g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
-        FOR_EACH_BYTECODE_OP(REGISTER_TABLE)
-#undef REGISTER_TABLE
-#define REGISTER_TABLE(name, op, paramType, returnType) \
-    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
-        FOR_EACH_BYTECODE_BINARY_OP(REGISTER_TABLE)
-        FOR_EACH_BYTECODE_UNARY_OP(REGISTER_TABLE)
-#undef REGISTER_TABLE
-#define REGISTER_TABLE(name, op, paramType, returnType, T1, T2) \
-    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
-        FOR_EACH_BYTECODE_UNARY_OP_2(REGISTER_TABLE)
-#undef REGISTER_TABLE
-#define REGISTER_TABLE(name, readType, writeType) \
-    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
-        FOR_EACH_BYTECODE_LOAD_OP(REGISTER_TABLE)
-        FOR_EACH_BYTECODE_STORE_OP(REGISTER_TABLE)
+        FOR_EACH_BYTECODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
 #endif
         initAddressToOpcodeTable();
