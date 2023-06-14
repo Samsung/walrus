@@ -375,7 +375,25 @@ void ModuleFunction::dumpByteCode()
     while (idx < m_byteCode.size()) {
         ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
         printf("%zu: ", idx);
-        code->dump(idx);
+
+        switch (code->opcode()) {
+#define GENERATE_BYTECODE_CASE(name, ...)    \
+    case ByteCode::name##Opcode:             \
+        static_cast<name*>(code)->dump(idx); \
+        break;
+
+            FOR_EACH_BYTECODE_OP(GENERATE_BYTECODE_CASE);
+            FOR_EACH_BYTECODE_BINARY_OP(GENERATE_BYTECODE_CASE);
+            FOR_EACH_BYTECODE_UNARY_OP(GENERATE_BYTECODE_CASE);
+            FOR_EACH_BYTECODE_UNARY_OP_2(GENERATE_BYTECODE_CASE);
+            FOR_EACH_BYTECODE_LOAD_OP(GENERATE_BYTECODE_CASE)
+            FOR_EACH_BYTECODE_STORE_OP(GENERATE_BYTECODE_CASE)
+#undef GENERATE_BYTECODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+
         printf("\n");
         idx += code->getSize();
     }
