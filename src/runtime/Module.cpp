@@ -375,7 +375,6 @@ void ModuleFunction::dumpByteCode()
     while (idx < m_byteCode.size()) {
         ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
         printf("%zu: ", idx);
-        printf("%s ", g_byteCodeInfo[code->opcode()].m_name);
         code->dump(idx);
         printf("\n");
         idx += code->getSize();

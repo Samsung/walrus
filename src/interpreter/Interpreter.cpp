@@ -18,7 +18,6 @@
 #include "Walrus.h"
 
 #include "interpreter/Interpreter.h"
-#include "interpreter/ByteCode.h"
 #include "runtime/Instance.h"
 #include "runtime/Function.h"
 #include "runtime/Memory.h"
@@ -36,12 +35,12 @@ const void* FillByteCodeOpcodeAddress[] = { &FillByteCodeOpcodeTableAsmLbl[0] };
 
 namespace Walrus {
 
-OpcodeTable g_opcodeTable;
+ByteCodeTable g_byteCodeTable;
 
-OpcodeTable::OpcodeTable()
+ByteCodeTable::ByteCodeTable()
 {
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-    // Dummy bytecode execution to initialize the OpcodeTable.
+    // Dummy bytecode execution to initialize the ByteCodeTable.
     ExecutionState dummyState;
     ByteCode b;
 #if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
@@ -201,9 +200,23 @@ R doConvert(ExecutionState& state, T val)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 static void initAddressToOpcodeTable()
 {
-#define REGISTER_TABLE(rtype, type1, type2, type3, memSize, prefix, code, name, text, decomp) \
-    g_opcodeTable.m_addressToOpcodeTable[g_opcodeTable.m_addressTable[name##Opcode]] = name##Opcode;
-    FOR_EACH_USED_OPCODE(REGISTER_TABLE)
+#define REGISTER_TABLE(name) \
+    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
+    FOR_EACH_BYTECODE_OP(REGISTER_TABLE)
+#undef REGISTER_TABLE
+#define REGISTER_TABLE(name, op, paramType, returnType) \
+    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
+    FOR_EACH_BYTECODE_BINARY_OP(REGISTER_TABLE)
+    FOR_EACH_BYTECODE_UNARY_OP(REGISTER_TABLE)
+#undef REGISTER_TABLE
+#define REGISTER_TABLE(name, op, paramType, returnType, T1, T2) \
+    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
+    FOR_EACH_BYTECODE_UNARY_OP_2(REGISTER_TABLE)
+#undef REGISTER_TABLE
+#define REGISTER_TABLE(name, readType, writeType) \
+    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
+    FOR_EACH_BYTECODE_LOAD_OP(REGISTER_TABLE)
+    FOR_EACH_BYTECODE_STORE_OP(REGISTER_TABLE)
 #undef REGISTER_TABLE
 }
 #endif
@@ -220,61 +233,61 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
 
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
 
-#define BINARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName) \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                      \
-        :                                                                                                                   \
-    {                                                                                                                       \
-        BinaryOperation* code = (BinaryOperation*)programCounter;                                                           \
-        auto lhs = readValue<nativeParameterTypeName>(bp, code->srcOffset()[0]);                                            \
-        auto rhs = readValue<nativeParameterTypeName>(bp, code->srcOffset()[1]);                                            \
-        writeValue<nativeReturnTypeName>(bp, code->dstOffset(), operationName(state, lhs, rhs));                            \
-        ADD_PROGRAM_COUNTER(BinaryOperation);                                                                               \
-        NEXT_INSTRUCTION();                                                                                                 \
+#define BINARY_OPERATION(name, op, paramType, returnType)                   \
+    DEFINE_OPCODE(name)                                                     \
+        :                                                                   \
+    {                                                                       \
+        name* code = (name*)programCounter;                                 \
+        auto lhs = readValue<paramType>(bp, code->srcOffset()[0]);          \
+        auto rhs = readValue<paramType>(bp, code->srcOffset()[1]);          \
+        writeValue<returnType>(bp, code->dstOffset(), op(state, lhs, rhs)); \
+        ADD_PROGRAM_COUNTER(name);                                          \
+        NEXT_INSTRUCTION();                                                 \
     }
 
-#define UNARY_OPERATION(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, byteCodeOperationName)                 \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                     \
-        :                                                                                                                                  \
-    {                                                                                                                                      \
-        UnaryOperation* code = (UnaryOperation*)programCounter;                                                                            \
-        writeValue<nativeReturnTypeName>(bp, code->dstOffset(), operationName(readValue<nativeParameterTypeName>(bp, code->srcOffset()))); \
-        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                               \
-        NEXT_INSTRUCTION();                                                                                                                \
+#define UNARY_OPERATION(name, op, paramType, returnType)                                                \
+    DEFINE_OPCODE(name)                                                                                 \
+        :                                                                                               \
+    {                                                                                                   \
+        name* code = (name*)programCounter;                                                             \
+        writeValue<returnType>(bp, code->dstOffset(), op(readValue<paramType>(bp, code->srcOffset()))); \
+        ADD_PROGRAM_COUNTER(name);                                                                      \
+        NEXT_INSTRUCTION();                                                                             \
     }
 
-#define UNARY_OPERATION_OPERATION_TEMPLATE_2(nativeParameterTypeName, nativeReturnTypeName, wasmTypeName, operationName, T1, T2, byteCodeOperationName)   \
-    DEFINE_OPCODE(wasmTypeName##byteCodeOperationName)                                                                                                    \
-        :                                                                                                                                                 \
-    {                                                                                                                                                     \
-        UnaryOperation* code = (UnaryOperation*)programCounter;                                                                                           \
-        writeValue<nativeReturnTypeName>(bp, code->dstOffset(), operationName<T1, T2>(state, readValue<nativeParameterTypeName>(bp, code->srcOffset()))); \
-        ADD_PROGRAM_COUNTER(UnaryOperation);                                                                                                              \
-        NEXT_INSTRUCTION();                                                                                                                               \
+#define UNARY_OPERATION_2(name, op, paramType, returnType, T1, T2)                                                     \
+    DEFINE_OPCODE(name)                                                                                                \
+        :                                                                                                              \
+    {                                                                                                                  \
+        name* code = (name*)programCounter;                                                                            \
+        writeValue<returnType>(bp, code->dstOffset(), op<T1, T2>(state, readValue<paramType>(bp, code->srcOffset()))); \
+        ADD_PROGRAM_COUNTER(name);                                                                                     \
+        NEXT_INSTRUCTION();                                                                                            \
     }
 
-#define MEMORY_LOAD_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName) \
-    DEFINE_OPCODE(opcodeName)                                                      \
-        :                                                                          \
-    {                                                                              \
-        MemoryLoad* code = (MemoryLoad*)programCounter;                            \
-        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());              \
-        nativeReadTypeName value;                                                  \
-        memories[0]->load(state, offset, code->offset(), &value);                  \
-        writeValue<nativeWriteTypeName>(bp, code->dstOffset(), value);             \
-        ADD_PROGRAM_COUNTER(MemoryLoad);                                           \
-        NEXT_INSTRUCTION();                                                        \
+#define MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)        \
+    DEFINE_OPCODE(opcodeName)                                         \
+        :                                                             \
+    {                                                                 \
+        MemoryLoad* code = (MemoryLoad*)programCounter;               \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset()); \
+        readType value;                                               \
+        memories[0]->load(state, offset, code->offset(), &value);     \
+        writeValue<writeType>(bp, code->dstOffset(), value);          \
+        ADD_PROGRAM_COUNTER(MemoryLoad);                              \
+        NEXT_INSTRUCTION();                                           \
     }
 
-#define MEMORY_STORE_OPERATION(opcodeName, nativeReadTypeName, nativeWriteTypeName)        \
-    DEFINE_OPCODE(opcodeName)                                                              \
-        :                                                                                  \
-    {                                                                                      \
-        MemoryStore* code = (MemoryStore*)programCounter;                                  \
-        nativeWriteTypeName value = readValue<nativeReadTypeName>(bp, code->src1Offset()); \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                     \
-        memories[0]->store(state, offset, code->offset(), value);                          \
-        ADD_PROGRAM_COUNTER(MemoryStore);                                                  \
-        NEXT_INSTRUCTION();                                                                \
+#define MEMORY_STORE_OPERATION(opcodeName, readType, writeType)        \
+    DEFINE_OPCODE(opcodeName)                                          \
+        :                                                              \
+    {                                                                  \
+        MemoryStore* code = (MemoryStore*)programCounter;              \
+        writeType value = readValue<readType>(bp, code->src1Offset()); \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset()); \
+        memories[0]->store(state, offset, code->offset(), value);      \
+        ADD_PROGRAM_COUNTER(MemoryStore);                              \
+        NEXT_INSTRUCTION();                                            \
     }
 
 
@@ -346,189 +359,48 @@ NextInstruction:
     DEFINE_OPCODE(Load32)
         :
     {
-        SimpleLoad* code = (SimpleLoad*)programCounter;
+        Load32* code = (Load32*)programCounter;
         uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
         memories[0]->load(state, offset, reinterpret_cast<uint32_t*>(bp + code->dstOffset()));
-        ADD_PROGRAM_COUNTER(SimpleLoad);
+        ADD_PROGRAM_COUNTER(Load32);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(Load64)
         :
     {
-        SimpleLoad* code = (SimpleLoad*)programCounter;
+        Load64* code = (Load64*)programCounter;
         uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
         memories[0]->load(state, offset, reinterpret_cast<uint64_t*>(bp + code->dstOffset()));
-        ADD_PROGRAM_COUNTER(SimpleLoad);
+        ADD_PROGRAM_COUNTER(Load64);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(Store32)
         :
     {
-        SimpleStore* code = (SimpleStore*)programCounter;
+        Store32* code = (Store32*)programCounter;
         uint32_t value = readValue<uint32_t>(bp, code->src1Offset());
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
         memories[0]->store(state, offset, value);
-        ADD_PROGRAM_COUNTER(SimpleStore);
+        ADD_PROGRAM_COUNTER(Store32);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(Store64)
         :
     {
-        SimpleStore* code = (SimpleStore*)programCounter;
+        Store64* code = (Store64*)programCounter;
         uint64_t value = readValue<uint64_t>(bp, code->src1Offset());
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
         memories[0]->store(state, offset, value);
-        ADD_PROGRAM_COUNTER(SimpleStore);
+        ADD_PROGRAM_COUNTER(Store64);
         NEXT_INSTRUCTION();
     }
 
-    BINARY_OPERATION(int32_t, int32_t, I32, add, Add)
-    BINARY_OPERATION(int32_t, int32_t, I32, sub, Sub)
-    BINARY_OPERATION(int32_t, int32_t, I32, mul, Mul)
-    BINARY_OPERATION(int32_t, int32_t, I32, intDiv, DivS)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, intDiv, DivU)
-    BINARY_OPERATION(int32_t, int32_t, I32, intRem, RemS)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, intRem, RemU)
-    BINARY_OPERATION(int32_t, int32_t, I32, intAnd, And)
-    BINARY_OPERATION(int32_t, int32_t, I32, intOr, Or)
-    BINARY_OPERATION(int32_t, int32_t, I32, intXor, Xor)
-    BINARY_OPERATION(int32_t, int32_t, I32, intShl, Shl)
-    BINARY_OPERATION(int32_t, int32_t, I32, intShr, ShrS)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, intShr, ShrU)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, intRotl, Rotl)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, intRotr, Rotr)
-    BINARY_OPERATION(int32_t, int32_t, I32, eq, Eq)
-    BINARY_OPERATION(int32_t, int32_t, I32, ne, Ne)
-    BINARY_OPERATION(int32_t, int32_t, I32, lt, LtS)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, lt, LtU)
-    BINARY_OPERATION(int32_t, int32_t, I32, le, LeS)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, le, LeU)
-    BINARY_OPERATION(int32_t, int32_t, I32, gt, GtS)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, gt, GtU)
-    BINARY_OPERATION(int32_t, int32_t, I32, ge, GeS)
-    BINARY_OPERATION(uint32_t, uint32_t, I32, ge, GeU)
-
-    UNARY_OPERATION(uint32_t, uint32_t, I32, clz, Clz)
-    UNARY_OPERATION(uint32_t, uint32_t, I32, ctz, Ctz)
-    UNARY_OPERATION(uint32_t, uint32_t, I32, popCount, Popcnt)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, uint32_t, I32, intExtend, uint32_t, 7, Extend8S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, uint32_t, I32, intExtend, uint32_t, 15, Extend16S)
-    UNARY_OPERATION(uint32_t, uint32_t, I32, intEqz, Eqz)
-
-    BINARY_OPERATION(float, float, F32, add, Add)
-    BINARY_OPERATION(float, float, F32, sub, Sub)
-    BINARY_OPERATION(float, float, F32, mul, Mul)
-    BINARY_OPERATION(float, float, F32, floatDiv, Div)
-    BINARY_OPERATION(float, float, F32, floatMax, Max)
-    BINARY_OPERATION(float, float, F32, floatMin, Min)
-    BINARY_OPERATION(float, float, F32, floatCopysign, Copysign)
-    BINARY_OPERATION(float, int32_t, F32, eq, Eq)
-    BINARY_OPERATION(float, int32_t, F32, ne, Ne)
-    BINARY_OPERATION(float, int32_t, F32, lt, Lt)
-    BINARY_OPERATION(float, int32_t, F32, le, Le)
-    BINARY_OPERATION(float, int32_t, F32, gt, Gt)
-    BINARY_OPERATION(float, int32_t, F32, ge, Ge)
-
-    UNARY_OPERATION(float, float, F32, floatSqrt, Sqrt)
-    UNARY_OPERATION(float, float, F32, floatCeil, Ceil)
-    UNARY_OPERATION(float, float, F32, floatFloor, Floor)
-    UNARY_OPERATION(float, float, F32, floatTrunc, Trunc)
-    UNARY_OPERATION(float, float, F32, floatNearest, Nearest)
-    UNARY_OPERATION(float, float, F32, floatAbs, Abs)
-    UNARY_OPERATION(float, float, F32, floatNeg, Neg)
-
-    BINARY_OPERATION(int64_t, int64_t, I64, add, Add)
-    BINARY_OPERATION(int64_t, int64_t, I64, sub, Sub)
-    BINARY_OPERATION(int64_t, int64_t, I64, mul, Mul)
-    BINARY_OPERATION(int64_t, int64_t, I64, intDiv, DivS)
-    BINARY_OPERATION(uint64_t, uint64_t, I64, intDiv, DivU)
-    BINARY_OPERATION(int64_t, int64_t, I64, intRem, RemS)
-    BINARY_OPERATION(uint64_t, uint64_t, I64, intRem, RemU)
-    BINARY_OPERATION(int64_t, int64_t, I64, intAnd, And)
-    BINARY_OPERATION(int64_t, int64_t, I64, intOr, Or)
-    BINARY_OPERATION(int64_t, int64_t, I64, intXor, Xor)
-    BINARY_OPERATION(int64_t, int64_t, I64, intShl, Shl)
-    BINARY_OPERATION(int64_t, int64_t, I64, intShr, ShrS)
-    BINARY_OPERATION(uint64_t, uint64_t, I64, intShr, ShrU)
-    BINARY_OPERATION(uint64_t, uint64_t, I64, intRotl, Rotl)
-    BINARY_OPERATION(uint64_t, uint64_t, I64, intRotr, Rotr)
-    BINARY_OPERATION(int64_t, int32_t, I64, eq, Eq)
-    BINARY_OPERATION(int64_t, int32_t, I64, ne, Ne)
-    BINARY_OPERATION(int64_t, int32_t, I64, lt, LtS)
-    BINARY_OPERATION(uint64_t, uint32_t, I64, lt, LtU)
-    BINARY_OPERATION(int64_t, int32_t, I64, le, LeS)
-    BINARY_OPERATION(uint64_t, uint32_t, I64, le, LeU)
-    BINARY_OPERATION(int64_t, int32_t, I64, gt, GtS)
-    BINARY_OPERATION(uint64_t, uint32_t, I64, gt, GtU)
-    BINARY_OPERATION(int64_t, int32_t, I64, ge, GeS)
-    BINARY_OPERATION(uint64_t, uint32_t, I64, ge, GeU)
-
-    UNARY_OPERATION(uint64_t, uint64_t, I64, clz, Clz)
-    UNARY_OPERATION(uint64_t, uint64_t, I64, ctz, Ctz)
-    UNARY_OPERATION(uint64_t, uint64_t, I64, popCount, Popcnt)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint64_t, I64, intExtend, uint64_t, 7, Extend8S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint64_t, I64, intExtend, uint64_t, 15, Extend16S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint64_t, I64, intExtend, uint64_t, 31, Extend32S)
-    UNARY_OPERATION(uint64_t, uint32_t, I64, intEqz, Eqz)
-
-    BINARY_OPERATION(double, double, F64, add, Add)
-    BINARY_OPERATION(double, double, F64, sub, Sub)
-    BINARY_OPERATION(double, double, F64, mul, Mul)
-    BINARY_OPERATION(double, double, F64, floatDiv, Div)
-    BINARY_OPERATION(double, double, F64, floatMax, Max)
-    BINARY_OPERATION(double, double, F64, floatMin, Min)
-    BINARY_OPERATION(double, double, F64, floatCopysign, Copysign)
-    BINARY_OPERATION(double, int32_t, F64, eq, Eq)
-    BINARY_OPERATION(double, int32_t, F64, ne, Ne)
-    BINARY_OPERATION(double, int32_t, F64, lt, Lt)
-    BINARY_OPERATION(double, int32_t, F64, le, Le)
-    BINARY_OPERATION(double, int32_t, F64, gt, Gt)
-    BINARY_OPERATION(double, int32_t, F64, ge, Ge)
-
-    UNARY_OPERATION(double, double, F64, floatSqrt, Sqrt)
-    UNARY_OPERATION(double, double, F64, floatCeil, Ceil)
-    UNARY_OPERATION(double, double, F64, floatFloor, Floor)
-    UNARY_OPERATION(double, double, F64, floatTrunc, Trunc)
-    UNARY_OPERATION(double, double, F64, floatNearest, Nearest)
-    UNARY_OPERATION(double, double, F64, floatAbs, Abs)
-    UNARY_OPERATION(double, double, F64, floatNeg, Neg)
-
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(int32_t, int64_t, I64, doConvert, int64_t, int32_t, ExtendI32S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, uint64_t, I64, doConvert, uint64_t, uint32_t, ExtendI32U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, uint32_t, I32, doConvert, uint32_t, uint64_t, WrapI64)
-
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int32_t, I32, doConvert, int32_t, float, TruncF32S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint32_t, I32, doConvert, uint32_t, float, TruncF32U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int32_t, I32, doConvert, int32_t, double, TruncF64S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint32_t, I32, doConvert, uint32_t, double, TruncF64U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int64_t, I64, doConvert, int64_t, float, TruncF32S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint64_t, I64, doConvert, uint64_t, float, TruncF32U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int64_t, I64, doConvert, int64_t, double, TruncF64S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint64_t, I64, doConvert, uint64_t, double, TruncF64U)
-
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(int32_t, float, F32, doConvert, float, int32_t, ConvertI32S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, float, F32, doConvert, float, uint32_t, ConvertI32U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(int64_t, float, F32, doConvert, float, int64_t, ConvertI64S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, float, F32, doConvert, float, uint64_t, ConvertI64U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(int32_t, double, F64, doConvert, double, int32_t, ConvertI32S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint32_t, double, F64, doConvert, double, uint32_t, ConvertI32U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(int64_t, double, F64, doConvert, double, int64_t, ConvertI64S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(uint64_t, double, F64, doConvert, double, uint64_t, ConvertI64U)
-
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int32_t, I32, intTruncSat, int32_t, float, TruncSatF32S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint32_t, I32, intTruncSat, uint32_t, float, TruncSatF32U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int32_t, I32, intTruncSat, int32_t, double, TruncSatF64S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint32_t, I32, intTruncSat, uint32_t, double, TruncSatF64U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, int64_t, I64, intTruncSat, int64_t, float, TruncSatF32S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, uint64_t, I64, intTruncSat, uint64_t, float, TruncSatF32U)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, int64_t, I64, intTruncSat, int64_t, double, TruncSatF64S)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, uint64_t, I64, intTruncSat, uint64_t, double, TruncSatF64U)
-
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(float, double, F64, doConvert, double, float, PromoteF32)
-    UNARY_OPERATION_OPERATION_TEMPLATE_2(double, float, F32, doConvert, float, double, DemoteF64)
+    FOR_EACH_BYTECODE_BINARY_OP(BINARY_OPERATION)
+    FOR_EACH_BYTECODE_UNARY_OP(UNARY_OPERATION)
+    FOR_EACH_BYTECODE_UNARY_OP_2(UNARY_OPERATION_2)
 
     DEFINE_OPCODE(Jump)
         :
@@ -648,30 +520,8 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    MEMORY_LOAD_OPERATION(I32Load, int32_t, int32_t)
-    MEMORY_LOAD_OPERATION(I32Load8S, int8_t, int32_t)
-    MEMORY_LOAD_OPERATION(I32Load8U, uint8_t, int32_t)
-    MEMORY_LOAD_OPERATION(I32Load16S, int16_t, int32_t)
-    MEMORY_LOAD_OPERATION(I32Load16U, uint16_t, int32_t)
-    MEMORY_LOAD_OPERATION(I64Load, int64_t, int64_t)
-    MEMORY_LOAD_OPERATION(I64Load8S, int8_t, int64_t)
-    MEMORY_LOAD_OPERATION(I64Load8U, uint8_t, int64_t)
-    MEMORY_LOAD_OPERATION(I64Load16S, int16_t, int64_t)
-    MEMORY_LOAD_OPERATION(I64Load16U, uint16_t, int64_t)
-    MEMORY_LOAD_OPERATION(I64Load32S, int32_t, int64_t)
-    MEMORY_LOAD_OPERATION(I64Load32U, uint32_t, int64_t)
-    MEMORY_LOAD_OPERATION(F32Load, float, float)
-    MEMORY_LOAD_OPERATION(F64Load, double, double)
-
-    MEMORY_STORE_OPERATION(I32Store, int32_t, int32_t)
-    MEMORY_STORE_OPERATION(I32Store16, int32_t, int16_t)
-    MEMORY_STORE_OPERATION(I32Store8, int32_t, int8_t)
-    MEMORY_STORE_OPERATION(I64Store, int64_t, int64_t)
-    MEMORY_STORE_OPERATION(I64Store32, int64_t, int32_t)
-    MEMORY_STORE_OPERATION(I64Store16, int64_t, int16_t)
-    MEMORY_STORE_OPERATION(I64Store8, int64_t, int8_t)
-    MEMORY_STORE_OPERATION(F32Store, float, float)
-    MEMORY_STORE_OPERATION(F64Store, double, double)
+    FOR_EACH_BYTECODE_LOAD_OP(MEMORY_LOAD_OPERATION)
+    FOR_EACH_BYTECODE_STORE_OP(MEMORY_STORE_OPERATION)
 
     DEFINE_OPCODE(MemorySize)
         :
@@ -924,9 +774,24 @@ NextInstruction:
 #endif
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
         asm volatile("FillByteCodeOpcodeTableAsmLbl:");
-#define REGISTER_TABLE(rtype, type1, type2, type3, memSize, prefix, code, name, text, decomp) \
-    g_opcodeTable.m_addressTable[OpcodeKind::name##Opcode] = &&name##OpcodeLbl;
-        FOR_EACH_USED_OPCODE(REGISTER_TABLE)
+
+#define REGISTER_TABLE(name) \
+    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
+        FOR_EACH_BYTECODE_OP(REGISTER_TABLE)
+#undef REGISTER_TABLE
+#define REGISTER_TABLE(name, op, paramType, returnType) \
+    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
+        FOR_EACH_BYTECODE_BINARY_OP(REGISTER_TABLE)
+        FOR_EACH_BYTECODE_UNARY_OP(REGISTER_TABLE)
+#undef REGISTER_TABLE
+#define REGISTER_TABLE(name, op, paramType, returnType, T1, T2) \
+    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
+        FOR_EACH_BYTECODE_UNARY_OP_2(REGISTER_TABLE)
+#undef REGISTER_TABLE
+#define REGISTER_TABLE(name, readType, writeType) \
+    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
+        FOR_EACH_BYTECODE_LOAD_OP(REGISTER_TABLE)
+        FOR_EACH_BYTECODE_STORE_OP(REGISTER_TABLE)
 #undef REGISTER_TABLE
 #endif
         initAddressToOpcodeTable();

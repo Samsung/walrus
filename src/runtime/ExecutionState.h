@@ -53,7 +53,7 @@ public:
     }
 
 private:
-    friend class OpcodeTable;
+    friend class ByteCodeTable;
     ExecutionState()
     {
         volatile int sp;
