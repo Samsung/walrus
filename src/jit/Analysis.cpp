@@ -78,14 +78,14 @@ static bool isSameConst(std::vector<Instruction*>& instDeps)
         return false;
     }
 
-    if (constInstr->opcode() == Const32Opcode) {
+    if (constInstr->opcode() == ByteCode::Const32Opcode) {
         uint32_t value = reinterpret_cast<Const32*>(constInstr->byteCode())->value();
         size_t end = instDeps.size();
 
         for (size_t i = 1; i < end; i++) {
             Instruction* instr = instDeps[i];
 
-            if (instr->opcode() != Const32Opcode || reinterpret_cast<Const32*>(instr->byteCode())->value() != value) {
+            if (instr->opcode() != ByteCode::Const32Opcode || reinterpret_cast<Const32*>(instr->byteCode())->value() != value) {
                 return false;
             }
         }
@@ -99,7 +99,7 @@ static bool isSameConst(std::vector<Instruction*>& instDeps)
     for (size_t i = 1; i < end; i++) {
         Instruction* instr = instDeps[i];
 
-        if (instr->opcode() != Const64Opcode || reinterpret_cast<Const64*>(instr->byteCode())->value() != value) {
+        if (instr->opcode() != ByteCode::Const64Opcode || reinterpret_cast<Const64*>(instr->byteCode())->value() != value) {
             return false;
         }
     }
@@ -159,7 +159,7 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
             Label* label = instr->asExtended()->value().targetLabel;
             label->m_dependencyCtx->update(currentDeps);
 
-            if (instr->opcode() == JumpOpcode) {
+            if (instr->opcode() == ByteCode::JumpOpcode) {
                 updateDeps = false;
             }
             continue;
