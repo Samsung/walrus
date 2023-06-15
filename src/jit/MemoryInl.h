@@ -193,74 +193,74 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
     sljit_u32 offset = 0;
 
     switch (instr->opcode()) {
-    case Load32Opcode:
+    case ByteCode::Load32Opcode:
         opcode = SLJIT_MOV32;
         size = 4;
         break;
-    case Load64Opcode:
+    case ByteCode::Load64Opcode:
         opcode = SLJIT_MOV;
         size = 8;
         break;
-    case I32LoadOpcode:
+    case ByteCode::I32LoadOpcode:
         opcode = SLJIT_MOV32;
         size = 4;
         break;
-    case I32Load8SOpcode:
+    case ByteCode::I32Load8SOpcode:
         opcode = SLJIT_MOV32_S8;
         size = 1;
         break;
-    case I32Load8UOpcode:
+    case ByteCode::I32Load8UOpcode:
         opcode = SLJIT_MOV32_U8;
         size = 1;
         break;
-    case I32Load16SOpcode:
+    case ByteCode::I32Load16SOpcode:
         opcode = SLJIT_MOV32_S16;
         size = 2;
         break;
-    case I32Load16UOpcode:
+    case ByteCode::I32Load16UOpcode:
         opcode = SLJIT_MOV32_U16;
         size = 2;
         break;
-    case I64LoadOpcode:
+    case ByteCode::I64LoadOpcode:
         opcode = SLJIT_MOV;
         size = 8;
         break;
-    case I64Load8SOpcode:
+    case ByteCode::I64Load8SOpcode:
         opcode = SLJIT_MOV_S8;
         size = 1;
         break;
-    case I64Load8UOpcode:
+    case ByteCode::I64Load8UOpcode:
         opcode = SLJIT_MOV_U8;
         size = 1;
         break;
-    case I64Load16SOpcode:
+    case ByteCode::I64Load16SOpcode:
         opcode = SLJIT_MOV_S16;
         size = 2;
         break;
-    case I64Load16UOpcode:
+    case ByteCode::I64Load16UOpcode:
         opcode = SLJIT_MOV_U16;
         size = 2;
         break;
-    case I64Load32SOpcode:
+    case ByteCode::I64Load32SOpcode:
         opcode = SLJIT_MOV_S32;
         size = 4;
         break;
-    case I64Load32UOpcode:
+    case ByteCode::I64Load32UOpcode:
         opcode = SLJIT_MOV_U32;
         size = 4;
         break;
-    case F32LoadOpcode:
+    case ByteCode::F32LoadOpcode:
         opcode = SLJIT_MOV_F32;
         size = 4;
         break;
     default:
-        ASSERT(instr->opcode() == F64LoadOpcode);
+        ASSERT(instr->opcode() == ByteCode::F64LoadOpcode);
         opcode = SLJIT_MOV_F64;
         size = 8;
         break;
     }
 
-    if (instr->opcode() != Load32Opcode && instr->opcode() != Load64Opcode) {
+    if (instr->opcode() != ByteCode::Load32Opcode && instr->opcode() != ByteCode::Load64Opcode) {
         MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(instr->byteCode());
         offset = loadOperation->offset();
     }
@@ -348,54 +348,54 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     sljit_u32 offset = 0;
 
     switch (instr->opcode()) {
-    case Store32Opcode:
+    case ByteCode::Store32Opcode:
         opcode = SLJIT_MOV32;
         size = 4;
         break;
-    case Store64Opcode:
+    case ByteCode::Store64Opcode:
         opcode = SLJIT_MOV;
         size = 8;
         break;
-    case I32StoreOpcode:
+    case ByteCode::I32StoreOpcode:
         opcode = SLJIT_MOV32;
         size = 4;
         break;
-    case I32Store8Opcode:
+    case ByteCode::I32Store8Opcode:
         opcode = SLJIT_MOV32_U8;
         size = 1;
         break;
-    case I32Store16Opcode:
+    case ByteCode::I32Store16Opcode:
         opcode = SLJIT_MOV32_U16;
         size = 2;
         break;
-    case I64StoreOpcode:
+    case ByteCode::I64StoreOpcode:
         opcode = SLJIT_MOV;
         size = 8;
         break;
-    case I64Store8Opcode:
+    case ByteCode::I64Store8Opcode:
         opcode = SLJIT_MOV_U8;
         size = 1;
         break;
-    case I64Store16Opcode:
+    case ByteCode::I64Store16Opcode:
         opcode = SLJIT_MOV_U16;
         size = 2;
         break;
-    case I64Store32Opcode:
+    case ByteCode::I64Store32Opcode:
         opcode = SLJIT_MOV_U32;
         size = 4;
         break;
-    case F32StoreOpcode:
+    case ByteCode::F32StoreOpcode:
         opcode = SLJIT_MOV_F32;
         size = 4;
         break;
     default:
-        ASSERT(instr->opcode() == F64StoreOpcode);
+        ASSERT(instr->opcode() == ByteCode::F64StoreOpcode);
         opcode = SLJIT_MOV_F64;
         size = 8;
         break;
     }
 
-    if (instr->opcode() != Store32Opcode && instr->opcode() != Store64Opcode) {
+    if (instr->opcode() != ByteCode::Store32Opcode && instr->opcode() != ByteCode::Store64Opcode) {
         MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(instr->byteCode());
         offset = storeOperation->offset();
     }
@@ -548,10 +548,10 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     Operand* params = instr->operands();
-    OpcodeKind opcode = instr->opcode();
+    ByteCode::Opcode opcode = instr->opcode();
 
     switch (opcode) {
-    case MemorySizeOpcode: {
+    case ByteCode::MemorySizeOpcode: {
         JITArg dstArg;
         operandToArg(params, dstArg);
 
@@ -559,9 +559,9 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
                        SLJIT_MEM1(kContextReg), OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte), SLJIT_IMM, 16);
         return;
     }
-    case MemoryInitOpcode:
-    case MemoryCopyOpcode:
-    case MemoryFillOpcode: {
+    case ByteCode::MemoryInitOpcode:
+    case ByteCode::MemoryCopyOpcode:
+    case ByteCode::MemoryFillOpcode: {
         JITArg srcArg;
 
         for (int i = 0; i < 3; i++) {
@@ -573,12 +573,12 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
         sljit_sw addr;
 
-        if (opcode == MemoryInitOpcode) {
+        if (opcode == ByteCode::MemoryInitOpcode) {
             MemoryInit* memoryInit = reinterpret_cast<MemoryInit*>(instr->byteCode());
 
             sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, memoryInit->segmentIndex());
             addr = GET_FUNC_ADDR(sljit_sw, initMemory);
-        } else if (opcode == MemoryCopyOpcode) {
+        } else if (opcode == ByteCode::MemoryCopyOpcode) {
             addr = GET_FUNC_ADDR(sljit_sw, copyMemory);
         } else {
             addr = GET_FUNC_ADDR(sljit_sw, fillMemory);
@@ -590,7 +590,7 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
         sljit_set_label(sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError), context->memoryTrapLabel);
         return;
     }
-    case MemoryGrowOpcode: {
+    case ByteCode::MemoryGrowOpcode: {
         JITArg arg;
 
         operandToArg(params, arg);

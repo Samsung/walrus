@@ -122,7 +122,7 @@ static void emitConvertFloatFromInteger(sljit_compiler* compiler, Instruction* i
     operandToArg(operands + 1, dstArg);
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-    if (instr->opcode() == F32ConvertI32UOpcode || instr->opcode() == F64ConvertI32UOpcode) {
+    if (instr->opcode() == ByteCode::F32ConvertI32UOpcode || instr->opcode() == ByteCode::F64ConvertI32UOpcode) {
         sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R0, 0, srcArg.arg, srcArg.argw);
         srcArg.arg = SLJIT_R0;
         srcArg.argw = 0;
@@ -146,95 +146,95 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
     sljit_sw addr = 0;
 
     switch (instr->opcode()) {
-    case I32TruncF32SOpcode: {
+    case ByteCode::I32TruncF32SOpcode: {
         flags = SourceIsFloat;
         addr = GET_FUNC_ADDR(sljit_sw, convertF32ToS32);
         break;
     }
-    case I32TruncF32UOpcode: {
+    case ByteCode::I32TruncF32UOpcode: {
         flags = SourceIsFloat;
         addr = GET_FUNC_ADDR(sljit_sw, convertF32ToU32);
         break;
     }
-    case I32TruncF64SOpcode: {
+    case ByteCode::I32TruncF64SOpcode: {
         flags = SourceIsFloat | SourceIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertF64ToS32);
         break;
     }
-    case I32TruncF64UOpcode: {
+    case ByteCode::I32TruncF64UOpcode: {
         flags = SourceIsFloat | SourceIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertF64ToU32);
         break;
     }
-    case I64TruncF32SOpcode: {
+    case ByteCode::I64TruncF32SOpcode: {
         flags = SourceIsFloat | DestinationIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertF32ToS64);
         break;
     }
-    case I64TruncF32UOpcode: {
+    case ByteCode::I64TruncF32UOpcode: {
         flags = SourceIsFloat | DestinationIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertF32ToU64);
         break;
     }
-    case I64TruncF64SOpcode: {
+    case ByteCode::I64TruncF64SOpcode: {
         flags = SourceIsFloat | SourceIs64Bit | DestinationIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertF64ToS64);
         break;
     }
-    case I64TruncF64UOpcode: {
+    case ByteCode::I64TruncF64UOpcode: {
         flags = SourceIsFloat | SourceIs64Bit | DestinationIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertF64ToU64);
         break;
     }
-    case I32TruncSatF32SOpcode: {
+    case ByteCode::I32TruncSatF32SOpcode: {
         flags = SourceIsFloat | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF32ToS32);
         break;
     }
-    case I32TruncSatF32UOpcode: {
+    case ByteCode::I32TruncSatF32UOpcode: {
         flags = SourceIsFloat | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF32ToU32);
         break;
     }
-    case I32TruncSatF64SOpcode: {
+    case ByteCode::I32TruncSatF64SOpcode: {
         flags = SourceIsFloat | SourceIs64Bit | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF64ToS32);
         break;
     }
-    case I32TruncSatF64UOpcode: {
+    case ByteCode::I32TruncSatF64UOpcode: {
         flags = SourceIsFloat | SourceIs64Bit | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF64ToU32);
         break;
     }
-    case I64TruncSatF32SOpcode: {
+    case ByteCode::I64TruncSatF32SOpcode: {
         flags = SourceIsFloat | DestinationIs64Bit | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF32ToS64);
         break;
     }
-    case I64TruncSatF32UOpcode: {
+    case ByteCode::I64TruncSatF32UOpcode: {
         flags = SourceIsFloat | DestinationIs64Bit | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF32ToU64);
         break;
     }
-    case I64TruncSatF64SOpcode: {
+    case ByteCode::I64TruncSatF64SOpcode: {
         flags = SourceIsFloat | SourceIs64Bit | DestinationIs64Bit | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF64ToS64);
         break;
     }
-    case I64TruncSatF64UOpcode: {
+    case ByteCode::I64TruncSatF64UOpcode: {
         flags = SourceIsFloat | SourceIs64Bit | DestinationIs64Bit | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF64ToU64);
         break;
     }
-    case F32ConvertI32SOpcode: {
+    case ByteCode::F32ConvertI32SOpcode: {
         emitConvertFloatFromInteger(compiler, instr, SLJIT_CONV_F32_FROM_S32);
         return;
     }
-    case F32ConvertI32UOpcode: {
+    case ByteCode::F32ConvertI32UOpcode: {
         emitConvertFloatFromInteger(compiler, instr, SLJIT_CONV_F32_FROM_U32);
         return;
     }
-    case F32ConvertI64SOpcode: {
+    case ByteCode::F32ConvertI64SOpcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIs64Bit | DestinationIsFloat;
         addr = GET_FUNC_ADDR(sljit_sw, convertS64ToF32);
@@ -244,7 +244,7 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
         return;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     }
-    case F32ConvertI64UOpcode: {
+    case ByteCode::F32ConvertI64UOpcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIs64Bit | DestinationIsFloat;
         addr = GET_FUNC_ADDR(sljit_sw, convertU64ToF32);
@@ -254,15 +254,15 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
         return;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     }
-    case F64ConvertI32SOpcode: {
+    case ByteCode::F64ConvertI32SOpcode: {
         emitConvertFloatFromInteger(compiler, instr, SLJIT_CONV_F64_FROM_S32);
         return;
     }
-    case F64ConvertI32UOpcode: {
+    case ByteCode::F64ConvertI32UOpcode: {
         emitConvertFloatFromInteger(compiler, instr, SLJIT_CONV_F64_FROM_U32);
         return;
     }
-    case F64ConvertI64SOpcode: {
+    case ByteCode::F64ConvertI64SOpcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIs64Bit | DestinationIsFloat | DestinationIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertS64ToF64);
@@ -273,7 +273,7 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     }
     default: {
-        ASSERT(instr->opcode() == F64ConvertI64UOpcode);
+        ASSERT(instr->opcode() == ByteCode::F64ConvertI64UOpcode);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIs64Bit | DestinationIsFloat | DestinationIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertU64ToF64);

@@ -38,25 +38,25 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
     // Construct labels first
     while (idx < endIdx) {
         ByteCode* byteCode = function->peekByteCode<ByteCode>(idx);
-        OpcodeKind opcode = byteCode->opcode();
+        ByteCode::Opcode opcode = byteCode->opcode();
 
         switch (opcode) {
-        case OpcodeKind::JumpOpcode: {
+        case ByteCode::JumpOpcode: {
             Jump* jump = reinterpret_cast<Jump*>(byteCode);
             labels[COMPUTE_OFFSET(idx, jump->offset())] = nullptr;
             break;
         }
-        case OpcodeKind::JumpIfTrueOpcode: {
+        case ByteCode::JumpIfTrueOpcode: {
             JumpIfTrue* jumpIfTrue = reinterpret_cast<JumpIfTrue*>(byteCode);
             labels[COMPUTE_OFFSET(idx, jumpIfTrue->offset())] = nullptr;
             break;
         }
-        case OpcodeKind::JumpIfFalseOpcode: {
+        case ByteCode::JumpIfFalseOpcode: {
             JumpIfFalse* jumpIfFalse = reinterpret_cast<JumpIfFalse*>(byteCode);
             labels[COMPUTE_OFFSET(idx, jumpIfFalse->offset())] = nullptr;
             break;
         }
-        case BrTableOpcode: {
+        case ByteCode::BrTableOpcode: {
             BrTable* brTable = reinterpret_cast<BrTable*>(byteCode);
             labels[COMPUTE_OFFSET(idx, brTable->defaultOffset())] = nullptr;
 
@@ -105,202 +105,202 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         }
 
         ByteCode* byteCode = function->peekByteCode<ByteCode>(idx);
-        OpcodeKind opcode = byteCode->opcode();
+        ByteCode::Opcode opcode = byteCode->opcode();
         Instruction::Group group = Instruction::Any;
         uint8_t paramCount = 0;
         uint16_t info = 0;
 
         switch (opcode) {
         // Binary operation
-        case I32AddOpcode:
-        case I32SubOpcode:
-        case I32MulOpcode:
-        case I32DivSOpcode:
-        case I32DivUOpcode:
-        case I32RemSOpcode:
-        case I32RemUOpcode:
-        case I32RotlOpcode:
-        case I32RotrOpcode:
-        case I32AndOpcode:
-        case I32OrOpcode:
-        case I32XorOpcode:
-        case I32ShlOpcode:
-        case I32ShrSOpcode:
-        case I32ShrUOpcode: {
+        case ByteCode::I32AddOpcode:
+        case ByteCode::I32SubOpcode:
+        case ByteCode::I32MulOpcode:
+        case ByteCode::I32DivSOpcode:
+        case ByteCode::I32DivUOpcode:
+        case ByteCode::I32RemSOpcode:
+        case ByteCode::I32RemUOpcode:
+        case ByteCode::I32RotlOpcode:
+        case ByteCode::I32RotrOpcode:
+        case ByteCode::I32AndOpcode:
+        case ByteCode::I32OrOpcode:
+        case ByteCode::I32XorOpcode:
+        case ByteCode::I32ShlOpcode:
+        case ByteCode::I32ShrSOpcode:
+        case ByteCode::I32ShrUOpcode: {
             info = Instruction::kIs32Bit;
             group = Instruction::Binary;
             paramCount = 2;
             break;
         }
-        case I64AddOpcode:
-        case I64SubOpcode:
-        case I64MulOpcode:
-        case I64DivSOpcode:
-        case I64DivUOpcode:
-        case I64RemSOpcode:
-        case I64RemUOpcode:
-        case I64RotlOpcode:
-        case I64RotrOpcode:
-        case I64AndOpcode:
-        case I64OrOpcode:
-        case I64XorOpcode:
-        case I64ShlOpcode:
-        case I64ShrSOpcode:
-        case I64ShrUOpcode: {
+        case ByteCode::I64AddOpcode:
+        case ByteCode::I64SubOpcode:
+        case ByteCode::I64MulOpcode:
+        case ByteCode::I64DivSOpcode:
+        case ByteCode::I64DivUOpcode:
+        case ByteCode::I64RemSOpcode:
+        case ByteCode::I64RemUOpcode:
+        case ByteCode::I64RotlOpcode:
+        case ByteCode::I64RotrOpcode:
+        case ByteCode::I64AndOpcode:
+        case ByteCode::I64OrOpcode:
+        case ByteCode::I64XorOpcode:
+        case ByteCode::I64ShlOpcode:
+        case ByteCode::I64ShrSOpcode:
+        case ByteCode::I64ShrUOpcode: {
             group = Instruction::Binary;
             paramCount = 2;
             break;
         }
-        case I32EqOpcode:
-        case I32NeOpcode:
-        case I32LtSOpcode:
-        case I32LtUOpcode:
-        case I32GtSOpcode:
-        case I32GtUOpcode:
-        case I32LeSOpcode:
-        case I32LeUOpcode:
-        case I32GeSOpcode:
-        case I32GeUOpcode: {
+        case ByteCode::I32EqOpcode:
+        case ByteCode::I32NeOpcode:
+        case ByteCode::I32LtSOpcode:
+        case ByteCode::I32LtUOpcode:
+        case ByteCode::I32GtSOpcode:
+        case ByteCode::I32GtUOpcode:
+        case ByteCode::I32LeSOpcode:
+        case ByteCode::I32LeUOpcode:
+        case ByteCode::I32GeSOpcode:
+        case ByteCode::I32GeUOpcode: {
             info = Instruction::kIs32Bit;
             group = Instruction::Compare;
             paramCount = 2;
             break;
         }
-        case I64EqOpcode:
-        case I64NeOpcode:
-        case I64LtSOpcode:
-        case I64LtUOpcode:
-        case I64GtSOpcode:
-        case I64GtUOpcode:
-        case I64LeSOpcode:
-        case I64LeUOpcode:
-        case I64GeSOpcode:
-        case I64GeUOpcode: {
+        case ByteCode::I64EqOpcode:
+        case ByteCode::I64NeOpcode:
+        case ByteCode::I64LtSOpcode:
+        case ByteCode::I64LtUOpcode:
+        case ByteCode::I64GtSOpcode:
+        case ByteCode::I64GtUOpcode:
+        case ByteCode::I64LeSOpcode:
+        case ByteCode::I64LeUOpcode:
+        case ByteCode::I64GeSOpcode:
+        case ByteCode::I64GeUOpcode: {
             group = Instruction::Compare;
             paramCount = 2;
             break;
         }
-        case F32AddOpcode:
-        case F32SubOpcode:
-        case F32MulOpcode:
-        case F32DivOpcode:
-        case F32MaxOpcode:
-        case F32MinOpcode:
-        case F32CopysignOpcode:
-        case F64AddOpcode:
-        case F64SubOpcode:
-        case F64MulOpcode:
-        case F64DivOpcode:
-        case F64MaxOpcode:
-        case F64MinOpcode:
-        case F64CopysignOpcode: {
+        case ByteCode::F32AddOpcode:
+        case ByteCode::F32SubOpcode:
+        case ByteCode::F32MulOpcode:
+        case ByteCode::F32DivOpcode:
+        case ByteCode::F32MaxOpcode:
+        case ByteCode::F32MinOpcode:
+        case ByteCode::F32CopysignOpcode:
+        case ByteCode::F64AddOpcode:
+        case ByteCode::F64SubOpcode:
+        case ByteCode::F64MulOpcode:
+        case ByteCode::F64DivOpcode:
+        case ByteCode::F64MaxOpcode:
+        case ByteCode::F64MinOpcode:
+        case ByteCode::F64CopysignOpcode: {
             group = Instruction::BinaryFloat;
             paramCount = 2;
             break;
         }
-        case F32EqOpcode:
-        case F32NeOpcode:
-        case F32LtOpcode:
-        case F32GtOpcode:
-        case F32LeOpcode:
-        case F32GeOpcode:
-        case F64EqOpcode:
-        case F64NeOpcode:
-        case F64LtOpcode:
-        case F64GtOpcode:
-        case F64LeOpcode:
-        case F64GeOpcode: {
+        case ByteCode::F32EqOpcode:
+        case ByteCode::F32NeOpcode:
+        case ByteCode::F32LtOpcode:
+        case ByteCode::F32GtOpcode:
+        case ByteCode::F32LeOpcode:
+        case ByteCode::F32GeOpcode:
+        case ByteCode::F64EqOpcode:
+        case ByteCode::F64NeOpcode:
+        case ByteCode::F64LtOpcode:
+        case ByteCode::F64GtOpcode:
+        case ByteCode::F64LeOpcode:
+        case ByteCode::F64GeOpcode: {
             group = Instruction::CompareFloat;
             paramCount = 2;
             break;
         }
-        case I32ClzOpcode:
-        case I32CtzOpcode:
-        case I32PopcntOpcode:
-        case I32Extend8SOpcode:
-        case I32Extend16SOpcode: {
+        case ByteCode::I32ClzOpcode:
+        case ByteCode::I32CtzOpcode:
+        case ByteCode::I32PopcntOpcode:
+        case ByteCode::I32Extend8SOpcode:
+        case ByteCode::I32Extend16SOpcode: {
             group = Instruction::Unary;
             paramCount = 1;
             info = Instruction::kIs32Bit;
             break;
         }
-        case I64ClzOpcode:
-        case I64CtzOpcode:
-        case I64PopcntOpcode:
-        case I64Extend8SOpcode:
-        case I64Extend16SOpcode:
-        case I64Extend32SOpcode: {
+        case ByteCode::I64ClzOpcode:
+        case ByteCode::I64CtzOpcode:
+        case ByteCode::I64PopcntOpcode:
+        case ByteCode::I64Extend8SOpcode:
+        case ByteCode::I64Extend16SOpcode:
+        case ByteCode::I64Extend32SOpcode: {
             group = Instruction::Unary;
             paramCount = 1;
             break;
         }
-        case F32CeilOpcode:
-        case F32FloorOpcode:
-        case F32TruncOpcode:
-        case F32NearestOpcode:
-        case F32SqrtOpcode:
-        case F32AbsOpcode:
-        case F32NegOpcode:
-        case F64CeilOpcode:
-        case F64FloorOpcode:
-        case F64TruncOpcode:
-        case F64NearestOpcode:
-        case F64SqrtOpcode:
-        case F64AbsOpcode:
-        case F64NegOpcode:
-        case F32DemoteF64Opcode:
-        case F64PromoteF32Opcode: {
+        case ByteCode::F32CeilOpcode:
+        case ByteCode::F32FloorOpcode:
+        case ByteCode::F32TruncOpcode:
+        case ByteCode::F32NearestOpcode:
+        case ByteCode::F32SqrtOpcode:
+        case ByteCode::F32AbsOpcode:
+        case ByteCode::F32NegOpcode:
+        case ByteCode::F64CeilOpcode:
+        case ByteCode::F64FloorOpcode:
+        case ByteCode::F64TruncOpcode:
+        case ByteCode::F64NearestOpcode:
+        case ByteCode::F64SqrtOpcode:
+        case ByteCode::F64AbsOpcode:
+        case ByteCode::F64NegOpcode:
+        case ByteCode::F32DemoteF64Opcode:
+        case ByteCode::F64PromoteF32Opcode: {
             group = Instruction::UnaryFloat;
             paramCount = 1;
             break;
         }
-        case I32EqzOpcode: {
+        case ByteCode::I32EqzOpcode: {
             group = Instruction::Compare;
             paramCount = 1;
             info = Instruction::kIs32Bit;
             break;
         }
-        case I64EqzOpcode: {
+        case ByteCode::I64EqzOpcode: {
             group = Instruction::Compare;
             paramCount = 1;
             break;
         }
-        case I32WrapI64Opcode:
-        case I64ExtendI32SOpcode:
-        case I64ExtendI32UOpcode: {
+        case ByteCode::I32WrapI64Opcode:
+        case ByteCode::I64ExtendI32SOpcode:
+        case ByteCode::I64ExtendI32UOpcode: {
             group = Instruction::Convert;
             paramCount = 1;
             break;
         }
-        case I32TruncF32SOpcode:
-        case I32TruncF32UOpcode:
-        case I32TruncF64SOpcode:
-        case I32TruncF64UOpcode:
-        case I64TruncF32SOpcode:
-        case I64TruncF32UOpcode:
-        case I64TruncF64SOpcode:
-        case I64TruncF64UOpcode:
-        case I32TruncSatF32SOpcode:
-        case I32TruncSatF32UOpcode:
-        case I32TruncSatF64SOpcode:
-        case I32TruncSatF64UOpcode:
-        case I64TruncSatF32SOpcode:
-        case I64TruncSatF32UOpcode:
-        case I64TruncSatF64SOpcode:
-        case I64TruncSatF64UOpcode:
-        case F32ConvertI32SOpcode:
-        case F32ConvertI32UOpcode:
-        case F32ConvertI64SOpcode:
-        case F32ConvertI64UOpcode:
-        case F64ConvertI32SOpcode:
-        case F64ConvertI32UOpcode:
-        case F64ConvertI64SOpcode:
-        case F64ConvertI64UOpcode: {
+        case ByteCode::I32TruncF32SOpcode:
+        case ByteCode::I32TruncF32UOpcode:
+        case ByteCode::I32TruncF64SOpcode:
+        case ByteCode::I32TruncF64UOpcode:
+        case ByteCode::I64TruncF32SOpcode:
+        case ByteCode::I64TruncF32UOpcode:
+        case ByteCode::I64TruncF64SOpcode:
+        case ByteCode::I64TruncF64UOpcode:
+        case ByteCode::I32TruncSatF32SOpcode:
+        case ByteCode::I32TruncSatF32UOpcode:
+        case ByteCode::I32TruncSatF64SOpcode:
+        case ByteCode::I32TruncSatF64UOpcode:
+        case ByteCode::I64TruncSatF32SOpcode:
+        case ByteCode::I64TruncSatF32UOpcode:
+        case ByteCode::I64TruncSatF64SOpcode:
+        case ByteCode::I64TruncSatF64UOpcode:
+        case ByteCode::F32ConvertI32SOpcode:
+        case ByteCode::F32ConvertI32UOpcode:
+        case ByteCode::F32ConvertI64SOpcode:
+        case ByteCode::F32ConvertI64UOpcode:
+        case ByteCode::F64ConvertI32SOpcode:
+        case ByteCode::F64ConvertI32UOpcode:
+        case ByteCode::F64ConvertI64SOpcode:
+        case ByteCode::F64ConvertI64UOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
             break;
         }
-        case SelectOpcode: {
+        case ByteCode::SelectOpcode: {
             auto instr = compiler->append(byteCode, group, opcode, 3, 1);
             auto select = reinterpret_cast<Select*>(byteCode);
             auto operands = instr->operands();
@@ -315,32 +315,42 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[3].offset = STACK_OFFSET(select->dstOffset());
             break;
         }
-        case Load32Opcode:
-        case Load64Opcode: {
-            SimpleLoad* loadOperation = reinterpret_cast<SimpleLoad*>(byteCode);
+        case ByteCode::Load32Opcode: {
+            Load32* load32 = reinterpret_cast<Load32*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
+            operands[0].offset = STACK_OFFSET(load32->srcOffset());
             operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            operands[1].offset = STACK_OFFSET(load32->dstOffset());
             break;
         }
-        case I32LoadOpcode:
-        case I32Load8SOpcode:
-        case I32Load8UOpcode:
-        case I32Load16SOpcode:
-        case I32Load16UOpcode:
-        case I64LoadOpcode:
-        case I64Load8SOpcode:
-        case I64Load8UOpcode:
-        case I64Load16SOpcode:
-        case I64Load16UOpcode:
-        case I64Load32SOpcode:
-        case I64Load32UOpcode:
-        case F32LoadOpcode:
-        case F64LoadOpcode: {
+        case ByteCode::Load64Opcode: {
+            Load64* load64 = reinterpret_cast<Load64*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(load64->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(load64->dstOffset());
+            break;
+        }
+        case ByteCode::I32LoadOpcode:
+        case ByteCode::I32Load8SOpcode:
+        case ByteCode::I32Load8UOpcode:
+        case ByteCode::I32Load16SOpcode:
+        case ByteCode::I32Load16UOpcode:
+        case ByteCode::I64LoadOpcode:
+        case ByteCode::I64Load8SOpcode:
+        case ByteCode::I64Load8UOpcode:
+        case ByteCode::I64Load16SOpcode:
+        case ByteCode::I64Load16UOpcode:
+        case ByteCode::I64Load32SOpcode:
+        case ByteCode::I64Load32UOpcode:
+        case ByteCode::F32LoadOpcode:
+        case ByteCode::F64LoadOpcode: {
             MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
 
@@ -351,27 +361,37 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
             break;
         }
-        case Store32Opcode:
-        case Store64Opcode: {
-            SimpleStore* storeOperation = reinterpret_cast<SimpleStore*>(byteCode);
+        case ByteCode::Store32Opcode: {
+            Store32* store32 = reinterpret_cast<Store32*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
+            operands[0].offset = STACK_OFFSET(store32->src0Offset());
             operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            operands[1].offset = STACK_OFFSET(store32->src1Offset());
             break;
         }
-        case I32StoreOpcode:
-        case I32Store8Opcode:
-        case I32Store16Opcode:
-        case I64StoreOpcode:
-        case I64Store8Opcode:
-        case I64Store16Opcode:
-        case I64Store32Opcode:
-        case F32StoreOpcode:
-        case F64StoreOpcode: {
+        case ByteCode::Store64Opcode: {
+            Store64* store64 = reinterpret_cast<Store64*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(store64->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(store64->src1Offset());
+            break;
+        }
+        case ByteCode::I32StoreOpcode:
+        case ByteCode::I32Store8Opcode:
+        case ByteCode::I32Store16Opcode:
+        case ByteCode::I64StoreOpcode:
+        case ByteCode::I64Store8Opcode:
+        case ByteCode::I64Store16Opcode:
+        case ByteCode::I64Store32Opcode:
+        case ByteCode::F32StoreOpcode:
+        case ByteCode::F64StoreOpcode: {
             MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
 
@@ -382,7 +402,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
             break;
         }
-        case TableInitOpcode: {
+        case ByteCode::TableInitOpcode: {
             auto tableInit = reinterpret_cast<TableInit*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
@@ -396,7 +416,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(tableInit->srcOffsets()[2]);
             break;
         }
-        case TableSizeOpcode: {
+        case ByteCode::TableSizeOpcode: {
             auto tableSize = reinterpret_cast<TableSize*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 0, 1);
@@ -406,7 +426,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(tableSize->dstOffset());
             break;
         }
-        case TableCopyOpcode: {
+        case ByteCode::TableCopyOpcode: {
             auto tableCopy = reinterpret_cast<TableCopy*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
@@ -420,7 +440,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(tableCopy->srcOffsets()[2]);
             break;
         }
-        case TableFillOpcode: {
+        case ByteCode::TableFillOpcode: {
             auto tableFill = reinterpret_cast<TableFill*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
@@ -434,7 +454,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(tableFill->srcOffsets()[2]);
             break;
         }
-        case TableGrowOpcode: {
+        case ByteCode::TableGrowOpcode: {
             auto tableGrow = reinterpret_cast<TableGrow*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 1);
@@ -448,7 +468,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(tableGrow->dstOffset());
             break;
         }
-        case TableSetOpcode: {
+        case ByteCode::TableSetOpcode: {
             auto tableSet = reinterpret_cast<TableSet*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 0);
@@ -460,7 +480,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(tableSet->src1Offset());
             break;
         }
-        case TableGetOpcode: {
+        case ByteCode::TableGetOpcode: {
             auto tableGet = reinterpret_cast<TableGet*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 1, 1);
@@ -472,7 +492,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(tableGet->dstOffset());
             break;
         }
-        case MemorySizeOpcode: {
+        case ByteCode::MemorySizeOpcode: {
             MemorySize* memorySize = reinterpret_cast<MemorySize*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 0, 1);
@@ -482,7 +502,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(memorySize->dstOffset());
             break;
         }
-        case MemoryInitOpcode: {
+        case ByteCode::MemoryInitOpcode: {
             MemoryInit* memoryInit = reinterpret_cast<MemoryInit*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
@@ -496,7 +516,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(memoryInit->srcOffsets()[2]);
             break;
         }
-        case MemoryCopyOpcode: {
+        case ByteCode::MemoryCopyOpcode: {
             MemoryCopy* memoryCopy = reinterpret_cast<MemoryCopy*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
@@ -510,7 +530,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(memoryCopy->srcOffsets()[2]);
             break;
         }
-        case MemoryFillOpcode: {
+        case ByteCode::MemoryFillOpcode: {
             MemoryFill* memoryFill = reinterpret_cast<MemoryFill*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
@@ -524,7 +544,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(memoryFill->srcOffsets()[2]);
             break;
         }
-        case MemoryGrowOpcode: {
+        case ByteCode::MemoryGrowOpcode: {
             MemoryGrow* memoryGrow = reinterpret_cast<MemoryGrow*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 1, 1);
@@ -536,29 +556,28 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(memoryGrow->dstOffset());
             break;
         }
-        case DataDropOpcode:
-        case ElemDropOpcode:
-        case NopOpcode:
-        case UnreachableOpcode: {
+        case ByteCode::DataDropOpcode:
+        case ByteCode::ElemDropOpcode:
+        case ByteCode::UnreachableOpcode: {
             compiler->append(byteCode, group, opcode, 0, 0);
             break;
         }
-        case JumpOpcode: {
+        case ByteCode::JumpOpcode: {
             Jump* jump = reinterpret_cast<Jump*>(byteCode);
             compiler->appendBranch(jump, opcode, labels[COMPUTE_OFFSET(idx, jump->offset())], 0);
             break;
         }
-        case JumpIfTrueOpcode: {
+        case ByteCode::JumpIfTrueOpcode: {
             JumpIfTrue* jumpIfTrue = reinterpret_cast<JumpIfTrue*>(byteCode);
             compiler->appendBranch(jumpIfTrue, opcode, labels[COMPUTE_OFFSET(idx, jumpIfTrue->offset())], STACK_OFFSET(jumpIfTrue->srcOffset()));
             break;
         }
-        case JumpIfFalseOpcode: {
+        case ByteCode::JumpIfFalseOpcode: {
             JumpIfFalse* jumpIfFalse = reinterpret_cast<JumpIfFalse*>(byteCode);
             compiler->appendBranch(jumpIfFalse, opcode, labels[COMPUTE_OFFSET(idx, jumpIfFalse->offset())], STACK_OFFSET(jumpIfFalse->srcOffset()));
             break;
         }
-        case BrTableOpcode: {
+        case ByteCode::BrTableOpcode: {
             BrTable* brTable = reinterpret_cast<BrTable*>(byteCode);
             uint32_t tableSize = brTable->tableSize();
             BrTableInstruction* instr = compiler->appendBrTable(brTable, tableSize, STACK_OFFSET(brTable->condOffset()));
@@ -587,8 +606,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             compiler->increaseBranchTableSize(tableSize);
             break;
         }
-        case Const32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Immediate, Const32Opcode, 0, 1);
+        case ByteCode::Const32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Immediate, ByteCode::Const32Opcode, 0, 1);
 
             Const32* const32 = reinterpret_cast<Const32*>(byteCode);
             Operand* operands = instr->operands();
@@ -597,8 +616,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(const32->dstOffset());
             break;
         }
-        case Const64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Immediate, Const64Opcode, 0, 1);
+        case ByteCode::Const64Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Immediate, ByteCode::Const64Opcode, 0, 1);
 
             Const64* const64 = reinterpret_cast<Const64*>(byteCode);
             Operand* operands = instr->operands();
@@ -607,8 +626,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(const64->dstOffset());
             break;
         }
-        case Move32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move32Opcode, 1, 1);
+        case ByteCode::Move32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move32Opcode, 1, 1);
 
             Move32* move32 = reinterpret_cast<Move32*>(byteCode);
             Operand* operands = instr->operands();
@@ -619,8 +638,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(move32->dstOffset());
             break;
         }
-        case Move64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, Move64Opcode, 1, 1);
+        case ByteCode::Move64Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move64Opcode, 1, 1);
 
             Move64* move64 = reinterpret_cast<Move64*>(byteCode);
             Operand* operands = instr->operands();
@@ -631,8 +650,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(move64->dstOffset());
             break;
         }
-        case GlobalGet32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, GlobalGet32Opcode, 0, 1);
+        case ByteCode::GlobalGet32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, ByteCode::GlobalGet32Opcode, 0, 1);
 
             GlobalGet32* globalGet32 = reinterpret_cast<GlobalGet32*>(byteCode);
             Operand* operands = instr->operands();
@@ -641,8 +660,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(globalGet32->dstOffset());
             break;
         }
-        case GlobalGet64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, GlobalGet64Opcode, 0, 1);
+        case ByteCode::GlobalGet64Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, ByteCode::GlobalGet64Opcode, 0, 1);
 
             GlobalGet64* globalGet64 = reinterpret_cast<GlobalGet64*>(byteCode);
             Operand* operands = instr->operands();
@@ -651,8 +670,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(globalGet64->dstOffset());
             break;
         }
-        case GlobalSet32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, GlobalSet32Opcode, 1, 0);
+        case ByteCode::GlobalSet32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, ByteCode::GlobalSet32Opcode, 1, 0);
 
             GlobalSet32* globalSet32 = reinterpret_cast<GlobalSet32*>(byteCode);
             Operand* operands = instr->operands();
@@ -661,8 +680,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(globalSet32->srcOffset());
             break;
         }
-        case GlobalSet64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, GlobalSet64Opcode, 1, 0);
+        case ByteCode::GlobalSet64Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, ByteCode::GlobalSet64Opcode, 1, 0);
 
             GlobalSet64* globalSet64 = reinterpret_cast<GlobalSet64*>(byteCode);
             Operand* operands = instr->operands();
@@ -671,7 +690,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(globalSet64->srcOffset());
             break;
         }
-        case EndOpcode: {
+        case ByteCode::EndOpcode: {
             uint32_t size = function->functionType()->result().size();
 
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, size, 0);
