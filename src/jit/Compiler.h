@@ -31,7 +31,6 @@ class JITFunction;
 class Instruction;
 class ExtendedInstruction;
 class BrTableInstruction;
-class CallInstruction;
 class Label;
 class JITModule;
 struct CompileContext;
@@ -151,12 +150,7 @@ public:
     static const uint16_t kKeepInstruction = 1 << 1;
     static const uint16_t kEarlyReturn = 1 << 2;
 
-    OpcodeKind opcode() { return m_opcode; }
-
-    bool isConditionalBranch()
-    {
-        return opcode() == BrIfOpcode || opcode() == InterpBrUnlessOpcode;
-    }
+    ByteCode::Opcode opcode() { return m_opcode; }
 
     ByteCode* byteCode() { return m_byteCode; }
 
@@ -186,18 +180,12 @@ public:
 
     BrTableInstruction* asBrTable()
     {
-        ASSERT(opcode() == BrTableOpcode);
+        ASSERT(opcode() == ByteCode::BrTableOpcode);
         return reinterpret_cast<BrTableInstruction*>(this);
     }
 
-    CallInstruction* asCall()
-    {
-        ASSERT(group() == Call);
-        return reinterpret_cast<CallInstruction*>(this);
-    }
-
 protected:
-    explicit Instruction(ByteCode* byteCode, Group group, OpcodeKind opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
+    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
         : InstructionListItem(group, prev)
         , m_byteCode(byteCode)
         , m_opcode(opcode)
@@ -206,7 +194,7 @@ protected:
     {
     }
 
-    explicit Instruction(ByteCode* byteCode, Group group, OpcodeKind opcode, InstructionListItem* prev)
+    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, InstructionListItem* prev)
         : InstructionListItem(group, prev)
         , m_byteCode(byteCode)
         , m_opcode(opcode)
@@ -217,7 +205,7 @@ protected:
 
 private:
     ByteCode* m_byteCode;
-    OpcodeKind m_opcode;
+    ByteCode::Opcode m_opcode;
     uint32_t m_paramCount;
     Operand* m_operands;
 };
@@ -234,7 +222,7 @@ public:
     InstructionValue& value() { return m_value; }
 
 protected:
-    explicit ExtendedInstruction(ByteCode* byteCode, Group group, OpcodeKind opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
+    explicit ExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
         : Instruction(byteCode, group, opcode, paramCount, operands, prev)
     {
         ASSERT(group == Instruction::DirectBranch);
@@ -249,7 +237,7 @@ class SimpleInstruction : public Instruction {
     friend class JITCompiler;
 
 protected:
-    explicit SimpleInstruction(ByteCode* byteCode, Group group, OpcodeKind opcode, uint32_t paramCount, InstructionListItem* prev)
+    explicit SimpleInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, InstructionListItem* prev)
         : Instruction(byteCode, group, opcode, paramCount, m_inlineOperands, prev)
     {
         ASSERT(paramCount == n || paramCount + 1 == n);
@@ -264,7 +252,7 @@ class SimpleExtendedInstruction : public ExtendedInstruction {
     friend class JITCompiler;
 
 protected:
-    explicit SimpleExtendedInstruction(ByteCode* byteCode, Group group, OpcodeKind opcode, uint32_t paramCount, InstructionListItem* prev)
+    explicit SimpleExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, InstructionListItem* prev)
         : ExtendedInstruction(byteCode, group, opcode, paramCount, m_inlineOperands, prev)
     {
         ASSERT(paramCount == n || paramCount + 1 == n);
@@ -281,11 +269,11 @@ public:
     ~ComplexInstruction() override;
 
 protected:
-    explicit ComplexInstruction(ByteCode* byteCode, Group group, OpcodeKind opcode, uint32_t paramCount, uint32_t operandCount, InstructionListItem* prev)
+    explicit ComplexInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount, InstructionListItem* prev)
         : Instruction(byteCode, group, opcode, paramCount, new Operand[operandCount], prev)
     {
         assert(operandCount >= paramCount && operandCount > 4);
-        assert(opcode == EndOpcode);
+        assert(opcode == ByteCode::EndOpcode);
     }
 };
 
@@ -305,50 +293,6 @@ private:
     Operand m_inlineParam;
     size_t m_targetLabelCount;
     Label** m_targetLabels;
-};
-
-class CallInstruction : public Instruction {
-    friend class JITCompiler;
-
-public:
-    static const uint16_t kIndirect = 1 << 0;
-    static const uint16_t kReturn = 1 << 1;
-
-    FunctionType* functionType() { return m_functionType; }
-    uint32_t frameSize() { return m_frameSize; }
-    uint32_t paramStart() { return m_paramStart; }
-
-protected:
-    explicit CallInstruction(ByteCode* byteCode, OpcodeKind opcode, uint32_t paramCount, FunctionType* functionType, Operand* operands, InstructionListItem* prev)
-        : Instruction(byteCode, Instruction::Call, opcode, paramCount, operands, prev)
-        , m_functionType(functionType)
-    {
-        ASSERT(opcode == CallOpcode || opcode == CallIndirectOpcode || opcode == ReturnCallOpcode);
-    }
-
-    FunctionType* m_functionType;
-    uint32_t m_frameSize;
-    uint32_t m_paramStart;
-};
-
-template <int n>
-class SimpleCallInstruction : public CallInstruction {
-    friend class JITCompiler;
-
-private:
-    explicit SimpleCallInstruction(ByteCode* byteCode, OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev);
-
-    Operand m_inlineOperands[n];
-};
-
-class ComplexCallInstruction : public CallInstruction {
-    friend class JITCompiler;
-
-public:
-    ~ComplexCallInstruction() override;
-
-private:
-    explicit ComplexCallInstruction(ByteCode* byteCode, OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev);
 };
 
 class DependencyGenContext;
@@ -432,8 +376,8 @@ public:
     void clear();
     void computeOptions();
 
-    Instruction* append(ByteCode* byteCode, Instruction::Group group, OpcodeKind opcode, uint32_t paramCount, uint32_t resultCount);
-    void appendBranch(ByteCode* byteCode, OpcodeKind opcode, Label* label, uint32_t offset);
+    Instruction* append(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
+    void appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset);
     BrTableInstruction* appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset);
 
     void appendLabel(Label* label)
