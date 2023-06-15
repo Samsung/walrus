@@ -45,7 +45,7 @@ static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg
     Instruction* instr = operand->item->asInstruction();
     ASSERT(srcReg != 0);
 
-    if (instr->opcode() == Const32Opcode) {
+    if (instr->opcode() == ByteCode::Const32Opcode) {
         union {
             uint32_t value;
             sljit_f32 number;
@@ -201,46 +201,46 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
     f64Function2Param f64Func = nullptr;
 
     switch (instr->opcode()) {
-    case F32AddOpcode:
+    case ByteCode::F32AddOpcode:
         opcode = SLJIT_ADD_F32;
         break;
-    case F32SubOpcode:
+    case ByteCode::F32SubOpcode:
         opcode = SLJIT_SUB_F32;
         break;
-    case F32MulOpcode:
+    case ByteCode::F32MulOpcode:
         opcode = SLJIT_MUL_F32;
         break;
-    case F32DivOpcode:
+    case ByteCode::F32DivOpcode:
         opcode = SLJIT_DIV_F32;
         break;
-    case F32MaxOpcode:
+    case ByteCode::F32MaxOpcode:
         f32Func = floatMax;
         break;
-    case F32MinOpcode:
+    case ByteCode::F32MinOpcode:
         f32Func = floatMin;
         break;
-    case F32CopysignOpcode:
+    case ByteCode::F32CopysignOpcode:
         f32Func = floatCopySign;
         break;
-    case F64AddOpcode:
+    case ByteCode::F64AddOpcode:
         opcode = SLJIT_ADD_F64;
         break;
-    case F64SubOpcode:
+    case ByteCode::F64SubOpcode:
         opcode = SLJIT_SUB_F64;
         break;
-    case F64MulOpcode:
+    case ByteCode::F64MulOpcode:
         opcode = SLJIT_MUL_F64;
         break;
-    case F64DivOpcode:
+    case ByteCode::F64DivOpcode:
         opcode = SLJIT_DIV_F64;
         break;
-    case F64MaxOpcode:
+    case ByteCode::F64MaxOpcode:
         f64Func = floatMax;
         break;
-    case F64MinOpcode:
+    case ByteCode::F64MinOpcode:
         f64Func = floatMin;
         break;
-    case F64CopysignOpcode:
+    case ByteCode::F64CopysignOpcode:
         f64Func = floatCopySign;
         break;
     default:
@@ -277,52 +277,52 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
     f64Function1Param f64Func = nullptr;
 
     switch (instr->opcode()) {
-    case F32CeilOpcode:
+    case ByteCode::F32CeilOpcode:
         f32Func = floatCeil;
         break;
-    case F32FloorOpcode:
+    case ByteCode::F32FloorOpcode:
         f32Func = floatFloor;
         break;
-    case F32TruncOpcode:
+    case ByteCode::F32TruncOpcode:
         f32Func = floatTrunc;
         break;
-    case F32NearestOpcode:
+    case ByteCode::F32NearestOpcode:
         f32Func = floatNearest;
         break;
-    case F32SqrtOpcode:
+    case ByteCode::F32SqrtOpcode:
         f32Func = sqrt;
         break;
-    case F32NegOpcode:
+    case ByteCode::F32NegOpcode:
         opcode = SLJIT_NEG_F32;
         break;
-    case F32AbsOpcode:
+    case ByteCode::F32AbsOpcode:
         opcode = SLJIT_ABS_F32;
         break;
-    case F32DemoteF64Opcode:
+    case ByteCode::F32DemoteF64Opcode:
         opcode = SLJIT_CONV_F32_FROM_F64;
         break;
-    case F64CeilOpcode:
+    case ByteCode::F64CeilOpcode:
         f64Func = floatCeil;
         break;
-    case F64FloorOpcode:
+    case ByteCode::F64FloorOpcode:
         f64Func = floatFloor;
         break;
-    case F64TruncOpcode:
+    case ByteCode::F64TruncOpcode:
         f64Func = floatTrunc;
         break;
-    case F64NearestOpcode:
+    case ByteCode::F64NearestOpcode:
         f64Func = floatNearest;
         break;
-    case F64SqrtOpcode:
+    case ByteCode::F64SqrtOpcode:
         f64Func = sqrt;
         break;
-    case F64NegOpcode:
+    case ByteCode::F64NegOpcode:
         opcode = SLJIT_NEG_F64;
         break;
-    case F64AbsOpcode:
+    case ByteCode::F64AbsOpcode:
         opcode = SLJIT_ABS_F64;
         break;
-    case F64PromoteF32Opcode:
+    case ByteCode::F64PromoteF32Opcode:
         opcode = SLJIT_CONV_F64_FROM_F32;
         break;
     default:
@@ -390,51 +390,51 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
     }
 
     switch (instr->opcode()) {
-    case F32EqOpcode:
+    case ByteCode::F32EqOpcode:
         opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_EQUAL;
         type = SLJIT_ORDERED_EQUAL;
         break;
-    case F32NeOpcode:
+    case ByteCode::F32NeOpcode:
         opcode = SLJIT_CMP_F32 | SLJIT_SET_UNORDERED_OR_NOT_EQUAL;
         type = SLJIT_UNORDERED_OR_NOT_EQUAL;
         break;
-    case F32LtOpcode:
+    case ByteCode::F32LtOpcode:
         opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_LESS;
         type = SLJIT_ORDERED_LESS;
         break;
-    case F32LeOpcode:
+    case ByteCode::F32LeOpcode:
         opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_LESS_EQUAL;
         type = SLJIT_ORDERED_LESS_EQUAL;
         break;
-    case F32GtOpcode:
+    case ByteCode::F32GtOpcode:
         opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_GREATER;
         type = SLJIT_ORDERED_GREATER;
         break;
-    case F32GeOpcode:
+    case ByteCode::F32GeOpcode:
         opcode = SLJIT_CMP_F32 | SLJIT_SET_ORDERED_GREATER_EQUAL;
         type = SLJIT_ORDERED_GREATER_EQUAL;
         break;
-    case F64EqOpcode:
+    case ByteCode::F64EqOpcode:
         opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_EQUAL;
         type = SLJIT_ORDERED_EQUAL;
         break;
-    case F64NeOpcode:
+    case ByteCode::F64NeOpcode:
         opcode = SLJIT_CMP_F64 | SLJIT_SET_UNORDERED_OR_NOT_EQUAL;
         type = SLJIT_UNORDERED_OR_NOT_EQUAL;
         break;
-    case F64LtOpcode:
+    case ByteCode::F64LtOpcode:
         opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_LESS;
         type = SLJIT_ORDERED_LESS;
         break;
-    case F64LeOpcode:
+    case ByteCode::F64LeOpcode:
         opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_LESS_EQUAL;
         type = SLJIT_ORDERED_LESS_EQUAL;
         break;
-    case F64GtOpcode:
+    case ByteCode::F64GtOpcode:
         opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_GREATER;
         type = SLJIT_ORDERED_GREATER;
         break;
-    case F64GeOpcode:
+    case ByteCode::F64GeOpcode:
         opcode = SLJIT_CMP_F64 | SLJIT_SET_ORDERED_GREATER_EQUAL;
         type = SLJIT_ORDERED_GREATER_EQUAL;
         break;
@@ -448,10 +448,10 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
     ASSERT(nextInstr != nullptr);
 
     switch (nextInstr->opcode()) {
-    case JumpIfTrueOpcode:
-    case JumpIfFalseOpcode:
+    case ByteCode::JumpIfTrueOpcode:
+    case ByteCode::JumpIfFalseOpcode:
         if (nextInstr->getParam(0)->item == instr) {
-            if (nextInstr->opcode() == JumpIfFalseOpcode) {
+            if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
                 type ^= 0x1;
             }
 
@@ -463,7 +463,7 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
             return true;
         }
         break;
-    case SelectOpcode:
+    case ByteCode::SelectOpcode:
         if (nextInstr->getParam(2)->item == instr) {
             isSelect = true;
         }

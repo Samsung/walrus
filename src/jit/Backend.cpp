@@ -217,11 +217,11 @@ static void operandToArg(Operand* operand, JITArg& arg)
     Instruction* instr = operand->item->asInstruction();
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    ASSERT(instr->opcode() == Const32Opcode);
+    ASSERT(instr->opcode() == ByteCode::Const32Opcode);
 
     arg.argw = static_cast<sljit_s32>(reinterpret_cast<Const32*>(instr->byteCode())->value());
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-    if (instr->opcode() == Const32Opcode) {
+    if (instr->opcode() == ByteCode::Const32Opcode) {
         arg.argw = static_cast<sljit_s32>(reinterpret_cast<Const32*>(instr->byteCode())->value());
         return;
     }
@@ -382,7 +382,7 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
 {
     sljit_jump* jump;
 
-    if (instr->opcode() == JumpOpcode) {
+    if (instr->opcode() == ByteCode::JumpOpcode) {
         jump = sljit_emit_jump(compiler, SLJIT_JUMP);
 
         CompileContext::get(compiler)->emitSlowCases(compiler);
@@ -391,7 +391,7 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
 
         operandToArg(instr->operands(), src);
 
-        sljit_s32 type = (instr->opcode() == JumpIfTrueOpcode) ? SLJIT_NOT_EQUAL : SLJIT_EQUAL;
+        sljit_s32 type = (instr->opcode() == ByteCode::JumpIfTrueOpcode) ? SLJIT_NOT_EQUAL : SLJIT_EQUAL;
 
         jump = sljit_emit_cmp(compiler, type | SLJIT_32, src.arg, src.argw, SLJIT_IMM, 0);
     }
@@ -635,7 +635,7 @@ JITModule* JITCompiler::compile()
             break;
         }
         case Instruction::GlobalGet: {
-            if (item->asInstruction()->opcode() == GlobalGet32Opcode) {
+            if (item->asInstruction()->opcode() == ByteCode::GlobalGet32Opcode) {
                 emitGlobalGet32(m_compiler, item->asInstruction());
             } else {
                 emitGlobalGet64(m_compiler, item->asInstruction());
@@ -643,7 +643,7 @@ JITModule* JITCompiler::compile()
             break;
         }
         case Instruction::GlobalSet: {
-            if (item->asInstruction()->opcode() == GlobalSet32Opcode) {
+            if (item->asInstruction()->opcode() == ByteCode::GlobalSet32Opcode) {
                 emitGlobalSet32(m_compiler, item->asInstruction());
             } else {
                 emitGlobalSet64(m_compiler, item->asInstruction());
@@ -651,7 +651,7 @@ JITModule* JITCompiler::compile()
             break;
         }
         case Instruction::Move: {
-            if (item->asInstruction()->opcode() == Move32Opcode) {
+            if (item->asInstruction()->opcode() == ByteCode::Move32Opcode) {
                 emitMove32(m_compiler, item->asInstruction());
             } else {
                 emitMove64(m_compiler, item->asInstruction());
@@ -660,32 +660,24 @@ JITModule* JITCompiler::compile()
         }
         default: {
             switch (item->asInstruction()->opcode()) {
-            case DropOpcode:
-            case ReturnOpcode: {
-                break;
-            }
-            case SelectOpcode: {
+            case ByteCode::SelectOpcode: {
                 emitSelect(m_compiler, item->asInstruction(), -1);
                 break;
             }
-            case ElemDropOpcode: {
+            case ByteCode::ElemDropOpcode: {
                 emitElemDrop(m_compiler, item->asInstruction());
                 break;
             }
-            case DataDropOpcode: {
+            case ByteCode::DataDropOpcode: {
                 emitDataDrop(m_compiler, item->asInstruction());
                 break;
             }
-            case NopOpcode: {
-                sljit_emit_op0(m_compiler, SLJIT_NOP);
-                break;
-            }
-            case UnreachableOpcode: {
+            case ByteCode::UnreachableOpcode: {
                 sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::UnreachableError);
                 sljit_set_label(sljit_emit_jump(m_compiler, SLJIT_JUMP), compileContext.trapLabel);
                 break;
             }
-            case EndOpcode: {
+            case ByteCode::EndOpcode: {
                 emitEnd(m_compiler, item->asInstruction());
                 break;
             }
