@@ -57,13 +57,13 @@ static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instru
 {
     sljit_sw offset = static_cast<sljit_sw>(result->offset << 2);
 
-    if (instr->opcode() == Const32Opcode) {
+    if (instr->opcode() == ByteCode::Const32Opcode) {
         uint32_t value32 = reinterpret_cast<Const32*>(instr->byteCode())->value();
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kFrameReg), offset, SLJIT_IMM, static_cast<sljit_sw>(value32));
         return;
     }
 
-    ASSERT(instr->opcode() == Const64Opcode);
+    ASSERT(instr->opcode() == ByteCode::Const64Opcode);
 
     uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
 
@@ -556,49 +556,49 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
         sljit_s32 opcode;
 
         switch (instr->opcode()) {
-        case I32AddOpcode:
+        case ByteCode::I32AddOpcode:
             opcode = SLJIT_ADD;
             break;
-        case I32SubOpcode:
+        case ByteCode::I32SubOpcode:
             opcode = SLJIT_SUB;
             break;
-        case I32MulOpcode:
+        case ByteCode::I32MulOpcode:
             opcode = SLJIT_MUL;
             break;
-        case I32DivSOpcode:
+        case ByteCode::I32DivSOpcode:
             emitDivRem32(compiler, SLJIT_DIV_SW, args);
             return;
-        case I32DivUOpcode:
+        case ByteCode::I32DivUOpcode:
             emitDivRem32(compiler, SLJIT_DIV_UW, args);
             return;
-        case I32RemSOpcode:
+        case ByteCode::I32RemSOpcode:
             emitDivRem32(compiler, SLJIT_DIVMOD_SW, args);
             return;
-        case I32RemUOpcode:
+        case ByteCode::I32RemUOpcode:
             emitDivRem32(compiler, SLJIT_DIVMOD_UW, args);
             return;
-        case I32RotlOpcode:
+        case ByteCode::I32RotlOpcode:
             opcode = SLJIT_ROTL;
             break;
-        case I32RotrOpcode:
+        case ByteCode::I32RotrOpcode:
             opcode = SLJIT_ROTR;
             break;
-        case I32AndOpcode:
+        case ByteCode::I32AndOpcode:
             opcode = SLJIT_AND;
             break;
-        case I32OrOpcode:
+        case ByteCode::I32OrOpcode:
             opcode = SLJIT_OR;
             break;
-        case I32XorOpcode:
+        case ByteCode::I32XorOpcode:
             opcode = SLJIT_XOR;
             break;
-        case I32ShlOpcode:
+        case ByteCode::I32ShlOpcode:
             opcode = SLJIT_SHL;
             break;
-        case I32ShrSOpcode:
+        case ByteCode::I32ShrSOpcode:
             opcode = SLJIT_ASHR;
             break;
-        case I32ShrUOpcode:
+        case ByteCode::I32ShrUOpcode:
             opcode = SLJIT_LSHR;
             break;
         default:
@@ -617,49 +617,49 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
     }
 
     switch (instr->opcode()) {
-    case I64AddOpcode:
+    case ByteCode::I64AddOpcode:
         emitSimpleBinary64(compiler, SLJIT_ADD | SLJIT_SET_CARRY, SLJIT_ADDC, args);
         return;
-    case I64SubOpcode:
+    case ByteCode::I64SubOpcode:
         emitSimpleBinary64(compiler, SLJIT_SUB | SLJIT_SET_CARRY, SLJIT_SUBC, args);
         return;
-    case I64MulOpcode:
+    case ByteCode::I64MulOpcode:
         emitMul64(compiler, args);
         return;
-    case I64DivSOpcode:
+    case ByteCode::I64DivSOpcode:
         emitDivRem64(compiler, SLJIT_DIV_SW, args);
         return;
-    case I64DivUOpcode:
+    case ByteCode::I64DivUOpcode:
         emitDivRem64(compiler, SLJIT_DIV_UW, args);
         return;
-    case I64RemSOpcode:
+    case ByteCode::I64RemSOpcode:
         emitDivRem64(compiler, SLJIT_DIVMOD_SW, args);
         return;
-    case I64RemUOpcode:
+    case ByteCode::I64RemUOpcode:
         emitDivRem64(compiler, SLJIT_DIVMOD_UW, args);
         return;
-    case I64RotlOpcode:
+    case ByteCode::I64RotlOpcode:
         emitRotate64(compiler, SLJIT_SHL, args);
         return;
-    case I64RotrOpcode:
+    case ByteCode::I64RotrOpcode:
         emitRotate64(compiler, SLJIT_LSHR, args);
         return;
-    case I64AndOpcode:
+    case ByteCode::I64AndOpcode:
         emitSimpleBinary64(compiler, SLJIT_AND, SLJIT_AND, args);
         return;
-    case I64OrOpcode:
+    case ByteCode::I64OrOpcode:
         emitSimpleBinary64(compiler, SLJIT_OR, SLJIT_OR, args);
         return;
-    case I64XorOpcode:
+    case ByteCode::I64XorOpcode:
         emitSimpleBinary64(compiler, SLJIT_XOR, SLJIT_XOR, args);
         return;
-    case I64ShlOpcode:
+    case ByteCode::I64ShlOpcode:
         emitShift64(compiler, SLJIT_SHL, args);
         return;
-    case I64ShrSOpcode:
+    case ByteCode::I64ShrSOpcode:
         emitShift64(compiler, SLJIT_ASHR, args);
         return;
-    case I64ShrUOpcode:
+    case ByteCode::I64ShrUOpcode:
         emitShift64(compiler, SLJIT_LSHR, args);
         return;
     default:
@@ -781,19 +781,19 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
         sljit_s32 opcode;
 
         switch (instr->opcode()) {
-        case I32ClzOpcode:
+        case ByteCode::I32ClzOpcode:
             opcode = SLJIT_CLZ;
             break;
-        case I32CtzOpcode:
+        case ByteCode::I32CtzOpcode:
             opcode = SLJIT_CTZ;
             break;
-        case I32PopcntOpcode:
+        case ByteCode::I32PopcntOpcode:
             emitPopcnt(compiler, args);
             return;
-        case I32Extend8SOpcode:
+        case ByteCode::I32Extend8SOpcode:
             emitExtend(compiler, SLJIT_MOV_S8, args);
             return;
-        case I32Extend16SOpcode:
+        case ByteCode::I32Extend16SOpcode:
             emitExtend(compiler, SLJIT_MOV_S16, args);
             return;
         default:
@@ -820,22 +820,22 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
     }
 
     switch (instr->opcode()) {
-    case I64ClzOpcode:
+    case ByteCode::I64ClzOpcode:
         emitCountZeroes(compiler, SLJIT_CLZ, args);
         return;
-    case I64CtzOpcode:
+    case ByteCode::I64CtzOpcode:
         emitCountZeroes(compiler, SLJIT_CTZ, args);
         return;
-    case I64PopcntOpcode:
+    case ByteCode::I64PopcntOpcode:
         emitPopcnt64(compiler, args);
         return;
-    case I64Extend8SOpcode:
+    case ByteCode::I64Extend8SOpcode:
         emitExtend64(compiler, SLJIT_MOV_S8, args);
         return;
-    case I64Extend16SOpcode:
+    case ByteCode::I64Extend16SOpcode:
         emitExtend64(compiler, SLJIT_MOV_S16, args);
         return;
-    case I64Extend32SOpcode:
+    case ByteCode::I64Extend32SOpcode:
         if (args[0].arg1 == args[1].arg1 && args[0].arg1w == args[1].arg1w) {
             sljit_emit_op2(compiler, SLJIT_ASHR, args[1].arg2, args[1].arg2w, args[0].arg1, args[0].arg1w, SLJIT_IMM, 31);
             return;
@@ -852,7 +852,7 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
 {
     Operand* operands = instr->operands();
     JITArg cond;
-    ASSERT(instr->opcode() == SelectOpcode && instr->paramCount() == 3);
+    ASSERT(instr->opcode() == ByteCode::SelectOpcode && instr->paramCount() == 3);
 
     if (false) {
         return emitFloatSelect(compiler, instr, type);
@@ -934,58 +934,58 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 opcode, type;
 
     switch (instr->opcode()) {
-    case I32EqzOpcode:
-    case I64EqzOpcode:
+    case ByteCode::I32EqzOpcode:
+    case ByteCode::I64EqzOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_Z;
         type = SLJIT_EQUAL;
         break;
-    case I32EqOpcode:
-    case I64EqOpcode:
+    case ByteCode::I32EqOpcode:
+    case ByteCode::I64EqOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_Z;
         type = SLJIT_EQUAL;
         break;
-    case I32NeOpcode:
-    case I64NeOpcode:
+    case ByteCode::I32NeOpcode:
+    case ByteCode::I64NeOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_Z;
         type = SLJIT_NOT_EQUAL;
         break;
-    case I32LtSOpcode:
-    case I64LtSOpcode:
+    case ByteCode::I32LtSOpcode:
+    case ByteCode::I64LtSOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_SIG_LESS;
         type = SLJIT_SIG_LESS;
         break;
-    case I32LtUOpcode:
-    case I64LtUOpcode:
+    case ByteCode::I32LtUOpcode:
+    case ByteCode::I64LtUOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_LESS;
         type = SLJIT_LESS;
         break;
-    case I32GtSOpcode:
-    case I64GtSOpcode:
+    case ByteCode::I32GtSOpcode:
+    case ByteCode::I64GtSOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_SIG_GREATER;
         type = SLJIT_SIG_GREATER;
         break;
-    case I32GtUOpcode:
-    case I64GtUOpcode:
+    case ByteCode::I32GtUOpcode:
+    case ByteCode::I64GtUOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_GREATER;
         type = SLJIT_GREATER;
         break;
-    case I32LeSOpcode:
-    case I64LeSOpcode:
+    case ByteCode::I32LeSOpcode:
+    case ByteCode::I64LeSOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_SIG_LESS_EQUAL;
         type = SLJIT_SIG_LESS_EQUAL;
         break;
-    case I32LeUOpcode:
-    case I64LeUOpcode:
+    case ByteCode::I32LeUOpcode:
+    case ByteCode::I64LeUOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_LESS_EQUAL;
         type = SLJIT_LESS_EQUAL;
         break;
-    case I32GeSOpcode:
-    case I64GeSOpcode:
+    case ByteCode::I32GeSOpcode:
+    case ByteCode::I64GeSOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_SIG_GREATER_EQUAL;
         type = SLJIT_SIG_GREATER_EQUAL;
         break;
-    case I32GeUOpcode:
-    case I64GeUOpcode:
+    case ByteCode::I32GeUOpcode:
+    case ByteCode::I64GeUOpcode:
         opcode = SLJIT_SUB | SLJIT_SET_GREATER_EQUAL;
         type = SLJIT_GREATER_EQUAL;
         break;
@@ -1004,13 +1004,13 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         nextInstr = instr->next()->asInstruction();
 
         switch (nextInstr->opcode()) {
-        case JumpIfTrueOpcode:
-        case JumpIfFalseOpcode:
+        case ByteCode::JumpIfTrueOpcode:
+        case ByteCode::JumpIfFalseOpcode:
             if (nextInstr->getParam(0)->item == instr) {
                 isBranch = true;
             }
             break;
-        case SelectOpcode:
+        case ByteCode::SelectOpcode:
             if (nextInstr->getParam(2)->item == instr) {
                 isSelect = true;
             }
@@ -1028,7 +1028,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
             operand++;
         }
 
-        if (instr->opcode() == I64EqzOpcode) {
+        if (instr->opcode() == ByteCode::I64EqzOpcode) {
             sljit_emit_op2u(compiler, SLJIT_OR | SLJIT_SET_Z, params[0].arg1, params[0].arg1w, params[0].arg2, params[0].arg2w);
         } else {
             sljit_emit_op2u(compiler, opcode | SLJIT_SET_Z, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
@@ -1039,7 +1039,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         }
 
         if (isBranch) {
-            if (nextInstr->opcode() == JumpIfFalseOpcode) {
+            if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
                 type ^= 0x1;
             }
 
@@ -1066,13 +1066,13 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         operand++;
     }
 
-    if (instr->opcode() == I32EqzOpcode) {
+    if (instr->opcode() == ByteCode::I32EqzOpcode) {
         params[1].arg = SLJIT_IMM;
         params[1].argw = 0;
     }
 
     if (isBranch) {
-        if (nextInstr->opcode() == JumpIfFalseOpcode) {
+        if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
             type ^= 0x1;
         }
 
@@ -1099,7 +1099,7 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
     Operand* operand = instr->operands();
 
     switch (instr->opcode()) {
-    case I32WrapI64Opcode: {
+    case ByteCode::I32WrapI64Opcode: {
         /* Just copy the lower word. */
         JITArgPair param;
         JITArg result;
@@ -1110,7 +1110,7 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV, result.arg, result.argw, param.arg1, param.arg1w);
         return;
     }
-    case I64ExtendI32SOpcode: {
+    case ByteCode::I64ExtendI32SOpcode: {
         JITArg param;
         JITArgPair result;
 
@@ -1129,7 +1129,7 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op2(compiler, SLJIT_ASHR, result.arg2, result.arg2w, param_reg, 0, SLJIT_IMM, 31);
         return;
     }
-    case I64ExtendI32UOpcode: {
+    case ByteCode::I64ExtendI32UOpcode: {
         JITArg param;
         JITArgPair result;
 
