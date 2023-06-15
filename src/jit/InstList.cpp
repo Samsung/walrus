@@ -29,11 +29,6 @@ uint32_t Instruction::resultCount()
         return 0;
     }
 
-    if (group() == Call) {
-        CallInstruction* callInstr = reinterpret_cast<CallInstruction*>(this);
-        return callInstr->functionType()->result().size();
-    }
-
     return 1;
 }
 
@@ -47,26 +42,8 @@ BrTableInstruction::~BrTableInstruction()
     delete[] m_targetLabels;
 }
 
-template <int n>
-SimpleCallInstruction<n>::SimpleCallInstruction(ByteCode* byteCode, OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev)
-    : CallInstruction(byteCode, opcode, functionType->param().size(), functionType, m_inlineOperands, prev)
-{
-    ASSERT(functionType->param().size() + functionType->result().size() == n);
-}
-
-ComplexCallInstruction::ComplexCallInstruction(ByteCode* byteCode, OpcodeKind opcode, FunctionType* functionType, InstructionListItem* prev)
-    : CallInstruction(byteCode, opcode, functionType->param().size(), functionType, new Operand[functionType->param().size() + functionType->result().size()], prev)
-{
-    ASSERT(functionType->param().size() + functionType->result().size() > 4);
-}
-
-ComplexCallInstruction::~ComplexCallInstruction()
-{
-    delete[] params();
-}
-
 BrTableInstruction::BrTableInstruction(ByteCode* byteCode, size_t targetLabelCount, InstructionListItem* prev)
-    : Instruction(byteCode, Instruction::BrTable, BrTableOpcode, 1, &m_inlineParam, prev)
+    : Instruction(byteCode, Instruction::BrTable, ByteCode::BrTableOpcode, 1, &m_inlineParam, prev)
     , m_targetLabelCount(targetLabelCount)
 {
     m_targetLabels = new Label*[targetLabelCount];
@@ -134,7 +111,7 @@ void JITCompiler::clear()
     }
 }
 
-Instruction* JITCompiler::append(ByteCode* byteCode, Instruction::Group group, OpcodeKind opcode, uint32_t paramCount, uint32_t resultCount)
+Instruction* JITCompiler::append(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount)
 {
     Instruction* instr;
     uint32_t operandCount = paramCount + resultCount;
@@ -167,15 +144,15 @@ Instruction* JITCompiler::append(ByteCode* byteCode, Instruction::Group group, O
     return instr;
 }
 
-void JITCompiler::appendBranch(ByteCode* byteCode, OpcodeKind opcode, Label* label, uint32_t offset)
+void JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset)
 {
-    ASSERT(opcode == JumpOpcode || opcode == JumpIfTrueOpcode || opcode == JumpIfFalseOpcode);
+    ASSERT(opcode == ByteCode::JumpOpcode || opcode == ByteCode::JumpIfTrueOpcode || opcode == ByteCode::JumpIfFalseOpcode);
     ASSERT(label != nullptr);
 
     ExtendedInstruction* branch;
 
-    if (opcode == JumpOpcode) {
-        branch = new ExtendedInstruction(byteCode, Instruction::DirectBranch, JumpOpcode, 0, nullptr, m_last);
+    if (opcode == ByteCode::JumpOpcode) {
+        branch = new ExtendedInstruction(byteCode, Instruction::DirectBranch, ByteCode::JumpOpcode, 0, nullptr, m_last);
     } else {
         branch = new SimpleExtendedInstruction<1>(byteCode, Instruction::DirectBranch, opcode, 1, m_last);
 
@@ -230,6 +207,12 @@ void JITCompiler::dump()
     bool enableColors = (verboseLevel() >= 2);
     int counter = 0;
 
+    static const char* byteCodeName[] = {
+#define BYTECODE_NAME(name, ...) #name,
+        FOR_EACH_BYTECODE(BYTECODE_NAME)
+#undef DECLARE_BYTECODE
+    };
+
     for (InstructionListItem* item = first(); item != nullptr; item = item->next()) {
         instrIndex[item] = counter++;
     }
@@ -248,7 +231,7 @@ void JITCompiler::dump()
                 printf("(%p) ", item);
             }
 
-            printf("Opcode: %s\n", g_byteCodeInfo[instr->opcode()].m_name);
+            printf("Opcode: %s\n", byteCodeName[instr->opcode()]);
 
             switch (instr->group()) {
             case Instruction::Immediate: {
@@ -259,10 +242,6 @@ void JITCompiler::dump()
             }
             case Instruction::DirectBranch: {
                 printf("  Jump to: %s%d%s\n", labelText, instrIndex[instr->asExtended()->value().targetLabel], defaultText);
-                break;
-            }
-            case Instruction::Call: {
-                printf("  Frame size: %d, param start: %d\n", instr->asCall()->frameSize(), instr->asCall()->paramStart());
                 break;
             }
             case Instruction::BrTable: {
