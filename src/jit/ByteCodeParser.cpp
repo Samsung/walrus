@@ -690,6 +690,16 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(globalSet64->srcOffset());
             break;
         }
+        case ByteCode::RefFuncOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::RefFuncOpcode, 0, 1);
+
+            auto refFunc = reinterpret_cast<RefFunc*>(byteCode);
+            auto operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(refFunc->dstOffset());
+            break;
+        }
         case ByteCode::EndOpcode: {
             uint32_t size = function->functionType()->result().size();
 
