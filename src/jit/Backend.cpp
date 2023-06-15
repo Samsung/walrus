@@ -133,6 +133,7 @@ struct CompileContext {
         sljit_sw offset = Instance::alignedSize();
         globalsStart = offset + sizeof(void*) * compiler->module()->numberOfMemoryTypes();
         tableStart = globalsStart + compiler->module()->numberOfGlobalTypes() * sizeof(void*);
+        functionsStart = tableStart + compiler->module()->numberOfTableTypes() * sizeof(void*);
 
         if (compiler->module()->numberOfMemoryTypes() > 0) {
             MemoryType* memoryType = compiler->module()->memoryType(0);
@@ -157,6 +158,7 @@ struct CompileContext {
     sljit_uw branchTableOffset;
     sljit_sw globalsStart;
     sljit_sw tableStart;
+    sljit_sw functionsStart;
     uint32_t initialMemorySize;
     uint32_t maximumMemorySize;
     std::vector<TrapBlock> trapBlocks;
@@ -484,6 +486,18 @@ static void emitGlobalSet32(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
 }
 
+static void emitRefFunc(sljit_compiler* compiler, Instruction* instr)
+{
+    JITArg dstArg;
+
+    operandToArg(instr->operands(), dstArg);
+
+    CompileContext* context = CompileContext::get(compiler);
+
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV_P, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_R0), context->functionsStart + (sizeof(Function*) * (reinterpret_cast<RefFunc*>(instr->byteCode()))->funcIndex()));
+}
+
 JITModule::~JITModule()
 {
     delete m_instanceConstData->trapHandlers;
@@ -662,6 +676,10 @@ JITModule* JITCompiler::compile()
             switch (item->asInstruction()->opcode()) {
             case ByteCode::SelectOpcode: {
                 emitSelect(m_compiler, item->asInstruction(), -1);
+                break;
+            }
+            case ByteCode::RefFuncOpcode: {
+                emitRefFunc(m_compiler, item->asInstruction());
                 break;
             }
             case ByteCode::ElemDropOpcode: {
