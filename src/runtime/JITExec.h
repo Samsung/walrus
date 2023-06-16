@@ -23,6 +23,7 @@
 
 namespace Walrus {
 
+class Exception;
 class Memory;
 class TrapHandlerList;
 
@@ -44,12 +45,17 @@ struct ExecutionContext {
 
     enum ErrorCodes : uint32_t {
         NoError,
+        CapturedException,
         OutOfStackError,
         DivideByZeroError,
         IntegerOverflowError,
-        InvalidConversionToIntegerError,
         OutOfBoundsMemAccessError,
         OutOfBoundsTableAccessError,
+        TypeMismatchError,
+        UndefinedElement,
+        UninitializedElement,
+        IndirectCallTypeMismatch,
+        InvalidConversionToIntegerError,
         UnreachableError,
     };
 
@@ -58,6 +64,7 @@ struct ExecutionContext {
         , currentInstanceConstData(currentInstanceConstData)
         , state(state)
         , instance(instance)
+        , capturedException(nullptr)
         , error(NoError)
     {
     }
@@ -66,6 +73,7 @@ struct ExecutionContext {
     InstanceConstData* currentInstanceConstData;
     ExecutionState& state;
     Instance* instance;
+    Exception* capturedException;
     Memory::TargetBuffer memory0;
     ErrorCodes error;
     uint64_t tmp1;
