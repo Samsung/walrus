@@ -338,7 +338,7 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1(F64, F64), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
         MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[1].arg, args[1].argw, SLJIT_FR0);
     } else {
-        sljit_emit_fop1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg, 0);
+        sljit_emit_fop1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
     }
 }
 
