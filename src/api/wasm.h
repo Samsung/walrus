@@ -384,6 +384,7 @@ WASM_API_EXTERN own wasm_trap_t* wasm_trap_new(wasm_store_t* store, const wasm_m
 WASM_API_EXTERN void wasm_trap_message(const wasm_trap_t*, own wasm_message_t* out);
 WASM_API_EXTERN own wasm_frame_t* wasm_trap_origin(const wasm_trap_t*);
 WASM_API_EXTERN void wasm_trap_trace(const wasm_trap_t*, own wasm_frame_vec_t* out);
+WASM_API_EXTERN void wasm_trap_trigger(const char* message, size_t length);
 
 
 // Foreign Objects
