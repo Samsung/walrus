@@ -17,6 +17,15 @@
 /* Only included by jit-backend.cc */
 
 struct JITArgPair {
+    JITArgPair(Operand* operand)
+    {
+        this->set(operand);
+    }
+
+    JITArgPair() = default;
+
+    void set(Operand* operand);
+
     sljit_s32 arg1;
     sljit_sw arg1w;
     sljit_s32 arg2;
@@ -31,26 +40,26 @@ struct JITArgPair {
 #define WORD_HIGH_OFFSET (sizeof(sljit_s32))
 #endif /* !SLJIT_BIG_ENDIAN */
 
-static void operandToArgPair(Operand* operand, JITArgPair& arg)
+void JITArgPair::set(Operand* operand)
 {
     if (operand->item == nullptr || operand->item->group() != Instruction::Immediate) {
-        arg.arg1 = SLJIT_MEM1(kFrameReg);
-        arg.arg1w = static_cast<sljit_sw>((operand->offset << 2) + WORD_LOW_OFFSET);
-        arg.arg2 = SLJIT_MEM1(kFrameReg);
-        arg.arg2w = static_cast<sljit_sw>((operand->offset << 2) + WORD_HIGH_OFFSET);
+        this->arg1 = SLJIT_MEM1(kFrameReg);
+        this->arg1w = static_cast<sljit_sw>((operand->offset << 2) + WORD_LOW_OFFSET);
+        this->arg2 = SLJIT_MEM1(kFrameReg);
+        this->arg2w = static_cast<sljit_sw>((operand->offset << 2) + WORD_HIGH_OFFSET);
         return;
     }
 
-    arg.arg1 = SLJIT_IMM;
-    arg.arg2 = SLJIT_IMM;
+    this->arg1 = SLJIT_IMM;
+    this->arg2 = SLJIT_IMM;
     ASSERT(operand->item->group() == Instruction::Immediate);
 
     Instruction* instr = operand->item->asInstruction();
 
     uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
 
-    arg.arg1w = static_cast<sljit_sw>(value64);
-    arg.arg2w = static_cast<sljit_sw>(value64 >> 32);
+    this->arg1w = static_cast<sljit_sw>(value64);
+    this->arg2w = static_cast<sljit_sw>(value64 >> 32);
 }
 
 static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instruction* instr)
@@ -547,11 +556,7 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
 
     if (instr->info() & Instruction::kIs32Bit) {
-        JITArg args[3];
-
-        for (int i = 0; i < 3; ++i) {
-            operandToArg(operands + i, args[i]);
-        }
+        JITArg args[3] = { operands, operands + 1, operands + 2 };
 
         sljit_s32 opcode;
 
@@ -610,11 +615,7 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    JITArgPair args[3];
-
-    for (int i = 0; i < 3; ++i) {
-        operandToArgPair(operands + i, args[i]);
-    }
+    JITArgPair args[3] = { operands, operands + 1, operands + 2 };
 
     switch (instr->opcode()) {
     case ByteCode::I64AddOpcode:
@@ -772,11 +773,7 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
 
     if (instr->info() & Instruction::kIs32Bit) {
-        JITArg args[2];
-
-        for (int i = 0; i < 2; ++i) {
-            operandToArg(operands + i, args[i]);
-        }
+        JITArg args[2] = { operands, operands + 1 };
 
         sljit_s32 opcode;
 
@@ -813,11 +810,7 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    JITArgPair args[2];
-
-    for (int i = 0; i < 2; ++i) {
-        operandToArgPair(operands + i, args[i]);
-    }
+    JITArgPair args[2] = { operands, operands + 1 };
 
     switch (instr->opcode()) {
     case ByteCode::I64ClzOpcode:
@@ -859,14 +852,10 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
     }
 
     if (reinterpret_cast<Select*>(instr->byteCode())->valueSize() == 4) {
-        JITArg args[3];
-
-        operandToArg(operands + 0, args[0]);
-        operandToArg(operands + 1, args[1]);
-        operandToArg(operands + 3, args[2]);
+        JITArg args[3] = { operands, operands + 1, operands + 3 };
 
         if (type == -1) {
-            operandToArg(operands + 2, cond);
+            cond.set(operands + 2);
             sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, cond.arg, cond.argw, SLJIT_IMM, 0);
 
             type = SLJIT_NOT_ZERO;
@@ -884,14 +873,10 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
         return;
     }
 
-    JITArgPair args[3];
-
-    operandToArgPair(operands + 0, args[0]);
-    operandToArgPair(operands + 1, args[1]);
-    operandToArgPair(operands + 3, args[2]);
+    JITArgPair args[3] = { operands, operands + 1, operands + 3 };
 
     if (type == -1) {
-        operandToArg(operands + 2, cond);
+        cond.set(operands + 2);
         sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, cond.arg, cond.argw, SLJIT_IMM, 0);
 
         type = SLJIT_NOT_ZERO;
@@ -1024,7 +1009,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         JITArgPair params[2];
 
         for (uint32_t i = 0; i < instr->paramCount(); ++i) {
-            operandToArgPair(operand, params[i]);
+            params[i].set(operand);
             operand++;
         }
 
@@ -1053,8 +1038,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
             return true;
         }
 
-        JITArg result;
-        operandToArg(operand, result);
+        JITArg result(operand);
         sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
         return false;
     }
@@ -1062,7 +1046,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
     JITArg params[2];
 
     for (uint32_t i = 0; i < instr->paramCount(); ++i) {
-        operandToArg(operand, params[i]);
+        params[i].set(operand);
         operand++;
     }
 
@@ -1088,8 +1072,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         return true;
     }
 
-    JITArg result;
-    operandToArg(operand, result);
+    JITArg result(operand);
     sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
     return false;
 }
@@ -1101,21 +1084,15 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
     switch (instr->opcode()) {
     case ByteCode::I32WrapI64Opcode: {
         /* Just copy the lower word. */
-        JITArgPair param;
-        JITArg result;
-
-        operandToArgPair(operand, param);
-        operandToArg(operand + 1, result);
+        JITArgPair param(operand);
+        JITArg result(operand + 1);
 
         sljit_emit_op1(compiler, SLJIT_MOV, result.arg, result.argw, param.arg1, param.arg1w);
         return;
     }
     case ByteCode::I64ExtendI32SOpcode: {
-        JITArg param;
-        JITArgPair result;
-
-        operandToArg(operand, param);
-        operandToArgPair(operand + 1, result);
+        JITArg param(operand);
+        JITArgPair result(operand + 1);
 
         if (SLJIT_IS_IMM(param.arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV, result.arg1, result.arg1w, SLJIT_IMM, param.argw);
@@ -1130,11 +1107,8 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         return;
     }
     case ByteCode::I64ExtendI32UOpcode: {
-        JITArg param;
-        JITArgPair result;
-
-        operandToArg(operand, param);
-        operandToArgPair(operand + 1, result);
+        JITArg param(operand);
+        JITArgPair result(operand + 1);
 
         sljit_emit_op1(compiler, SLJIT_MOV, result.arg1, result.arg1w, param.arg, param.argw);
         sljit_emit_op1(compiler, SLJIT_MOV, result.arg2, result.arg2w, SLJIT_IMM, 0);
@@ -1150,11 +1124,8 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
 static void emitMove64(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    JITArgPair src;
-    JITArgPair dst;
-
-    operandToArgPair(operands, src);
-    operandToArgPair(operands + 1, dst);
+    JITArgPair src(operands);
+    JITArgPair dst(operands + 1);
 
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg1, dst.arg1w, src.arg1, src.arg1w);
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg2, dst.arg2w, src.arg2, src.arg2w);
@@ -1164,9 +1135,7 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
-    JITArgPair dst;
-
-    operandToArgPair(operands, dst);
+    JITArgPair dst(operands);
 
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
 
@@ -1180,9 +1149,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
-    JITArgPair src;
-
-    operandToArgPair(operands, src);
+    JITArgPair src(operands);
 
     GlobalSet32* globalSet = reinterpret_cast<GlobalSet32*>(instr->byteCode());
 
