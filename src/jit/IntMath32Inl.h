@@ -104,7 +104,7 @@ static void emitDivRem32(sljit_compiler* compiler, sljit_s32 opcode, JITArg* arg
         if (opcode == SLJIT_DIV_SW && args[1].argw == -1) {
             sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
 
-            sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(INT32_MIN));
+            sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(INT32_MIN));
             sljit_set_label(cmp, context->trapLabel);
         }
     } else if (opcode == SLJIT_DIV_SW || opcode == SLJIT_DIVMOD_SW) {
