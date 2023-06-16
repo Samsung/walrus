@@ -35,7 +35,7 @@ using f64Function1Param = std::add_pointer<sljit_f64(sljit_f64)>::type;
 static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 srcReg)
 {
     if (operand->item == nullptr || operand->item->group() != Instruction::Immediate) {
-        operandToArg(operand, arg);
+        arg.set(operand);
         return;
     }
 
@@ -354,9 +354,8 @@ static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_
     floatOperandToArg(compiler, operands + 3, args[2], 0);
 
     if (type == -1) {
-        JITArg cond;
+        JITArg cond(operands + 2);
 
-        operandToArg(operands + 2, cond);
         sljit_emit_op2u(compiler, SLJIT_SUB32 | SLJIT_SET_Z, cond.arg, cond.argw, SLJIT_IMM, 0);
 
         type = SLJIT_NOT_ZERO;

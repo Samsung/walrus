@@ -22,7 +22,7 @@ static void emitLoad3Arguments(sljit_compiler* compiler, Operand* params)
     JITArg srcArg;
 
     for (int i = 0; i < 3; i++) {
-        operandToArg(params + i, srcArg);
+        srcArg.set(params + i);
         MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R(i), srcArg.arg, srcArg.argw);
     }
 
@@ -112,9 +112,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         break;
     }
     case ByteCode::TableSizeOpcode: {
-        JITArg dstArg;
-
-        operandToArg(instr->operands(), dstArg);
+        JITArg dstArg(instr->operands());
 
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->tableStart + ((reinterpret_cast<TableSize*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
@@ -141,37 +139,31 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         break;
     }
     case ByteCode::TableGrowOpcode: {
-        JITArg arg;
-
-        operandToArg(instr->operands(), arg);
+        JITArg arg(instr->operands());
 
         MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R0, arg.arg, arg.argw);
 
-        operandToArg(instr->operands() + 1, arg);
+        arg.set(instr->operands() + 1);
 
         MOVE_TO_REG(compiler, SLJIT_MOV_P, SLJIT_R1, arg.arg, arg.argw);
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R2, 0, SLJIT_IMM, ((reinterpret_cast<TableGrow*>(instr->byteCode()))->tableIndex()));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, 32, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, growTable));
 
-        operandToArg(instr->operands() + 2, arg);
+        arg.set(instr->operands() + 2);
 
         MOVE_FROM_REG(compiler, SLJIT_MOV32, arg.arg, arg.argw, SLJIT_R0);
         break;
     }
     case ByteCode::TableSetOpcode: {
-        JITArg srcArg0;
-        JITArg srcArg1;
+        JITArg src[2] = { instr->operands(), instr->operands() + 1 };
 
-        operandToArg(instr->operands(), srcArg0);
-        operandToArg(instr->operands() + 1, srcArg1);
+        sljit_s32 sourceReg = GET_SOURCE_REG(src[0].arg, SLJIT_R0);
 
-        sljit_s32 sourceReg = GET_SOURCE_REG(srcArg0.arg, SLJIT_R0);
-
-        if (!IS_SOURCE_REG(srcArg0.arg)) {
-            MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, srcArg0.arg, srcArg0.argw);
-            srcArg0.arg = sourceReg;
-            srcArg0.argw = 0;
+        if (!IS_SOURCE_REG(src[0].arg)) {
+            MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, src[0].arg, src[0].argw);
+            src[0].arg = sourceReg;
+            src[0].argw = 0;
         }
 
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
@@ -179,13 +171,11 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), context->tableStart + ((reinterpret_cast<TableSet*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
         sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, sourceReg, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableSizeOffset()), context->trapLabel);
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableElements());
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM2(SLJIT_R1, sourceReg), SLJIT_WORD_SHIFT, srcArg1.arg, srcArg1.argw);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM2(SLJIT_R1, sourceReg), SLJIT_WORD_SHIFT, src[1].arg, src[1].argw);
         break;
     }
     case ByteCode::TableGetOpcode: {
-        JITArg srcArg;
-
-        operandToArg(instr->operands(), srcArg);
+        JITArg srcArg(instr->operands());
 
         sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_R0);
 
@@ -200,9 +190,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), context->tableStart + ((reinterpret_cast<TableGet*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
         sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, sourceReg, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableSizeOffset()), context->trapLabel);
 
-        JITArg dstArg;
-
-        operandToArg(instr->operands() + 1, dstArg);
+        JITArg dstArg(instr->operands() + 1);
 
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableElements());
         sljit_emit_op1(compiler, SLJIT_MOV_P, dstArg.arg, dstArg.argw, SLJIT_MEM2(SLJIT_R1, sourceReg), SLJIT_WORD_SHIFT);
