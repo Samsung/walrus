@@ -31,13 +31,16 @@ static void emitLoad3Arguments(sljit_compiler* compiler, Operand* params)
 
 static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, ExecutionContext* context)
 {
-    auto table = context->instance->table(context->tmp1);
+    auto table = context->instance->table(*(sljit_u32*)&context->tmp1);
     auto source = (context->instance->elementSegment(*(sljit_u32*)&context->tmp2));
 
-    if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)srcSize)
-        || UNLIKELY(!source.element() || (srcStart + srcSize) > source.element()->functionIndex().size())
-        || UNLIKELY(table->type() != Value::Type::FuncRef)) {
+    if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)table->size())
+        || UNLIKELY(!source.element() || (srcStart + srcSize) > source.element()->functionIndex().size())) {
         return ExecutionContext::OutOfBoundsTableAccessError;
+    }
+
+    if (UNLIKELY(table->type() != Value::Type::FuncRef)) {
+        return ExecutionContext::TypeMismatchError;
     }
 
     table->initTable(context->instance, &source, dstStart, srcStart, srcSize);
@@ -74,10 +77,10 @@ static sljit_s32 growTable(void* ptr, uint32_t newSize, uint32_t tableIndex, Exe
     auto srcTable = context->instance->table(tableIndex);
     auto oldSize = srcTable->size();
 
-    newSize += oldSize;
+    uint64_t totalSize = static_cast<uint64_t>(newSize) + oldSize;
 
-    if (newSize <= srcTable->maximumSize()) {
-        srcTable->grow(newSize, ptr);
+    if (totalSize <= srcTable->maximumSize()) {
+        srcTable->grow(totalSize, ptr);
         return oldSize;
     }
 
@@ -108,7 +111,10 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         emitLoad3Arguments(compiler, instr->operands());
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, (reinterpret_cast<TableInit*>(instr->byteCode()))->tableIndex());
+        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2), SLJIT_IMM, (reinterpret_cast<TableInit*>(instr->byteCode()))->segmentIndex());
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(VOID, 32, 32, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, initTable));
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
+        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError), context->trapLabel);
         break;
     }
     case ByteCode::TableSizeOpcode: {

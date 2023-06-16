@@ -44,6 +44,8 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
 
     if (context.error != ExecutionContext::NoError) {
         switch (context.error) {
+        case ExecutionContext::CapturedException:
+            throw std::unique_ptr<Exception>(context.capturedException);
         case ExecutionContext::OutOfStackError:
             Trap::throwException(state, "call stack exhausted");
             return resultOffsets;
@@ -53,14 +55,26 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::IntegerOverflowError:
             Trap::throwException(state, "integer overflow");
             return resultOffsets;
-        case ExecutionContext::InvalidConversionToIntegerError:
-            Trap::throwException(state, "invalid conversion to integer");
-            return resultOffsets;
         case ExecutionContext::OutOfBoundsMemAccessError:
             Trap::throwException(state, "out of bounds memory access");
             return resultOffsets;
         case ExecutionContext::OutOfBoundsTableAccessError:
             Trap::throwException(state, "out of bounds table access");
+            return resultOffsets;
+        case ExecutionContext::TypeMismatchError:
+            Trap::throwException(state, "type mismatch");
+            return resultOffsets;
+        case ExecutionContext::UndefinedElement:
+            Trap::throwException(state, "undefined element");
+            return resultOffsets;
+        case ExecutionContext::UninitializedElement:
+            Trap::throwException(state, "uninitialized element");
+            return resultOffsets;
+        case ExecutionContext::IndirectCallTypeMismatch:
+            Trap::throwException(state, "indirect call type mismatch");
+            return resultOffsets;
+        case ExecutionContext::InvalidConversionToIntegerError:
+            Trap::throwException(state, "invalid conversion to integer");
             return resultOffsets;
         case ExecutionContext::UnreachableError:
             Trap::throwException(state, "unreachable executed");

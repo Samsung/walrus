@@ -71,7 +71,7 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
                 min = static_cast<sljit_sw>(INT32_MIN);
             }
 
-            sljit_jump* cmp = sljit_emit_cmp(compiler, type, SLJIT_R1, 0, SLJIT_IMM, min);
+            sljit_jump* cmp = sljit_emit_cmp(compiler, type, SLJIT_R0, 0, SLJIT_IMM, min);
             sljit_set_label(cmp, context->trapLabel);
         }
     } else if (options & DivRemSigned) {

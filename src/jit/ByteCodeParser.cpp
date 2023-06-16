@@ -28,10 +28,15 @@ namespace Walrus {
 #define COMPUTE_OFFSET(idx, offset) \
     (static_cast<size_t>(static_cast<ssize_t>(idx) + (offset)))
 
-static void createInstructionList(JITCompiler* compiler, ModuleFunction* function)
+static void createInstructionList(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
     size_t idx = 0;
     size_t endIdx = function->currentByteCodeSize();
+
+    if (endIdx == 0) {
+        // If a function has no End opcode, it is an imported function.
+        return;
+    }
 
     std::map<size_t, Label*> labels;
 
@@ -313,6 +318,55 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[2].offset = STACK_OFFSET(select->condOffset());
             operands[3].item = nullptr;
             operands[3].offset = STACK_OFFSET(select->dstOffset());
+            break;
+        }
+        case ByteCode::CallOpcode:
+        case ByteCode::CallIndirectOpcode: {
+            FunctionType* functionType;
+            ByteCodeStackOffset* stackOffset;
+            uint32_t callerCount;
+
+            if (opcode == ByteCode::CallOpcode) {
+                Call* call = reinterpret_cast<Call*>(byteCode);
+                functionType = module->function(call->index())->functionType();
+                stackOffset = call->stackOffsets();
+                callerCount = 0;
+            } else {
+                CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(byteCode);
+                functionType = callIndirect->functionType();
+                stackOffset = callIndirect->stackOffsets();
+                callerCount = 1;
+            }
+
+            uint32_t paramCount = functionType->param().size();
+            uint32_t resultCount = functionType->result().size();
+
+            Instruction* instr = compiler->appendExtended(byteCode, Instruction::Call,
+                                                          opcode, paramCount + callerCount, resultCount);
+            Operand* operand = instr->operands();
+            Operand* end = operand + paramCount;
+
+            while (operand < end) {
+                operand->item = nullptr;
+                operand->offset = STACK_OFFSET(*stackOffset);
+                operand++;
+                stackOffset++;
+            }
+
+            if (opcode == ByteCode::CallIndirectOpcode) {
+                operand->item = nullptr;
+                operand->offset = STACK_OFFSET(reinterpret_cast<CallIndirect*>(byteCode)->calleeOffset());
+                operand++;
+            }
+
+            end = operand + resultCount;
+
+            while (operand < end) {
+                operand->item = nullptr;
+                operand->offset = STACK_OFFSET(*stackOffset);
+                operand++;
+                stackOffset++;
+            }
             break;
         }
         case ByteCode::Load32Opcode: {
@@ -788,7 +842,7 @@ void Module::jitCompile(int verboseLevel)
             printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(i));
         }
 
-        createInstructionList(&compiler, m_functions[i]);
+        createInstructionList(&compiler, m_functions[i], this);
     }
 
     m_jitModule = compiler.compile();

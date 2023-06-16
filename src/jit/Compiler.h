@@ -127,6 +127,8 @@ protected:
     {
     }
 
+    uint8_t internalResultCount() { return m_resultCount; }
+
 private:
     InstructionListItem* m_next;
     InstructionListItem* m_prev;
@@ -213,6 +215,8 @@ private:
 union InstructionValue {
     // For direct branches.
     Label* targetLabel;
+    // For calls.
+    uint32_t resultCount;
 };
 
 class ExtendedInstruction : public Instruction {
@@ -225,7 +229,7 @@ protected:
     explicit ExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
         : Instruction(byteCode, group, opcode, paramCount, operands, prev)
     {
-        ASSERT(group == Instruction::DirectBranch);
+        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call);
     }
 
 private:
@@ -255,7 +259,7 @@ protected:
     explicit SimpleExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, InstructionListItem* prev)
         : ExtendedInstruction(byteCode, group, opcode, paramCount, m_inlineOperands, prev)
     {
-        ASSERT(paramCount == n || paramCount + 1 == n);
+        ASSERT(paramCount <= n);
     }
 
 private:
@@ -274,6 +278,20 @@ protected:
     {
         assert(operandCount >= paramCount && operandCount > 4);
         assert(opcode == ByteCode::EndOpcode);
+    }
+};
+
+class ComplexExtendedInstruction : public ExtendedInstruction {
+    friend class JITCompiler;
+
+public:
+    ~ComplexExtendedInstruction() override;
+
+protected:
+    explicit ComplexExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount, InstructionListItem* prev)
+        : ExtendedInstruction(byteCode, group, opcode, paramCount, new Operand[operandCount], prev)
+    {
+        assert(operandCount >= paramCount && operandCount > 4);
     }
 };
 
@@ -377,6 +395,7 @@ public:
     void computeOptions();
 
     Instruction* append(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
+    ExtendedInstruction* appendExtended(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
     void appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset);
     BrTableInstruction* appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset);
 
