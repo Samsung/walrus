@@ -128,11 +128,7 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
 static void emitBinary(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    JITArg args[3];
-
-    for (int i = 0; i < 3; ++i) {
-        operandToArg(operands + i, args[i]);
-    }
+    JITArg args[3] = { operands, operands + 1, operands + 2 };
 
     sljit_s32 opcode;
 
@@ -277,11 +273,7 @@ static void emitExtend(sljit_compiler* compiler, sljit_s32 opcode, sljit_s32 big
 static void emitUnary(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    JITArg args[2];
-
-    for (int i = 0; i < 2; ++i) {
-        operandToArg(operands + i, args[i]);
-    }
+    JITArg args[2] = { operands, operands + 1 };
 
     sljit_s32 opcode;
 
@@ -350,16 +342,11 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
 
     bool is32 = reinterpret_cast<Select*>(instr->byteCode())->valueSize() == 4;
     sljit_s32 movOpcode = is32 ? SLJIT_MOV32 : SLJIT_MOV;
-    JITArg args[3];
-
-    operandToArg(operands + 0, args[0]);
-    operandToArg(operands + 1, args[1]);
-    operandToArg(operands + 3, args[2]);
+    JITArg args[3] = { operands, operands + 1, operands + 3 };
 
     if (type == -1) {
-        JITArg cond;
+        JITArg cond(operands + 2);
 
-        operandToArg(operands + 2, cond);
         sljit_emit_op2u(compiler, SLJIT_SUB32 | SLJIT_SET_Z, cond.arg, cond.argw, SLJIT_IMM, 0);
 
         type = SLJIT_NOT_ZERO;
@@ -388,7 +375,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
     JITArg params[2];
 
     for (uint32_t i = 0; i < instr->paramCount(); ++i) {
-        operandToArg(operand, params[i]);
+        params[i].set(operand);
         operand++;
     }
 
@@ -501,7 +488,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         return true;
     }
 
-    operandToArg(operand, params[0]);
+    params[0].set(operand);
     sljit_emit_op_flags(compiler, SLJIT_MOV32, params[0].arg, params[0].argw, type);
     return false;
 }
@@ -509,11 +496,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 static void emitConvert(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    JITArg args[2];
-
-    for (int i = 0; i < 2; ++i) {
-        operandToArg(operands + i, args[i]);
-    }
+    JITArg args[2] = { operands, operands + 1 };
 
     switch (instr->opcode()) {
     case ByteCode::I32WrapI64Opcode:
@@ -553,11 +536,8 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
 static void emitMove64(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    JITArg src;
-    JITArg dst;
-
-    operandToArg(operands, src);
-    operandToArg(operands + 1, dst);
+    JITArg src(operands);
+    JITArg dst(operands + 1);
 
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, src.arg, src.argw);
 }
@@ -566,9 +546,7 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
-    JITArg dst;
-
-    operandToArg(operands, dst);
+    JITArg dst(operands);
 
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
 
@@ -581,9 +559,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
-    JITArg src;
-
-    operandToArg(operands, src);
+    JITArg src(operands);
 
     GlobalSet64* globalSet = reinterpret_cast<GlobalSet64*>(instr->byteCode());
 
