@@ -16,13 +16,14 @@
 
 #include "Walrus.h"
 
+#include "runtime/Global.h"
+#include "runtime/Function.h"
+#include "runtime/Instance.h"
 #include "runtime/JITExec.h"
 #include "runtime/Memory.h"
-#include "runtime/Global.h"
 #include "runtime/Table.h"
 #include "jit/Compiler.h"
 #include "util/MathOperation.h"
-#include "runtime/Instance.h"
 
 #include <math.h>
 #include <map>
@@ -263,7 +264,22 @@ static sljit_uw SLJIT_FUNC getTrapHandler(ExecutionContext* context, sljit_uw re
 #include "IntMath64Inl.h"
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
+static void emitStoreImmediateParams(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* param = instr->params();
+    Operand* paramEnd = param + instr->paramCount();
+
+    while (param < paramEnd) {
+        if (param->item != nullptr && param->item->group() == Instruction::Immediate && !(param->item->info() & Instruction::kKeepInstruction)) {
+            emitStoreImmediate(compiler, param, param->item->asInstruction());
+        }
+
+        param++;
+    }
+}
+
 #include "FloatConvInl.h"
+#include "CallInl.h"
 #include "MemoryInl.h"
 #include "TableInl.h"
 
@@ -369,18 +385,9 @@ static void emitImmediate(sljit_compiler* compiler, Instruction* instr)
 
 static void emitEnd(sljit_compiler* compiler, Instruction* instr)
 {
-    Operand* param = instr->params();
-    Operand* paramEnd = param + instr->paramCount();
-
-    while (param < paramEnd) {
-        if (param->item != nullptr && param->item->group() == Instruction::Immediate && !(param->item->info() & Instruction::kKeepInstruction)) {
-            emitStoreImmediate(compiler, param, param->item->asInstruction());
-        }
-
-        param++;
-    }
-
     End* end = reinterpret_cast<End*>(instr->byteCode());
+
+    emitStoreImmediateParams(compiler, instr);
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(end->resultOffsets()));
 
     if (instr->info() & Instruction::kEarlyReturn) {
@@ -548,6 +555,11 @@ void JITCompiler::computeOptions()
 
 JITModule* JITCompiler::compile()
 {
+    if (m_functionListFirst == nullptr) {
+        // All functions are imported.
+        return nullptr;
+    }
+
     CompileContext compileContext(this);
     m_compiler = sljit_create_compiler(reinterpret_cast<void*>(&compileContext), nullptr);
 
@@ -590,6 +602,10 @@ JITModule* JITCompiler::compile()
         }
         case Instruction::BrTable: {
             emitBrTable(m_compiler, item->asInstruction()->asBrTable());
+            break;
+        }
+        case Instruction::Call: {
+            emitCall(m_compiler, item->asInstruction());
             break;
         }
         case Instruction::Binary: {
