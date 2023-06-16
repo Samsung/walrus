@@ -330,7 +330,9 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     store,
                     ft,
                     [](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data) {
-                        // Do nothing
+                        ASSERT(argc == 1 && argv[0].type() == Value::I32);
+                        exit(argv[0].asI32());
+                        ASSERT_NOT_REACHED();
                     },
                     nullptr));
             }
