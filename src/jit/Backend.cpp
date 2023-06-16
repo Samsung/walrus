@@ -61,9 +61,44 @@ static const uint8_t kContextReg = SLJIT_S0;
 static const uint8_t kFrameReg = SLJIT_S1;
 
 struct JITArg {
+    JITArg(Operand* operand)
+    {
+        this->set(operand);
+    }
+
+    JITArg() = default;
+
+    void set(Operand* operand);
+
     sljit_s32 arg;
     sljit_sw argw;
 };
+
+void JITArg::set(Operand* operand)
+{
+    if (operand->item == nullptr || operand->item->group() != Instruction::Immediate) {
+        this->arg = SLJIT_MEM1(kFrameReg);
+        this->argw = static_cast<sljit_sw>(operand->offset << 2);
+        return;
+    }
+
+    this->arg = SLJIT_IMM;
+
+    Instruction* instr = operand->item->asInstruction();
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    ASSERT(instr->opcode() == ByteCode::Const32Opcode);
+
+    this->argw = static_cast<sljit_s32>(reinterpret_cast<Const32*>(instr->byteCode())->value());
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+    if (instr->opcode() == ByteCode::Const32Opcode) {
+        this->argw = static_cast<sljit_s32>(reinterpret_cast<Const32*>(instr->byteCode())->value());
+        return;
+    }
+
+    this->argw = static_cast<sljit_sw>(reinterpret_cast<Const64*>(instr->byteCode())->value());
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+}
 
 struct TrapBlock {
     TrapBlock(sljit_label* endLabel, sljit_label* handlerLabel)
@@ -204,32 +239,6 @@ private:
 static sljit_uw SLJIT_FUNC getTrapHandler(ExecutionContext* context, sljit_uw returnAddr)
 {
     return context->currentInstanceConstData->trapHandlers->find(returnAddr);
-}
-
-static void operandToArg(Operand* operand, JITArg& arg)
-{
-    if (operand->item == nullptr || operand->item->group() != Instruction::Immediate) {
-        arg.arg = SLJIT_MEM1(kFrameReg);
-        arg.argw = static_cast<sljit_sw>(operand->offset << 2);
-        return;
-    }
-
-    arg.arg = SLJIT_IMM;
-
-    Instruction* instr = operand->item->asInstruction();
-
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    ASSERT(instr->opcode() == ByteCode::Const32Opcode);
-
-    arg.argw = static_cast<sljit_s32>(reinterpret_cast<Const32*>(instr->byteCode())->value());
-#else /* !SLJIT_32BIT_ARCHITECTURE */
-    if (instr->opcode() == ByteCode::Const32Opcode) {
-        arg.argw = static_cast<sljit_s32>(reinterpret_cast<Const32*>(instr->byteCode())->value());
-        return;
-    }
-
-    arg.argw = static_cast<sljit_sw>(reinterpret_cast<Const64*>(instr->byteCode())->value());
-#endif /* SLJIT_32BIT_ARCHITECTURE */
 }
 
 #define GET_TARGET_REG(arg, default_reg) \
@@ -389,9 +398,7 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
 
         CompileContext::get(compiler)->emitSlowCases(compiler);
     } else {
-        JITArg src;
-
-        operandToArg(instr->operands(), src);
+        JITArg src(instr->operands());
 
         sljit_s32 type = (instr->opcode() == ByteCode::JumpIfTrueOpcode) ? SLJIT_NOT_EQUAL : SLJIT_EQUAL;
 
@@ -407,9 +414,7 @@ static void emitBrTable(sljit_compiler* compiler, BrTableInstruction* instr)
     size_t targetLabelCount = instr->targetLabelCount() - 1;
     Label** label = instr->targetLabels();
     Label** end = label + targetLabelCount;
-    JITArg src;
-
-    operandToArg(instr->operands(), src);
+    JITArg src(instr->operands());
 
     sljit_s32 offsetReg = GET_SOURCE_REG(src.arg, SLJIT_R0);
     MOVE_TO_REG(compiler, SLJIT_MOV32, offsetReg, src.arg, src.argw);
@@ -441,11 +446,8 @@ static void emitBrTable(sljit_compiler* compiler, BrTableInstruction* instr)
 static void emitMove32(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    JITArg src;
-    JITArg dst;
-
-    operandToArg(operands, src);
-    operandToArg(operands + 1, dst);
+    JITArg src(operands);
+    JITArg dst(operands + 1);
 
     sljit_emit_op1(compiler, SLJIT_MOV32, dst.arg, dst.argw, src.arg, src.argw);
 }
@@ -454,9 +456,7 @@ static void emitGlobalGet32(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
-    JITArg dst;
-
-    operandToArg(operands, dst);
+    JITArg dst(operands);
 
     GlobalGet32* globalGet = reinterpret_cast<GlobalGet32*>(instr->byteCode());
 
@@ -469,9 +469,7 @@ static void emitGlobalSet32(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
-    JITArg src;
-
-    operandToArg(operands, src);
+    JITArg src(operands);
 
     GlobalSet32* globalSet = reinterpret_cast<GlobalSet32*>(instr->byteCode());
 
@@ -488,9 +486,7 @@ static void emitGlobalSet32(sljit_compiler* compiler, Instruction* instr)
 
 static void emitRefFunc(sljit_compiler* compiler, Instruction* instr)
 {
-    JITArg dstArg;
-
-    operandToArg(instr->operands(), dstArg);
+    JITArg dstArg(instr->operands());
 
     CompileContext* context = CompileContext::get(compiler);
 
