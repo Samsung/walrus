@@ -37,7 +37,6 @@ struct MemAddress {
 void MemAddress::check(sljit_compiler* compiler, Operand* params, sljit_u32 offset, sljit_u32 size)
 {
     CompileContext* context = CompileContext::get(compiler);
-    JITArg offsetArg;
 
     if (UNLIKELY(context->maximumMemorySize < size)) {
         // This memory load is never successful.
@@ -46,7 +45,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* params, sljit_u32 offs
         return;
     }
 
-    operandToArg(params, offsetArg);
+    JITArg offsetArg(params);
 
     if (SLJIT_IS_IMM(offsetArg.arg)) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -286,8 +285,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (!(opcode & SLJIT_32)) {
-        JITArgPair valueArgPair;
-        operandToArgPair(operands + 1, valueArgPair);
+        JITArgPair valueArgPair(operands + 1);
 
         sljit_s32 dstReg1 = GET_TARGET_REG(valueArgPair.arg1, SLJIT_R0);
 
@@ -320,8 +318,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
     }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-    JITArg valueArg;
-    operandToArg(operands + 1, valueArg);
+    JITArg valueArg(operands + 1);
 
     sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, SLJIT_R0);
 
@@ -420,7 +417,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         }
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     } else if (opcode == SLJIT_MOV) {
-        operandToArgPair(operands + 1, valueArgPair);
+        valueArgPair.set(operands + 1);
 
         if (SLJIT_IS_MEM(valueArgPair.arg1)) {
             addr.options = MemAddress::LoadToReg2 | MemAddress::DontSetR1;
@@ -430,7 +427,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     } else {
-        operandToArg(operands + 1, addr.loadArg);
+        addr.loadArg.set(operands + 1);
 
         if (SLJIT_IS_MEM(addr.loadArg.arg)) {
             addr.options = MemAddress::LoadToReg2;
@@ -552,8 +549,7 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
     switch (opcode) {
     case ByteCode::MemorySizeOpcode: {
-        JITArg dstArg;
-        operandToArg(params, dstArg);
+        JITArg dstArg(params);
 
         sljit_emit_op2(compiler, SLJIT_LSHR32, dstArg.arg, dstArg.argw,
                        SLJIT_MEM1(kContextReg), OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte), SLJIT_IMM, 16);
@@ -565,7 +561,7 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
         JITArg srcArg;
 
         for (int i = 0; i < 3; i++) {
-            operandToArg(params + i, srcArg);
+            srcArg.set(params + i);
             sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R(i), 0, srcArg.arg, srcArg.argw);
         }
 
@@ -591,16 +587,15 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
         return;
     }
     case ByteCode::MemoryGrowOpcode: {
-        JITArg arg;
+        JITArg arg(params);
 
-        operandToArg(params, arg);
         MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R0, arg.arg, arg.argw);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kContextReg, 0);
 
         sljit_sw addr = GET_FUNC_ADDR(sljit_sw, growMemory);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(32, 32, W), SLJIT_IMM, addr);
 
-        operandToArg(params + 1, arg);
+        arg.set(params + 1);
         MOVE_FROM_REG(compiler, SLJIT_MOV32, arg.arg, arg.argw, SLJIT_R0);
         return;
     }
