@@ -783,6 +783,13 @@ void wasm_trap_trace(const wasm_trap_t*, own wasm_frame_vec_t* out)
     RELEASE_ASSERT_NOT_REACHED();
 }
 
+void wasm_trap_trigger(const char* message, size_t length)
+{
+    // FIXME : throw an Exception
+    // NOTE) this thrown exception should be catched by walrus side
+    Trap::throwException(std::string(message, length));
+}
+
 // Modules
 own wasm_module_t* wasm_module_new(wasm_store_t* store, const wasm_byte_vec_t* binary)
 {
