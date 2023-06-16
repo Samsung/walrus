@@ -256,6 +256,8 @@ public:
 
     Opcode opcode() const;
     size_t getSize();
+    virtual const std::string getName() const { return "MISSING NAME"; };
+    virtual void printExtra(size_t pos) { return; };
 
 protected:
     friend class Interpreter;
@@ -302,9 +304,13 @@ public:
     uint32_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("const32 ");
+        return "const32";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("value: %" PRId32, m_value);
     }
@@ -330,9 +336,13 @@ public:
     uint64_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("const64 ");
+        return "const64";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("value: %" PRIu64, m_value);
     }
@@ -356,11 +366,6 @@ public:
     const ByteCodeStackOffset* srcOffset() const { return m_srcOffset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
 
 protected:
     ByteCodeStackOffset m_srcOffset[2];
@@ -368,10 +373,13 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_BINARY_BYTECODE_DUMP(name)                                                                                                             \
-    void dump(size_t pos)                                                                                                                             \
-    {                                                                                                                                                 \
-        printf(#name "src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset[0], (uint32_t)m_srcOffset[1], (uint32_t)m_dstOffset); \
+#define DEFINE_BINARY_BYTECODE_DUMP(name)                                                                                                       \
+                                                                                                                                                \
+    const std::string getName() const override { return #name; }                                                                                \
+                                                                                                                                                \
+    void printExtra(size_t pos) override                                                                                                        \
+    {                                                                                                                                           \
+        printf("src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset[0], (uint32_t)m_srcOffset[1], (uint32_t)m_dstOffset); \
     }
 #else
 #define DEFINE_BINARY_BYTECODE_DUMP(name)
@@ -398,11 +406,6 @@ public:
     }
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
 
 protected:
     ByteCodeStackOffset m_srcOffset;
@@ -410,10 +413,12 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_UNARY_BYTECODE_DUMP(name)                                                               \
-    void dump(size_t pos)                                                                              \
-    {                                                                                                  \
-        printf(#name " src: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset); \
+#define DEFINE_UNARY_BYTECODE_DUMP(name)                                                        \
+    const std::string getName() const override { return #name; }                                \
+                                                                                                \
+    void printExtra(size_t pos) override                                                        \
+    {                                                                                           \
+        printf("src: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset); \
     }
 #else
 #define DEFINE_UNARY_BYTECODE_DUMP(name)
@@ -466,9 +471,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("call ");
+        return "call";
+    }
+
+    void printExtra(size_t pos) override
+    {
         printf("index: %" PRId32 " ", m_index);
         size_t c = 0;
         auto arr = stackOffsets();
@@ -482,7 +491,6 @@ public:
         for (size_t i = 0; i < m_functionType->result().size(); i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
-        printf(" ");
     }
 #endif
 
@@ -513,9 +521,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("call_indirect ");
+        return "call_indirect";
+    }
+
+    void printExtra(size_t pos) override
+    {
         printf("tableIndex: %" PRId32 " ", m_tableIndex);
         DUMP_BYTECODE_OFFSET(calleeOffset);
 
@@ -531,7 +543,6 @@ public:
         for (size_t i = 0; i < m_functionType->result().size(); i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
-        printf(" ");
     }
 #endif
 
@@ -554,9 +565,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("move32 ");
+        return "move32";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
@@ -580,9 +595,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("move64 ");
+        return "move64";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
@@ -606,9 +625,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("load32 ");
+        return "load32";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
@@ -632,9 +655,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("load64 ");
+        return "load64";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
@@ -658,9 +685,13 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("store32 ");
+        return "store32";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
     }
@@ -684,9 +715,13 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("store64 ");
+        return "store64";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
     }
@@ -712,9 +747,14 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("jump dst: %" PRId32, (int32_t)pos + m_offset);
+        return "jump";
+    }
+
+    void printExtra(size_t pos) override
+    {
+        printf("dst: %" PRId32, (int32_t)pos + m_offset);
     }
 #endif
 
@@ -739,9 +779,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("jump_if_true ");
+        return "jump_if_true";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         printf("dst: %" PRId32, (int32_t)pos + m_offset);
     }
@@ -769,9 +813,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("jump_if_false ");
+        return "jump_if_false";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         printf("dst: %" PRId32, (int32_t)pos + m_offset);
     }
@@ -804,9 +852,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("select ");
+        return "select";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(condOffset);
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
@@ -843,9 +895,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("br_table ");
+        return "br_table";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(condOffset);
         printf("tableSize: %" PRIu32 ", defaultOffset: %" PRId32, m_tableSize, m_defaultOffset);
         printf(" table contents: ");
@@ -873,9 +929,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("memory.size ");
+        return "memory.size";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
 #endif
@@ -905,9 +965,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("memory.init ");
+        return "memory.init";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
@@ -936,9 +1000,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("memory.copy ");
+        return "memory.copy";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
@@ -963,9 +1031,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("memory.fill ");
+        return "memory.fill";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
@@ -989,9 +1061,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("data.drop ");
+        return "data.drop";
+    }
+
+    void printExtra(size_t pos) override
+    {
         printf("segmentIndex: %" PRIu32, m_segmentIndex);
     }
 #endif
@@ -1014,9 +1090,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("memory.grow ");
+        return "memory.grow";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
@@ -1042,11 +1122,6 @@ public:
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
 protected:
     uint32_t m_offset;
     ByteCodeStackOffset m_srcOffset;
@@ -1054,10 +1129,12 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                                        \
-    void dump(size_t pos)                                                                                                                      \
-    {                                                                                                                                          \
-        printf(#name " src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+#define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                                  \
+    const std::string getName() const override { return #name; }                                                                         \
+                                                                                                                                         \
+    void printExtra(size_t pos) override                                                                                                 \
+    {                                                                                                                                    \
+        printf(" src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
     }
 #else
 #define DEFINE_LOAD_BYTECODE_DUMP(name)
@@ -1088,11 +1165,6 @@ public:
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
 protected:
     uint32_t m_offset;
     ByteCodeStackOffset m_src0Offset;
@@ -1100,10 +1172,12 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                          \
-    void dump(size_t pos)                                                                                                                         \
-    {                                                                                                                                             \
-        printf(#name " src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
+#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                    \
+    const std::string getName() const override { return #name; }                                                                            \
+                                                                                                                                            \
+    void printExtra(size_t pos) override                                                                                                    \
+    {                                                                                                                                       \
+        printf(" src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
     }
 #else
 #define DEFINE_STORE_BYTECODE_DUMP(name)
@@ -1141,9 +1215,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("table.get ");
+        return "table.get";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("tableIndex: %" PRIu32, m_tableIndex);
@@ -1171,9 +1249,13 @@ public:
     uint32_t tableIndex() const { return m_tableIndex; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("table.set ");
+        return "table.set";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
         printf("tableIndex: %" PRIu32, m_tableIndex);
@@ -1203,9 +1285,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("table.grow ");
+        return "table.grow";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
         DUMP_BYTECODE_OFFSET(dstOffset);
@@ -1233,9 +1319,13 @@ public:
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("table.size ");
+        return "table.size";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("tableIndex: %" PRIu32, m_tableIndex);
     }
@@ -1264,9 +1354,13 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("table.copy ");
+        return "table.copy";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
@@ -1295,9 +1389,13 @@ public:
         return m_srcOffsets;
     }
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("table.fill ");
+        return "table.fill";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
@@ -1327,9 +1425,13 @@ public:
         return m_srcOffsets;
     }
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("table.init ");
+        return "table.init";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(srcOffsets[0]);
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
@@ -1357,9 +1459,14 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("elem.drop segmentIndex: %" PRIu32, m_segmentIndex);
+        return "elem.drop";
+    }
+
+    void printExtra(size_t pos) override
+    {
+        printf("segmentIndex: %" PRIu32, m_segmentIndex);
     }
 #endif
 
@@ -1380,9 +1487,13 @@ public:
     uint32_t funcIndex() const { return m_funcIndex; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("ref.func ");
+        return "ref.func";
+    }
+
+    void printExtra(size_t pos) override
+    {
         DUMP_BYTECODE_OFFSET(dstOffset);
         printf("funcIndex: %" PRIu32, m_funcIndex);
     }
@@ -1406,9 +1517,13 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("global.get32 ");
+        return "global.get32";
+    }
+
+    void printExtra(size_t pos) override
+    {
         printf("index: %" PRId32,
                m_index);
     }
@@ -1432,9 +1547,13 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("global.get64 ");
+        return "global.get64";
+    }
+
+    void printExtra(size_t pos) override
+    {
         printf("index: %" PRId32,
                m_index);
     }
@@ -1458,9 +1577,13 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("global.set32 ");
+        return "global.set32";
+    }
+
+    void printExtra(size_t pos) override
+    {
         printf("index: %" PRId32,
                m_index);
     }
@@ -1484,9 +1607,13 @@ public:
     uint32_t index() const { return m_index; }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("global.set64 ");
+        return "global.set64";
+    }
+
+    void printExtra(size_t pos) override
+    {
         printf("index: %" PRId32,
                m_index);
     }
@@ -1518,10 +1645,14 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("throw tagIndex: %" PRId32 " ",
-               m_tagIndex);
+        return "throw";
+    }
+
+    void printExtra(size_t pos) override
+    {
+        printf("tagIndex: %" PRId32 " ", m_tagIndex);
 
         if (m_tagIndex != std::numeric_limits<uint32_t>::max()) {
             auto arr = dataOffsets();
@@ -1529,7 +1660,6 @@ public:
             for (size_t i = 0; i < offsetsSize(); i++) {
                 printf("%" PRIu32 " ", (uint32_t)arr[i]);
             }
-            printf(" ");
         }
     }
 #endif
@@ -1547,9 +1677,9 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("unreachable");
+        return "unreachable";
     }
 #endif
 
@@ -1575,14 +1705,18 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
+    {
+        return "end";
+    }
+
+    void printExtra(size_t pos) override
     {
         auto arr = resultOffsets();
-        printf("end resultOffsets: ");
+        printf("resultOffsets: ");
         for (size_t i = 0; i < offsetsSize(); i++) {
             printf("%" PRIu32 " ", arr[i]);
         }
-        printf(" ");
     }
 #endif
 
@@ -1598,9 +1732,9 @@ public:
     }
 
 #if !defined(NDEBUG)
-    void dump(size_t pos)
+    const std::string getName() const override
     {
-        printf("fill opcode table");
+        return "fill opcode table";
     }
 #endif
 };

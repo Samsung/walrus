@@ -282,7 +282,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                          &data);
             }
 
-            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || index >= instance->m_tables[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
+            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || index > instance->m_tables[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
                 Trap::throwException(state, "out of bounds table access");
             }
 
@@ -368,18 +368,26 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 #if !defined(NDEBUG)
 void ModuleFunction::dumpByteCode()
 {
-    printf("function type %p\n", m_functionType);
-    printf("requiredStackSize %u, requiredStackSizeDueToLocal %u\n", m_requiredStackSize, m_requiredStackSizeDueToLocal);
-
+    printf("\n");
+    printf("| %-32s: %p\n", "function type", m_functionType);
+    printf("| %-32s: %8u bytes\n", "required stack size", m_requiredStackSize);
+    printf("| %-32s: %8u bytes\n", "required stack size due to local", m_requiredStackSizeDueToLocal);
+    printf("| %-32s: %8zu bytes\n", "bytecode size", m_byteCode.size());
+    if (m_byteCode.size() > 0) {
+        printf("|\n");
+        printf("|  %-14s | %-4s | %-15s | %-10s\n", "address", "size", "opcode", "note");
+        printf("|-----------------+------+-----------------+-----------------\n");
+    }
     size_t idx = 0;
     while (idx < m_byteCode.size()) {
         ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
-        printf("%zu: ", idx);
-
+        printf("| %15zu |", idx);
         switch (code->opcode()) {
-#define GENERATE_BYTECODE_CASE(name, ...)    \
-    case ByteCode::name##Opcode:             \
-        static_cast<name*>(code)->dump(idx); \
+#define GENERATE_BYTECODE_CASE(name, ...)                                 \
+    case ByteCode::name##Opcode:                                          \
+        printf("%5zu |", static_cast<name*>(code)->getSize());            \
+        printf(" %-15s | ", static_cast<name*>(code)->getName().c_str()); \
+        static_cast<name*>(code)->printExtra(idx);                        \
         break;
 
             FOR_EACH_BYTECODE(GENERATE_BYTECODE_CASE);
@@ -388,10 +396,12 @@ void ModuleFunction::dumpByteCode()
             ASSERT_NOT_REACHED();
             break;
         }
-
         printf("\n");
         idx += code->getSize();
     }
+    if (m_byteCode.size() > 0)
+        printf("|-----------------+------+-----------------+-----------------\n");
+    printf("\n");
 }
 #endif
 

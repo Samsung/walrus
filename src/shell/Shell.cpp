@@ -550,7 +550,10 @@ static void printConstVector(wabt::ConstVector& v)
 static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn, wabt::ConstVector expectedResult,
                                 const char* expectedException, bool expectUserException = false)
 {
-    RELEASE_ASSERT(fn->functionType()->param().size() == action->args.size());
+    if (fn->functionType()->param().size() != action->args.size()) {
+        fprintf(stderr, "Error: expected %zu parameter(s) but got %zu.\n", fn->functionType()->param().size(), action->args.size());
+        abort();
+    }
     Walrus::ValueVector args;
     for (auto& a : action->args) {
         args.push_back(toWalrusValue(a));
@@ -560,7 +563,8 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         Walrus::Function* fn;
         wabt::ConstVector& expectedResult;
         Walrus::ValueVector& args;
-    } data = { fn, expectedResult, args };
+        wabt::InvokeAction* action;
+    } data = { fn, expectedResult, args, action };
     Walrus::Trap trap;
     auto trapResult = trap.run([](Walrus::ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
@@ -571,7 +575,14 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
             RELEASE_ASSERT(data->fn->functionType()->result().size() == data->expectedResult.size());
             // compare result
             for (size_t i = 0; i < result.size(); i++) {
-                RELEASE_ASSERT(equals(result[i], data->expectedResult[i]));
+                if (!equals(result[i], data->expectedResult[i])) {
+                    printf("invoke %s(", data->action->name.data());
+                    printConstVector(data->action->args);
+                    printf(") expect value(");
+                    printConstVector(data->expectedResult);
+                    printf(") (line: %d) : FAILED\n", data->action->loc.line);
+                    abort();
+                }
             }
         }
     },
@@ -625,8 +636,8 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
     if (!lexer) {
-        RELEASE_ASSERT_NOT_REACHED();
-        return;
+        fprintf(stderr, "Error at lexer initialization!\n");
+        abort();
     }
 
     wabt::Errors errors;
@@ -635,9 +646,18 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     features.EnableAll();
     wabt::WastParseOptions parse_wast_options(features);
     auto result = wabt::ParseWastScript(lexer.get(), &script, &errors, &parse_wast_options);
+
     if (!wabt::Succeeded(result)) {
-        RELEASE_ASSERT_NOT_REACHED();
-        return;
+        fprintf(stderr, "Parse error");
+        if (errors.size() > 1)
+            fprintf(stderr, "s");
+        fprintf(stderr, "!\n");
+        int i = 1;
+        for (auto e : errors) {
+            fprintf(stderr, "%15d.) %s\n", i++, e.message.c_str());
+        }
+        fprintf(stderr, "\n");
+        abort();
     }
 
     std::map<size_t, Instance*> instanceMap;
@@ -649,7 +669,12 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::ScriptModule: {
             auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
-            executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            if (trapResult.exception) {
+                std::string& errorMessage = trapResult.exception->message();
+                fprintf(stderr, "Error occured during execution: %s\n", errorMessage.c_str());
+                abort();
+            }
             instanceMap[commandCount] = store->getLastInstance();
             if (moduleCommand->module.name.size()) {
                 registeredInstanceMap[moduleCommand->module.name] = store->getLastInstance();
@@ -659,7 +684,10 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::AssertReturn: {
             auto* assertReturn = static_cast<wabt::AssertReturnCommand*>(command.get());
             auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExportType(assertReturn->action->name);
-            RELEASE_ASSERT(value);
+            if (!value) {
+                fprintf(stderr, "Undefined function: %s\n", assertReturn->action->name.c_str());
+                abort();
+            }
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
