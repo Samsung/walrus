@@ -115,11 +115,8 @@ static void emitConvertFloatFromInteger(sljit_compiler* compiler, Instruction* i
 {
     Operand* operands = instr->operands();
 
-    JITArg srcArg;
-    operandToArg(operands, srcArg);
-
-    JITArg dstArg;
-    operandToArg(operands + 1, dstArg);
+    JITArg srcArg(operands);
+    JITArg dstArg(operands + 1);
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     if (instr->opcode() == ByteCode::F32ConvertI32UOpcode || instr->opcode() == ByteCode::F64ConvertI32UOpcode) {
@@ -294,21 +291,20 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
         sljit_s32 argTypes = (flags & DestinationIs64Bit) ? SLJIT_ARG_RETURN(SLJIT_ARG_TYPE_F64) : SLJIT_ARG_RETURN(SLJIT_ARG_TYPE_F32);
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        operandToArg(operands, arg);
+        arg.set(operands);
 
         sljit_s32 movOp = (flags & SourceIs64Bit) ? SLJIT_MOV : SLJIT_MOV32;
         MOVE_TO_REG(compiler, movOp, SLJIT_R0, arg.arg, arg.argw);
         argTypes |= (flags & SourceIs64Bit) ? SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_W, 1) : SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_32, 1);
 #else /* !SLJIT_64BIT_ARCHITECTURE */
         if (flags & SourceIs64Bit) {
-            JITArgPair srcArgPair;
-            operandToArgPair(operands, srcArgPair);
+            JITArgPair srcArgPair(operands);
 
             MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, srcArgPair.arg1, srcArgPair.arg1w);
             MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R1, srcArgPair.arg2, srcArgPair.arg2w);
             argTypes |= SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_W, 1) | SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_W, 2);
         } else {
-            operandToArg(operands, arg);
+            arg.set(operands);
 
             MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, arg.arg, arg.argw);
             argTypes |= SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_W, 1);
@@ -316,7 +312,7 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
         sljit_emit_icall(compiler, SLJIT_CALL, argTypes, SLJIT_IMM, addr);
-        operandToArg(operands + 1, arg);
+        arg.set(operands + 1);
 
         sljit_s32 floatMovOp = (flags & DestinationIs64Bit) ? SLJIT_MOV_F64 : SLJIT_MOV_F32;
         MOVE_FROM_FREG(compiler, floatMovOp, arg.arg, arg.argw, SLJIT_FR0);
@@ -334,16 +330,16 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
     ASSERT(operands[1].item == nullptr);
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-    operandToArg(operands + 1, arg);
+    arg.set(operands + 1);
 #else /* !SLJIT_64BIT_ARCHITECTURE */
     JITArgPair argPair;
 
     if (flags & DestinationIs64Bit) {
-        operandToArgPair(operands + 1, argPair);
+        argPair.set(operands + 1);
         arg.arg = argPair.arg1;
         arg.argw = argPair.arg1w - WORD_LOW_OFFSET;
     } else {
-        operandToArg(operands + 1, arg);
+        arg.set(operands + 1);
     }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
