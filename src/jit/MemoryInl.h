@@ -180,7 +180,7 @@ void MemAddress::load(sljit_compiler* compiler)
 
     if (options & LoadToFReg0) {
         SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg));
-        sljit_emit_fop1(compiler, (options & Load32) ? SLJIT_MOV_F32 : SLJIT_MOV_F64, SLJIT_R2, 0, loadArg.arg, loadArg.argw);
+        sljit_emit_fop1(compiler, (options & Load32) ? SLJIT_MOV_F32 : SLJIT_MOV_F64, SLJIT_FR0, 0, loadArg.arg, loadArg.argw);
         return;
     }
 }
@@ -415,29 +415,39 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
                 addr.options |= MemAddress::Load32;
             }
         }
+    } else {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    } else if (opcode == SLJIT_MOV) {
-        valueArgPair.set(operands + 1);
+        if (opcode == SLJIT_MOV32 || (opcode & SLJIT_32)) {
+            addr.loadArg.set(operands + 1);
 
-        if (SLJIT_IS_MEM(valueArgPair.arg1)) {
-            addr.options = MemAddress::LoadToReg2 | MemAddress::DontSetR1;
+            if (SLJIT_IS_MEM(addr.loadArg.arg)) {
+                addr.options = MemAddress::LoadToReg2;
+            }
+        } else {
+            valueArgPair.set(operands + 1);
 
             addr.loadArg.arg = valueArgPair.arg1;
             addr.loadArg.argw = valueArgPair.arg1w;
+
+            if (SLJIT_IS_MEM(valueArgPair.arg1)) {
+                addr.options = MemAddress::LoadToReg2;
+
+                if (opcode == SLJIT_MOV) {
+                    addr.options |= MemAddress::DontSetR1;
+                }
+            }
         }
-#endif /* SLJIT_32BIT_ARCHITECTURE */
-    } else {
+#else /* !SLJIT_32BIT_ARCHITECTURE */
         addr.loadArg.set(operands + 1);
 
         if (SLJIT_IS_MEM(addr.loadArg.arg)) {
             addr.options = MemAddress::LoadToReg2;
 
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
             if (opcode == SLJIT_MOV32 || (opcode & SLJIT_32)) {
                 addr.options |= MemAddress::Load32;
             }
-#endif /* SLJIT_64BIT_ARCHITECTURE */
         }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     }
 
     addr.check(compiler, operands, offset, size);

@@ -25,14 +25,19 @@ namespace Walrus {
 
 uint32_t Instruction::resultCount()
 {
-    if (!hasResult()) {
-        return 0;
+    if (group() != Instruction::Call) {
+        return internalResultCount();
     }
 
-    return 1;
+    return reinterpret_cast<ExtendedInstruction*>(this)->value().resultCount;
 }
 
 ComplexInstruction::~ComplexInstruction()
+{
+    delete[] params();
+}
+
+ComplexExtendedInstruction::~ComplexExtendedInstruction()
 {
     delete[] params();
 }
@@ -137,8 +142,43 @@ Instruction* JITCompiler::append(ByteCode* byteCode, Instruction::Group group, B
         break;
     }
 
-    ASSERT(resultCount <= UINT8_MAX);
+    ASSERT(resultCount <= 1);
     instr->m_resultCount = static_cast<uint8_t>(resultCount);
+
+    append(instr);
+    return instr;
+}
+
+ExtendedInstruction* JITCompiler::appendExtended(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount)
+{
+    ExtendedInstruction* instr;
+    uint32_t operandCount = paramCount + resultCount;
+
+    ASSERT(group == Instruction::Call);
+
+    switch (operandCount) {
+    case 0:
+        instr = new ExtendedInstruction(byteCode, group, opcode, 0, nullptr, m_last);
+        break;
+    case 1:
+        instr = new SimpleExtendedInstruction<1>(byteCode, group, opcode, paramCount, m_last);
+        break;
+    case 2:
+        instr = new SimpleExtendedInstruction<2>(byteCode, group, opcode, paramCount, m_last);
+        break;
+    case 3:
+        instr = new SimpleExtendedInstruction<3>(byteCode, group, opcode, paramCount, m_last);
+        break;
+    case 4:
+        instr = new SimpleExtendedInstruction<4>(byteCode, group, opcode, paramCount, m_last);
+        break;
+    default:
+        instr = new ComplexExtendedInstruction(byteCode, group, opcode, paramCount, operandCount, m_last);
+        break;
+    }
+
+    instr->m_resultCount = resultCount > 0 ? 1 : 0;
+    instr->m_value.resultCount = resultCount;
 
     append(instr);
     return instr;
