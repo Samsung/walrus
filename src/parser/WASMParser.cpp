@@ -209,6 +209,7 @@ private:
         std::vector<uint32_t> m_parameterPositions;
         uint32_t m_functionStackSizeSoFar;
         bool m_shouldRestoreVMStackAtEnd;
+        bool m_byteCodeGenerationStopped;
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
         struct JumpToEndBrInfo {
@@ -231,6 +232,7 @@ private:
             , m_vmStack(binaryReader.m_vmStack)
             , m_functionStackSizeSoFar(binaryReader.m_functionStackSizeSoFar)
             , m_shouldRestoreVMStackAtEnd(false)
+            , m_byteCodeGenerationStopped(false)
         {
             if (returnValueType.IsIndex() && binaryReader.m_result.m_functionTypes[returnValueType]->param().size()) {
                 // record parameter positions
@@ -1122,6 +1124,7 @@ public:
         if (m_blockInfo.size()) {
             m_resumeGenerateByteCodeAfterNBlockEnd = 1;
             m_blockInfo.back().m_shouldRestoreVMStackAtEnd = true;
+            m_blockInfo.back().m_byteCodeGenerationStopped = true;
         }
         m_shouldContinueToGenerateByteCode = false;
     }
@@ -1682,7 +1685,8 @@ public:
             }
 #endif
 
-            if (blockInfo.m_blockType == BlockInfo::TryCatch) {
+            switch (blockInfo.m_blockType) {
+            case BlockInfo::TryCatch: {
                 auto iter = m_catchInfo.begin();
                 while (iter != m_catchInfo.end()) {
                     if (iter->m_tryCatchBlockDepth - 1 != m_blockInfo.size()) {
@@ -1696,6 +1700,19 @@ public:
                     m_currentFunction->m_catchInfo.push_back({ iter->m_tryStart, iter->m_tryEnd, iter->m_catchStart, stackSizeToBe, iter->m_tagIndex });
                     iter = m_catchInfo.erase(iter);
                 }
+                break;
+            }
+            case BlockInfo::Loop:
+            case BlockInfo::Block: {
+                if (blockInfo.m_byteCodeGenerationStopped && blockInfo.m_jumpToEndBrInfo.size() == 0) {
+                    stopToGenerateByteCodeWhileBlockEnd();
+                    return;
+                }
+                break;
+            }
+            default: {
+                break;
+            }
             }
 
             if (blockInfo.m_shouldRestoreVMStackAtEnd) {
