@@ -795,6 +795,81 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     }
 }
 
+static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun)
+{
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
+
+    if (!parseResult.second.empty()) {
+        fprintf(stderr, "parse error: %s\n", parseResult.second.c_str());
+        return;
+    }
+
+    auto module = parseResult.first;
+
+    const auto& importTypes = module->imports();
+
+    if (importTypes.size() != 0) {
+        fprintf(stderr, "error: module has imports, but imports are not supported\n");
+        return;
+    }
+
+    struct RunData {
+        Module* module;
+        std::string* exportToRun;
+    } data = { module.value(), &exportToRun };
+    Walrus::Trap trap;
+
+    trap.run([](ExecutionState& state, void* d) {
+        auto data = reinterpret_cast<RunData*>(d);
+        Instance* instance = data->module->instantiate(state, ExternVector());
+
+        for (auto&& exp : data->module->exports()) {
+            if (exp->exportType() == ExportType::Function) {
+                if (*data->exportToRun != exp->name() && *data->exportToRun != "*") {
+                    continue;
+                }
+
+                auto fn = instance->function(exp->itemIndex());
+                FunctionType* fnType = fn->asDefinedFunction()->moduleFunction()->functionType();
+
+                if (!fnType->param().empty()) {
+                    printf("warning: function %s has params, but params are not supported\n", exp->name().c_str());
+                    return;
+                }
+
+                Walrus::ValueVector result;
+                result.resize(fnType->result().size());
+                fn->call(state, 0, nullptr, result.data());
+
+                for (auto&& r : result) {
+                    switch (r.type()) {
+                    case Value::I32: {
+                        printf("%d\n", r.asI32());
+                        break;
+                    }
+                    case Value::I64: {
+                        printf("%" PRId64 "\n", r.asI64());
+                        break;
+                    }
+                    case Value::F32: {
+                        printf("%.7f\n", r.asF32());
+                        break;
+                    }
+                    case Value::F64: {
+                        printf("%.15lf\n", r.asF64());
+                        break;
+                    }
+                    default:
+                        printf("(unknown)\n");
+                        break;
+                    }
+                }
+            }
+        }
+    },
+             &data);
+}
+
 int main(int argc, char* argv[])
 {
 #ifndef NDEBUG
@@ -813,8 +888,21 @@ int main(int argc, char* argv[])
     Store* store = new Store(engine);
 
     SpecTestFunctionTypes functionTypes;
+    std::string exportToRun;
 
     for (int i = 1; i < argc; i++) {
+        if (argv[i][0] == '-') {
+            if (strcmp(argv[i], "--run-export") == 0) {
+                if (i + 1 >= argc) {
+                    fprintf(stderr, "error: --run-export requires an argument\n");
+                    return 1;
+                }
+
+                exportToRun = argv[++i];
+                continue;
+            }
+        }
+
         std::string filePath = argv[i];
         FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
@@ -827,10 +915,14 @@ int main(int argc, char* argv[])
             fclose(fp);
 
             if (endsWith(filePath, "wasm")) {
-                auto trapResult = executeWASM(store, filePath, buf, functionTypes);
-                if (trapResult.exception) {
-                    fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
-                    return -1;
+                if (!exportToRun.empty()) {
+                    runExports(store, filePath, buf, exportToRun);
+                } else {
+                    auto trapResult = executeWASM(store, filePath, buf, functionTypes);
+                    if (trapResult.exception) {
+                        fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
+                        return -1;
+                    }
                 }
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
                 executeWAST(store, filePath, buf, functionTypes);
