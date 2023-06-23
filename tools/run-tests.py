@@ -99,7 +99,7 @@ def run(args, cwd=None, env=None, stdout=None, checkresult=True, report=False):
 def readfile(filename):
     with open(filename, 'r') as f:
         return f.readlines()
-    
+
 def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
@@ -150,6 +150,23 @@ def run_core_tests(engine):
 
     if fail_total > 0:
         raise Exception("wasm-test-core failed")
+
+@runner('wasi', default=True)
+def run_basic_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi')
+
+    print('Running wasi tests:')
+    xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("basic wasi tests failed")
 
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
