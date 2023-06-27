@@ -26,6 +26,11 @@ struct spectestseps : std::numpunct<char> {
     std::string do_grouping() const { return "\3"; }
 };
 
+struct ArgParser {
+    std::string exportToRun;
+    std::vector<std::string> fileNames;
+};
+
 using namespace Walrus;
 
 static void printI32(int32_t v)
@@ -922,6 +927,33 @@ static void runExports(Store* store, const std::string& filename, const std::vec
              &data);
 }
 
+static void parseArguments(int argc, char* argv[], ArgParser& argParser)
+{
+    const std::vector<std::string_view> args(argv + 1, argv + argc);
+
+    for (auto it = args.begin(); it != args.end(); ++it) {
+        if (*it == "--run-export") {
+            if (*it == args.back()) {
+                fprintf(stderr, "error: --run-export requires an argument\n");
+                exit(1);
+            }
+
+            std::advance(it, 1);
+            argParser.exportToRun = *it;
+        } else if (auto arg = std::string(*it); endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
+            argParser.fileNames.emplace_back(*it);
+        } else {
+            fprintf(stderr, "error: unknown argument: %s\n", it->data());
+            exit(1);
+        }
+    }
+
+    if (argParser.fileNames.empty()) {
+        fprintf(stderr, "error: no input files\n");
+        exit(1);
+    }
+}
+
 int main(int argc, char* argv[])
 {
 #ifndef NDEBUG
@@ -940,22 +972,11 @@ int main(int argc, char* argv[])
     Store* store = new Store(engine);
 
     SpecTestFunctionTypes functionTypes;
-    std::string exportToRun;
+    ArgParser argParser;
 
-    for (int i = 1; i < argc; i++) {
-        if (argv[i][0] == '-') {
-            if (strcmp(argv[i], "--run-export") == 0) {
-                if (i + 1 >= argc) {
-                    fprintf(stderr, "error: --run-export requires an argument\n");
-                    return 1;
-                }
+    parseArguments(argc, argv, argParser);
 
-                exportToRun = argv[++i];
-                continue;
-            }
-        }
-
-        std::string filePath = argv[i];
+    for (const auto& filePath : argParser.fileNames) {
         FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
             fseek(fp, 0, SEEK_END);
@@ -967,8 +988,8 @@ int main(int argc, char* argv[])
             fclose(fp);
 
             if (endsWith(filePath, "wasm")) {
-                if (!exportToRun.empty()) {
-                    runExports(store, filePath, buf, exportToRun);
+                if (!argParser.exportToRun.empty()) {
+                    runExports(store, filePath, buf, argParser.exportToRun);
                 } else {
                     auto trapResult = executeWASM(store, filePath, buf, functionTypes);
                     if (trapResult.exception) {
@@ -980,7 +1001,7 @@ int main(int argc, char* argv[])
                 executeWAST(store, filePath, buf, functionTypes);
             }
         } else {
-            printf("Cannot open file %s\n", argv[i]);
+            printf("Cannot open file %s\n", filePath.data());
             return -1;
         }
     }
