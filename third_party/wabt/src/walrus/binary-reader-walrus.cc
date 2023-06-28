@@ -451,7 +451,6 @@ public:
         return Result::Ok;
     }
     Result OnOpcodeV128(v128 value) override {
-        abort();
         return Result::Ok;
     }
     Result OnOpcodeBlockSig(Type sig_type) override {
@@ -644,7 +643,8 @@ public:
     }
     Result OnV128ConstExpr(v128 value_bits) override {
         CHECK_RESULT(m_validator.OnConst(GetLocation(), Type::V128));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnV128ConstExpr(value_bits.v);
         return Result::Ok;
     }
     Result OnGlobalGetExpr(Index global_index) override {

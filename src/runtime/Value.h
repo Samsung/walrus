@@ -29,8 +29,7 @@ class Table;
 class Memory;
 class Global;
 
-class V128 {
-public:
+struct Vec128 {
     uint8_t m_data[16];
 };
 
@@ -143,6 +142,9 @@ public:
         case I64:
             m_i64 = *reinterpret_cast<const int64_t*>(memory);
             break;
+        case V128:
+            memcpy(m_v128.m_data, memory, 16);
+            break;
         case FuncRef:
         case ExternRef:
             m_ref = *reinterpret_cast<void**>(const_cast<uint8_t*>(memory));
@@ -189,6 +191,12 @@ public:
     {
         ASSERT(type() == F64);
         return m_i64;
+    }
+
+    const uint8_t* asV128Addr() const
+    {
+        ASSERT(type() == V128);
+        return m_v128.m_data;
     }
 
     Function* asFunction() const
@@ -246,6 +254,10 @@ public:
             *reinterpret_cast<int64_t*>(ptr) = m_i64;
             break;
         }
+        case V128: {
+            memcpy(ptr, m_v128.m_data, 16);
+            break;
+        }
         case FuncRef:
         case ExternRef: {
             *reinterpret_cast<void**>(ptr) = m_ref;
@@ -266,7 +278,8 @@ public:
         } else if (siz == 8) {
             *reinterpret_cast<int64_t*>(ptr) = m_i64;
         } else {
-            ASSERT_NOT_REACHED();
+            ASSERT(siz == 16);
+            memcpy(ptr, m_v128.m_data, 16);
         }
     }
 
@@ -315,6 +328,7 @@ private:
         float m_f32;
         double m_f64;
         void* m_ref;
+        Vec128 m_v128;
     };
 
     Type m_type;
@@ -344,9 +358,11 @@ inline void Value::readFromStack(uint8_t* ptr)
     ASSERT(valueSizeInStack(m_type) == size);
     if (size == 4) {
         m_i32 = *reinterpret_cast<int32_t*>(ptr);
-    } else {
-        ASSERT(size == 8);
+    } else if (size == 8) {
         m_i64 = *reinterpret_cast<int64_t*>(ptr);
+    } else {
+        ASSERT(size == 16);
+        memcpy(m_v128.m_data, ptr, 16);
     }
 }
 

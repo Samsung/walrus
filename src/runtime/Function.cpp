@@ -68,6 +68,10 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
             functionStackPointer += stackAllocatedSize<int64_t>();
             break;
         }
+        case Value::V128: {
+            functionStackPointer += stackAllocatedSize<Vec128>();
+            break;
+        }
         case Value::FuncRef:
         case Value::ExternRef: {
             functionStackPointer += stackAllocatedSize<void*>();

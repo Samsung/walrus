@@ -401,6 +401,9 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         memcpy(&s, &bits, sizeof(double));
         return Walrus::Value(s);
     }
+    case wabt::Type::V128: {
+        return Walrus::Value(Walrus::Value::V128, c.vec128().v);
+    }
     case wabt::Type::FuncRef: {
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
             return Walrus::Value(Walrus::Value::FuncRef, Walrus::Value::Null);
@@ -472,6 +475,8 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
             }
         }
         return c.f64_bits() == v.asF64Bits();
+    } else if (c.type() == wabt::Type::V128 && v.type() == Walrus::Value::V128) {
+        return memcmp(v.asV128Addr(), c.vec128().v, 16) == 0;
     } else if (c.type() == wabt::Type::ExternRef && v.type() == Walrus::Value::ExternRef) {
         // FIXME value of c.ref_bits() for RefNull
         wabt::Const constNull;
@@ -538,6 +543,8 @@ static void printConstVector(wabt::ConstVector& v)
                 printf("ref.null");
                 return;
             }
+        } else if (c.type() == wabt::Type::V128) {
+            printf("v128");
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
