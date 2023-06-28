@@ -324,6 +324,15 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(Const128)
+        :
+    {
+        Const128* code = (Const128*)programCounter;
+        memcpy(bp + code->dstOffset(), code->value(), 16);
+        ADD_PROGRAM_COUNTER(Const128);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(Move32)
         :
     {
@@ -339,6 +348,15 @@ NextInstruction:
         Move64* code = (Move64*)programCounter;
         *reinterpret_cast<uint64_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint64_t*>(bp + code->srcOffset());
         ADD_PROGRAM_COUNTER(Move64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(Move128)
+        :
+    {
+        Move128* code = (Move128*)programCounter;
+        memcpy(bp + code->dstOffset(), bp + code->srcOffset(), 16);
+        ADD_PROGRAM_COUNTER(Move128);
         NEXT_INSTRUCTION();
     }
 
@@ -484,6 +502,16 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(GlobalGet128)
+        :
+    {
+        GlobalGet128* code = (GlobalGet128*)programCounter;
+        ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
+        globals[code->index()]->value().writeNBytesToMemory<16>(bp + code->dstOffset());
+        ADD_PROGRAM_COUNTER(GlobalGet128);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(GlobalSet32)
         :
     {
@@ -503,6 +531,17 @@ NextInstruction:
         Value& val = globals[code->index()]->value();
         val.readFromStack<8>(bp + code->srcOffset());
         ADD_PROGRAM_COUNTER(GlobalSet64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(GlobalSet128)
+        :
+    {
+        GlobalSet128* code = (GlobalSet128*)programCounter;
+        ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
+        Value& val = globals[code->index()]->value();
+        val.readFromStack<16>(bp + code->srcOffset());
+        ADD_PROGRAM_COUNTER(GlobalSet128);
         NEXT_INSTRUCTION();
     }
 

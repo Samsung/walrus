@@ -135,11 +135,11 @@ def run_basic_tests(engine):
         raise Exception("basic tests failed")
 
 @runner('wasm-test-core', default=True)
-def run_basic_tests(engine):
+def run_core_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-spec', 'core')
 
     print('Running wasm-test-core tests:')
-    xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass = glob(join(TEST_DIR, '**/*.wast'), recursive=True)
     xpass_result = _run_wast_tests(engine, xpass, False)
 
     tests_total = len(xpass)

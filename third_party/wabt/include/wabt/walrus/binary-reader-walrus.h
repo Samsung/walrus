@@ -107,6 +107,7 @@ public:
     virtual void OnI64ConstExpr(uint64_t value) = 0;
     virtual void OnF32ConstExpr(uint32_t value) = 0;
     virtual void OnF64ConstExpr(uint64_t value) = 0;
+    virtual void OnV128ConstExpr(uint8_t* value) = 0;
     virtual void OnLocalGetExpr(Index localIndex) = 0;
     virtual void OnLocalSetExpr(Index localIndex) = 0;
     virtual void OnLocalTeeExpr(Index localIndex) = 0;
