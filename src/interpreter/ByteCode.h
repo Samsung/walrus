@@ -55,15 +55,19 @@ class FunctionType;
     F(RefFunc)                  \
     F(Move32)                   \
     F(Move64)                   \
+    F(Move128)                  \
     F(Jump)                     \
     F(JumpIfTrue)               \
     F(JumpIfFalse)              \
     F(GlobalGet32)              \
     F(GlobalGet64)              \
+    F(GlobalGet128)             \
     F(GlobalSet32)              \
     F(GlobalSet64)              \
+    F(GlobalSet128)             \
     F(Const32)                  \
     F(Const64)                  \
+    F(Const128)                 \
     F(Load32)                   \
     F(Load64)                   \
     F(Store32)                  \
@@ -343,6 +347,34 @@ protected:
     uint64_t m_value;
 };
 
+class Const128 : public ByteCode {
+public:
+    Const128(ByteCodeStackOffset dstOffset, uint8_t* value)
+        : ByteCode(Opcode::Const128Opcode)
+        , m_dstOffset(dstOffset)
+    {
+        ASSERT(!!value);
+        memcpy(m_value, value, 16);
+    }
+
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
+    const uint8_t* value() const { return m_value; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("const128 ");
+        DUMP_BYTECODE_OFFSET(dstOffset);
+        //printf("value: %" PRIu64, m_value);
+    }
+#endif
+
+protected:
+    ByteCodeStackOffset m_dstOffset;
+    uint8_t m_value[16];
+};
+
 // dummy ByteCode for binary operation
 class BinaryOperation : public ByteCode {
 public:
@@ -583,6 +615,32 @@ public:
     void dump(size_t pos)
     {
         printf("move64 ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
+    }
+#endif
+
+protected:
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
+};
+
+class Move128 : public ByteCode {
+public:
+    Move128(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : ByteCode(Opcode::Move128Opcode)
+        , m_srcOffset(srcOffset)
+        , m_dstOffset(dstOffset)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("move128 ");
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
@@ -1445,6 +1503,32 @@ protected:
     uint32_t m_index;
 };
 
+class GlobalGet128 : public ByteCode {
+public:
+    GlobalGet128(ByteCodeStackOffset dstOffset, uint32_t index)
+        : ByteCode(Opcode::GlobalGet128Opcode)
+        , m_dstOffset(dstOffset)
+        , m_index(index)
+    {
+    }
+
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint32_t index() const { return m_index; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("global.get128 ");
+        printf("index: %" PRId32,
+               m_index);
+    }
+#endif
+
+protected:
+    ByteCodeStackOffset m_dstOffset;
+    uint32_t m_index;
+};
+
 class GlobalSet32 : public ByteCode {
 public:
     GlobalSet32(ByteCodeStackOffset srcOffset, uint32_t index)
@@ -1487,6 +1571,32 @@ public:
     void dump(size_t pos)
     {
         printf("global.set64 ");
+        printf("index: %" PRId32,
+               m_index);
+    }
+#endif
+
+protected:
+    ByteCodeStackOffset m_srcOffset;
+    uint32_t m_index;
+};
+
+class GlobalSet128 : public ByteCode {
+public:
+    GlobalSet128(ByteCodeStackOffset srcOffset, uint32_t index)
+        : ByteCode(Opcode::GlobalSet128Opcode)
+        , m_srcOffset(srcOffset)
+        , m_index(index)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    uint32_t index() const { return m_index; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("global.set128 ");
         printf("index: %" PRId32,
                m_index);
     }

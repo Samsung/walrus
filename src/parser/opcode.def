@@ -569,5 +569,6 @@ WABT_OPCODE(I64, I32, I64, I64, 4, 0xfe, 0x4e, I64AtomicRmw32CmpxchgU, "i64.atom
 /* Walrus interpreter only opcodes */
 WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe7, Move32, "move_32", "")
 WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe8, Move64, "move_64", "")
-WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xef, Const32, "const_32", "")
-WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe0, Const64, "const_64", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe9, Move128, "move_128", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xea, Const32, "const_32", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xeb, Const64, "const_64", "")

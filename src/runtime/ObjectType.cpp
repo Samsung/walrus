@@ -58,6 +58,7 @@ GlobalType::GlobalType(Value::Type type, bool mut)
     case Value::I64:
     case Value::F32:
     case Value::F64:
+    case Value::V128:
     case Value::FuncRef:
     case Value::ExternRef:
         return;

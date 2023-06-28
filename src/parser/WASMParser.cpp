@@ -98,6 +98,8 @@ static Walrus::Value::Type toValueKind(Type type)
         return Walrus::Value::Type::F32;
     case Type::F64:
         return Walrus::Value::Type::F64;
+    case Type::V128:
+        return Walrus::Value::Type::V128;
     case Type::FuncRef:
         return Walrus::Value::Type::FuncRef;
     case Type::ExternRef:
@@ -847,6 +849,11 @@ public:
         pushByteCode(Walrus::Const64(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::F64)), value), WASMOpcode::F64ConstOpcode);
     }
 
+    virtual void OnV128ConstExpr(uint8_t* value) override
+    {
+        pushByteCode(Walrus::Const128(pushVMStack(Walrus::valueSizeInStack(Walrus::Value::Type::V128)), value), WASMOpcode::V128ConstOpcode);
+    }
+
     std::pair<uint32_t, uint32_t> resolveLocalOffsetAndSize(Index localIndex)
     {
         if (localIndex < m_currentFunctionType->param().size()) {
@@ -971,9 +978,11 @@ public:
         auto stackPos = pushVMStack(sz);
         if (sz == 4) {
             pushByteCode(Walrus::GlobalGet32(stackPos, index), WASMOpcode::GlobalGetOpcode);
-        } else {
-            ASSERT(sz == 8);
+        } else if (sz == 8) {
             pushByteCode(Walrus::GlobalGet64(stackPos, index), WASMOpcode::GlobalGetOpcode);
+        } else {
+            ASSERT(sz == 16);
+            pushByteCode(Walrus::GlobalGet128(stackPos, index), WASMOpcode::GlobalGetOpcode);
         }
     }
 
@@ -985,10 +994,13 @@ public:
         if (sz == 4) {
             ASSERT(peekVMStackSize() == 4);
             pushByteCode(Walrus::GlobalSet32(stackPos, index), WASMOpcode::GlobalSetOpcode);
-        } else {
-            ASSERT(sz == 8);
+        } else if (sz == 8) {
             ASSERT(peekVMStackSize() == 8);
             pushByteCode(Walrus::GlobalSet64(stackPos, index), WASMOpcode::GlobalSetOpcode);
+        } else {
+            ASSERT(sz == 16);
+            ASSERT(peekVMStackSize() == 16);
+            pushByteCode(Walrus::GlobalSet128(stackPos, index), WASMOpcode::GlobalSetOpcode);
         }
         popVMStack();
     }
@@ -1176,9 +1188,11 @@ public:
         if (srcPosition != dstPosition) {
             if (size == 4) {
                 pushByteCode(Walrus::Move32(srcPosition, dstPosition), WASMOpcode::Move32Opcode);
-            } else {
-                ASSERT(size == 8);
+            } else if (size == 8) {
                 pushByteCode(Walrus::Move64(srcPosition, dstPosition), WASMOpcode::Move64Opcode);
+            } else {
+                ASSERT(size == 16);
+                pushByteCode(Walrus::Move128(srcPosition, dstPosition), WASMOpcode::Move128Opcode);
             }
         }
     }
