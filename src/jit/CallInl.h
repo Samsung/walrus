@@ -46,6 +46,7 @@ static sljit_sw callFunction(
         }
     } catch (std::unique_ptr<Exception>& exception) {
         context->capturedException = exception.release();
+        context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
     }
 
@@ -69,16 +70,19 @@ static sljit_sw callFunctionIndirect(
 
     uint32_t idx = *reinterpret_cast<uint32_t*>(bp + code->calleeOffset());
     if (idx >= table->size()) {
+        context->error = ExecutionContext::UndefinedElement;
         return ExecutionContext::UndefinedElement;
     }
 
     auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
     if (UNLIKELY(Value::isNull(target))) {
+        context->error = ExecutionContext::UninitializedElement;
         return ExecutionContext::UninitializedElement;
     }
 
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
+        context->error = ExecutionContext::IndirectCallTypeMismatch;
         return ExecutionContext::IndirectCallTypeMismatch;
     }
 
@@ -104,6 +108,7 @@ static sljit_sw callFunctionIndirect(
         }
     } catch (std::unique_ptr<Exception>& exception) {
         context->capturedException = exception.release();
+        context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
     }
 
@@ -132,7 +137,14 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
     sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
-    sljit_set_label(jump, CompileContext::get(compiler)->trapLabel);
+    CompileContext* context = CompileContext::get(compiler);
+
+    if (context->currentTryBlock == InstanceConstData::globalTryBlock) {
+        sljit_set_label(jump, context->returnToLabel);
+        return;
+    }
+
+    std::vector<TryBlock>& tryBlocks = context->compiler->tryBlocks();
+    tryBlocks[context->currentTryBlock].throwJumps.push_back(jump);
 }
