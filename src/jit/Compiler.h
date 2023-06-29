@@ -27,6 +27,8 @@ struct sljit_label;
 
 namespace Walrus {
 
+#define STACK_OFFSET(v) ((v) >> 2)
+
 class JITFunction;
 class Instruction;
 class ExtendedInstruction;
@@ -322,9 +324,11 @@ class Label : public InstructionListItem {
 
 public:
     // Various info bits.
-    static const uint16_t kNewFunction = 1 << 0;
-    static const uint16_t kHasJumpList = 1 << 1;
-    static const uint16_t kHasLabelData = 1 << 2;
+    static const uint16_t kHasJumpList = 1 << 0;
+    static const uint16_t kHasLabelData = 1 << 1;
+    static const uint16_t kNewFunction = 1 << 2;
+    static const uint16_t kHasTryInfo = 1 << 3;
+    static const uint16_t kHasCatchInfo = 1 << 4;
 
     typedef std::vector<Instruction*> DependencyList;
 
@@ -336,6 +340,12 @@ public:
     const std::vector<Instruction*>& branches() { return m_branches; }
     size_t dependencyCount() { return m_dependencies.size(); }
     const DependencyList& dependencies(size_t i) { return m_dependencies[i]; }
+
+    sljit_label* label()
+    {
+        ASSERT(info() & Label::kHasLabelData);
+        return m_label;
+    }
 
     void append(Instruction* instr);
     // Should be called before removing the other instruction.
@@ -359,6 +369,36 @@ private:
         LabelJumpList* m_jumpList;
         sljit_label* m_label;
     };
+};
+
+struct TryBlock {
+    struct CatchBlock {
+        CatchBlock(Label* handler, size_t stackSizeToBe, uint32_t tagIndex)
+            : handler(handler)
+            , stackSizeToBe(stackSizeToBe)
+            , tagIndex(tagIndex)
+        {
+        }
+
+        Label* handler;
+        size_t stackSizeToBe;
+        uint32_t tagIndex;
+    };
+
+    TryBlock(Label* start, size_t size)
+        : start(start)
+        , parent(0)
+        , returnToLabel(nullptr)
+    {
+        catchBlocks.reserve(size);
+    }
+
+    Label* start;
+    size_t parent;
+    sljit_label* findHandlerLabel;
+    sljit_label* returnToLabel;
+    std::vector<CatchBlock> catchBlocks;
+    std::vector<sljit_jump*> throwJumps;
 };
 
 class JITCompiler {
@@ -414,9 +454,10 @@ public:
     void appendFunction(JITFunction* jitFunc, bool isExternal);
     void dump();
 
-    void buildParamDependencies(uint32_t requiredStackSize);
+    void buildParamDependencies(uint32_t requiredStackSize, size_t nextTryBlock);
     JITModule* compile();
 
+    std::vector<TryBlock>& tryBlocks() { return m_tryBlocks; }
     Label* getFunctionEntry(size_t i) { return m_functionList[i].entryLabel; }
 
 private:
@@ -444,7 +485,7 @@ private:
     // Backend operations.
     void releaseFunctionList();
     void emitProlog(size_t index, CompileContext& context);
-    sljit_label* emitEpilog(size_t index, CompileContext& context);
+    void emitEpilog(size_t index, CompileContext& context);
 
     InstructionListItem* m_first;
     InstructionListItem* m_last;
@@ -460,6 +501,7 @@ private:
     int m_verboseLevel;
     uint32_t m_options;
 
+    std::vector<TryBlock> m_tryBlocks;
     std::vector<FunctionList> m_functionList;
 };
 

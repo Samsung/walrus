@@ -413,6 +413,12 @@ public:
         return m_tagTypes.size();
     }
 
+    TagType* tagType(uint32_t index) const
+    {
+        ASSERT(index < m_tagTypes.size());
+        return m_tagTypes[index];
+    }
+
     const VectorWithFixedSize<ImportType*, std::allocator<ImportType*>>& imports() const
     {
         return m_imports;
