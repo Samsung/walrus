@@ -25,12 +25,7 @@ namespace Walrus {
 
 class Exception;
 class Memory;
-class TrapHandlerList;
-
-// Header of instance const data
-struct InstanceConstData {
-    TrapHandlerList* trapHandlers;
-};
+class InstanceConstData;
 
 struct ExecutionContext {
     // Describes a function in the call frame

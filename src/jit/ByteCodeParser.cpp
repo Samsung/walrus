@@ -24,9 +24,65 @@
 
 namespace Walrus {
 
-#define STACK_OFFSET(v) ((v) >> 2)
 #define COMPUTE_OFFSET(idx, offset) \
     (static_cast<size_t>(static_cast<ssize_t>(idx) + (offset)))
+
+class TryRange {
+public:
+    TryRange(size_t start, size_t end)
+        : m_start(start)
+        , m_end(end)
+    {
+    }
+
+    size_t start() const { return m_start; }
+    size_t end() const { return m_end; }
+
+    bool operator<(const TryRange& other) const
+    {
+        return m_start < other.m_start || (m_start == other.m_start && m_end > other.m_end);
+    }
+
+private:
+    size_t m_start;
+    size_t m_end;
+};
+
+void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<size_t, Label*>& labels)
+{
+    std::map<TryRange, size_t> ranges;
+
+    for (auto it : function->catchInfo()) {
+        ranges[TryRange(it.m_tryStart, it.m_tryEnd)]++;
+    }
+
+    std::vector<TryBlock>& tryBlocks = compiler->tryBlocks();
+    size_t counter = tryBlocks.size();
+
+    tryBlocks.reserve(counter + ranges.size());
+
+    // The it->second assignment does not work with auto iterator.
+    for (std::map<TryRange, size_t>::iterator it = ranges.begin(); it != ranges.end(); it++) {
+        Label* start = labels[it->first.start()];
+
+        start->addInfo(Label::kHasTryInfo);
+
+        tryBlocks.push_back(TryBlock(start, it->second));
+        it->second = counter++;
+    }
+
+    for (auto it : function->catchInfo()) {
+        Label* catchLabel = labels[it.m_catchStartPosition];
+        size_t idx = ranges[TryRange(it.m_tryStart, it.m_tryEnd)];
+
+        if (tryBlocks[idx].catchBlocks.size() == 0) {
+            // The first catch block terminates the try block.
+            catchLabel->addInfo(Label::kHasCatchInfo);
+        }
+
+        tryBlocks[idx].catchBlocks.push_back(TryBlock::CatchBlock(catchLabel, it.m_stackSizeToBe, it.m_tagIndex));
+    }
+}
 
 static void createInstructionList(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
@@ -82,12 +138,20 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         idx += byteCode->getSize();
     }
 
+    for (auto it : function->catchInfo()) {
+        labels[it.m_tryStart] = nullptr;
+        labels[it.m_catchStartPosition] = nullptr;
+    }
+
     std::map<size_t, Label*>::iterator it;
 
     // Values needs to be modified.
     for (it = labels.begin(); it != labels.end(); it++) {
         it->second = new Label();
     }
+
+    size_t nextTryBlock = compiler->tryBlocks().size();
+    buildCatchInfo(compiler, function, labels);
 
     it = labels.begin();
     size_t nextLabelIndex = ~static_cast<size_t>(0);
@@ -366,6 +430,23 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
                 operand->offset = STACK_OFFSET(*stackOffset);
                 operand++;
                 stackOffset++;
+            }
+            break;
+        }
+        case ByteCode::ThrowOpcode: {
+            Throw* throwTag = reinterpret_cast<Throw*>(byteCode);
+            TagType* tagType = module->tagType(throwTag->tagIndex());
+            uint32_t size = module->functionType(tagType->sigIndex())->param().size();
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, size, 0);
+            Operand* param = instr->params();
+            Operand* end = param + size;
+            ByteCodeStackOffset* offsets = throwTag->dataOffsets();
+
+            while (param < end) {
+                param->item = nullptr;
+                param->offset = STACK_OFFSET(*offsets++);
+                param++;
             }
             break;
         }
@@ -814,7 +895,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         idx += byteCode->getSize();
     }
 
-    compiler->buildParamDependencies(STACK_OFFSET(function->requiredStackSize()));
+    compiler->buildParamDependencies(STACK_OFFSET(function->requiredStackSize()), nextTryBlock);
 
     if (compiler->verboseLevel() >= 1) {
         compiler->dump();
