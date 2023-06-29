@@ -326,7 +326,9 @@ void JITCompiler::dump()
 
             Label* label = item->asLabel();
 
-            printf("Label:\n");
+            printf("Label:%s%s%s\n", (label->info() & Label::kNewFunction) ? " newFunction" : "",
+                   (label->info() & Label::kHasTryInfo) ? " hasTryInfo" : "",
+                   (label->info() & Label::kHasCatchInfo) ? " hasCatchInfo" : "");
 
             for (auto it : label->branches()) {
                 printf("  Jump from: %s%d%s\n", instrText, instrIndex[it], defaultText);
