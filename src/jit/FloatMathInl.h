@@ -175,16 +175,6 @@ static sljit_f64 floatMax(sljit_f64 lhs, sljit_f64 rhs)
     return std::max(lhs, rhs);
 }
 
-static sljit_f32 floatCopySign(sljit_f32 lhs, sljit_f32 rhs)
-{
-    return std::copysign(lhs, rhs);
-}
-
-static sljit_f64 floatCopySign(sljit_f64 lhs, sljit_f64 rhs)
-{
-    return std::copysign(lhs, rhs);
-}
-
 static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
@@ -196,7 +186,8 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
     floatOperandToArg(compiler, operands + 1, args[1], SLJIT_FR1);
     floatOperandToArg(compiler, operands + 2, args[2], 0);
 
-    sljit_s32 opcode;
+    sljit_s32 opcode = SLJIT_NOP;
+    sljit_s32 dstReg;
     f32Function2Param f32Func = nullptr;
     f64Function2Param f64Func = nullptr;
 
@@ -219,9 +210,6 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F32MinOpcode:
         f32Func = floatMin;
         break;
-    case ByteCode::F32CopysignOpcode:
-        f32Func = floatCopySign;
-        break;
     case ByteCode::F64AddOpcode:
         opcode = SLJIT_ADD_F64;
         break;
@@ -240,11 +228,21 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F64MinOpcode:
         f64Func = floatMin;
         break;
+    case ByteCode::F32CopysignOpcode:
     case ByteCode::F64CopysignOpcode:
-        f64Func = floatCopySign;
-        break;
+        dstReg = GET_TARGET_REG(args[2].arg, SLJIT_FR0);
+        opcode = instr->opcode() == ByteCode::F32CopysignOpcode ? SLJIT_COPYSIGN_F32 : SLJIT_COPYSIGN_F64;
+        sljit_emit_fop2r(compiler, opcode, dstReg, args[0].arg, args[0].argw, args[1].arg, args[1].argw);
+        opcode = instr->opcode() == ByteCode::F32CopysignOpcode ? SLJIT_MOV_F32 : SLJIT_MOV_F64;
+        MOVE_FROM_FREG(compiler, opcode, args[2].arg, args[2].argw, SLJIT_FR0);
+        return;
     default:
         RELEASE_ASSERT_NOT_REACHED();
+    }
+
+    if (opcode != SLJIT_NOP) {
+        sljit_emit_fop2(compiler, opcode, args[2].arg, args[2].argw, args[0].arg, args[0].argw, args[1].arg, args[1].argw);
+        return;
     }
 
     if (f32Func) {
@@ -252,14 +250,13 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
         MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR1, args[1].arg, args[1].argw);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F32, F32, F32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f32Func));
         MOVE_FROM_FREG(compiler, SLJIT_MOV_F32, args[2].arg, args[2].argw, SLJIT_FR0);
-    } else if (f64Func) {
-        MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR0, args[0].arg, args[0].argw);
-        MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR1, args[1].arg, args[1].argw);
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F64, F64, F64), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
-        MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[2].arg, args[2].argw, SLJIT_FR0);
-    } else {
-        sljit_emit_fop2(compiler, opcode, args[2].arg, args[2].argw, args[0].arg, args[0].argw, args[1].arg, args[1].argw);
+        return;
     }
+
+    MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR0, args[0].arg, args[0].argw);
+    MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR1, args[1].arg, args[1].argw);
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F64, F64, F64), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
+    MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[2].arg, args[2].argw, SLJIT_FR0);
 }
 
 static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
