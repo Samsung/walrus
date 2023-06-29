@@ -47,6 +47,7 @@ public:
     StackItem& stackItem(size_t index) { return m_stack[index]; }
 
     void update(std::vector<InstructionListItem*>& dependencies);
+    void update(std::vector<InstructionListItem*>& dependencies, size_t excludeStart, size_t excludeSize);
 
 private:
     std::vector<StackItem> m_stack;
@@ -59,6 +60,32 @@ void DependencyGenContext::update(std::vector<InstructionListItem*>& dependencie
     size_t size = m_stack.size();
 
     for (size_t i = 0; i < size; i++) {
+        InstructionListItem* dependency = dependencies[i];
+
+        if (dependency == nullptr) {
+            m_stack[i].options |= DependencyGenContext::kOptHasAnyInstruction;
+            continue;
+        }
+
+        m_stack[i].dependencies.insert(dependency);
+    }
+}
+
+void DependencyGenContext::update(std::vector<InstructionListItem*>& dependencies, size_t excludeStart, size_t excludeSize)
+{
+    assert(dependencies.size() == m_stack.size());
+
+    excludeStart = STACK_OFFSET(excludeStart);
+
+    size_t excludeEnd = excludeStart + STACK_OFFSET(excludeSize);
+    size_t size = m_stack.size();
+
+    for (size_t i = 0; i < size; i++) {
+        if (i >= excludeStart && i < excludeEnd) {
+            m_stack[i].options |= DependencyGenContext::kOptHasAnyInstruction;
+            continue;
+        }
+
         InstructionListItem* dependency = dependencies[i];
 
         if (dependency == nullptr) {
@@ -107,7 +134,7 @@ static bool isSameConst(std::vector<Instruction*>& instDeps)
     return true;
 }
 
-void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
+void JITCompiler::buildParamDependencies(uint32_t requiredStackSize, size_t nextTryBlock)
 {
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
@@ -127,6 +154,26 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
 
             if (updateDeps) {
                 label->m_dependencyCtx->update(currentDeps);
+            }
+
+            if (label->info() & Label::kHasTryInfo) {
+                ASSERT(tryBlocks()[nextTryBlock].start == label);
+
+                do {
+                    for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
+                        if (it.tagIndex == std::numeric_limits<uint32_t>::max()) {
+                            it.handler->m_dependencyCtx->update(currentDeps);
+                        } else {
+                            TagType* tagType = module()->tagType(it.tagIndex);
+                            uint32_t size = module()->functionType(tagType->sigIndex())->param().size();
+
+                            it.handler->m_dependencyCtx->update(currentDeps, it.stackSizeToBe, it.stackSizeToBe + size);
+                        }
+                    }
+
+                    nextTryBlock++;
+                } while (nextTryBlock < tryBlocks().size()
+                         && tryBlocks()[nextTryBlock].start == label);
             }
 
             for (uint32_t i = 0; i < requiredStackSize; ++i) {
@@ -176,6 +223,11 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
                 }
                 label++;
             }
+            updateDeps = false;
+            continue;
+        }
+
+        if (instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::UnreachableOpcode) {
             updateDeps = false;
             continue;
         }
