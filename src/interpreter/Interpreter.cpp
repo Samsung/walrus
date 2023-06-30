@@ -37,6 +37,37 @@ namespace Walrus {
 
 ByteCodeTable g_byteCodeTable;
 
+
+// SIMD Structures
+template <typename T, uint8_t L>
+struct SIMDValue {
+    using LaneType = T;
+    static constexpr uint8_t Lanes = L;
+
+    T v[L];
+
+    inline T& operator[](uint8_t idx)
+    {
+#if defined(WALRUS_BIG_ENDIAN)
+        idx = (~idx) & (L - 1);
+#endif
+        ASSERT(idx < L);
+        return v[idx];
+    }
+};
+
+
+typedef SIMDValue<uint32_t, 4> U32x4;
+
+COMPILE_ASSERT(sizeof(U32x4) == sizeof(Vec128), "");
+
+template <typename T>
+struct SIMDType;
+template <>
+struct SIMDType<uint32_t> {
+    using Type = U32x4;
+};
+
 ByteCodeTable::ByteCodeTable()
 {
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
@@ -145,15 +176,15 @@ T intMax(ExecutionState& state, T lhs, T rhs) { return std::max(lhs, rhs); }
 template <typename T>
 T intAndNot(ExecutionState& state, T lhs, T rhs) { return lhs & ~rhs; }
 template <typename T>
-T intClz(ExecutionState& state, T val) { return clz(val); }
+T intClz(T val) { return clz(val); }
 template <typename T>
-T intCtz(ExecutionState& state, T val) { return ctz(val); }
+T intCtz(T val) { return ctz(val); }
 template <typename T>
-T intPopcnt(ExecutionState& state, T val) { return popCount(val); }
+T intPopcnt(T val) { return popCount(val); }
 template <typename T>
-T intNot(ExecutionState& state, T val) { return ~val; }
+T intNot(T val) { return ~val; }
 template <typename T>
-T intNeg(ExecutionState& state, T val) { return ~val + 1; }
+T intNeg(T val) { return ~val + 1; }
 template <typename T>
 T intAvgr(ExecutionState& state, T lhs, T rhs) { return (lhs + rhs + 1) / 2; }
 
@@ -249,6 +280,37 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         writeValue<returnType>(bp, code->dstOffset(), op<T1, T2>(state, readValue<paramType>(bp, code->srcOffset()))); \
         ADD_PROGRAM_COUNTER(name);                                                                                     \
         NEXT_INSTRUCTION();                                                                                            \
+    }
+
+#define SIMD_BINARY_OPERATION(name, op, paramType, returnType) \
+    DEFINE_OPCODE(name)                                        \
+        :                                                      \
+    {                                                          \
+        using Type = typename SIMDType<paramType>::Type;       \
+        name* code = (name*)programCounter;                    \
+        auto lhs = readValue<Type>(bp, code->srcOffset()[0]);  \
+        auto rhs = readValue<Type>(bp, code->srcOffset()[1]);  \
+        Type result;                                           \
+        for (uint8_t i = 0; i < Type::Lanes; i++) {            \
+            result[i] = op(state, lhs[i], rhs[i]);             \
+        }                                                      \
+        writeValue<Type>(bp, code->dstOffset(), result);       \
+        ADD_PROGRAM_COUNTER(name);                             \
+        NEXT_INSTRUCTION();                                    \
+    }
+
+#define SIMD_UNARY_OPERATION(name, op, type)                                                \
+    DEFINE_OPCODE(name)                                                                     \
+        :                                                                                   \
+    {                                                                                       \
+        using Type = typename SIMDType<type>::Type;                                         \
+        name* code = (name*)programCounter;                                                 \
+        auto val = readValue<Type>(bp, code->srcOffset());                                  \
+        Type result;                                                                        \
+        std::transform(std::begin(val.v), std::end(val.v), std::begin(result.v), op<type>); \
+        writeValue<Type>(bp, code->dstOffset(), result);                                    \
+        ADD_PROGRAM_COUNTER(name);                                                          \
+        NEXT_INSTRUCTION();                                                                 \
     }
 
 #define MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)        \
@@ -405,6 +467,8 @@ NextInstruction:
     FOR_EACH_BYTECODE_BINARY_OP(BINARY_OPERATION)
     FOR_EACH_BYTECODE_UNARY_OP(UNARY_OPERATION)
     FOR_EACH_BYTECODE_UNARY_OP_2(UNARY_OPERATION_2)
+    FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
 
     DEFINE_OPCODE(Jump)
         :

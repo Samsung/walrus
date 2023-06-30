@@ -1806,6 +1806,7 @@ public:
         break;                                                     \
     }
             FOR_EACH_BYTECODE_BINARY_OP(GENERATE_BINARY_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_BINARY_OP(GENERATE_BINARY_CODE_CASE)
 #undef GENERATE_BINARY_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
@@ -1823,6 +1824,7 @@ public:
     }
             FOR_EACH_BYTECODE_UNARY_OP(GENERATE_UNARY_CODE_CASE)
             FOR_EACH_BYTECODE_UNARY_OP_2(GENERATE_UNARY_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_UNARY_OP(GENERATE_UNARY_CODE_CASE)
 #undef GENERATE_UNARY_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
