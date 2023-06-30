@@ -212,6 +212,14 @@ class FunctionType;
     F(F64PromoteF32, doConvert, float, double, double, float)           \
     F(F32DemoteF64, doConvert, double, float, float, double)
 
+#define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F) \
+    F(I32X4Add, add, uint32_t, uint32_t)    \
+    F(I32X4Sub, sub, uint32_t, uint32_t)    \
+    F(I32X4Mul, mul, uint32_t, uint32_t)
+
+#define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
+    F(I32X4Neg, intNeg, uint32_t)
+
 #define FOR_EACH_BYTECODE_LOAD_OP(F) \
     F(I32Load, int32_t, int32_t)     \
     F(I32Load8S, int8_t, int32_t)    \
@@ -239,12 +247,14 @@ class FunctionType;
     F(F32Store, float, float)         \
     F(F64Store, double, double)
 
-#define FOR_EACH_BYTECODE(F)        \
-    FOR_EACH_BYTECODE_OP(F)         \
-    FOR_EACH_BYTECODE_BINARY_OP(F)  \
-    FOR_EACH_BYTECODE_UNARY_OP(F)   \
-    FOR_EACH_BYTECODE_UNARY_OP_2(F) \
-    FOR_EACH_BYTECODE_LOAD_OP(F)    \
+#define FOR_EACH_BYTECODE(F)            \
+    FOR_EACH_BYTECODE_OP(F)             \
+    FOR_EACH_BYTECODE_BINARY_OP(F)      \
+    FOR_EACH_BYTECODE_UNARY_OP(F)       \
+    FOR_EACH_BYTECODE_UNARY_OP_2(F)     \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F) \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)  \
+    FOR_EACH_BYTECODE_LOAD_OP(F)        \
     FOR_EACH_BYTECODE_STORE_OP(F)
 
 class ByteCode {
@@ -464,6 +474,8 @@ protected:
 FOR_EACH_BYTECODE_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_BINARY_OP(DEFINE_BINARY_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_UNARY_OP(DEFINE_UNARY_BYTECODE)
 #undef DEFINE_BINARY_BYTECODE_DUMP
 #undef DEFINE_BINARY_BYTECODE
 #undef DEFINE_UNARY_BYTECODE_DUMP
