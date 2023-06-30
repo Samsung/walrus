@@ -59,10 +59,12 @@ struct SIMDValue {
 typedef SIMDValue<uint8_t, 16> U8x16;
 typedef SIMDValue<uint16_t, 8> U16x8;
 typedef SIMDValue<uint32_t, 4> U32x4;
+typedef SIMDValue<uint64_t, 2> U64x2;
 
 COMPILE_ASSERT(sizeof(U8x16) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U16x8) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U32x4) == sizeof(Vec128), "");
+COMPILE_ASSERT(sizeof(U64x2) == sizeof(Vec128), "");
 
 template <typename T>
 struct SIMDType;
@@ -77,6 +79,10 @@ struct SIMDType<uint16_t> {
 template <>
 struct SIMDType<uint32_t> {
     using Type = U32x4;
+};
+template <>
+struct SIMDType<uint64_t> {
+    using Type = U64x2;
 };
 
 ByteCodeTable::ByteCodeTable()
