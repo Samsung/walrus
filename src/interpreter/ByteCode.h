@@ -220,12 +220,16 @@ class FunctionType;
     F(I16X8Mul, mul, uint16_t, uint16_t)    \
     F(I32X4Add, add, uint32_t, uint32_t)    \
     F(I32X4Sub, sub, uint32_t, uint32_t)    \
-    F(I32X4Mul, mul, uint32_t, uint32_t)
+    F(I32X4Mul, mul, uint32_t, uint32_t)    \
+    F(I64X2Add, add, uint64_t, uint64_t)    \
+    F(I64X2Sub, sub, uint64_t, uint64_t)    \
+    F(I64X2Mul, mul, uint64_t, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
     F(I16X8Neg, intNeg, uint16_t)          \
-    F(I32X4Neg, intNeg, uint32_t)
+    F(I32X4Neg, intNeg, uint32_t)          \
+    F(I64X2Neg, intNeg, uint64_t)
 
 #define FOR_EACH_BYTECODE_LOAD_OP(F) \
     F(I32Load, int32_t, int32_t)     \
