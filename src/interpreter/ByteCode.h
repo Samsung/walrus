@@ -213,11 +213,14 @@ class FunctionType;
     F(F32DemoteF64, doConvert, double, float, float, double)
 
 #define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F) \
+    F(I8X16Add, add, uint8_t, uint8_t)      \
+    F(I8X16Sub, sub, uint8_t, uint8_t)      \
     F(I32X4Add, add, uint32_t, uint32_t)    \
     F(I32X4Sub, sub, uint32_t, uint32_t)    \
     F(I32X4Mul, mul, uint32_t, uint32_t)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
+    F(I8X16Neg, intNeg, uint8_t)           \
     F(I32X4Neg, intNeg, uint32_t)
 
 #define FOR_EACH_BYTECODE_LOAD_OP(F) \
