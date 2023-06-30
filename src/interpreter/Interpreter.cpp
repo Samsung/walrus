@@ -56,13 +56,18 @@ struct SIMDValue {
     }
 };
 
-
+typedef SIMDValue<uint8_t, 16> U8x16;
 typedef SIMDValue<uint32_t, 4> U32x4;
 
+COMPILE_ASSERT(sizeof(U8x16) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U32x4) == sizeof(Vec128), "");
 
 template <typename T>
 struct SIMDType;
+template <>
+struct SIMDType<uint8_t> {
+    using Type = U8x16;
+};
 template <>
 struct SIMDType<uint32_t> {
     using Type = U32x4;
