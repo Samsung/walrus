@@ -493,7 +493,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                         result &= isCanonicalNan(value);
                     }
                 } else {
-                    result &= (v.asV128().asF32Bits(lane) == c.v128_lane<uint32_t>(lane));
+                    result &= (static_cast<uint32_t>(v.asV128().asF32(lane)) == static_cast<uint32_t>(c.v128_lane<float>(lane)));
                 }
             }
             return result;
@@ -509,7 +509,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                         result &= isCanonicalNan(value);
                     }
                 } else {
-                    result &= (v.asV128().asF64Bits(lane) == c.v128_lane<uint64_t>(lane));
+                    result &= (static_cast<uint64_t>(v.asV128().asF64(lane)) == static_cast<uint64_t>(c.v128_lane<double>(lane)));
                 }
             }
             return result;
