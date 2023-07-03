@@ -212,29 +212,33 @@ class FunctionType;
     F(F64PromoteF32, doConvert, float, double, double, float)           \
     F(F32DemoteF64, doConvert, double, float, float, double)
 
-#define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)      \
-    F(I8X16Add, add, uint8_t, uint8_t)           \
-    F(I8X16AddSatS, intAddSat, int8_t, int8_t)   \
-    F(I8X16AddSatU, intAddSat, uint8_t, uint8_t) \
-    F(I8X16Sub, sub, uint8_t, uint8_t)           \
-    F(I8X16SubSatS, intSubSat, int8_t, int8_t)   \
-    F(I8X16SubSatU, intSubSat, uint8_t, uint8_t) \
-    F(I16X8Add, add, uint16_t, uint16_t)         \
-    F(I16X8Sub, sub, uint16_t, uint16_t)         \
-    F(I16X8Mul, mul, uint16_t, uint16_t)         \
-    F(I32X4Add, add, uint32_t, uint32_t)         \
-    F(I32X4Sub, sub, uint32_t, uint32_t)         \
-    F(I32X4Mul, mul, uint32_t, uint32_t)         \
-    F(I64X2Add, add, uint64_t, uint64_t)         \
-    F(I64X2Sub, sub, uint64_t, uint64_t)         \
-    F(I64X2Mul, mul, uint64_t, uint64_t)         \
-    F(F32X4Add, add, float, float)               \
-    F(F32X4Sub, sub, float, float)               \
-    F(F32X4Mul, mul, float, float)               \
-    F(F32X4Div, floatDiv, float, float)          \
-    F(F64X2Add, add, double, double)             \
-    F(F64X2Sub, sub, double, double)             \
-    F(F64X2Mul, mul, double, double)             \
+#define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)        \
+    F(I8X16Add, add, uint8_t, uint8_t)             \
+    F(I8X16AddSatS, intAddSat, int8_t, int8_t)     \
+    F(I8X16AddSatU, intAddSat, uint8_t, uint8_t)   \
+    F(I8X16Sub, sub, uint8_t, uint8_t)             \
+    F(I8X16SubSatS, intSubSat, int8_t, int8_t)     \
+    F(I8X16SubSatU, intSubSat, uint8_t, uint8_t)   \
+    F(I16X8Add, add, uint16_t, uint16_t)           \
+    F(I16X8AddSatS, intAddSat, int16_t, int16_t)   \
+    F(I16X8AddSatU, intAddSat, uint16_t, uint16_t) \
+    F(I16X8Sub, sub, uint16_t, uint16_t)           \
+    F(I16X8SubSatS, intSubSat, int16_t, int16_t)   \
+    F(I16X8SubSatU, intSubSat, uint16_t, uint16_t) \
+    F(I16X8Mul, mul, uint16_t, uint16_t)           \
+    F(I32X4Add, add, uint32_t, uint32_t)           \
+    F(I32X4Sub, sub, uint32_t, uint32_t)           \
+    F(I32X4Mul, mul, uint32_t, uint32_t)           \
+    F(I64X2Add, add, uint64_t, uint64_t)           \
+    F(I64X2Sub, sub, uint64_t, uint64_t)           \
+    F(I64X2Mul, mul, uint64_t, uint64_t)           \
+    F(F32X4Add, add, float, float)                 \
+    F(F32X4Sub, sub, float, float)                 \
+    F(F32X4Mul, mul, float, float)                 \
+    F(F32X4Div, floatDiv, float, float)            \
+    F(F64X2Add, add, double, double)               \
+    F(F64X2Sub, sub, double, double)               \
+    F(F64X2Mul, mul, double, double)               \
     F(F64X2Div, floatDiv, double, double)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
