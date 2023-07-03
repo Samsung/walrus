@@ -463,13 +463,13 @@ R saturate(T val)
 }
 
 template <typename T, typename U = typename SatPromote<T>::type>
-T intAddSat(T lhs, T rhs)
+T intAddSat(ExecutionState& state, T lhs, T rhs)
 {
     return saturate<T, U>(lhs + rhs);
 }
 
 template <typename T, typename U = typename SatPromote<T>::type>
-T intSubSat(T lhs, T rhs)
+T intSubSat(ExecutionState& state, T lhs, T rhs)
 {
     return saturate<T, U>(lhs - rhs);
 }

@@ -56,6 +56,7 @@ struct SIMDValue {
     }
 };
 
+typedef SIMDValue<int8_t, 16> S8x16;
 typedef SIMDValue<uint8_t, 16> U8x16;
 typedef SIMDValue<uint16_t, 8> U16x8;
 typedef SIMDValue<uint32_t, 4> U32x4;
@@ -65,6 +66,7 @@ typedef SIMDValue<double, 2> F64x2;
 
 COMPILE_ASSERT(sizeof(uint32_t) == sizeof(float), "");
 COMPILE_ASSERT(sizeof(uint64_t) == sizeof(double), "");
+COMPILE_ASSERT(sizeof(S8x16) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U8x16) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U16x8) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U32x4) == sizeof(Vec128), "");
@@ -74,6 +76,10 @@ COMPILE_ASSERT(sizeof(F64x2) == sizeof(Vec128), "");
 
 template <typename T>
 struct SIMDType;
+template <>
+struct SIMDType<int8_t> {
+    using Type = S8x16;
+};
 template <>
 struct SIMDType<uint8_t> {
     using Type = U8x16;
