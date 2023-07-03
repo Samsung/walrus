@@ -41,6 +41,13 @@ struct Vec128 {
         return result;
     }
 
+    Vec128()
+        : m_data{
+            0,
+        }
+    {
+    }
+
     float asF32(int lane) const { return to<float>(lane); }
     uint32_t asF32Bits(int lane) const { return to<uint32_t>(lane); }
     double asF64(int lane) const { return to<double>(lane); }
@@ -83,7 +90,7 @@ public:
     };
 
     Value()
-        : m_ref(nullptr)
+        : m_v128()
         , m_type(Void)
     {
     }
@@ -109,6 +116,12 @@ public:
     explicit Value(const double& v)
         : m_f64(v)
         , m_type(F64)
+    {
+    }
+
+    explicit Value(const Vec128& v)
+        : m_v128(v)
+        , m_type(V128)
     {
     }
 
@@ -159,7 +172,7 @@ public:
             m_i64 = *reinterpret_cast<const int64_t*>(memory);
             break;
         case V128:
-            memcpy(m_v128.m_data, memory, 16);
+            m_v128 = *reinterpret_cast<const Vec128*>(memory);
             break;
         case FuncRef:
         case ExternRef:
@@ -277,7 +290,7 @@ public:
             break;
         }
         case V128: {
-            memcpy(ptr, m_v128.m_data, 16);
+            *reinterpret_cast<Vec128*>(ptr) = m_v128;
             break;
         }
         case FuncRef:

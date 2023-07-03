@@ -402,7 +402,10 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         return Walrus::Value(s);
     }
     case wabt::Type::V128: {
-        return Walrus::Value(Walrus::Value::V128, c.vec128().v);
+        Walrus::Vec128 v;
+        v128 bits = c.vec128();
+        memcpy((void*)&v, (void*)&bits, sizeof(v128));
+        return Walrus::Value(v);
     }
     case wabt::Type::FuncRef: {
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
@@ -493,7 +496,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                         result &= isCanonicalNan(value);
                     }
                 } else {
-                    result &= (static_cast<uint32_t>(v.asV128().asF32(lane)) == static_cast<uint32_t>(c.v128_lane<float>(lane)));
+                    result &= (v.asV128().asF32Bits(lane) == c.v128_lane<uint32_t>(lane));
                 }
             }
             return result;
@@ -509,7 +512,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                         result &= isCanonicalNan(value);
                     }
                 } else {
-                    result &= (static_cast<uint64_t>(v.asV128().asF64(lane)) == static_cast<uint64_t>(c.v128_lane<double>(lane)));
+                    result &= (v.asV128().asF64Bits(lane) == c.v128_lane<uint64_t>(lane));
                 }
             }
             return result;
