@@ -18,6 +18,7 @@
 #define __WalrusValue__
 
 #include "util/Vector.h"
+#include "util/BitOperation.h"
 #include "runtime/ExecutionState.h"
 #include "runtime/Exception.h"
 
@@ -30,6 +31,21 @@ class Memory;
 class Global;
 
 struct Vec128 {
+    template <typename T>
+    T to(int lane) const
+    {
+        COMPILE_ASSERT(sizeof(T) <= sizeof(m_data), "");
+        ASSERT((lane + 1) * sizeof(T) <= sizeof(m_data));
+        T result;
+        memcpyEndianAware(&result, m_data, sizeof(result), sizeof(m_data), 0, lane * sizeof(T), sizeof(result));
+        return result;
+    }
+
+    float asF32(int lane) const { return to<float>(lane); }
+    uint32_t asF32Bits(int lane) const { return to<uint32_t>(lane); }
+    double asF64(int lane) const { return to<double>(lane); }
+    uint64_t asF64Bits(int lane) const { return to<uint64_t>(lane); }
+
     uint8_t m_data[16];
 };
 
@@ -191,6 +207,12 @@ public:
     {
         ASSERT(type() == F64);
         return m_i64;
+    }
+
+    const Vec128& asV128() const
+    {
+        ASSERT(type() == V128);
+        return m_v128;
     }
 
     const uint8_t* asV128Addr() const
