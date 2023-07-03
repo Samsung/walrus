@@ -63,6 +63,8 @@ typedef SIMDValue<uint64_t, 2> U64x2;
 typedef SIMDValue<float, 4> F32x4;
 typedef SIMDValue<double, 2> F64x2;
 
+COMPILE_ASSERT(sizeof(uint32_t) == sizeof(float), "");
+COMPILE_ASSERT(sizeof(uint64_t) == sizeof(double), "");
 COMPILE_ASSERT(sizeof(U8x16) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U16x8) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U32x4) == sizeof(Vec128), "");
@@ -328,18 +330,20 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                    \
     }
 
-#define SIMD_UNARY_OPERATION(name, op, type)                                                \
-    DEFINE_OPCODE(name)                                                                     \
-        :                                                                                   \
-    {                                                                                       \
-        using Type = typename SIMDType<type>::Type;                                         \
-        name* code = (name*)programCounter;                                                 \
-        auto val = readValue<Type>(bp, code->srcOffset());                                  \
-        Type result;                                                                        \
-        std::transform(std::begin(val.v), std::end(val.v), std::begin(result.v), op<type>); \
-        writeValue<Type>(bp, code->dstOffset(), result);                                    \
-        ADD_PROGRAM_COUNTER(name);                                                          \
-        NEXT_INSTRUCTION();                                                                 \
+#define SIMD_UNARY_OPERATION(name, op, type)               \
+    DEFINE_OPCODE(name)                                    \
+        :                                                  \
+    {                                                      \
+        using Type = typename SIMDType<type>::Type;        \
+        name* code = (name*)programCounter;                \
+        auto val = readValue<Type>(bp, code->srcOffset()); \
+        Type result;                                       \
+        for (uint8_t i = 0; i < Type::Lanes; i++) {        \
+            result[i] = op(val[i]);                        \
+        }                                                  \
+        writeValue<Type>(bp, code->dstOffset(), result);   \
+        ADD_PROGRAM_COUNTER(name);                         \
+        NEXT_INSTRUCTION();                                \
     }
 
 #define MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)        \
