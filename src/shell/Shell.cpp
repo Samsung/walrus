@@ -476,7 +476,48 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         }
         return c.f64_bits() == v.asF64Bits();
     } else if (c.type() == wabt::Type::V128 && v.type() == Walrus::Value::V128) {
-        return memcmp(v.asV128Addr(), c.vec128().v, 16) == 0;
+        switch (c.lane_type()) {
+        case wabt::Type::I8:
+        case wabt::Type::I16:
+        case wabt::Type::I32:
+        case wabt::Type::I64:
+            return memcmp(v.asV128Addr(), c.vec128().v, 16) == 0;
+        case wabt::Type::F32: {
+            bool result = true;
+            for (int lane = 0; lane < c.lane_count(); ++lane) {
+                if (c.is_expected_nan(lane)) {
+                    float value = v.asV128().asF32(lane);
+                    if (c.expected_nan(lane) == wabt::ExpectedNan::Arithmetic) {
+                        result &= isArithmeticNan(value);
+                    } else {
+                        result &= isCanonicalNan(value);
+                    }
+                } else {
+                    result &= (v.asV128().asF32Bits(lane) == c.v128_lane<uint32_t>(lane));
+                }
+            }
+            return result;
+        }
+        case wabt::Type::F64: {
+            bool result = true;
+            for (int lane = 0; lane < c.lane_count(); ++lane) {
+                if (c.is_expected_nan(lane)) {
+                    double value = v.asV128().asF64(lane);
+                    if (c.expected_nan(lane) == wabt::ExpectedNan::Arithmetic) {
+                        result &= isArithmeticNan(value);
+                    } else {
+                        result &= isCanonicalNan(value);
+                    }
+                } else {
+                    result &= (v.asV128().asF64Bits(lane) == c.v128_lane<uint64_t>(lane));
+                }
+            }
+            return result;
+        }
+        default:
+            return false;
+        }
+
     } else if (c.type() == wabt::Type::ExternRef && v.type() == Walrus::Value::ExternRef) {
         // FIXME value of c.ref_bits() for RefNull
         wabt::Const constNull;
@@ -498,6 +539,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         // Add one similar to wabt interpreter.
         return (c.ref_bits() + 1) == reinterpret_cast<uintptr_t>(v.asFunction());
     }
+
     return false;
 }
 
