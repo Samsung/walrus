@@ -128,7 +128,7 @@ def run_basic_tests(engine):
     tests_total = len(xpass)
     fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
-    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
 
     if fail_total > 0:
@@ -145,11 +145,11 @@ def run_core_tests(engine):
     tests_total = len(xpass)
     fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
-    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
 
     if fail_total > 0:
-        raise Exception("basic wasm-test-core failed")
+        raise Exception("wasm-test-core failed")
 
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
