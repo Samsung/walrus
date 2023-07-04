@@ -105,17 +105,17 @@ struct Mask<double> {
 };
 
 template <typename T>
-typename Mask<T>::Type eqMask(T lhs, T rhs) { return lhs == rhs ? -1 : 0; }
+typename Mask<T>::Type eqMask(ExecutionState& state, T lhs, T rhs) { return lhs == rhs ? -1 : 0; }
 template <typename T>
-typename Mask<T>::Type neMask(T lhs, T rhs) { return lhs != rhs ? -1 : 0; }
+typename Mask<T>::Type neMask(ExecutionState& state, T lhs, T rhs) { return lhs != rhs ? -1 : 0; }
 template <typename T>
-typename Mask<T>::Type ltMask(T lhs, T rhs) { return lhs < rhs ? -1 : 0; }
+typename Mask<T>::Type ltMask(ExecutionState& state, T lhs, T rhs) { return lhs < rhs ? -1 : 0; }
 template <typename T>
-typename Mask<T>::Type leMask(T lhs, T rhs) { return lhs <= rhs ? -1 : 0; }
+typename Mask<T>::Type leMask(ExecutionState& state, T lhs, T rhs) { return lhs <= rhs ? -1 : 0; }
 template <typename T>
-typename Mask<T>::Type gtMask(T lhs, T rhs) { return lhs > rhs ? -1 : 0; }
+typename Mask<T>::Type gtMask(ExecutionState& state, T lhs, T rhs) { return lhs > rhs ? -1 : 0; }
 template <typename T>
-typename Mask<T>::Type geMask(T lhs, T rhs) { return lhs >= rhs ? -1 : 0; }
+typename Mask<T>::Type geMask(ExecutionState& state, T lhs, T rhs) { return lhs >= rhs ? -1 : 0; }
 
 template <typename T>
 T intRotl(ExecutionState& state, T lhs, T rhs)
