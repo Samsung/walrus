@@ -60,7 +60,9 @@ typedef SIMDValue<int8_t, 16> S8x16;
 typedef SIMDValue<uint8_t, 16> U8x16;
 typedef SIMDValue<int16_t, 8> S16x8;
 typedef SIMDValue<uint16_t, 8> U16x8;
+typedef SIMDValue<int32_t, 4> S32x4;
 typedef SIMDValue<uint32_t, 4> U32x4;
+typedef SIMDValue<int64_t, 2> S64x2;
 typedef SIMDValue<uint64_t, 2> U64x2;
 typedef SIMDValue<float, 4> F32x4;
 typedef SIMDValue<double, 2> F64x2;
@@ -71,7 +73,9 @@ COMPILE_ASSERT(sizeof(S8x16) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U8x16) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(S16x8) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U16x8) == sizeof(Vec128), "");
+COMPILE_ASSERT(sizeof(S32x4) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U32x4) == sizeof(Vec128), "");
+COMPILE_ASSERT(sizeof(S64x2) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U64x2) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(F32x4) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(F64x2) == sizeof(Vec128), "");
@@ -95,8 +99,16 @@ struct SIMDType<uint16_t> {
     using Type = U16x8;
 };
 template <>
+struct SIMDType<int32_t> {
+    using Type = S32x4;
+};
+template <>
 struct SIMDType<uint32_t> {
     using Type = U32x4;
+};
+template <>
+struct SIMDType<int64_t> {
+    using Type = S64x2;
 };
 template <>
 struct SIMDType<uint64_t> {
@@ -325,21 +337,23 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                                                            \
     }
 
-#define SIMD_BINARY_OPERATION(name, op, paramType, returnType) \
-    DEFINE_OPCODE(name)                                        \
-        :                                                      \
-    {                                                          \
-        using Type = typename SIMDType<paramType>::Type;       \
-        name* code = (name*)programCounter;                    \
-        auto lhs = readValue<Type>(bp, code->srcOffset()[0]);  \
-        auto rhs = readValue<Type>(bp, code->srcOffset()[1]);  \
-        Type result;                                           \
-        for (uint8_t i = 0; i < Type::Lanes; i++) {            \
-            result[i] = op(state, lhs[i], rhs[i]);             \
-        }                                                      \
-        writeValue<Type>(bp, code->dstOffset(), result);       \
-        ADD_PROGRAM_COUNTER(name);                             \
-        NEXT_INSTRUCTION();                                    \
+#define SIMD_BINARY_OPERATION(name, op, paramType, resultType)     \
+    DEFINE_OPCODE(name)                                            \
+        :                                                          \
+    {                                                              \
+        using ParamType = typename SIMDType<paramType>::Type;      \
+        using ResultType = typename SIMDType<resultType>::Type;    \
+        COMPILE_ASSERT(ParamType::Lanes == ResultType::Lanes, ""); \
+        name* code = (name*)programCounter;                        \
+        auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]); \
+        auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]); \
+        ResultType result;                                         \
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {           \
+            result[i] = op(state, lhs[i], rhs[i]);                 \
+        }                                                          \
+        writeValue<ResultType>(bp, code->dstOffset(), result);     \
+        ADD_PROGRAM_COUNTER(name);                                 \
+        NEXT_INSTRUCTION();                                        \
     }
 
 #define SIMD_UNARY_OPERATION(name, op, type)               \
