@@ -239,7 +239,55 @@ class FunctionType;
     F(F64X2Add, add, double, double)               \
     F(F64X2Sub, sub, double, double)               \
     F(F64X2Mul, mul, double, double)               \
-    F(F64X2Div, floatDiv, double, double)
+    F(F64X2Div, floatDiv, double, double)          \
+    F(I8X16Eq, eqMask, uint8_t, uint8_t)           \
+    F(I8X16Ne, neMask, uint8_t, uint8_t)           \
+    F(I8X16LtS, ltMask, int8_t, int8_t)            \
+    F(I8X16LtU, ltMask, uint8_t, uint8_t)          \
+    F(I8X16GtS, gtMask, int8_t, int8_t)            \
+    F(I8X16GtU, gtMask, uint8_t, uint8_t)          \
+    F(I8X16LeS, leMask, int8_t, int8_t)            \
+    F(I8X16LeU, leMask, uint8_t, uint8_t)          \
+    F(I8X16GeS, geMask, int8_t, int8_t)            \
+    F(I8X16GeU, geMask, uint8_t, uint8_t)          \
+    F(I16X8Eq, eqMask, uint16_t, uint16_t)         \
+    F(I16X8Ne, neMask, uint16_t, uint16_t)         \
+    F(I16X8LtS, ltMask, int16_t, int16_t)          \
+    F(I16X8LtU, ltMask, uint16_t, uint16_t)        \
+    F(I16X8GtS, gtMask, int16_t, int16_t)          \
+    F(I16X8GtU, gtMask, uint16_t, uint16_t)        \
+    F(I16X8LeS, leMask, int16_t, int16_t)          \
+    F(I16X8LeU, leMask, uint16_t, uint16_t)        \
+    F(I16X8GeS, geMask, int16_t, int16_t)          \
+    F(I16X8GeU, geMask, uint16_t, uint16_t)        \
+    F(I32X4Eq, eqMask, uint32_t, uint32_t)         \
+    F(I32X4Ne, neMask, uint32_t, uint32_t)         \
+    F(I32X4LtS, ltMask, int32_t, int32_t)          \
+    F(I32X4LtU, ltMask, uint32_t, uint32_t)        \
+    F(I32X4GtS, gtMask, int32_t, int32_t)          \
+    F(I32X4GtU, gtMask, uint32_t, uint32_t)        \
+    F(I32X4LeS, leMask, int32_t, int32_t)          \
+    F(I32X4LeU, leMask, uint32_t, uint32_t)        \
+    F(I32X4GeS, geMask, int32_t, int32_t)          \
+    F(I32X4GeU, geMask, uint32_t, uint32_t)        \
+    F(I64X2Eq, eqMask, uint64_t, uint64_t)         \
+    F(I64X2Ne, neMask, uint64_t, uint64_t)         \
+    F(I64X2LtS, ltMask, int64_t, int64_t)          \
+    F(I64X2GtS, gtMask, int64_t, int64_t)          \
+    F(I64X2LeS, leMask, int64_t, int64_t)          \
+    F(I64X2GeS, geMask, int64_t, int64_t)          \
+    F(F32X4Eq, eqMask, float, uint32_t)            \
+    F(F32X4Ne, neMask, float, uint32_t)            \
+    F(F32X4Lt, ltMask, float, uint32_t)            \
+    F(F32X4Gt, gtMask, float, uint32_t)            \
+    F(F32X4Le, leMask, float, uint32_t)            \
+    F(F32X4Ge, geMask, float, uint32_t)            \
+    F(F64X2Eq, eqMask, double, uint64_t)           \
+    F(F64X2Ne, neMask, double, uint64_t)           \
+    F(F64X2Lt, ltMask, double, uint64_t)           \
+    F(F64X2Gt, gtMask, double, uint64_t)           \
+    F(F64X2Le, leMask, double, uint64_t)           \
+    F(F64X2Ge, geMask, double, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
@@ -265,7 +313,8 @@ class FunctionType;
     F(I64Load32S, int32_t, int64_t)  \
     F(I64Load32U, uint32_t, int64_t) \
     F(F32Load, float, float)         \
-    F(F64Load, double, double)
+    F(F64Load, double, double)       \
+    F(V128Load, Vec128, Vec128)
 
 #define FOR_EACH_BYTECODE_STORE_OP(F) \
     F(I32Store, int32_t, int32_t)     \
@@ -441,10 +490,10 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_BINARY_BYTECODE_DUMP(name)                                                                                                             \
-    void dump(size_t pos)                                                                                                                             \
-    {                                                                                                                                                 \
-        printf(#name "src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset[0], (uint32_t)m_srcOffset[1], (uint32_t)m_dstOffset); \
+#define DEFINE_BINARY_BYTECODE_DUMP(name)                                                                                                              \
+    void dump(size_t pos)                                                                                                                              \
+    {                                                                                                                                                  \
+        printf(#name " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset[0], (uint32_t)m_srcOffset[1], (uint32_t)m_dstOffset); \
     }
 #else
 #define DEFINE_BINARY_BYTECODE_DUMP(name)
