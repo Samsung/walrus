@@ -1095,10 +1095,16 @@ public:
     {
         keepSubResultsIfNeeds();
         BlockInfo& blockInfo = m_blockInfo.back();
-        blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
-        blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
-        pushByteCode(Walrus::Jump(), WASMOpcode::ElseOpcode);
+
         ASSERT(blockInfo.m_blockType == BlockInfo::IfElse);
+        blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
+
+        if (!blockInfo.m_byteCodeGenerationStopped) {
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
+            pushByteCode(Walrus::Jump(), WASMOpcode::ElseOpcode);
+        }
+
+        blockInfo.m_byteCodeGenerationStopped = false;
         restoreVMStackRegardToPartOfBlockEnd(blockInfo);
         m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
             ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
@@ -1296,7 +1302,8 @@ public:
         if (dropSize.second) {
             generateMoveValuesCodeRegardToDrop(dropSize);
         }
-        if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
+        if (blockInfo.m_blockType != BlockInfo::Loop) {
+            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
         }
         pushByteCode(Walrus::Jump(offset), WASMOpcode::BrOpcode);
@@ -1329,7 +1336,8 @@ public:
             pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
             generateMoveValuesCodeRegardToDrop(dropSize);
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
-            if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
+            if (blockInfo.m_blockType != BlockInfo::Loop) {
+                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
                 blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
@@ -1337,7 +1345,8 @@ public:
                 ->setOffset(m_currentFunction->currentByteCodeSize() - pos);
         } else {
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
-            if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
+            if (blockInfo.m_blockType != BlockInfo::Loop) {
+                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
                 blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentFunction->currentByteCodeSize() });
             }
             pushByteCode(Walrus::JumpIfTrue(stackPos, offset), WASMOpcode::BrIfOpcode);
@@ -1372,7 +1381,8 @@ public:
 
         offset = (int32_t)(blockInfo.m_position - brTableCode);
 
-        if (blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse) {
+        if (blockInfo.m_blockType != BlockInfo::Loop) {
+            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
             offset = jumpOffset;
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsBrTable, brTableCode + jumpOffset });
         }
@@ -1460,13 +1470,14 @@ public:
         if (m_catchInfo.size() && m_catchInfo.back().m_tryCatchBlockDepth == m_blockInfo.size()) {
             // not first catch
             tryEnd = m_catchInfo.back().m_tryEnd;
-            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
-            pushByteCode(Walrus::Jump(), WASMOpcode::CatchOpcode);
-        } else {
-            // first catch
+        }
+
+        if (!blockInfo.m_byteCodeGenerationStopped) {
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
             pushByteCode(Walrus::Jump(), WASMOpcode::CatchOpcode);
         }
+
+        blockInfo.m_byteCodeGenerationStopped = false;
 
         m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentFunction->currentByteCodeSize(), tagIndex });
 
@@ -1699,8 +1710,7 @@ public:
             }
 #endif
 
-            switch (blockInfo.m_blockType) {
-            case BlockInfo::TryCatch: {
+            if (blockInfo.m_blockType == BlockInfo::TryCatch) {
                 auto iter = m_catchInfo.begin();
                 while (iter != m_catchInfo.end()) {
                     if (iter->m_tryCatchBlockDepth - 1 != m_blockInfo.size()) {
@@ -1714,19 +1724,11 @@ public:
                     m_currentFunction->m_catchInfo.push_back({ iter->m_tryStart, iter->m_tryEnd, iter->m_catchStart, stackSizeToBe, iter->m_tagIndex });
                     iter = m_catchInfo.erase(iter);
                 }
-                break;
             }
-            case BlockInfo::Loop:
-            case BlockInfo::Block: {
-                if (blockInfo.m_byteCodeGenerationStopped && blockInfo.m_jumpToEndBrInfo.size() == 0) {
-                    stopToGenerateByteCodeWhileBlockEnd();
-                    return;
-                }
-                break;
-            }
-            default: {
-                break;
-            }
+
+            if (blockInfo.m_byteCodeGenerationStopped && blockInfo.m_jumpToEndBrInfo.size() == 0) {
+                stopToGenerateByteCodeWhileBlockEnd();
+                return;
             }
 
             if (blockInfo.m_shouldRestoreVMStackAtEnd) {
