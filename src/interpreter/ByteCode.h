@@ -641,7 +641,6 @@ public:
         for (size_t i = 0; i < m_functionType->result().size(); i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
-        printf(" ");
     }
 #endif
 
@@ -690,7 +689,6 @@ public:
         for (size_t i = 0; i < m_functionType->result().size(); i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
-        printf(" ");
     }
 #endif
 
@@ -1869,7 +1867,6 @@ public:
             for (size_t i = 0; i < offsetsSize(); i++) {
                 printf("%" PRIu32 " ", (uint32_t)arr[i]);
             }
-            printf(" ");
         }
     }
 #endif
@@ -1922,7 +1919,6 @@ public:
         for (size_t i = 0; i < offsetsSize(); i++) {
             printf("%" PRIu32 " ", arr[i]);
         }
-        printf(" ");
     }
 #endif
 

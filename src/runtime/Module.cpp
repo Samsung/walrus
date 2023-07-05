@@ -368,13 +368,16 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 #if !defined(NDEBUG)
 void ModuleFunction::dumpByteCode()
 {
-    printf("function type %p\n", m_functionType);
-    printf("requiredStackSize %u, requiredStackSizeDueToLocal %u\n", m_requiredStackSize, m_requiredStackSizeDueToLocal);
+    printf("\n");
+    printf("required stack size: %u bytes\n", m_requiredStackSize);
+    printf("required stack size due to local: %u bytes\n", m_requiredStackSizeDueToLocal);
+    printf("bytecode size: %zu bytes\n", m_byteCode.size());
+    printf("\n");
 
     size_t idx = 0;
     while (idx < m_byteCode.size()) {
         ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
-        printf("%zu: ", idx);
+        printf("%6zu ", idx);
 
         switch (code->opcode()) {
 #define GENERATE_BYTECODE_CASE(name, ...)    \
@@ -392,6 +395,7 @@ void ModuleFunction::dumpByteCode()
         printf("\n");
         idx += code->getSize();
     }
+    printf("\n");
 }
 #endif
 
