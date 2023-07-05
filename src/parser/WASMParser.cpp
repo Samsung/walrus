@@ -1821,6 +1821,26 @@ public:
         }
     }
 
+    virtual void OnSimdStoreLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::V128)));
+        auto src1 = popVMStack();
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
+        auto src0 = popVMStack();
+        switch (code) {
+#define GENERATE_STORE_CODE_CASE(name, opType)                                                                 \
+    case WASMOpcode::name##Opcode: {                                                                           \
+        pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value)), code); \
+        break;                                                                                                 \
+    }
+            FOR_EACH_BYTECODE_SIMD_STORE_OP(GENERATE_STORE_CODE_CASE)
+#undef GENERATE_STORE_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+
     void generateBinaryCode(WASMOpcode code, size_t src0, size_t src1, size_t dst)
     {
         switch (code) {

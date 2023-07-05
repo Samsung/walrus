@@ -935,7 +935,8 @@ public:
     }
     Result OnSimdStoreLaneExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override {
         CHECK_RESULT(m_validator.OnSimdStoreLane(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), value));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnSimdStoreLaneExpr(opcode, memidx, alignment_log2, offset, value);
         return Result::Ok;
     }
     Result OnSimdShuffleOpExpr(Opcode opcode, v128 value) override {
