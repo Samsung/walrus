@@ -325,7 +325,8 @@ class FunctionType;
     F(I64Store16, int64_t, int16_t)   \
     F(I64Store8, int64_t, int8_t)     \
     F(F32Store, float, float)         \
-    F(F64Store, double, double)
+    F(F64Store, double, double)       \
+    F(V128Store, Vec128, Vec128)
 
 #define FOR_EACH_BYTECODE(F)            \
     FOR_EACH_BYTECODE_OP(F)             \
