@@ -212,6 +212,35 @@ class FunctionType;
     F(F64PromoteF32, doConvert, float, double, double, float)           \
     F(F32DemoteF64, doConvert, double, float, float, double)
 
+#define FOR_EACH_BYTECODE_LOAD_OP(F) \
+    F(I32Load, int32_t, int32_t)     \
+    F(I32Load8S, int8_t, int32_t)    \
+    F(I32Load8U, uint8_t, int32_t)   \
+    F(I32Load16S, int16_t, int32_t)  \
+    F(I32Load16U, uint16_t, int32_t) \
+    F(I64Load, int64_t, int64_t)     \
+    F(I64Load8S, int8_t, int64_t)    \
+    F(I64Load8U, uint8_t, int64_t)   \
+    F(I64Load16S, int16_t, int64_t)  \
+    F(I64Load16U, uint16_t, int64_t) \
+    F(I64Load32S, int32_t, int64_t)  \
+    F(I64Load32U, uint32_t, int64_t) \
+    F(F32Load, float, float)         \
+    F(F64Load, double, double)       \
+    F(V128Load, Vec128, Vec128)
+
+#define FOR_EACH_BYTECODE_STORE_OP(F) \
+    F(I32Store, int32_t, int32_t)     \
+    F(I32Store16, int32_t, int16_t)   \
+    F(I32Store8, int32_t, int8_t)     \
+    F(I64Store, int64_t, int64_t)     \
+    F(I64Store32, int64_t, int32_t)   \
+    F(I64Store16, int64_t, int16_t)   \
+    F(I64Store8, int64_t, int8_t)     \
+    F(F32Store, float, float)         \
+    F(F64Store, double, double)       \
+    F(V128Store, Vec128, Vec128)
+
 #define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)        \
     F(I8X16Add, add, uint8_t, uint8_t)             \
     F(I8X16AddSatS, intAddSat, int8_t, int8_t)     \
@@ -299,44 +328,22 @@ class FunctionType;
     F(F64X2Neg, floatNeg, double)          \
     F(F64X2Sqrt, floatSqrt, double)
 
-#define FOR_EACH_BYTECODE_LOAD_OP(F) \
-    F(I32Load, int32_t, int32_t)     \
-    F(I32Load8S, int8_t, int32_t)    \
-    F(I32Load8U, uint8_t, int32_t)   \
-    F(I32Load16S, int16_t, int32_t)  \
-    F(I32Load16U, uint16_t, int32_t) \
-    F(I64Load, int64_t, int64_t)     \
-    F(I64Load8S, int8_t, int64_t)    \
-    F(I64Load8U, uint8_t, int64_t)   \
-    F(I64Load16S, int16_t, int64_t)  \
-    F(I64Load16U, uint16_t, int64_t) \
-    F(I64Load32S, int32_t, int64_t)  \
-    F(I64Load32U, uint32_t, int64_t) \
-    F(F32Load, float, float)         \
-    F(F64Load, double, double)       \
-    F(V128Load, Vec128, Vec128)
-
-#define FOR_EACH_BYTECODE_STORE_OP(F) \
-    F(I32Store, int32_t, int32_t)     \
-    F(I32Store16, int32_t, int16_t)   \
-    F(I32Store8, int32_t, int8_t)     \
-    F(I64Store, int64_t, int64_t)     \
-    F(I64Store32, int64_t, int32_t)   \
-    F(I64Store16, int64_t, int16_t)   \
-    F(I64Store8, int64_t, int8_t)     \
-    F(F32Store, float, float)         \
-    F(F64Store, double, double)       \
-    F(V128Store, Vec128, Vec128)
+#define FOR_EACH_BYTECODE_SIMD_LOAD_OP(F) \
+    F(V128Load8Lane, uint8_t)             \
+    F(V128Load16Lane, uint16_t)           \
+    F(V128Load32Lane, uint32_t)           \
+    F(V128Load64Lane, uint64_t)
 
 #define FOR_EACH_BYTECODE(F)            \
     FOR_EACH_BYTECODE_OP(F)             \
     FOR_EACH_BYTECODE_BINARY_OP(F)      \
     FOR_EACH_BYTECODE_UNARY_OP(F)       \
     FOR_EACH_BYTECODE_UNARY_OP_2(F)     \
+    FOR_EACH_BYTECODE_LOAD_OP(F)        \
+    FOR_EACH_BYTECODE_STORE_OP(F)       \
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(F) \
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)  \
-    FOR_EACH_BYTECODE_LOAD_OP(F)        \
-    FOR_EACH_BYTECODE_STORE_OP(F)
+    FOR_EACH_BYTECODE_SIMD_LOAD_OP(F)
 
 class ByteCode {
 public:
@@ -1204,6 +1211,38 @@ protected:
     ByteCodeStackOffset m_dstOffset;
 };
 
+// dummy ByteCode for simd memory load operation
+class SIMDMemoryLoad : public ByteCode {
+public:
+    SIMDMemoryLoad(Opcode code, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
+        : ByteCode(code)
+        , m_offset(offset)
+        , m_srcOffsets{ src0, src1 }
+        , m_index(index)
+        , m_dstOffset(dst)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset index() const { return m_index; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    const ByteCodeStackOffset* srcOffsets() const
+    {
+        return m_srcOffsets;
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_srcOffsets[2];
+    ByteCodeStackOffset m_index;
+    ByteCodeStackOffset m_dstOffset;
+};
+
 #if !defined(NDEBUG)
 #define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                                        \
     void dump(size_t pos)                                                                                                                      \
@@ -1222,6 +1261,26 @@ protected:
         {                                                                                   \
         }                                                                                   \
         DEFINE_LOAD_BYTECODE_DUMP(name)                                                     \
+    };
+
+#if !defined(NDEBUG)
+#define DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)                                                                                                                                                                                         \
+    void dump(size_t pos)                                                                                                                                                                                                            \
+    {                                                                                                                                                                                                                                \
+        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_srcOffsets[0], (uint32_t)m_srcOffsets[1], (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+    }
+#else
+#define DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_SIMD_LOAD_BYTECODE(name, opType)                                                                                       \
+    class name : public SIMDMemoryLoad {                                                                                              \
+    public:                                                                                                                           \
+        name(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst) \
+            : SIMDMemoryLoad(Opcode::name##Opcode, offset, src0, src1, index, dst)                                                    \
+        {                                                                                                                             \
+        }                                                                                                                             \
+        DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)                                                                                          \
     };
 
 // dummy ByteCode for memory store operation
@@ -1272,6 +1331,7 @@ protected:
 
 FOR_EACH_BYTECODE_LOAD_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_STORE_OP(DEFINE_STORE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_LOAD_OP(DEFINE_SIMD_LOAD_BYTECODE)
 #undef DEFINE_LOAD_BYTECODE_DUMP
 #undef DEFINE_LOAD_BYTECODE
 #undef DEFINE_STORE_BYTECODE_DUMP

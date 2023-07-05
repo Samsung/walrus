@@ -397,6 +397,21 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                            \
     }
 
+#define SIMD_MEMORY_LOAD_OPERATION(opcodeName, opType)                    \
+    DEFINE_OPCODE(opcodeName)                                             \
+        :                                                                 \
+    {                                                                     \
+        using Type = typename SIMDType<opType>::Type;                     \
+        SIMDMemoryLoad* code = (SIMDMemoryLoad*)programCounter;           \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffsets()[0]); \
+        Type result = readValue<Type>(bp, code->srcOffsets()[1]);         \
+        opType value;                                                     \
+        memories[0]->load(state, offset, code->offset(), &value);         \
+        result[code->index()] = value;                                    \
+        writeValue<Type>(bp, code->dstOffset(), result);                  \
+        ADD_PROGRAM_COUNTER(SIMDMemoryLoad);                              \
+        NEXT_INSTRUCTION();                                               \
+    }
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 #if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
@@ -670,6 +685,7 @@ NextInstruction:
 
     FOR_EACH_BYTECODE_LOAD_OP(MEMORY_LOAD_OPERATION)
     FOR_EACH_BYTECODE_STORE_OP(MEMORY_STORE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LOAD_OP(SIMD_MEMORY_LOAD_OPERATION)
 
     DEFINE_OPCODE(MemorySize)
         :

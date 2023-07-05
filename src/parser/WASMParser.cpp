@@ -1799,6 +1799,28 @@ public:
         endFunction();
     }
 
+    // SIMD Instructions
+    virtual void OnSimdLoadLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::V128)));
+        auto src1 = popVMStack();
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
+        auto src0 = popVMStack();
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, opType)                                                                       \
+    case WASMOpcode::name##Opcode: {                                                                                \
+        pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value), dst), code); \
+        break;                                                                                                      \
+    }
+            FOR_EACH_BYTECODE_SIMD_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+
     void generateBinaryCode(WASMOpcode code, size_t src0, size_t src1, size_t dst)
     {
         switch (code) {
