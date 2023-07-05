@@ -152,6 +152,7 @@ public:
     virtual void OnEndExpr() = 0;
     virtual void OnUnreachableExpr() = 0;
     virtual void EndFunctionBody(Index index) = 0;
+    virtual void OnSimdLoadLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) = 0;
 
     bool shouldContinueToGenerateByteCode() const
     {
