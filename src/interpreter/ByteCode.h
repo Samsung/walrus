@@ -334,6 +334,12 @@ class FunctionType;
     F(V128Load32Lane, uint32_t)           \
     F(V128Load64Lane, uint64_t)
 
+#define FOR_EACH_BYTECODE_SIMD_STORE_OP(F) \
+    F(V128Store8Lane, uint8_t)             \
+    F(V128Store16Lane, uint16_t)           \
+    F(V128Store32Lane, uint32_t)           \
+    F(V128Store64Lane, uint64_t)
+
 #define FOR_EACH_BYTECODE(F)            \
     FOR_EACH_BYTECODE_OP(F)             \
     FOR_EACH_BYTECODE_BINARY_OP(F)      \
@@ -343,7 +349,8 @@ class FunctionType;
     FOR_EACH_BYTECODE_STORE_OP(F)       \
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(F) \
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)  \
-    FOR_EACH_BYTECODE_SIMD_LOAD_OP(F)
+    FOR_EACH_BYTECODE_SIMD_LOAD_OP(F)   \
+    FOR_EACH_BYTECODE_SIMD_STORE_OP(F)
 
 class ByteCode {
 public:
@@ -1217,7 +1224,8 @@ public:
     SIMDMemoryLoad(Opcode code, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
         : ByteCode(code)
         , m_offset(offset)
-        , m_srcOffsets{ src0, src1 }
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
         , m_index(index)
         , m_dstOffset(dst)
     {
@@ -1225,11 +1233,9 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset index() const { return m_index; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    const ByteCodeStackOffset* srcOffsets() const
-    {
-        return m_srcOffsets;
-    }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -1238,7 +1244,8 @@ public:
 #endif
 protected:
     uint32_t m_offset;
-    ByteCodeStackOffset m_srcOffsets[2];
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_index;
     ByteCodeStackOffset m_dstOffset;
 };
@@ -1264,10 +1271,10 @@ protected:
     };
 
 #if !defined(NDEBUG)
-#define DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)                                                                                                                                                                                         \
-    void dump(size_t pos)                                                                                                                                                                                                            \
-    {                                                                                                                                                                                                                                \
-        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_srcOffsets[0], (uint32_t)m_srcOffsets[1], (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+#define DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)                                                                                                                                                                                   \
+    void dump(size_t pos)                                                                                                                                                                                                      \
+    {                                                                                                                                                                                                                          \
+        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
     }
 #else
 #define DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)
@@ -1309,6 +1316,35 @@ protected:
     ByteCodeStackOffset m_src1Offset;
 };
 
+// dummy ByteCode for simd memory store operation
+class SIMDMemoryStore : public ByteCode {
+public:
+    SIMDMemoryStore(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index)
+        : ByteCode(opcode)
+        , m_offset(offset)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_index(index)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset index() const { return m_index; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_index;
+};
+
 #if !defined(NDEBUG)
 #define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                          \
     void dump(size_t pos)                                                                                                                         \
@@ -1329,9 +1365,30 @@ protected:
         DEFINE_STORE_BYTECODE_DUMP(name)                                          \
     };
 
+#if !defined(NDEBUG)
+#define DEFINE_SIMD_STORE_BYTECODE_DUMP(name)                                                                                                                                         \
+    void dump(size_t pos)                                                                                                                                                             \
+    {                                                                                                                                                                                 \
+        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
+    }
+#else
+#define DEFINE_SIMD_STORE_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_SIMD_STORE_BYTECODE(name, opType)                                                             \
+    class name : public SIMDMemoryStore {                                                                    \
+    public:                                                                                                  \
+        name(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index) \
+            : SIMDMemoryStore(Opcode::name##Opcode, offset, src0, src1, index)                               \
+        {                                                                                                    \
+        }                                                                                                    \
+        DEFINE_SIMD_STORE_BYTECODE_DUMP(name)                                                                \
+    };
+
 FOR_EACH_BYTECODE_LOAD_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_STORE_OP(DEFINE_STORE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_OP(DEFINE_SIMD_LOAD_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_STORE_OP(DEFINE_SIMD_STORE_BYTECODE)
 #undef DEFINE_LOAD_BYTECODE_DUMP
 #undef DEFINE_LOAD_BYTECODE
 #undef DEFINE_STORE_BYTECODE_DUMP
