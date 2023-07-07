@@ -328,8 +328,16 @@ class FunctionType;
     F(I32X4Neg, intNeg, uint32_t)          \
     F(I64X2Neg, intNeg, uint64_t)          \
     F(F32X4Neg, floatNeg, float)           \
+    F(F32X4Ceil, floatCeil, float)         \
+    F(F32X4Floor, floatFloor, float)       \
+    F(F32X4Trunc, floatTrunc, float)       \
+    F(F32X4Nearest, floatNearest, float)   \
     F(F32X4Sqrt, floatSqrt, float)         \
     F(F64X2Neg, floatNeg, double)          \
+    F(F64X2Ceil, floatCeil, double)        \
+    F(F64X2Floor, floatFloor, double)      \
+    F(F64X2Trunc, floatTrunc, double)      \
+    F(F64X2Nearest, floatNearest, double)  \
     F(F64X2Sqrt, floatSqrt, double)
 
 #define FOR_EACH_BYTECODE_SIMD_LOAD_OP(F) \
