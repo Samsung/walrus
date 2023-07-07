@@ -311,12 +311,16 @@ class FunctionType;
     F(F32X4Gt, gtMask, float, uint32_t)            \
     F(F32X4Le, leMask, float, uint32_t)            \
     F(F32X4Ge, geMask, float, uint32_t)            \
+    F(F32X4PMin, floatPMin, float, float)          \
+    F(F32X4PMax, floatPMax, float, float)          \
     F(F64X2Eq, eqMask, double, uint64_t)           \
     F(F64X2Ne, neMask, double, uint64_t)           \
     F(F64X2Lt, ltMask, double, uint64_t)           \
     F(F64X2Gt, gtMask, double, uint64_t)           \
     F(F64X2Le, leMask, double, uint64_t)           \
-    F(F64X2Ge, geMask, double, uint64_t)
+    F(F64X2Ge, geMask, double, uint64_t)           \
+    F(F64X2PMin, floatPMin, double, double)        \
+    F(F64X2PMax, floatPMax, double, double)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
