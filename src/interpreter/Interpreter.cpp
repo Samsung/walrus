@@ -558,6 +558,117 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
 
+    // FIXME optimize this macro
+#define SIMD_EXTMUL_OPERATION(PT, RT, LOW)                                         \
+    using ParamType = typename SIMDType<PT>::Type;                                 \
+    using ResultType = typename SIMDType<RT>::Type;                                \
+    BinaryOperation* code = (BinaryOperation*)programCounter;                      \
+    auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]);                     \
+    auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]);                     \
+    ResultType result;                                                             \
+    for (uint8_t i = 0; i < ResultType::Lanes; i++) {                              \
+        uint8_t laneIdx = (LOW ? 0 : ResultType::Lanes) + i;                       \
+        result[i] = static_cast<RT>(lhs[laneIdx]) * static_cast<RT>(rhs[laneIdx]); \
+    }                                                                              \
+    writeValue<ResultType>(bp, code->dstOffset(), result);
+
+
+    DEFINE_OPCODE(I16X8ExtmulLowI8X16S)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(int8_t, int16_t, true)
+        ADD_PROGRAM_COUNTER(I16X8ExtmulLowI8X16S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8ExtmulHighI8X16S)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(int8_t, int16_t, false)
+        ADD_PROGRAM_COUNTER(I16X8ExtmulHighI8X16S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8ExtmulLowI8X16U)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(uint8_t, uint16_t, true)
+        ADD_PROGRAM_COUNTER(I16X8ExtmulLowI8X16U);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8ExtmulHighI8X16U)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(uint8_t, uint16_t, false)
+        ADD_PROGRAM_COUNTER(I16X8ExtmulHighI8X16U);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4ExtmulLowI16X8S)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(int16_t, int32_t, true)
+        ADD_PROGRAM_COUNTER(I32X4ExtmulLowI16X8S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4ExtmulHighI16X8S)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(int16_t, int32_t, false)
+        ADD_PROGRAM_COUNTER(I32X4ExtmulHighI16X8S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4ExtmulLowI16X8U)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(uint16_t, uint32_t, true)
+        ADD_PROGRAM_COUNTER(I32X4ExtmulLowI16X8U);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4ExtmulHighI16X8U)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(uint16_t, uint32_t, false)
+        ADD_PROGRAM_COUNTER(I32X4ExtmulHighI16X8U);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I64X2ExtmulLowI32X4S)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(int32_t, int64_t, true)
+        ADD_PROGRAM_COUNTER(I64X2ExtmulLowI32X4S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I64X2ExtmulHighI32X4S)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(int32_t, int64_t, false)
+        ADD_PROGRAM_COUNTER(I64X2ExtmulHighI32X4S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I64X2ExtmulLowI32X4U)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(uint32_t, uint64_t, true)
+        ADD_PROGRAM_COUNTER(I64X2ExtmulLowI32X4U);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I64X2ExtmulHighI32X4U)
+        :
+    {
+        SIMD_EXTMUL_OPERATION(uint32_t, uint64_t, false)
+        ADD_PROGRAM_COUNTER(I64X2ExtmulHighI32X4U);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(I32X4DotI16X8S)
         :
     {
