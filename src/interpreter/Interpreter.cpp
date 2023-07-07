@@ -558,6 +558,78 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
 
+    DEFINE_OPCODE(I32X4TruncSatF32X4S)
+        :
+    {
+        using ParamType = typename SIMDType<float>::Type;
+        using ResultType = typename SIMDType<int32_t>::Type;
+        I32X4TruncSatF32X4S* code = (I32X4TruncSatF32X4S*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = intTruncSat<int32_t, float>(state, val[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I32X4TruncSatF32X4S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4TruncSatF32X4U)
+        :
+    {
+        using ParamType = typename SIMDType<float>::Type;
+        using ResultType = typename SIMDType<uint32_t>::Type;
+        I32X4TruncSatF32X4U* code = (I32X4TruncSatF32X4U*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = intTruncSat<uint32_t, float>(state, val[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I32X4TruncSatF32X4U);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4TruncSatF64X2SZero)
+        :
+    {
+        // FIXME init result vector with zeros
+        using ParamType = typename SIMDType<double>::Type;
+        using ResultType = typename SIMDType<int32_t>::Type;
+        I32X4TruncSatF64X2SZero* code = (I32X4TruncSatF64X2SZero*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = intTruncSat<int32_t, double>(state, val[i]);
+        }
+        for (uint8_t i = ParamType::Lanes; i < ResultType::Lanes; i++) {
+            result[i] = 0;
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I32X4TruncSatF64X2SZero);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4TruncSatF64X2UZero)
+        :
+    {
+        // FIXME init result vector with zeros
+        using ParamType = typename SIMDType<double>::Type;
+        using ResultType = typename SIMDType<uint32_t>::Type;
+        I32X4TruncSatF64X2UZero* code = (I32X4TruncSatF64X2UZero*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = intTruncSat<uint32_t, double>(state, val[i]);
+        }
+        for (uint8_t i = ParamType::Lanes; i < ResultType::Lanes; i++) {
+            result[i] = 0;
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I32X4TruncSatF64X2UZero);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(Jump)
         :
     {
