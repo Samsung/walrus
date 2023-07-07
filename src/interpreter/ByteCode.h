@@ -340,11 +340,15 @@ class FunctionType;
     F(F64X2Nearest, floatNearest, double)  \
     F(F64X2Sqrt, floatSqrt, double)
 
-#define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)                \
-    F(I32X4TruncSatF32X4S, intTruncSat, float, int32_t)      \
-    F(I32X4TruncSatF32X4U, intTruncSat, float, uint32_t)     \
-    F(I32X4TruncSatF64X2SZero, intTruncSat, double, int32_t) \
-    F(I32X4TruncSatF64X2UZero, intTruncSat, double, uint32_t)
+#define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
+    F(I16X8ExtaddPairwiseI8X16S)              \
+    F(I16X8ExtaddPairwiseI8X16U)              \
+    F(I32X4ExtaddPairwiseI16X8S)              \
+    F(I32X4ExtaddPairwiseI16X8U)              \
+    F(I32X4TruncSatF32X4S)                    \
+    F(I32X4TruncSatF32X4U)                    \
+    F(I32X4TruncSatF64X2SZero)                \
+    F(I32X4TruncSatF64X2UZero)
 
 #define FOR_EACH_BYTECODE_SIMD_LOAD_OP(F) \
     F(V128Load8Lane, uint8_t)             \

@@ -558,6 +558,74 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
 
+    DEFINE_OPCODE(I16X8ExtaddPairwiseI8X16S)
+        :
+    {
+        using ParamType = typename SIMDType<int8_t>::Type;
+        using ResultType = typename SIMDType<int16_t>::Type;
+        I16X8ExtaddPairwiseI8X16S* code = (I16X8ExtaddPairwiseI8X16S*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+            uint8_t laneIdx = i * 2;
+            result[i] = static_cast<int16_t>(val[laneIdx]) + static_cast<int16_t>(val[laneIdx + 1]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I16X8ExtaddPairwiseI8X16S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8ExtaddPairwiseI8X16U)
+        :
+    {
+        using ParamType = typename SIMDType<uint8_t>::Type;
+        using ResultType = typename SIMDType<uint16_t>::Type;
+        I16X8ExtaddPairwiseI8X16U* code = (I16X8ExtaddPairwiseI8X16U*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+            uint8_t laneIdx = i * 2;
+            result[i] = static_cast<uint16_t>(val[laneIdx]) + static_cast<uint16_t>(val[laneIdx + 1]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I16X8ExtaddPairwiseI8X16U);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4ExtaddPairwiseI16X8S)
+        :
+    {
+        using ParamType = typename SIMDType<int16_t>::Type;
+        using ResultType = typename SIMDType<int32_t>::Type;
+        I32X4ExtaddPairwiseI16X8S* code = (I32X4ExtaddPairwiseI16X8S*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+            uint8_t laneIdx = i * 2;
+            result[i] = static_cast<int32_t>(val[laneIdx]) + static_cast<int32_t>(val[laneIdx + 1]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I32X4ExtaddPairwiseI16X8S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4ExtaddPairwiseI16X8U)
+        :
+    {
+        using ParamType = typename SIMDType<uint16_t>::Type;
+        using ResultType = typename SIMDType<uint32_t>::Type;
+        I32X4ExtaddPairwiseI16X8U* code = (I32X4ExtaddPairwiseI16X8U*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+            uint8_t laneIdx = i * 2;
+            result[i] = static_cast<uint32_t>(val[laneIdx]) + static_cast<uint32_t>(val[laneIdx + 1]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I32X4ExtaddPairwiseI16X8U);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(I32X4TruncSatF32X4S)
         :
     {
