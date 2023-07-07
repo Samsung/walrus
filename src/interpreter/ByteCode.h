@@ -342,6 +342,18 @@ class FunctionType;
     F(F64X2Sqrt, floatSqrt, double)
 
 #define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
+    F(I16X8ExtmulLowI8X16S)                    \
+    F(I16X8ExtmulHighI8X16S)                   \
+    F(I16X8ExtmulLowI8X16U)                    \
+    F(I16X8ExtmulHighI8X16U)                   \
+    F(I32X4ExtmulLowI16X8S)                    \
+    F(I32X4ExtmulHighI16X8S)                   \
+    F(I32X4ExtmulLowI16X8U)                    \
+    F(I32X4ExtmulHighI16X8U)                   \
+    F(I64X2ExtmulLowI32X4S)                    \
+    F(I64X2ExtmulHighI32X4S)                   \
+    F(I64X2ExtmulLowI32X4U)                    \
+    F(I64X2ExtmulHighI32X4U)                   \
     F(I32X4DotI16X8S)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
