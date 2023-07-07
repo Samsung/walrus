@@ -290,7 +290,7 @@ ALWAYS_INLINE T floatMin(ExecutionState& state, T lhs, T rhs)
 }
 
 template <typename T>
-ALWAYS_INLINE T floatPMin(T lhs, T rhs)
+ALWAYS_INLINE T floatPMin(ExecutionState& state, T lhs, T rhs)
 {
     return std::min(lhs, rhs);
 }
@@ -308,7 +308,7 @@ ALWAYS_INLINE T floatMax(ExecutionState& state, T lhs, T rhs)
 }
 
 template <typename T>
-ALWAYS_INLINE T floatPMax(T lhs, T rhs)
+ALWAYS_INLINE T floatPMax(ExecutionState& state, T lhs, T rhs)
 {
     return std::max(lhs, rhs);
 }
