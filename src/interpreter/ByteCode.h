@@ -320,7 +320,8 @@ class FunctionType;
     F(F64X2Le, leMask, double, uint64_t)           \
     F(F64X2Ge, geMask, double, uint64_t)           \
     F(F64X2PMin, floatPMin, double, double)        \
-    F(F64X2PMax, floatPMax, double, double)
+    F(F64X2PMax, floatPMax, double, double)        \
+    F(I16X8Q15mulrSatS, saturatingRoundingQMul, int16_t, int16_t)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \

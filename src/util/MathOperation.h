@@ -475,7 +475,7 @@ T intSubSat(ExecutionState& state, T lhs, T rhs)
 }
 
 template <typename T>
-T saturatingRoundingQMul(T lhs, T rhs)
+T saturatingRoundingQMul(ExecutionState& state, T lhs, T rhs)
 {
     constexpr int size_in_bits = sizeof(T) * 8;
     int round_const = 1 << (size_in_bits - 2);
