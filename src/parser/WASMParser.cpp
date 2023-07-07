@@ -1844,13 +1844,14 @@ public:
     void generateBinaryCode(WASMOpcode code, size_t src0, size_t src1, size_t dst)
     {
         switch (code) {
-#define GENERATE_BINARY_CODE_CASE(name, op, paramType, returnType) \
-    case WASMOpcode::name##Opcode: {                               \
-        pushByteCode(Walrus::name(src0, src1, dst), code);         \
-        break;                                                     \
+#define GENERATE_BINARY_CODE_CASE(name, ...)               \
+    case WASMOpcode::name##Opcode: {                       \
+        pushByteCode(Walrus::name(src0, src1, dst), code); \
+        break;                                             \
     }
             FOR_EACH_BYTECODE_BINARY_OP(GENERATE_BINARY_CODE_CASE)
             FOR_EACH_BYTECODE_SIMD_BINARY_OP(GENERATE_BINARY_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(GENERATE_BINARY_CODE_CASE)
 #undef GENERATE_BINARY_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
