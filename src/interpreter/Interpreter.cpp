@@ -558,6 +558,26 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
 
+    DEFINE_OPCODE(I32X4DotI16X8S)
+        :
+    {
+        using ParamType = typename SIMDType<int16_t>::Type;
+        using ResultType = typename SIMDType<uint32_t>::Type;
+        I32X4DotI16X8S* code = (I32X4DotI16X8S*)programCounter;
+        auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]);
+        auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]);
+        ResultType result;
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+            uint8_t laneIdx = i * 2;
+            uint32_t lo = static_cast<uint32_t>(lhs[laneIdx]) * static_cast<uint32_t>(rhs[laneIdx]);
+            uint32_t hi = static_cast<uint32_t>(lhs[laneIdx + 1]) * static_cast<uint32_t>(rhs[laneIdx + 1]);
+            result[i] = add(state, lo, hi);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I32X4DotI16X8S);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(I16X8ExtaddPairwiseI8X16S)
         :
     {

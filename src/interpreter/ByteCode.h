@@ -341,6 +341,9 @@ class FunctionType;
     F(F64X2Nearest, floatNearest, double)  \
     F(F64X2Sqrt, floatSqrt, double)
 
+#define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
+    F(I32X4DotI16X8S)
+
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
     F(I16X8ExtaddPairwiseI8X16S)              \
     F(I16X8ExtaddPairwiseI8X16U)              \
@@ -363,17 +366,18 @@ class FunctionType;
     F(V128Store32Lane, uint32_t)           \
     F(V128Store64Lane, uint64_t)
 
-#define FOR_EACH_BYTECODE(F)              \
-    FOR_EACH_BYTECODE_OP(F)               \
-    FOR_EACH_BYTECODE_BINARY_OP(F)        \
-    FOR_EACH_BYTECODE_UNARY_OP(F)         \
-    FOR_EACH_BYTECODE_UNARY_OP_2(F)       \
-    FOR_EACH_BYTECODE_LOAD_OP(F)          \
-    FOR_EACH_BYTECODE_STORE_OP(F)         \
-    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)   \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)    \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
-    FOR_EACH_BYTECODE_SIMD_LOAD_OP(F)     \
+#define FOR_EACH_BYTECODE(F)               \
+    FOR_EACH_BYTECODE_OP(F)                \
+    FOR_EACH_BYTECODE_BINARY_OP(F)         \
+    FOR_EACH_BYTECODE_UNARY_OP(F)          \
+    FOR_EACH_BYTECODE_UNARY_OP_2(F)        \
+    FOR_EACH_BYTECODE_LOAD_OP(F)           \
+    FOR_EACH_BYTECODE_STORE_OP(F)          \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)    \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)     \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)  \
+    FOR_EACH_BYTECODE_SIMD_LOAD_OP(F)      \
     FOR_EACH_BYTECODE_SIMD_STORE_OP(F)
 
 class ByteCode {
@@ -538,7 +542,7 @@ protected:
 #define DEFINE_BINARY_BYTECODE_DUMP(name)
 #endif
 
-#define DEFINE_BINARY_BYTECODE(name, op, paramType, returnType)                                             \
+#define DEFINE_BINARY_BYTECODE(name, ...)                                                                   \
     class name : public BinaryOperation {                                                                   \
     public:                                                                                                 \
         name(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset dstOffset) \
@@ -594,6 +598,7 @@ FOR_EACH_BYTECODE_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OP(DEFINE_BINARY_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
 #undef DEFINE_BINARY_BYTECODE_DUMP
