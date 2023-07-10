@@ -241,87 +241,91 @@ class FunctionType;
     F(F64Store, double, double)       \
     F(V128Store, Vec128, Vec128)
 
-#define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)        \
-    F(I8X16Add, add, uint8_t, uint8_t)             \
-    F(I8X16AddSatS, intAddSat, int8_t, int8_t)     \
-    F(I8X16AddSatU, intAddSat, uint8_t, uint8_t)   \
-    F(I8X16Sub, sub, uint8_t, uint8_t)             \
-    F(I8X16SubSatS, intSubSat, int8_t, int8_t)     \
-    F(I8X16SubSatU, intSubSat, uint8_t, uint8_t)   \
-    F(I16X8Add, add, uint16_t, uint16_t)           \
-    F(I16X8AddSatS, intAddSat, int16_t, int16_t)   \
-    F(I16X8AddSatU, intAddSat, uint16_t, uint16_t) \
-    F(I16X8Sub, sub, uint16_t, uint16_t)           \
-    F(I16X8SubSatS, intSubSat, int16_t, int16_t)   \
-    F(I16X8SubSatU, intSubSat, uint16_t, uint16_t) \
-    F(I16X8Mul, mul, uint16_t, uint16_t)           \
-    F(I32X4Add, add, uint32_t, uint32_t)           \
-    F(I32X4Sub, sub, uint32_t, uint32_t)           \
-    F(I32X4Mul, mul, uint32_t, uint32_t)           \
-    F(I64X2Add, add, uint64_t, uint64_t)           \
-    F(I64X2Sub, sub, uint64_t, uint64_t)           \
-    F(I64X2Mul, mul, uint64_t, uint64_t)           \
-    F(F32X4Add, add, float, float)                 \
-    F(F32X4Sub, sub, float, float)                 \
-    F(F32X4Mul, mul, float, float)                 \
-    F(F32X4Div, floatDiv, float, float)            \
-    F(F64X2Add, add, double, double)               \
-    F(F64X2Sub, sub, double, double)               \
-    F(F64X2Mul, mul, double, double)               \
-    F(F64X2Div, floatDiv, double, double)          \
-    F(I8X16Eq, eqMask, uint8_t, uint8_t)           \
-    F(I8X16Ne, neMask, uint8_t, uint8_t)           \
-    F(I8X16LtS, ltMask, int8_t, int8_t)            \
-    F(I8X16LtU, ltMask, uint8_t, uint8_t)          \
-    F(I8X16GtS, gtMask, int8_t, int8_t)            \
-    F(I8X16GtU, gtMask, uint8_t, uint8_t)          \
-    F(I8X16LeS, leMask, int8_t, int8_t)            \
-    F(I8X16LeU, leMask, uint8_t, uint8_t)          \
-    F(I8X16GeS, geMask, int8_t, int8_t)            \
-    F(I8X16GeU, geMask, uint8_t, uint8_t)          \
-    F(I16X8Eq, eqMask, uint16_t, uint16_t)         \
-    F(I16X8Ne, neMask, uint16_t, uint16_t)         \
-    F(I16X8LtS, ltMask, int16_t, int16_t)          \
-    F(I16X8LtU, ltMask, uint16_t, uint16_t)        \
-    F(I16X8GtS, gtMask, int16_t, int16_t)          \
-    F(I16X8GtU, gtMask, uint16_t, uint16_t)        \
-    F(I16X8LeS, leMask, int16_t, int16_t)          \
-    F(I16X8LeU, leMask, uint16_t, uint16_t)        \
-    F(I16X8GeS, geMask, int16_t, int16_t)          \
-    F(I16X8GeU, geMask, uint16_t, uint16_t)        \
-    F(I32X4Eq, eqMask, uint32_t, uint32_t)         \
-    F(I32X4Ne, neMask, uint32_t, uint32_t)         \
-    F(I32X4LtS, ltMask, int32_t, int32_t)          \
-    F(I32X4LtU, ltMask, uint32_t, uint32_t)        \
-    F(I32X4GtS, gtMask, int32_t, int32_t)          \
-    F(I32X4GtU, gtMask, uint32_t, uint32_t)        \
-    F(I32X4LeS, leMask, int32_t, int32_t)          \
-    F(I32X4LeU, leMask, uint32_t, uint32_t)        \
-    F(I32X4GeS, geMask, int32_t, int32_t)          \
-    F(I32X4GeU, geMask, uint32_t, uint32_t)        \
-    F(I64X2Eq, eqMask, uint64_t, uint64_t)         \
-    F(I64X2Ne, neMask, uint64_t, uint64_t)         \
-    F(I64X2LtS, ltMask, int64_t, int64_t)          \
-    F(I64X2GtS, gtMask, int64_t, int64_t)          \
-    F(I64X2LeS, leMask, int64_t, int64_t)          \
-    F(I64X2GeS, geMask, int64_t, int64_t)          \
-    F(F32X4Eq, eqMask, float, uint32_t)            \
-    F(F32X4Ne, neMask, float, uint32_t)            \
-    F(F32X4Lt, ltMask, float, uint32_t)            \
-    F(F32X4Gt, gtMask, float, uint32_t)            \
-    F(F32X4Le, leMask, float, uint32_t)            \
-    F(F32X4Ge, geMask, float, uint32_t)            \
-    F(F32X4PMin, floatPMin, float, float)          \
-    F(F32X4PMax, floatPMax, float, float)          \
-    F(F64X2Eq, eqMask, double, uint64_t)           \
-    F(F64X2Ne, neMask, double, uint64_t)           \
-    F(F64X2Lt, ltMask, double, uint64_t)           \
-    F(F64X2Gt, gtMask, double, uint64_t)           \
-    F(F64X2Le, leMask, double, uint64_t)           \
-    F(F64X2Ge, geMask, double, uint64_t)           \
-    F(F64X2PMin, floatPMin, double, double)        \
-    F(F64X2PMax, floatPMax, double, double)        \
-    F(I16X8Q15mulrSatS, saturatingRoundingQMul, int16_t, int16_t)
+#define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)                       \
+    F(I8X16Add, add, uint8_t, uint8_t)                            \
+    F(I8X16AddSatS, intAddSat, int8_t, int8_t)                    \
+    F(I8X16AddSatU, intAddSat, uint8_t, uint8_t)                  \
+    F(I8X16Sub, sub, uint8_t, uint8_t)                            \
+    F(I8X16SubSatS, intSubSat, int8_t, int8_t)                    \
+    F(I8X16SubSatU, intSubSat, uint8_t, uint8_t)                  \
+    F(I16X8Add, add, uint16_t, uint16_t)                          \
+    F(I16X8AddSatS, intAddSat, int16_t, int16_t)                  \
+    F(I16X8AddSatU, intAddSat, uint16_t, uint16_t)                \
+    F(I16X8Sub, sub, uint16_t, uint16_t)                          \
+    F(I16X8SubSatS, intSubSat, int16_t, int16_t)                  \
+    F(I16X8SubSatU, intSubSat, uint16_t, uint16_t)                \
+    F(I16X8Mul, mul, uint16_t, uint16_t)                          \
+    F(I32X4Add, add, uint32_t, uint32_t)                          \
+    F(I32X4Sub, sub, uint32_t, uint32_t)                          \
+    F(I32X4Mul, mul, uint32_t, uint32_t)                          \
+    F(I64X2Add, add, uint64_t, uint64_t)                          \
+    F(I64X2Sub, sub, uint64_t, uint64_t)                          \
+    F(I64X2Mul, mul, uint64_t, uint64_t)                          \
+    F(F32X4Add, add, float, float)                                \
+    F(F32X4Sub, sub, float, float)                                \
+    F(F32X4Mul, mul, float, float)                                \
+    F(F32X4Div, floatDiv, float, float)                           \
+    F(F64X2Add, add, double, double)                              \
+    F(F64X2Sub, sub, double, double)                              \
+    F(F64X2Mul, mul, double, double)                              \
+    F(F64X2Div, floatDiv, double, double)                         \
+    F(I8X16Eq, eqMask, uint8_t, uint8_t)                          \
+    F(I8X16Ne, neMask, uint8_t, uint8_t)                          \
+    F(I8X16LtS, ltMask, int8_t, int8_t)                           \
+    F(I8X16LtU, ltMask, uint8_t, uint8_t)                         \
+    F(I8X16GtS, gtMask, int8_t, int8_t)                           \
+    F(I8X16GtU, gtMask, uint8_t, uint8_t)                         \
+    F(I8X16LeS, leMask, int8_t, int8_t)                           \
+    F(I8X16LeU, leMask, uint8_t, uint8_t)                         \
+    F(I8X16GeS, geMask, int8_t, int8_t)                           \
+    F(I8X16GeU, geMask, uint8_t, uint8_t)                         \
+    F(I16X8Eq, eqMask, uint16_t, uint16_t)                        \
+    F(I16X8Ne, neMask, uint16_t, uint16_t)                        \
+    F(I16X8LtS, ltMask, int16_t, int16_t)                         \
+    F(I16X8LtU, ltMask, uint16_t, uint16_t)                       \
+    F(I16X8GtS, gtMask, int16_t, int16_t)                         \
+    F(I16X8GtU, gtMask, uint16_t, uint16_t)                       \
+    F(I16X8LeS, leMask, int16_t, int16_t)                         \
+    F(I16X8LeU, leMask, uint16_t, uint16_t)                       \
+    F(I16X8GeS, geMask, int16_t, int16_t)                         \
+    F(I16X8GeU, geMask, uint16_t, uint16_t)                       \
+    F(I32X4Eq, eqMask, uint32_t, uint32_t)                        \
+    F(I32X4Ne, neMask, uint32_t, uint32_t)                        \
+    F(I32X4LtS, ltMask, int32_t, int32_t)                         \
+    F(I32X4LtU, ltMask, uint32_t, uint32_t)                       \
+    F(I32X4GtS, gtMask, int32_t, int32_t)                         \
+    F(I32X4GtU, gtMask, uint32_t, uint32_t)                       \
+    F(I32X4LeS, leMask, int32_t, int32_t)                         \
+    F(I32X4LeU, leMask, uint32_t, uint32_t)                       \
+    F(I32X4GeS, geMask, int32_t, int32_t)                         \
+    F(I32X4GeU, geMask, uint32_t, uint32_t)                       \
+    F(I64X2Eq, eqMask, uint64_t, uint64_t)                        \
+    F(I64X2Ne, neMask, uint64_t, uint64_t)                        \
+    F(I64X2LtS, ltMask, int64_t, int64_t)                         \
+    F(I64X2GtS, gtMask, int64_t, int64_t)                         \
+    F(I64X2LeS, leMask, int64_t, int64_t)                         \
+    F(I64X2GeS, geMask, int64_t, int64_t)                         \
+    F(F32X4Eq, eqMask, float, uint32_t)                           \
+    F(F32X4Ne, neMask, float, uint32_t)                           \
+    F(F32X4Lt, ltMask, float, uint32_t)                           \
+    F(F32X4Gt, gtMask, float, uint32_t)                           \
+    F(F32X4Le, leMask, float, uint32_t)                           \
+    F(F32X4Ge, geMask, float, uint32_t)                           \
+    F(F32X4PMin, floatPMin, float, float)                         \
+    F(F32X4PMax, floatPMax, float, float)                         \
+    F(F64X2Eq, eqMask, double, uint64_t)                          \
+    F(F64X2Ne, neMask, double, uint64_t)                          \
+    F(F64X2Lt, ltMask, double, uint64_t)                          \
+    F(F64X2Gt, gtMask, double, uint64_t)                          \
+    F(F64X2Le, leMask, double, uint64_t)                          \
+    F(F64X2Ge, geMask, double, uint64_t)                          \
+    F(F64X2PMin, floatPMin, double, double)                       \
+    F(F64X2PMax, floatPMax, double, double)                       \
+    F(I16X8Q15mulrSatS, saturatingRoundingQMul, int16_t, int16_t) \
+    F(V128And, intAnd, uint64_t, uint64_t)                        \
+    F(V128Andnot, intAndNot, uint64_t, uint64_t)                  \
+    F(V128Or, intOr, uint64_t, uint64_t)                          \
+    F(V128Xor, intXor, uint64_t, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
@@ -339,7 +343,8 @@ class FunctionType;
     F(F64X2Floor, floatFloor, double)      \
     F(F64X2Trunc, floatTrunc, double)      \
     F(F64X2Nearest, floatNearest, double)  \
-    F(F64X2Sqrt, floatSqrt, double)
+    F(F64X2Sqrt, floatSqrt, double)        \
+    F(V128Not, intNot, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
     F(I16X8ExtmulLowI8X16S)                    \
@@ -392,6 +397,9 @@ class FunctionType;
     F(V128Store32Lane, uint32_t)                \
     F(V128Store64Lane, uint64_t)
 
+#define FOR_EACH_BYTECODE_SIMD_ETC_OP(F) \
+    F(V128BitSelect)
+
 #define FOR_EACH_BYTECODE(F)                 \
     FOR_EACH_BYTECODE_OP(F)                  \
     FOR_EACH_BYTECODE_BINARY_OP(F)           \
@@ -406,7 +414,8 @@ class FunctionType;
     FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F)  \
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)   \
-    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)
+    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)  \
+    FOR_EACH_BYTECODE_SIMD_ETC_OP(F)
 
 class ByteCode {
 public:
@@ -1451,6 +1460,34 @@ FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(DEFINE_SIMD_STORE_LANE_BYTECODE)
 #undef DEFINE_LOAD_BYTECODE
 #undef DEFINE_STORE_BYTECODE_DUMP
 #undef DEFINE_STORE_BYTECODE
+
+// FOR_EACH_BYTECODE_SIMD_ETC_OP
+class V128BitSelect : public ByteCode {
+public:
+    V128BitSelect(ByteCodeStackOffset lhs, ByteCodeStackOffset rhs, ByteCodeStackOffset c, ByteCodeStackOffset dst)
+        : ByteCode(Opcode::V128BitSelectOpcode)
+        , m_srcOffsets{ lhs, rhs, c }
+        , m_dstOffset(dst)
+    {
+    }
+
+    const ByteCodeStackOffset* srcOffsets() const
+    {
+        return m_srcOffsets;
+    }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("v128.bitselect lhs: %" PRIu32 " rhs: %" PRIu32 " c: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffsets[0], (uint32_t)m_srcOffsets[1], (uint32_t)m_srcOffsets[2], (uint32_t)m_dstOffset);
+    }
+#endif
+
+protected:
+    ByteCodeStackOffset m_srcOffsets[3];
+    ByteCodeStackOffset m_dstOffset;
+};
 
 class TableGet : public ByteCode {
 public:

@@ -116,6 +116,7 @@ public:
     virtual void OnDropExpr() = 0;
     virtual void OnBinaryExpr(uint32_t opcode) = 0;
     virtual void OnUnaryExpr(uint32_t opcode) = 0;
+    virtual void OnTernaryExpr(uint32_t opcode) = 0;
     virtual void OnIfExpr(Type sigType) = 0;
     virtual void OnElseExpr() = 0;
     virtual void OnLoopExpr(Type sigType) = 0;
