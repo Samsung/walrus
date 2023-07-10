@@ -946,7 +946,8 @@ public:
     }
     Result OnLoadSplatExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
         CHECK_RESULT(m_validator.OnLoadSplat(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnLoadSplatExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
     Result OnLoadZeroExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {

@@ -366,6 +366,12 @@ class FunctionType;
     F(I32X4TruncSatF64X2SZero)                \
     F(I32X4TruncSatF64X2UZero)
 
+#define FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F) \
+    F(V128Load8Splat, uint8_t)                  \
+    F(V128Load16Splat, uint16_t)                \
+    F(V128Load32Splat, uint32_t)                \
+    F(V128Load64Splat, uint64_t)
+
 #define FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
     F(V128Load8X8S, int8_t, int16_t)             \
     F(V128Load8X8U, uint8_t, uint16_t)           \
@@ -397,6 +403,7 @@ class FunctionType;
     FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)   \
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)       \
     FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)    \
+    FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F)  \
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)   \
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)
@@ -1309,7 +1316,7 @@ protected:
 #define DEFINE_LOAD_BYTECODE_DUMP(name)
 #endif
 
-#define DEFINE_LOAD_BYTECODE(name, readType, writeType)                                     \
+#define DEFINE_LOAD_BYTECODE(name, ...)                                                     \
     class name : public MemoryLoad {                                                        \
     public:                                                                                 \
         name(uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
@@ -1436,6 +1443,7 @@ protected:
 
 FOR_EACH_BYTECODE_LOAD_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_STORE_OP(DEFINE_STORE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(DEFINE_SIMD_LOAD_LANE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(DEFINE_SIMD_STORE_LANE_BYTECODE)
