@@ -1814,7 +1814,7 @@ public:
         pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value), dst), code); \
         break;                                                                                                      \
     }
-            FOR_EACH_BYTECODE_SIMD_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(GENERATE_LOAD_CODE_CASE)
 #undef GENERATE_LOAD_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
@@ -1834,7 +1834,7 @@ public:
         pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value)), code); \
         break;                                                                                                 \
     }
-            FOR_EACH_BYTECODE_SIMD_STORE_OP(GENERATE_STORE_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_STORE_CODE_CASE)
 #undef GENERATE_STORE_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
@@ -1887,6 +1887,7 @@ public:
         break;                                              \
     }
             FOR_EACH_BYTECODE_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(GENERATE_LOAD_CODE_CASE)
 #undef GENERATE_LOAD_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
