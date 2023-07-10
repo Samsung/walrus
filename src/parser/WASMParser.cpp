@@ -1800,6 +1800,26 @@ public:
     }
 
     // SIMD Instructions
+    virtual void OnLoadSplatExpr(int opcode, Index memidx, Address alignment_log2, Address offset) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::I32)));
+        auto src = popVMStack();
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, ...)                  \
+    case WASMOpcode::name##Opcode: {                        \
+        pushByteCode(Walrus::name(offset, src, dst), code); \
+        break;                                              \
+    }
+
+            FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+
     virtual void OnSimdLoadLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
