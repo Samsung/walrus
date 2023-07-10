@@ -1013,9 +1013,9 @@ public:
     virtual void OnBinaryExpr(uint32_t opcode) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
-        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize());
-        auto src1 = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackSize());
+        auto src1 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize());
         auto src0 = popVMStack();
         auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
         generateBinaryCode(code, src0, src1, dst);
@@ -1036,6 +1036,26 @@ public:
             break;
         default:
             generateUnaryCode(code, src, dst);
+            break;
+        }
+    }
+
+    virtual void OnTernaryExpr(uint32_t opcode) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[2]) == peekVMStackSize());
+        auto c = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackSize());
+        auto rhs = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize());
+        auto lhs = popVMStack();
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+        case WASMOpcode::V128BitSelectOpcode:
+            pushByteCode(Walrus::V128BitSelect(lhs, rhs, c, dst), code);
+            break;
+        default:
+            ASSERT_NOT_REACHED();
             break;
         }
     }

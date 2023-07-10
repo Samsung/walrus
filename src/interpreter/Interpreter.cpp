@@ -1010,6 +1010,24 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(SIMD_MEMORY_LOAD_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(SIMD_MEMORY_STORE_LANE_OPERATION)
 
+    // FOR_EACH_BYTECODE_SIMD_ETC_OP
+    DEFINE_OPCODE(V128BitSelect)
+        :
+    {
+        using Type = typename SIMDType<uint64_t>::Type;
+        V128BitSelect* code = (V128BitSelect*)programCounter;
+        auto lhs = readValue<Type>(bp, code->srcOffsets()[0]);
+        auto rhs = readValue<Type>(bp, code->srcOffsets()[1]);
+        auto c = readValue<Type>(bp, code->srcOffsets()[2]);
+        Type result;
+        for (uint8_t i = 0; i < Type::Lanes; i++) {
+            result[i] = (lhs[i] & c[i]) | (rhs[i] & ~c[i]);
+        }
+        writeValue<Type>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(V128BitSelect);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(MemorySize)
         :
     {

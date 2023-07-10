@@ -899,7 +899,8 @@ public:
     }
     Result OnTernaryExpr(Opcode opcode) override {
         CHECK_RESULT(m_validator.OnTernary(GetLocation(), opcode));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTernaryExpr(opcode);
         return Result::Ok;
     }
     Result OnUnreachableExpr() override {
