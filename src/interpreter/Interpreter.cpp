@@ -397,6 +397,22 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                            \
     }
 
+#define SIMD_MEMORY_LOAD_SPLAT_OPERATION(opcodeName, opType)          \
+    DEFINE_OPCODE(opcodeName)                                         \
+        :                                                             \
+    {                                                                 \
+        using Type = typename SIMDType<opType>::Type;                 \
+        MemoryLoad* code = (MemoryLoad*)programCounter;               \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset()); \
+        opType value;                                                 \
+        memories[0]->load(state, offset, code->offset(), &value);     \
+        Type result;                                                  \
+        std::fill(std::begin(result.v), std::end(result.v), value);   \
+        writeValue<Type>(bp, code->dstOffset(), result);              \
+        ADD_PROGRAM_COUNTER(MemoryLoad);                              \
+        NEXT_INSTRUCTION();                                           \
+    }
+
 #define SIMD_MEMORY_LOAD_EXTEND_OPERATION(opcodeName, readType, writeType) \
     DEFINE_OPCODE(opcodeName)                                              \
         :                                                                  \
@@ -989,6 +1005,7 @@ NextInstruction:
 
     FOR_EACH_BYTECODE_LOAD_OP(MEMORY_LOAD_OPERATION)
     FOR_EACH_BYTECODE_STORE_OP(MEMORY_STORE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(SIMD_MEMORY_LOAD_SPLAT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(SIMD_MEMORY_LOAD_EXTEND_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(SIMD_MEMORY_LOAD_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(SIMD_MEMORY_STORE_LANE_OPERATION)

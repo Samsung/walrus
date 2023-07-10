@@ -154,6 +154,7 @@ public:
     virtual void EndFunctionBody(Index index) = 0;
     virtual void OnSimdLoadLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) = 0;
     virtual void OnSimdStoreLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) = 0;
+    virtual void OnLoadSplatExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
 
     bool shouldContinueToGenerateByteCode() const
     {
