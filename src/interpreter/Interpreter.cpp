@@ -1028,6 +1028,38 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(V128Load32Zero)
+        :
+    {
+        using Type = typename SIMDType<uint32_t>::Type;
+        V128Load32Zero* code = (V128Load32Zero*)programCounter;
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
+        uint32_t value;
+        memories[0]->load(state, offset, code->offset(), &value);
+        Type result;
+        std::fill(std::begin(result.v), std::end(result.v), 0);
+        result[0] = value;
+        writeValue<Type>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(V128Load32Zero);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(V128Load64Zero)
+        :
+    {
+        using Type = typename SIMDType<uint64_t>::Type;
+        V128Load64Zero* code = (V128Load64Zero*)programCounter;
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
+        uint64_t value;
+        memories[0]->load(state, offset, code->offset(), &value);
+        Type result;
+        std::fill(std::begin(result.v), std::end(result.v), 0);
+        result[0] = value;
+        writeValue<Type>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(V128Load64Zero);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(MemorySize)
         :
     {

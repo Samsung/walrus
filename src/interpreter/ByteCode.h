@@ -398,7 +398,9 @@ class FunctionType;
     F(V128Store64Lane, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_ETC_OP(F) \
-    F(V128BitSelect)
+    F(V128BitSelect)                     \
+    F(V128Load32Zero)                    \
+    F(V128Load64Zero)
 
 #define FOR_EACH_BYTECODE(F)                 \
     FOR_EACH_BYTECODE_OP(F)                  \
@@ -1487,6 +1489,36 @@ public:
 protected:
     ByteCodeStackOffset m_srcOffsets[3];
     ByteCodeStackOffset m_dstOffset;
+};
+
+class V128Load32Zero : public MemoryLoad {
+public:
+    V128Load32Zero(uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : MemoryLoad(Opcode::V128Load32ZeroOpcode, offset, srcOffset, dstOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("V128Load32Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
+    }
+#endif
+};
+
+class V128Load64Zero : public MemoryLoad {
+public:
+    V128Load64Zero(uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : MemoryLoad(Opcode::V128Load64ZeroOpcode, offset, srcOffset, dstOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("V128Load64Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
+    }
+#endif
 };
 
 class TableGet : public ByteCode {

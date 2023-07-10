@@ -922,7 +922,8 @@ public:
     }
     Result OnSimdLaneOpExpr(Opcode opcode, uint64_t value) override {
         CHECK_RESULT(m_validator.OnSimdLaneOp(GetLocation(), opcode, value));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnSimdLaneOpExpr(opcode, value);
         return Result::Ok;
     }
     uint32_t GetAlignment(Address alignment_log2) {
@@ -952,7 +953,9 @@ public:
         return Result::Ok;
     }
     Result OnLoadZeroExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        abort();
+        CHECK_RESULT(m_validator.OnLoadZero(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnLoadZeroExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
 
