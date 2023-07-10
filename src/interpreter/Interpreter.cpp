@@ -397,7 +397,26 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                            \
     }
 
-#define SIMD_MEMORY_LOAD_OPERATION(opcodeName, opType)                 \
+#define SIMD_MEMORY_LOAD_EXTEND_OPERATION(opcodeName, readType, writeType) \
+    DEFINE_OPCODE(opcodeName)                                              \
+        :                                                                  \
+    {                                                                      \
+        using ReadType = typename SIMDType<readType>::Type;                \
+        using WriteType = typename SIMDType<writeType>::Type;              \
+        MemoryLoad* code = (MemoryLoad*)programCounter;                    \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());      \
+        ReadType value;                                                    \
+        memories[0]->load(state, offset, code->offset(), &value);          \
+        WriteType result;                                                  \
+        for (uint8_t i = 0; i < WriteType::Lanes; i++) {                   \
+            result[i] = value[i];                                          \
+        }                                                                  \
+        writeValue<WriteType>(bp, code->dstOffset(), result);              \
+        ADD_PROGRAM_COUNTER(MemoryLoad);                                   \
+        NEXT_INSTRUCTION();                                                \
+    }
+
+#define SIMD_MEMORY_LOAD_LANE_OPERATION(opcodeName, opType)            \
     DEFINE_OPCODE(opcodeName)                                          \
         :                                                              \
     {                                                                  \
@@ -413,7 +432,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                            \
     }
 
-#define SIMD_MEMORY_STORE_OPERATION(opcodeName, opType)                \
+#define SIMD_MEMORY_STORE_LANE_OPERATION(opcodeName, opType)           \
     DEFINE_OPCODE(opcodeName)                                          \
         :                                                              \
     {                                                                  \
@@ -970,8 +989,9 @@ NextInstruction:
 
     FOR_EACH_BYTECODE_LOAD_OP(MEMORY_LOAD_OPERATION)
     FOR_EACH_BYTECODE_STORE_OP(MEMORY_STORE_OPERATION)
-    FOR_EACH_BYTECODE_SIMD_LOAD_OP(SIMD_MEMORY_LOAD_OPERATION)
-    FOR_EACH_BYTECODE_SIMD_STORE_OP(SIMD_MEMORY_STORE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(SIMD_MEMORY_LOAD_EXTEND_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(SIMD_MEMORY_LOAD_LANE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(SIMD_MEMORY_STORE_LANE_OPERATION)
 
     DEFINE_OPCODE(MemorySize)
         :

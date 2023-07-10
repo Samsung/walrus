@@ -366,31 +366,40 @@ class FunctionType;
     F(I32X4TruncSatF64X2SZero)                \
     F(I32X4TruncSatF64X2UZero)
 
-#define FOR_EACH_BYTECODE_SIMD_LOAD_OP(F) \
-    F(V128Load8Lane, uint8_t)             \
-    F(V128Load16Lane, uint16_t)           \
-    F(V128Load32Lane, uint32_t)           \
+#define FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
+    F(V128Load8X8S, int8_t, int16_t)             \
+    F(V128Load8X8U, uint8_t, uint16_t)           \
+    F(V128Load16X4S, int16_t, int32_t)           \
+    F(V128Load16X4U, uint16_t, uint32_t)         \
+    F(V128Load32X2S, int32_t, int64_t)           \
+    F(V128Load32X2U, uint32_t, uint64_t)
+
+#define FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F) \
+    F(V128Load8Lane, uint8_t)                  \
+    F(V128Load16Lane, uint16_t)                \
+    F(V128Load32Lane, uint32_t)                \
     F(V128Load64Lane, uint64_t)
 
-#define FOR_EACH_BYTECODE_SIMD_STORE_OP(F) \
-    F(V128Store8Lane, uint8_t)             \
-    F(V128Store16Lane, uint16_t)           \
-    F(V128Store32Lane, uint32_t)           \
+#define FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F) \
+    F(V128Store8Lane, uint8_t)                  \
+    F(V128Store16Lane, uint16_t)                \
+    F(V128Store32Lane, uint32_t)                \
     F(V128Store64Lane, uint64_t)
 
-#define FOR_EACH_BYTECODE(F)               \
-    FOR_EACH_BYTECODE_OP(F)                \
-    FOR_EACH_BYTECODE_BINARY_OP(F)         \
-    FOR_EACH_BYTECODE_UNARY_OP(F)          \
-    FOR_EACH_BYTECODE_UNARY_OP_2(F)        \
-    FOR_EACH_BYTECODE_LOAD_OP(F)           \
-    FOR_EACH_BYTECODE_STORE_OP(F)          \
-    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)    \
-    FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)     \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)  \
-    FOR_EACH_BYTECODE_SIMD_LOAD_OP(F)      \
-    FOR_EACH_BYTECODE_SIMD_STORE_OP(F)
+#define FOR_EACH_BYTECODE(F)                 \
+    FOR_EACH_BYTECODE_OP(F)                  \
+    FOR_EACH_BYTECODE_BINARY_OP(F)           \
+    FOR_EACH_BYTECODE_UNARY_OP(F)            \
+    FOR_EACH_BYTECODE_UNARY_OP_2(F)          \
+    FOR_EACH_BYTECODE_LOAD_OP(F)             \
+    FOR_EACH_BYTECODE_STORE_OP(F)            \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)      \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)   \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)       \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)    \
+    FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
+    FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)   \
+    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)
 
 class ByteCode {
 public:
@@ -1311,23 +1320,23 @@ protected:
     };
 
 #if !defined(NDEBUG)
-#define DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)                                                                                                                                                                                   \
+#define DEFINE_SIMD_LOAD_LANE_BYTECODE_DUMP(name)                                                                                                                                                                              \
     void dump(size_t pos)                                                                                                                                                                                                      \
     {                                                                                                                                                                                                                          \
         printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
     }
 #else
-#define DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)
+#define DEFINE_SIMD_LOAD_LANE_BYTECODE_DUMP(name)
 #endif
 
-#define DEFINE_SIMD_LOAD_BYTECODE(name, opType)                                                                                       \
+#define DEFINE_SIMD_LOAD_LANE_BYTECODE(name, opType)                                                                                  \
     class name : public SIMDMemoryLoad {                                                                                              \
     public:                                                                                                                           \
         name(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst) \
             : SIMDMemoryLoad(Opcode::name##Opcode, offset, src0, src1, index, dst)                                                    \
         {                                                                                                                             \
         }                                                                                                                             \
-        DEFINE_SIMD_LOAD_BYTECODE_DUMP(name)                                                                                          \
+        DEFINE_SIMD_LOAD_LANE_BYTECODE_DUMP(name)                                                                                     \
     };
 
 // dummy ByteCode for memory store operation
@@ -1406,29 +1415,30 @@ protected:
     };
 
 #if !defined(NDEBUG)
-#define DEFINE_SIMD_STORE_BYTECODE_DUMP(name)                                                                                                                                         \
+#define DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)                                                                                                                                    \
     void dump(size_t pos)                                                                                                                                                             \
     {                                                                                                                                                                                 \
         printf(#name " idx: %" PRIu32 " src0: %" PRIu32 "src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_index, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
     }
 #else
-#define DEFINE_SIMD_STORE_BYTECODE_DUMP(name)
+#define DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)
 #endif
 
-#define DEFINE_SIMD_STORE_BYTECODE(name, opType)                                                             \
+#define DEFINE_SIMD_STORE_LANE_BYTECODE(name, opType)                                                        \
     class name : public SIMDMemoryStore {                                                                    \
     public:                                                                                                  \
         name(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index) \
             : SIMDMemoryStore(Opcode::name##Opcode, offset, src0, src1, index)                               \
         {                                                                                                    \
         }                                                                                                    \
-        DEFINE_SIMD_STORE_BYTECODE_DUMP(name)                                                                \
+        DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)                                                           \
     };
 
 FOR_EACH_BYTECODE_LOAD_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_STORE_OP(DEFINE_STORE_BYTECODE)
-FOR_EACH_BYTECODE_SIMD_LOAD_OP(DEFINE_SIMD_LOAD_BYTECODE)
-FOR_EACH_BYTECODE_SIMD_STORE_OP(DEFINE_SIMD_STORE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(DEFINE_LOAD_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(DEFINE_SIMD_LOAD_LANE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(DEFINE_SIMD_STORE_LANE_BYTECODE)
 #undef DEFINE_LOAD_BYTECODE_DUMP
 #undef DEFINE_LOAD_BYTECODE
 #undef DEFINE_STORE_BYTECODE_DUMP
