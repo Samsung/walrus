@@ -1861,10 +1861,25 @@ public:
         }
     }
 
-    virtual void OnSimdLaneOpExpr(int opcode, uint64_t value)
+    virtual void OnSimdLaneOpExpr(int opcode, uint64_t value) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
-        abort();
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::V128)));
+        auto src = popVMStack();
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+#define GENERATE_SIMD_LANE_CODE_CASE(name, ...)                                  \
+    case WASMOpcode::name##Opcode: {                                             \
+        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src, dst), code); \
+        break;                                                                   \
+    }
+
+            FOR_EACH_BYTECODE_SIMD_LANE_OP(GENERATE_SIMD_LANE_CODE_CASE)
+#undef GENERATE_SIMD_LANE_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
     }
 
     virtual void OnSimdLoadLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override

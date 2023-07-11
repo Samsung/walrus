@@ -462,6 +462,18 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                            \
     }
 
+#define SIMD_LANE_OPERATION(opcodeName, readType, writeType)                 \
+    DEFINE_OPCODE(opcodeName)                                                \
+        :                                                                    \
+    {                                                                        \
+        using Type = typename SIMDType<readType>::Type;                      \
+        opcodeName* code = (opcodeName*)programCounter;                      \
+        Type result = readValue<Type>(bp, code->srcOffset());                \
+        writeValue<writeType>(bp, code->dstOffset(), result[code->index()]); \
+        ADD_PROGRAM_COUNTER(opcodeName);                                     \
+        NEXT_INSTRUCTION();                                                  \
+    }
+
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 #if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
     if (UNLIKELY((((ByteCode*)programCounter)->m_opcodeInAddress) == NULL)) {
@@ -1009,6 +1021,7 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(SIMD_MEMORY_LOAD_EXTEND_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(SIMD_MEMORY_LOAD_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(SIMD_MEMORY_STORE_LANE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LANE_OP(SIMD_LANE_OPERATION)
 
     // FOR_EACH_BYTECODE_SIMD_ETC_OP
     DEFINE_OPCODE(V128BitSelect)
