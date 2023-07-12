@@ -356,6 +356,23 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                        \
     }
 
+#define SIMD_SHIFT_OPERATION(name, op, opType)                          \
+    DEFINE_OPCODE(name)                                                 \
+        :                                                               \
+    {                                                                   \
+        using Type = typename SIMDType<opType>::Type;                   \
+        name* code = (name*)programCounter;                             \
+        auto lhs = readValue<Type>(bp, code->srcOffset()[0]);           \
+        auto amount = readValue<uint32_t>(bp, code->srcOffset()[1]);    \
+        Type result;                                                    \
+        for (uint8_t i = 0; i < Type::Lanes; i++) {                     \
+            result[i] = op(state, lhs[i], static_cast<opType>(amount)); \
+        }                                                               \
+        writeValue<Type>(bp, code->dstOffset(), result);                \
+        ADD_PROGRAM_COUNTER(name);                                      \
+        NEXT_INSTRUCTION();                                             \
+    }
+
 #define SIMD_UNARY_OPERATION(name, op, type)               \
     DEFINE_OPCODE(name)                                    \
         :                                                  \
@@ -603,6 +620,7 @@ NextInstruction:
     FOR_EACH_BYTECODE_UNARY_OP(UNARY_OPERATION)
     FOR_EACH_BYTECODE_UNARY_OP_2(UNARY_OPERATION_2)
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_SHIFT_OP(SIMD_SHIFT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
 
     // FIXME optimize this macro
