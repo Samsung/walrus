@@ -122,7 +122,7 @@ def run_basic_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'basic')
 
     print('Running basic tests:')
-    xpass = glob(join(TEST_DIR, '*'))
+    xpass = glob(join(TEST_DIR, '*.wast'))
     xpass_result = _run_wast_tests(engine, xpass, False)
 
     tests_total = len(xpass)

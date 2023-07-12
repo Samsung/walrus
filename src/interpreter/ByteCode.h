@@ -327,6 +327,35 @@ class FunctionType;
     F(V128Or, intOr, uint64_t, uint64_t)                          \
     F(V128Xor, intXor, uint64_t, uint64_t)
 
+#define FOR_EACH_BYTECODE_SIMD_SHIFT_OP(F) \
+    F(I8X16Shl, intShl, uint8_t)           \
+    F(I8X16ShrS, intShr, int8_t)           \
+    F(I8X16ShrU, intShr, uint8_t)          \
+    F(I16X8Shl, intShl, uint16_t)          \
+    F(I16X8ShrS, intShr, int16_t)          \
+    F(I16X8ShrU, intShr, uint16_t)         \
+    F(I32X4Shl, intShl, uint32_t)          \
+    F(I32X4ShrS, intShr, int32_t)          \
+    F(I32X4ShrU, intShr, uint32_t)         \
+    F(I64X2Shl, intShl, uint64_t)          \
+    F(I64X2ShrS, intShr, int64_t)          \
+    F(I64X2ShrU, intShr, uint64_t)
+
+#define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
+    F(I16X8ExtmulLowI8X16S)                    \
+    F(I16X8ExtmulHighI8X16S)                   \
+    F(I16X8ExtmulLowI8X16U)                    \
+    F(I16X8ExtmulHighI8X16U)                   \
+    F(I32X4ExtmulLowI16X8S)                    \
+    F(I32X4ExtmulHighI16X8S)                   \
+    F(I32X4ExtmulLowI16X8U)                    \
+    F(I32X4ExtmulHighI16X8U)                   \
+    F(I64X2ExtmulLowI32X4S)                    \
+    F(I64X2ExtmulHighI32X4S)                   \
+    F(I64X2ExtmulLowI32X4U)                    \
+    F(I64X2ExtmulHighI32X4U)                   \
+    F(I32X4DotI16X8S)
+
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
     F(I16X8Neg, intNeg, uint16_t)          \
@@ -345,21 +374,6 @@ class FunctionType;
     F(F64X2Nearest, floatNearest, double)  \
     F(F64X2Sqrt, floatSqrt, double)        \
     F(V128Not, intNot, uint64_t)
-
-#define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
-    F(I16X8ExtmulLowI8X16S)                    \
-    F(I16X8ExtmulHighI8X16S)                   \
-    F(I16X8ExtmulLowI8X16U)                    \
-    F(I16X8ExtmulHighI8X16U)                   \
-    F(I32X4ExtmulLowI16X8S)                    \
-    F(I32X4ExtmulHighI16X8S)                   \
-    F(I32X4ExtmulLowI16X8U)                    \
-    F(I32X4ExtmulHighI16X8U)                   \
-    F(I64X2ExtmulLowI32X4S)                    \
-    F(I64X2ExtmulHighI32X4S)                   \
-    F(I64X2ExtmulLowI32X4U)                    \
-    F(I64X2ExtmulHighI32X4U)                   \
-    F(I32X4DotI16X8S)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
     F(I16X8ExtaddPairwiseI8X16S)              \
@@ -420,6 +434,7 @@ class FunctionType;
     FOR_EACH_BYTECODE_LOAD_OP(F)             \
     FOR_EACH_BYTECODE_STORE_OP(F)            \
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)      \
+    FOR_EACH_BYTECODE_SIMD_SHIFT_OP(F)       \
     FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)   \
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)       \
     FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)    \
@@ -648,6 +663,7 @@ FOR_EACH_BYTECODE_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OP(DEFINE_BINARY_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_SHIFT_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
