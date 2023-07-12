@@ -279,6 +279,10 @@ class FunctionType;
     F(I8X16LeU, leMask, uint8_t, uint8_t)                         \
     F(I8X16GeS, geMask, int8_t, int8_t)                           \
     F(I8X16GeU, geMask, uint8_t, uint8_t)                         \
+    F(I8X16MinS, intMin, int8_t, int8_t)                          \
+    F(I8X16MinU, intMin, uint8_t, uint8_t)                        \
+    F(I8X16MaxS, intMax, int8_t, int8_t)                          \
+    F(I8X16MaxU, intMax, uint8_t, uint8_t)                        \
     F(I16X8Eq, eqMask, uint16_t, uint16_t)                        \
     F(I16X8Ne, neMask, uint16_t, uint16_t)                        \
     F(I16X8LtS, ltMask, int16_t, int16_t)                         \
@@ -289,6 +293,10 @@ class FunctionType;
     F(I16X8LeU, leMask, uint16_t, uint16_t)                       \
     F(I16X8GeS, geMask, int16_t, int16_t)                         \
     F(I16X8GeU, geMask, uint16_t, uint16_t)                       \
+    F(I16X8MinS, intMin, int16_t, int16_t)                        \
+    F(I16X8MinU, intMin, uint16_t, uint16_t)                      \
+    F(I16X8MaxS, intMax, int16_t, int16_t)                        \
+    F(I16X8MaxU, intMax, uint16_t, uint16_t)                      \
     F(I32X4Eq, eqMask, uint32_t, uint32_t)                        \
     F(I32X4Ne, neMask, uint32_t, uint32_t)                        \
     F(I32X4LtS, ltMask, int32_t, int32_t)                         \
@@ -299,6 +307,10 @@ class FunctionType;
     F(I32X4LeU, leMask, uint32_t, uint32_t)                       \
     F(I32X4GeS, geMask, int32_t, int32_t)                         \
     F(I32X4GeU, geMask, uint32_t, uint32_t)                       \
+    F(I32X4MinS, intMin, int32_t, int32_t)                        \
+    F(I32X4MinU, intMin, uint32_t, uint32_t)                      \
+    F(I32X4MaxS, intMax, int32_t, int32_t)                        \
+    F(I32X4MaxU, intMax, uint32_t, uint32_t)                      \
     F(I64X2Eq, eqMask, uint64_t, uint64_t)                        \
     F(I64X2Ne, neMask, uint64_t, uint64_t)                        \
     F(I64X2LtS, ltMask, int64_t, int64_t)                         \
@@ -311,6 +323,8 @@ class FunctionType;
     F(F32X4Gt, gtMask, float, uint32_t)                           \
     F(F32X4Le, leMask, float, uint32_t)                           \
     F(F32X4Ge, geMask, float, uint32_t)                           \
+    F(F32X4Min, floatMin, float, float)                           \
+    F(F32X4Max, floatMax, float, float)                           \
     F(F32X4PMin, floatPMin, float, float)                         \
     F(F32X4PMax, floatPMax, float, float)                         \
     F(F64X2Eq, eqMask, double, uint64_t)                          \
@@ -319,6 +333,8 @@ class FunctionType;
     F(F64X2Gt, gtMask, double, uint64_t)                          \
     F(F64X2Le, leMask, double, uint64_t)                          \
     F(F64X2Ge, geMask, double, uint64_t)                          \
+    F(F64X2Min, floatMin, double, double)                         \
+    F(F64X2Max, floatMax, double, double)                         \
     F(F64X2PMin, floatPMin, double, double)                       \
     F(F64X2PMax, floatPMax, double, double)                       \
     F(I16X8Q15mulrSatS, saturatingRoundingQMul, int16_t, int16_t) \
@@ -358,16 +374,22 @@ class FunctionType;
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
+    F(I8X16Abs, intAbs, uint8_t)           \
     F(I16X8Neg, intNeg, uint16_t)          \
+    F(I16X8Abs, intAbs, uint16_t)          \
     F(I32X4Neg, intNeg, uint32_t)          \
+    F(I32X4Abs, intAbs, uint32_t)          \
     F(I64X2Neg, intNeg, uint64_t)          \
+    F(I64X2Abs, intAbs, uint64_t)          \
     F(F32X4Neg, floatNeg, float)           \
+    F(F32X4Abs, floatAbs, float)           \
     F(F32X4Ceil, floatCeil, float)         \
     F(F32X4Floor, floatFloor, float)       \
     F(F32X4Trunc, floatTrunc, float)       \
     F(F32X4Nearest, floatNearest, float)   \
     F(F32X4Sqrt, floatSqrt, float)         \
     F(F64X2Neg, floatNeg, double)          \
+    F(F64X2Abs, floatAbs, double)          \
     F(F64X2Ceil, floatCeil, double)        \
     F(F64X2Floor, floatFloor, double)      \
     F(F64X2Trunc, floatTrunc, double)      \
