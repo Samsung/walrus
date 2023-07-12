@@ -398,6 +398,15 @@ class FunctionType;
     F(V128Not, intNot, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
+    F(V128AnyTrue)                            \
+    F(I8X16Bitmask)                           \
+    F(I8X16AllTrue)                           \
+    F(I16X8Bitmask)                           \
+    F(I16X8AllTrue)                           \
+    F(I32X4Bitmask)                           \
+    F(I32X4AllTrue)                           \
+    F(I64X2Bitmask)                           \
+    F(I64X2AllTrue)                           \
     F(I16X8ExtaddPairwiseI8X16S)              \
     F(I16X8ExtaddPairwiseI8X16U)              \
     F(I32X4ExtaddPairwiseI16X8S)              \

@@ -754,6 +754,134 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(V128AnyTrue)
+        :
+    {
+        using Type = typename SIMDType<uint8_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = (std::count_if(std::begin(val.v), std::end(val.v), [](uint8_t x) { return x != 0; }) >= 1);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I8X16Bitmask)
+        :
+    {
+        using Type = typename SIMDType<int8_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = 0;
+        for (uint8_t i = 0; i < Type::Lanes; i++) {
+            if (val[i] < 0) {
+                result |= 1 << i;
+            }
+        }
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I8X16AllTrue)
+        :
+    {
+        using Type = typename SIMDType<uint8_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = (std::count_if(std::begin(val.v), std::end(val.v), [](uint8_t x) { return x != 0; }) >= 16);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8Bitmask)
+        :
+    {
+        using Type = typename SIMDType<int16_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = 0;
+        for (uint8_t i = 0; i < Type::Lanes; i++) {
+            if (val[i] < 0) {
+                result |= 1 << i;
+            }
+        }
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8AllTrue)
+        :
+    {
+        using Type = typename SIMDType<uint16_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = (std::count_if(std::begin(val.v), std::end(val.v), [](uint8_t x) { return x != 0; }) >= 8);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4Bitmask)
+        :
+    {
+        using Type = typename SIMDType<int32_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = 0;
+        for (uint8_t i = 0; i < Type::Lanes; i++) {
+            if (val[i] < 0) {
+                result |= 1 << i;
+            }
+        }
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I32X4AllTrue)
+        :
+    {
+        using Type = typename SIMDType<uint32_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = (std::count_if(std::begin(val.v), std::end(val.v), [](uint8_t x) { return x != 0; }) >= 4);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I64X2Bitmask)
+        :
+    {
+        using Type = typename SIMDType<int64_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = 0;
+        for (uint8_t i = 0; i < Type::Lanes; i++) {
+            if (val[i] < 0) {
+                result |= 1 << i;
+            }
+        }
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I64X2AllTrue)
+        :
+    {
+        using Type = typename SIMDType<uint64_t>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<Type>(bp, code->srcOffset());
+        uint32_t result = (std::count_if(std::begin(val.v), std::end(val.v), [](uint8_t x) { return x != 0; }) >= 2);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(I16X8ExtaddPairwiseI8X16S)
         :
     {
