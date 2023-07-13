@@ -356,7 +356,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                        \
     }
 
-#define SIMD_SHIFT_OPERATION(name, op, opType)                          \
+#define SIMD_BINARY_SHIFT_OPERATION(name, op, opType)                   \
     DEFINE_OPCODE(name)                                                 \
         :                                                               \
     {                                                                   \
@@ -387,6 +387,23 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         writeValue<Type>(bp, code->dstOffset(), result);   \
         ADD_PROGRAM_COUNTER(name);                         \
         NEXT_INSTRUCTION();                                \
+    }
+
+#define SIMD_UNARY_CONVERT_OPERATION(name, P, R, Low)                       \
+    DEFINE_OPCODE(name)                                                     \
+        :                                                                   \
+    {                                                                       \
+        using ParamType = typename SIMDType<P>::Type;                       \
+        using ResultType = typename SIMDType<R>::Type;                      \
+        name* code = (name*)programCounter;                                 \
+        auto val = readValue<ParamType>(bp, code->srcOffset());             \
+        ResultType result;                                                  \
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {                   \
+            result[i] = convert<R>(val[(Low ? 0 : ResultType::Lanes) + i]); \
+        }                                                                   \
+        writeValue<ResultType>(bp, code->dstOffset(), result);              \
+        ADD_PROGRAM_COUNTER(name);                                          \
+        NEXT_INSTRUCTION();                                                 \
     }
 
 #define MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)        \
@@ -620,8 +637,9 @@ NextInstruction:
     FOR_EACH_BYTECODE_UNARY_OP(UNARY_OPERATION)
     FOR_EACH_BYTECODE_UNARY_OP_2(UNARY_OPERATION_2)
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
-    FOR_EACH_BYTECODE_SIMD_SHIFT_OP(SIMD_SHIFT_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(SIMD_BINARY_SHIFT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(SIMD_UNARY_CONVERT_OPERATION)
 
     // FIXME optimize this macro
 #define SIMD_EXTMUL_OPERATION(PT, RT, LOW)                                         \
@@ -751,6 +769,86 @@ NextInstruction:
         }
         writeValue<ResultType>(bp, code->dstOffset(), result);
         ADD_PROGRAM_COUNTER(I32X4DotI16X8S);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I8X16NarrowI16X8S)
+        :
+    {
+        using ParamType = typename SIMDType<int16_t>::Type;
+        using ResultType = typename SIMDType<int8_t>::Type;
+        BinaryOperation* code = (BinaryOperation*)programCounter;
+        auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]);
+        auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]);
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = saturate<int8_t, int16_t>(lhs[i]);
+        }
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[ParamType::Lanes + i] = saturate<int8_t, int16_t>(rhs[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(BinaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I8X16NarrowI16X8U)
+        :
+    {
+        using ParamType = typename SIMDType<int16_t>::Type;
+        using ResultType = typename SIMDType<uint8_t>::Type;
+        BinaryOperation* code = (BinaryOperation*)programCounter;
+        auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]);
+        auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]);
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = saturate<uint8_t, int16_t>(lhs[i]);
+        }
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[ParamType::Lanes + i] = saturate<uint8_t, int16_t>(rhs[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(BinaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8NarrowI32X4S)
+        :
+    {
+        using ParamType = typename SIMDType<int32_t>::Type;
+        using ResultType = typename SIMDType<int16_t>::Type;
+        BinaryOperation* code = (BinaryOperation*)programCounter;
+        auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]);
+        auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]);
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = saturate<int16_t, int32_t>(lhs[i]);
+        }
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[ParamType::Lanes + i] = saturate<int16_t, int32_t>(rhs[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(BinaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I16X8NarrowI32X4U)
+        :
+    {
+        using ParamType = typename SIMDType<int32_t>::Type;
+        using ResultType = typename SIMDType<uint16_t>::Type;
+        BinaryOperation* code = (BinaryOperation*)programCounter;
+        auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]);
+        auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]);
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = saturate<uint16_t, int32_t>(lhs[i]);
+        }
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[ParamType::Lanes + i] = saturate<uint16_t, int32_t>(rhs[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(BinaryOperation);
         NEXT_INSTRUCTION();
     }
 
@@ -1019,6 +1117,57 @@ NextInstruction:
         }
         writeValue<ResultType>(bp, code->dstOffset(), result);
         ADD_PROGRAM_COUNTER(I32X4TruncSatF64X2UZero);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(F32X4ConvertI32X4S)
+        :
+    {
+        using ParamType = typename SIMDType<int32_t>::Type;
+        using ResultType = typename SIMDType<float>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+            result[i] = convert<float, int32_t>(val[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(F32X4ConvertI32X4U)
+        :
+    {
+        using ParamType = typename SIMDType<uint32_t>::Type;
+        using ResultType = typename SIMDType<float>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+            result[i] = convert<float, uint32_t>(val[i]);
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(F32X4DemoteF64X2Zero)
+        :
+    {
+        using ParamType = typename SIMDType<double>::Type;
+        using ResultType = typename SIMDType<float>::Type;
+        UnaryOperation* code = (UnaryOperation*)programCounter;
+        auto val = readValue<ParamType>(bp, code->srcOffset());
+        ResultType result;
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {
+            result[i] = convert<float, double>(val[i]);
+        }
+        for (uint8_t i = ParamType::Lanes; i < ResultType::Lanes; i++) {
+            result[i] = 0;
+        }
+        writeValue<ResultType>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(UnaryOperation);
         NEXT_INSTRUCTION();
     }
 
