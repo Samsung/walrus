@@ -423,12 +423,16 @@ class FunctionType;
     F(V128AnyTrue, (simdAnyTrueOperation))                                          \
     F(I8X16Bitmask, (simdBitmaskOperation<int8_t>))                                 \
     F(I8X16AllTrue, (simdAllTrueOperation<uint8_t, 16>))                            \
+    F(I8X16Splat, (simdSplatOperation<uint32_t, uint8_t>))                          \
     F(I16X8Bitmask, (simdBitmaskOperation<int16_t>))                                \
     F(I16X8AllTrue, (simdAllTrueOperation<uint16_t, 8>))                            \
+    F(I16X8Splat, (simdSplatOperation<uint32_t, uint16_t>))                         \
     F(I32X4Bitmask, (simdBitmaskOperation<int32_t>))                                \
     F(I32X4AllTrue, (simdAllTrueOperation<uint32_t, 4>))                            \
+    F(I32X4Splat, (simdSplatOperation<uint32_t, uint32_t>))                         \
     F(I64X2Bitmask, (simdBitmaskOperation<int64_t>))                                \
     F(I64X2AllTrue, (simdAllTrueOperation<uint64_t, 2>))                            \
+    F(I64X2Splat, (simdSplatOperation<uint64_t, uint64_t>))                         \
     F(I16X8ExtaddPairwiseI8X16S, (simdExtaddPairwiseOperation<int8_t, int16_t>))    \
     F(I16X8ExtaddPairwiseI8X16U, (simdExtaddPairwiseOperation<uint8_t, uint16_t>))  \
     F(I32X4ExtaddPairwiseI16X8S, (simdExtaddPairwiseOperation<int16_t, int32_t>))   \
@@ -439,7 +443,9 @@ class FunctionType;
     F(I32X4TruncSatF64X2UZero, (simdTruncSatZeroOperation<double, uint32_t>))       \
     F(F32X4ConvertI32X4S, (simdConvertOperation<int32_t, float>))                   \
     F(F32X4ConvertI32X4U, (simdConvertOperation<uint32_t, float>))                  \
-    F(F32X4DemoteF64X2Zero, (simdDemoteZeroOperation))
+    F(F32X4DemoteF64X2Zero, (simdDemoteZeroOperation))                              \
+    F(F32X4Splat, (simdSplatOperation<float, float>))                               \
+    F(F64X2Splat, (simdSplatOperation<double, double>))
 
 #define FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F) \
     F(V128Load8Splat, uint8_t)                  \
