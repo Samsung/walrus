@@ -473,15 +473,23 @@ class FunctionType;
     F(V128Store32Lane, uint32_t)                \
     F(V128Store64Lane, uint64_t)
 
-#define FOR_EACH_BYTECODE_SIMD_LANE_OP(F)    \
-    F(I8X16ExtractLaneS, int8_t, int32_t)    \
-    F(I8X16ExtractLaneU, uint8_t, uint32_t)  \
-    F(I16X8ExtractLaneS, int16_t, int32_t)   \
-    F(I16X8ExtractLaneU, uint16_t, uint32_t) \
-    F(I32X4ExtractLane, int32_t, uint32_t)   \
-    F(I64X2ExtractLane, uint64_t, uint64_t)  \
-    F(F32X4ExtractLane, float, float)        \
+#define FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(F) \
+    F(I8X16ExtractLaneS, int8_t, int32_t)         \
+    F(I8X16ExtractLaneU, uint8_t, uint32_t)       \
+    F(I16X8ExtractLaneS, int16_t, int32_t)        \
+    F(I16X8ExtractLaneU, uint16_t, uint32_t)      \
+    F(I32X4ExtractLane, int32_t, uint32_t)        \
+    F(I64X2ExtractLane, uint64_t, uint64_t)       \
+    F(F32X4ExtractLane, float, float)             \
     F(F64X2ExtractLane, double, double)
+
+#define FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(F) \
+    F(I8X16ReplaceLane, uint32_t, uint8_t)        \
+    F(I16X8ReplaceLane, uint32_t, uint16_t)       \
+    F(I32X4ReplaceLane, uint32_t, uint32_t)       \
+    F(I64X2ReplaceLane, uint64_t, uint64_t)       \
+    F(F32X4ReplaceLane, float, float)             \
+    F(F64X2ReplaceLane, double, double)
 
 #define FOR_EACH_BYTECODE_SIMD_ETC_OP(F) \
     F(V128BitSelect)                     \
@@ -505,7 +513,8 @@ class FunctionType;
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F)   \
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)     \
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)    \
-    FOR_EACH_BYTECODE_SIMD_LANE_OP(F)          \
+    FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(F)  \
+    FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(F)  \
     FOR_EACH_BYTECODE_SIMD_ETC_OP(F)
 
 class ByteCode {
@@ -1545,16 +1554,16 @@ protected:
 
 
 #if !defined(NDEBUG)
-#define DEFINE_SIMD_LANE_BYTECODE_DUMP(name)                                                                                               \
+#define DEFINE_SIMD_EXTRACT_LANE_BYTECODE_DUMP(name)                                                                                       \
     void dump(size_t pos)                                                                                                                  \
     {                                                                                                                                      \
         printf(#name " idx: %" PRIu32 " src: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_index, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset); \
     }
 #else
-#define DEFINE_SIMD_LANE_BYTECODE_DUMP(name)
+#define DEFINE_SIMD_EXTRACT_LANE_BYTECODE_DUMP(name)
 #endif
 
-#define DEFINE_SIMD_LANE_BYTECODE(name, ...)                                  \
+#define DEFINE_SIMD_EXTRACT_LANE_BYTECODE(name, ...)                          \
     class name : public ByteCode {                                            \
     public:                                                                   \
         name(uint8_t index, ByteCodeStackOffset src, ByteCodeStackOffset dst) \
@@ -1567,11 +1576,41 @@ protected:
         uint32_t index() const { return m_index; }                            \
         ByteCodeStackOffset srcOffset() const { return m_srcOffset; }         \
         ByteCodeStackOffset dstOffset() const { return m_dstOffset; }         \
-        DEFINE_SIMD_LANE_BYTECODE_DUMP(name)                                  \
+        DEFINE_SIMD_EXTRACT_LANE_BYTECODE_DUMP(name)                          \
     protected:                                                                \
         uint8_t m_index;                                                      \
         ByteCodeStackOffset m_srcOffset;                                      \
         ByteCodeStackOffset m_dstOffset;                                      \
+    };
+
+#if !defined(NDEBUG)
+#define DEFINE_SIMD_REPLACE_LANE_BYTECODE_DUMP(name)                                                                                                                                         \
+    void dump(size_t pos)                                                                                                                                                                    \
+    {                                                                                                                                                                                        \
+        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_index, (uint32_t)m_srcOffsets[0], (uint32_t)m_srcOffsets[1], (uint32_t)m_dstOffset); \
+    }
+#else
+#define DEFINE_SIMD_REPLACE_LANE_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_SIMD_REPLACE_LANE_BYTECODE(name, ...)                                                     \
+    class name : public ByteCode {                                                                       \
+    public:                                                                                              \
+        name(uint8_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst) \
+            : ByteCode(Opcode::name##Opcode)                                                             \
+            , m_index(index)                                                                             \
+            , m_srcOffsets{ src0, src1 }                                                                 \
+            , m_dstOffset(dst)                                                                           \
+        {                                                                                                \
+        }                                                                                                \
+        uint32_t index() const { return m_index; }                                                       \
+        const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }                           \
+        ByteCodeStackOffset dstOffset() const { return m_dstOffset; }                                    \
+        DEFINE_SIMD_REPLACE_LANE_BYTECODE_DUMP(name)                                                     \
+    protected:                                                                                           \
+        uint8_t m_index;                                                                                 \
+        ByteCodeStackOffset m_srcOffsets[2];                                                             \
+        ByteCodeStackOffset m_dstOffset;                                                                 \
     };
 
 
@@ -1581,7 +1620,8 @@ FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(DEFINE_LOAD_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(DEFINE_SIMD_LOAD_LANE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(DEFINE_SIMD_STORE_LANE_BYTECODE)
-FOR_EACH_BYTECODE_SIMD_LANE_OP(DEFINE_SIMD_LANE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(DEFINE_SIMD_EXTRACT_LANE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(DEFINE_SIMD_REPLACE_LANE_BYTECODE)
 #undef DEFINE_LOAD_BYTECODE_DUMP
 #undef DEFINE_LOAD_BYTECODE
 #undef DEFINE_STORE_BYTECODE_DUMP
