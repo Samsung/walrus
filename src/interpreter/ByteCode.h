@@ -343,18 +343,18 @@ class FunctionType;
     F(V128Or, intOr, uint64_t, uint64_t)                          \
     F(V128Xor, intXor, uint64_t, uint64_t)
 
-#define FOR_EACH_BYTECODE_SIMD_SHIFT_OP(F) \
-    F(I8X16Shl, intShl, uint8_t)           \
-    F(I8X16ShrS, intShr, int8_t)           \
-    F(I8X16ShrU, intShr, uint8_t)          \
-    F(I16X8Shl, intShl, uint16_t)          \
-    F(I16X8ShrS, intShr, int16_t)          \
-    F(I16X8ShrU, intShr, uint16_t)         \
-    F(I32X4Shl, intShl, uint32_t)          \
-    F(I32X4ShrS, intShr, int32_t)          \
-    F(I32X4ShrU, intShr, uint32_t)         \
-    F(I64X2Shl, intShl, uint64_t)          \
-    F(I64X2ShrS, intShr, int64_t)          \
+#define FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(F) \
+    F(I8X16Shl, intShl, uint8_t)                  \
+    F(I8X16ShrS, intShr, int8_t)                  \
+    F(I8X16ShrU, intShr, uint8_t)                 \
+    F(I16X8Shl, intShl, uint16_t)                 \
+    F(I16X8ShrS, intShr, int16_t)                 \
+    F(I16X8ShrU, intShr, uint16_t)                \
+    F(I32X4Shl, intShl, uint32_t)                 \
+    F(I32X4ShrS, intShr, int32_t)                 \
+    F(I32X4ShrU, intShr, uint32_t)                \
+    F(I64X2Shl, intShl, uint64_t)                 \
+    F(I64X2ShrS, intShr, int64_t)                 \
     F(I64X2ShrU, intShr, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
@@ -370,7 +370,11 @@ class FunctionType;
     F(I64X2ExtmulHighI32X4S)                   \
     F(I64X2ExtmulLowI32X4U)                    \
     F(I64X2ExtmulHighI32X4U)                   \
-    F(I32X4DotI16X8S)
+    F(I32X4DotI16X8S)                          \
+    F(I8X16NarrowI16X8S)                       \
+    F(I8X16NarrowI16X8U)                       \
+    F(I16X8NarrowI32X4S)                       \
+    F(I16X8NarrowI32X4U)
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
@@ -397,6 +401,23 @@ class FunctionType;
     F(F64X2Sqrt, floatSqrt, double)        \
     F(V128Not, intNot, uint64_t)
 
+#define FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(F)      \
+    F(I16X8ExtendLowI8X16S, int8_t, int16_t, true)      \
+    F(I16X8ExtendHighI8X16S, int8_t, int16_t, false)    \
+    F(I16X8ExtendLowI8X16U, uint8_t, uint16_t, true)    \
+    F(I16X8ExtendHighI8X16U, uint8_t, uint16_t, false)  \
+    F(I32X4ExtendLowI16X8S, int16_t, int32_t, true)     \
+    F(I32X4ExtendHighI16X8S, int16_t, int32_t, false)   \
+    F(I32X4ExtendLowI16X8U, uint16_t, uint32_t, true)   \
+    F(I32X4ExtendHighI16X8U, uint16_t, uint32_t, false) \
+    F(I64X2ExtendLowI32X4S, int32_t, int64_t, true)     \
+    F(I64X2ExtendHighI32X4S, int32_t, int64_t, false)   \
+    F(I64X2ExtendLowI32X4U, uint32_t, uint64_t, true)   \
+    F(I64X2ExtendHighI32X4U, uint32_t, uint64_t, false) \
+    F(F64X2PromoteLowF32X4, float, double, true)        \
+    F(F64X2ConvertLowI32X4S, int32_t, double, true)     \
+    F(F64X2ConvertLowI32X4U, uint32_t, double, true)
+
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
     F(V128AnyTrue)                            \
     F(I8X16Bitmask)                           \
@@ -414,7 +435,10 @@ class FunctionType;
     F(I32X4TruncSatF32X4S)                    \
     F(I32X4TruncSatF32X4U)                    \
     F(I32X4TruncSatF64X2SZero)                \
-    F(I32X4TruncSatF64X2UZero)
+    F(I32X4TruncSatF64X2UZero)                \
+    F(F32X4ConvertI32X4S)                     \
+    F(F32X4ConvertI32X4U)                     \
+    F(F32X4DemoteF64X2Zero)
 
 #define FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F) \
     F(V128Load8Splat, uint8_t)                  \
@@ -457,23 +481,24 @@ class FunctionType;
     F(V128Load32Zero)                    \
     F(V128Load64Zero)
 
-#define FOR_EACH_BYTECODE(F)                 \
-    FOR_EACH_BYTECODE_OP(F)                  \
-    FOR_EACH_BYTECODE_BINARY_OP(F)           \
-    FOR_EACH_BYTECODE_UNARY_OP(F)            \
-    FOR_EACH_BYTECODE_UNARY_OP_2(F)          \
-    FOR_EACH_BYTECODE_LOAD_OP(F)             \
-    FOR_EACH_BYTECODE_STORE_OP(F)            \
-    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)      \
-    FOR_EACH_BYTECODE_SIMD_SHIFT_OP(F)       \
-    FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)   \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)       \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)    \
-    FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F)  \
-    FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
-    FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)   \
-    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)  \
-    FOR_EACH_BYTECODE_SIMD_LANE_OP(F)        \
+#define FOR_EACH_BYTECODE(F)                   \
+    FOR_EACH_BYTECODE_OP(F)                    \
+    FOR_EACH_BYTECODE_BINARY_OP(F)             \
+    FOR_EACH_BYTECODE_UNARY_OP(F)              \
+    FOR_EACH_BYTECODE_UNARY_OP_2(F)            \
+    FOR_EACH_BYTECODE_LOAD_OP(F)               \
+    FOR_EACH_BYTECODE_STORE_OP(F)              \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)        \
+    FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(F)  \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)     \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)         \
+    FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(F) \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)      \
+    FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F)    \
+    FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F)   \
+    FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)     \
+    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)    \
+    FOR_EACH_BYTECODE_SIMD_LANE_OP(F)          \
     FOR_EACH_BYTECODE_SIMD_ETC_OP(F)
 
 class ByteCode {
@@ -694,9 +719,10 @@ FOR_EACH_BYTECODE_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OP(DEFINE_BINARY_BYTECODE)
-FOR_EACH_BYTECODE_SIMD_SHIFT_OP(DEFINE_BINARY_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OP(DEFINE_UNARY_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
 #undef DEFINE_BINARY_BYTECODE_DUMP
 #undef DEFINE_BINARY_BYTECODE
