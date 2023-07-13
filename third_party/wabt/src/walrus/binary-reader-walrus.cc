@@ -943,7 +943,8 @@ public:
     }
     Result OnSimdShuffleOpExpr(Opcode opcode, v128 value) override {
         CHECK_RESULT(m_validator.OnSimdShuffleOp(GetLocation(), opcode, value));
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnSimdShuffleOpExpr(opcode, value.v);
         return Result::Ok;
     }
     Result OnLoadSplatExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
