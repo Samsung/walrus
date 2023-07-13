@@ -357,24 +357,25 @@ class FunctionType;
     F(I64X2ShrS, intShr, int64_t)                 \
     F(I64X2ShrU, intShr, uint64_t)
 
-#define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F) \
-    F(I16X8ExtmulLowI8X16S)                    \
-    F(I16X8ExtmulHighI8X16S)                   \
-    F(I16X8ExtmulLowI8X16U)                    \
-    F(I16X8ExtmulHighI8X16U)                   \
-    F(I32X4ExtmulLowI16X8S)                    \
-    F(I32X4ExtmulHighI16X8S)                   \
-    F(I32X4ExtmulLowI16X8U)                    \
-    F(I32X4ExtmulHighI16X8U)                   \
-    F(I64X2ExtmulLowI32X4S)                    \
-    F(I64X2ExtmulHighI32X4S)                   \
-    F(I64X2ExtmulLowI32X4U)                    \
-    F(I64X2ExtmulHighI32X4U)                   \
-    F(I32X4DotI16X8S)                          \
-    F(I8X16NarrowI16X8S)                       \
-    F(I8X16NarrowI16X8U)                       \
-    F(I16X8NarrowI32X4S)                       \
-    F(I16X8NarrowI32X4U)
+#define FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)                                 \
+    F(I8X16Swizzle, (simdSwizzleOperation<uint8_t>))                           \
+    F(I16X8ExtmulLowI8X16S, (simdExtmulOperation<int8_t, int16_t, true>))      \
+    F(I16X8ExtmulHighI8X16S, (simdExtmulOperation<int8_t, int16_t, false>))    \
+    F(I16X8ExtmulLowI8X16U, (simdExtmulOperation<uint8_t, uint16_t, true>))    \
+    F(I16X8ExtmulHighI8X16U, (simdExtmulOperation<uint8_t, uint16_t, false>))  \
+    F(I32X4ExtmulLowI16X8S, (simdExtmulOperation<int16_t, int32_t, true>))     \
+    F(I32X4ExtmulHighI16X8S, (simdExtmulOperation<int16_t, int32_t, false>))   \
+    F(I32X4ExtmulLowI16X8U, (simdExtmulOperation<uint16_t, uint32_t, true>))   \
+    F(I32X4ExtmulHighI16X8U, (simdExtmulOperation<uint16_t, uint32_t, false>)) \
+    F(I64X2ExtmulLowI32X4S, (simdExtmulOperation<int32_t, int64_t, true>))     \
+    F(I64X2ExtmulHighI32X4S, (simdExtmulOperation<int32_t, int64_t, false>))   \
+    F(I64X2ExtmulLowI32X4U, (simdExtmulOperation<uint32_t, uint64_t, true>))   \
+    F(I64X2ExtmulHighI32X4U, (simdExtmulOperation<uint32_t, uint64_t, false>)) \
+    F(I32X4DotI16X8S, (simdDotOperation))                                      \
+    F(I8X16NarrowI16X8S, (simdNarrowOperation<int16_t, int8_t>))               \
+    F(I8X16NarrowI16X8U, (simdNarrowOperation<int16_t, uint8_t>))              \
+    F(I16X8NarrowI32X4S, (simdNarrowOperation<int32_t, int16_t>))              \
+    F(I16X8NarrowI32X4U, (simdNarrowOperation<int32_t, uint16_t>))
 
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
@@ -418,27 +419,27 @@ class FunctionType;
     F(F64X2ConvertLowI32X4S, int32_t, double, true)     \
     F(F64X2ConvertLowI32X4U, uint32_t, double, true)
 
-#define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F) \
-    F(V128AnyTrue)                            \
-    F(I8X16Bitmask)                           \
-    F(I8X16AllTrue)                           \
-    F(I16X8Bitmask)                           \
-    F(I16X8AllTrue)                           \
-    F(I32X4Bitmask)                           \
-    F(I32X4AllTrue)                           \
-    F(I64X2Bitmask)                           \
-    F(I64X2AllTrue)                           \
-    F(I16X8ExtaddPairwiseI8X16S)              \
-    F(I16X8ExtaddPairwiseI8X16U)              \
-    F(I32X4ExtaddPairwiseI16X8S)              \
-    F(I32X4ExtaddPairwiseI16X8U)              \
-    F(I32X4TruncSatF32X4S)                    \
-    F(I32X4TruncSatF32X4U)                    \
-    F(I32X4TruncSatF64X2SZero)                \
-    F(I32X4TruncSatF64X2UZero)                \
-    F(F32X4ConvertI32X4S)                     \
-    F(F32X4ConvertI32X4U)                     \
-    F(F32X4DemoteF64X2Zero)
+#define FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)                                       \
+    F(V128AnyTrue, (simdAnyTrueOperation))                                          \
+    F(I8X16Bitmask, (simdBitmaskOperation<int8_t>))                                 \
+    F(I8X16AllTrue, (simdAllTrueOperation<uint8_t, 16>))                            \
+    F(I16X8Bitmask, (simdBitmaskOperation<int16_t>))                                \
+    F(I16X8AllTrue, (simdAllTrueOperation<uint16_t, 8>))                            \
+    F(I32X4Bitmask, (simdBitmaskOperation<int32_t>))                                \
+    F(I32X4AllTrue, (simdAllTrueOperation<uint32_t, 4>))                            \
+    F(I64X2Bitmask, (simdBitmaskOperation<int64_t>))                                \
+    F(I64X2AllTrue, (simdAllTrueOperation<uint64_t, 2>))                            \
+    F(I16X8ExtaddPairwiseI8X16S, (simdExtaddPairwiseOperation<int8_t, int16_t>))    \
+    F(I16X8ExtaddPairwiseI8X16U, (simdExtaddPairwiseOperation<uint8_t, uint16_t>))  \
+    F(I32X4ExtaddPairwiseI16X8S, (simdExtaddPairwiseOperation<int16_t, int32_t>))   \
+    F(I32X4ExtaddPairwiseI16X8U, (simdExtaddPairwiseOperation<uint16_t, uint32_t>)) \
+    F(I32X4TruncSatF32X4S, (simdTruncSatOperation<float, int32_t>))                 \
+    F(I32X4TruncSatF32X4U, (simdTruncSatOperation<float, uint32_t>))                \
+    F(I32X4TruncSatF64X2SZero, (simdTruncSatZeroOperation<double, int32_t>))        \
+    F(I32X4TruncSatF64X2UZero, (simdTruncSatZeroOperation<double, uint32_t>))       \
+    F(F32X4ConvertI32X4S, (simdConvertOperation<int32_t, float>))                   \
+    F(F32X4ConvertI32X4U, (simdConvertOperation<uint32_t, float>))                  \
+    F(F32X4DemoteF64X2Zero, (simdDemoteZeroOperation))
 
 #define FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F) \
     F(V128Load8Splat, uint8_t)                  \
