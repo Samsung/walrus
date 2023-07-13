@@ -1936,6 +1936,17 @@ public:
         }
     }
 
+    virtual void OnSimdShuffleOpExpr(int opcode, uint8_t* value) override
+    {
+        ASSERT(static_cast<WASMOpcode>(opcode) == WASMOpcode::I8X16ShuffleOpcode);
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::V128)));
+        auto src1 = popVMStack();
+        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::V128)));
+        auto src0 = popVMStack();
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
+        pushByteCode(Walrus::I8X16Shuffle(src0, src1, dst, value), WASMOpcode::I8X16ShuffleOpcode);
+    }
+
     void generateBinaryCode(WASMOpcode code, size_t src0, size_t src1, size_t dst)
     {
         switch (code) {
