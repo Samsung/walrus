@@ -691,7 +691,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                            \
     }
 
-#define SIMD_LANE_OPERATION(opcodeName, readType, writeType)                 \
+#define SIMD_EXTRACT_LANE_OPERATION(opcodeName, readType, writeType)         \
     DEFINE_OPCODE(opcodeName)                                                \
         :                                                                    \
     {                                                                        \
@@ -701,6 +701,20 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         writeValue<writeType>(bp, code->dstOffset(), result[code->index()]); \
         ADD_PROGRAM_COUNTER(opcodeName);                                     \
         NEXT_INSTRUCTION();                                                  \
+    }
+
+#define SIMD_REPLACE_LANE_OPERATION(opcodeName, readType, writeType)          \
+    DEFINE_OPCODE(opcodeName)                                                 \
+        :                                                                     \
+    {                                                                         \
+        using ResultType = typename SIMDType<writeType>::Type;                \
+        opcodeName* code = (opcodeName*)programCounter;                       \
+        auto val = readValue<readType>(bp, code->srcOffsets()[1]);            \
+        ResultType result = readValue<ResultType>(bp, code->srcOffsets()[0]); \
+        result[code->index()] = val;                                          \
+        writeValue<ResultType>(bp, code->dstOffset(), result);                \
+        ADD_PROGRAM_COUNTER(opcodeName);                                      \
+        NEXT_INSTRUCTION();                                                   \
     }
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
@@ -983,7 +997,8 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(SIMD_MEMORY_LOAD_EXTEND_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(SIMD_MEMORY_LOAD_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(SIMD_MEMORY_STORE_LANE_OPERATION)
-    FOR_EACH_BYTECODE_SIMD_LANE_OP(SIMD_LANE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(SIMD_EXTRACT_LANE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(SIMD_REPLACE_LANE_OPERATION)
 
     // FOR_EACH_BYTECODE_SIMD_ETC_OP
     DEFINE_OPCODE(V128BitSelect)

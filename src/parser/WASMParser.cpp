@@ -1864,18 +1864,31 @@ public:
     virtual void OnSimdLaneOpExpr(int opcode, uint64_t value) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
-        ASSERT(peekVMStackSize() == Walrus::valueSizeInStack(toValueKind(Type::V128)));
-        auto src = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
-#define GENERATE_SIMD_LANE_CODE_CASE(name, ...)                                  \
-    case WASMOpcode::name##Opcode: {                                             \
-        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src, dst), code); \
-        break;                                                                   \
+#define GENERATE_SIMD_EXTRACT_LANE_CODE_CASE(name, ...)                                                          \
+    case WASMOpcode::name##Opcode: {                                                                             \
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize()); \
+        auto src = popVMStack();                                                                                 \
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));         \
+        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src, dst), code);                                 \
+        break;                                                                                                   \
     }
 
-            FOR_EACH_BYTECODE_SIMD_LANE_OP(GENERATE_SIMD_LANE_CODE_CASE)
-#undef GENERATE_SIMD_LANE_CODE_CASE
+#define GENERATE_SIMD_REPLACE_LANE_CODE_CASE(name, ...)                                                          \
+    case WASMOpcode::name##Opcode: {                                                                             \
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackSize()); \
+        auto src1 = popVMStack();                                                                                \
+        ASSERT(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackSize()); \
+        auto src0 = popVMStack();                                                                                \
+        auto dst = pushVMStack(WASMCodeInfo::codeTypeToMemorySize(g_wasmCodeInfo[opcode].m_resultType));         \
+        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src0, src1, dst), code);                          \
+        break;                                                                                                   \
+    }
+
+            FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(GENERATE_SIMD_EXTRACT_LANE_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(GENERATE_SIMD_REPLACE_LANE_CODE_CASE)
+#undef GENERATE_SIMD_EXTRACT_LANE_CODE_CASE
+#undef GENERATE_SIMD_REPLACE_LANE_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
             break;
