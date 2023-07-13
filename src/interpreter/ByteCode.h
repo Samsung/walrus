@@ -494,7 +494,8 @@ class FunctionType;
 #define FOR_EACH_BYTECODE_SIMD_ETC_OP(F) \
     F(V128BitSelect)                     \
     F(V128Load32Zero)                    \
-    F(V128Load64Zero)
+    F(V128Load64Zero)                    \
+    F(I8X16Shuffle)
 
 #define FOR_EACH_BYTECODE(F)                   \
     FOR_EACH_BYTECODE_OP(F)                    \
@@ -1683,6 +1684,33 @@ public:
         printf("V128Load64Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
     }
 #endif
+};
+
+class I8X16Shuffle : public ByteCode {
+public:
+    I8X16Shuffle(ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst, uint8_t* value)
+        : ByteCode(Opcode::I8X16ShuffleOpcode)
+        , m_srcOffsets{ src0, src1 }
+        , m_dstOffset(dst)
+    {
+        ASSERT(!!value);
+        memcpy(m_value, value, 16);
+    }
+
+    const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    const uint8_t* value() const { return m_value; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("I8X16Shuffle src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffsets[0], (uint32_t)m_srcOffsets[1], (uint32_t)m_dstOffset);
+    }
+#endif
+protected:
+    ByteCodeStackOffset m_srcOffsets[2];
+    ByteCodeStackOffset m_dstOffset;
+    uint8_t m_value[16];
 };
 
 class TableGet : public ByteCode {

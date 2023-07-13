@@ -1050,6 +1050,24 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(I8X16Shuffle)
+        :
+    {
+        using Type = typename SIMDType<uint8_t>::Type;
+        I8X16Shuffle* code = (I8X16Shuffle*)programCounter;
+        Type sel;
+        memcpy(sel.v, code->value(), 16);
+        auto lhs = readValue<Type>(bp, code->srcOffsets()[0]);
+        auto rhs = readValue<Type>(bp, code->srcOffsets()[1]);
+        Type result;
+        for (uint8_t i = 0; i < Type::Lanes; i++) {
+            result[i] = sel[i] < Type::Lanes ? lhs[sel[i]] : rhs[sel[i] - Type::Lanes];
+        }
+        writeValue<Type>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(I8X16Shuffle);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(MemorySize)
         :
     {

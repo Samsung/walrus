@@ -158,6 +158,7 @@ public:
     virtual void OnSimdStoreLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) = 0;
     virtual void OnLoadSplatExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
     virtual void OnLoadZeroExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) = 0;
+    virtual void OnSimdShuffleOpExpr(int opcode, uint8_t* value) = 0;
 
     bool shouldContinueToGenerateByteCode() const
     {
