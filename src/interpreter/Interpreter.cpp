@@ -450,6 +450,15 @@ inline static void simdDemoteZeroOperation(ExecutionState& state, UnaryOperation
     writeValue<ResultType>(bp, code->dstOffset(), result);
 }
 
+template <typename P, typename R>
+inline static void simdSplatOperation(ExecutionState& state, UnaryOperation* code, uint8_t* bp)
+{
+    using ResultType = typename SIMDType<R>::Type;
+    auto val = readValue<P>(bp, code->srcOffset());
+    ResultType result;
+    std::fill(std::begin(result.v), std::end(result.v), val);
+    writeValue<ResultType>(bp, code->dstOffset(), result);
+}
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 static void initAddressToOpcodeTable()
