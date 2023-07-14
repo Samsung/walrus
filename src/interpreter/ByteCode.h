@@ -454,12 +454,12 @@ class FunctionType;
     F(V128Load64Splat, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
-    F(V128Load8X8S, int8_t, int16_t)             \
-    F(V128Load8X8U, uint8_t, uint16_t)           \
-    F(V128Load16X4S, int16_t, int32_t)           \
-    F(V128Load16X4U, uint16_t, uint32_t)         \
-    F(V128Load32X2S, int32_t, int64_t)           \
-    F(V128Load32X2U, uint32_t, uint64_t)
+    F(V128Load8X8S, S8x8, int16_t)               \
+    F(V128Load8X8U, U8x8, uint16_t)              \
+    F(V128Load16X4S, S16x4, int32_t)             \
+    F(V128Load16X4U, U16x4, uint32_t)            \
+    F(V128Load32X2S, S32x2, int64_t)             \
+    F(V128Load32X2U, U32x2, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F) \
     F(V128Load8Lane, uint8_t)                  \
