@@ -67,6 +67,14 @@ typedef SIMDValue<uint64_t, 2> U64x2;
 typedef SIMDValue<float, 4> F32x4;
 typedef SIMDValue<double, 2> F64x2;
 
+// for load extend instructions
+typedef SIMDValue<int8_t, 8> S8x8;
+typedef SIMDValue<uint8_t, 8> U8x8;
+typedef SIMDValue<int16_t, 4> S16x4;
+typedef SIMDValue<uint16_t, 4> U16x4;
+typedef SIMDValue<int32_t, 2> S32x2;
+typedef SIMDValue<uint32_t, 2> U32x2;
+
 COMPILE_ASSERT(sizeof(uint32_t) == sizeof(float), "");
 COMPILE_ASSERT(sizeof(uint64_t) == sizeof(double), "");
 COMPILE_ASSERT(sizeof(S8x16) == sizeof(Vec128), "");
@@ -79,6 +87,13 @@ COMPILE_ASSERT(sizeof(S64x2) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(U64x2) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(F32x4) == sizeof(Vec128), "");
 COMPILE_ASSERT(sizeof(F64x2) == sizeof(Vec128), "");
+
+COMPILE_ASSERT(sizeof(S8x8) == 8, "");
+COMPILE_ASSERT(sizeof(U8x8) == 8, "");
+COMPILE_ASSERT(sizeof(S16x4) == 8, "");
+COMPILE_ASSERT(sizeof(U16x4) == 8, "");
+COMPILE_ASSERT(sizeof(S32x2) == 8, "");
+COMPILE_ASSERT(sizeof(U32x2) == 8, "");
 
 template <typename T>
 struct SIMDType;
@@ -646,11 +661,10 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
     DEFINE_OPCODE(opcodeName)                                              \
         :                                                                  \
     {                                                                      \
-        using ReadType = typename SIMDType<readType>::Type;                \
         using WriteType = typename SIMDType<writeType>::Type;              \
         MemoryLoad* code = (MemoryLoad*)programCounter;                    \
         uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());      \
-        ReadType value;                                                    \
+        readType value;                                                    \
         memories[0]->load(state, offset, code->offset(), &value);          \
         WriteType result;                                                  \
         for (uint8_t i = 0; i < WriteType::Lanes; i++) {                   \
