@@ -247,19 +247,30 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             if (iter != registeredInstanceMap->end()) {
                 Instance* instance = iter->second;
                 auto e = instance->resolveExportType(import->fieldName());
-                RELEASE_ASSERT(e);
-                if (e->exportType() == ExportType::Function) {
-                    importValues.push_back(instance->resolveExportFunction(import->fieldName()));
-                } else if (e->exportType() == ExportType::Tag) {
-                    importValues.push_back(instance->resolveExportTag(import->fieldName()));
-                } else if (e->exportType() == ExportType::Table) {
-                    importValues.push_back(instance->resolveExportTable(import->fieldName()));
-                } else if (e->exportType() == ExportType::Memory) {
-                    importValues.push_back(instance->resolveExportMemory(import->fieldName()));
-                } else if (e->exportType() == ExportType::Global) {
-                    importValues.push_back(instance->resolveExportGlobal(import->fieldName()));
-                } else {
+                if (e == nullptr) {
+                    printf("Error: %s:%s module has not been found.\n", import->fieldName().c_str(), import->moduleName().c_str());
                     RELEASE_ASSERT_NOT_REACHED();
+                }
+                switch (e->exportType()) {
+                case ExportType::Function:
+                    importValues.push_back(instance->resolveExportFunction(import->fieldName()));
+                    break;
+                case ExportType::Tag:
+                    importValues.push_back(instance->resolveExportTag(import->fieldName()));
+                    break;
+                case ExportType::Table:
+                    importValues.push_back(instance->resolveExportTable(import->fieldName()));
+                    break;
+                case ExportType::Memory:
+                    importValues.push_back(instance->resolveExportMemory(import->fieldName()));
+                    break;
+                case ExportType::Global:
+                    importValues.push_back(instance->resolveExportGlobal(import->fieldName()));
+                    break;
+                default:
+                    printf("Error: unsupported export type: %s\n", import->moduleName().c_str());
+                    RELEASE_ASSERT_NOT_REACHED();
+                    break;
                 }
             }
         }
@@ -328,7 +339,9 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         return Walrus::Value(Walrus::Value::ExternRef, c.ref_bits() + 1, Walrus::Value::Force);
     }
     default:
+        printf("Error: unknown value type during converting wabt::Const to wabt::Value\n");
         RELEASE_ASSERT_NOT_REACHED();
+        return Walrus::Value();
     }
 }
 
@@ -456,11 +469,16 @@ static void printConstVector(wabt::ConstVector& v)
 {
     for (size_t i = 0; i < v.size(); i++) {
         auto c = v[i];
-        if (c.type() == wabt::Type::I32) {
+        switch (c.type()) {
+        case wabt::Type::I32: {
             printf("%" PRIu32, c.u32());
-        } else if (c.type() == wabt::Type::I64) {
+            break;
+        }
+        case wabt::Type::I64: {
             printf("%" PRIu64, c.u64());
-        } else if (c.type() == wabt::Type::F32) {
+            break;
+        }
+        case wabt::Type::F32: {
             if (c.is_expected_nan(0)) {
                 printf("nan");
                 return;
@@ -469,7 +487,9 @@ static void printConstVector(wabt::ConstVector& v)
             auto bits = c.f32_bits();
             memcpy(&s, &bits, sizeof(float));
             printf("%f", s);
-        } else if (c.type() == wabt::Type::F64) {
+            break;
+        }
+        case wabt::Type::F64: {
             if (c.is_expected_nan(0)) {
                 printf("nan");
                 return;
@@ -478,26 +498,37 @@ static void printConstVector(wabt::ConstVector& v)
             auto bits = c.f64_bits();
             memcpy(&s, &bits, sizeof(double));
             printf("%lf", s);
-        } else if (c.type() == wabt::Type::ExternRef) {
-            // FIXME value of c.ref_bits() for RefNull
-            wabt::Const constNull;
-            constNull.set_null(c.type());
-            if (c.ref_bits() == constNull.ref_bits()) {
-                printf("ref.null");
-                return;
-            }
-        } else if (c.type() == wabt::Type::FuncRef) {
-            // FIXME value of c.ref_bits() for RefNull
-            wabt::Const constNull;
-            constNull.set_null(c.type());
-            if (c.ref_bits() == constNull.ref_bits()) {
-                printf("ref.null");
-                return;
-            }
-        } else if (c.type() == wabt::Type::V128) {
+            break;
+        }
+        case wabt::Type::V128: {
             printf("v128");
-        } else {
+            break;
+        }
+        case wabt::Type::ExternRef: {
+            // FIXME value of c.ref_bits() for RefNull
+            wabt::Const constNull;
+            constNull.set_null(c.type());
+            if (c.ref_bits() == constNull.ref_bits()) {
+                printf("ref.null");
+                return;
+            }
+            break;
+        }
+        case wabt::Type::FuncRef: {
+            // FIXME value of c.ref_bits() for RefNull
+            wabt::Const constNull;
+            constNull.set_null(c.type());
+            if (c.ref_bits() == constNull.ref_bits()) {
+                printf("ref.null");
+                return;
+            }
+            break;
+        }
+        default: {
+            printf("Error: unkown wabt::Const type\n");
             RELEASE_ASSERT_NOT_REACHED();
+            break;
+        }
         }
         if (i + 1 != v.size()) {
             printf(", ");
@@ -508,7 +539,10 @@ static void printConstVector(wabt::ConstVector& v)
 static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn, wabt::ConstVector expectedResult,
                                 const char* expectedException, bool expectUserException = false)
 {
-    RELEASE_ASSERT(fn->functionType()->param().size() == action->args.size());
+    if (fn->functionType()->param().size() != action->args.size()) {
+        printf("Error: expected %zu parameter(s) but got %zu.\n", fn->functionType()->param().size(), action->args.size());
+        RELEASE_ASSERT_NOT_REACHED();
+    }
     Walrus::ValueVector args;
     for (auto& a : action->args) {
         args.push_back(toWalrusValue(a));
@@ -518,7 +552,8 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         Walrus::Function* fn;
         wabt::ConstVector& expectedResult;
         Walrus::ValueVector& args;
-    } data = { fn, expectedResult, args };
+        wabt::InvokeAction* action;
+    } data = { fn, expectedResult, args, action };
     Walrus::Trap trap;
     auto trapResult = trap.run([](Walrus::ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
@@ -526,26 +561,51 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         result.resize(data->expectedResult.size());
         data->fn->call(state, data->args.data(), result.data());
         if (data->expectedResult.size()) {
-            RELEASE_ASSERT(data->fn->functionType()->result().size() == data->expectedResult.size());
+            if (data->fn->functionType()->result().size() != data->expectedResult.size()) {
+                printf("Error: %s returned with %zu parameter(s) but expected %zu", data->action->name.data(), data->fn->functionType()->result().size(), data->expectedResult.size());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             // compare result
             for (size_t i = 0; i < result.size(); i++) {
-                RELEASE_ASSERT(equals(result[i], data->expectedResult[i]));
+                if (!equals(result[i], data->expectedResult[i])) {
+                    printf("Assertion failed at %d: ", data->action->loc.line);
+                    printf("%s(", data->action->name.data());
+                    printConstVector(data->action->args);
+                    printf(") expected ");
+                    printConstVector(data->expectedResult);
+                    printf(", but got %s\n", ((std::string)result[i]).c_str());
+                    RELEASE_ASSERT_NOT_REACHED();
+                }
             }
         }
     },
                                &data);
     if (expectedResult.size()) {
-        RELEASE_ASSERT(!trapResult.exception);
+        if (trapResult.exception != nullptr) {
+            printf("Error: %s\n", trapResult.exception->message().c_str());
+            RELEASE_ASSERT_NOT_REACHED();
+        }
     }
     if (expectedException) {
-        RELEASE_ASSERT(trapResult.exception);
+        if (trapResult.exception == nullptr) {
+            printf("Missing exception: %s\n", expectedException);
+            RELEASE_ASSERT_NOT_REACHED();
+        }
         std::string& s = trapResult.exception->message();
-        RELEASE_ASSERT(s.find(expectedException) == 0);
+        if (s.find(expectedException) != 0) {
+            printf("Error: different error message than expected!\n");
+            printf("Expected: %s\n", expectedException);
+            printf("But got: %s\n", s.c_str());
+            RELEASE_ASSERT_NOT_REACHED();
+        }
         printf("invoke %s(", action->name.data());
         printConstVector(action->args);
         printf("), expect exception: %s (line: %d) : OK\n", expectedException, action->loc.line);
     } else if (expectUserException) {
-        RELEASE_ASSERT(trapResult.exception->tag());
+        if (trapResult.exception->tag() == nullptr) {
+            printf("Missing user exception: %s\n", action->name.data());
+            RELEASE_ASSERT_NOT_REACHED();
+        }
         printf("invoke %s(", action->name.data());
         printConstVector(action->args);
         printf(") expect user exception() (line: %d) : OK\n", action->loc.line);
@@ -582,9 +642,9 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
 static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes, WASI* wasi)
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
-    if (!lexer) {
+    if (lexer == nullptr) {
+        printf("Error during lexer initialization!\n");
         RELEASE_ASSERT_NOT_REACHED();
-        return;
     }
 
     wabt::Errors errors;
@@ -594,8 +654,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     wabt::WastParseOptions parse_wast_options(features);
     auto result = wabt::ParseWastScript(lexer.get(), &script, &errors, &parse_wast_options);
     if (!wabt::Succeeded(result)) {
+        printf("Syntax error(s):\n");
+        for (auto e : errors)
+            printf("  %s\n", e.message.c_str());
+        printf("\n");
         RELEASE_ASSERT_NOT_REACHED();
-        return;
     }
 
     std::map<size_t, Instance*> instanceMap;
@@ -608,7 +671,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
             auto trapResult = executeWASM(store, filename, buf->data, functionTypes, wasi, &registeredInstanceMap);
-            RELEASE_ASSERT(!trapResult.exception);
+            if (trapResult.exception) {
+                std::string& errorMessage = trapResult.exception->message();
+                printf("Error: %s\n", errorMessage.c_str());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             instanceMap[commandCount] = store->getLastInstance();
             if (moduleCommand->module.name.size()) {
                 registeredInstanceMap[moduleCommand->module.name] = store->getLastInstance();
@@ -618,7 +685,10 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::AssertReturn: {
             auto* assertReturn = static_cast<wabt::AssertReturnCommand*>(command.get());
             auto value = fetchInstance(assertReturn->action->module_var, instanceMap, registeredInstanceMap)->resolveExportType(assertReturn->action->name);
-            RELEASE_ASSERT(value);
+            if (value == nullptr) {
+                printf("Undefined function: %s\n", assertReturn->action->name.c_str());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
@@ -626,20 +696,27 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
                 auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
                 auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(action->name)->value();
-                RELEASE_ASSERT(equals(v, assertReturn->expected[0]))
+                if (!equals(v, assertReturn->expected[0])) {
+                    printf("Assert failed.\n");
+                    RELEASE_ASSERT_NOT_REACHED();
+                }
                 printf("get %s", action->name.data());
                 printf(" expect value(");
                 printConstVector(assertReturn->expected);
                 printf(") (line: %d) : OK\n", action->loc.line);
             } else {
-                ASSERT_NOT_REACHED();
+                printf("Not supported action type.\n");
+                RELEASE_ASSERT_NOT_REACHED();
             }
             break;
         }
         case wabt::CommandType::AssertTrap: {
             auto* assertTrap = static_cast<wabt::AssertTrapCommand*>(command.get());
             auto value = fetchInstance(assertTrap->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertTrap->action->name);
-            RELEASE_ASSERT(value);
+            if (value == nullptr) {
+                printf("Error: fetchInstance returned with nullptr.\n");
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             if (assertTrap->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertTrap->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
@@ -652,7 +729,10 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::AssertException: {
             auto* assertException = static_cast<wabt::AssertExceptionCommand*>(command.get());
             auto value = fetchInstance(assertException->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertException->action->name);
-            RELEASE_ASSERT(value);
+            if (value == nullptr) {
+                printf("Fetching instance failed (at wabt::CommandType::AssertException case)\n");
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             if (assertException->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertException->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
@@ -666,12 +746,20 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             auto* assertModuleUninstantiable = static_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertUninstantiable>*>(command.get());
             auto m = assertModuleUninstantiable->module.get();
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
-            RELEASE_ASSERT(tsm);
+            if (tsm == nullptr) {
+                printf("Error at casting to wabt::TextScriptModule*.\n");
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             auto buf = readModuleData(&tsm->module);
             auto trapResult = executeWASM(store, filename, buf->data, functionTypes, wasi, &registeredInstanceMap);
             RELEASE_ASSERT(trapResult.exception);
             std::string& s = trapResult.exception->message();
-            RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
+            if (s.find(assertModuleUninstantiable->text) != 0) {
+                printf("Error: different error message than expected!\n");
+                printf("Expected: %s\n", assertModuleUninstantiable->text.c_str());
+                printf("But got: %s\n", s.c_str());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
             break;
         }
@@ -683,7 +771,10 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::Action: {
             auto* actionCommand = static_cast<wabt::ActionCommand*>(command.get());
             auto value = fetchInstance(actionCommand->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(actionCommand->action->name);
-            RELEASE_ASSERT(value);
+            if (value == nullptr) {
+                printf("Fetching instance failed (at wabt::CommandType::Action case)");
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             if (actionCommand->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(actionCommand->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
@@ -698,7 +789,10 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             auto m = assertModuleInvalid->module.get();
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             auto dsm = dynamic_cast<wabt::BinaryScriptModule*>(m);
-            RELEASE_ASSERT(tsm || dsm);
+            if (!tsm && !dsm) {
+                printf("Module is neither TextScriptModule nor BinaryScriptModule.\n");
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             std::vector<uint8_t> buf;
             if (tsm) {
                 buf = readModuleData(&tsm->module)->data;
@@ -706,7 +800,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 buf = dsm->data;
             }
             auto trapResult = executeWASM(store, filename, buf, functionTypes, wasi);
-            RELEASE_ASSERT(trapResult.exception);
+            if (trapResult.exception == nullptr) {
+                printf("Execute WASM returned nullptr (in wabt::CommandType::AssertInvalid case)\n");
+                printf("Expected exception:%s\n", assertModuleInvalid->text.data());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             std::string& actual = trapResult.exception->message();
             printf("assertModuleInvalid (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertModuleInvalid->text.data(), actual.data(), assertModuleInvalid->module->location().line);
             break;
@@ -721,7 +819,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             auto m = assertUnlinkable->module.get();
             auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
             auto dsm = dynamic_cast<wabt::BinaryScriptModule*>(m);
-            RELEASE_ASSERT(tsm || dsm);
+            if (!tsm && !dsm) {
+                printf("Both TextScriptModule* and BinaryScriptModule* castings failed (in wabt::CommandType::AssertUnlinkable case)\n");
+                RELEASE_ASSERT_NOT_REACHED();
+            }
+
             std::vector<uint8_t> buf;
             if (tsm) {
                 buf = readModuleData(&tsm->module)->data;
@@ -729,13 +831,20 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 buf = dsm->data;
             }
             auto trapResult = executeWASM(store, filename, buf, functionTypes, wasi);
-            RELEASE_ASSERT(trapResult.exception);
+            if (trapResult.exception == nullptr) {
+                printf("Execute WASM returned nullptr (in wabt::CommandType::AssertUnlinkable case)\n");
+                printf("Expected exception:%s\n", assertUnlinkable->text.data());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             break;
         }
         case wabt::CommandType::AssertExhaustion: {
             auto* assertExhaustion = static_cast<wabt::AssertExhaustionCommand*>(command.get());
             auto value = fetchInstance(assertExhaustion->action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(assertExhaustion->action->name);
-            RELEASE_ASSERT(value);
+            if (value == nullptr) {
+                printf("Fetching instance failed (at wabt::CommandType::AssertExhaustion case)\n");
+                RELEASE_ASSERT_NOT_REACHED();
+            }
             if (assertExhaustion->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertExhaustion->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
