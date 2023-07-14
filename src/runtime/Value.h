@@ -363,6 +363,26 @@ public:
         return false;
     }
 
+    operator std::string() const
+    {
+        switch (m_type) {
+        case I32:
+            return std::to_string(asI32());
+        case I64:
+            return std::to_string(asI64());
+        case F32:
+            return std::to_string(asF32());
+        case F64:
+            return std::to_string(asF64());
+        case FuncRef:
+        case ExternRef:
+            return std::to_string((size_t)(asExternal()));
+        default:
+            ASSERT_NOT_REACHED();
+            return "";
+        }
+    }
+
 private:
     union {
         int32_t m_i32;
