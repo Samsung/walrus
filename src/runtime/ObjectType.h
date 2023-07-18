@@ -131,19 +131,20 @@ private:
 
 class MemoryType : public ObjectType {
 public:
-    MemoryType(uint32_t initSize, uint32_t maxSize)
+    MemoryType(uint64_t initSize, uint64_t maxSize)
         : ObjectType(ObjectType::MemoryKind)
         , m_initialSize(initSize)
         , m_maximumSize(maxSize)
     {
     }
 
-    uint32_t initialSize() const { return m_initialSize; }
-    uint32_t maximumSize() const { return m_maximumSize; }
+    uint64_t initialSize() const { return m_initialSize; }
+    uint64_t maximumSize() const { return m_maximumSize; }
 
 private:
-    uint32_t m_initialSize;
-    uint32_t m_maximumSize;
+    // size should be uint64_t type
+    uint64_t m_initialSize;
+    uint64_t m_maximumSize;
 };
 
 class TagType : public ObjectType {

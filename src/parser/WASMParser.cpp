@@ -640,7 +640,7 @@ public:
         m_result.m_memoryTypes.reserve(count);
     }
 
-    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) override
+    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize) override
     {
         ASSERT(index == m_result.m_memoryTypes.size());
         m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize));

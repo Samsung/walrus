@@ -154,10 +154,8 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Trap::throwException(state, "incompatible import type");
             }
 
-            if (m_imports[i]->tableType()->maximumSize() != std::numeric_limits<uint32_t>::max()) {
-                if (imports[i]->asTable()->maximumSize() == std::numeric_limits<uint32_t>::max()
-                    || imports[i]->asTable()->maximumSize() > m_imports[i]->tableType()->maximumSize())
-                    Trap::throwException(state, "incompatible import type");
+            if (imports[i]->asTable()->maximumSize() > m_imports[i]->tableType()->maximumSize()) {
+                Trap::throwException(state, "incompatible import type");
             }
             instance->m_tables[tableIndex++] = imports[i]->asTable();
             break;
@@ -168,10 +166,8 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Trap::throwException(state, "incompatible import type");
             }
 
-            if (m_imports[i]->memoryType()->maximumSize() != std::numeric_limits<uint32_t>::max()) {
-                if (imports[i]->asMemory()->maximumSizeInPageSize() == std::numeric_limits<uint32_t>::max()
-                    || imports[i]->asMemory()->maximumSizeInPageSize() > m_imports[i]->memoryType()->maximumSize())
-                    Trap::throwException(state, "incompatible import type");
+            if (imports[i]->asMemory()->maximumSizeInPageSize() > m_imports[i]->memoryType()->maximumSize()) {
+                Trap::throwException(state, "incompatible import type");
             }
             instance->m_memories[memIndex++] = imports[i]->asMemory();
             break;
@@ -282,7 +278,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                          &data);
             }
 
-            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || index >= instance->m_tables[elem->tableIndex()]->size() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
+            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
                 Trap::throwException(state, "out of bounds table access");
             }
 

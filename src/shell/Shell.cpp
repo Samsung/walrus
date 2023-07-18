@@ -706,7 +706,8 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::ScriptModule: {
             auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
-            executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            RELEASE_ASSERT(!trapResult.exception);
             instanceMap[commandCount] = store->getLastInstance();
             if (moduleCommand->module.name.size()) {
                 registeredInstanceMap[moduleCommand->module.name] = store->getLastInstance();
@@ -767,6 +768,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             RELEASE_ASSERT(tsm);
             auto buf = readModuleData(&tsm->module);
             auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            RELEASE_ASSERT(trapResult.exception);
             std::string& s = trapResult.exception->message();
             RELEASE_ASSERT(s.find(assertModuleUninstantiable->text) == 0);
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
