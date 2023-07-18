@@ -871,6 +871,10 @@ static void runExports(Store* store, const std::string& filename, const std::vec
 
     auto module = parseResult.first;
 
+    if (useJIT) {
+        module->jitCompile(jitVerbose);
+    }
+
     const auto& importTypes = module->imports();
 
     if (importTypes.size() != 0) {
