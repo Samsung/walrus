@@ -30,7 +30,7 @@ class Memory : public Extern {
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
 
-    static Memory* createMemory(Store* store, uint32_t initialSizeInByte, uint32_t maximumSizeInByte = std::numeric_limits<uint32_t>::max());
+    static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte);
 
     ~Memory();
 
@@ -49,22 +49,22 @@ public:
         return m_buffer;
     }
 
-    uint32_t sizeInByte() const
+    uint64_t sizeInByte() const
     {
         return m_sizeInByte;
     }
 
-    uint32_t sizeInPageSize() const
+    uint64_t sizeInPageSize() const
     {
         return sizeInByte() / s_memoryPageSize;
     }
 
-    uint32_t maximumSizeInByte() const
+    uint64_t maximumSizeInByte() const
     {
         return m_maximumSizeInByte;
     }
 
-    uint32_t maximumSizeInPageSize() const
+    uint64_t maximumSizeInPageSize() const
     {
         return m_maximumSizeInByte / s_memoryPageSize;
     }
@@ -114,7 +114,7 @@ public:
     void fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size);
 
 private:
-    Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte);
+    Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte);
 
     void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
     inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0) const
@@ -132,8 +132,8 @@ private:
     inline void copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size);
     inline void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
-    uint32_t m_sizeInByte;
-    uint32_t m_maximumSizeInByte;
+    uint64_t m_sizeInByte;
+    uint64_t m_maximumSizeInByte;
     uint8_t* m_buffer;
 };
 
