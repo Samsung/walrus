@@ -246,7 +246,7 @@ struct wasm_memorytype_t : wasm_externtype_t {
 
     wasm_memorytype_t(const MemoryType* type)
         : wasm_externtype_t(WASM_EXTERN_MEMORY)
-        , limits{ type->initialSize() / (uint32_t)MEMORY_PAGE_SIZE, type->maximumSize() / (uint32_t)MEMORY_PAGE_SIZE }
+        , limits{ (uint32_t)type->initialSize() / (uint32_t)MEMORY_PAGE_SIZE, (uint32_t)type->maximumSize() / (uint32_t)MEMORY_PAGE_SIZE }
     {
     }
 

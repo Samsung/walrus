@@ -23,14 +23,14 @@
 
 namespace Walrus {
 
-Memory* Memory::createMemory(Store* store, uint32_t initialSizeInByte, uint32_t maximumSizeInByte)
+Memory* Memory::createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte)
 {
     Memory* mem = new Memory(initialSizeInByte, maximumSizeInByte);
     store->appendExtern(mem);
     return mem;
 }
 
-Memory::Memory(uint32_t initialSizeInByte, uint32_t maximumSizeInByte)
+Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte)
     : m_sizeInByte(initialSizeInByte)
     , m_maximumSizeInByte(maximumSizeInByte)
     , m_buffer(reinterpret_cast<uint8_t*>(calloc(1, initialSizeInByte)))

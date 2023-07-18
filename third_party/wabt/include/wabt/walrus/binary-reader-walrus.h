@@ -55,7 +55,7 @@ public:
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) = 0;
 
     virtual void OnMemoryCount(Index count) = 0;
-    virtual void OnMemory(Index index, size_t initialSize, size_t maximumSize) = 0;
+    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize) = 0;
 
     virtual void OnDataSegmentCount(Index count) = 0;
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) = 0;
