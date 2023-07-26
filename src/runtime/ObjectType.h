@@ -82,7 +82,7 @@ private:
     {
         size_t s = 0;
         for (size_t i = 0; i < v.size(); i++) {
-            s += valueSizeInStack(v[i]);
+            s += valueStackAllocatedSize(v[i]);
         }
         return s;
     }
