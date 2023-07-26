@@ -369,7 +369,29 @@ private:
     Type m_type;
 };
 
-inline size_t valueSizeInStack(Value::Type type)
+inline size_t valueSize(Value::Type type)
+{
+    switch (type) {
+    case Value::I32:
+        return sizeof(int32_t);
+    case Value::F32:
+        return sizeof(float);
+    case Value::I64:
+        return sizeof(int64_t);
+    case Value::F64:
+        return sizeof(double);
+    case Value::V128:
+        return 16;
+    case Value::FuncRef:
+    case Value::ExternRef:
+        return sizeof(size_t);
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        return 0;
+    }
+}
+
+inline size_t valueStackAllocatedSize(Value::Type type)
 {
     switch (type) {
     case Value::I32:
@@ -382,15 +404,21 @@ inline size_t valueSizeInStack(Value::Type type)
         return stackAllocatedSize<double>();
     case Value::V128:
         return 16;
-    default:
+    case Value::Void:
+        return 0;
+    case Value::FuncRef:
+    case Value::ExternRef:
         return sizeof(size_t);
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        return 0;
     }
 }
 
 template <const size_t size>
 inline void Value::readFromStack(uint8_t* ptr)
 {
-    ASSERT(valueSizeInStack(m_type) == size);
+    ASSERT(valueStackAllocatedSize(m_type) == size);
     if (size == 4) {
         m_i32 = *reinterpret_cast<int32_t*>(ptr);
     } else if (size == 8) {
