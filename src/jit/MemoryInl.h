@@ -49,7 +49,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* params, sljit_u32 offs
 
     if (SLJIT_IS_IMM(offsetArg.arg)) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_sw totalOffset = static_cast<sljit_sw>(offset) + static_cast<sljit_sw>(static_cast<sljit_u32>(offsetArg.argw));
+        sljit_uw totalOffset = offset + static_cast<sljit_u32>(offsetArg.argw);
 #else /* !SLJIT_64BIT_ARCHITECTURE */
         sljit_u32 totalOffset = static_cast<sljit_u32>(offsetArg.argw);
 
@@ -79,8 +79,14 @@ void MemAddress::check(sljit_compiler* compiler, Operand* params, sljit_u32 offs
             return;
         }
 
-        sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
                        OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte));
+#else /* !SLJIT_64BIT_ARCHITECTURE */
+        /* The sizeInByte is always a 32 bit number on 32 bit systems. */
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+                       OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
+#endif /* SLJIT_64BIT_ARCHITECTURE */
 
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(totalOffset + size));
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg),
@@ -111,13 +117,20 @@ void MemAddress::check(sljit_compiler* compiler, Operand* params, sljit_u32 offs
     }
 
     sljit_s32 offsetReg = GET_SOURCE_REG(offsetArg.arg, SLJIT_R1);
+    sljit_uw totalOffset = offset;
 
     MOVE_TO_REG(compiler, SLJIT_MOV_U32, offsetReg, offsetArg.arg, offsetArg.argw);
 
     if (context->initialMemorySize != context->maximumMemorySize) {
-        sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
                        OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte));
-        offset += size;
+#else /* !SLJIT_64BIT_ARCHITECTURE */
+        /* The sizeInByte is always a 32 bit number on 32 bit systems. */
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+                       OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+        totalOffset += size;
     }
 
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg),
@@ -127,17 +140,17 @@ void MemAddress::check(sljit_compiler* compiler, Operand* params, sljit_u32 offs
         load(compiler);
     }
 
-    if (offset > 0) {
+    if (totalOffset > 0) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
+        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(totalOffset));
 #else /* !SLJIT_64BIT_ARCHITECTURE */
-        sljit_emit_op2(compiler, SLJIT_ADD | SLJIT_SET_CARRY, SLJIT_R1, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
+        sljit_emit_op2(compiler, SLJIT_ADD | SLJIT_SET_CARRY, SLJIT_R1, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(totalOffset));
         sljit_set_label(sljit_emit_jump(compiler, SLJIT_CARRY), context->memoryTrapLabel);
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     }
 
     if (context->initialMemorySize == context->maximumMemorySize) {
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, SLJIT_R1, 0, SLJIT_IMM, context->maximumMemorySize - size), context->memoryTrapLabel);
+        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(context->maximumMemorySize - size)), context->memoryTrapLabel);
 
         memArg.arg = SLJIT_MEM2(SLJIT_R0, SLJIT_R1);
         memArg.argw = 0;
