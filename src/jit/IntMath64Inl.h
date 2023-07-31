@@ -20,16 +20,29 @@ static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instru
 {
     sljit_sw offset = static_cast<sljit_sw>(result->offset << 2);
 
-    if (instr->opcode() == ByteCode::Const32Opcode) {
+    switch (instr->opcode()) {
+#ifdef HAS_SIMD
+    case ByteCode::Const128Opcode: {
+        const uint8_t* value = reinterpret_cast<Const128*>(instr->byteCode())->value();
+
+        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, SLJIT_MEM0(), (sljit_sw)value);
+        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, SLJIT_MEM1(kFrameReg), offset);
+        return;
+    }
+#endif /* HAS_SIMD */
+    case ByteCode::Const32Opcode: {
         uint32_t value32 = reinterpret_cast<Const32*>(instr->byteCode())->value();
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kFrameReg), offset, SLJIT_IMM, static_cast<sljit_s32>(value32));
         return;
     }
+    default: {
+        ASSERT(instr->opcode() == ByteCode::Const64Opcode);
 
-    ASSERT(instr->opcode() == ByteCode::Const64Opcode);
-
-    uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kFrameReg), offset, SLJIT_IMM, static_cast<sljit_sw>(value64));
+        uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kFrameReg), offset, SLJIT_IMM, static_cast<sljit_sw>(value64));
+        return;
+    }
+    }
 }
 
 enum DivRemOptions : sljit_s32 {
