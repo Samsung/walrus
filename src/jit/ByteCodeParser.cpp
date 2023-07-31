@@ -485,7 +485,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I64Load32SOpcode:
         case ByteCode::I64Load32UOpcode:
         case ByteCode::F32LoadOpcode:
-        case ByteCode::F64LoadOpcode: {
+        case ByteCode::F64LoadOpcode:
+        case ByteCode::V128LoadOpcode: {
             MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
 
@@ -526,7 +527,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I64Store16Opcode:
         case ByteCode::I64Store32Opcode:
         case ByteCode::F32StoreOpcode:
-        case ByteCode::F64StoreOpcode: {
+        case ByteCode::F64StoreOpcode:
+        case ByteCode::V128StoreOpcode: {
             MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
 
@@ -856,6 +858,28 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             }
 
             continue;
+        }
+        /* SIMD support. */
+        case ByteCode::Const128Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Immediate, ByteCode::Const128Opcode, 0, 1);
+
+            Const128* const128 = reinterpret_cast<Const128*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(const128->dstOffset());
+            break;
+        }
+        case ByteCode::F64X2MinOpcode:
+        case ByteCode::F64X2MaxOpcode: {
+            group = Instruction::BinarySIMD;
+            paramCount = 2;
+            break;
+        }
+        case ByteCode::F64X2AbsOpcode: {
+            group = Instruction::UnarySIMD;
+            paramCount = 1;
+            break;
         }
         default: {
             break;
