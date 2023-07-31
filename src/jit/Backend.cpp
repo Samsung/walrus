@@ -305,6 +305,36 @@ struct CompileContext {
         sljit_emit_op1(compiler, mov_op, (arg), (argw), (source_reg), 0); \
     }
 
+#if (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
+#define HAS_SIMD
+
+static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 type, sljit_s32 srcReg)
+{
+    InstructionListItem* item = operand->item;
+
+    if (item == nullptr || item->group() != Instruction::Immediate) {
+        arg.set(operand);
+
+        if (SLJIT_IS_MEM(arg.arg)) {
+            sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | type, srcReg, arg.arg, arg.argw);
+
+            arg.arg = srcReg;
+            arg.argw = 0;
+        }
+        return;
+    }
+
+    ASSERT(item->asInstruction()->opcode() == ByteCode::Const128Opcode);
+
+    const uint8_t* value = reinterpret_cast<Const128*>(item->asInstruction()->byteCode())->value();
+    sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | type, srcReg, SLJIT_MEM0(), (sljit_sw)value);
+
+    arg.arg = srcReg;
+    arg.argw = 0;
+}
+
+#endif /* SLJIT_CONFIG_ARM_64 */
+
 #include "FloatMathInl.h"
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -332,6 +362,10 @@ static void emitStoreImmediateParams(sljit_compiler* compiler, Instruction* inst
 #include "MemoryInl.h"
 #include "TableInl.h"
 #include "TryCatchInl.h"
+
+#if (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
+#include "SimdArm64Inl.h"
+#endif /* SLJIT_CONFIG_ARM_64 */
 
 void CompileContext::emitSlowCases(sljit_compiler* compiler)
 {
@@ -745,6 +779,16 @@ JITModule* JITCompiler::compile()
             }
             break;
         }
+#ifdef HAS_SIMD
+        case Instruction::BinarySIMD: {
+            emitBinarySIMD(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::UnarySIMD: {
+            emitUnarySIMD(m_compiler, item->asInstruction());
+            break;
+        }
+#endif /* HAS_SIMD */
         default: {
             switch (item->asInstruction()->opcode()) {
             case ByteCode::SelectOpcode: {

@@ -24,6 +24,9 @@ struct MemAddress {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         DontSetR1 = 1 << 3,
 #endif /* SLJIT_32BIT_ARCHITECTURE */
+#ifdef HAS_SIMD
+        LoadToSimdReg0 = 1 << 4,
+#endif /* HAS_SIMD */
     };
 
     void check(sljit_compiler* compiler, Operand* params, sljit_u32 offset, sljit_u32 size);
@@ -196,6 +199,14 @@ void MemAddress::load(sljit_compiler* compiler)
         sljit_emit_fop1(compiler, (options & Load32) ? SLJIT_MOV_F32 : SLJIT_MOV_F64, SLJIT_FR0, 0, loadArg.arg, loadArg.argw);
         return;
     }
+
+#ifdef HAS_SIMD
+    if (options & LoadToSimdReg0) {
+        SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg));
+        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, loadArg.arg, loadArg.argw);
+        return;
+    }
+#endif /* HAS_SIMD */
 }
 
 static void emitLoad(sljit_compiler* compiler, Instruction* instr)
@@ -265,6 +276,12 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_MOV_F32;
         size = 4;
         break;
+#ifdef HAS_SIMD
+    case ByteCode::V128LoadOpcode:
+        opcode = 0;
+        size = 16;
+        break;
+#endif /* HAS_SIMD */
     default:
         ASSERT(instr->opcode() == ByteCode::F64LoadOpcode);
         opcode = SLJIT_MOV_F64;
@@ -295,6 +312,19 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, addr.memArg.arg, addr.memArg.argw);
         return;
     }
+
+#ifdef HAS_SIMD
+    if (opcode == 0) {
+        ASSERT(size == 16);
+
+        JITArg valueArg(operands + 1);
+
+        // TODO: support aligned access
+        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, addr.memArg.arg, addr.memArg.argw);
+        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, valueArg.arg, valueArg.argw);
+        return;
+    }
+#endif /* HAS_SIMD */
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (!(opcode & SLJIT_32)) {
@@ -398,6 +428,12 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_MOV_F32;
         size = 4;
         break;
+#ifdef HAS_SIMD
+    case ByteCode::V128StoreOpcode:
+        opcode = 0;
+        size = 16;
+        break;
+#endif /* HAS_SIMD */
     default:
         ASSERT(instr->opcode() == ByteCode::F64StoreOpcode);
         opcode = SLJIT_MOV_F64;
@@ -428,6 +464,25 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
                 addr.options |= MemAddress::Load32;
             }
         }
+#ifdef HAS_SIMD
+    } else if (opcode == 0) {
+        ASSERT(size == 16);
+
+        InstructionListItem* item = operands[1].item;
+
+        if (item == nullptr || item->group() != Instruction::Immediate) {
+            addr.loadArg.set(operands + 1);
+        } else {
+            ASSERT(item->asInstruction()->opcode() == ByteCode::Const128Opcode);
+
+            addr.loadArg.arg = SLJIT_MEM0();
+            addr.loadArg.argw = reinterpret_cast<sljit_sw>(reinterpret_cast<Const128*>(item->asInstruction()->byteCode())->value());
+        }
+
+        if (SLJIT_IS_MEM(addr.loadArg.arg)) {
+            addr.options = MemAddress::LoadToSimdReg0;
+        }
+#endif /* HAS_SIMD */
     } else {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         if (opcode == SLJIT_MOV32 || (opcode & SLJIT_32)) {
@@ -479,6 +534,20 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_fop1(compiler, opcode, addr.memArg.arg, addr.memArg.argw, addr.loadArg.arg, addr.loadArg.argw);
         return;
     }
+
+#ifdef HAS_SIMD
+    if (opcode == 0) {
+        ASSERT(size == 16);
+
+        if (addr.options & MemAddress::LoadToSimdReg0) {
+            addr.loadArg.arg = SLJIT_FR0;
+            addr.loadArg.argw = 0;
+        }
+
+        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, addr.loadArg.arg, addr.memArg.arg, addr.memArg.argw);
+        return;
+    }
+#endif /* HAS_SIMD */
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (opcode == SLJIT_MOV) {
