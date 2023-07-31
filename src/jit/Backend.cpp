@@ -253,6 +253,13 @@ struct CompileContext {
             MemoryType* memoryType = compiler->module()->memoryType(0);
             initialMemorySize = memoryType->initialSize() * Memory::s_memoryPageSize;
             maximumMemorySize = memoryType->maximumSize() * Memory::s_memoryPageSize;
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            /* Four GB memory cannot be allocated on 32 bit systems. */
+            if (maximumMemorySize >= ((uint64_t)1 << 32)) {
+                maximumMemorySize = ((uint64_t)1 << 32) - Memory::s_memoryPageSize;
+            }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
         }
     }
 
@@ -276,8 +283,8 @@ struct CompileContext {
     size_t nextTryBlock;
     size_t currentTryBlock;
     size_t trapBlocksStart;
-    uint32_t initialMemorySize;
-    uint32_t maximumMemorySize;
+    uint64_t initialMemorySize;
+    uint64_t maximumMemorySize;
     std::vector<TrapBlock> trapBlocks;
     std::vector<size_t> tryBlockStack;
     std::vector<SlowCase*> slowCases;
