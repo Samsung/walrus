@@ -89,6 +89,10 @@ public:
         GlobalGet,
         // GlobalSet operation (e.g. GlobalSet32, GlobalSet64)
         GlobalSet,
+        // Binary SIMD opcodes (e.g. F64X2Min)
+        BinarySIMD,
+        // Unary SIMD opcodes (e.g. F64X2Abs)
+        UnarySIMD,
     };
 
     virtual ~InstructionListItem() {}
