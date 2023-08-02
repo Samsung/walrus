@@ -678,7 +678,22 @@ Result BinaryReader::ReadInstructions(bool stop_on_end,
                                       Opcode* final_opcode) {
   CALLBACK(OnStartReadInstructions);
 
-  while (state_.offset < end_offset) {
+  auto start_offset = state_.offset;
+  bool in_preprocess = delegate_->NeedsPreprocess();
+  if (in_preprocess) {
+    CALLBACK(OnStartPreprocess);
+  }
+
+  while (true) {
+    if (state_.offset >= end_offset) {
+      if (in_preprocess) {
+        CALLBACK(OnEndPreprocess);
+        in_preprocess = false;
+        state_.offset = start_offset;
+      } else {
+        break;
+      }
+    }
     Opcode opcode;
     CHECK_RESULT(ReadOpcode(&opcode, "opcode"));
     CALLBACK(OnOpcode, opcode);
@@ -814,7 +829,13 @@ Result BinaryReader::ReadInstructions(bool stop_on_end,
       case Opcode::End:
         CALLBACK0(OnEndExpr);
         if (stop_on_end) {
-          return Result::Ok;
+          if (in_preprocess) {
+            CALLBACK(OnEndPreprocess);
+            in_preprocess = false;
+            state_.offset = start_offset;
+          } else {
+            return Result::Ok;
+          }
         }
         break;
 
