@@ -190,6 +190,10 @@ class BinaryReaderDelegate {
   virtual Result OnLocalDecl(Index decl_index, Index count, Type type) = 0;
   virtual Result OnStartReadInstructions() { return Result::Ok; }
 
+  virtual bool NeedsPreprocess() { return false; }
+  virtual Result OnStartPreprocess() { return Result::Ok; }
+  virtual Result OnEndPreprocess() { return Result::Ok; }
+
   /* Function expressions; called between BeginFunctionBody and
    EndFunctionBody */
   virtual Result OnOpcode(Opcode Opcode) = 0;
