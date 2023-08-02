@@ -870,12 +870,35 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(const128->dstOffset());
             break;
         }
+        case ByteCode::I8X16SubOpcode:
+        case ByteCode::I8X16AddOpcode:
+        case ByteCode::I8X16AddSatSOpcode:
+        case ByteCode::I8X16AddSatUOpcode:
+        case ByteCode::I8X16SubSatSOpcode:
+        case ByteCode::I8X16SubSatUOpcode:
+        case ByteCode::I16X8AddOpcode:
+        case ByteCode::I16X8SubOpcode:
+        case ByteCode::I16X8MulOpcode:
+        case ByteCode::I16X8AddSatSOpcode:
+        case ByteCode::I16X8AddSatUOpcode:
+        case ByteCode::I16X8SubSatSOpcode:
+        case ByteCode::I16X8SubSatUOpcode:
+        case ByteCode::I32X4AddOpcode:
+        case ByteCode::I32X4SubOpcode:
+        case ByteCode::I32X4MulOpcode:
+        case ByteCode::I64X2AddOpcode:
+        case ByteCode::I64X2SubOpcode:
+        case ByteCode::I64X2MulOpcode:
         case ByteCode::F64X2MinOpcode:
         case ByteCode::F64X2MaxOpcode: {
             group = Instruction::BinarySIMD;
             paramCount = 2;
             break;
         }
+        case ByteCode::I8X16NegOpcode:
+        case ByteCode::I16X8NegOpcode:
+        case ByteCode::I32X4NegOpcode:
+        case ByteCode::I64X2NegOpcode:
         case ByteCode::F64X2AbsOpcode: {
             group = Instruction::UnarySIMD;
             paramCount = 1;
