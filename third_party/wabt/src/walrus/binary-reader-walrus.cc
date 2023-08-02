@@ -411,6 +411,20 @@ public:
         return Result::Ok;
     }
 
+    Result OnStartPreprocess() override {
+        m_externalDelegate->OnStartPreprocess();
+        return Result::Ok;
+    }
+
+    Result OnEndPreprocess() override {
+        m_externalDelegate->OnEndPreprocess();
+        return Result::Ok;
+    }
+
+    bool NeedsPreprocess() override {
+        return true;
+    }
+
     /* Function expressions; called between BeginFunctionBody and
      EndFunctionBody */
     Result OnOpcode(Opcode opcode) override {

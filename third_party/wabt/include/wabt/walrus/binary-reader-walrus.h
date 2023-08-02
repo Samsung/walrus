@@ -98,6 +98,8 @@ public:
     virtual void OnLocalDecl(Index decl_index, Index count, Type type) = 0;
 
     virtual void OnStartReadInstructions() = 0;
+    virtual void OnStartPreprocess() = 0;
+    virtual void OnEndPreprocess() = 0;
 
     virtual void OnOpcode(uint32_t opcode) = 0;
 
