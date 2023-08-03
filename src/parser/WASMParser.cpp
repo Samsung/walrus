@@ -304,7 +304,9 @@ private:
     };
 
     size_t* m_readerOffsetPointer;
+    const uint8_t* m_readerDataPointer;
     size_t m_codeStartOffset;
+    size_t m_codeEndOffset;
 
     struct LocalVariableUsage {
         size_t m_localIndex;
@@ -379,6 +381,11 @@ private:
     virtual void OnSetOffsetAddress(size_t* ptr) override
     {
         m_readerOffsetPointer = ptr;
+    }
+
+    virtual void OnSetDataAddress(const uint8_t* data) override
+    {
+        m_readerDataPointer = data;
     }
 
     size_t pushVMStack(Walrus::Value::Type type)
@@ -486,10 +493,44 @@ private:
         m_currentFunction->pushByteCode(code);
     }
 
+    Walrus::Optional<uint8_t> lookaheadUnsigned8(size_t offset = 0)
+    {
+        if (*m_readerOffsetPointer + offset < m_codeEndOffset) {
+            return m_readerDataPointer[*m_readerOffsetPointer + offset];
+        }
+        return Walrus::Optional<uint8_t>();
+    }
+
+    std::pair<Walrus::Optional<uint32_t>, size_t> lookaheadUnsigned32(size_t offset = 0) // returns result value and data-length
+    {
+        if (*m_readerOffsetPointer + offset < m_codeEndOffset) {
+            uint32_t out = 0;
+            auto ptr = m_readerDataPointer + *m_readerOffsetPointer + offset;
+            auto len = ReadU32Leb128(ptr, m_readerDataPointer + m_codeEndOffset, &out);
+            return std::make_pair(out, len);
+        }
+        return std::make_pair(Walrus::Optional<uint32_t>(), 0);
+    }
+
+    std::pair<Walrus::Optional<uint32_t>, size_t> readAheadLocalGetIfExists() // return localIndex and code length if exists
+    {
+        Walrus::Optional<uint8_t> mayLoadGetCode = lookaheadUnsigned8();
+        if (mayLoadGetCode.hasValue() && mayLoadGetCode.value() == 0x21) {
+            auto r = lookaheadUnsigned32(1);
+            if (r.first) {
+                return std::make_pair(r.first, r.second + 1);
+            }
+        }
+
+        return std::make_pair(Walrus::Optional<uint32_t>(), 0);
+    }
+
 public:
     WASMBinaryReader()
         : m_readerOffsetPointer(nullptr)
+        , m_readerDataPointer(nullptr)
         , m_codeStartOffset(0)
+        , m_codeEndOffset(0)
         , m_inPreprocess(false)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
@@ -824,9 +865,11 @@ public:
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
 
-    virtual void OnStartReadInstructions() override
+    virtual void OnStartReadInstructions(Offset start, Offset end) override
     {
-        m_codeStartOffset = *m_readerOffsetPointer;
+        ASSERT(start == *m_readerOffsetPointer);
+        m_codeStartOffset = start;
+        m_codeEndOffset = end;
     }
 
     virtual void OnStartPreprocess() override
@@ -906,27 +949,27 @@ public:
 
     virtual void OnI32ConstExpr(uint32_t value) override
     {
-        pushByteCode(Walrus::Const32(pushVMStack(Walrus::Value::Type::I32), value), WASMOpcode::I32ConstOpcode);
+        pushByteCode(Walrus::Const32(computeExprResultPosition(Walrus::Value::Type::I32), value), WASMOpcode::I32ConstOpcode);
     }
 
     virtual void OnI64ConstExpr(uint64_t value) override
     {
-        pushByteCode(Walrus::Const64(pushVMStack(Walrus::Value::Type::I64), value), WASMOpcode::I64ConstOpcode);
+        pushByteCode(Walrus::Const64(computeExprResultPosition(Walrus::Value::Type::I64), value), WASMOpcode::I64ConstOpcode);
     }
 
     virtual void OnF32ConstExpr(uint32_t value) override
     {
-        pushByteCode(Walrus::Const32(pushVMStack(Walrus::Value::Type::F32), value), WASMOpcode::F32ConstOpcode);
+        pushByteCode(Walrus::Const32(computeExprResultPosition(Walrus::Value::Type::F32), value), WASMOpcode::F32ConstOpcode);
     }
 
     virtual void OnF64ConstExpr(uint64_t value) override
     {
-        pushByteCode(Walrus::Const64(pushVMStack(Walrus::Value::Type::F64), value), WASMOpcode::F64ConstOpcode);
+        pushByteCode(Walrus::Const64(computeExprResultPosition(Walrus::Value::Type::F64), value), WASMOpcode::F64ConstOpcode);
     }
 
     virtual void OnV128ConstExpr(uint8_t* value) override
     {
-        pushByteCode(Walrus::Const128(pushVMStack(Walrus::Value::Type::V128), value), WASMOpcode::V128ConstOpcode);
+        pushByteCode(Walrus::Const128(computeExprResultPosition(Walrus::Value::Type::V128), value), WASMOpcode::V128ConstOpcode);
     }
 
     std::pair<uint32_t, uint32_t> resolveLocalOffsetAndSize(Index localIndex)
@@ -945,6 +988,23 @@ public:
             }
             return std::make_pair(offset, Walrus::valueStackAllocatedSize(m_currentFunction->m_local[localIndex]));
         }
+    }
+
+    size_t computeExprResultPosition(Walrus::Value::Type type)
+    {
+        if (!m_inPreprocess) {
+            // if there is local.set code ahead,
+            // we can use local variable position as expr target position
+            auto localSetInfo = readAheadLocalGetIfExists();
+            if (localSetInfo.first) {
+                auto pos = resolveLocalOffsetAndSize(localSetInfo.first.value()).first;
+                // skip local.set opcode
+                *m_readerOffsetPointer += localSetInfo.second;
+                return pos;
+            }
+        }
+
+        return pushVMStack(type);
     }
 
     Index resolveLocalIndexFromStackPosition(size_t pos)
@@ -1037,7 +1097,7 @@ public:
     {
         auto valueType = m_result.m_globalTypes[index]->type();
         auto sz = Walrus::valueStackAllocatedSize(valueType);
-        auto stackPos = pushVMStack(valueType);
+        auto stackPos = computeExprResultPosition(valueType);
         if (sz == 4) {
             pushByteCode(Walrus::GlobalGet32(stackPos, index), WASMOpcode::GlobalGetOpcode);
         } else if (sz == 8) {
@@ -1077,7 +1137,7 @@ public:
         auto src1 = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src0 = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         generateBinaryCode(code, src0, src1, dst);
     }
 
@@ -1086,7 +1146,7 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
         case WASMOpcode::I32ReinterpretF32Opcode:
         case WASMOpcode::I64ReinterpretF64Opcode:
@@ -1109,7 +1169,7 @@ public:
         auto rhs = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto lhs = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
         case WASMOpcode::V128BitSelectOpcode:
             pushByteCode(Walrus::V128BitSelect(lhs, rhs, c, dst), code);
@@ -1519,7 +1579,7 @@ public:
         auto type = peekVMStackValueType();
         auto src1 = popVMStack();
         auto src0 = popVMStack();
-        auto dst = pushVMStack(type);
+        auto dst = computeExprResultPosition(type);
         pushByteCode(Walrus::Select(stackPos, Walrus::valueSize(type), src0, src1, dst), WASMOpcode::SelectOpcode);
     }
 
@@ -1643,13 +1703,13 @@ public:
     {
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src = popVMStack();
-        auto dst = pushVMStack(Walrus::Value::Type::I32);
+        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
         pushByteCode(Walrus::MemoryGrow(memidx, src, dst), WASMOpcode::MemoryGrowOpcode);
     }
 
     virtual void OnMemorySizeExpr(Index memidx) override
     {
-        auto stackPos = pushVMStack(Walrus::Value::Type::I32);
+        auto stackPos = computeExprResultPosition(Walrus::Value::Type::I32);
         pushByteCode(Walrus::MemorySize(memidx, stackPos), WASMOpcode::MemorySizeOpcode);
     }
 
@@ -1657,7 +1717,7 @@ public:
     {
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src = popVMStack();
-        auto dst = pushVMStack(m_result.m_tableTypes[tableIndex]->type());
+        auto dst = computeExprResultPosition(m_result.m_tableTypes[tableIndex]->type());
         pushByteCode(Walrus::TableGet(tableIndex, src, dst), WASMOpcode::TableGetOpcode);
     }
 
@@ -1676,13 +1736,13 @@ public:
         auto src1 = popVMStack();
         ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->type());
         auto src0 = popVMStack();
-        auto dst = pushVMStack(Walrus::Value::Type::I32);
+        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
         pushByteCode(Walrus::TableGrow(tableIndex, src0, src1, dst), WASMOpcode::TableGrowOpcode);
     }
 
     virtual void OnTableSizeExpr(Index tableIndex) override
     {
-        auto dst = pushVMStack(Walrus::Value::Type::I32);
+        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
         pushByteCode(Walrus::TableSize(tableIndex, dst), WASMOpcode::TableSizeOpcode);
     }
 
@@ -1729,7 +1789,7 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         if ((opcode == (int)WASMOpcode::I32LoadOpcode || opcode == (int)WASMOpcode::F32LoadOpcode) && offset == 0) {
             pushByteCode(Walrus::Load32(src, dst), code);
         } else if ((opcode == (int)WASMOpcode::I64LoadOpcode || opcode == (int)WASMOpcode::F64LoadOpcode) && offset == 0) {
@@ -1757,13 +1817,13 @@ public:
 
     virtual void OnRefFuncExpr(Index func_index) override
     {
-        auto dst = pushVMStack(Walrus::Value::Type::FuncRef);
+        auto dst = computeExprResultPosition(Walrus::Value::Type::FuncRef);
         pushByteCode(Walrus::RefFunc(func_index, dst), WASMOpcode::RefFuncOpcode);
     }
 
     virtual void OnRefNullExpr(Type type) override
     {
-        Walrus::ByteCodeStackOffset dst = pushVMStack(toValueKind(type));
+        Walrus::ByteCodeStackOffset dst = computeExprResultPosition(toValueKind(type));
 #if defined(WALRUS_32)
         pushByteCode(Walrus::Const32(dst, Walrus::Value::Null), WASMOpcode::Const32Opcode);
 #else
@@ -1774,7 +1834,7 @@ public:
     virtual void OnRefIsNullExpr() override
     {
         auto src = popVMStack();
-        auto dst = pushVMStack(Walrus::Value::Type::I32);
+        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
 #if defined(WALRUS_32)
         pushByteCode(Walrus::I32Eqz(src, dst), WASMOpcode::RefIsNullOpcode);
 #else
@@ -1901,7 +1961,7 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
 #define GENERATE_LOAD_CODE_CASE(name, ...)                  \
     case WASMOpcode::name##Opcode: {                        \
@@ -1921,7 +1981,7 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
         case WASMOpcode::V128Load32ZeroOpcode: {
             pushByteCode(Walrus::V128Load32Zero(offset, src, dst), code);
@@ -1941,24 +2001,24 @@ public:
     {
         auto code = static_cast<WASMOpcode>(opcode);
         switch (code) {
-#define GENERATE_SIMD_EXTRACT_LANE_CODE_CASE(name, ...)                                                              \
-    case WASMOpcode::name##Opcode: {                                                                                 \
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType()); \
-        auto src = popVMStack();                                                                                     \
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));              \
-        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src, dst), code);                                     \
-        break;                                                                                                       \
+#define GENERATE_SIMD_EXTRACT_LANE_CODE_CASE(name, ...)                                                               \
+    case WASMOpcode::name##Opcode: {                                                                                  \
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());  \
+        auto src = popVMStack();                                                                                      \
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType)); \
+        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src, dst), code);                                      \
+        break;                                                                                                        \
     }
 
-#define GENERATE_SIMD_REPLACE_LANE_CODE_CASE(name, ...)                                                              \
-    case WASMOpcode::name##Opcode: {                                                                                 \
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType()); \
-        auto src1 = popVMStack();                                                                                    \
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType()); \
-        auto src0 = popVMStack();                                                                                    \
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));              \
-        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src0, src1, dst), code);                              \
-        break;                                                                                                       \
+#define GENERATE_SIMD_REPLACE_LANE_CODE_CASE(name, ...)                                                               \
+    case WASMOpcode::name##Opcode: {                                                                                  \
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());  \
+        auto src1 = popVMStack();                                                                                     \
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());  \
+        auto src0 = popVMStack();                                                                                     \
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType)); \
+        pushByteCode(Walrus::name(static_cast<uint8_t>(value), src0, src1, dst), code);                               \
+        break;                                                                                                        \
     }
 
             FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(GENERATE_SIMD_EXTRACT_LANE_CODE_CASE)
@@ -1978,7 +2038,7 @@ public:
         auto src1 = popVMStack();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src0 = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
 #define GENERATE_LOAD_CODE_CASE(name, opType)                                                                       \
     case WASMOpcode::name##Opcode: {                                                                                \
@@ -2019,7 +2079,7 @@ public:
         auto src1 = popVMStack();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::V128);
         auto src0 = popVMStack();
-        auto dst = pushVMStack(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         pushByteCode(Walrus::I8X16Shuffle(src0, src1, dst, value), WASMOpcode::I8X16ShuffleOpcode);
     }
 

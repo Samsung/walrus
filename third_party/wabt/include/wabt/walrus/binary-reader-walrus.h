@@ -24,6 +24,7 @@
 
 #include "wabt/base-types.h"
 #include "wabt/type.h"
+#include "wabt/leb128.h"
 
 namespace wabt {
 
@@ -36,6 +37,7 @@ public:
     {
     }
     virtual ~WASMBinaryReaderDelegate() { }
+    virtual void OnSetDataAddress(const uint8_t* data) = 0;
     virtual void OnSetOffsetAddress(size_t* o) = 0;
     /* Module */
     virtual void BeginModule(uint32_t version) = 0;
@@ -97,7 +99,7 @@ public:
     virtual void OnLocalDeclCount(Index count) = 0;
     virtual void OnLocalDecl(Index decl_index, Index count, Type type) = 0;
 
-    virtual void OnStartReadInstructions() = 0;
+    virtual void OnStartReadInstructions(Offset start, Offset end) = 0;
     virtual void OnStartPreprocess() = 0;
     virtual void OnEndPreprocess() = 0;
 
