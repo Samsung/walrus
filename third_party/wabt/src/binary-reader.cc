@@ -676,7 +676,7 @@ Result BinaryReader::ReadFunctionBody(Offset end_offset) {
 Result BinaryReader::ReadInstructions(bool stop_on_end,
                                       Offset end_offset,
                                       Opcode* final_opcode) {
-  CALLBACK(OnStartReadInstructions);
+  CALLBACK(OnStartReadInstructions, state_.offset, end_offset);
 
   auto start_offset = state_.offset;
   bool in_preprocess = delegate_->NeedsPreprocess();

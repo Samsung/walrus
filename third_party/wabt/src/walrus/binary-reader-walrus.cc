@@ -165,6 +165,7 @@ public:
     void OnSetState(const State* s) override {
         BinaryReaderDelegate::OnSetState(s);
         m_externalDelegate->OnSetOffsetAddress(const_cast<size_t*>(&s->offset));
+        m_externalDelegate->OnSetDataAddress(s->data);
     }
 
     bool OnError(const Error& err) override {
@@ -406,8 +407,8 @@ public:
         return Result::Ok;
     }
 
-    Result OnStartReadInstructions() override {
-        m_externalDelegate->OnStartReadInstructions();
+    Result OnStartReadInstructions(Offset start, Offset end) override {
+        m_externalDelegate->OnStartReadInstructions(start, end);
         return Result::Ok;
     }
 
