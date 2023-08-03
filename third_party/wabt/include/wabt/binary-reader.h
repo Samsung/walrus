@@ -188,7 +188,7 @@ class BinaryReaderDelegate {
   virtual Result BeginFunctionBody(Index index, Offset size) = 0;
   virtual Result OnLocalDeclCount(Index count) = 0;
   virtual Result OnLocalDecl(Index decl_index, Index count, Type type) = 0;
-  virtual Result OnStartReadInstructions() { return Result::Ok; }
+  virtual Result OnStartReadInstructions(Offset start, Offset end) { return Result::Ok; }
 
   virtual bool NeedsPreprocess() { return false; }
   virtual Result OnStartPreprocess() { return Result::Ok; }
