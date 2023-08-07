@@ -890,7 +890,11 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I64X2SubOpcode:
         case ByteCode::I64X2MulOpcode:
         case ByteCode::F64X2MinOpcode:
-        case ByteCode::F64X2MaxOpcode: {
+        case ByteCode::F64X2MaxOpcode:
+        case ByteCode::V128AndOpcode:
+        case ByteCode::V128OrOpcode:
+        case ByteCode::V128XorOpcode:
+        case ByteCode::V128AndnotOpcode: {
             group = Instruction::BinarySIMD;
             paramCount = 2;
             break;
@@ -899,9 +903,29 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I16X8NegOpcode:
         case ByteCode::I32X4NegOpcode:
         case ByteCode::I64X2NegOpcode:
-        case ByteCode::F64X2AbsOpcode: {
+        case ByteCode::F64X2AbsOpcode:
+        case ByteCode::V128NotOpcode: {
             group = Instruction::UnarySIMD;
             paramCount = 1;
+            break;
+        }
+        case ByteCode::V128BitSelectOpcode: {
+            group = Instruction::SelectSIMD;
+            Instruction* instr = compiler->append(byteCode, group, opcode, 3, 1);
+            instr->addInfo(info);
+
+            auto bitSelect = reinterpret_cast<V128BitSelect*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(bitSelect->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(bitSelect->srcOffsets()[1]);
+            operands[1].item = nullptr;
+            operands[2].offset = STACK_OFFSET(bitSelect->srcOffsets()[2]);
+            operands[2].item = nullptr;
+            operands[3].offset = STACK_OFFSET(bitSelect->dstOffset());
+            operands[3].item = nullptr;
             break;
         }
         default: {

@@ -788,6 +788,10 @@ JITModule* JITCompiler::compile()
             emitUnarySIMD(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::SelectSIMD: {
+            emitSelectSIMD(m_compiler, item->asInstruction());
+            break;
+        }
 #endif /* HAS_SIMD */
         default: {
             switch (item->asInstruction()->opcode()) {
