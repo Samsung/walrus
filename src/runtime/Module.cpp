@@ -362,11 +362,41 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 }
 
 #if !defined(NDEBUG)
+
+static const char* localTypeName(Value::Type v)
+{
+    switch (v) {
+    case Value::I32:
+        return "i32";
+    case Value::I64:
+        return "i64";
+    case Value::F32:
+        return "f32";
+    case Value::F64:
+        return "f64";
+    case Value::V128:
+        return "v128";
+    case Value::FuncRef:
+        return "FuncRef";
+    case Value::ExternRef:
+        return "ExternRef";
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
 void ModuleFunction::dumpByteCode()
 {
     printf("\n");
     printf("required stack size: %u bytes\n", m_requiredStackSize);
     printf("required stack size due to local: %u bytes\n", m_requiredStackSizeDueToLocal);
+    printf("stack: [");
+    size_t pos = 0;
+    for (size_t i = 0; i < m_local.size(); i++) {
+        printf("%zu(local %zu, %s) ", pos, i, localTypeName(m_local[i]));
+        pos += valueStackAllocatedSize(m_local[i]);
+    }
+    printf("%zu(%" PRIu32 " bytes for general operation)]\n", pos, (m_requiredStackSize - m_requiredStackSizeDueToLocal));
     printf("bytecode size: %zu bytes\n", m_byteCode.size());
     printf("\n");
 

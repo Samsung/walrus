@@ -4,6 +4,10 @@
 #include <iomanip>
 #include <inttypes.h>
 
+#if defined(WALRUS_GOOGLE_PERF)
+#include <gperftools/profiler.h>
+#endif
+
 #include "Walrus.h"
 #include "runtime/Engine.h"
 #include "runtime/Store.h"
@@ -970,6 +974,10 @@ int main(int argc, char* argv[])
     mallopt(M_MMAP_MAX, 1024 * 1024);
 #endif
 
+#if defined(WALRUS_GOOGLE_PERF)
+    ProfilerStart("gperf_result");
+#endif
+
     Engine* engine = new Engine();
     Store* store = new Store(engine);
 
@@ -1011,6 +1019,10 @@ int main(int argc, char* argv[])
     // finalize
     delete store;
     delete engine;
+
+#if defined(WALRUS_GOOGLE_PERF)
+    ProfilerStop();
+#endif
 
     return 0;
 }
