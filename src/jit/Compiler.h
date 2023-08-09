@@ -93,6 +93,8 @@ public:
         BinarySIMD,
         // Unary SIMD opcodes (e.g. F64X2Abs)
         UnarySIMD,
+        // Select SIMD operation (e.g. V128BitSelect)
+        SelectSIMD,
     };
 
     virtual ~InstructionListItem() {}
