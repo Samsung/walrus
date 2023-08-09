@@ -26,9 +26,17 @@ enum Type : uint32_t {
     fmax = 0x4e20f400,
     add = 0x4e208400,
     addp = 0x4e20bc00,
+    andOp = 0x4e201c00,
+    bic = 0x4e601c00,
+    bsl = 0x6e601c00,
+    dup = 0x4e000c00,
+    eor = 0x6e201c00,
     neg = 0x6e20b800,
+    notOp = 0x6e205800,
     mul = 0x4e209c00,
+    orr = 0x4ea01c00,
     rev64 = 0x4e200800,
+    shl = 0x4f005400,
     shll = 0x2e213800,
     sqadd = 0x4e200c00,
     sqsub = 0x4e202c00,
@@ -71,7 +79,7 @@ static void simdEmitI64x2Mul(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 r
     auto tmpReg1 = SLJIT_FR2;
     auto tmpReg2 = SLJIT_FR3;
 
-    simdEmitOp(compiler,  SimdOp::rev64 | SimdOp::S4, tmpReg2, rm, 0);
+    simdEmitOp(compiler, SimdOp::rev64 | SimdOp::S4, tmpReg2, rm, 0);
     simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, tmpReg2, tmpReg2, rn);
     simdEmitOp(compiler, SimdOp::xtn | SimdOp::S4, tmpReg1, rn, 0);
     simdEmitOp(compiler, SimdOp::addp | SimdOp::S4, rd, tmpReg2, tmpReg2);
@@ -103,6 +111,9 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64X2NegOpcode:
         type = SLJIT_SIMD_MEM_ELEM_64;
         break;
+    case ByteCode::V128NotOpcode:
+        type = SLJIT_SIMD_MEM_ELEM_128;
+        break;
     default:
         ASSERT_NOT_REACHED();
         break;
@@ -116,6 +127,9 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     switch (instr->opcode()) {
     case ByteCode::F64X2AbsOpcode:
         simdEmitOp(compiler, SimdOp::fabs | SimdOp::FD2, dst, args[0].arg, 0);
+        break;
+    case ByteCode::V128NotOpcode:
+        simdEmitOp(compiler, SimdOp::notOp, dst, args[0].arg, 0);
         break;
     case ByteCode::I8X16NegOpcode:
         simdEmitOp(compiler, SimdOp::neg | SimdOp::B16, dst, args[0].arg, 0);
@@ -177,6 +191,12 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64X2SubOpcode:
     case ByteCode::I64X2MulOpcode:
         type = SLJIT_SIMD_MEM_ELEM_64;
+        break;
+    case ByteCode::V128AndOpcode:
+    case ByteCode::V128OrOpcode:
+    case ByteCode::V128XorOpcode:
+    case ByteCode::V128AndnotOpcode:
+        type = SLJIT_SIMD_MEM_ELEM_128;
         break;
     default:
         ASSERT_NOT_REACHED();
@@ -250,11 +270,21 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64X2SubOpcode:
         simdEmitOp(compiler, SimdOp::sub | SimdOp::D2, dst, args[0].arg, args[1].arg);
         break;
-    case ByteCode::I64X2MulOpcode: {
+    case ByteCode::I64X2MulOpcode:
         simdEmitI64x2Mul(compiler, dst, args[0].arg, args[1].arg);
         break;
-    }
-
+    case ByteCode::V128AndOpcode:
+        simdEmitOp(compiler, SimdOp::andOp, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::V128OrOpcode:
+        simdEmitOp(compiler, SimdOp::orr, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::V128XorOpcode:
+        simdEmitOp(compiler, SimdOp::eor, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::V128AndnotOpcode:
+        simdEmitOp(compiler, SimdOp::bic, dst, args[0].arg, args[1].arg);
+        break;
     default:
         ASSERT_NOT_REACHED();
         break;
@@ -262,5 +292,26 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
 
     if (SLJIT_IS_MEM(args[2].arg)) {
         sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | type, dst, args[2].arg, args[2].argw);
+    }
+}
+
+static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
+{
+    ASSERT(instr != nullptr);
+
+    Operand* operands = instr->operands();
+    JITArg args[3];
+
+    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR2);
+    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR1);
+    simdOperandToArg(compiler, operands + 2, args[2], SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0);
+
+    simdEmitOp(compiler, SimdOp::bsl, args[2].arg, args[0].arg, args[1].arg);
+
+    args[1].set(operands + 3);
+    sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_FR0);
+
+    if (SLJIT_IS_MEM(args[1].arg)) {
+        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, dst, args[1].arg, args[1].argw);
     }
 }
