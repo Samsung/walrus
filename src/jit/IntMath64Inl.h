@@ -25,8 +25,8 @@ static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instru
     case ByteCode::Const128Opcode: {
         const uint8_t* value = reinterpret_cast<Const128*>(instr->byteCode())->value();
 
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, SLJIT_MEM0(), (sljit_sw)value);
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, SLJIT_MEM1(kFrameReg), offset);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, SLJIT_MEM0(), (sljit_sw)value);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, SLJIT_MEM1(kFrameReg), offset);
         return;
     }
 #endif /* HAS_SIMD */
@@ -558,8 +558,7 @@ static void emitMove64(sljit_compiler* compiler, Instruction* instr)
 static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    Operand* operands = instr->operands();
-    JITArg dst(operands);
+    JITArg dst(instr->operands());
 
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
 
@@ -571,8 +570,7 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
 static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    Operand* operands = instr->operands();
-    JITArg src(operands);
+    JITArg src(instr->operands());
 
     GlobalSet64* globalSet = reinterpret_cast<GlobalSet64*>(instr->byteCode());
 

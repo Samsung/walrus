@@ -85,10 +85,12 @@ public:
         Memory,
         // Move operation. (e.g. Move32, Move64)
         Move,
-        // GlobalGet operation (e.g. GlobalGet32, GlobalGet64)
-        GlobalGet,
-        // GlobalSet operation (e.g. GlobalSet32, GlobalSet64)
-        GlobalSet,
+        // Extract lane SIMD opcodes (e.g. I8X16ExtractLaneS, F64X2ExtractLane)
+        ExtractLaneSIMD,
+        // Replace lane SIMD opcodes (e.g. I8X16ReplaceLane, F64X2ReplaceLane)
+        ReplaceLaneSIMD,
+        // Splat to all lanes operation (e.g. I8X16Splat, F32X4Splat)
+        SplatSIMD,
         // Binary SIMD opcodes (e.g. F64X2Min)
         BinarySIMD,
         // Unary SIMD opcodes (e.g. F64X2Abs)
