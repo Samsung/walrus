@@ -203,7 +203,7 @@ void MemAddress::load(sljit_compiler* compiler)
 #ifdef HAS_SIMD
     if (options & LoadToSimdReg0) {
         SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg));
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, loadArg.arg, loadArg.argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, loadArg.arg, loadArg.argw);
         return;
     }
 #endif /* HAS_SIMD */
@@ -214,6 +214,9 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 opcode;
     sljit_u32 size;
     sljit_u32 offset = 0;
+#ifdef HAS_SIMD
+    sljit_s32 simdType = 0;
+#endif /* HAS_SIMD */
 
     switch (instr->opcode()) {
     case ByteCode::Load32Opcode:
@@ -279,8 +282,47 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #ifdef HAS_SIMD
     case ByteCode::V128LoadOpcode:
         opcode = 0;
+        simdType = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128;
         size = 16;
         break;
+    case ByteCode::V128Load8SplatOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
+        size = 1;
+        break;
+    case ByteCode::V128Load16SplatOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16;
+        size = 2;
+        break;
+    case ByteCode::V128Load32SplatOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
+        size = 4;
+        break;
+    case ByteCode::V128Load64SplatOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        simdType |= SLJIT_SIMD_FLOAT;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+        size = 8;
+        break;
+    case ByteCode::V128Load32ZeroOpcode: {
+        opcode = 0;
+        simdType = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_LANE_ZERO;
+        size = 4;
+        break;
+    }
+    case ByteCode::V128Load64ZeroOpcode: {
+        opcode = 0;
+        simdType = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_LANE_ZERO;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        simdType |= SLJIT_SIMD_FLOAT;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+        size = 8;
+        break;
+    }
 #endif /* HAS_SIMD */
     default:
         ASSERT(instr->opcode() == ByteCode::F64LoadOpcode);
@@ -315,13 +357,22 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
 #ifdef HAS_SIMD
     if (opcode == 0) {
-        ASSERT(size == 16);
-
         JITArg valueArg(operands + 1);
+        sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, SLJIT_FR0);
 
         // TODO: support aligned access
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, addr.memArg.arg, addr.memArg.argw);
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0, valueArg.arg, valueArg.argw);
+        if (size == 16) {
+            sljit_emit_simd_mov(compiler, simdType, dstReg, addr.memArg.arg, addr.memArg.argw);
+        } else if (simdType & SLJIT_SIMD_LANE_ZERO) {
+            sljit_emit_simd_lane_mov(compiler, simdType, dstReg, 0, addr.memArg.arg, addr.memArg.argw);
+        } else {
+            sljit_emit_simd_replicate(compiler, simdType, dstReg, addr.memArg.arg, addr.memArg.argw);
+        }
+
+        if (SLJIT_IS_MEM(valueArg.arg)) {
+            simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128;
+            sljit_emit_simd_mov(compiler, simdType, SLJIT_FR0, valueArg.arg, valueArg.argw);
+        }
         return;
     }
 #endif /* HAS_SIMD */
@@ -386,6 +437,10 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 opcode;
     sljit_u32 size;
     sljit_u32 offset = 0;
+#ifdef HAS_SIMD
+    sljit_s32 simdType = 0;
+    sljit_s32 laneIndex = 0;
+#endif /* HAS_SIMD */
 
     switch (instr->opcode()) {
     case ByteCode::Store32Opcode:
@@ -431,7 +486,31 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #ifdef HAS_SIMD
     case ByteCode::V128StoreOpcode:
         opcode = 0;
+        simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128;
         size = 16;
+        break;
+    case ByteCode::V128Store8LaneOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
+        size = 1;
+        break;
+    case ByteCode::V128Store16LaneOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16;
+        size = 2;
+        break;
+    case ByteCode::V128Store32LaneOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
+        size = 4;
+        break;
+    case ByteCode::V128Store64LaneOpcode:
+        opcode = 0;
+        simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        simdType |= SLJIT_SIMD_FLOAT;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+        size = 8;
         break;
 #endif /* HAS_SIMD */
     default:
@@ -442,8 +521,18 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (instr->opcode() != ByteCode::Store32Opcode && instr->opcode() != ByteCode::Store64Opcode) {
-        MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(instr->byteCode());
-        offset = storeOperation->offset();
+#ifdef HAS_SIMD
+        if (opcode != 0) {
+#endif /* HAS_SIMD */
+            MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(instr->byteCode());
+            offset = storeOperation->offset();
+#ifdef HAS_SIMD
+        } else {
+            SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(instr->byteCode());
+            offset = storeOperation->offset();
+            laneIndex = storeOperation->index();
+        }
+#endif /* HAS_SIMD */
     }
 
     Operand* operands = instr->operands();
@@ -466,8 +555,6 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         }
 #ifdef HAS_SIMD
     } else if (opcode == 0) {
-        ASSERT(size == 16);
-
         InstructionListItem* item = operands[1].item;
 
         if (item == nullptr || item->group() != Instruction::Immediate) {
@@ -537,14 +624,17 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
 #ifdef HAS_SIMD
     if (opcode == 0) {
-        ASSERT(size == 16);
-
         if (addr.options & MemAddress::LoadToSimdReg0) {
             addr.loadArg.arg = SLJIT_FR0;
             addr.loadArg.argw = 0;
         }
 
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, addr.loadArg.arg, addr.memArg.arg, addr.memArg.argw);
+        if (size == 16) {
+            sljit_emit_simd_mov(compiler, simdType, addr.loadArg.arg, addr.memArg.arg, addr.memArg.argw);
+            return;
+        }
+
+        sljit_emit_simd_lane_mov(compiler, simdType, addr.loadArg.arg, laneIndex, addr.memArg.arg, addr.memArg.argw);
         return;
     }
 #endif /* HAS_SIMD */
