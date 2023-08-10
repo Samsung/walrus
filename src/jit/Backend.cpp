@@ -316,7 +316,7 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
         arg.set(operand);
 
         if (SLJIT_IS_MEM(arg.arg)) {
-            sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | type, srcReg, arg.arg, arg.argw);
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | type, srcReg, arg.arg, arg.argw);
 
             arg.arg = srcReg;
             arg.argw = 0;
@@ -327,7 +327,7 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
     ASSERT(item->asInstruction()->opcode() == ByteCode::Const128Opcode);
 
     const uint8_t* value = reinterpret_cast<Const128*>(item->asInstruction()->byteCode())->value();
-    sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_LOAD | SLJIT_SIMD_MEM_REG_128 | type, srcReg, SLJIT_MEM0(), (sljit_sw)value);
+    sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | type, srcReg, SLJIT_MEM0(), (sljit_sw)value);
 
     arg.arg = srcReg;
     arg.argw = 0;
@@ -366,6 +366,10 @@ static void emitStoreImmediateParams(sljit_compiler* compiler, Instruction* inst
 #if (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
 #include "SimdArm64Inl.h"
 #endif /* SLJIT_CONFIG_ARM_64 */
+
+#ifdef HAS_SIMD
+#include "SimdInl.h"
+#endif /* HAS_SIMD */
 
 void CompileContext::emitSlowCases(sljit_compiler* compiler)
 {
@@ -546,8 +550,7 @@ static void emitMove32(sljit_compiler* compiler, Instruction* instr)
 static void emitGlobalGet32(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    Operand* operands = instr->operands();
-    JITArg dst(operands);
+    JITArg dst(instr->operands());
 
     GlobalGet32* globalGet = reinterpret_cast<GlobalGet32*>(instr->byteCode());
 
@@ -559,8 +562,7 @@ static void emitGlobalGet32(sljit_compiler* compiler, Instruction* instr)
 static void emitGlobalSet32(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    Operand* operands = instr->operands();
-    JITArg src(operands);
+    JITArg src(instr->operands());
 
     GlobalSet32* globalSet = reinterpret_cast<GlobalSet32*>(instr->byteCode());
 
@@ -755,22 +757,6 @@ JITModule* JITCompiler::compile()
             emitMemory(m_compiler, item->asInstruction());
             break;
         }
-        case Instruction::GlobalGet: {
-            if (item->asInstruction()->opcode() == ByteCode::GlobalGet32Opcode) {
-                emitGlobalGet32(m_compiler, item->asInstruction());
-            } else {
-                emitGlobalGet64(m_compiler, item->asInstruction());
-            }
-            break;
-        }
-        case Instruction::GlobalSet: {
-            if (item->asInstruction()->opcode() == ByteCode::GlobalSet32Opcode) {
-                emitGlobalSet32(m_compiler, item->asInstruction());
-            } else {
-                emitGlobalSet64(m_compiler, item->asInstruction());
-            }
-            break;
-        }
         case Instruction::Move: {
             if (item->asInstruction()->opcode() == ByteCode::Move32Opcode) {
                 emitMove32(m_compiler, item->asInstruction());
@@ -780,6 +766,18 @@ JITModule* JITCompiler::compile()
             break;
         }
 #ifdef HAS_SIMD
+        case Instruction::ExtractLaneSIMD: {
+            emitExtractLaneSIMD(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::ReplaceLaneSIMD: {
+            emitReplaceLaneSIMD(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::SplatSIMD: {
+            emitSplatSIMD(m_compiler, item->asInstruction());
+            break;
+        }
         case Instruction::BinarySIMD: {
             emitBinarySIMD(m_compiler, item->asInstruction());
             break;
@@ -799,6 +797,34 @@ JITModule* JITCompiler::compile()
                 emitSelect(m_compiler, item->asInstruction(), -1);
                 break;
             }
+            case ByteCode::GlobalGet32Opcode: {
+                emitGlobalGet32(m_compiler, item->asInstruction());
+                break;
+            }
+            case ByteCode::GlobalGet64Opcode: {
+                emitGlobalGet64(m_compiler, item->asInstruction());
+                break;
+            }
+#ifdef HAS_SIMD
+            case ByteCode::GlobalGet128Opcode: {
+                emitGlobalGet128(m_compiler, item->asInstruction());
+                break;
+            }
+#endif /* HAS_SIMD */
+            case ByteCode::GlobalSet32Opcode: {
+                emitGlobalSet32(m_compiler, item->asInstruction());
+                break;
+            }
+            case ByteCode::GlobalSet64Opcode: {
+                emitGlobalSet64(m_compiler, item->asInstruction());
+                break;
+            }
+#ifdef HAS_SIMD
+            case ByteCode::GlobalSet128Opcode: {
+                emitGlobalSet128(m_compiler, item->asInstruction());
+                break;
+            }
+#endif /* HAS_SIMD */
             case ByteCode::RefFuncOpcode: {
                 emitRefFunc(m_compiler, item->asInstruction());
                 break;
