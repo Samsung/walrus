@@ -63,11 +63,11 @@ enum FloatSizeType : uint32_t {
 
 static void simdEmitOp(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    rd = sljit_get_register_index(SLJIT_SIMD_MEM_REG_128, rd);
-    rn = sljit_get_register_index(SLJIT_SIMD_MEM_REG_128, rn);
+    rd = sljit_get_register_index(SLJIT_SIMD_REG_128, rd);
+    rn = sljit_get_register_index(SLJIT_SIMD_REG_128, rn);
 
     if (rm >= SLJIT_FR0) {
-        rm = sljit_get_register_index(SLJIT_SIMD_MEM_REG_128, rm);
+        rm = sljit_get_register_index(SLJIT_SIMD_REG_128, rm);
     }
 
     opcode |= (uint32_t)rd | ((uint32_t)rn << 5) | ((uint32_t)rm << 16);
@@ -93,26 +93,26 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
     JITArg args[2];
 
-    sljit_s32 type = SLJIT_SIMD_MEM_ELEM_128;
+    sljit_s32 type = SLJIT_SIMD_ELEM_128;
 
     switch (instr->opcode()) {
     case ByteCode::F64X2AbsOpcode:
-        type = SLJIT_SIMD_MEM_FLOAT | SLJIT_SIMD_MEM_ELEM_64;
+        type = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::I8X16NegOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_8;
+        type = SLJIT_SIMD_ELEM_8;
         break;
     case ByteCode::I16X8NegOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_16;
+        type = SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I32X4NegOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_32;
+        type = SLJIT_SIMD_ELEM_32;
         break;
     case ByteCode::I64X2NegOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_64;
+        type = SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::V128NotOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_128;
+        type = SLJIT_SIMD_ELEM_128;
         break;
     default:
         ASSERT_NOT_REACHED();
@@ -149,7 +149,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (SLJIT_IS_MEM(args[1].arg)) {
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | type, dst, args[1].arg, args[1].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, dst, args[1].arg, args[1].argw);
     }
 }
 
@@ -158,12 +158,12 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
     JITArg args[3];
 
-    sljit_s32 type = SLJIT_SIMD_MEM_ELEM_128;
+    sljit_s32 type = SLJIT_SIMD_ELEM_128;
 
     switch (instr->opcode()) {
     case ByteCode::F64X2MinOpcode:
     case ByteCode::F64X2MaxOpcode:
-        type = SLJIT_SIMD_MEM_FLOAT | SLJIT_SIMD_MEM_ELEM_64;
+        type = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::I8X16AddOpcode:
     case ByteCode::I8X16SubOpcode:
@@ -171,7 +171,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I8X16AddSatUOpcode:
     case ByteCode::I8X16SubSatSOpcode:
     case ByteCode::I8X16SubSatUOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_8;
+        type = SLJIT_SIMD_ELEM_8;
         break;
     case ByteCode::I16X8AddOpcode:
     case ByteCode::I16X8SubOpcode:
@@ -180,23 +180,23 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8AddSatUOpcode:
     case ByteCode::I16X8SubSatSOpcode:
     case ByteCode::I16X8SubSatUOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_16;
+        type = SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I32X4AddOpcode:
     case ByteCode::I32X4SubOpcode:
     case ByteCode::I32X4MulOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_32;
+        type = SLJIT_SIMD_ELEM_32;
         break;
     case ByteCode::I64X2AddOpcode:
     case ByteCode::I64X2SubOpcode:
     case ByteCode::I64X2MulOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_64;
+        type = SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::V128AndOpcode:
     case ByteCode::V128OrOpcode:
     case ByteCode::V128XorOpcode:
     case ByteCode::V128AndnotOpcode:
-        type = SLJIT_SIMD_MEM_ELEM_128;
+        type = SLJIT_SIMD_ELEM_128;
         break;
     default:
         ASSERT_NOT_REACHED();
@@ -291,7 +291,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (SLJIT_IS_MEM(args[2].arg)) {
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | type, dst, args[2].arg, args[2].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, dst, args[2].arg, args[2].argw);
     }
 }
 
@@ -302,9 +302,9 @@ static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
     JITArg args[3];
 
-    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR2);
-    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR1);
-    simdOperandToArg(compiler, operands + 2, args[2], SLJIT_SIMD_MEM_ELEM_128, SLJIT_FR0);
+    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, SLJIT_FR2);
+    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, SLJIT_FR1);
+    simdOperandToArg(compiler, operands + 2, args[2], SLJIT_SIMD_ELEM_128, SLJIT_FR0);
 
     simdEmitOp(compiler, SimdOp::bsl, args[2].arg, args[0].arg, args[1].arg);
 
@@ -312,6 +312,6 @@ static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_FR0);
 
     if (SLJIT_IS_MEM(args[1].arg)) {
-        sljit_emit_simd_mem(compiler, SLJIT_SIMD_MEM_STORE | SLJIT_SIMD_MEM_REG_128 | SLJIT_SIMD_MEM_ELEM_128, dst, args[1].arg, args[1].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst, args[1].arg, args[1].argw);
     }
 }
