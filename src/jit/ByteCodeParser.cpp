@@ -84,6 +84,32 @@ void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<si
     }
 }
 
+#define PARSE_EXTRACT_LANE(byteCodeType)                                                             \
+    case ByteCode::byteCodeType##Opcode: {                                                           \
+        byteCodeType* extractLane = reinterpret_cast<byteCodeType*>(byteCode);                       \
+        Instruction* instr = compiler->append(byteCode, Instruction::ExtractLaneSIMD, opcode, 2, 0); \
+        Operand* operands = instr->operands();                                                       \
+        operands[0].item = nullptr;                                                                  \
+        operands[0].offset = STACK_OFFSET(extractLane->srcOffset());                                 \
+        operands[1].item = nullptr;                                                                  \
+        operands[1].offset = STACK_OFFSET(extractLane->dstOffset());                                 \
+        break;                                                                                       \
+    }
+
+#define PARSE_REPLACE_LANE(byteCodeType)                                                             \
+    case ByteCode::byteCodeType##Opcode: {                                                           \
+        byteCodeType* replaceLane = reinterpret_cast<byteCodeType*>(byteCode);                       \
+        Instruction* instr = compiler->append(byteCode, Instruction::ReplaceLaneSIMD, opcode, 2, 1); \
+        Operand* operands = instr->operands();                                                       \
+        operands[0].item = nullptr;                                                                  \
+        operands[0].offset = STACK_OFFSET(replaceLane->srcOffsets()[0]);                             \
+        operands[1].item = nullptr;                                                                  \
+        operands[1].offset = STACK_OFFSET(replaceLane->srcOffsets()[1]);                             \
+        operands[2].item = nullptr;                                                                  \
+        operands[2].offset = STACK_OFFSET(replaceLane->dstOffset());                                 \
+        break;                                                                                       \
+    }
+
 static void createInstructionList(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
     size_t idx = 0;
@@ -486,7 +512,13 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I64Load32UOpcode:
         case ByteCode::F32LoadOpcode:
         case ByteCode::F64LoadOpcode:
-        case ByteCode::V128LoadOpcode: {
+        case ByteCode::V128LoadOpcode:
+        case ByteCode::V128Load8SplatOpcode:
+        case ByteCode::V128Load16SplatOpcode:
+        case ByteCode::V128Load32SplatOpcode:
+        case ByteCode::V128Load64SplatOpcode:
+        case ByteCode::V128Load32ZeroOpcode:
+        case ByteCode::V128Load64ZeroOpcode: {
             MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
 
@@ -537,6 +569,44 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
             operands[1].item = nullptr;
             operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            break;
+        }
+        case ByteCode::V128Store8LaneOpcode:
+        case ByteCode::V128Store16LaneOpcode:
+        case ByteCode::V128Store32LaneOpcode:
+        case ByteCode::V128Store64LaneOpcode: {
+            SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            break;
+        }
+            PARSE_EXTRACT_LANE(I8X16ExtractLaneS)
+            PARSE_EXTRACT_LANE(I8X16ExtractLaneU)
+            PARSE_EXTRACT_LANE(I16X8ExtractLaneS)
+            PARSE_EXTRACT_LANE(I16X8ExtractLaneU)
+            PARSE_EXTRACT_LANE(I32X4ExtractLane)
+            PARSE_EXTRACT_LANE(I64X2ExtractLane)
+            PARSE_EXTRACT_LANE(F32X4ExtractLane)
+            PARSE_EXTRACT_LANE(F64X2ExtractLane)
+            PARSE_REPLACE_LANE(I8X16ReplaceLane)
+            PARSE_REPLACE_LANE(I16X8ReplaceLane)
+            PARSE_REPLACE_LANE(I32X4ReplaceLane)
+            PARSE_REPLACE_LANE(I64X2ReplaceLane)
+            PARSE_REPLACE_LANE(F32X4ReplaceLane)
+            PARSE_REPLACE_LANE(F64X2ReplaceLane)
+        case ByteCode::I8X16SplatOpcode:
+        case ByteCode::I16X8SplatOpcode:
+        case ByteCode::I32X4SplatOpcode:
+        case ByteCode::I64X2SplatOpcode:
+        case ByteCode::F32X4SplatOpcode:
+        case ByteCode::F64X2SplatOpcode: {
+            group = Instruction::SplatSIMD;
+            paramCount = 1;
             break;
         }
         case ByteCode::TableInitOpcode: {
@@ -788,7 +858,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case ByteCode::GlobalGet32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, ByteCode::GlobalGet32Opcode, 0, 1);
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet32Opcode, 0, 1);
 
             GlobalGet32* globalGet32 = reinterpret_cast<GlobalGet32*>(byteCode);
             Operand* operands = instr->operands();
@@ -798,7 +868,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case ByteCode::GlobalGet64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalGet, ByteCode::GlobalGet64Opcode, 0, 1);
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet64Opcode, 0, 1);
 
             GlobalGet64* globalGet64 = reinterpret_cast<GlobalGet64*>(byteCode);
             Operand* operands = instr->operands();
@@ -807,8 +877,18 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(globalGet64->dstOffset());
             break;
         }
+        case ByteCode::GlobalGet128Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet128Opcode, 0, 1);
+
+            GlobalGet128* globalGet128 = reinterpret_cast<GlobalGet128*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(globalGet128->dstOffset());
+            break;
+        }
         case ByteCode::GlobalSet32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, ByteCode::GlobalSet32Opcode, 1, 0);
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet32Opcode, 1, 0);
 
             GlobalSet32* globalSet32 = reinterpret_cast<GlobalSet32*>(byteCode);
             Operand* operands = instr->operands();
@@ -818,13 +898,23 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case ByteCode::GlobalSet64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GlobalSet, ByteCode::GlobalSet64Opcode, 1, 0);
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet64Opcode, 1, 0);
 
             GlobalSet64* globalSet64 = reinterpret_cast<GlobalSet64*>(byteCode);
             Operand* operands = instr->operands();
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(globalSet64->srcOffset());
+            break;
+        }
+        case ByteCode::GlobalSet128Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet128Opcode, 1, 0);
+
+            GlobalSet128* globalSet128 = reinterpret_cast<GlobalSet128*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(globalSet128->srcOffset());
             break;
         }
         case ByteCode::RefFuncOpcode: {
