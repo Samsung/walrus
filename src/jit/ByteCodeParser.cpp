@@ -966,6 +966,16 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I8X16AddSatUOpcode:
         case ByteCode::I8X16SubSatSOpcode:
         case ByteCode::I8X16SubSatUOpcode:
+        case ByteCode::I8X16EqOpcode:
+        case ByteCode::I8X16NeOpcode:
+        case ByteCode::I8X16LtSOpcode:
+        case ByteCode::I8X16LtUOpcode:
+        case ByteCode::I8X16LeSOpcode:
+        case ByteCode::I8X16LeUOpcode:
+        case ByteCode::I8X16GtSOpcode:
+        case ByteCode::I8X16GtUOpcode:
+        case ByteCode::I8X16GeSOpcode:
+        case ByteCode::I8X16GeUOpcode:
         case ByteCode::I16X8AddOpcode:
         case ByteCode::I16X8SubOpcode:
         case ByteCode::I16X8MulOpcode:
@@ -973,14 +983,52 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I16X8AddSatUOpcode:
         case ByteCode::I16X8SubSatSOpcode:
         case ByteCode::I16X8SubSatUOpcode:
+        case ByteCode::I16X8EqOpcode:
+        case ByteCode::I16X8NeOpcode:
+        case ByteCode::I16X8LtSOpcode:
+        case ByteCode::I16X8LtUOpcode:
+        case ByteCode::I16X8LeSOpcode:
+        case ByteCode::I16X8LeUOpcode:
+        case ByteCode::I16X8GtSOpcode:
+        case ByteCode::I16X8GtUOpcode:
+        case ByteCode::I16X8GeSOpcode:
+        case ByteCode::I16X8GeUOpcode:
         case ByteCode::I32X4AddOpcode:
         case ByteCode::I32X4SubOpcode:
         case ByteCode::I32X4MulOpcode:
+        case ByteCode::I32X4EqOpcode:
+        case ByteCode::I32X4NeOpcode:
+        case ByteCode::I32X4LtSOpcode:
+        case ByteCode::I32X4LtUOpcode:
+        case ByteCode::I32X4LeSOpcode:
+        case ByteCode::I32X4LeUOpcode:
+        case ByteCode::I32X4GtSOpcode:
+        case ByteCode::I32X4GtUOpcode:
+        case ByteCode::I32X4GeSOpcode:
+        case ByteCode::I32X4GeUOpcode:
         case ByteCode::I64X2AddOpcode:
         case ByteCode::I64X2SubOpcode:
         case ByteCode::I64X2MulOpcode:
+        case ByteCode::I64X2EqOpcode:
+        case ByteCode::I64X2NeOpcode:
+        case ByteCode::I64X2LtSOpcode:
+        case ByteCode::I64X2LeSOpcode:
+        case ByteCode::I64X2GtSOpcode:
+        case ByteCode::I64X2GeSOpcode:
+        case ByteCode::F32X4EqOpcode:
+        case ByteCode::F32X4NeOpcode:
+        case ByteCode::F32X4LtOpcode:
+        case ByteCode::F32X4LeOpcode:
+        case ByteCode::F32X4GtOpcode:
+        case ByteCode::F32X4GeOpcode:
         case ByteCode::F64X2MinOpcode:
         case ByteCode::F64X2MaxOpcode:
+        case ByteCode::F64X2EqOpcode:
+        case ByteCode::F64X2NeOpcode:
+        case ByteCode::F64X2LtOpcode:
+        case ByteCode::F64X2LeOpcode:
+        case ByteCode::F64X2GtOpcode:
+        case ByteCode::F64X2GeOpcode:
         case ByteCode::V128AndOpcode:
         case ByteCode::V128OrOpcode:
         case ByteCode::V128XorOpcode:
