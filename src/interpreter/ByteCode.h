@@ -1513,6 +1513,58 @@ protected:
     ByteCodeStackOffset m_index;
 };
 
+// dummy ByteCode for simd extract lane operation
+class SIMDExtractLane : public ByteCode {
+public:
+    SIMDExtractLane(Opcode opcode, ByteCodeStackOffset index, ByteCodeStackOffset src, ByteCodeStackOffset dst)
+        : ByteCode(opcode)
+        , m_srcOffset(src)
+        , m_dstOffset(dst)
+        , m_index(index)
+    {
+    }
+
+    ByteCodeStackOffset index() const { return m_index; }
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
+    ByteCodeStackOffset m_index;
+};
+
+// dummy ByteCode for simd extract lane operation
+class SIMDReplaceLane : public ByteCode {
+public:
+    SIMDReplaceLane(Opcode opcode, ByteCodeStackOffset index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
+        : ByteCode(opcode)
+        , m_srcOffsets{ src0, src1 }
+        , m_dstOffset(dst)
+        , m_index(index)
+    {
+    }
+
+    uint32_t index() const { return m_index; }
+    const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    ByteCodeStackOffset m_srcOffsets[2];
+    ByteCodeStackOffset m_dstOffset;
+    ByteCodeStackOffset m_index;
+};
+
 #if !defined(NDEBUG)
 #define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                          \
     void dump(size_t pos)                                                                                                                         \
@@ -1565,23 +1617,13 @@ protected:
 #endif
 
 #define DEFINE_SIMD_EXTRACT_LANE_BYTECODE(name, ...)                          \
-    class name : public ByteCode {                                            \
+    class name : public SIMDExtractLane {                                     \
     public:                                                                   \
         name(uint8_t index, ByteCodeStackOffset src, ByteCodeStackOffset dst) \
-            : ByteCode(Opcode::name##Opcode)                                  \
-            , m_index(index)                                                  \
-            , m_srcOffset(src)                                                \
-            , m_dstOffset(dst)                                                \
+            : SIMDExtractLane(Opcode::name##Opcode, index, src, dst)          \
         {                                                                     \
         }                                                                     \
-        uint32_t index() const { return m_index; }                            \
-        ByteCodeStackOffset srcOffset() const { return m_srcOffset; }         \
-        ByteCodeStackOffset dstOffset() const { return m_dstOffset; }         \
         DEFINE_SIMD_EXTRACT_LANE_BYTECODE_DUMP(name)                          \
-    protected:                                                                \
-        uint8_t m_index;                                                      \
-        ByteCodeStackOffset m_srcOffset;                                      \
-        ByteCodeStackOffset m_dstOffset;                                      \
     };
 
 #if !defined(NDEBUG)
@@ -1595,23 +1637,13 @@ protected:
 #endif
 
 #define DEFINE_SIMD_REPLACE_LANE_BYTECODE(name, ...)                                                     \
-    class name : public ByteCode {                                                                       \
+    class name : public SIMDReplaceLane {                                                                \
     public:                                                                                              \
         name(uint8_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst) \
-            : ByteCode(Opcode::name##Opcode)                                                             \
-            , m_index(index)                                                                             \
-            , m_srcOffsets{ src0, src1 }                                                                 \
-            , m_dstOffset(dst)                                                                           \
+            : SIMDReplaceLane(Opcode::name##Opcode, index, src0, src1, dst)                              \
         {                                                                                                \
         }                                                                                                \
-        uint32_t index() const { return m_index; }                                                       \
-        const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }                           \
-        ByteCodeStackOffset dstOffset() const { return m_dstOffset; }                                    \
         DEFINE_SIMD_REPLACE_LANE_BYTECODE_DUMP(name)                                                     \
-    protected:                                                                                           \
-        uint8_t m_index;                                                                                 \
-        ByteCodeStackOffset m_srcOffsets[2];                                                             \
-        ByteCodeStackOffset m_dstOffset;                                                                 \
     };
 
 
