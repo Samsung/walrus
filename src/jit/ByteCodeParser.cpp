@@ -1021,8 +1021,22 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::F32X4LeOpcode:
         case ByteCode::F32X4GtOpcode:
         case ByteCode::F32X4GeOpcode:
-        case ByteCode::F64X2MinOpcode:
+        case ByteCode::F32X4AddOpcode:
+        case ByteCode::F32X4DivOpcode:
+        case ByteCode::F32X4MaxOpcode:
+        case ByteCode::F32X4MinOpcode:
+        case ByteCode::F32X4MulOpcode:
+        case ByteCode::F32X4PMaxOpcode:
+        case ByteCode::F32X4PMinOpcode:
+        case ByteCode::F32X4SubOpcode:
+        case ByteCode::F64X2AddOpcode:
+        case ByteCode::F64X2DivOpcode:
         case ByteCode::F64X2MaxOpcode:
+        case ByteCode::F64X2MinOpcode:
+        case ByteCode::F64X2MulOpcode:
+        case ByteCode::F64X2PMaxOpcode:
+        case ByteCode::F64X2PMinOpcode:
+        case ByteCode::F64X2SubOpcode:
         case ByteCode::F64X2EqOpcode:
         case ByteCode::F64X2NeOpcode:
         case ByteCode::F64X2LtOpcode:
@@ -1041,7 +1055,20 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I16X8NegOpcode:
         case ByteCode::I32X4NegOpcode:
         case ByteCode::I64X2NegOpcode:
+        case ByteCode::F32X4AbsOpcode:
+        case ByteCode::F32X4CeilOpcode:
+        case ByteCode::F32X4FloorOpcode:
+        case ByteCode::F32X4NearestOpcode:
+        case ByteCode::F32X4NegOpcode:
+        case ByteCode::F32X4SqrtOpcode:
+        case ByteCode::F32X4TruncOpcode:
         case ByteCode::F64X2AbsOpcode:
+        case ByteCode::F64X2CeilOpcode:
+        case ByteCode::F64X2FloorOpcode:
+        case ByteCode::F64X2NearestOpcode:
+        case ByteCode::F64X2NegOpcode:
+        case ByteCode::F64X2SqrtOpcode:
+        case ByteCode::F64X2TruncOpcode:
         case ByteCode::V128NotOpcode: {
             group = Instruction::UnarySIMD;
             paramCount = 1;
