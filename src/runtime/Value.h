@@ -48,6 +48,11 @@ struct Vec128 {
     {
     }
 
+    bool operator==(const Vec128& src) const
+    {
+        return memcmp(m_data, src.m_data, 16) == 0;
+    }
+
     float asF32(int lane) const { return to<float>(lane); }
     uint32_t asF32Bits(int lane) const { return to<uint32_t>(lane); }
     double asF64(int lane) const { return to<double>(lane); }
@@ -348,6 +353,8 @@ public:
             case FuncRef:
             case ExternRef:
                 return m_ref == v.m_ref;
+            case V128:
+                return m_v128 == v.m_v128;
             default:
                 ASSERT_NOT_REACHED();
                 break;
