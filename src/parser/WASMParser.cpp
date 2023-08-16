@@ -267,7 +267,8 @@ private:
             , m_returnValueType(returnValueType)
             , m_position(0)
             , m_functionStackSizeSoFar(binaryReader.m_functionStackSizeSoFar)
-            , m_shouldRestoreVMStackAtEnd(false)
+            , m_shouldRestoreVMStackAtEnd((m_returnValueType.IsIndex() && binaryReader.m_result.m_functionTypes[m_returnValueType]->result().size())
+                                          || m_returnValueType != Type::Void)
             , m_byteCodeGenerationStopped(false)
         {
             if (returnValueType.IsIndex() && binaryReader.m_result.m_functionTypes[returnValueType]->param().size()) {
@@ -276,14 +277,14 @@ private:
                 auto endIter = binaryReader.m_vmStack.rbegin() + param.size();
                 auto iter = binaryReader.m_vmStack.rbegin();
                 while (iter != endIter) {
-                    if (iter->hasValidLocalIndex()) {
+                    if (iter->position() != iter->nonOptimizedPosition()) {
                         binaryReader.generateMoveCodeIfNeeds(iter->position(), iter->nonOptimizedPosition(), iter->valueType());
                         iter->setPosition(iter->nonOptimizedPosition());
-                        if (binaryReader.m_inPreprocess) {
+                        if (binaryReader.m_preprocessData.m_inPreprocess && iter->hasValidLocalIndex()) {
                             size_t pos = *binaryReader.m_readerOffsetPointer;
-                            auto localVariableIter = binaryReader.m_localVariableUsage.rbegin();
+                            auto localVariableIter = binaryReader.m_preprocessData.m_localVariableUsage.rbegin();
                             while (true) {
-                                ASSERT(localVariableIter != binaryReader.m_localVariableUsage.rend());
+                                ASSERT(localVariableIter != binaryReader.m_preprocessData.m_localVariableUsage.rend());
                                 if (localVariableIter->m_localIndex == iter->localIndex()
                                     && localVariableIter->m_endPosition == std::numeric_limits<size_t>::max()) {
                                     localVariableIter->m_endPosition = *binaryReader.m_readerOffsetPointer;
@@ -328,9 +329,9 @@ private:
     LocalVariableUsage& findNearestUsage(size_t localIndex)
     {
         size_t pos = *m_readerOffsetPointer;
-        auto iter = m_localVariableUsage.rbegin();
+        auto iter = m_preprocessData.m_localVariableUsage.rbegin();
         while (true) {
-            ASSERT(iter != m_localVariableUsage.rend());
+            ASSERT(iter != m_preprocessData.m_localVariableUsage.rend());
             if (iter->m_localIndex == localIndex) {
                 if (iter->m_startPosition <= pos) {
                     return *iter;
@@ -341,9 +342,62 @@ private:
         ASSERT_NOT_REACHED();
     }
 
-    bool m_inPreprocess;
-    std::vector<LocalVariableUsage> m_localVariableUsage;
+    struct ProprocessData {
+        bool m_inPreprocess;
+        std::vector<LocalVariableUsage> m_localVariableUsage;
+        std::vector<std::pair<Walrus::Value, size_t>> m_constantData;
+        ProprocessData()
+            : m_inPreprocess(false)
+        {
+        }
 
+        void clear()
+        {
+            m_localVariableUsage.clear();
+            m_constantData.clear();
+        }
+
+        void addConstantData(const Walrus::Value& v)
+        {
+            ASSERT(m_inPreprocess);
+            bool found = false;
+            for (size_t i = 0; i < m_constantData.size(); i++) {
+                if (m_constantData[i].first == v) {
+                    m_constantData[i].second++;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                m_constantData.push_back(std::make_pair(v, 1));
+            }
+
+#ifndef WALRUS_ASSIGN_CONSTANT_ON_STACK_MAX_COUNT
+#define WALRUS_ASSIGN_CONSTANT_ON_STACK_MAX_COUNT 6
+#endif
+            constexpr size_t maxConstantData = WALRUS_ASSIGN_CONSTANT_ON_STACK_MAX_COUNT;
+            if (m_constantData.size() > maxConstantData) {
+                organizeConstantData();
+                m_constantData.erase(m_constantData.end() - maxConstantData / 4, m_constantData.end());
+            }
+        }
+
+        void organizeConstantData()
+        {
+            std::sort(m_constantData.begin(), m_constantData.end(),
+                      [](const std::pair<Walrus::Value, size_t>& a, const std::pair<Walrus::Value, size_t>& b) -> bool {
+                          return a.second > b.second;
+                      });
+        }
+
+        void organizeData()
+        {
+            organizeConstantData();
+        }
+
+    } m_preprocessData;
+
+    bool m_inInitExpr;
     Walrus::ModuleFunction* m_currentFunction;
     Walrus::FunctionType* m_currentFunctionType;
     uint32_t m_initialFunctionStackSize;
@@ -397,7 +451,7 @@ private:
 
     void pushVMStack(Walrus::Value::Type type, size_t pos, size_t localIndex = std::numeric_limits<size_t>::max())
     {
-        if (m_inPreprocess) {
+        if (m_preprocessData.m_inPreprocess) {
             if (localIndex != std::numeric_limits<size_t>::max()) {
                 size_t pushCount = 0;
                 for (const auto& stack : m_vmStack) {
@@ -405,7 +459,7 @@ private:
                         pushCount++;
                     }
                 }
-                m_localVariableUsage.push_back(LocalVariableUsage(localIndex, *m_readerOffsetPointer, pushCount));
+                m_preprocessData.m_localVariableUsage.push_back(LocalVariableUsage(localIndex, *m_readerOffsetPointer, pushCount));
             }
         }
 
@@ -424,12 +478,12 @@ private:
         m_functionStackSizeSoFar -= Walrus::valueStackAllocatedSize(info.valueType());
         m_vmStack.pop_back();
 
-        if (m_inPreprocess) {
+        if (m_preprocessData.m_inPreprocess) {
             if (info.hasValidLocalIndex()) {
                 size_t pos = *m_readerOffsetPointer;
-                auto iter = m_localVariableUsage.rbegin();
+                auto iter = m_preprocessData.m_localVariableUsage.rbegin();
                 while (true) {
-                    ASSERT(iter != m_localVariableUsage.rend());
+                    ASSERT(iter != m_preprocessData.m_localVariableUsage.rend());
                     if (iter->m_localIndex == info.localIndex()
                         && iter->m_endPosition == std::numeric_limits<size_t>::max()) {
                         iter->m_endPosition = *m_readerOffsetPointer;
@@ -453,7 +507,7 @@ private:
         return m_vmStack.back().position();
     }
 
-    const VMStackInfo& peekVMStackInfo()
+    VMStackInfo& peekVMStackInfo()
     {
         return m_vmStack.back();
     }
@@ -463,8 +517,9 @@ private:
         return m_vmStack.back().valueType();
     }
 
-    void beginFunction(Walrus::ModuleFunction* mf)
+    void beginFunction(Walrus::ModuleFunction* mf, bool inInitExpr)
     {
+        m_inInitExpr = inInitExpr;
         m_currentFunction = mf;
         m_currentFunctionType = mf->functionType();
         m_localInfo.clear();
@@ -472,7 +527,7 @@ private:
         for (size_t i = 0; i < m_currentFunctionType->param().size(); i++) {
             m_localInfo.push_back(LocalInfo(m_currentFunctionType->param()[i]));
         }
-        m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
+        m_currentFunction->m_requiredStackSizeDueToParameterAndLocal = m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
         m_lastByteCodePosition = 0;
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
@@ -531,7 +586,7 @@ public:
         , m_readerDataPointer(nullptr)
         , m_codeStartOffset(0)
         , m_codeEndOffset(0)
-        , m_inPreprocess(false)
+        , m_inInitExpr(false)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
         , m_initialFunctionStackSize(0)
@@ -687,7 +742,7 @@ public:
 
     virtual void BeginElemSegmentInitExpr(Index index) override
     {
-        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)));
+        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)), true);
     }
 
     virtual void EndElemSegmentInitExpr(Index index) override
@@ -750,7 +805,7 @@ public:
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
         ASSERT(index == m_result.m_datas.size());
-        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)));
+        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)), true);
     }
 
     virtual void BeginDataSegmentInitExpr(Index index) override
@@ -804,7 +859,7 @@ public:
         auto ft = Walrus::Store::getDefaultFunctionType(m_result.m_globalTypes[index]->type());
         Walrus::ModuleFunction* mf = new Walrus::ModuleFunction(ft);
         m_result.m_globalTypes[index]->setFunction(mf);
-        beginFunction(mf);
+        beginFunction(mf, true);
     }
 
     virtual void EndGlobalInitExpr(Index index) override
@@ -840,7 +895,7 @@ public:
     virtual void BeginFunctionBody(Index index, Offset size) override
     {
         ASSERT(m_currentFunction == nullptr);
-        beginFunction(m_result.m_functions[index]);
+        beginFunction(m_result.m_functions[index], false);
     }
 
     virtual void OnLocalDeclCount(Index count) override
@@ -858,7 +913,7 @@ public:
             auto sz = Walrus::valueStackAllocatedSize(wType);
             m_initialFunctionStackSize += sz;
             m_functionStackSizeSoFar += sz;
-            m_currentFunction->m_requiredStackSizeDueToLocal += sz;
+            m_currentFunction->m_requiredStackSizeDueToParameterAndLocal += sz;
             count--;
         }
         m_currentFunction->m_requiredStackSize = std::max(
@@ -874,13 +929,29 @@ public:
 
     virtual void OnStartPreprocess() override
     {
-        m_inPreprocess = true;
-        m_localVariableUsage.clear();
+        m_preprocessData.m_inPreprocess = true;
+        m_preprocessData.clear();
     }
 
     virtual void OnEndPreprocess() override
     {
-        m_inPreprocess = false;
+        m_preprocessData.m_inPreprocess = false;
+        m_preprocessData.organizeData();
+
+        uint8_t constantBuffer[16];
+        for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
+            size_t siz = Walrus::valueStackAllocatedSize(m_preprocessData.m_constantData[i].first.type());
+            m_initialFunctionStackSize += siz;
+            memset(constantBuffer, 0, sizeof(constantBuffer));
+            m_preprocessData.m_constantData[i].first.writeToMemory(constantBuffer);
+            for (size_t i = 0; i < siz; i++) {
+                m_currentFunction->m_constantData.pushBack(constantBuffer[i]);
+            }
+#if !defined(NDEBUG)
+            m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i].first);
+#endif
+        }
+
         m_skipValidationUntil = *m_readerOffsetPointer - 1;
         m_shouldContinueToGenerateByteCode = true;
 
@@ -890,6 +961,8 @@ public:
         m_catchInfo.clear();
 
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
+        m_currentFunction->m_requiredStackSize = std::max(
+            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
         m_lastByteCodePosition = 0;
         m_vmStack.clear();
     }
@@ -947,28 +1020,63 @@ public:
         }
     }
 
+    bool processConstValue(const Walrus::Value& value)
+    {
+        if (!m_inInitExpr) {
+            if (m_preprocessData.m_inPreprocess) {
+                m_preprocessData.addConstantData(value);
+            } else {
+                size_t pos = m_currentFunction->m_requiredStackSizeDueToParameterAndLocal;
+                for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
+                    if (m_preprocessData.m_constantData[i].first == value) {
+                        pushVMStack(value.type(), pos);
+                        return true;
+                    }
+                    pos += Walrus::valueStackAllocatedSize(m_preprocessData.m_constantData[i].first.type());
+                }
+            }
+        }
+        return false;
+    }
+
+
     virtual void OnI32ConstExpr(uint32_t value) override
     {
+        if (processConstValue(Walrus::Value(Walrus::Value::Type::I32, reinterpret_cast<uint8_t*>(&value)))) {
+            return;
+        }
         pushByteCode(Walrus::Const32(computeExprResultPosition(Walrus::Value::Type::I32), value), WASMOpcode::I32ConstOpcode);
     }
 
     virtual void OnI64ConstExpr(uint64_t value) override
     {
+        if (processConstValue(Walrus::Value(Walrus::Value::Type::I64, reinterpret_cast<uint8_t*>(&value)))) {
+            return;
+        }
         pushByteCode(Walrus::Const64(computeExprResultPosition(Walrus::Value::Type::I64), value), WASMOpcode::I64ConstOpcode);
     }
 
     virtual void OnF32ConstExpr(uint32_t value) override
     {
+        if (processConstValue(Walrus::Value(Walrus::Value::Type::F32, reinterpret_cast<uint8_t*>(&value)))) {
+            return;
+        }
         pushByteCode(Walrus::Const32(computeExprResultPosition(Walrus::Value::Type::F32), value), WASMOpcode::F32ConstOpcode);
     }
 
     virtual void OnF64ConstExpr(uint64_t value) override
     {
+        if (processConstValue(Walrus::Value(Walrus::Value::Type::F64, reinterpret_cast<uint8_t*>(&value)))) {
+            return;
+        }
         pushByteCode(Walrus::Const64(computeExprResultPosition(Walrus::Value::Type::F64), value), WASMOpcode::F64ConstOpcode);
     }
 
     virtual void OnV128ConstExpr(uint8_t* value) override
     {
+        if (processConstValue(Walrus::Value(Walrus::Value::Type::V128, value))) {
+            return;
+        }
         pushByteCode(Walrus::Const128(computeExprResultPosition(Walrus::Value::Type::V128), value), WASMOpcode::V128ConstOpcode);
     }
 
@@ -992,7 +1100,7 @@ public:
 
     size_t computeExprResultPosition(Walrus::Value::Type type)
     {
-        if (!m_inPreprocess) {
+        if (!m_preprocessData.m_inPreprocess) {
             // if there is local.set code ahead,
             // we can use local variable position as expr target position
             auto localSetInfo = readAheadLocalGetIfExists();
@@ -1040,7 +1148,7 @@ public:
 
         bool canUseDirectReference = true;
         size_t pos = *m_readerOffsetPointer;
-        for (const auto& r : m_localVariableUsage) {
+        for (const auto& r : m_preprocessData.m_localVariableUsage) {
             if (r.m_localIndex == localIndex && r.m_startPosition <= pos && pos <= r.m_endPosition) {
                 if (r.m_hasWriteUsage) {
                     canUseDirectReference = false;
@@ -1060,10 +1168,10 @@ public:
 
     void updateWriteUsageOfLocalIfNeeds(Index localIndex)
     {
-        if (m_inPreprocess) {
+        if (m_preprocessData.m_inPreprocess) {
             size_t pos = *m_readerOffsetPointer;
-            auto iter = m_localVariableUsage.begin();
-            while (iter != m_localVariableUsage.end()) {
+            auto iter = m_preprocessData.m_localVariableUsage.begin();
+            while (iter != m_preprocessData.m_localVariableUsage.end()) {
                 if (localIndex == iter->m_localIndex
                     && iter->m_startPosition <= pos && pos <= iter->m_endPosition) {
                     iter->m_hasWriteUsage = true;
@@ -1204,44 +1312,45 @@ public:
         m_functionStackSizeSoFar = blockInfo.m_functionStackSizeSoFar;
     }
 
-    void restoreVMStackRegardToPartOfBlockEnd(const BlockInfo& blockInfo)
+    void keepBlockResultsIfNeeds(BlockInfo& blockInfo)
     {
-        if (blockInfo.m_shouldRestoreVMStackAtEnd) {
-            restoreVMStackBy(blockInfo);
-        } else if (blockInfo.m_returnValueType.IsIndex()) {
-            auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];
-            if (ft->param().size()) {
-                restoreVMStackBy(blockInfo);
-            } else {
-                const auto& result = ft->result();
-                for (size_t i = 0; i < result.size(); i++) {
-                    ASSERT(peekVMStackValueType() == result[result.size() - i - 1]);
-                    popVMStack();
-                }
-            }
-        } else if (blockInfo.m_returnValueType != Type::Void) {
-            ASSERT(peekVMStackValueType() == toValueKind(blockInfo.m_returnValueType));
-            popVMStack();
-        }
+        auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
+        keepBlockResultsIfNeeds(blockInfo, dropSize);
     }
 
-    void keepSubResultsIfNeeds()
+    void keepBlockResultsIfNeeds(BlockInfo& blockInfo, const std::pair<size_t, size_t>& dropSize)
     {
-        BlockInfo& blockInfo = m_blockInfo.back();
-        if ((blockInfo.m_returnValueType.IsIndex() && m_result.m_functionTypes[blockInfo.m_returnValueType]->result().size())
-            || blockInfo.m_returnValueType != Type::Void) {
-            blockInfo.m_shouldRestoreVMStackAtEnd = true;
-            auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
+        if (blockInfo.m_shouldRestoreVMStackAtEnd) {
             if (dropSize.second) {
                 generateMoveValuesCodeRegardToDrop(dropSize);
+            }
+
+            if (!blockInfo.m_byteCodeGenerationStopped) {
+                if (blockInfo.m_returnValueType.IsIndex()) {
+                    auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];
+                    const auto& result = ft->result();
+                    for (size_t i = 0; i < result.size(); i++) {
+                        ASSERT(peekVMStackValueType() == result[result.size() - i - 1]);
+                        auto info = peekVMStackInfo();
+                        generateMoveCodeIfNeeds(info.position(), info.nonOptimizedPosition(), info.valueType());
+                        info.setPosition(info.nonOptimizedPosition());
+                        popVMStack();
+                    }
+                } else if (blockInfo.m_returnValueType != Type::Void) {
+                    ASSERT(peekVMStackValueType() == toValueKind(blockInfo.m_returnValueType));
+                    auto info = peekVMStackInfo();
+                    generateMoveCodeIfNeeds(info.position(), info.nonOptimizedPosition(), info.valueType());
+                    info.setPosition(info.nonOptimizedPosition());
+                    popVMStack();
+                }
             }
         }
     }
 
     virtual void OnElseExpr() override
     {
-        keepSubResultsIfNeeds();
         BlockInfo& blockInfo = m_blockInfo.back();
+        keepBlockResultsIfNeeds(blockInfo);
 
         ASSERT(blockInfo.m_blockType == BlockInfo::IfElse);
         blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
@@ -1252,7 +1361,7 @@ public:
         }
 
         blockInfo.m_byteCodeGenerationStopped = false;
-        restoreVMStackRegardToPartOfBlockEnd(blockInfo);
+        restoreVMStackBy(blockInfo);
         m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
             ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
     }
@@ -1460,6 +1569,17 @@ public:
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
         if (dropSize.second) {
             generateMoveValuesCodeRegardToDrop(dropSize);
+        } else if (blockInfo.m_blockType == BlockInfo::Loop && blockInfo.m_returnValueType.IsIndex() && m_result.m_functionTypes[blockInfo.m_returnValueType]->param().size()) {
+            size_t pos = m_currentFunction->currentByteCodeSize();
+
+            auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];
+            const auto& param = ft->param();
+            for (size_t i = 0; i < param.size(); i++) {
+                ASSERT((m_vmStack.rbegin() + i)->valueType() == param[param.size() - i - 1]);
+                auto info = m_vmStack.rbegin() + i;
+                generateMoveCodeIfNeeds(info->position(), info->nonOptimizedPosition(), info->valueType());
+                info->setPosition(info->nonOptimizedPosition());
+            }
         }
         if (blockInfo.m_blockType != BlockInfo::Loop) {
             ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
@@ -1494,6 +1614,28 @@ public:
             size_t pos = m_currentFunction->currentByteCodeSize();
             pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
             generateMoveValuesCodeRegardToDrop(dropSize);
+
+            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+            if (blockInfo.m_blockType != BlockInfo::Loop) {
+                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
+                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
+            }
+            pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
+            m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(pos)
+                ->setOffset(m_currentFunction->currentByteCodeSize() - pos);
+        } else if (blockInfo.m_blockType == BlockInfo::Loop && blockInfo.m_returnValueType.IsIndex() && m_result.m_functionTypes[blockInfo.m_returnValueType]->param().size()) {
+            size_t pos = m_currentFunction->currentByteCodeSize();
+            pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
+
+            auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];
+            const auto& param = ft->param();
+            for (size_t i = 0; i < param.size(); i++) {
+                ASSERT((m_vmStack.rbegin() + i)->valueType() == param[param.size() - i - 1]);
+                auto info = m_vmStack.rbegin() + i;
+                generateMoveCodeIfNeeds(info->position(), info->nonOptimizedPosition(), info->valueType());
+                info->setPosition(info->nonOptimizedPosition());
+            }
+
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
             if (blockInfo.m_blockType != BlockInfo::Loop) {
                 ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
@@ -1620,10 +1762,10 @@ public:
     void processCatchExpr(Index tagIndex)
     {
         ASSERT(m_blockInfo.back().m_blockType == BlockInfo::TryCatch);
-        keepSubResultsIfNeeds();
 
         auto& blockInfo = m_blockInfo.back();
-        restoreVMStackRegardToPartOfBlockEnd(blockInfo);
+        keepBlockResultsIfNeeds(blockInfo);
+        restoreVMStackBy(blockInfo);
 
         size_t tryEnd = m_currentFunction->currentByteCodeSize();
         if (m_catchInfo.size() && m_catchInfo.back().m_tryCatchBlockDepth == m_blockInfo.size()) {
@@ -1887,10 +2029,9 @@ public:
                 return;
             }
 
+            keepBlockResultsIfNeeds(blockInfo, dropSize);
+
             if (blockInfo.m_shouldRestoreVMStackAtEnd) {
-                if (dropSize.second) {
-                    generateMoveValuesCodeRegardToDrop(dropSize);
-                }
                 restoreVMStackBy(blockInfo);
                 if (blockInfo.m_returnValueType.IsIndex()) {
                     auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];

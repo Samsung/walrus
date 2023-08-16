@@ -637,7 +637,6 @@ public:
     {
         printf("const128 ");
         DUMP_BYTECODE_OFFSET(dstOffset);
-        //printf("value: %" PRIu64, m_value);
     }
 #endif
 

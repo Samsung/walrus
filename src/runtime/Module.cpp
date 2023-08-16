@@ -33,7 +33,7 @@ namespace Walrus {
 ModuleFunction::ModuleFunction(FunctionType* functionType)
     : m_functionType(functionType)
     , m_requiredStackSize(std::max(m_functionType->paramStackSize(), m_functionType->resultStackSize()))
-    , m_requiredStackSizeDueToLocal(0)
+    , m_requiredStackSizeDueToParameterAndLocal(0)
 {
 }
 
@@ -363,7 +363,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
 #if !defined(NDEBUG)
 
-static const char* localTypeName(Value::Type v)
+static const char* typeName(Value::Type v)
 {
     switch (v) {
     case Value::I32:
@@ -385,18 +385,71 @@ static const char* localTypeName(Value::Type v)
     }
 }
 
+static void dumpValue(Value v)
+{
+    switch (v.type()) {
+    case Value::I32:
+        printf("%" PRId32, v.asI32());
+        break;
+    case Value::I64:
+        printf("%" PRId64, v.asI64());
+        break;
+    case Value::F32:
+        printf("%f", v.asF32());
+        break;
+    case Value::F64:
+        printf("%lf", v.asF64());
+        break;
+    case Value::V128:
+        printf("%" PRIu8, v.asV128().m_data[0]);
+        printf(" %" PRIu8, v.asV128().m_data[1]);
+        printf(" %" PRIu8, v.asV128().m_data[2]);
+        printf(" %" PRIu8, v.asV128().m_data[3]);
+        printf(" %" PRIu8, v.asV128().m_data[4]);
+        printf(" %" PRIu8, v.asV128().m_data[5]);
+        printf(" %" PRIu8, v.asV128().m_data[6]);
+        printf(" %" PRIu8, v.asV128().m_data[7]);
+        printf(" %" PRIu8, v.asV128().m_data[8]);
+        printf(" %" PRIu8, v.asV128().m_data[9]);
+        printf(" %" PRIu8, v.asV128().m_data[10]);
+        printf(" %" PRIu8, v.asV128().m_data[11]);
+        printf(" %" PRIu8, v.asV128().m_data[12]);
+        printf(" %" PRIu8, v.asV128().m_data[13]);
+        printf(" %" PRIu8, v.asV128().m_data[14]);
+        printf(" %" PRIu8, v.asV128().m_data[15]);
+        break;
+    case Value::FuncRef:
+        break;
+    case Value::ExternRef:
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+    printf(", %s", typeName(v.type()));
+}
+
 void ModuleFunction::dumpByteCode()
 {
     printf("\n");
     printf("required stack size: %u bytes\n", m_requiredStackSize);
-    printf("required stack size due to local: %u bytes\n", m_requiredStackSizeDueToLocal);
+    printf("required stack size due to parameter and local: %u bytes\n", m_requiredStackSizeDueToParameterAndLocal);
     printf("stack: [");
     size_t pos = 0;
+    for (size_t i = 0; i < m_functionType->param().size(); i++) {
+        printf("%zu(parameter %zu, %s) ", pos, i, typeName(m_functionType->param()[i]));
+        pos += valueStackAllocatedSize(m_functionType->param()[i]);
+    }
     for (size_t i = 0; i < m_local.size(); i++) {
-        printf("%zu(local %zu, %s) ", pos, i, localTypeName(m_local[i]));
+        printf("%zu(local %zu, %s) ", pos, i, typeName(m_local[i]));
         pos += valueStackAllocatedSize(m_local[i]);
     }
-    printf("%zu(%" PRIu32 " bytes for general operation)]\n", pos, (m_requiredStackSize - m_requiredStackSizeDueToLocal));
+    for (size_t i = 0; i < m_constantDebugData.size(); i++) {
+        printf("%zu(constant ", pos);
+        dumpValue(m_constantDebugData[i]);
+        printf(") ");
+        pos += valueStackAllocatedSize(m_constantDebugData[i].type());
+    }
+    printf("%zu(%" PRIu32 " bytes for general operation)]\n", pos, (m_requiredStackSize - m_requiredStackSizeDueToParameterAndLocal));
     printf("bytecode size: %zu bytes\n", m_byteCode.size());
     printf("\n");
 
