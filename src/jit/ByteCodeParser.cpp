@@ -993,6 +993,10 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I16X8GtUOpcode:
         case ByteCode::I16X8GeSOpcode:
         case ByteCode::I16X8GeUOpcode:
+        case ByteCode::I16X8ExtmulLowI8X16SOpcode:
+        case ByteCode::I16X8ExtmulHighI8X16SOpcode:
+        case ByteCode::I16X8ExtmulLowI8X16UOpcode:
+        case ByteCode::I16X8ExtmulHighI8X16UOpcode:
         case ByteCode::I32X4AddOpcode:
         case ByteCode::I32X4SubOpcode:
         case ByteCode::I32X4MulOpcode:
@@ -1006,6 +1010,10 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I32X4GtUOpcode:
         case ByteCode::I32X4GeSOpcode:
         case ByteCode::I32X4GeUOpcode:
+        case ByteCode::I32X4ExtmulLowI16X8SOpcode:
+        case ByteCode::I32X4ExtmulHighI16X8SOpcode:
+        case ByteCode::I32X4ExtmulLowI16X8UOpcode:
+        case ByteCode::I32X4ExtmulHighI16X8UOpcode:
         case ByteCode::I64X2AddOpcode:
         case ByteCode::I64X2SubOpcode:
         case ByteCode::I64X2MulOpcode:
@@ -1015,6 +1023,10 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I64X2LeSOpcode:
         case ByteCode::I64X2GtSOpcode:
         case ByteCode::I64X2GeSOpcode:
+        case ByteCode::I64X2ExtmulLowI32X4SOpcode:
+        case ByteCode::I64X2ExtmulHighI32X4SOpcode:
+        case ByteCode::I64X2ExtmulLowI32X4UOpcode:
+        case ByteCode::I64X2ExtmulHighI32X4UOpcode:
         case ByteCode::F32X4EqOpcode:
         case ByteCode::F32X4NeOpcode:
         case ByteCode::F32X4LtOpcode:
@@ -1053,7 +1065,11 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         }
         case ByteCode::I8X16NegOpcode:
         case ByteCode::I16X8NegOpcode:
+        case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
+        case ByteCode::I16X8ExtaddPairwiseI8X16UOpcode:
         case ByteCode::I32X4NegOpcode:
+        case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
+        case ByteCode::I32X4ExtaddPairwiseI16X8UOpcode:
         case ByteCode::I64X2NegOpcode:
         case ByteCode::F32X4AbsOpcode:
         case ByteCode::F32X4CeilOpcode:
