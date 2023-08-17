@@ -50,8 +50,7 @@ def prepare_arg_pars():
                         const='./ctests', default='./ctests')
     parser.add_argument('--only-game', help='only run The Benchmarks Game tests', action='store_true')
     parser.add_argument('--run', metavar='TEST', help='only run one benchmark')
-    parser.add_argument('--walrus', metavar='PATH', help='path to the engine', nargs='?', const='./engines/walrus',
-                        type=str)
+    parser.add_argument('--walrus', metavar='PATH', help='path to the engine', nargs='+', default=['walrus'])
     parser.add_argument('--report', metavar='PATH', help='path to the report', nargs='?', const='./report.md')
     parser.add_argument('--iterations', metavar='NUMBER', help='how many times run the tests', nargs='?',
                         const='10', default=10, type=int)
@@ -64,9 +63,11 @@ def check_programs(walrus):
         print("git not found")
         exit(1)
 
-    if walrus is not None and os.path.isfile(walrus) is False:
-        print("walrus not found")
-        exit(1)
+    for w in walrus:
+        path = w.split(" ")[0]
+        if os.path.isfile(path) is False:
+            print(path + " not found")
+            exit(1)
 
     print("Checks done")
 
@@ -116,24 +117,6 @@ def compile_tests(path, only_game=False, compile_anyway=False, run=None):
 
     return test_names
 
-
-def run_walrus_jit(engine, path, name):
-    if not os.path.exists(path):
-        print("invalid path for walrus run")
-        exit(1)
-
-    result = subprocess.check_output(engine + " --run-export runtime --jit " + path + "/wasm/" + name + ".wasm",
-                                     shell=True)
-
-    if float(f'{float(result):.9f}') != float(expectedValues[name]):
-        print("walrus jit failed with " + name + ".wasm", file=sys.stderr)
-        print("Expected: " + str(expectedValues[name]), file=sys.stderr)
-        print("Got: " + str(result), file=sys.stderr)
-        return False
-
-    return True
-
-
 def run_walrus(engine, path, name):
     if not os.path.exists(path):
         print("invalid path for walrus run")
@@ -170,21 +153,26 @@ def run_tests(path, test_names, walrus, number_of_runs):
     ret_val = []
     for name in test_names:
         print("running " + name)
-        measurements_walrus = []
-        measurements_walrus_jit = []
+        measurements_walrus = {}
+        for w in walrus:
+            measurements_walrus[w] = []
 
         for i in range(0, number_of_runs):
             print("round " + str(i + 1))
-            measurements_walrus.append(measure_time(path, name, run_walrus, walrus))
-            measurements_walrus_jit.append(measure_time(path, name, run_walrus_jit, walrus))
+            for w in walrus:
+                measurements_walrus[w].append(measure_time(path, name, run_walrus, w))
 
         result_list = {"test": name}
 
-        min_walrus = min(measurements_walrus)
-        min_walrus_jit = min(measurements_walrus_jit)
-        result_list["walrus [s]"] = "{:.3f}".format(min_walrus / 1000000000) + " ({:.3f}x)".format(1)
-        result_list["walrus-jit [s]"] = "{:.3f}".format(min_walrus_jit / 1000000000) + " ({:.3f}x)".format(
-            (min_walrus / min_walrus_jit))
+        min_walrus_first = False
+        min_walrus = {}
+        for w in walrus:
+            min_walrus[w] = min(measurements_walrus[w])
+            if min_walrus_first is False:
+                min_walrus_first = min_walrus[w]
+
+        for w in walrus:
+            result_list[w + " [s]"] = "{:.3f}".format(min_walrus[w] / 1000000000) + " ({:.3f}x)".format((min_walrus[w] / min_walrus_first))
 
         ret_val.append(result_list)
 
