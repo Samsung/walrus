@@ -1359,7 +1359,7 @@ NEVER_INLINE void Interpreter::callOperation(
     Function* target = instance->function(code->index());
     const FunctionType* ft = target->functionType();
     const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size(), isAllocaParam);
+    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
 
     size_t c = 0;
     for (size_t i = 0; i < param.size(); i++) {
@@ -1367,7 +1367,7 @@ NEVER_INLINE void Interpreter::callOperation(
     }
 
     const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size(), isAllocaResult);
+    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
     size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     target->call(state, param.size(), paramVector, resultVector);
@@ -1375,13 +1375,6 @@ NEVER_INLINE void Interpreter::callOperation(
     for (size_t i = 0; i < result.size(); i++) {
         uint8_t* resultStackPointer = bp + code->stackOffsets()[c++];
         resultVector[i].writeToMemory(resultStackPointer);
-    }
-
-    if (UNLIKELY(!isAllocaParam)) {
-        delete[] paramVector;
-    }
-    if (UNLIKELY(!isAllocaResult)) {
-        delete[] resultVector;
     }
 
     programCounter += sizeof(Call) + codeExtraOffsetsSize;
@@ -1409,7 +1402,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         Trap::throwException(state, "indirect call type mismatch");
     }
     const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size(), isAllocaParam);
+    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
 
     size_t c = 0;
     for (size_t i = 0; i < param.size(); i++) {
@@ -1417,7 +1410,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
 
     const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size(), isAllocaResult);
+    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
     size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     target->call(state, param.size(), paramVector, resultVector);
@@ -1427,14 +1420,6 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         resultVector[i].writeToMemory(resultStackPointer);
     }
 
-    if (UNLIKELY(!isAllocaParam)) {
-        delete[] paramVector;
-    }
-    if (UNLIKELY(!isAllocaResult)) {
-        delete[] resultVector;
-    }
-
     programCounter += sizeof(CallIndirect) + codeExtraOffsetsSize;
 }
-
 } // namespace Walrus

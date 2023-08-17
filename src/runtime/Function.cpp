@@ -45,7 +45,7 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
 {
     ExecutionState newState(state, this);
     checkStackLimit(newState);
-    ALLOCA(uint8_t, functionStackBase, m_moduleFunction->requiredStackSize(), isAlloca);
+    ALLOCA(uint8_t, functionStackBase, m_moduleFunction->requiredStackSize());
     uint8_t* functionStackPointer = functionStackBase;
 
     // init parameter space
@@ -99,10 +99,6 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
     const ValueTypeVector& resultTypeInfo = ft->result();
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {
         result[i] = Value(resultTypeInfo[i], functionStackBase + resultOffsets[i]);
-    }
-
-    if (UNLIKELY(!isAlloca)) {
-        delete[] functionStackBase;
     }
 }
 

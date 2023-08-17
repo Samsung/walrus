@@ -226,16 +226,12 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
-                ALLOCA(uint8_t, functionStackBase, data->mf->requiredStackSize(), isAlloca);
+                ALLOCA(uint8_t, functionStackBase, data->mf->requiredStackSize());
 
                 DefinedFunction fakeFunction(data->instance, data->mf);
                 ExecutionState newState(state, &fakeFunction);
                 auto resultOffset = Interpreter::interpret(newState, functionStackBase);
                 data->instance->m_globals[data->index]->setValue(Value(data->type, functionStackBase + resultOffset[0]));
-
-                if (UNLIKELY(!isAlloca)) {
-                    delete[] functionStackBase;
-                }
             },
                      &data);
         }
@@ -261,7 +257,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Walrus::Trap trap;
                 trap.run([](Walrus::ExecutionState& state, void* d) {
                     RunData* data = reinterpret_cast<RunData*>(d);
-                    ALLOCA(uint8_t, functionStackBase, data->elem->moduleFunction()->requiredStackSize(), isAlloca);
+                    ALLOCA(uint8_t, functionStackBase, data->elem->moduleFunction()->requiredStackSize());
 
                     DefinedFunction fakeFunction(data->instance,
                                                  data->elem->moduleFunction());
@@ -270,10 +266,6 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                     auto resultOffset = Interpreter::interpret(newState, functionStackBase);
                     Value offset(Value::I32, functionStackBase + resultOffset[0]);
                     data->index = offset.asI32();
-
-                    if (UNLIKELY(!isAlloca)) {
-                        delete[] functionStackBase;
-                    }
                 },
                          &data);
             }
@@ -312,7 +304,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         auto result = trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
             if (data->init->moduleFunction()->currentByteCodeSize()) {
-                ALLOCA(uint8_t, functionStackBase, data->init->moduleFunction()->requiredStackSize(), isAlloca);
+                ALLOCA(uint8_t, functionStackBase, data->init->moduleFunction()->requiredStackSize());
 
                 DefinedFunction fakeFunction(data->instance,
                                              data->init->moduleFunction());
@@ -320,10 +312,6 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
                 auto resultOffset = Interpreter::interpret(newState, functionStackBase);
                 Value offset(Value::I32, functionStackBase + resultOffset[0]);
-
-                if (UNLIKELY(!isAlloca)) {
-                    delete[] functionStackBase;
-                }
 
                 Memory* m = data->instance->memory(0);
                 const auto& initData = data->init->initData();
