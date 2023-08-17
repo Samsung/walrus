@@ -343,10 +343,16 @@ if (f.type == Type::B) { puts("failed in msvc."); }
     static void operator delete(void*) = delete;  \
     static void operator delete[](void*) = delete;
 
-#define ALLOCA(Type, Result, Bytes, Success)                       \
-    Type* Result = (Type*)(LIKELY(Bytes < 512) ? alloca(Bytes)     \
-                                               : new char[Bytes]); \
-    bool Success = LIKELY(Bytes < 512) ? true : false;
+#define ALLOCA(Type, Result, Bytes)                                                             \
+    std::unique_ptr<uint8_t[]> Result##HolderWhenUsingMalloc;                                   \
+    size_t bytes##Result = (Bytes);                                                             \
+    Type* Result;                                                                               \
+    if (LIKELY(bytes##Result < 512)) {                                                          \
+        Result = (Type*)alloca(bytes##Result);                                                  \
+    } else {                                                                                    \
+        Result##HolderWhenUsingMalloc = std::unique_ptr<uint8_t[]>(new uint8_t[bytes##Result]); \
+        Result = (Type*)Result##HolderWhenUsingMalloc.get();                                    \
+    }
 
 #if !defined(STACK_GROWS_DOWN) && !defined(STACK_GROWS_UP)
 #define STACK_GROWS_DOWN
