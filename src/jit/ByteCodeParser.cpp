@@ -976,6 +976,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I8X16GtUOpcode:
         case ByteCode::I8X16GeSOpcode:
         case ByteCode::I8X16GeUOpcode:
+        case ByteCode::I8X16NarrowI16X8SOpcode:
+        case ByteCode::I8X16NarrowI16X8UOpcode:
         case ByteCode::I16X8AddOpcode:
         case ByteCode::I16X8SubOpcode:
         case ByteCode::I16X8MulOpcode:
@@ -997,6 +999,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I16X8ExtmulHighI8X16SOpcode:
         case ByteCode::I16X8ExtmulLowI8X16UOpcode:
         case ByteCode::I16X8ExtmulHighI8X16UOpcode:
+        case ByteCode::I16X8NarrowI32X4SOpcode:
+        case ByteCode::I16X8NarrowI32X4UOpcode:
         case ByteCode::I32X4AddOpcode:
         case ByteCode::I32X4SubOpcode:
         case ByteCode::I32X4MulOpcode:
@@ -1067,9 +1071,17 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I16X8NegOpcode:
         case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
         case ByteCode::I16X8ExtaddPairwiseI8X16UOpcode:
+        case ByteCode::I16X8ExtendLowI8X16SOpcode:
+        case ByteCode::I16X8ExtendHighI8X16SOpcode:
+        case ByteCode::I16X8ExtendLowI8X16UOpcode:
+        case ByteCode::I16X8ExtendHighI8X16UOpcode:
         case ByteCode::I32X4NegOpcode:
         case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
         case ByteCode::I32X4ExtaddPairwiseI16X8UOpcode:
+        case ByteCode::I32X4ExtendLowI16X8SOpcode:
+        case ByteCode::I32X4ExtendHighI16X8SOpcode:
+        case ByteCode::I32X4ExtendLowI16X8UOpcode:
+        case ByteCode::I32X4ExtendHighI16X8UOpcode:
         case ByteCode::I64X2NegOpcode:
         case ByteCode::F32X4AbsOpcode:
         case ByteCode::F32X4CeilOpcode:
@@ -1078,6 +1090,9 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::F32X4NegOpcode:
         case ByteCode::F32X4SqrtOpcode:
         case ByteCode::F32X4TruncOpcode:
+        case ByteCode::F32X4DemoteF64X2ZeroOpcode:
+        case ByteCode::F32X4ConvertI32X4SOpcode:
+        case ByteCode::F32X4ConvertI32X4UOpcode:
         case ByteCode::F64X2AbsOpcode:
         case ByteCode::F64X2CeilOpcode:
         case ByteCode::F64X2FloorOpcode:
@@ -1085,6 +1100,9 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::F64X2NegOpcode:
         case ByteCode::F64X2SqrtOpcode:
         case ByteCode::F64X2TruncOpcode:
+        case ByteCode::F64X2PromoteLowF32X4Opcode:
+        case ByteCode::F64X2ConvertLowI32X4SOpcode:
+        case ByteCode::F64X2ConvertLowI32X4UOpcode:
         case ByteCode::V128NotOpcode: {
             group = Instruction::UnarySIMD;
             paramCount = 1;
