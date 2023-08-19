@@ -21,42 +21,34 @@ static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
 
     sljit_s32 type = 0;
-    uint32_t index = 0;
+    uint32_t index = reinterpret_cast<SIMDExtractLane*>(instr->byteCode())->index();
 
     switch (instr->opcode()) {
     case ByteCode::I8X16ExtractLaneSOpcode:
-        index = reinterpret_cast<I8X16ExtractLaneS*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_LANE_SIGNED | SLJIT_32;
         break;
     case ByteCode::I8X16ExtractLaneUOpcode:
-        index = reinterpret_cast<I8X16ExtractLaneU*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_8 | SLJIT_32;
         break;
     case ByteCode::I16X8ExtractLaneSOpcode:
-        index = reinterpret_cast<I16X8ExtractLaneS*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_16 | SLJIT_SIMD_LANE_SIGNED | SLJIT_32;
         break;
     case ByteCode::I16X8ExtractLaneUOpcode:
-        index = reinterpret_cast<I16X8ExtractLaneU*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_16 | SLJIT_32;
         break;
     case ByteCode::I32X4ExtractLaneOpcode:
-        index = reinterpret_cast<I32X4ExtractLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_32 | SLJIT_32;
         break;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     case ByteCode::I64X2ExtractLaneOpcode:
-        index = reinterpret_cast<I64X2ExtractLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_64;
         break;
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     case ByteCode::F32X4ExtractLaneOpcode:
-        index = reinterpret_cast<F32X4ExtractLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::F64X2ExtractLaneOpcode);
-        index = reinterpret_cast<F64X2ExtractLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
         break;
     }
@@ -89,34 +81,28 @@ static void emitReplaceLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
 
     sljit_s32 type = 0;
-    uint32_t index = 0;
+    uint32_t index = reinterpret_cast<SIMDReplaceLane*>(instr->byteCode())->index();
 
     switch (instr->opcode()) {
     case ByteCode::I8X16ReplaceLaneOpcode:
-        index = reinterpret_cast<I8X16ReplaceLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_8 | SLJIT_32;
         break;
     case ByteCode::I16X8ReplaceLaneOpcode:
-        index = reinterpret_cast<I16X8ReplaceLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_16 | SLJIT_32;
         break;
     case ByteCode::I32X4ReplaceLaneOpcode:
-        index = reinterpret_cast<I32X4ReplaceLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_32 | SLJIT_32;
         break;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     case ByteCode::I64X2ReplaceLaneOpcode:
-        index = reinterpret_cast<I64X2ReplaceLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_64;
         break;
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     case ByteCode::F32X4ReplaceLaneOpcode:
-        index = reinterpret_cast<F32X4ReplaceLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::F64X2ReplaceLaneOpcode);
-        index = reinterpret_cast<F64X2ReplaceLane*>(instr->byteCode())->index();
         type = SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
         break;
     }

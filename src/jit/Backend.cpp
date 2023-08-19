@@ -786,8 +786,8 @@ JITModule* JITCompiler::compile()
             emitUnarySIMD(m_compiler, item->asInstruction());
             break;
         }
-        case Instruction::SelectSIMD: {
-            emitSelectSIMD(m_compiler, item->asInstruction());
+        case Instruction::LoadLaneSIMD: {
+            emitLoadLaneSIMD(m_compiler, item->asInstruction());
             break;
         }
 #endif /* HAS_SIMD */
@@ -797,6 +797,16 @@ JITModule* JITCompiler::compile()
                 emitSelect(m_compiler, item->asInstruction(), -1);
                 break;
             }
+#ifdef HAS_SIMD
+            case ByteCode::V128BitSelectOpcode: {
+                emitSelectSIMD(m_compiler, item->asInstruction());
+                break;
+            }
+            case ByteCode::I8X16ShuffleOpcode: {
+                emitShuffleSIMD(m_compiler, item->asInstruction());
+                break;
+            }
+#endif /* HAS_SIMD */
             case ByteCode::GlobalGet32Opcode: {
                 emitGlobalGet32(m_compiler, item->asInstruction());
                 break;
