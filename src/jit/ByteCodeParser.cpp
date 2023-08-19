@@ -84,32 +84,6 @@ void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<si
     }
 }
 
-#define PARSE_EXTRACT_LANE(byteCodeType)                                                             \
-    case ByteCode::byteCodeType##Opcode: {                                                           \
-        byteCodeType* extractLane = reinterpret_cast<byteCodeType*>(byteCode);                       \
-        Instruction* instr = compiler->append(byteCode, Instruction::ExtractLaneSIMD, opcode, 2, 0); \
-        Operand* operands = instr->operands();                                                       \
-        operands[0].item = nullptr;                                                                  \
-        operands[0].offset = STACK_OFFSET(extractLane->srcOffset());                                 \
-        operands[1].item = nullptr;                                                                  \
-        operands[1].offset = STACK_OFFSET(extractLane->dstOffset());                                 \
-        break;                                                                                       \
-    }
-
-#define PARSE_REPLACE_LANE(byteCodeType)                                                             \
-    case ByteCode::byteCodeType##Opcode: {                                                           \
-        byteCodeType* replaceLane = reinterpret_cast<byteCodeType*>(byteCode);                       \
-        Instruction* instr = compiler->append(byteCode, Instruction::ReplaceLaneSIMD, opcode, 2, 1); \
-        Operand* operands = instr->operands();                                                       \
-        operands[0].item = nullptr;                                                                  \
-        operands[0].offset = STACK_OFFSET(replaceLane->srcOffsets()[0]);                             \
-        operands[1].item = nullptr;                                                                  \
-        operands[1].offset = STACK_OFFSET(replaceLane->srcOffsets()[1]);                             \
-        operands[2].item = nullptr;                                                                  \
-        operands[2].offset = STACK_OFFSET(replaceLane->dstOffset());                                 \
-        break;                                                                                       \
-    }
-
 static void createInstructionList(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
     size_t idx = 0;
@@ -517,6 +491,12 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::V128Load16SplatOpcode:
         case ByteCode::V128Load32SplatOpcode:
         case ByteCode::V128Load64SplatOpcode:
+        case ByteCode::V128Load8X8SOpcode:
+        case ByteCode::V128Load8X8UOpcode:
+        case ByteCode::V128Load16X4SOpcode:
+        case ByteCode::V128Load16X4UOpcode:
+        case ByteCode::V128Load32X2SOpcode:
+        case ByteCode::V128Load32X2UOpcode:
         case ByteCode::V128Load32ZeroOpcode:
         case ByteCode::V128Load64ZeroOpcode: {
             MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
@@ -527,6 +507,22 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
             operands[1].item = nullptr;
             operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            break;
+        }
+        case ByteCode::V128Load8LaneOpcode:
+        case ByteCode::V128Load16LaneOpcode:
+        case ByteCode::V128Load32LaneOpcode:
+        case ByteCode::V128Load64LaneOpcode: {
+            SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::LoadLaneSIMD, opcode, 2, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(loadOperation->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(loadOperation->src1Offset());
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(loadOperation->dstOffset());
             break;
         }
         case ByteCode::Store32Opcode: {
@@ -585,20 +581,42 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
             break;
         }
-            PARSE_EXTRACT_LANE(I8X16ExtractLaneS)
-            PARSE_EXTRACT_LANE(I8X16ExtractLaneU)
-            PARSE_EXTRACT_LANE(I16X8ExtractLaneS)
-            PARSE_EXTRACT_LANE(I16X8ExtractLaneU)
-            PARSE_EXTRACT_LANE(I32X4ExtractLane)
-            PARSE_EXTRACT_LANE(I64X2ExtractLane)
-            PARSE_EXTRACT_LANE(F32X4ExtractLane)
-            PARSE_EXTRACT_LANE(F64X2ExtractLane)
-            PARSE_REPLACE_LANE(I8X16ReplaceLane)
-            PARSE_REPLACE_LANE(I16X8ReplaceLane)
-            PARSE_REPLACE_LANE(I32X4ReplaceLane)
-            PARSE_REPLACE_LANE(I64X2ReplaceLane)
-            PARSE_REPLACE_LANE(F32X4ReplaceLane)
-            PARSE_REPLACE_LANE(F64X2ReplaceLane)
+        case ByteCode::I8X16ExtractLaneSOpcode:
+        case ByteCode::I8X16ExtractLaneUOpcode:
+        case ByteCode::I16X8ExtractLaneSOpcode:
+        case ByteCode::I16X8ExtractLaneUOpcode:
+        case ByteCode::I32X4ExtractLaneOpcode:
+        case ByteCode::I64X2ExtractLaneOpcode:
+        case ByteCode::F32X4ExtractLaneOpcode:
+        case ByteCode::F64X2ExtractLaneOpcode: {
+            SIMDExtractLane* extractLane = reinterpret_cast<SIMDExtractLane*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::ExtractLaneSIMD, opcode, 2, 0);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(extractLane->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(extractLane->dstOffset());
+            break;
+        }
+        case ByteCode::I8X16ReplaceLaneOpcode:
+        case ByteCode::I16X8ReplaceLaneOpcode:
+        case ByteCode::I32X4ReplaceLaneOpcode:
+        case ByteCode::I64X2ReplaceLaneOpcode:
+        case ByteCode::F32X4ReplaceLaneOpcode:
+        case ByteCode::F64X2ReplaceLaneOpcode: {
+            SIMDReplaceLane* replaceLane = reinterpret_cast<SIMDReplaceLane*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::ReplaceLaneSIMD, opcode, 2, 1);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(replaceLane->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(replaceLane->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(replaceLane->dstOffset());
+            break;
+        }
         case ByteCode::I8X16SplatOpcode:
         case ByteCode::I16X8SplatOpcode:
         case ByteCode::I32X4SplatOpcode:
@@ -1062,7 +1080,8 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::V128AndOpcode:
         case ByteCode::V128OrOpcode:
         case ByteCode::V128XorOpcode:
-        case ByteCode::V128AndnotOpcode: {
+        case ByteCode::V128AndnotOpcode:
+        case ByteCode::I8X16SwizzleOpcode: {
             group = Instruction::BinarySIMD;
             paramCount = 2;
             break;
@@ -1109,22 +1128,33 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case ByteCode::V128BitSelectOpcode: {
-            group = Instruction::SelectSIMD;
-            Instruction* instr = compiler->append(byteCode, group, opcode, 3, 1);
-            instr->addInfo(info);
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, 3, 1);
 
-            auto bitSelect = reinterpret_cast<V128BitSelect*>(byteCode);
+            V128BitSelect* bitSelect = reinterpret_cast<V128BitSelect*>(byteCode);
             Operand* operands = instr->operands();
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(bitSelect->srcOffsets()[0]);
             operands[1].item = nullptr;
             operands[1].offset = STACK_OFFSET(bitSelect->srcOffsets()[1]);
-            operands[1].item = nullptr;
-            operands[2].offset = STACK_OFFSET(bitSelect->srcOffsets()[2]);
             operands[2].item = nullptr;
-            operands[3].offset = STACK_OFFSET(bitSelect->dstOffset());
+            operands[2].offset = STACK_OFFSET(bitSelect->srcOffsets()[2]);
             operands[3].item = nullptr;
+            operands[3].offset = STACK_OFFSET(bitSelect->dstOffset());
+            break;
+        }
+        case ByteCode::I8X16ShuffleOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, 2, 1);
+
+            I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(shuffle->srcOffsets()[0]);
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(shuffle->srcOffsets()[1]);
+            operands[2].item = nullptr;
+            operands[2].offset = STACK_OFFSET(shuffle->dstOffset());
             break;
         }
         default: {
