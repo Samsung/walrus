@@ -60,10 +60,11 @@ enum Type : uint32_t {
     shll = 0x2e213800,
     sqadd = 0x4e200c00,
     sqsub = 0x4e202c00,
-    sqxtn = 0xe214800,
+    sqxtn = 0x0e214800,
     sqxtun = 0x2e212800,
     sub = 0x6e208400,
-    sxtl = 0xf00a400,
+    sxtl = 0x0f00a400,
+    tbl = 0x4e000000,
     uaddlp = 0x6e202800,
     ucmge = 0x6e203c00,
     ucmgt = 0x6e203400,
@@ -460,6 +461,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::V128OrOpcode:
     case ByteCode::V128XorOpcode:
     case ByteCode::V128AndnotOpcode:
+    case ByteCode::I8X16SwizzleOpcode:
         type = SLJIT_SIMD_ELEM_128;
         break;
     default:
@@ -607,7 +609,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::mul | SimdOp::H8, dst, dst, tmpReg);
         break;
     }
-
     case ByteCode::I16X8ExtmulHighI8X16SOpcode: {
         auto tmpReg = SLJIT_FR2;
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 19) | (0x1 << 30), dst, args[0].arg, 0);
@@ -615,7 +616,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::mul | SimdOp::H8, dst, dst, tmpReg);
         break;
     }
-
     case ByteCode::I16X8ExtmulLowI8X16UOpcode: {
         auto tmpReg = SLJIT_FR2;
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 19), dst, args[0].arg, 0);
@@ -697,7 +697,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, dst, dst, tmpReg);
         break;
     }
-
     case ByteCode::I32X4ExtmulHighI16X8UOpcode: {
         auto tmpReg = SLJIT_FR2;
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 20) | (0x1 << 30), dst, args[0].arg, 0);
@@ -840,6 +839,9 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::V128AndnotOpcode:
         simdEmitOp(compiler, SimdOp::bic, dst, args[0].arg, args[1].arg);
         break;
+    case ByteCode::I8X16SwizzleOpcode:
+        simdEmitOp(compiler, SimdOp::tbl, dst, args[0].arg, args[1].arg);
+        break;
     default:
         ASSERT_NOT_REACHED();
         break;
@@ -852,8 +854,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
 
 static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
 {
-    ASSERT(instr != nullptr);
-
     Operand* operands = instr->operands();
     JITArg args[3];
 
@@ -868,5 +868,28 @@ static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
 
     if (SLJIT_IS_MEM(args[1].arg)) {
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst, args[1].arg, args[1].argw);
+    }
+}
+
+static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operands = instr->operands();
+    JITArg args[3];
+
+    /* Must be two consecutive registers! */
+    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, SLJIT_FR1);
+    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, SLJIT_FR2);
+
+    args[2].set(operands + 2);
+    sljit_s32 dst = GET_TARGET_REG(args[2].arg, SLJIT_FR0);
+
+    I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(instr->byteCode());
+    const sljit_s32 type = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
+    sljit_emit_simd_mov(compiler, type, dst, SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
+
+    simdEmitOp(compiler, SimdOp::tbl | (1 << 13), dst, args[0].arg, dst);
+
+    if (SLJIT_IS_MEM(args[2].arg)) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst, args[2].arg, args[2].argw);
     }
 }
