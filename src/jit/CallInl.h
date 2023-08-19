@@ -25,7 +25,7 @@ static sljit_sw callFunction(
     Function* target = instance->function(code->index());
     const FunctionType* ft = target->functionType();
     const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size(), isAllocaParam);
+    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
 
     size_t c = 0;
     for (size_t i = 0; i < param.size(); i++) {
@@ -33,7 +33,7 @@ static sljit_sw callFunction(
     }
 
     const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size(), isAllocaResult);
+    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
     size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     sljit_sw error = ExecutionContext::NoError;
@@ -48,13 +48,6 @@ static sljit_sw callFunction(
         context->capturedException = exception.release();
         context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
-    }
-
-    if (UNLIKELY(!isAllocaParam)) {
-        delete[] paramVector;
-    }
-    if (UNLIKELY(!isAllocaResult)) {
-        delete[] resultVector;
     }
 
     return error;
@@ -87,7 +80,7 @@ static sljit_sw callFunctionIndirect(
     }
 
     const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size(), isAllocaParam);
+    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
 
     size_t c = 0;
     for (size_t i = 0; i < param.size(); i++) {
@@ -95,7 +88,7 @@ static sljit_sw callFunctionIndirect(
     }
 
     const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size(), isAllocaResult);
+    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
     size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     sljit_sw error = ExecutionContext::NoError;
@@ -110,13 +103,6 @@ static sljit_sw callFunctionIndirect(
         context->capturedException = exception.release();
         context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
-    }
-
-    if (UNLIKELY(!isAllocaParam)) {
-        delete[] paramVector;
-    }
-    if (UNLIKELY(!isAllocaResult)) {
-        delete[] resultVector;
     }
 
     return error;
