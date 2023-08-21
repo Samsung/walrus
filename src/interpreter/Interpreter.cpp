@@ -1355,29 +1355,10 @@ NEVER_INLINE void Interpreter::callOperation(
     Instance* instance)
 {
     Call* code = (Call*)programCounter;
-
     Function* target = instance->function(code->index());
-    const FunctionType* ft = target->functionType();
-    const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
-
-    size_t c = 0;
-    for (size_t i = 0; i < param.size(); i++) {
-        paramVector[i] = Value(param[i], bp + code->stackOffsets()[c++]);
-    }
-
-    const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
-    size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
-
-    target->call(state, param.size(), paramVector, resultVector);
-
-    for (size_t i = 0; i < result.size(); i++) {
-        uint8_t* resultStackPointer = bp + code->stackOffsets()[c++];
-        resultVector[i].writeToMemory(resultStackPointer);
-    }
-
-    programCounter += sizeof(Call) + codeExtraOffsetsSize;
+    target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    programCounter += (sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                       + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 
 NEVER_INLINE void Interpreter::callIndirectOperation(
@@ -1401,25 +1382,9 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     if (!ft->equals(code->functionType())) {
         Trap::throwException(state, "indirect call type mismatch");
     }
-    const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
 
-    size_t c = 0;
-    for (size_t i = 0; i < param.size(); i++) {
-        paramVector[i] = Value(param[i], bp + code->stackOffsets()[c++]);
-    }
-
-    const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
-    size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
-
-    target->call(state, param.size(), paramVector, resultVector);
-
-    for (size_t i = 0; i < result.size(); i++) {
-        uint8_t* resultStackPointer = bp + code->stackOffsets()[c++];
-        resultVector[i].writeToMemory(resultStackPointer);
-    }
-
-    programCounter += sizeof(CallIndirect) + codeExtraOffsetsSize;
+    target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    programCounter += (sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                       + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 } // namespace Walrus

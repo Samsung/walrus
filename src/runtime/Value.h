@@ -422,6 +422,15 @@ inline size_t valueStackAllocatedSize(Value::Type type)
     }
 }
 
+inline size_t valueFunctionCopyCount(Value::Type type)
+{
+    size_t s = valueSize(type) / sizeof(size_t);
+    if (s == 0) {
+        return 1;
+    }
+    return s;
+}
+
 template <const size_t size>
 inline void Value::readFromStack(uint8_t* ptr)
 {

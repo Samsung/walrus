@@ -65,8 +65,8 @@ public:
         delete m_resultTypes;
     }
 
-    ValueTypeVector& param() const { return *m_paramTypes; }
-    ValueTypeVector& result() const { return *m_resultTypes; }
+    const ValueTypeVector& param() const { return *m_paramTypes; }
+    const ValueTypeVector& result() const { return *m_resultTypes; }
     size_t paramStackSize() const { return m_paramStackSize; }
     size_t resultStackSize() const { return m_resultStackSize; }
 
