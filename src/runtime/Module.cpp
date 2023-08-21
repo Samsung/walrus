@@ -343,7 +343,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     if (m_seenStartAttribute) {
         ASSERT(instance->m_functions[m_start]->functionType()->param().size() == 0);
         ASSERT(instance->m_functions[m_start]->functionType()->result().size() == 0);
-        instance->m_functions[m_start]->call(state, 0, nullptr, nullptr);
+        instance->m_functions[m_start]->call(state, nullptr, nullptr);
     }
 
     return instance;

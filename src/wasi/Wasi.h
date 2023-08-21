@@ -52,10 +52,10 @@ public:
     void fillWasiFuncTable();
     WasiFunc* find(std::string funcName);
 
-    static void test(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data);
-    static void printI32(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data);
-    static void writeI32(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data);
-    static void proc_exit(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data);
+    static void test(ExecutionState& state, Value* argv, Value* result, void* data);
+    static void printI32(ExecutionState& state, Value* argv, Value* result, void* data);
+    static void writeI32(ExecutionState& state, Value* argv, Value* result, void* data);
+    static void proc_exit(ExecutionState& state, Value* argv, Value* result, void* data);
 
     WasiFunc m_wasiFunctions[FuncEnd];
 };

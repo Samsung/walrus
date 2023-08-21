@@ -364,5 +364,8 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #endif
 
 #include "util/Optional.h"
+namespace Walrus {
+typedef uint16_t ByteCodeStackOffset;
+}
 
 #endif

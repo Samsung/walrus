@@ -58,7 +58,8 @@ size_t ByteCode::getSize()
     }
     case CallOpcode: {
         Call* call = reinterpret_cast<Call*>(this);
-        return sizeof(Call) + sizeof(ByteCodeStackOffset) * call->offsetsSize();
+        return sizeof(Call) + sizeof(ByteCodeStackOffset) * call->parameterOffsetsSize()
+            + sizeof(ByteCodeStackOffset) * call->resultOffsetsSize();
     }
     case BrTableOpcode: {
         BrTable* brTable = reinterpret_cast<BrTable*>(this);
@@ -66,8 +67,8 @@ size_t ByteCode::getSize()
     }
     case CallIndirectOpcode: {
         CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(this);
-        size_t operands = callIndirect->functionType()->param().size() + callIndirect->functionType()->result().size();
-        return sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * operands;
+        return sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * callIndirect->parameterOffsetsSize()
+            + sizeof(ByteCodeStackOffset) * callIndirect->resultOffsetsSize();
     }
     case EndOpcode: {
         End* end = reinterpret_cast<End*>(this);

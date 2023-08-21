@@ -44,7 +44,11 @@ public:
 
     const FunctionType* functionType() const { return m_functionType; }
 
-    virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) = 0;
+    virtual void call(ExecutionState& state, Value* argv, Value* result) = 0;
+    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
+        = 0;
+
     virtual bool isDefinedFunction() const
     {
         return false;
@@ -119,7 +123,9 @@ public:
     {
         return true;
     }
-    virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) override;
+    virtual void call(ExecutionState& state, Value* argv, Value* result) override;
+    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
 
 protected:
     DefinedFunction(Instance* instance,
@@ -131,7 +137,7 @@ protected:
 
 class ImportedFunction : public Function {
 public:
-    typedef std::function<void(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data)> ImportedFunctionCallback;
+    typedef std::function<void(ExecutionState& state, Value* argv, Value* result, void* data)> ImportedFunctionCallback;
 
     static ImportedFunction* createImportedFunction(Store* store,
                                                     FunctionType* functionType,
@@ -142,7 +148,9 @@ public:
     {
         return true;
     }
-    virtual void call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result) override;
+    virtual void call(ExecutionState& state, Value* argv, Value* result) override;
+    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
 
 protected:
     ImportedFunction(FunctionType* functionType,
