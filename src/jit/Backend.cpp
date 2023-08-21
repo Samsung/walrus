@@ -790,6 +790,10 @@ JITModule* JITCompiler::compile()
             emitLoadLaneSIMD(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::ShiftSIMD: {
+            emitShiftSIMD(m_compiler, item->asInstruction());
+            break;
+        }
 #endif /* HAS_SIMD */
         default: {
             switch (item->asInstruction()->opcode()) {
