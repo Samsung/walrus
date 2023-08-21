@@ -27,7 +27,6 @@
 
 namespace Walrus {
 
-typedef uint16_t ByteCodeStackOffset;
 class FunctionType;
 
 #define FOR_EACH_BYTECODE_OP(F) \
@@ -747,18 +746,11 @@ FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
 
 class Call : public ByteCode {
 public:
-    Call(uint32_t index, uint32_t offsetsSize
-#if !defined(NDEBUG)
-         ,
-         FunctionType* functionType
-#endif
-         )
+    Call(uint32_t index, uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize)
         : ByteCode(Opcode::CallOpcode)
         , m_index(index)
-        , m_offsetsSize(offsetsSize)
-#if !defined(NDEBUG)
-        , m_functionType(functionType)
-#endif
+        , m_parameterOffsetsSize(parameterOffsetsSize)
+        , m_resultOffsetsSize(resultOffsetsSize)
     {
     }
 
@@ -768,9 +760,14 @@ public:
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call));
     }
 
-    uint32_t offsetsSize()
+    uint16_t parameterOffsetsSize() const
     {
-        return m_offsetsSize;
+        return m_parameterOffsetsSize;
+    }
+
+    uint16_t resultOffsetsSize() const
+    {
+        return m_resultOffsetsSize;
     }
 
 #if !defined(NDEBUG)
@@ -781,13 +778,13 @@ public:
         size_t c = 0;
         auto arr = stackOffsets();
         printf("paramOffsets: ");
-        for (size_t i = 0; i < m_functionType->param().size(); i++) {
+        for (size_t i = 0; i < m_parameterOffsetsSize; i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
         printf(" ");
 
         printf("resultOffsets: ");
-        for (size_t i = 0; i < m_functionType->result().size(); i++) {
+        for (size_t i = 0; i < m_resultOffsetsSize; i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
     }
@@ -795,19 +792,20 @@ public:
 
 protected:
     uint32_t m_index;
-    uint32_t m_offsetsSize;
-#if !defined(NDEBUG)
-    FunctionType* m_functionType;
-#endif
+    uint16_t m_parameterOffsetsSize;
+    uint16_t m_resultOffsetsSize;
 };
 
 class CallIndirect : public ByteCode {
 public:
-    CallIndirect(ByteCodeStackOffset stackOffset, uint32_t tableIndex, FunctionType* functionType)
+    CallIndirect(ByteCodeStackOffset stackOffset, uint32_t tableIndex, FunctionType* functionType,
+                 uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize)
         : ByteCode(Opcode::CallIndirectOpcode)
         , m_calleeOffset(stackOffset)
         , m_tableIndex(tableIndex)
         , m_functionType(functionType)
+        , m_parameterOffsetsSize(parameterOffsetsSize)
+        , m_resultOffsetsSize(resultOffsetsSize)
     {
     }
 
@@ -817,6 +815,16 @@ public:
     ByteCodeStackOffset* stackOffsets() const
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallIndirect));
+    }
+
+    uint16_t parameterOffsetsSize() const
+    {
+        return m_parameterOffsetsSize;
+    }
+
+    uint16_t resultOffsetsSize() const
+    {
+        return m_resultOffsetsSize;
     }
 
 #if !defined(NDEBUG)
@@ -845,6 +853,8 @@ protected:
     ByteCodeStackOffset m_calleeOffset;
     uint32_t m_tableIndex;
     FunctionType* m_functionType;
+    uint16_t m_parameterOffsetsSize;
+    uint16_t m_resultOffsetsSize;
 };
 
 class Move32 : public ByteCode {

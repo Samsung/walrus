@@ -908,7 +908,8 @@ own wasm_func_t* wasm_func_new(
     ImportedFunction* func = ImportedFunction::createImportedFunction(
         store->get(),
         ToWalrusFunctionType(ft),
-        [=](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
+        [=](ExecutionState& state, Value* argv, Value* result, void* d) {
+            auto argc = state.currentFunction()->functionType()->param().size();
             wasm_val_vec_t params, results;
             wasm_val_vec_new_uninitialized(&params, argc);
             wasm_val_vec_new_uninitialized(&results, reinterpret_cast<size_t>(d));
@@ -941,7 +942,8 @@ own wasm_func_t* wasm_func_new_with_env(
     ImportedFunction* func = ImportedFunction::createImportedFunction(
         store->get(),
         ToWalrusFunctionType(ft),
-        [=](ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* d) {
+        [=](ExecutionState& state, Value* argv, Value* result, void* d) {
+            auto argc = state.currentFunction()->functionType()->param().size();
             wasm_val_vec_t params, results;
             wasm_val_vec_new_uninitialized(&params, argc);
             wasm_val_vec_new_uninitialized(&results, reinterpret_cast<size_t>(d));
@@ -1002,7 +1004,7 @@ own wasm_trap_t* wasm_func_call(
     auto trapResult = trap.run([](ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
 
-        data->fn->call(state, data->args.size(), data->args.data(), data->results.data());
+        data->fn->call(state, data->args.data(), data->results.data());
     },
                                &data);
 

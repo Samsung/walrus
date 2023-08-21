@@ -971,31 +971,58 @@ public:
     {
     }
 
+    uint16_t computeFunctionParameterOrResultOffsetCount(const Walrus::ValueTypeVector& types)
+    {
+        uint16_t result = 0;
+        for (auto t : types) {
+            result += valueFunctionCopyCount(t);
+        }
+        return result;
+    }
+
+    template <typename CodeType>
+    void generateCallExpr(CodeType* code, uint16_t parameterCount, uint16_t resultCount,
+                          Walrus::FunctionType* functionType)
+    {
+        size_t offsetIndex = 0;
+        size_t siz = functionType->param().size();
+
+        for (size_t i = 0; i < siz; i++) {
+            ASSERT(peekVMStackValueType() == functionType->param()[siz - i - 1]);
+            size_t sourcePos = popVMStack();
+            auto type = functionType->param()[siz - i - 1];
+            size_t s = Walrus::valueSize(type);
+            size_t offsetSubCount = 0;
+            size_t subIndexCount = valueFunctionCopyCount(type);
+            for (size_t j = 0; j < s; j += sizeof(size_t)) {
+                code->stackOffsets()[parameterCount - offsetIndex - subIndexCount + offsetSubCount++] = sourcePos + j;
+            }
+            offsetIndex += subIndexCount;
+        }
+
+        siz = functionType->result().size();
+        for (size_t i = 0; i < siz; i++) {
+            size_t dstPos = pushVMStack(functionType->result()[i]);
+            size_t itemSize = Walrus::valueSize(functionType->result()[i]);
+            for (size_t j = 0; j < itemSize; j += sizeof(size_t)) {
+                code->stackOffsets()[offsetIndex++] = dstPos + j;
+            }
+        }
+        ASSERT(offsetIndex == (code->parameterOffsetsSize() + code->resultOffsetsSize()));
+    }
+
     virtual void OnCallExpr(uint32_t index) override
     {
         auto functionType = m_result.m_functions[index]->functionType();
         auto callPos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::Call(index, functionType->param().size() + functionType->result().size()
-#if !defined(NDEBUG)
-                                             ,
-                                  functionType
-#endif
-                                  ),
-                     WASMOpcode::CallOpcode);
+        auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
+        auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
+        pushByteCode(Walrus::Call(index, parameterCount, resultCount), WASMOpcode::CallOpcode);
 
-        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (functionType->param().size() + functionType->result().size()));
+        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount));
         auto code = m_currentFunction->peekByteCode<Walrus::Call>(callPos);
 
-        size_t c = 0;
-        size_t siz = functionType->param().size();
-        for (size_t i = 0; i < siz; i++) {
-            ASSERT(peekVMStackValueType() == functionType->param()[siz - i - 1]);
-            code->stackOffsets()[siz - c++ - 1] = popVMStack();
-        }
-        siz = functionType->result().size();
-        for (size_t i = 0; i < siz; i++) {
-            code->stackOffsets()[c++] = pushVMStack(functionType->result()[i]);
-        }
+        generateCallExpr(code, parameterCount, resultCount, functionType);
     }
 
     virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) override
@@ -1003,21 +1030,14 @@ public:
         ASSERT(peekVMStackValueType() == Walrus::Value::I32);
         auto functionType = m_result.m_functionTypes[sigIndex];
         auto callPos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType), WASMOpcode::CallIndirectOpcode);
-        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (functionType->param().size() + functionType->result().size()));
+        auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
+        auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
+        pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType, parameterCount, resultCount),
+                     WASMOpcode::CallIndirectOpcode);
+        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount));
 
         auto code = m_currentFunction->peekByteCode<Walrus::CallIndirect>(callPos);
-
-        size_t c = 0;
-        size_t siz = functionType->param().size();
-        for (size_t i = 0; i < siz; i++) {
-            ASSERT(peekVMStackValueType() == functionType->param()[siz - i - 1]);
-            code->stackOffsets()[siz - c++ - 1] = popVMStack();
-        }
-        siz = functionType->result().size();
-        for (size_t i = 0; i < siz; i++) {
-            code->stackOffsets()[c++] = pushVMStack(functionType->result()[i]);
-        }
+        generateCallExpr(code, parameterCount, resultCount, functionType);
     }
 
     bool processConstValue(const Walrus::Value& value)
@@ -1516,14 +1536,24 @@ public:
             return;
         }
         auto pos = m_currentFunction->currentByteCodeSize();
-        pushByteCode(Walrus::End(m_currentFunctionType->result().size()), WASMOpcode::EndOpcode);
+        auto offsetCount = computeFunctionParameterOrResultOffsetCount(m_currentFunctionType->result());
+        pushByteCode(Walrus::End(offsetCount), WASMOpcode::EndOpcode);
 
         auto& result = m_currentFunctionType->result();
-        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * result.size());
+        m_currentFunction->expandByteCode(sizeof(Walrus::ByteCodeStackOffset) * offsetCount);
         Walrus::End* end = m_currentFunction->peekByteCode<Walrus::End>(pos);
+        size_t offsetIndex = 0;
         for (size_t i = 0; i < result.size(); i++) {
-            end->resultOffsets()[result.size() - i - 1] = (m_vmStack.rbegin() + i)->position();
+            auto type = result[result.size() - 1 - i];
+            size_t s = Walrus::valueSize(type);
+            size_t offsetSubCount = 0;
+            size_t subIndexCount = valueFunctionCopyCount(type);
+            for (size_t j = 0; j < s; j += sizeof(size_t)) {
+                end->resultOffsets()[offsetCount - offsetIndex - subIndexCount + offsetSubCount++] = (m_vmStack.rbegin() + i)->position() + j;
+            }
+            offsetIndex += subIndexCount;
         }
+        ASSERT(offsetIndex == computeFunctionParameterOrResultOffsetCount(result));
 
         if (shouldClearVMStack) {
             for (size_t i = 0; i < result.size(); i++) {
@@ -1597,11 +1627,12 @@ public:
             ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
             auto stackPos = popVMStack();
             size_t pos = m_currentFunction->currentByteCodeSize();
-            pushByteCode(Walrus::JumpIfFalse(stackPos, sizeof(Walrus::JumpIfFalse) + sizeof(Walrus::End) + sizeof(uint16_t) * m_currentFunctionType->result().size()), WASMOpcode::BrIfOpcode);
+            pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 ASSERT((m_vmStack.rbegin() + i)->valueType() == m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]);
             }
             generateEndCode();
+            m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
             return;
         }
 

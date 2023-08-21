@@ -41,52 +41,71 @@ DefinedFunction::DefinedFunction(Instance* instance,
 {
 }
 
-void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
+void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
+{
+    const FunctionType* ft = functionType();
+    size_t valueBufferSize = std::max(ft->paramStackSize(), ft->resultStackSize());
+    ALLOCA(uint8_t, valueBuffer, valueBufferSize);
+    uint16_t parameterOffsetSize = ft->paramStackSize() / sizeof(size_t);
+    uint16_t resultOffsetSize = ft->resultStackSize() / sizeof(size_t);
+    ALLOCA(uint16_t, offsetBuffer, (parameterOffsetSize + resultOffsetSize) * sizeof(uint16_t));
+    const ValueTypeVector& paramTypeInfo = ft->param();
+    const ValueTypeVector& resultTypeInfo = ft->result();
+
+    size_t argc = paramTypeInfo.size();
+    uint8_t* paramBuffer = valueBuffer;
+    size_t offsetIndex = 0;
+    for (size_t i = 0; i < argc; i++) {
+        ASSERT(argv[i].type() == paramTypeInfo[i]);
+        argv[i].writeToMemory(paramBuffer);
+        size_t stackAllocatedSize = valueStackAllocatedSize(paramTypeInfo[i]);
+        for (size_t j = 0; j < stackAllocatedSize; j += sizeof(size_t)) {
+            offsetBuffer[offsetIndex++] = reinterpret_cast<size_t>(paramBuffer) - reinterpret_cast<size_t>(valueBuffer) + j;
+        }
+        paramBuffer += stackAllocatedSize;
+    }
+    ASSERT(offsetIndex == parameterOffsetSize);
+
+    size_t resultOffset = 0;
+    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
+        size_t stackAllocatedSize = valueStackAllocatedSize(resultTypeInfo[i]);
+        for (size_t j = 0; j < stackAllocatedSize; j += sizeof(size_t)) {
+            offsetBuffer[offsetIndex++] = resultOffset + j;
+        }
+        resultOffset += stackAllocatedSize;
+    }
+    ASSERT(offsetIndex == parameterOffsetSize + resultOffsetSize);
+    interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetSize);
+
+    size_t resultOffsetIndex = 0;
+    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
+        result[i] = Value(resultTypeInfo[i], valueBuffer + offsetBuffer[resultOffsetIndex + parameterOffsetSize]);
+        size_t stackAllocatedSize = valueStackAllocatedSize(resultTypeInfo[i]);
+        resultOffsetIndex += stackAllocatedSize / sizeof(size_t);
+    }
+}
+
+void DefinedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                      uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
     ExecutionState newState(state, this);
     checkStackLimit(newState);
+
+    const FunctionType* ft = functionType();
+    const size_t paramStackSize = ft->paramStackSize();
+    const ValueTypeVector& resultTypeInfo = ft->result();
+
     ALLOCA(uint8_t, functionStackBase, m_moduleFunction->requiredStackSize());
     uint8_t* functionStackPointer = functionStackBase;
 
     // init parameter space
-    for (size_t i = 0; i < argc; i++) {
-        argv[i].writeToMemory(functionStackPointer);
-        switch (argv[i].type()) {
-        case Value::I32: {
-            functionStackPointer += stackAllocatedSize<int32_t>();
-            break;
-        }
-        case Value::F32: {
-            functionStackPointer += stackAllocatedSize<float>();
-            break;
-        }
-        case Value::F64: {
-            functionStackPointer += stackAllocatedSize<double>();
-            break;
-        }
-        case Value::I64: {
-            functionStackPointer += stackAllocatedSize<int64_t>();
-            break;
-        }
-        case Value::V128: {
-            functionStackPointer += stackAllocatedSize<Vec128>();
-            break;
-        }
-        case Value::FuncRef:
-        case Value::ExternRef: {
-            functionStackPointer += stackAllocatedSize<void*>();
-            break;
-        }
-        default: {
-            ASSERT_NOT_REACHED();
-            break;
-        }
-        }
+    for (size_t i = 0; i < parameterOffsetCount; i++) {
+        *((size_t*)functionStackPointer) = *((size_t*)(bp + offsets[i]));
+        functionStackPointer += sizeof(size_t);
     }
 
     // init local space
-    auto localSize = m_moduleFunction->requiredStackSizeDueToParameterAndLocal()
-        - m_moduleFunction->functionType()->paramStackSize();
+    auto localSize = m_moduleFunction->requiredStackSizeDueToParameterAndLocal() - paramStackSize;
     memset(functionStackPointer, 0, localSize);
     functionStackPointer += localSize;
 
@@ -95,10 +114,9 @@ void DefinedFunction::call(ExecutionState& state, const uint32_t argc, Value* ar
 
     auto resultOffsets = Interpreter::interpret(newState, functionStackBase);
 
-    const FunctionType* ft = functionType();
-    const ValueTypeVector& resultTypeInfo = ft->result();
-    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
-        result[i] = Value(resultTypeInfo[i], functionStackBase + resultOffsets[i]);
+    offsets += parameterOffsetCount;
+    for (size_t i = 0; i < resultOffsetCount; i++) {
+        *((size_t*)(bp + offsets[i])) = *((size_t*)(functionStackBase + resultOffsets[i]));
     }
 }
 
@@ -114,11 +132,37 @@ ImportedFunction* ImportedFunction::createImportedFunction(Store* store,
     return func;
 }
 
-void ImportedFunction::call(ExecutionState& state, const uint32_t argc, Value* argv, Value* result)
+void ImportedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                       uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
+{
+    const FunctionType* ft = functionType();
+    const ValueTypeVector& paramTypeInfo = ft->param();
+    const ValueTypeVector& resultTypeInfo = ft->result();
+
+    ALLOCA(Value, paramVector, sizeof(Value) * paramTypeInfo.size());
+    ALLOCA(Value, resultVector, sizeof(Value) * resultTypeInfo.size());
+
+    size_t offsetIndex = 0;
+    size_t size = paramTypeInfo.size();
+    Value* paramVectorStart = paramVector;
+    for (size_t i = 0; i < size; i++) {
+        paramVector[i] = Value(paramTypeInfo[i], bp + offsets[offsetIndex]);
+        offsetIndex += valueFunctionCopyCount(paramTypeInfo[i]);
+    }
+
+    call(state, paramVectorStart, resultVector);
+
+    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
+        resultVector[i].writeToMemory(bp + offsets[offsetIndex]);
+        offsetIndex += valueFunctionCopyCount(resultTypeInfo[i]);
+    }
+}
+
+void ImportedFunction::call(ExecutionState& state, Value* argv, Value* result)
 {
     ExecutionState newState(state, this);
     checkStackLimit(newState);
-    m_callback(newState, argc, argv, result, m_data);
+    m_callback(newState, argv, result, m_data);
 }
 
 } // namespace Walrus

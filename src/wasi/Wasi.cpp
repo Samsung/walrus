@@ -28,25 +28,25 @@ WASI::WasiFunc* WASI::find(std::string funcName)
     return nullptr;
 }
 
-void WASI::test(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data)
+void WASI::test(ExecutionState& state, Value* argv, Value* result, void* data)
 {
     printf("No argument test succesful.\n");
 }
 
-void WASI::printI32(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data)
+void WASI::printI32(ExecutionState& state, Value* argv, Value* result, void* data)
 {
     printf("Recieved number: %d.\n", argv[0].asI32());
 }
 
-void WASI::writeI32(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data)
+void WASI::writeI32(ExecutionState& state, Value* argv, Value* result, void* data)
 {
     printf("Writing 42 to stack.\n");
     result[0] = Value((int32_t)42);
 }
 
-void WASI::proc_exit(ExecutionState& state, const uint32_t argc, Value* argv, Value* result, void* data)
+void WASI::proc_exit(ExecutionState& state, Value* argv, Value* result, void* data)
 {
-    ASSERT(argc == 1 && argv[0].type() == Value::I32);
+    ASSERT(argv[0].type() == Value::I32);
     exit(argv[0].asI32());
     ASSERT_NOT_REACHED();
 }
