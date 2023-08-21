@@ -1127,6 +1127,22 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             paramCount = 1;
             break;
         }
+        case ByteCode::I8X16ShlOpcode:
+        case ByteCode::I8X16ShrSOpcode:
+        case ByteCode::I8X16ShrUOpcode:
+        case ByteCode::I16X8ShlOpcode:
+        case ByteCode::I16X8ShrSOpcode:
+        case ByteCode::I16X8ShrUOpcode:
+        case ByteCode::I32X4ShlOpcode:
+        case ByteCode::I32X4ShrSOpcode:
+        case ByteCode::I32X4ShrUOpcode:
+        case ByteCode::I64X2ShlOpcode:
+        case ByteCode::I64X2ShrSOpcode:
+        case ByteCode::I64X2ShrUOpcode: {
+            group = Instruction::ShiftSIMD;
+            paramCount = 2;
+            break;
+        }
         case ByteCode::V128BitSelectOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, 3, 1);
 
