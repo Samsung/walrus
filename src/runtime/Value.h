@@ -275,7 +275,7 @@ public:
         return reinterpret_cast<void*>(m_ref);
     }
 
-    inline void writeToMemory(uint8_t* ptr)
+    inline void writeToMemory(uint8_t* ptr) const
     {
         switch (m_type) {
         case I32: {
@@ -311,7 +311,7 @@ public:
     }
 
     template <const size_t siz>
-    inline void writeNBytesToMemory(uint8_t* ptr)
+    inline void writeNBytesToMemory(uint8_t* ptr) const
     {
         if (siz == 4) {
             *reinterpret_cast<int32_t*>(ptr) = m_i32;
