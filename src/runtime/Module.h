@@ -209,8 +209,6 @@ public:
     }
 
     const uint8_t* byteCode() const { return m_byteCode.data(); }
-    const uint8_t* constantData() const { return m_constantData.data(); }
-    size_t constantDataSize() const { return m_constantData.size(); }
 #if !defined(NDEBUG)
     void dumpByteCode();
 #endif
@@ -227,7 +225,6 @@ private:
     uint32_t m_requiredStackSizeDueToParameterAndLocal;
     ValueTypeVector m_local;
     Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
-    Vector<uint8_t, std::allocator<uint8_t>> m_constantData;
 #if !defined(NDEBUG)
     Vector<Value, std::allocator<Value>> m_constantDebugData;
 #endif
