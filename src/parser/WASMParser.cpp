@@ -177,7 +177,6 @@ private:
 
         const VMStackInfo& operator=(const VMStackInfo& src)
         {
-            m_reader = src.m_reader;
             m_valueType = src.m_valueType;
             m_position = src.m_position;
             m_nonOptimizedPosition = src.m_nonOptimizedPosition;
@@ -247,6 +246,7 @@ private:
         uint32_t m_functionStackSizeSoFar;
         bool m_shouldRestoreVMStackAtEnd;
         bool m_byteCodeGenerationStopped;
+        bool m_seenBranch;
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
         struct JumpToEndBrInfo {
@@ -270,6 +270,7 @@ private:
             , m_shouldRestoreVMStackAtEnd((m_returnValueType.IsIndex() && binaryReader.m_result.m_functionTypes[m_returnValueType]->result().size())
                                           || m_returnValueType != Type::Void)
             , m_byteCodeGenerationStopped(false)
+            , m_seenBranch(false)
         {
             if (returnValueType.IsIndex() && binaryReader.m_result.m_functionTypes[returnValueType]->param().size()) {
                 // record parameter positions
@@ -282,11 +283,12 @@ private:
                         iter->setPosition(iter->nonOptimizedPosition());
                         if (binaryReader.m_preprocessData.m_inPreprocess && iter->hasValidLocalIndex()) {
                             size_t pos = *binaryReader.m_readerOffsetPointer;
-                            auto localVariableIter = binaryReader.m_preprocessData.m_localVariableUsage.rbegin();
+                            auto localVariableIter = binaryReader.m_preprocessData
+                                                         .m_localVariableInfo[iter->localIndex()]
+                                                         .m_usageInfo.rbegin();
                             while (true) {
-                                ASSERT(localVariableIter != binaryReader.m_preprocessData.m_localVariableUsage.rend());
-                                if (localVariableIter->m_localIndex == iter->localIndex()
-                                    && localVariableIter->m_endPosition == std::numeric_limits<size_t>::max()) {
+                                ASSERT(localVariableIter != binaryReader.m_preprocessData.m_localVariableInfo[iter->localIndex()].m_usageInfo.rend());
+                                if (localVariableIter->m_endPosition == std::numeric_limits<size_t>::max()) {
                                     localVariableIter->m_endPosition = *binaryReader.m_readerOffsetPointer;
                                     break;
                                 }
@@ -309,76 +311,140 @@ private:
     size_t m_codeStartOffset;
     size_t m_codeEndOffset;
 
-    struct LocalVariableUsage {
-        size_t m_localIndex;
-        size_t m_startPosition;
-        size_t m_endPosition;
-        size_t m_pushCount;
-        bool m_hasWriteUsage;
-
-        LocalVariableUsage(size_t localIndex, size_t startPosition, size_t pushCount)
-            : m_localIndex(localIndex)
-            , m_startPosition(startPosition)
-            , m_endPosition(std::numeric_limits<size_t>::max())
-            , m_pushCount(pushCount)
-            , m_hasWriteUsage(false)
-        {
-        }
-    };
-
-    LocalVariableUsage& findNearestUsage(size_t localIndex)
-    {
-        size_t pos = *m_readerOffsetPointer;
-        auto iter = m_preprocessData.m_localVariableUsage.rbegin();
-        while (true) {
-            ASSERT(iter != m_preprocessData.m_localVariableUsage.rend());
-            if (iter->m_localIndex == localIndex) {
-                if (iter->m_startPosition <= pos) {
-                    return *iter;
-                }
+    struct PreprocessData {
+        struct LocalVariableInfo {
+            bool m_needsExplicitInitOnStartup;
+            LocalVariableInfo()
+                : m_needsExplicitInitOnStartup(false)
+            {
             }
-            iter++;
-        }
-        ASSERT_NOT_REACHED();
-    }
 
-    struct ProprocessData {
-        bool m_inPreprocess;
-        std::vector<LocalVariableUsage> m_localVariableUsage;
-        std::vector<std::pair<Walrus::Value, size_t>> m_constantData;
-        ProprocessData()
+            struct UsageInfo {
+                size_t m_startPosition;
+                size_t m_endPosition;
+                size_t m_pushCount;
+                bool m_hasWriteUsage;
+
+                UsageInfo(size_t startPosition, size_t pushCount)
+                    : m_startPosition(startPosition)
+                    , m_endPosition(std::numeric_limits<size_t>::max())
+                    , m_pushCount(pushCount)
+                    , m_hasWriteUsage(false)
+                {
+                }
+            };
+            std::vector<size_t> m_definitelyWritePlaces;
+            std::vector<size_t> m_writePlacesBetweenBranches;
+            std::vector<UsageInfo> m_usageInfo;
+        };
+
+        PreprocessData(WASMBinaryReader& reader)
             : m_inPreprocess(false)
+            , m_reader(reader)
         {
         }
 
         void clear()
         {
-            m_localVariableUsage.clear();
+            m_localVariableInfo.clear();
+            m_localVariableInfo.resize(m_reader.m_localInfo.size());
             m_constantData.clear();
+        }
+
+        void seenBranch()
+        {
+            if (m_inPreprocess) {
+                if (m_reader.m_blockInfo.size()) {
+                    m_reader.m_blockInfo.back().m_seenBranch = true;
+                }
+                for (auto& info : m_localVariableInfo) {
+                    info.m_writePlacesBetweenBranches.clear();
+                }
+            }
+        }
+
+        void addLocalVariableUsage(size_t localIndex)
+        {
+            if (m_inPreprocess) {
+                size_t pushCount = 0;
+                size_t pos = *m_reader.m_readerOffsetPointer;
+                for (const auto& stack : m_reader.m_vmStack) {
+                    if (stack.localIndex() == localIndex) {
+                        pushCount++;
+                    }
+                }
+                m_localVariableInfo[localIndex].m_usageInfo.push_back(LocalVariableInfo::UsageInfo(pos, pushCount));
+                if (!m_localVariableInfo[localIndex].m_needsExplicitInitOnStartup) {
+                    if (!m_localVariableInfo[localIndex].m_writePlacesBetweenBranches.size()) {
+                        bool writeFound = false;
+                        const auto& definitelyWritePlaces = m_localVariableInfo[localIndex].m_definitelyWritePlaces;
+                        for (size_t i = 0; i < definitelyWritePlaces.size(); i++) {
+                            if (definitelyWritePlaces[i] < pos) {
+                                writeFound = true;
+                                break;
+                            }
+                        }
+                        if (!writeFound) {
+                            m_localVariableInfo[localIndex].m_needsExplicitInitOnStartup = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        void addLocalVariableWrite(Index localIndex)
+        {
+            if (m_inPreprocess) {
+                size_t pos = *m_reader.m_readerOffsetPointer;
+                auto iter = m_localVariableInfo[localIndex].m_usageInfo.begin();
+                while (iter != m_localVariableInfo[localIndex].m_usageInfo.end()) {
+                    if (iter->m_startPosition <= pos && pos <= iter->m_endPosition) {
+                        iter->m_hasWriteUsage = true;
+                    }
+                    iter++;
+                }
+
+                bool isDefinitelyWritePlaces = true;
+                auto blockIter = m_reader.m_blockInfo.rbegin();
+                while (blockIter != m_reader.m_blockInfo.rend()) {
+                    if (blockIter->m_seenBranch) {
+                        isDefinitelyWritePlaces = false;
+                        break;
+                    }
+                    blockIter++;
+                }
+
+                if (isDefinitelyWritePlaces) {
+                    m_localVariableInfo[localIndex].m_definitelyWritePlaces.push_back(pos);
+                }
+
+                m_localVariableInfo[localIndex].m_writePlacesBetweenBranches.push_back(pos);
+            }
         }
 
         void addConstantData(const Walrus::Value& v)
         {
-            ASSERT(m_inPreprocess);
-            bool found = false;
-            for (size_t i = 0; i < m_constantData.size(); i++) {
-                if (m_constantData[i].first == v) {
-                    m_constantData[i].second++;
-                    found = true;
-                    break;
+            if (m_inPreprocess) {
+                bool found = false;
+                for (size_t i = 0; i < m_constantData.size(); i++) {
+                    if (m_constantData[i].first == v) {
+                        m_constantData[i].second++;
+                        found = true;
+                        break;
+                    }
                 }
-            }
-            if (!found) {
-                m_constantData.push_back(std::make_pair(v, 1));
-            }
+                if (!found) {
+                    m_constantData.push_back(std::make_pair(v, 1));
+                }
 
 #ifndef WALRUS_ASSIGN_CONSTANT_ON_STACK_MAX_COUNT
 #define WALRUS_ASSIGN_CONSTANT_ON_STACK_MAX_COUNT 6
 #endif
-            constexpr size_t maxConstantData = WALRUS_ASSIGN_CONSTANT_ON_STACK_MAX_COUNT;
-            if (m_constantData.size() > maxConstantData) {
-                organizeConstantData();
-                m_constantData.erase(m_constantData.end() - maxConstantData / 4, m_constantData.end());
+                constexpr size_t maxConstantData = WALRUS_ASSIGN_CONSTANT_ON_STACK_MAX_COUNT;
+                if (m_constantData.size() > maxConstantData) {
+                    organizeConstantData();
+                    m_constantData.erase(m_constantData.end() - maxConstantData / 4, m_constantData.end());
+                }
             }
         }
 
@@ -395,14 +461,17 @@ private:
             organizeConstantData();
         }
 
-    } m_preprocessData;
+        bool m_inPreprocess;
+        WASMBinaryReader& m_reader;
+        std::vector<LocalVariableInfo> m_localVariableInfo;
+        std::vector<std::pair<Walrus::Value, size_t>> m_constantData;
+    };
 
     bool m_inInitExpr;
     Walrus::ModuleFunction* m_currentFunction;
     Walrus::FunctionType* m_currentFunctionType;
     uint32_t m_initialFunctionStackSize;
     uint32_t m_functionStackSizeSoFar;
-    uint32_t m_lastByteCodePosition;
 
     std::vector<VMStackInfo> m_vmStack;
     std::vector<BlockInfo> m_blockInfo;
@@ -432,6 +501,8 @@ private:
 
     Walrus::WASMParsingResult m_result;
 
+    PreprocessData m_preprocessData;
+
     virtual void OnSetOffsetAddress(size_t* ptr) override
     {
         m_readerOffsetPointer = ptr;
@@ -451,16 +522,8 @@ private:
 
     void pushVMStack(Walrus::Value::Type type, size_t pos, size_t localIndex = std::numeric_limits<size_t>::max())
     {
-        if (m_preprocessData.m_inPreprocess) {
-            if (localIndex != std::numeric_limits<size_t>::max()) {
-                size_t pushCount = 0;
-                for (const auto& stack : m_vmStack) {
-                    if (stack.localIndex() == localIndex) {
-                        pushCount++;
-                    }
-                }
-                m_preprocessData.m_localVariableUsage.push_back(LocalVariableUsage(localIndex, *m_readerOffsetPointer, pushCount));
-            }
+        if (localIndex != std::numeric_limits<size_t>::max()) {
+            m_preprocessData.addLocalVariableUsage(localIndex);
         }
 
         m_vmStack.push_back(VMStackInfo(*this, type, pos, m_functionStackSizeSoFar, localIndex));
@@ -481,11 +544,10 @@ private:
         if (m_preprocessData.m_inPreprocess) {
             if (info.hasValidLocalIndex()) {
                 size_t pos = *m_readerOffsetPointer;
-                auto iter = m_preprocessData.m_localVariableUsage.rbegin();
+                auto iter = m_preprocessData.m_localVariableInfo[info.localIndex()].m_usageInfo.rbegin();
                 while (true) {
-                    ASSERT(iter != m_preprocessData.m_localVariableUsage.rend());
-                    if (iter->m_localIndex == info.localIndex()
-                        && iter->m_endPosition == std::numeric_limits<size_t>::max()) {
+                    ASSERT(iter != m_preprocessData.m_localVariableInfo[info.localIndex()].m_usageInfo.rend());
+                    if (iter->m_endPosition == std::numeric_limits<size_t>::max()) {
                         iter->m_endPosition = *m_readerOffsetPointer;
                         break;
                     }
@@ -528,7 +590,6 @@ private:
             m_localInfo.push_back(LocalInfo(m_currentFunctionType->param()[i]));
         }
         m_currentFunction->m_requiredStackSizeDueToParameterAndLocal = m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
-        m_lastByteCodePosition = 0;
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
@@ -544,7 +605,6 @@ private:
     template <typename CodeType>
     void pushByteCode(const CodeType& code, WASMOpcode opcode)
     {
-        m_lastByteCodePosition = m_currentFunction->currentByteCodeSize();
         m_currentFunction->pushByteCode(code);
     }
 
@@ -591,9 +651,9 @@ public:
         , m_currentFunctionType(nullptr)
         , m_initialFunctionStackSize(0)
         , m_functionStackSizeSoFar(0)
-        , m_lastByteCodePosition(0)
         , m_elementTableIndex(0)
         , m_segmentMode(Walrus::SegmentMode::None)
+        , m_preprocessData(*this)
     {
     }
 
@@ -936,22 +996,6 @@ public:
     virtual void OnEndPreprocess() override
     {
         m_preprocessData.m_inPreprocess = false;
-        m_preprocessData.organizeData();
-
-        uint8_t constantBuffer[16];
-        for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
-            size_t siz = Walrus::valueStackAllocatedSize(m_preprocessData.m_constantData[i].first.type());
-            m_initialFunctionStackSize += siz;
-            memset(constantBuffer, 0, sizeof(constantBuffer));
-            m_preprocessData.m_constantData[i].first.writeToMemory(constantBuffer);
-            for (size_t i = 0; i < siz; i++) {
-                m_currentFunction->m_constantData.pushBack(constantBuffer[i]);
-            }
-#if !defined(NDEBUG)
-            m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i].first);
-#endif
-        }
-
         m_skipValidationUntil = *m_readerOffsetPointer - 1;
         m_shouldContinueToGenerateByteCode = true;
 
@@ -960,11 +1004,54 @@ public:
         m_blockInfo.clear();
         m_catchInfo.clear();
 
+        m_vmStack.clear();
+
+        m_preprocessData.organizeData();
+        // init local if needs
+        for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
+            if (m_preprocessData.m_localVariableInfo[i].m_needsExplicitInitOnStartup) {
+                auto r = resolveLocalOffsetAndSize(i);
+                if (r.second == 4) {
+                    pushByteCode(Walrus::Const32(r.first, 0), WASMOpcode::I32ConstOpcode);
+                } else if (r.second == 8) {
+                    pushByteCode(Walrus::Const64(r.first, 0), WASMOpcode::I64ConstOpcode);
+                } else {
+                    ASSERT(r.second == 16);
+                    uint8_t empty[16] = {
+                        0,
+                    };
+                    pushByteCode(Walrus::Const128(r.first, empty), WASMOpcode::V128ConstOpcode);
+                }
+            }
+        }
+
+        // init constant space
+        for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
+            const auto& constValue = m_preprocessData.m_constantData[i].first;
+            auto constType = m_preprocessData.m_constantData[i].first.type();
+            auto constPos = m_initialFunctionStackSize;
+            size_t constSize = Walrus::valueSize(constType);
+
+            uint8_t constantBuffer[16];
+            constValue.writeToMemory(constantBuffer);
+            if (constSize == 4) {
+                pushByteCode(Walrus::Const32(constPos, *reinterpret_cast<uint32_t*>(constantBuffer)), WASMOpcode::I32ConstOpcode);
+            } else if (constSize == 8) {
+                pushByteCode(Walrus::Const64(constPos, *reinterpret_cast<uint64_t*>(constantBuffer)), WASMOpcode::I64ConstOpcode);
+            } else {
+                ASSERT(constSize == 16);
+                pushByteCode(Walrus::Const128(constPos, constantBuffer), WASMOpcode::V128ConstOpcode);
+            }
+
+            m_initialFunctionStackSize += Walrus::valueStackAllocatedSize(constType);
+#if !defined(NDEBUG)
+            m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i].first);
+#endif
+        }
+
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
-        m_lastByteCodePosition = 0;
-        m_vmStack.clear();
     }
 
     virtual void OnOpcode(uint32_t opcode) override
@@ -1043,9 +1130,8 @@ public:
     bool processConstValue(const Walrus::Value& value)
     {
         if (!m_inInitExpr) {
-            if (m_preprocessData.m_inPreprocess) {
-                m_preprocessData.addConstantData(value);
-            } else {
+            m_preprocessData.addConstantData(value);
+            if (!m_preprocessData.m_inPreprocess) {
                 size_t pos = m_currentFunction->m_requiredStackSizeDueToParameterAndLocal;
                 for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
                     if (m_preprocessData.m_constantData[i].first == value) {
@@ -1107,14 +1193,14 @@ public:
             for (Index i = 0; i < localIndex; i++) {
                 offset += Walrus::valueStackAllocatedSize(m_currentFunctionType->param()[i]);
             }
-            return std::make_pair(offset, Walrus::valueStackAllocatedSize(m_currentFunctionType->param()[localIndex]));
+            return std::make_pair(offset, Walrus::valueSize(m_currentFunctionType->param()[localIndex]));
         } else {
             localIndex -= m_currentFunctionType->param().size();
             size_t offset = m_currentFunctionType->paramStackSize();
             for (Index i = 0; i < localIndex; i++) {
                 offset += Walrus::valueStackAllocatedSize(m_currentFunction->m_local[i]);
             }
-            return std::make_pair(offset, Walrus::valueStackAllocatedSize(m_currentFunction->m_local[localIndex]));
+            return std::make_pair(offset, Walrus::valueSize(m_currentFunction->m_local[localIndex]));
         }
     }
 
@@ -1168,8 +1254,8 @@ public:
 
         bool canUseDirectReference = true;
         size_t pos = *m_readerOffsetPointer;
-        for (const auto& r : m_preprocessData.m_localVariableUsage) {
-            if (r.m_localIndex == localIndex && r.m_startPosition <= pos && pos <= r.m_endPosition) {
+        for (const auto& r : m_preprocessData.m_localVariableInfo[localIndex].m_usageInfo) {
+            if (r.m_startPosition <= pos && pos <= r.m_endPosition) {
                 if (r.m_hasWriteUsage) {
                     canUseDirectReference = false;
                     break;
@@ -1186,21 +1272,6 @@ public:
         }
     }
 
-    void updateWriteUsageOfLocalIfNeeds(Index localIndex)
-    {
-        if (m_preprocessData.m_inPreprocess) {
-            size_t pos = *m_readerOffsetPointer;
-            auto iter = m_preprocessData.m_localVariableUsage.begin();
-            while (iter != m_preprocessData.m_localVariableUsage.end()) {
-                if (localIndex == iter->m_localIndex
-                    && iter->m_startPosition <= pos && pos <= iter->m_endPosition) {
-                    iter->m_hasWriteUsage = true;
-                }
-                iter++;
-            }
-        }
-    }
-
     virtual void OnLocalSetExpr(Index localIndex) override
     {
         auto r = resolveLocalOffsetAndSize(localIndex);
@@ -1208,7 +1279,7 @@ public:
         ASSERT(m_localInfo[localIndex].m_valueType == peekVMStackValueType());
         auto src = popVMStackInfo();
         generateMoveCodeIfNeeds(src.position(), r.first, src.valueType());
-        updateWriteUsageOfLocalIfNeeds(localIndex);
+        m_preprocessData.addLocalVariableWrite(localIndex);
     }
 
     virtual void OnLocalTeeExpr(Index localIndex) override
@@ -1218,7 +1289,7 @@ public:
         ASSERT(valueType == peekVMStackValueType());
         auto dstInfo = peekVMStackInfo();
         generateMoveCodeIfNeeds(dstInfo.position(), r.first, valueType);
-        updateWriteUsageOfLocalIfNeeds(localIndex);
+        m_preprocessData.addLocalVariableWrite(localIndex);
     }
 
     virtual void OnGlobalGetExpr(Index index) override
@@ -1317,6 +1388,8 @@ public:
         b.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, b.m_position });
         m_blockInfo.push_back(b);
         pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::IfOpcode);
+
+        m_preprocessData.seenBranch();
     }
 
     void restoreVMStackBy(const BlockInfo& blockInfo)
@@ -1369,6 +1442,7 @@ public:
 
     virtual void OnElseExpr() override
     {
+        m_preprocessData.seenBranch();
         BlockInfo& blockInfo = m_blockInfo.back();
         keepBlockResultsIfNeeds(blockInfo);
 
@@ -1589,6 +1663,7 @@ public:
 
     virtual void OnBrExpr(Index depth) override
     {
+        m_preprocessData.seenBranch();
         if (m_blockInfo.size() == depth) {
             // this case acts like return
             generateFunctionReturnCode(true);
@@ -1622,6 +1697,7 @@ public:
 
     virtual void OnBrIfExpr(Index depth) override
     {
+        m_preprocessData.seenBranch();
         if (m_blockInfo.size() == depth) {
             // this case acts like return
             ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
@@ -1724,6 +1800,7 @@ public:
 
     virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
     {
+        m_preprocessData.seenBranch();
         ASSERT(peekVMStackValueType() == Walrus::Value::I32);
         auto stackPos = popVMStack();
 
@@ -1758,6 +1835,7 @@ public:
 
     virtual void OnThrowExpr(Index tagIndex) override
     {
+        m_preprocessData.seenBranch();
         auto pos = m_currentFunction->currentByteCodeSize();
         uint32_t offsetsSize = 0;
 
@@ -1794,6 +1872,7 @@ public:
     {
         ASSERT(m_blockInfo.back().m_blockType == BlockInfo::TryCatch);
 
+        m_preprocessData.seenBranch();
         auto& blockInfo = m_blockInfo.back();
         keepBlockResultsIfNeeds(blockInfo);
         restoreVMStackBy(blockInfo);
@@ -2021,6 +2100,7 @@ public:
 
     virtual void OnReturnExpr() override
     {
+        m_preprocessData.seenBranch();
         generateFunctionReturnCode();
     }
 
@@ -2105,6 +2185,7 @@ public:
 
     virtual void OnUnreachableExpr() override
     {
+        m_preprocessData.seenBranch();
         pushByteCode(Walrus::Unreachable(), WASMOpcode::UnreachableOpcode);
         stopToGenerateByteCodeWhileBlockEnd();
     }
