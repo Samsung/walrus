@@ -747,7 +747,7 @@ NextInstruction:
     goto*(((ByteCode*)programCounter)->m_opcodeInAddress);
 #else
 
-#define DEFINE_OPCODE(codeName) case codeName##Opcode
+#define DEFINE_OPCODE(codeName) case ByteCode::Opcode::codeName##Opcode
 #define DEFINE_DEFAULT                \
     default:                          \
         RELEASE_ASSERT_NOT_REACHED(); \
@@ -1324,7 +1324,7 @@ NextInstruction:
         End* code = (End*)programCounter;
         return code->resultOffsets();
     }
-
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
     DEFINE_OPCODE(FillOpcodeTable)
         :
     {
@@ -1342,7 +1342,7 @@ NextInstruction:
         initAddressToOpcodeTable();
         return nullptr;
     }
-
+#endif
     DEFINE_DEFAULT
 
     return nullptr;

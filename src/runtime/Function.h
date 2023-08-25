@@ -17,9 +17,23 @@
 #ifndef __WalrusFunction__
 #define __WalrusFunction__
 
+#include "util/Util.h"
 #include "runtime/Value.h"
 #include "runtime/Trap.h"
 #include "runtime/Object.h"
+
+#ifdef STACK_GROWS_DOWN
+#define CHECK_STACK_LIMIT(state)                                        \
+    if (UNLIKELY(state.stackLimit() > (size_t)currentStackPointer())) { \
+        Trap::throwException(state, "call stack exhausted");            \
+    }
+#else
+#define CHECK_STACK_LIMIT(state)                                        \
+    if (UNLIKELY(state.stackLimit() < (size_t)currentStackPointer())) { \
+        Trap::throwException(state, "call stack exhausted");            \
+    }
+#endif
+
 
 namespace Walrus {
 
@@ -74,34 +88,6 @@ protected:
     Function(FunctionType* functionType)
         : m_functionType(functionType)
     {
-    }
-
-#if defined(COMPILER_GCC) || defined(COMPILER_CLANG)
-    static inline void* currentStackPointer()
-    {
-        return __builtin_frame_address(0);
-    }
-#elif defined(COMPILER_MSVC)
-    static inline void* currentStackPointer()
-    {
-        volatile int temp;
-        return (void*)&temp;
-    }
-#else
-#error
-#endif
-
-    static ALWAYS_INLINE void checkStackLimit(ExecutionState& state)
-    {
-        if (UNLIKELY(state.stackLimit()
-#ifdef STACK_GROWS_DOWN
-                     >
-#else
-                     <
-#endif
-                     (size_t)currentStackPointer())) {
-            Trap::throwException(state, "call stack exhausted");
-        }
     }
 
     const FunctionType* m_functionType;
