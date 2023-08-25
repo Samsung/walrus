@@ -108,9 +108,9 @@ inline int clz(unsigned int v)
 inline int clz(unsigned __int64 v)
 {
 #if WALRUS_32
-    int result = Clz(highDWORD(v));
+    int result = clz(highDWORD(v));
     if (result == 32)
-        result += Clz(lowDWORD(v));
+        result += clz(lowDWORD(v));
 
     return result;
 #else
@@ -174,7 +174,7 @@ inline int popCount(unsigned int value)
 inline int popCount(unsigned __int64 value)
 {
 #if WALRUS_32
-    return popCount(highDWORD(value)) + popcount(lowDWORD(value));
+    return popCount(highDWORD(value)) + popCount(lowDWORD(value));
 #else
     return __popcnt64(value);
 #endif

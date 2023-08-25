@@ -172,6 +172,46 @@ jobs:
           ninja -Cout/release
           python3 ./tools/run-tests.py --engine="./out/release/walrus"
 
+  test-on-windows-x86-x64:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        arch: [x86, x64]
+    steps:
+    - name: Set git cllf config
+      run: |
+        git config --global core.autocrlf input
+        git config --global core.eol lf
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - uses: lukka/get-cmake@latest
+    - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
+      with:
+        sdk-version: 20348
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install msvc redist package
+      run: |
+        (new-object System.Net.WebClient).DownloadFile('https://github.com/abbodi1406/vcredist/releases/download/v0.73.0/VisualCppRedist_AIO_x86_x64.exe','VisualCppRedist_AIO_x86_x64.exe')
+        .\VisualCppRedist_AIO_x86_x64.exe /y
+    - uses: ilammy/msvc-dev-cmd@v1.12.1
+      with:
+        arch: ${{ matrix.arch }}
+        sdk: "10.0.20348.0"
+    - name: Build ${{ matrix.arch }} Release
+      run: |
+        CMake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
+        CMake --build out/ --config Release
+    - name: Run tests
+      run: |
+        python tools\run-tests.py --engine=%cd%\out\walrus.exe
+      shell: cmd
+    - if: ${{ failure() }}
+      uses: mxschmitt/action-tmate@v3
+      timeout-minutes: 15
+
   built-test-wasm-c-api:
     runs-on: ubuntu-latest
     steps:

@@ -210,10 +210,14 @@ set(WABT_LIBRARY_SRC
   src/binary-writer.cc
 )
 
-if (WABT_ARCH STREQUAL "x86")
+if (COMPILER_IS_MSVC)
+  set(WABT_CXX_FLAGS_INTERNAL ${WABT_CXX_FLAGS_INTERNAL} /fp:strict /Oy-)
+else ()
+  if (WABT_ARCH STREQUAL "x86")
     # wasm doesn't allow for x87 floating point math
     set(WABT_CXX_FLAGS_INTERNAL ${WABT_CXX_FLAGS_INTERNAL} -msse2 -mfpmath=sse)
-endif ()
+  endif ()
+endif()
 
 add_compile_options(${WABT_CXX_FLAGS_INTERNAL})
 add_compile_options(${WABT_CXX_FLAGS})
