@@ -58,13 +58,15 @@ enum Type : uint32_t {
     rev64 = 0x4e200800,
     saddlp = 0x4e202800,
     scvtf = 0x4e21d800,
+    sdot = 0x4e009400,
+    shl = 0x4f005400,
     shll = 0x2e213800,
+    smull = 0xe20c000,
     sqadd = 0x4e200c00,
+    sqrdmulh = 0x6e20b400,
     sqsub = 0x4e202c00,
     sqxtn = 0x0e214800,
-    sqrdmulh = 0x6e20b400,
     sqxtun = 0x2e212800,
-    shl = 0x4f005400,
     sshl = 0x4e204400,
     sshr = 0x4f000400,
     sub = 0x6e208400,
@@ -83,7 +85,10 @@ enum Type : uint32_t {
     uxtl = 0x2f00a400,
     ushl = 0x6e204400,
     ushr = 0x6f000400,
+    uzp1 = 0x4e001800,
     xtn = 0xe212800,
+    zip1 = 0x4e003800,
+    zip2 = 0x4e007800,
 };
 
 enum IntSizeType : uint32_t {
@@ -196,6 +201,31 @@ static void simdEmitI64x2AllTrue(sljit_compiler* compiler, sljit_s32 rd, sljit_s
     simdEmitOp(compiler, SimdOp::addp | SimdOp::D2, rn, rn, rn);
     sljit_emit_fop1(compiler, SLJIT_CMP_F64 | SLJIT_SET_ORDERED_EQUAL, rn, 0, rn, 0);
     sljit_emit_op_flags(compiler, SLJIT_MOV, rd, 0, SLJIT_ORDERED_EQUAL);
+}
+
+static void simdEmitDot(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
+{
+#ifdef __ARM_FEATURE_DOTPROD
+    simdEmitOp(compiler, SimdOp::sdot | SimdOp::S4, rd, rn, rm);
+#else
+    auto tmpReg1 = SLJIT_FR2;
+    auto tmpReg2 = SLJIT_FR3;
+
+    // tmpReg1 = rn * rm lower
+    simdEmitOp(compiler, SimdOp::smull | SimdOp::H8, tmpReg1, rn, rm);
+    // tmpReg2 = rn * rm upper
+    simdEmitOp(compiler, SimdOp::smull | SimdOp::H8 | (0x1 << 30), tmpReg2, rn, rm);
+    // rd = tmpReg1[1], tmpReg2[1], tmpReg1[0], tmpReg2[0]
+    simdEmitOp(compiler, SimdOp::zip1 | SimdOp::S4, rd, tmpReg1, tmpReg2);
+    // tmpReg1 = tmpReg1[3], tmpReg2[3], tmpReg1[2], tmpReg2[2]
+    simdEmitOp(compiler, SimdOp::zip2 | SimdOp::S4, tmpReg1, tmpReg1, tmpReg2);
+    // rd = rd[3] + rd[2], rd[1] + rd[0]
+    simdEmitOp(compiler, SimdOp::saddlp | SimdOp::S4, rd, rd, 0);
+    // tmpReg1 = tmpReg1[3] + tmpReg1[2], tmpReg1[1] + tmpReg1[0]
+    simdEmitOp(compiler, SimdOp::saddlp | SimdOp::S4, tmpReg1, tmpReg1, 0);
+    // rd = rd[1], tmpReg1[1], rd[0], tmpReg1[0]
+    simdEmitOp(compiler, SimdOp::uzp1 | SimdOp::S4, rd, rd, tmpReg1);
+#endif
 }
 
 static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
@@ -499,6 +529,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8NarrowI32X4SOpcode:
     case ByteCode::I16X8NarrowI32X4UOpcode:
     case ByteCode::I16X8Q15mulrSatSOpcode:
+    case ByteCode::I32X4DotI16X8SOpcode:
         type = SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I32X4AddOpcode:
@@ -817,6 +848,9 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, dst, dst, tmpReg);
         break;
     }
+    case ByteCode::I32X4DotI16X8SOpcode:
+        simdEmitDot(compiler, dst, args[0].arg, args[1].arg);
+        break;
     case ByteCode::I64X2AddOpcode:
         simdEmitOp(compiler, SimdOp::add | SimdOp::D2, dst, args[0].arg, args[1].arg);
         break;
