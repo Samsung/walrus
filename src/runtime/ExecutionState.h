@@ -18,6 +18,7 @@
 #define __WalrusExecutionState__
 
 #include "util/Optional.h"
+#include "util/Util.h"
 
 namespace Walrus {
 
@@ -56,8 +57,7 @@ private:
     friend class ByteCodeTable;
     ExecutionState()
     {
-        volatile int sp;
-        m_stackLimit = (size_t)&sp;
+        m_stackLimit = (size_t)currentStackPointer();
 
 #ifdef STACK_GROWS_DOWN
         m_stackLimit = m_stackLimit - STACK_LIMIT_FROM_BASE;

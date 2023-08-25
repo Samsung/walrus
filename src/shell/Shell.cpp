@@ -892,9 +892,15 @@ int main(int argc, char* argv[])
             fseek(fp, 0, SEEK_SET);
             std::vector<uint8_t> buf;
             buf.resize(sz);
-            fread(buf.data(), sz, 1, fp);
+            int ret = fread(buf.data(), 1, sz, fp);
             fclose(fp);
-
+            // read again with binary mode if result is not success
+            // this one needs for windows
+            if (ret != sz) {
+                FILE* fp = fopen(filePath.data(), "rb");
+                fread(buf.data(), sz, 1, fp);
+                fclose(fp);
+            }
             if (endsWith(filePath, "wasm")) {
                 if (!argParser.exportToRun.empty()) {
                     runExports(store, filePath, buf, argParser.exportToRun);

@@ -89,7 +89,7 @@ void DefinedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCo
                                       uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
     ExecutionState newState(state, this);
-    checkStackLimit(newState);
+    CHECK_STACK_LIMIT(newState);
 
     ALLOCA(uint8_t, functionStackBase, m_moduleFunction->requiredStackSize());
 
@@ -147,7 +147,7 @@ void ImportedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteC
 void ImportedFunction::call(ExecutionState& state, Value* argv, Value* result)
 {
     ExecutionState newState(state, this);
-    checkStackLimit(newState);
+    CHECK_STACK_LIMIT(newState);
     m_callback(newState, argv, result, m_data);
 }
 

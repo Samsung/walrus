@@ -18,6 +18,15 @@
 #ifndef __WalrusMathOperation__
 #define __WalrusMathOperation__
 
+#if defined(COMPILER_MSVC)
+#include <immintrin.h>
+#if defined(CPU_X86)
+#include <float.h>
+#elif defined(CPU_X86_64)
+#include <emmintrin.h>
+#endif
+#endif
+
 #include "util/BitOperation.h"
 #include "runtime/ExecutionState.h"
 
@@ -151,29 +160,29 @@ bool isNormalDivRem(T lhs, T rhs)
 template <typename T>
 ALWAYS_INLINE T floatAbs(T val);
 template <typename T>
-ALWAYS_INLINE T floatCopysign(T lhs, T rhs);
+ALWAYS_INLINE T floatCopysign(ExecutionState& state, T lhs, T rhs);
 
 // Don't use std::{abs,copysign} directly on MSVC, since that seems to lose
 // the NaN tag.
 template <>
 ALWAYS_INLINE float floatAbs(float val)
 {
-    return _mm_cvtss_float(_mm_and_ps(
+    return _mm_cvtss_f32(_mm_and_ps(
         _mm_set1_ps(val), _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff))));
 }
 
 template <>
 ALWAYS_INLINE double floatAbs(double val)
 {
-    return _mm_cvtsd_double(
+    return _mm_cvtsd_f64(
         _mm_and_pd(_mm_set1_pd(val),
                    _mm_castsi128_pd(_mm_set1_epi64x(0x7fffffffffffffffull))));
 }
 
 template <>
-ALWAYS_INLINE float floatCopysign(float lhs, float rhs)
+ALWAYS_INLINE float floatCopysign(ExecutionState& state, float lhs, float rhs)
 {
-    return _mm_cvtss_float(
+    return _mm_cvtss_f32(
         _mm_or_ps(_mm_and_ps(_mm_set1_ps(lhs),
                              _mm_castsi128_ps(_mm_set1_epi32(0x7fffffff))),
                   _mm_and_ps(_mm_set1_ps(rhs),
@@ -181,9 +190,9 @@ ALWAYS_INLINE float floatCopysign(float lhs, float rhs)
 }
 
 template <>
-ALWAYS_INLINE double floatCopysign(double lhs, double rhs)
+ALWAYS_INLINE double floatCopysign(ExecutionState& state, double lhs, double rhs)
 {
-    return _mm_cvtsd_double(_mm_or_pd(
+    return _mm_cvtsd_f64(_mm_or_pd(
         _mm_and_pd(_mm_set1_pd(lhs),
                    _mm_castsi128_pd(_mm_set1_epi64x(0x7fffffffffffffffull))),
         _mm_and_pd(_mm_set1_pd(rhs),
@@ -362,10 +371,113 @@ inline float convert(double val)
 }
 
 #if defined(COMPILER_MSVC)
-double convertUint64ToDouble(uint64_t x);
-float convertUint64ToFloat(uint64_t x);
-double convertInt64ToDouble(int64_t x);
-float convertInt64ToFloat(int64_t x);
+
+#if defined(CPU_X86)
+// Allow the following functions to change the floating-point environment (e.g.
+// update to 64-bit precision in the mantissa). This is only needed for x87
+// floats, which are only used on MSVC 32-bit.
+#pragma fenv_access(on)
+namespace {
+typedef unsigned int FPControl;
+inline FPControl set64BitPrecisionControl()
+{
+    FPControl old_ctrl = _control87(0, 0);
+    _control87(_PC_64, _MCW_PC);
+    return old_ctrl;
+}
+void resetPrecisionControl(FPControl old_ctrl)
+{
+    _control87(old_ctrl, _MCW_PC);
+}
+
+} // end of anonymous namespace
+#endif
+
+
+double convertUint64ToDouble(uint64_t x)
+{
+#if defined(WALRUS_X86_64)
+    // MSVC on x64 generates uint64 -> float conversions but doesn't do
+    // round-to-nearest-ties-to-even, which is required by WebAssembly.
+    __m128d result = _mm_setzero_pd();
+    if (x & 0x8000000000000000ULL) {
+        result = _mm_cvtsi64_sd(result, (x >> 1) | (x & 1));
+        result = _mm_add_sd(result, result);
+    } else {
+        result = _mm_cvtsi64_sd(result, x);
+    }
+    return _mm_cvtsd_f64(result);
+#elif defined(CPU_X86)
+    // MSVC on x86 converts from i64 -> double -> float, which causes incorrect
+    // rounding. Using the x87 float stack instead preserves the correct
+    // rounding.
+    FPControl old_ctrl = set64BitPrecisionControl();
+    static const double c = 18446744073709551616.0;
+    double result;
+    __asm fild x;
+    if (x & 0x8000000000000000ULL) {
+        __asm fadd c;
+    }
+    __asm fstp result;
+    resetPrecisionControl(old_ctrl);
+    return result;
+#else
+    return static_cast<double>(x);
+#endif
+}
+float convertUint64ToFloat(uint64_t x)
+{
+#if defined(WALRUS_X86_64)
+    // MSVC on x64 generates uint64 -> float conversions but doesn't do
+    // round-to-nearest-ties-to-even, which is required by WebAssembly.
+    __m128 result = _mm_setzero_ps();
+    if (x & 0x8000000000000000ULL) {
+        result = _mm_cvtsi64_ss(result, (x >> 1) | (x & 1));
+        result = _mm_add_ss(result, result);
+    } else {
+        result = _mm_cvtsi64_ss(result, x);
+    }
+    return _mm_cvtss_f32(result);
+#elif defined(CPU_X86)
+    // MSVC on x86 converts from i64 -> double -> float, which causes incorrect
+    // rounding. Using the x87 float stack instead preserves the correct
+    // rounding.
+    FPControl old_ctrl = set64BitPrecisionControl();
+    static const float c = 18446744073709551616.0f;
+    float result;
+    __asm fild x;
+    if (x & 0x8000000000000000ULL) {
+        __asm fadd c;
+    }
+    __asm fstp result;
+    resetPrecisionControl(old_ctrl);
+    return result;
+#else
+    return static_cast<float>(x);
+#endif
+}
+double convertInt64ToDouble(int64_t x)
+{
+#if defined(CPU_X86)
+    double result;
+    __asm fild x;
+    __asm fstp result;
+    return result;
+#else
+    return static_cast<double>(x);
+#endif
+}
+float convertInt64ToFloat(int64_t x)
+{
+#if defined(CPU_X86)
+    float result;
+    __asm fild x;
+    __asm fstp result;
+    return result;
+#else
+    return static_cast<float>(x);
+#endif
+}
 #else
 inline double convertUint64ToDouble(uint64_t x)
 {
