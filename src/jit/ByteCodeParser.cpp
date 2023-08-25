@@ -1037,6 +1037,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::I32X4ExtmulHighI16X8SOpcode:
         case ByteCode::I32X4ExtmulLowI16X8UOpcode:
         case ByteCode::I32X4ExtmulHighI16X8UOpcode:
+        case ByteCode::I32X4DotI16X8SOpcode:
         case ByteCode::I64X2AddOpcode:
         case ByteCode::I64X2SubOpcode:
         case ByteCode::I64X2MulOpcode:
