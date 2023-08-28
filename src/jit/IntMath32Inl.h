@@ -159,7 +159,7 @@ static void emitDivRem32(sljit_compiler* compiler, sljit_s32 opcode, JITArg* arg
 static void emitSimpleBinary64(sljit_compiler* compiler, sljit_s32 op1, sljit_s32 op2, JITArgPair* args)
 {
 #if !(defined SLJIT_CONFIG_X86_32 && SLJIT_CONFIG_X86_32)
-    if (arg0arg1 & arg1arg1 & SLJIT_MEM) {
+    if (args[0].arg1 & args[1].arg1 & SLJIT_MEM) {
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, args[0].arg1, args[0].arg1w);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, args[1].arg1, args[1].arg1w);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, args[0].arg2, args[0].arg2w);
