@@ -758,10 +758,19 @@ JITModule* JITCompiler::compile()
             break;
         }
         case Instruction::Move: {
-            if (item->asInstruction()->opcode() == ByteCode::Move32Opcode) {
+            switch (item->asInstruction()->opcode()) {
+            case ByteCode::Move32Opcode:
                 emitMove32(m_compiler, item->asInstruction());
-            } else {
+                break;
+#ifdef HAS_SIMD
+            case ByteCode::Move128Opcode:
+                emitMove128(m_compiler, item->asInstruction());
+                break;
+#endif /* HAS_SIMD */
+            default:
+                ASSERT(item->asInstruction()->opcode() == ByteCode::Move64Opcode);
                 emitMove64(m_compiler, item->asInstruction());
+                break;
             }
             break;
         }
@@ -788,6 +797,10 @@ JITModule* JITCompiler::compile()
         }
         case Instruction::LoadLaneSIMD: {
             emitLoadLaneSIMD(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::BitMaskSIMD: {
+            emitBitMaskSIMD(m_compiler, item->asInstruction());
             break;
         }
         case Instruction::ShiftSIMD: {

@@ -627,6 +627,14 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             paramCount = 1;
             break;
         }
+        case ByteCode::I8X16BitmaskOpcode:
+        case ByteCode::I16X8BitmaskOpcode:
+        case ByteCode::I32X4BitmaskOpcode:
+        case ByteCode::I64X2BitmaskOpcode: {
+            group = Instruction::BitMaskSIMD;
+            paramCount = 1;
+            break;
+        }
         case ByteCode::TableInitOpcode: {
             auto tableInit = reinterpret_cast<TableInit*>(byteCode);
 
@@ -873,6 +881,18 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             operands[0].offset = STACK_OFFSET(move64->srcOffset());
             operands[1].item = nullptr;
             operands[1].offset = STACK_OFFSET(move64->dstOffset());
+            break;
+        }
+        case ByteCode::Move128Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move128Opcode, 1, 1);
+
+            Move128* move128 = reinterpret_cast<Move128*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(move128->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(move128->dstOffset());
             break;
         }
         case ByteCode::GlobalGet32Opcode: {
