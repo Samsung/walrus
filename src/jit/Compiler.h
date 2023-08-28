@@ -97,7 +97,9 @@ public:
         UnarySIMD,
         // Load lane SIMD opcodes (e.g. V128Load16Lane)
         LoadLaneSIMD,
-        // SHift SIMD opcodes (e.g. I8X16SHL)
+        // Bitmask SIMD opcodes (e.g. I16X8Bitmask)
+        BitMaskSIMD,
+        // Shift SIMD opcodes (e.g. I8X16SHL)
         ShiftSIMD,
     };
 

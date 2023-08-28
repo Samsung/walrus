@@ -23,27 +23,10 @@ static sljit_sw callFunction(
 {
     Instance* instance = context->instance;
     Function* target = instance->function(code->index());
-    const FunctionType* ft = target->functionType();
-    const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
-
-    size_t c = 0;
-    for (size_t i = 0; i < param.size(); i++) {
-        paramVector[i] = Value(param[i], bp + code->stackOffsets()[c++]);
-    }
-
-    const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
-    size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
 
     sljit_sw error = ExecutionContext::NoError;
     try {
-        target->call(context->state, param.size(), paramVector, resultVector);
-
-        for (size_t i = 0; i < result.size(); i++) {
-            uint8_t* resultStackPointer = bp + code->stackOffsets()[c++];
-            resultVector[i].writeToMemory(resultStackPointer);
-        }
+        target->interpreterCall(context->state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     } catch (std::unique_ptr<Exception>& exception) {
         context->capturedException = exception.release();
         context->error = ExecutionContext::CapturedException;
@@ -79,26 +62,9 @@ static sljit_sw callFunctionIndirect(
         return ExecutionContext::IndirectCallTypeMismatch;
     }
 
-    const ValueTypeVector& param = ft->param();
-    ALLOCA(Value, paramVector, sizeof(Value) * param.size());
-
-    size_t c = 0;
-    for (size_t i = 0; i < param.size(); i++) {
-        paramVector[i] = Value(param[i], bp + code->stackOffsets()[c++]);
-    }
-
-    const ValueTypeVector& result = ft->result();
-    ALLOCA(Value, resultVector, sizeof(Value) * result.size());
-    size_t codeExtraOffsetsSize = sizeof(ByteCodeStackOffset) * ft->param().size() + sizeof(ByteCodeStackOffset) * ft->result().size();
-
     sljit_sw error = ExecutionContext::NoError;
     try {
-        target->call(context->state, param.size(), paramVector, resultVector);
-
-        for (size_t i = 0; i < result.size(); i++) {
-            uint8_t* resultStackPointer = bp + code->stackOffsets()[c++];
-            resultVector[i].writeToMemory(resultStackPointer);
-        }
+        target->interpreterCall(context->state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     } catch (std::unique_ptr<Exception>& exception) {
         context->capturedException = exception.release();
         context->error = ExecutionContext::CapturedException;

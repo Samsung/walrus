@@ -1049,36 +1049,41 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 type = SLJIT_SIMD_ELEM_128;
 
     int mask = 0;
+    bool isShr = true;
 
     switch (instr->opcode()) {
     case ByteCode::I8X16ShlOpcode:
+        isShr = false;
+        FALLTHROUGH;
     case ByteCode::I8X16ShrSOpcode:
-    case ByteCode::I8X16ShrUOpcode: {
+    case ByteCode::I8X16ShrUOpcode:
         mask = SimdOp::shiftB;
         type = SLJIT_SIMD_ELEM_8;
         break;
-    }
     case ByteCode::I16X8ShlOpcode:
+        isShr = false;
+        FALLTHROUGH;
     case ByteCode::I16X8ShrSOpcode:
-    case ByteCode::I16X8ShrUOpcode: {
+    case ByteCode::I16X8ShrUOpcode:
         mask = SimdOp::shiftH;
         type = SLJIT_SIMD_ELEM_16;
         break;
-    }
     case ByteCode::I32X4ShlOpcode:
+        isShr = false;
+        FALLTHROUGH;
     case ByteCode::I32X4ShrSOpcode:
-    case ByteCode::I32X4ShrUOpcode: {
+    case ByteCode::I32X4ShrUOpcode:
         mask = SimdOp::shiftS;
         type = SLJIT_SIMD_ELEM_32;
         break;
-    }
     case ByteCode::I64X2ShlOpcode:
+        isShr = false;
+        FALLTHROUGH;
     case ByteCode::I64X2ShrSOpcode:
-    case ByteCode::I64X2ShrUOpcode: {
+    case ByteCode::I64X2ShrUOpcode:
         mask = SimdOp::shiftD;
         type = SLJIT_SIMD_ELEM_64;
         break;
-    }
     default:
         ASSERT_NOT_REACHED();
     }
@@ -1089,7 +1094,18 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
     args[2].set(operands + 2);
     sljit_s32 dst = GET_TARGET_REG(args[2].arg, SLJIT_FR1);
 
-    if (!SLJIT_IS_IMM(args[1].arg)) {
+    if (SLJIT_IS_IMM(args[1].arg)) {
+        if (isShr)
+            args[1].argw = (args[1].argw ^ mask) + 1;
+
+        args[1].argw &= mask;
+        if (args[1].argw == 0) {
+            if (args[2].arg != args[0].arg) {
+                sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, args[0].arg, args[2].arg, args[2].argw);
+            }
+            return;
+        }
+    } else {
         sljit_s32 srcReg = GET_SOURCE_REG(args[1].arg, SLJIT_R0);
         MOVE_TO_REG(compiler, SLJIT_MOV32, srcReg, args[1].arg, args[1].argw);
 
@@ -1100,14 +1116,14 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
     switch (instr->opcode()) {
     case ByteCode::I8X16ShlOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmB16 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmB16 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::B16, dst, args[0].arg, dst);
         }
         break;
     case ByteCode::I8X16ShrSOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmB16 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmB16 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::B16, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::B16, dst, args[0].arg, dst);
@@ -1115,7 +1131,7 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I8X16ShrUOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmB16 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmB16 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::B16, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::ushl | SimdOp::B16, dst, args[0].arg, dst);
@@ -1123,14 +1139,14 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I16X8ShlOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmH8 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmH8 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::H8, dst, args[0].arg, dst);
         }
         break;
     case ByteCode::I16X8ShrSOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmH8 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmH8 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::H8, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::H8, dst, args[0].arg, dst);
@@ -1138,7 +1154,7 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I16X8ShrUOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmH8 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmH8 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::H8, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::ushl | SimdOp::H8, dst, args[0].arg, dst);
@@ -1146,14 +1162,14 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I32X4ShlOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmS4 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmS4 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::S4, dst, args[0].arg, dst);
         }
         break;
     case ByteCode::I32X4ShrSOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmS4 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmS4 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::S4, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::S4, dst, args[0].arg, dst);
@@ -1161,7 +1177,7 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I32X4ShrUOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmS4 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmS4 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::S4, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::ushl | SimdOp::S4, dst, args[0].arg, dst);
@@ -1169,14 +1185,14 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I64X2ShlOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmD2 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::shl | SimdOp::ImmD2 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::D2, dst, args[0].arg, dst);
         }
         break;
     case ByteCode::I64X2ShrSOpcode:
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmD2 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::sshr | SimdOp::ImmD2 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::D2, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::sshl | SimdOp::D2, dst, args[0].arg, dst);
@@ -1186,7 +1202,7 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         ASSERT(instr->opcode() == ByteCode::I64X2ShrUOpcode);
 
         if (SLJIT_IS_IMM(args[1].arg)) {
-            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmD2 | ((0b111 & args[1].argw) << 16), dst, args[0].arg, 0);
+            simdEmitOp(compiler, SimdOp::ushr | SimdOp::ImmD2 | (args[1].argw << 16), dst, args[0].arg, 0);
         } else {
             simdEmitOp(compiler, SimdOp::neg | SimdOp::D2, dst, dst, 0);
             simdEmitOp(compiler, SimdOp::ushl | SimdOp::D2, dst, args[0].arg, dst);

@@ -16,6 +16,21 @@
 
 /* Only included by jit-backend.cc */
 
+static void emitMove128(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operands = instr->operands();
+    JITArg dst(operands + 1);
+    JITArg src;
+
+    sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_FR0);
+
+    simdOperandToArg(compiler, operands + 0, src, SLJIT_SIMD_REG_128, dstReg);
+
+    if (SLJIT_IS_MEM(dst.arg)) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, dstReg, dst.arg, dst.argw);
+    }
+}
+
 static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
@@ -25,31 +40,31 @@ static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I8X16ExtractLaneSOpcode:
-        type = SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_LANE_SIGNED | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_LANE_SIGNED | SLJIT_32;
         break;
     case ByteCode::I8X16ExtractLaneUOpcode:
-        type = SLJIT_SIMD_ELEM_8 | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_32;
         break;
     case ByteCode::I16X8ExtractLaneSOpcode:
-        type = SLJIT_SIMD_ELEM_16 | SLJIT_SIMD_LANE_SIGNED | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16 | SLJIT_SIMD_LANE_SIGNED | SLJIT_32;
         break;
     case ByteCode::I16X8ExtractLaneUOpcode:
-        type = SLJIT_SIMD_ELEM_16 | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16 | SLJIT_32;
         break;
     case ByteCode::I32X4ExtractLaneOpcode:
-        type = SLJIT_SIMD_ELEM_32 | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_32;
         break;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     case ByteCode::I64X2ExtractLaneOpcode:
-        type = SLJIT_SIMD_ELEM_64;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
         break;
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     case ByteCode::F32X4ExtractLaneOpcode:
-        type = SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::F64X2ExtractLaneOpcode);
-        type = SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
         break;
     }
 
@@ -58,12 +73,12 @@ static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     args[1].set(operands + 1);
 
     if (type & SLJIT_SIMD_FLOAT) {
-        sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, args[0].arg, index, args[1].arg, args[1].argw);
+        sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index, args[1].arg, args[1].argw);
         return;
     }
 
     sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, SLJIT_R0);
-    sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, args[0].arg, index, dstReg, 0);
+    sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index, dstReg, 0);
 
     if (SLJIT_IS_MEM(args[1].arg)) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -85,25 +100,25 @@ static void emitReplaceLaneSIMD(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I8X16ReplaceLaneOpcode:
-        type = SLJIT_SIMD_ELEM_8 | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_32;
         break;
     case ByteCode::I16X8ReplaceLaneOpcode:
-        type = SLJIT_SIMD_ELEM_16 | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16 | SLJIT_32;
         break;
     case ByteCode::I32X4ReplaceLaneOpcode:
-        type = SLJIT_SIMD_ELEM_32 | SLJIT_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_32;
         break;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     case ByteCode::I64X2ReplaceLaneOpcode:
-        type = SLJIT_SIMD_ELEM_64;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
         break;
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     case ByteCode::F32X4ReplaceLaneOpcode:
-        type = SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::F64X2ReplaceLaneOpcode);
-        type = SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
         break;
     }
 
@@ -120,13 +135,13 @@ static void emitReplaceLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (args[0].arg != dstReg) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | (type & ~SLJIT_32), dstReg, args[0].arg, 0);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | (type & ~SLJIT_32), dstReg, args[0].arg, 0);
     }
 
-    sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | type, dstReg, index, args[1].arg, args[1].argw);
+    sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | type, dstReg, index, args[1].arg, args[1].argw);
 
     if (SLJIT_IS_MEM(args[2].arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | (type & ~SLJIT_32), dstReg, args[2].arg, args[2].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | (type & ~SLJIT_32), dstReg, args[2].arg, args[2].argw);
     }
 }
 
@@ -139,34 +154,63 @@ static void emitSplatSIMD(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I8X16SplatOpcode:
-        type = SLJIT_SIMD_ELEM_8;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
         break;
     case ByteCode::I16X8SplatOpcode:
-        type = SLJIT_SIMD_ELEM_16;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I32X4SplatOpcode:
-        type = SLJIT_SIMD_ELEM_32;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
         break;
     case ByteCode::I64X2SplatOpcode:
-        type = SLJIT_SIMD_ELEM_64;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::F32X4SplatOpcode:
-        type = SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::F64X2SplatOpcode);
-        type = SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
         break;
     }
 
     JITArg args[2] = { operands + 0, operands + 1 };
     sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, SLJIT_FR0);
 
-    sljit_emit_simd_replicate(compiler, SLJIT_SIMD_REG_128 | type, dstReg, args[0].arg, args[0].argw);
+    sljit_emit_simd_replicate(compiler, type, dstReg, args[0].arg, args[0].argw);
 
     if (SLJIT_IS_MEM(args[1].arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, dstReg, args[1].arg, args[1].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | type, dstReg, args[1].arg, args[1].argw);
     }
+}
+
+static void emitBitMaskSIMD(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operands = instr->operands();
+
+    sljit_s32 type = 0;
+
+    switch (instr->opcode()) {
+    case ByteCode::I8X16BitmaskOpcode:
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
+        break;
+    case ByteCode::I16X8BitmaskOpcode:
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16;
+        break;
+    case ByteCode::I32X4BitmaskOpcode:
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
+        break;
+    default:
+        ASSERT(instr->opcode() == ByteCode::I64X2BitmaskOpcode);
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
+        break;
+    }
+
+    JITArg src;
+    simdOperandToArg(compiler, operands, src, type, SLJIT_FR0);
+
+    JITArg dst(operands + 1);
+    sljit_emit_simd_sign(compiler, SLJIT_SIMD_STORE | type | SLJIT_32, src.arg, dst.arg, dst.argw);
 }
 
 static void emitGlobalGet128(sljit_compiler* compiler, Instruction* instr)
