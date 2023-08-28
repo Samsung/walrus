@@ -305,7 +305,7 @@ struct CompileContext {
         sljit_emit_op1(compiler, mov_op, (arg), (argw), (source_reg), 0); \
     }
 
-#if (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
+#if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM)
 #define HAS_SIMD
 
 static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 type, sljit_s32 srcReg)
@@ -333,7 +333,7 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
     arg.argw = 0;
 }
 
-#endif /* SLJIT_CONFIG_ARM_64 */
+#endif /* SLJIT_CONFIG_ARM */
 
 #include "FloatMathInl.h"
 
@@ -365,7 +365,9 @@ static void emitStoreImmediateParams(sljit_compiler* compiler, Instruction* inst
 
 #if (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
 #include "SimdArm64Inl.h"
-#endif /* SLJIT_CONFIG_ARM_64 */
+#elif (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+#include "SimdArm32Inl.h"
+#endif /* SLJIT_CONFIG_ARM */
 
 #ifdef HAS_SIMD
 #include "SimdInl.h"
