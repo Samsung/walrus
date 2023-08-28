@@ -1,0 +1,91 @@
+def isPr() {
+    env.CHANGE_ID != null
+}
+node {
+    currentBuild.displayName = "Walrus test on Arm"
+    try {
+        stage("Get source") {
+            def url = 'https://github.com/Samsung/walrus.git'
+            if (isPr()) {
+                def refspec = "+refs/pull/${env.CHANGE_ID}/head:refs/remotes/origin/PR-${env.CHANGE_ID} +refs/heads/interp:refs/remotes/origin/interp"
+                def extensions = [[$class: 'PreBuildMerge', options: [mergeRemote: "refs/remotes/origin", mergeTarget: "PR-${env.CHANGE_ID}"]]]
+                checkout([
+                $class: 'GitSCM',
+                doGenerateSubmoduleConfigurations: false,
+                extensions: extensions,
+                submoduleCfg: [],
+                userRemoteConfigs: [[
+                    refspec: refspec,
+                    url: url
+                ]]
+                ])
+            } else {
+                def refspec = "+refs/heads/interp:refs/remotes/origin/interp"
+                def extensions = []
+                checkout([
+                $class: 'GitSCM',
+                doGenerateSubmoduleConfigurations: false,
+                extensions: [[$class: 'WipeWorkspace']],
+                submoduleCfg: [],
+                userRemoteConfigs: [[
+                    refspec: refspec,
+                    url: url
+                ]]
+                ])
+            }
+        }
+
+        stage('Submodule update') {
+            sh 'git submodule update --init'
+        }
+
+        def arm32RemoteInfo = [:]
+        arm32RemoteInfo.name = 'arm32-docker'
+        arm32RemoteInfo.host = 'localhost'
+        arm32RemoteInfo.port = 11111
+        arm32RemoteInfo.allowAnyHosts = true
+        withCredentials([usernamePassword(credentialsId: 'arm32docker', passwordVariable: 'passwordVariable', usernameVariable: 'usernameVariable')]) {
+            arm32RemoteInfo.user = usernameVariable
+            arm32RemoteInfo.password = passwordVariable
+        }
+        stage('prepare arm32 workspace') {
+            sshCommand remote: arm32RemoteInfo, command: "rm -rf walrus walrus.zip"
+            sshCommand remote: arm32RemoteInfo, command: "pwd"
+            sh "zip -r walrus.zip ./*"
+            sshPut remote: arm32RemoteInfo, from: "walrus.zip", into: "./"
+            sshCommand remote: arm32RemoteInfo, command: "unzip walrus.zip -d walrus"
+        }
+
+        stage('Build arm32') {
+            sshCommand remote: arm32RemoteInfo, command: "\
+            cd walrus;\
+            cmake -H./ -Bout -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=arm32 -GNinja;\
+            cmake --build ./out/;\
+            "
+        }
+
+        stage('Build aarch64') {
+            sh 'cmake -H./ -Bout -GNinja'
+            sh 'cmake --build ./out/'
+        }
+
+        stage('Running test') {
+            timeout(60) {
+                parallel (
+                    'arm32' : {
+                        sshCommand remote: arm32RemoteInfo, command: "\
+                        cd walrus;\
+                        tools/run-tests.py --engine='/root/walrus/out/walrus'"
+                    },
+                    'aarch64' : {
+                        sh '#!/bin/bash\ntools/run-tests.py --engine="${WORKSPACE}/out/walrus"'
+                    },
+                )
+            }
+        }
+    } catch (e) {
+        throw e
+    } finally {
+        cleanWs()
+    }
+}
