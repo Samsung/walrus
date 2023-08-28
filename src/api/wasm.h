@@ -10,10 +10,10 @@
 #include <assert.h>
 
 #ifndef WASM_API_EXTERN
-#ifdef _WIN32
-#define WASM_API_EXTERN __declspec(dllimport)
+#ifdef _MSC_VER
+#define WASM_API_EXTERN __declspec(dllexport)
 #else
-#define WASM_API_EXTERN
+#define WASM_API_EXTERN __attribute__((visibility("default")))
 #endif
 #endif
 
