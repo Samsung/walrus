@@ -2037,6 +2037,7 @@ public:
     void dump(size_t pos)
     {
         printf("global.get32 ");
+        DUMP_BYTECODE_OFFSET(dstOffset);
         printf("index: %" PRId32,
                m_index);
     }
@@ -2063,6 +2064,7 @@ public:
     void dump(size_t pos)
     {
         printf("global.get64 ");
+        DUMP_BYTECODE_OFFSET(dstOffset);
         printf("index: %" PRId32,
                m_index);
     }
@@ -2089,6 +2091,7 @@ public:
     void dump(size_t pos)
     {
         printf("global.get128 ");
+        DUMP_BYTECODE_OFFSET(dstOffset);
         printf("index: %" PRId32,
                m_index);
     }
@@ -2115,6 +2118,7 @@ public:
     void dump(size_t pos)
     {
         printf("global.set32 ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
         printf("index: %" PRId32,
                m_index);
     }
@@ -2141,6 +2145,7 @@ public:
     void dump(size_t pos)
     {
         printf("global.set64 ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
         printf("index: %" PRId32,
                m_index);
     }
@@ -2167,6 +2172,7 @@ public:
     void dump(size_t pos)
     {
         printf("global.set128 ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
         printf("index: %" PRId32,
                m_index);
     }
