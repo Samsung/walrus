@@ -46,11 +46,13 @@ enum Type : uint32_t {
     vneg = 0xffb103c0,
     vorn = 0xef300150,
     vorr = 0xef200150,
+    vpadd = 0xef000b10,
     vpaddl = 0xffb00240,
     vpmax = 0xef000a00,
     vpmin = 0xef000a10,
     vrev64 = 0xffB00040,
     vqadd = 0xef000050,
+    vqrdmulh = 0xff000b40,
     vqsub = 0xef000250,
     vshlImm = 0xef800550,
     vshl = 0xef000440,
@@ -224,6 +226,16 @@ static void simdEmitI64x2AllTrue(sljit_compiler* compiler, sljit_s32 rd, sljit_s
     sljit_emit_op2(compiler, SLJIT_ADD, rd, 0, rd, 0, SLJIT_IMM, 1);
 }
 
+static void simdEmitI32x4Dot(sljit_compiler* compiler, sljit_s32 vd, sljit_s32 vn, sljit_s32 vm)
+{
+    auto tmpReg = SLJIT_FR4;
+
+    simdEmitOp(compiler, SimdOp::Type::vmull | SimdOp::I16, tmpReg, vn, vm);
+    simdEmitOp(compiler, SimdOp::Type::vpadd | SimdOp::I32, vd, tmpReg, getHighRegister(tmpReg));
+    simdEmitOp(compiler, SimdOp::Type::vmull | SimdOp::I16, tmpReg, getHighRegister(vn), getHighRegister(vm));
+    simdEmitOp(compiler, SimdOp::Type::vpadd | SimdOp::I32, getHighRegister(vd), tmpReg, getHighRegister(tmpReg));
+}
+
 static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
@@ -385,6 +397,8 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4ExtmulHighI16X8SOpcode:
     case ByteCode::I32X4ExtmulLowI16X8UOpcode:
     case ByteCode::I32X4ExtmulHighI16X8UOpcode:
+    case ByteCode::I32X4DotI16X8SOpcode:
+    case ByteCode::I16X8Q15mulrSatSOpcode:
         type = SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I32X4AddOpcode:
@@ -559,6 +573,12 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I32X4ExtmulHighI16X8UOpcode:
         simdEmitOp(compiler, SimdOp::Type::vmull | SimdOp::I16 | SimdOp::unsignedBit, dst, getHighRegister(args[0].arg), getHighRegister(args[1].arg));
+        break;
+    case ByteCode::I32X4DotI16X8SOpcode:
+        simdEmitI32x4Dot(compiler, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I16X8Q15mulrSatSOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vqrdmulh | SimdOp::I16, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I32X4AddOpcode:
         simdEmitOp(compiler, SimdOp::Type::vadd | SimdOp::I32, dst, args[0].arg, args[1].arg);
