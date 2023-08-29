@@ -485,8 +485,10 @@ private:
     std::vector<CatchInfo> m_catchInfo;
     struct LocalInfo {
         Walrus::Value::Type m_valueType;
-        LocalInfo(Walrus::Value::Type type)
+        size_t m_position;
+        LocalInfo(Walrus::Value::Type type, size_t position)
             : m_valueType(type)
+            , m_position(position)
         {
         }
     };
@@ -586,8 +588,10 @@ private:
         m_currentFunctionType = mf->functionType();
         m_localInfo.clear();
         m_localInfo.reserve(m_currentFunctionType->param().size());
+        size_t pos = 0;
         for (size_t i = 0; i < m_currentFunctionType->param().size(); i++) {
-            m_localInfo.push_back(LocalInfo(m_currentFunctionType->param()[i]));
+            m_localInfo.push_back(LocalInfo(m_currentFunctionType->param()[i], pos));
+            pos += Walrus::valueStackAllocatedSize(m_localInfo[i].m_valueType);
         }
         m_currentFunction->m_requiredStackSizeDueToParameterAndLocal = m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
         m_currentFunction->m_requiredStackSize = std::max(
@@ -969,7 +973,7 @@ public:
         while (count) {
             auto wType = toValueKind(type);
             m_currentFunction->m_local.push_back(wType);
-            m_localInfo.push_back(LocalInfo(wType));
+            m_localInfo.push_back(LocalInfo(wType, m_functionStackSizeSoFar));
             auto sz = Walrus::valueStackAllocatedSize(wType);
             m_initialFunctionStackSize += sz;
             m_functionStackSizeSoFar += sz;
@@ -1010,17 +1014,18 @@ public:
         // init local if needs
         for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
             if (m_preprocessData.m_localVariableInfo[i].m_needsExplicitInitOnStartup) {
-                auto r = resolveLocalOffsetAndSize(i);
-                if (r.second == 4) {
-                    pushByteCode(Walrus::Const32(r.first, 0), WASMOpcode::I32ConstOpcode);
-                } else if (r.second == 8) {
-                    pushByteCode(Walrus::Const64(r.first, 0), WASMOpcode::I64ConstOpcode);
+                auto localPos = m_localInfo[i].m_position;
+                auto size = Walrus::valueSize(m_localInfo[i].m_valueType);
+                if (size == 4) {
+                    pushByteCode(Walrus::Const32(localPos, 0), WASMOpcode::I32ConstOpcode);
+                } else if (size == 8) {
+                    pushByteCode(Walrus::Const64(localPos, 0), WASMOpcode::I64ConstOpcode);
                 } else {
-                    ASSERT(r.second == 16);
+                    ASSERT(size == 16);
                     uint8_t empty[16] = {
                         0,
                     };
-                    pushByteCode(Walrus::Const128(r.first, empty), WASMOpcode::V128ConstOpcode);
+                    pushByteCode(Walrus::Const128(localPos, empty), WASMOpcode::V128ConstOpcode);
                 }
             }
         }
@@ -1050,8 +1055,7 @@ public:
         }
 
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
-        m_currentFunction->m_requiredStackSize = std::max(
-            m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
+        m_currentFunction->m_requiredStackSize = m_functionStackSizeSoFar;
     }
 
     virtual void OnOpcode(uint32_t opcode) override
@@ -1186,24 +1190,6 @@ public:
         pushByteCode(Walrus::Const128(computeExprResultPosition(Walrus::Value::Type::V128), value), WASMOpcode::V128ConstOpcode);
     }
 
-    std::pair<uint32_t, uint32_t> resolveLocalOffsetAndSize(Index localIndex)
-    {
-        if (localIndex < m_currentFunctionType->param().size()) {
-            size_t offset = 0;
-            for (Index i = 0; i < localIndex; i++) {
-                offset += Walrus::valueStackAllocatedSize(m_currentFunctionType->param()[i]);
-            }
-            return std::make_pair(offset, Walrus::valueSize(m_currentFunctionType->param()[localIndex]));
-        } else {
-            localIndex -= m_currentFunctionType->param().size();
-            size_t offset = m_currentFunctionType->paramStackSize();
-            for (Index i = 0; i < localIndex; i++) {
-                offset += Walrus::valueStackAllocatedSize(m_currentFunction->m_local[i]);
-            }
-            return std::make_pair(offset, Walrus::valueSize(m_currentFunction->m_local[localIndex]));
-        }
-    }
-
     size_t computeExprResultPosition(Walrus::Value::Type type)
     {
         if (!m_preprocessData.m_inPreprocess) {
@@ -1211,7 +1197,7 @@ public:
             // we can use local variable position as expr target position
             auto localSetInfo = readAheadLocalGetIfExists();
             if (localSetInfo.first) {
-                auto pos = resolveLocalOffsetAndSize(localSetInfo.first.value()).first;
+                auto pos = m_localInfo[localSetInfo.first.value()].m_position;
                 // skip local.set opcode
                 *m_readerOffsetPointer += localSetInfo.second;
                 return pos;
@@ -1221,35 +1207,9 @@ public:
         return pushVMStack(type);
     }
 
-    Index resolveLocalIndexFromStackPosition(size_t pos)
-    {
-        ASSERT(pos < m_initialFunctionStackSize);
-        if (pos <= m_currentFunctionType->paramStackSize()) {
-            Index idx = 0;
-            size_t offset = 0;
-            while (true) {
-                if (offset == pos) {
-                    return idx;
-                }
-                offset += Walrus::valueStackAllocatedSize(m_currentFunctionType->param()[idx]);
-                idx++;
-            }
-        }
-        pos -= m_currentFunctionType->paramStackSize();
-        Index idx = 0;
-        size_t offset = 0;
-        while (true) {
-            if (offset == pos) {
-                return idx + m_currentFunctionType->param().size();
-            }
-            offset += Walrus::valueStackAllocatedSize(m_currentFunction->m_local[idx]);
-            idx++;
-        }
-    }
-
     virtual void OnLocalGetExpr(Index localIndex) override
     {
-        auto r = resolveLocalOffsetAndSize(localIndex);
+        auto localPos = m_localInfo[localIndex].m_position;
         auto localValueType = m_localInfo[localIndex].m_valueType;
 
         bool canUseDirectReference = true;
@@ -1264,31 +1224,31 @@ public:
         }
 
         if (canUseDirectReference) {
-            pushVMStack(localValueType, r.first, localIndex);
+            pushVMStack(localValueType, localPos, localIndex);
         } else {
             auto pos = m_functionStackSizeSoFar;
             pushVMStack(localValueType, pos, localIndex);
-            generateMoveCodeIfNeeds(r.first, pos, localValueType);
+            generateMoveCodeIfNeeds(localPos, pos, localValueType);
         }
     }
 
     virtual void OnLocalSetExpr(Index localIndex) override
     {
-        auto r = resolveLocalOffsetAndSize(localIndex);
+        auto localPos = m_localInfo[localIndex].m_position;
 
         ASSERT(m_localInfo[localIndex].m_valueType == peekVMStackValueType());
         auto src = popVMStackInfo();
-        generateMoveCodeIfNeeds(src.position(), r.first, src.valueType());
+        generateMoveCodeIfNeeds(src.position(), localPos, src.valueType());
         m_preprocessData.addLocalVariableWrite(localIndex);
     }
 
     virtual void OnLocalTeeExpr(Index localIndex) override
     {
         auto valueType = m_localInfo[localIndex].m_valueType;
-        auto r = resolveLocalOffsetAndSize(localIndex);
+        auto localPos = m_localInfo[localIndex].m_position;
         ASSERT(valueType == peekVMStackValueType());
         auto dstInfo = peekVMStackInfo();
-        generateMoveCodeIfNeeds(dstInfo.position(), r.first, valueType);
+        generateMoveCodeIfNeeds(dstInfo.position(), localPos, valueType);
         m_preprocessData.addLocalVariableWrite(localIndex);
     }
 
