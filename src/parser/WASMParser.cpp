@@ -1255,7 +1255,7 @@ public:
     virtual void OnGlobalGetExpr(Index index) override
     {
         auto valueType = m_result.m_globalTypes[index]->type();
-        auto sz = Walrus::valueStackAllocatedSize(valueType);
+        auto sz = Walrus::valueSize(valueType);
         auto stackPos = computeExprResultPosition(valueType);
         if (sz == 4) {
             pushByteCode(Walrus::GlobalGet32(stackPos, index), WASMOpcode::GlobalGetOpcode);
@@ -1273,7 +1273,7 @@ public:
         auto stackPos = peekVMStack();
 
         ASSERT(peekVMStackValueType() == valueType);
-        auto sz = Walrus::valueStackAllocatedSize(valueType);
+        auto sz = Walrus::valueSize(valueType);
         if (sz == 4) {
             pushByteCode(Walrus::GlobalSet32(stackPos, index), WASMOpcode::GlobalSetOpcode);
         } else if (sz == 8) {
