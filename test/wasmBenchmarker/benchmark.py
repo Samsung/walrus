@@ -31,6 +31,7 @@ expectedValues = {
     "gregory": 3.141592640,
     "hanoi": 0,
     "heapsort": 0,
+    "huffman": 0,
     "k_nucleotide": 1,
     "mandelbrot": 2091942736,
     "nbody": -0.169083713,
