@@ -347,7 +347,7 @@ if (f.type == Type::B) { puts("failed in msvc."); }
     std::unique_ptr<uint8_t[]> Result##HolderWhenUsingMalloc;                                   \
     size_t bytes##Result = (Bytes);                                                             \
     Type* Result;                                                                               \
-    if (LIKELY(bytes##Result < 512)) {                                                          \
+    if (LIKELY(bytes##Result < 2048)) {                                                         \
         Result = (Type*)alloca(bytes##Result);                                                  \
     } else {                                                                                    \
         Result##HolderWhenUsingMalloc = std::unique_ptr<uint8_t[]>(new uint8_t[bytes##Result]); \
