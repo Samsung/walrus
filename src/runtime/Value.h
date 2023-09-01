@@ -431,6 +431,30 @@ inline size_t valueFunctionCopyCount(Value::Type type)
     return s;
 }
 
+inline bool hasCPUWordAlignedSize(Value::Type type)
+{
+#if defined(WALRUS_32)
+    ASSERT(valueStackAllocatedSize(type) == valueSize(type));
+#endif
+    return valueStackAllocatedSize(type) == valueSize(type);
+}
+
+inline bool needsCPUWordAlignedAddress(Value::Type type)
+{
+#if defined(WALRUS_32)
+    // everything is already aligned!
+    return false;
+#else
+    switch (type) {
+    case Value::FuncRef:
+    case Value::ExternRef:
+        return true;
+    default:
+        return false;
+    }
+#endif
+}
+
 template <const size_t size>
 inline void Value::readFromStack(uint8_t* ptr)
 {

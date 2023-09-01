@@ -177,7 +177,6 @@ public:
 
     FunctionType* functionType() const { return m_functionType; }
     uint32_t requiredStackSize() const { return m_requiredStackSize; }
-    uint32_t requiredStackSizeDueToParameterAndLocal() const { return m_requiredStackSizeDueToParameterAndLocal; }
 
     template <typename CodeType>
     void pushByteCode(const CodeType& code)
@@ -220,13 +219,12 @@ public:
 
 private:
     FunctionType* m_functionType;
-    // m_requiredStackSize = m_requiredStackSizeDueToParameterAndLocal + constant space + general purpose space
     uint32_t m_requiredStackSize;
-    uint32_t m_requiredStackSizeDueToParameterAndLocal;
     ValueTypeVector m_local;
     Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
 #if !defined(NDEBUG)
-    Vector<Value, std::allocator<Value>> m_constantDebugData;
+    Vector<size_t, std::allocator<size_t>> m_localDebugData;
+    Vector<std::pair<Value, size_t>, std::allocator<std::pair<Value, size_t>>> m_constantDebugData;
 #endif
     Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
 };
