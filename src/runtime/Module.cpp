@@ -33,7 +33,6 @@ namespace Walrus {
 ModuleFunction::ModuleFunction(FunctionType* functionType)
     : m_functionType(functionType)
     , m_requiredStackSize(std::max(m_functionType->paramStackSize(), m_functionType->resultStackSize()))
-    , m_requiredStackSizeDueToParameterAndLocal(0)
 {
 }
 
@@ -420,24 +419,22 @@ void ModuleFunction::dumpByteCode()
 {
     printf("\n");
     printf("required stack size: %u bytes\n", m_requiredStackSize);
-    printf("required stack size due to parameter and local: %u bytes\n", m_requiredStackSizeDueToParameterAndLocal);
     printf("stack: [");
     size_t pos = 0;
     for (size_t i = 0; i < m_functionType->param().size(); i++) {
-        printf("%zu(parameter %zu, %s) ", pos, i, typeName(m_functionType->param()[i]));
+        printf("(parameter %zu, %s, pos %zu) ", i, typeName(m_functionType->param()[i]), pos);
         pos += valueStackAllocatedSize(m_functionType->param()[i]);
     }
     for (size_t i = 0; i < m_local.size(); i++) {
-        printf("%zu(local %zu, %s) ", pos, i, typeName(m_local[i]));
-        pos += valueStackAllocatedSize(m_local[i]);
+        printf("(local %zu, %s, pos %zu) ", i, typeName(m_local[i]), m_localDebugData[i]);
     }
     for (size_t i = 0; i < m_constantDebugData.size(); i++) {
-        printf("%zu(constant ", pos);
-        dumpValue(m_constantDebugData[i]);
-        printf(") ");
-        pos += valueStackAllocatedSize(m_constantDebugData[i].type());
+        printf("(constant ");
+        dumpValue(m_constantDebugData[i].first);
+        printf(", pos %zu) ", m_constantDebugData[i].second);
     }
-    printf("%zu(%" PRIu32 " bytes for general operation)]\n", pos, (m_requiredStackSize - m_requiredStackSizeDueToParameterAndLocal));
+    printf("....]\n");
+
     printf("bytecode size: %zu bytes\n", m_byteCode.size());
     printf("\n");
 

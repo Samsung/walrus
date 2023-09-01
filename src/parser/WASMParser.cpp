@@ -464,6 +464,7 @@ private:
         bool m_inPreprocess;
         WASMBinaryReader& m_reader;
         std::vector<LocalVariableInfo> m_localVariableInfo;
+        // <ConstantValue, reference count or position>
         std::vector<std::pair<Walrus::Value, size_t>> m_constantData;
     };
 
@@ -593,7 +594,7 @@ private:
             m_localInfo.push_back(LocalInfo(m_currentFunctionType->param()[i], pos));
             pos += Walrus::valueStackAllocatedSize(m_localInfo[i].m_valueType);
         }
-        m_currentFunction->m_requiredStackSizeDueToParameterAndLocal = m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
+        m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
@@ -977,7 +978,6 @@ public:
             auto sz = Walrus::valueStackAllocatedSize(wType);
             m_initialFunctionStackSize += sz;
             m_functionStackSizeSoFar += sz;
-            m_currentFunction->m_requiredStackSizeDueToParameterAndLocal += sz;
             count--;
         }
         m_currentFunction->m_requiredStackSize = std::max(
@@ -1011,7 +1011,64 @@ public:
         m_vmStack.clear();
 
         m_preprocessData.organizeData();
-        // init local if needs
+
+        // set const variables position
+        for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
+            auto constType = m_preprocessData.m_constantData[i].first.type();
+            m_preprocessData.m_constantData[i].second = m_initialFunctionStackSize;
+            m_initialFunctionStackSize += Walrus::valueStackAllocatedSize(constType);
+        }
+
+#if defined(WALRUS_64)
+#ifndef WALRUS_ENABLE_LOCAL_VARIABLE_PACKING_MIN_SIZE
+#define WALRUS_ENABLE_LOCAL_VARIABLE_PACKING_MIN_SIZE 64
+#endif
+        // pack local variables if needs
+        constexpr size_t enableLocalVaraiblePackingMinSize = WALRUS_ENABLE_LOCAL_VARIABLE_PACKING_MIN_SIZE;
+        if (m_initialFunctionStackSize >= enableLocalVaraiblePackingMinSize) {
+            m_initialFunctionStackSize = m_currentFunctionType->paramStackSize();
+            // put already aligned variables first
+            for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
+                auto& info = m_localInfo[i];
+                if (Walrus::hasCPUWordAlignedSize(info.m_valueType) || needsCPUWordAlignedAddress(info.m_valueType)) {
+                    info.m_position = m_initialFunctionStackSize;
+                    m_initialFunctionStackSize += Walrus::valueStackAllocatedSize(info.m_valueType);
+                }
+            }
+            for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
+                auto constType = m_preprocessData.m_constantData[i].first.type();
+                if (Walrus::hasCPUWordAlignedSize(constType) || needsCPUWordAlignedAddress(constType)) {
+                    m_preprocessData.m_constantData[i].second = m_initialFunctionStackSize;
+                    m_initialFunctionStackSize += Walrus::valueStackAllocatedSize(constType);
+                }
+            }
+
+            // pack rest values
+            for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
+                auto& info = m_localInfo[i];
+                if (!Walrus::hasCPUWordAlignedSize(info.m_valueType) && !needsCPUWordAlignedAddress(info.m_valueType)) {
+                    info.m_position = m_initialFunctionStackSize;
+                    m_initialFunctionStackSize += Walrus::valueSize(info.m_valueType);
+                }
+            }
+            for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
+                auto constType = m_preprocessData.m_constantData[i].first.type();
+                if (!Walrus::hasCPUWordAlignedSize(constType) && !needsCPUWordAlignedAddress(constType)) {
+                    m_preprocessData.m_constantData[i].second = m_initialFunctionStackSize;
+                    m_initialFunctionStackSize += Walrus::valueSize(constType);
+                }
+            }
+
+            if (m_initialFunctionStackSize % sizeof(size_t)) {
+                m_initialFunctionStackSize += (sizeof(size_t) - m_initialFunctionStackSize % sizeof(size_t));
+            }
+        }
+#endif
+
+        m_functionStackSizeSoFar = m_initialFunctionStackSize;
+        m_currentFunction->m_requiredStackSize = m_functionStackSizeSoFar;
+
+        // Explicit init local variable if needs
         for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
             if (m_preprocessData.m_localVariableInfo[i].m_needsExplicitInitOnStartup) {
                 auto localPos = m_localInfo[i].m_position;
@@ -1028,13 +1085,16 @@ public:
                     pushByteCode(Walrus::Const128(localPos, empty), WASMOpcode::V128ConstOpcode);
                 }
             }
+#if !defined(NDEBUG)
+            m_currentFunction->m_localDebugData.push_back(m_localInfo[i].m_position);
+#endif
         }
 
         // init constant space
         for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
             const auto& constValue = m_preprocessData.m_constantData[i].first;
             auto constType = m_preprocessData.m_constantData[i].first.type();
-            auto constPos = m_initialFunctionStackSize;
+            auto constPos = m_preprocessData.m_constantData[i].second;
             size_t constSize = Walrus::valueSize(constType);
 
             uint8_t constantBuffer[16];
@@ -1047,15 +1107,10 @@ public:
                 ASSERT(constSize == 16);
                 pushByteCode(Walrus::Const128(constPos, constantBuffer), WASMOpcode::V128ConstOpcode);
             }
-
-            m_initialFunctionStackSize += Walrus::valueStackAllocatedSize(constType);
 #if !defined(NDEBUG)
-            m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i].first);
+            m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i]);
 #endif
         }
-
-        m_functionStackSizeSoFar = m_initialFunctionStackSize;
-        m_currentFunction->m_requiredStackSize = m_functionStackSizeSoFar;
     }
 
     virtual void OnOpcode(uint32_t opcode) override
@@ -1136,13 +1191,11 @@ public:
         if (!m_inInitExpr) {
             m_preprocessData.addConstantData(value);
             if (!m_preprocessData.m_inPreprocess) {
-                size_t pos = m_currentFunction->m_requiredStackSizeDueToParameterAndLocal;
                 for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
                     if (m_preprocessData.m_constantData[i].first == value) {
-                        pushVMStack(value.type(), pos);
+                        pushVMStack(value.type(), m_preprocessData.m_constantData[i].second);
                         return true;
                     }
-                    pos += Walrus::valueStackAllocatedSize(m_preprocessData.m_constantData[i].first.type());
                 }
             }
         }
