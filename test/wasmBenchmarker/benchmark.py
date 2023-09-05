@@ -1,4 +1,4 @@
-#!/bin/python3
+#!/usr/bin/env python3
 
 # Copyright 2023-present Samsung Electronics Co., Ltd.
 #
@@ -21,7 +21,10 @@ import subprocess
 import sys
 import time
 
+from os.path import abspath, dirname, join
 from markdownTable import markdownTable  # pip install py-markdown-table
+
+TEST_DIR = join(dirname(abspath(__file__)), 'ctests')
 
 expectedValues = {
     "change": 4,
@@ -44,14 +47,13 @@ expectedValues = {
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
 gameTests = ["mandelbrot", "nbody", "gregory", "fannkuch", "k_nucleotide"]
 
-
 def prepare_arg_pars():
     parser = argparse.ArgumentParser()
     parser.add_argument('--test-dir', metavar='PATH', help='path to the test files written in c', nargs='?',
-                        const='./ctests', default='./ctests')
+                        const=TEST_DIR, default=TEST_DIR)
     parser.add_argument('--only-game', help='only run The Benchmarks Game tests', action='store_true')
     parser.add_argument('--run', metavar='TEST', help='only run one benchmark')
-    parser.add_argument('--walrus', metavar='PATH', help='path to the engine', nargs='+', default=['walrus'])
+    parser.add_argument('--engines', metavar='PATH', help='paths to wasm engines', nargs='+', default=['walrus'])
     parser.add_argument('--report', metavar='PATH', help='path to the report', nargs='?', const='./report.md')
     parser.add_argument('--iterations', metavar='NUMBER', help='how many times run the tests', nargs='?',
                         const='10', default=10, type=int)
@@ -59,13 +61,13 @@ def prepare_arg_pars():
     return parser.parse_args()
 
 
-def check_programs(walrus):
+def check_programs(engines):
     if os.system("git --version >/dev/null") != 0:
         print("git not found")
         exit(1)
 
-    for w in walrus:
-        path = w.split(" ")[0]
+    for e in engines:
+        path = e.split(" ")[0]
         if os.path.isfile(path) is False:
             print(path + " not found")
             exit(1)
@@ -74,6 +76,13 @@ def check_programs(walrus):
 
 
 def get_emcc():
+    emcc_path = None 
+    if os.getenv('EMSDK'):
+        emcc_path = join(os.getenv('EMSDK'), 'upstream/emscripten/emcc.py')
+        if os.path.exists(emcc_path):
+            print("EMCC already installed: " + emcc_path)
+            return emcc_path
+
     if os.path.exists("./emsdk/.git"):
         os.system("(cd ./emsdk && git fetch -a) >/dev/null")
         os.system("(cd ./emsdk && git reset --hard origin/HEAD) >/dev/null")
@@ -84,12 +93,18 @@ def get_emcc():
         os.system("./emsdk/emsdk install latest >/dev/null")
         os.system("./emsdk/emsdk activate latest >/dev/null")
 
-    print("EMCC done")
+    emcc_path = "./emsdk/upstream/emscripten/emcc"
+    print("EMCC install done: " + emcc_path)
+    return emcc_path
 
 
-def compile_tests(path, only_game=False, compile_anyway=False, run=None):
+def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, run=None):
+    if not os.path.exists(emcc_path):
+        print("invalid path for emcc: " + emcc_path)
+        exit(1)
+
     if not os.path.exists(path):
-        print("invalid path for tests")
+        print("invalid path for tests: " + path)
         exit(1)
 
     if not os.path.exists(path + "/wasm"):
@@ -113,20 +128,23 @@ def compile_tests(path, only_game=False, compile_anyway=False, run=None):
             continue
 
         print("compiling " + name)
-        bob_the_stringbuilder = "./emsdk/upstream/emscripten/emcc " + path + "/" + file + " --no-entry -s WASM=1 -s EXPORTED_FUNCTIONS=_runtime -s EXPORTED_RUNTIME_METHODS=ccall,cwrap -o " + path + "/wasm/" + name + ".wasm"
+        bob_the_stringbuilder = emcc_path + " " + path + "/" + file + " --no-entry -s WASM=1 -s EXPORTED_FUNCTIONS=_runtime -s EXPORTED_RUNTIME_METHODS=ccall,cwrap -o " + path + "/wasm/" + name + ".wasm"
+        print(bob_the_stringbuilder)
         os.system(bob_the_stringbuilder)
 
     return test_names
 
-def run_walrus(engine, path, name):
+def run_wasm(engine, path, name):
     if not os.path.exists(path):
-        print("invalid path for walrus run")
+        print("invalid path for run")
         exit(1)
 
-    result = subprocess.check_output(engine + " --run-export runtime " + path + "/wasm/" + name + ".wasm", shell=True)
+    tc_path = path + "/wasm/" + name + ".wasm"
+    print("TC path: " + tc_path)
+    result = subprocess.check_output(engine + " --run-export runtime " + tc_path, shell=True)
 
     if float(f'{float(result):.9f}') != float(expectedValues[name]):
-        print("walrus failed with " + name + ".wasm", file=sys.stderr)
+        print("run failed with " + name + ".wasm", file=sys.stderr)
         print("Expected: " + str(expectedValues[name]), file=sys.stderr)
         print("Got: " + str(result), file=sys.stderr)
         return False
@@ -150,30 +168,30 @@ def measure_time(path, name, functon, engine=None):
         return math.nan
 
 
-def run_tests(path, test_names, walrus, number_of_runs):
+def run_tests(path, test_names, engines, number_of_runs):
     ret_val = []
     for name in test_names:
         print("running " + name)
-        measurements_walrus = {}
-        for w in walrus:
-            measurements_walrus[w] = []
+        measurements_engines = {}
+        for e in engines:
+            measurements_engines[e] = []
 
         for i in range(0, number_of_runs):
             print("round " + str(i + 1))
-            for w in walrus:
-                measurements_walrus[w].append(measure_time(path, name, run_walrus, w))
+            for e in engines:
+                measurements_engines[e].append(measure_time(path, name, run_wasm, e))
 
         result_list = {"test": name}
 
-        min_walrus_first = False
-        min_walrus = {}
-        for w in walrus:
-            min_walrus[w] = min(measurements_walrus[w])
-            if min_walrus_first is False:
-                min_walrus_first = min_walrus[w]
+        compare_result = False
+        results = {}
+        for e in engines:
+            results[e] = sum(measurements_engines[e])/len(measurements_engines[e])
+            if compare_result is False:
+                compare_result = results[e]
 
-        for w in walrus:
-            result_list[w + " [s]"] = "{:.3f}".format(min_walrus[w] / 1000000000) + " ({:.3f}x)".format((min_walrus[w] / min_walrus_first))
+        for e in engines:
+            result_list[e + " [s]"] = "{:.3f}".format(results[e] / 1000000000) + " ({:.3f}x)".format((results[e] / compare_result))
 
         ret_val.append(result_list)
 
@@ -191,16 +209,17 @@ def generate_report(data, file=None):
 
 def main():
     args = prepare_arg_pars()
+    print(TEST_DIR)
 
-    if args.walrus is None:
-        print("You need to specify the engine location")
+    if args.engines is None:
+        print("You need to specify the engine locations")
         exit(1)
 
-    check_programs(args.walrus)
-    get_emcc()
-    test_names = compile_tests(args.test_dir, args.only_game, args.compile_anyway, args.run)
+    check_programs(args.engines)
+    emcc_path = get_emcc()
+    test_names = compile_tests(emcc_path, args.test_dir, args.only_game, args.compile_anyway, args.run)
     generate_report(
-        run_tests(args.test_dir, test_names, args.walrus, args.iterations),
+        run_tests(args.test_dir, test_names, args.engines, args.iterations),
         args.report)
 
 
