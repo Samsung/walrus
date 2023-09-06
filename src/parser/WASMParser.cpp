@@ -471,8 +471,8 @@ private:
     bool m_inInitExpr;
     Walrus::ModuleFunction* m_currentFunction;
     Walrus::FunctionType* m_currentFunctionType;
-    uint32_t m_initialFunctionStackSize;
-    uint32_t m_functionStackSizeSoFar;
+    uint16_t m_initialFunctionStackSize;
+    uint16_t m_functionStackSizeSoFar;
 
     std::vector<VMStackInfo> m_vmStack;
     std::vector<BlockInfo> m_blockInfo;
@@ -1879,6 +1879,7 @@ public:
     {
         BlockInfo b(BlockInfo::TryCatch, sigType, *this);
         m_blockInfo.push_back(b);
+        m_currentFunction->m_hasTryCatch = true;
     }
 
     void processCatchExpr(Index tagIndex)

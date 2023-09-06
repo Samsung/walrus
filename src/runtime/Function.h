@@ -121,6 +121,22 @@ protected:
     ModuleFunction* m_moduleFunction;
 };
 
+class DefinedFunctionWithTryCatch : public DefinedFunction {
+    friend class DefinedFunction;
+    friend class Module;
+
+public:
+    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
+
+protected:
+    DefinedFunctionWithTryCatch(Instance* instance,
+                                ModuleFunction* moduleFunction)
+        : DefinedFunction(instance, moduleFunction)
+    {
+    }
+};
+
 class ImportedFunction : public Function {
 public:
     typedef std::function<void(ExecutionState& state, Value* argv, Value* result, void* data)> ImportedFunctionCallback;

@@ -124,7 +124,7 @@ private:
     Instance(Module* module);
     ~Instance() {}
 
-    static size_t alignedSize()
+    static constexpr size_t alignedSize()
     {
         return (sizeof(Instance) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
     }
