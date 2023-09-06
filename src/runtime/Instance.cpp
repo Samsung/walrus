@@ -51,6 +51,11 @@ void Instance::freeInstance(Instance* instance)
 
 Instance::Instance(Module* module)
     : m_module(module)
+    , m_memories(nullptr)
+    , m_globals(nullptr)
+    , m_tables(nullptr)
+    , m_functions(nullptr)
+    , m_tags(nullptr)
 {
     module->store()->appendInstance(this);
 }
