@@ -20,6 +20,8 @@
 #include "runtime/Store.h"
 #include "interpreter/Interpreter.h"
 #include "runtime/Module.h"
+#include "runtime/Tag.h"
+#include "runtime/Instance.h"
 #include "runtime/Value.h"
 
 namespace Walrus {
@@ -28,7 +30,12 @@ DefinedFunction* DefinedFunction::createDefinedFunction(Store* store,
                                                         Instance* instance,
                                                         ModuleFunction* moduleFunction)
 {
-    DefinedFunction* func = new DefinedFunction(instance, moduleFunction);
+    DefinedFunction* func;
+    if (moduleFunction->hasTryCatch()) {
+        func = new DefinedFunctionWithTryCatch(instance, moduleFunction);
+    } else {
+        func = new DefinedFunction(instance, moduleFunction);
+    }
     store->appendExtern(func);
     return func;
 }
@@ -88,22 +95,13 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
 void DefinedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
                                       uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
-    ExecutionState newState(state, this);
-    CHECK_STACK_LIMIT(newState);
+    Interpreter::callInterpreter<false>(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
+}
 
-    ALLOCA(uint8_t, functionStackBase, m_moduleFunction->requiredStackSize());
-
-    // init parameter space
-    for (size_t i = 0; i < parameterOffsetCount; i++) {
-        ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
-    }
-
-    auto resultOffsets = Interpreter::interpret(newState, functionStackBase);
-
-    offsets += parameterOffsetCount;
-    for (size_t i = 0; i < resultOffsetCount; i++) {
-        *((size_t*)(bp + offsets[i])) = *((size_t*)(functionStackBase + resultOffsets[i]));
-    }
+void DefinedFunctionWithTryCatch::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                                  uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
+{
+    Interpreter::callInterpreter<true>(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
 }
 
 ImportedFunction* ImportedFunction::createImportedFunction(Store* store,

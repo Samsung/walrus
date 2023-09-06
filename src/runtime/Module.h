@@ -175,8 +175,9 @@ public:
 
     ModuleFunction(FunctionType* functionType);
 
+    bool hasTryCatch() const { return m_hasTryCatch; }
+    uint16_t requiredStackSize() const { return m_requiredStackSize; }
     FunctionType* functionType() const { return m_functionType; }
-    uint32_t requiredStackSize() const { return m_requiredStackSize; }
 
     template <typename CodeType>
     void pushByteCode(const CodeType& code)
@@ -218,8 +219,9 @@ public:
     }
 
 private:
+    bool m_hasTryCatch;
+    uint16_t m_requiredStackSize;
     FunctionType* m_functionType;
-    uint32_t m_requiredStackSize;
     ValueTypeVector m_local;
     Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
 #if !defined(NDEBUG)

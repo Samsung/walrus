@@ -31,8 +31,9 @@
 namespace Walrus {
 
 ModuleFunction::ModuleFunction(FunctionType* functionType)
-    : m_functionType(functionType)
-    , m_requiredStackSize(std::max(m_functionType->paramStackSize(), m_functionType->resultStackSize()))
+    : m_hasTryCatch(false)
+    , m_requiredStackSize(std::max(functionType->paramStackSize(), functionType->resultStackSize()))
+    , m_functionType(functionType)
 {
 }
 
@@ -218,19 +219,16 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             struct RunData {
                 Instance* instance;
                 Module* module;
-                Value::Type type;
                 ModuleFunction* mf;
                 size_t index;
-            } data = { instance, this, globalType->type(), globalType->function(), globIndex };
+            } data = { instance, this, globalType->function(), globIndex };
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
-                ALLOCA(uint8_t, functionStackBase, data->mf->requiredStackSize());
-
-                DefinedFunction fakeFunction(data->instance, data->mf);
-                ExecutionState newState(state, &fakeFunction);
-                auto resultOffset = Interpreter::interpret(newState, functionStackBase);
-                data->instance->m_globals[data->index]->setValue(Value(data->type, functionStackBase + resultOffset[0]));
+                DefinedFunctionWithTryCatch fakeFunction(data->instance, data->mf);
+                Value result;
+                fakeFunction.call(state, nullptr, &result);
+                data->instance->m_globals[data->index]->setValue(result);
             },
                      &data);
         }
@@ -250,20 +248,14 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 struct RunData {
                     Element* elem;
                     Instance* instance;
-                    Module* module;
                     uint32_t& index;
-                } data = { elem, instance, this, index };
+                } data = { elem, instance, index };
                 Walrus::Trap trap;
                 trap.run([](Walrus::ExecutionState& state, void* d) {
                     RunData* data = reinterpret_cast<RunData*>(d);
-                    ALLOCA(uint8_t, functionStackBase, data->elem->moduleFunction()->requiredStackSize());
-
-                    DefinedFunction fakeFunction(data->instance,
-                                                 data->elem->moduleFunction());
-                    ExecutionState newState(state, &fakeFunction);
-
-                    auto resultOffset = Interpreter::interpret(newState, functionStackBase);
-                    Value offset(Value::I32, functionStackBase + resultOffset[0]);
+                    DefinedFunctionWithTryCatch fakeFunction(data->instance, data->elem->moduleFunction());
+                    Value offset;
+                    fakeFunction.call(state, nullptr, &offset);
                     data->index = offset.asI32();
                 },
                          &data);
@@ -303,14 +295,10 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         auto result = trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
             if (data->init->moduleFunction()->currentByteCodeSize()) {
-                ALLOCA(uint8_t, functionStackBase, data->init->moduleFunction()->requiredStackSize());
-
-                DefinedFunction fakeFunction(data->instance,
-                                             data->init->moduleFunction());
-                ExecutionState newState(state, &fakeFunction);
-
-                auto resultOffset = Interpreter::interpret(newState, functionStackBase);
-                Value offset(Value::I32, functionStackBase + resultOffset[0]);
+                DefinedFunctionWithTryCatch fakeFunction(data->instance,
+                                                         data->init->moduleFunction());
+                Value offset;
+                fakeFunction.call(state, nullptr, &offset);
 
                 Memory* m = data->instance->memory(0);
                 const auto& initData = data->init->initData();

@@ -150,51 +150,8 @@ ByteCodeTable::ByteCodeTable()
     b.m_opcodeInAddress = const_cast<void*>(FillByteCodeOpcodeAddress[0]);
 #endif
     size_t pc = reinterpret_cast<size_t>(&b);
-    Interpreter::interpret(dummyState, pc, nullptr, nullptr, nullptr, nullptr, nullptr);
+    Interpreter::interpret(dummyState, pc, nullptr, nullptr);
 #endif
-}
-
-ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
-                                            uint8_t* bp)
-{
-    DefinedFunction* df = state.currentFunction()->asDefinedFunction();
-    ModuleFunction* mf = df->moduleFunction();
-    size_t programCounter = reinterpret_cast<size_t>(mf->byteCode());
-    Instance* instance = df->instance();
-    while (true) {
-        try {
-            return interpret(state, programCounter, bp, instance, instance->m_memories, instance->m_tables, instance->m_globals);
-        } catch (std::unique_ptr<Exception>& e) {
-            for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
-                if (e->m_programCounterInfo[i - 1].first == &state) {
-                    programCounter = e->m_programCounterInfo[i - 1].second;
-                    break;
-                }
-            }
-            if (e->isUserException()) {
-                bool isCatchSucessful = false;
-                Tag* tag = e->tag().value();
-                size_t offset = programCounter - reinterpret_cast<size_t>(mf->byteCode());
-                for (const auto& item : mf->catchInfo()) {
-                    if (item.m_tryStart <= offset && offset < item.m_tryEnd) {
-                        if (item.m_tagIndex == std::numeric_limits<uint32_t>::max() || state.currentFunction()->asDefinedFunction()->instance()->tag(item.m_tagIndex) == tag) {
-                            programCounter = item.m_catchStartPosition + reinterpret_cast<size_t>(mf->byteCode());
-                            uint8_t* sp = bp + item.m_stackSizeToBe;
-                            if (item.m_tagIndex != std::numeric_limits<uint32_t>::max() && tag->functionType()->paramStackSize()) {
-                                memcpy(sp, e->userExceptionData().data(), tag->functionType()->paramStackSize());
-                            }
-                            isCatchSucessful = true;
-                            break;
-                        }
-                    }
-                }
-                if (isCatchSucessful) {
-                    continue;
-                }
-            }
-            throw std::unique_ptr<Exception>(std::move(e));
-        }
-    }
 }
 
 template <typename T>
@@ -488,11 +445,10 @@ static void initAddressToOpcodeTable()
 ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
                                             size_t programCounter,
                                             uint8_t* bp,
-                                            Instance* instance,
-                                            Memory** memories,
-                                            Table** tables,
-                                            Global** globals)
+                                            Instance* instance)
 {
+    Memory** memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+
     state.m_programCounterPointer = &programCounter;
 
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
@@ -947,7 +903,7 @@ NextInstruction:
     {
         GlobalGet32* code = (GlobalGet32*)programCounter;
         ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
-        globals[code->index()]->value().writeNBytesToMemory<4>(bp + code->dstOffset());
+        instance->m_globals[code->index()]->value().writeNBytesToMemory<4>(bp + code->dstOffset());
         ADD_PROGRAM_COUNTER(GlobalGet32);
         NEXT_INSTRUCTION();
     }
@@ -957,7 +913,7 @@ NextInstruction:
     {
         GlobalGet64* code = (GlobalGet64*)programCounter;
         ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
-        globals[code->index()]->value().writeNBytesToMemory<8>(bp + code->dstOffset());
+        instance->m_globals[code->index()]->value().writeNBytesToMemory<8>(bp + code->dstOffset());
         ADD_PROGRAM_COUNTER(GlobalGet64);
         NEXT_INSTRUCTION();
     }
@@ -967,7 +923,7 @@ NextInstruction:
     {
         GlobalGet128* code = (GlobalGet128*)programCounter;
         ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
-        globals[code->index()]->value().writeNBytesToMemory<16>(bp + code->dstOffset());
+        instance->m_globals[code->index()]->value().writeNBytesToMemory<16>(bp + code->dstOffset());
         ADD_PROGRAM_COUNTER(GlobalGet128);
         NEXT_INSTRUCTION();
     }
@@ -977,7 +933,7 @@ NextInstruction:
     {
         GlobalSet32* code = (GlobalSet32*)programCounter;
         ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
-        Value& val = globals[code->index()]->value();
+        Value& val = instance->m_globals[code->index()]->value();
         val.readFromStack<4>(bp + code->srcOffset());
         ADD_PROGRAM_COUNTER(GlobalSet32);
         NEXT_INSTRUCTION();
@@ -988,7 +944,7 @@ NextInstruction:
     {
         GlobalSet64* code = (GlobalSet64*)programCounter;
         ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
-        Value& val = globals[code->index()]->value();
+        Value& val = instance->m_globals[code->index()]->value();
         val.readFromStack<8>(bp + code->srcOffset());
         ADD_PROGRAM_COUNTER(GlobalSet64);
         NEXT_INSTRUCTION();
@@ -999,7 +955,7 @@ NextInstruction:
     {
         GlobalSet128* code = (GlobalSet128*)programCounter;
         ASSERT(code->index() < instance->module()->numberOfGlobalTypes());
-        Value& val = globals[code->index()]->value();
+        Value& val = instance->m_globals[code->index()]->value();
         val.readFromStack<16>(bp + code->srcOffset());
         ADD_PROGRAM_COUNTER(GlobalSet128);
         NEXT_INSTRUCTION();
@@ -1161,7 +1117,7 @@ NextInstruction:
     {
         TableGet* code = (TableGet*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
-        Table* table = tables[code->tableIndex()];
+        Table* table = instance->m_tables[code->tableIndex()];
         void* val = table->getElement(state, readValue<uint32_t>(bp, code->srcOffset()));
         writeValue(bp, code->dstOffset(), val);
 
@@ -1174,7 +1130,7 @@ NextInstruction:
     {
         TableSet* code = (TableSet*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
-        Table* table = tables[code->tableIndex()];
+        Table* table = instance->m_tables[code->tableIndex()];
         void* ptr = readValue<void*>(bp, code->src1Offset());
         table->setElement(state, readValue<uint32_t>(bp, code->src0Offset()), ptr);
 
@@ -1187,7 +1143,7 @@ NextInstruction:
     {
         TableGrow* code = (TableGrow*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
-        Table* table = tables[code->tableIndex()];
+        Table* table = instance->m_tables[code->tableIndex()];
         size_t size = table->size();
 
         uint64_t newSize = (uint64_t)readValue<uint32_t>(bp, code->src1Offset()) + size;
@@ -1210,7 +1166,7 @@ NextInstruction:
     {
         TableSize* code = (TableSize*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
-        Table* table = tables[code->tableIndex()];
+        Table* table = instance->m_tables[code->tableIndex()];
         size_t size = table->size();
         writeValue<uint32_t>(bp, code->dstOffset(), size);
 
@@ -1224,8 +1180,8 @@ NextInstruction:
         TableCopy* code = (TableCopy*)programCounter;
         ASSERT(code->dstIndex() < instance->module()->numberOfTableTypes());
         ASSERT(code->srcIndex() < instance->module()->numberOfTableTypes());
-        Table* dstTable = tables[code->dstIndex()];
-        Table* srcTable = tables[code->srcIndex()];
+        Table* dstTable = instance->m_tables[code->dstIndex()];
+        Table* srcTable = instance->m_tables[code->srcIndex()];
 
         uint32_t dstIndex = readValue<uint32_t>(bp, code->srcOffsets()[0]);
         uint32_t srcIndex = readValue<uint32_t>(bp, code->srcOffsets()[1]);
@@ -1242,7 +1198,7 @@ NextInstruction:
     {
         TableFill* code = (TableFill*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
-        Table* table = tables[code->tableIndex()];
+        Table* table = instance->m_tables[code->tableIndex()];
 
         int32_t index = readValue<int32_t>(bp, code->srcOffsets()[0]);
         void* ptr = readValue<void*>(bp, code->srcOffsets()[1]);
@@ -1264,7 +1220,7 @@ NextInstruction:
         int32_t size = readValue<int32_t>(bp, code->srcOffsets()[2]);
 
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
-        Table* table = tables[code->tableIndex()];
+        Table* table = instance->m_tables[code->tableIndex()];
         table->init(state, instance, &sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();
