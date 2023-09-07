@@ -36,16 +36,20 @@ expectedValues = {
     "heapsort": 0,
     "huffman": 0,
     "k_nucleotide": 1,
-    "mandelbrot": 2091942736,
-    "nbody": -0.169083713,
+    "mandelbrot": 775007,
+    "nbody": -0.1691057,
     "nqueens": 0,
     "prime": 48611,
     "quick_sort": 0,
     "red-black": 4000000,
-    "salesman": 840
+    "salesman": 840,
+    "simdMandelbrot": 775007,
+    "simdNbody": -0.1691057
 }
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
 gameTests = ["mandelbrot", "nbody", "gregory", "fannkuch", "k_nucleotide"]
+
+simdTests = ["simdMandelbrot", "simdNbody"]
 
 def prepare_arg_pars():
     parser = argparse.ArgumentParser()
@@ -58,6 +62,7 @@ def prepare_arg_pars():
     parser.add_argument('--iterations', metavar='NUMBER', help='how many times run the tests', nargs='?',
                         const='10', default=10, type=int)
     parser.add_argument('--compile-anyway', help='compile the tests even if they are compiled', action='store_true')
+    parser.add_argument('--enable-simd', help='run SIMD tests too', action='store_true')
     return parser.parse_args()
 
 
@@ -98,7 +103,7 @@ def get_emcc():
     return emcc_path
 
 
-def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, run=None):
+def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, simd=False, run=None):
     if not os.path.exists(emcc_path):
         print("invalid path for emcc: " + emcc_path)
         exit(1)
@@ -118,7 +123,9 @@ def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, run=No
     for file in test_list:
         name = file.split('.')[0]
 
-        if (name not in gameTests and only_game) or (run is not None and name != run):
+        if (name not in gameTests and only_game) or \
+           (run is not None and name != run) or     \
+           (name in simdTests and not simd):
             continue
 
         test_names.append(name)
@@ -127,8 +134,10 @@ def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, run=No
             print("target files are found; compilation skipped")
             continue
 
+        extraFlags = "-msimd128" if file.startswith("simd") else ""
+
         print("compiling " + name)
-        bob_the_stringbuilder = emcc_path + " " + path + "/" + file + " --no-entry -s WASM=1 -s EXPORTED_FUNCTIONS=_runtime -s EXPORTED_RUNTIME_METHODS=ccall,cwrap -o " + path + "/wasm/" + name + ".wasm"
+        bob_the_stringbuilder = emcc_path + " " + path + "/" + file + " " + extraFlags + " --no-entry -s WASM=1 -s EXPORTED_FUNCTIONS=_runtime -s EXPORTED_RUNTIME_METHODS=ccall,cwrap -o " + path + "/wasm/" + name + ".wasm"
         print(bob_the_stringbuilder)
         os.system(bob_the_stringbuilder)
 
@@ -217,7 +226,7 @@ def main():
 
     check_programs(args.engines)
     emcc_path = get_emcc()
-    test_names = compile_tests(emcc_path, args.test_dir, args.only_game, args.compile_anyway, args.run)
+    test_names = compile_tests(emcc_path, args.test_dir, args.only_game, args.compile_anyway, args.enable_simd, args.run)
     generate_report(
         run_tests(args.test_dir, test_names, args.engines, args.iterations),
         args.report)
