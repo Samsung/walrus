@@ -28,7 +28,7 @@
 #include "runtime/Tag.h"
 #include "util/MathOperation.h"
 
-#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO) && !defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
 extern char FillByteCodeOpcodeTableAsmLbl[];
 const void* FillByteCodeOpcodeAddress[] = { &FillByteCodeOpcodeTableAsmLbl[0] };
 #endif
@@ -1287,14 +1287,14 @@ NextInstruction:
 #if defined(COMPILER_GCC) && __GNUC__ >= 9
         __attribute__((cold));
 #endif
-#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+#if !defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
         asm volatile("FillByteCodeOpcodeTableAsmLbl:");
+#endif
 
 #define REGISTER_TABLE(name, ...) \
     g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
         FOR_EACH_BYTECODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
-#endif
         initAddressToOpcodeTable();
         return nullptr;
     }
