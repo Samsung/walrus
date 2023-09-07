@@ -14,57 +14,67 @@
  * limitations under the License.
  */
 
-#include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <math.h>
+#include <stdint.h>
 
-#define LOOP 600
-#define X_MIN -1.5
-#define X_MAX 0.5
-#define Y_MIN -1.0
-#define Y_MAX 1.0
-#define X_RES 512
+#define WIDTH 1600
+#define HIGHT 1400
+#define N 20
+#define REAL_AXIS_SHIFT -1.8 // ~ horizontal shift
+#define IMAGINARY_AXIS_SHIFT -1.0 // ~ vertical shift
+#define ZOOM 0.0015
+
+#define getNthBit(b, n) ((b & (1 << (7 - n))) > 0)
+
+#define clearNthBit(b, n) b = b & (0xFF - (1 << (7 - n)))
+
+#define setNthBit(b, n) b = b | (1 << (7 - n))
+
+#define ABS_COMPLEX(z_real, z_complex) (sqrtf(z_real * z_real + z_complex * z_complex))
+
+typedef uint8_t byte;
+
+byte isInMandelbrotSet(float c_real, float c_imaginary)
+{
+    byte result = 0b10000000;
+    float z_real = 0;
+    float z_imaginary = 0;
+    for (size_t k = 0; k < N; k++) {
+        float complex_abs = ABS_COMPLEX(z_real, z_imaginary);
+        if (getNthBit(result, 0) == 1 && complex_abs > 2) {
+            clearNthBit(result, 0);
+        } else {
+            float next_z_real = (z_real * z_real - z_imaginary * z_imaginary) + c_real;
+            float next_z_imaginary = ((float)2.0 * z_real * z_imaginary) + c_imaginary;
+            z_real = next_z_real;
+            z_imaginary = next_z_imaginary;
+        }
+
+        if (result == 0) {
+            break;
+        }
+    }
+    return result;
+}
 
 uint32_t runtime() {
-    const int yRes = (X_RES * (Y_MAX - Y_MIN)) / (X_MAX - X_MIN);
-
-    double dx = (X_MAX - X_MIN) / X_RES;
-    double dy = (Y_MAX - Y_MIN) / yRes;
-    double x, y;
-    int k;
-
-    uint16_t retValLower = 0;
-    uint16_t retValHigher = 0;
-
-    for (int j = 0; j < yRes; j++) {
-        y = Y_MAX - j * dy;
-
-        for (int i = 0; i < X_RES; i++) {
-            double u = 0;
-            double v = 0;
-            double u2 = 0;
-            double v2 = 0;
-
-            x = X_MIN + i * dx;
-
-            for (k = 1; k < LOOP && (u2 + v2 < 4.0); k++) {
-                v = 2 * u * v + y;
-                u = u2 - v2 + x;
-                u2 = u * u;
-                v2 = v * v;
-            }
-
-            if (k >= LOOP) {
-                retValLower++;
-            } else {
-                retValHigher++;
+    uint32_t setSize = 0;
+    for (int i = 0; i < HIGHT; i++) {
+        for (int j = 0; j < WIDTH; j++) {
+            float real = ((float)j * (float)ZOOM) + (float)REAL_AXIS_SHIFT;
+            float imaginary = ((float)i * (float)ZOOM) + (float)IMAGINARY_AXIS_SHIFT;
+            if (getNthBit(isInMandelbrotSet(real, imaginary),0)) {
+                setSize++;
             }
         }
     }
-
-    return retValLower + (retValHigher << 16);
+    return setSize;
 }
 
+
 int main() {
-    printf("%d\n", runtime());
+    printf("%u\n", runtime());
     return 0;
 }
