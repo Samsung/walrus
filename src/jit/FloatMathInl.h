@@ -360,7 +360,7 @@ static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_
 
     sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, SLJIT_FR0);
 
-    if (!IS_SOURCE_REG(args[1].arg)) {
+    if (!SLJIT_IS_REG(args[1].arg)) {
         sljit_emit_fop1(compiler, movOpcode, targetReg, 0, args[1].arg, args[1].argw);
         args[1].arg = targetReg;
     }
