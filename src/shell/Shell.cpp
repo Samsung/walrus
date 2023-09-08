@@ -122,7 +122,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
 
     auto module = parseResult.first;
     if (useJIT) {
-        module->jitCompile(jitVerbose);
+        module->jitCompile(nullptr, 0, jitVerbose);
     }
 
     const auto& importTypes = module->imports();
@@ -885,7 +885,7 @@ static void runExports(Store* store, const std::string& filename, const std::vec
     auto module = parseResult.first;
 
     if (useJIT) {
-        module->jitCompile(jitVerbose);
+        module->jitCompile(nullptr, 0, jitVerbose);
     }
 
     const auto& importTypes = module->imports();

@@ -402,19 +402,15 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
                 callerCount = 1;
             }
 
-            uint32_t paramCount = functionType->param().size();
-            uint32_t resultCount = functionType->result().size();
-
-            Instruction* instr = compiler->appendExtended(byteCode, Instruction::Call,
-                                                          opcode, paramCount + callerCount, resultCount);
+            Instruction* instr = compiler->appendExtended(byteCode, Instruction::Call, opcode,
+                                                          functionType->param().size() + callerCount, functionType->result().size());
             Operand* operand = instr->operands();
-            Operand* end = operand + paramCount;
 
-            while (operand < end) {
+            for (auto it : functionType->param()) {
                 operand->item = nullptr;
                 operand->offset = STACK_OFFSET(*stackOffset);
                 operand++;
-                stackOffset++;
+                stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
 
             if (opcode == ByteCode::CallIndirectOpcode) {
@@ -423,14 +419,14 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
                 operand++;
             }
 
-            end = operand + resultCount;
-
-            while (operand < end) {
+            for (auto it : functionType->result()) {
                 operand->item = nullptr;
                 operand->offset = STACK_OFFSET(*stackOffset);
                 operand++;
-                stackOffset++;
+                stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
+
+            ASSERT(operand == instr->operands() + instr->paramCount() + instr->resultCount());
             break;
         }
         case ByteCode::ThrowOpcode: {
@@ -966,17 +962,17 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
             break;
         }
         case ByteCode::EndOpcode: {
-            uint32_t size = function->functionType()->result().size();
+            const ValueTypeVector& result = function->functionType()->result();
 
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, size, 0);
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, result.size(), 0);
             Operand* param = instr->params();
-            Operand* end = param + size;
             ByteCodeStackOffset* offsets = reinterpret_cast<End*>(byteCode)->resultOffsets();
 
-            while (param < end) {
+            for (auto it : result) {
                 param->item = nullptr;
-                param->offset = STACK_OFFSET(*offsets++);
+                param->offset = STACK_OFFSET(*offsets);
                 param++;
+                offsets += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
 
             idx += byteCode->getSize();
@@ -1255,25 +1251,37 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
     compiler->clear();
 }
 
-void Module::jitCompile(int verboseLevel)
+void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int verboseLevel)
 {
-    size_t functionCount = m_functions.size();
-
-    if (functionCount == 0) {
-        return;
-    }
-
     JITCompiler compiler(this, verboseLevel);
 
-    for (size_t i = 0; i < functionCount; i++) {
-        if (verboseLevel >= 1) {
-            printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(i));
-        }
+    if (functionsLength == 0) {
+        size_t functionCount = m_functions.size();
 
-        createInstructionList(&compiler, m_functions[i], this);
+        for (size_t i = 0; i < functionCount; i++) {
+            if (m_functions[i]->jitFunction() == nullptr) {
+                if (verboseLevel >= 1) {
+                    printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(i));
+                }
+
+                createInstructionList(&compiler, m_functions[i], this);
+            }
+        }
+    } else {
+        do {
+            if ((*functions)->jitFunction() == nullptr) {
+                if (verboseLevel >= 1) {
+                    printf("[[[[[[[  Function %p  ]]]]]]]\n", *functions);
+                }
+
+                createInstructionList(&compiler, *functions, this);
+            }
+
+            functions++;
+        } while (--functionsLength != 0);
     }
 
-    m_jitModule = compiler.compile();
+    compiler.compile();
 }
 
 } // namespace Walrus
