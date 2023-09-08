@@ -76,6 +76,8 @@ struct ExecutionContext {
 };
 
 class JITModule {
+    friend class JITCompiler;
+
 public:
     // Update JITCompiler::compile() after this definition is modified.
     typedef ByteCodeStackOffset* (*ExportCall)(ExecutionContext* context, void* alignedStart, void* exportEntry);
@@ -85,6 +87,7 @@ public:
         , m_moduleStart(moduleStart)
     {
     }
+
     ~JITModule();
 
     ExportCall exportCall()
@@ -97,9 +100,9 @@ public:
 private:
     InstanceConstData* m_instanceConstData;
     void* m_moduleStart;
+    // Does not include m_moduleStart code block
+    std::vector<void*> m_codeBlocks;
 };
-
-class JITCompiler;
 
 class JITFunction {
     friend class JITCompiler;

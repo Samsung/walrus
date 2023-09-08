@@ -156,6 +156,7 @@ public:
     };
 
     InstanceConstData(std::vector<TrapBlock>& trapBlocks, std::vector<Walrus::TryBlock>& tryBlocks);
+    void append(std::vector<TrapBlock>& trapBlocks, std::vector<Walrus::TryBlock>& tryBlocks);
 
     std::vector<TryBlock>& tryBlocks() { return m_tryBlocks; }
     std::vector<CatchBlock>& catchBlocks() { return m_catchBlocks; }
@@ -240,7 +241,7 @@ struct CompileContext {
         , memoryTrapLabel(nullptr)
         , nextTryBlock(0)
         , currentTryBlock(InstanceConstData::globalTryBlock)
-        , trapBlocksStart(1)
+        , trapBlocksStart(0)
         , initialMemorySize(0)
         , maximumMemorySize(0)
     {
@@ -292,10 +293,9 @@ struct CompileContext {
 };
 
 #define GET_TARGET_REG(arg, default_reg) \
-    (((arg)&SLJIT_MEM) ? (default_reg) : (arg))
-#define IS_SOURCE_REG(arg) (!((arg) & (SLJIT_MEM | SLJIT_IMM)))
+    (SLJIT_IS_REG(arg) ? (arg) : (default_reg))
 #define GET_SOURCE_REG(arg, default_reg) \
-    (IS_SOURCE_REG(arg) ? (arg) : (default_reg))
+    (SLJIT_IS_REG(arg) ? (arg) : (default_reg))
 #define MOVE_TO_REG(compiler, mov_op, target_reg, arg, argw)              \
     if ((target_reg) != (arg)) {                                          \
         sljit_emit_op1(compiler, mov_op, (target_reg), 0, (arg), (argw)); \
@@ -593,6 +593,10 @@ JITModule::~JITModule()
 {
     delete m_instanceConstData;
     sljit_free_code(m_moduleStart, nullptr);
+
+    for (auto it : m_codeBlocks) {
+        sljit_free_code(it, nullptr);
+    }
 }
 
 struct LabelJumpList {
@@ -633,33 +637,51 @@ void Label::emit(sljit_compiler* compiler)
     addInfo(Label::kHasLabelData);
 }
 
-void JITCompiler::computeOptions()
+JITCompiler::JITCompiler(Module* module, int verboseLevel)
+    : m_first(nullptr)
+    , m_last(nullptr)
+    , m_functionListFirst(nullptr)
+    , m_functionListLast(nullptr)
+    , m_compiler(nullptr)
+    , m_module(module)
+    , m_branchTableSize(0)
+    , m_tryBlockOffset(0)
+    , m_verboseLevel(verboseLevel)
+    , m_options(0)
 {
+    if (module->m_jitModule != nullptr) {
+        ASSERT(module->m_jitModule->m_instanceConstData != nullptr);
+        m_tryBlockOffset = module->m_jitModule->m_instanceConstData->tryBlocks().size();
+    }
+
     if (sljit_has_cpu_feature(SLJIT_HAS_CMOV)) {
         m_options |= JITCompiler::kHasCondMov;
     }
 }
 
-JITModule* JITCompiler::compile()
+void JITCompiler::compile()
 {
     if (m_functionListFirst == nullptr) {
         // All functions are imported.
-        return nullptr;
+        return;
     }
 
     CompileContext compileContext(this);
     m_compiler = sljit_create_compiler(reinterpret_cast<void*>(&compileContext), nullptr);
 
-    // Follows the declaration of FunctionDescriptor::ExternalDecl().
-    // Context stored in SLJIT_S0 (kContextReg)
-    // Frame stored in SLJIT_S1 (kFrameReg)
-    sljit_emit_enter(m_compiler, 0, SLJIT_ARGS3(P, P, P, P_R), 3, 2, 0, 0, 0);
-    sljit_emit_icall(m_compiler, SLJIT_CALL_REG_ARG, SLJIT_ARGS0(P), SLJIT_R2, 0);
-    sljit_label* returnToLabel = sljit_emit_label(m_compiler);
-    sljit_emit_return(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0);
+    if (module()->m_jitModule == nullptr) {
+        // Follows the declaration of FunctionDescriptor::ExternalDecl().
+        // Context stored in SLJIT_S0 (kContextReg)
+        // Frame stored in SLJIT_S1 (kFrameReg)
+        sljit_emit_enter(m_compiler, 0, SLJIT_ARGS3(P, P, P, P_R), 3, 2, 0, 0, 0);
+        sljit_emit_icall(m_compiler, SLJIT_CALL_REG_ARG, SLJIT_ARGS0(P), SLJIT_R2, 0);
+        sljit_label* returnToLabel = sljit_emit_label(m_compiler);
+        sljit_emit_return(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0);
 
-    ASSERT(compileContext.trapBlocksStart == 1);
-    compileContext.trapBlocks.push_back(TrapBlock(sljit_emit_label(m_compiler), returnToLabel));
+        compileContext.trapBlocks.push_back(TrapBlock(sljit_emit_label(m_compiler), returnToLabel));
+        ASSERT(compileContext.trapBlocksStart == 0);
+        compileContext.trapBlocksStart = 1;
+    }
 
     size_t currentFunction = 0;
 
@@ -894,13 +916,18 @@ JITModule* JITCompiler::compile()
     ASSERT(compileContext.nextTryBlock == tryBlocks().size());
 
     void* code = sljit_generate_code(m_compiler);
-    JITModule* moduleDescriptor = nullptr;
 
     if (code != nullptr) {
-        size_t size = sizeof(InstanceConstData);
-        InstanceConstData* instanceConstData = new InstanceConstData(compileContext.trapBlocks, tryBlocks());
+        JITModule* moduleDescriptor = module()->m_jitModule;
 
-        moduleDescriptor = new JITModule(instanceConstData, code);
+        if (moduleDescriptor == nullptr) {
+            InstanceConstData* instanceConstData = new InstanceConstData(compileContext.trapBlocks, tryBlocks());
+            moduleDescriptor = new JITModule(instanceConstData, code);
+            module()->m_jitModule = moduleDescriptor;
+        } else {
+            moduleDescriptor->m_instanceConstData->append(compileContext.trapBlocks, tryBlocks());
+            moduleDescriptor->m_codeBlocks.push_back(code);
+        }
 
         for (auto it : m_functionList) {
             it.jitFunc->m_module = moduleDescriptor;
@@ -927,7 +954,6 @@ JITModule* JITCompiler::compile()
     }
 
     sljit_free_compiler(m_compiler);
-    return moduleDescriptor;
 }
 
 void JITCompiler::releaseFunctionList()

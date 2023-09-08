@@ -56,8 +56,8 @@ private:
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
         ByteCodeStackOffset* resultOffsets;
 
-        if (m_moduleFunction->jitFunction() != nullptr) {
-            resultOffsets = m_moduleFunction->jitFunction()->call(newState, function->instance(), functionStackBase);
+        if (moduleFunction->jitFunction() != nullptr) {
+            resultOffsets = moduleFunction->jitFunction()->call(newState, function->instance(), functionStackBase);
         } else if (considerException) {
             while (true) {
                 try {

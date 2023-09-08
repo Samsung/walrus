@@ -417,19 +417,7 @@ class JITCompiler {
 public:
     static const uint32_t kHasCondMov = 1 << 0;
 
-    JITCompiler(Module* module, int verboseLevel)
-        : m_first(nullptr)
-        , m_last(nullptr)
-        , m_functionListFirst(nullptr)
-        , m_functionListLast(nullptr)
-        , m_compiler(nullptr)
-        , m_module(module)
-        , m_branchTableSize(0)
-        , m_verboseLevel(verboseLevel)
-        , m_options(0)
-    {
-        computeOptions();
-    }
+    JITCompiler(Module* module, int verboseLevel);
 
     ~JITCompiler()
     {
@@ -444,7 +432,6 @@ public:
     InstructionListItem* last() { return m_last; }
 
     void clear();
-    void computeOptions();
 
     Instruction* append(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
     ExtendedInstruction* appendExtended(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
@@ -467,10 +454,11 @@ public:
     void dump();
 
     void buildParamDependencies(uint32_t requiredStackSize, size_t nextTryBlock);
-    JITModule* compile();
+    void compile();
 
     std::vector<TryBlock>& tryBlocks() { return m_tryBlocks; }
     Label* getFunctionEntry(size_t i) { return m_functionList[i].entryLabel; }
+    size_t tryBlockOffset() { return m_tryBlockOffset; }
 
 private:
     struct FunctionList {
@@ -510,6 +498,7 @@ private:
     sljit_compiler* m_compiler;
     Module* m_module;
     size_t m_branchTableSize;
+    size_t m_tryBlockOffset;
     int m_verboseLevel;
     uint32_t m_options;
 

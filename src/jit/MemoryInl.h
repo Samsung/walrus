@@ -410,7 +410,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    if (!(opcode & SLJIT_32)) {
+    if (!(opcode & SLJIT_32) && opcode != SLJIT_MOV32) {
         JITArgPair valueArgPair(operands + 1);
 
         sljit_s32 dstReg1 = GET_TARGET_REG(valueArgPair.arg1, SLJIT_R0);
@@ -656,7 +656,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
     } else {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-        if (opcode == SLJIT_MOV32 || (opcode & SLJIT_32)) {
+        if ((opcode & SLJIT_32) || opcode == SLJIT_MOV32) {
             addr.loadArg.set(operands + 1);
 
             if (SLJIT_IS_MEM(addr.loadArg.arg)) {

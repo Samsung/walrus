@@ -56,7 +56,7 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
     CompileContext* context = CompileContext::get(compiler);
     sljit_s32 movOpcode = (options & DivRem32) ? SLJIT_MOV32 : SLJIT_MOV;
 
-    if (args[1].arg & SLJIT_IMM) {
+    if (SLJIT_IS_IMM(args[1].arg)) {
         if (args[1].argw == 0) {
             sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
             sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
@@ -72,7 +72,7 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
 
     sljit_jump* moduloJumpFrom = nullptr;
 
-    if (args[1].arg & SLJIT_IMM) {
+    if (SLJIT_IS_IMM(args[1].arg)) {
         if ((options & DivRemSigned) && args[1].argw == -1) {
             sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
 
@@ -272,7 +272,7 @@ static void emitExtend(sljit_compiler* compiler, sljit_s32 opcode, sljit_s32 big
 
     assert((args[0].arg >> 8) == 0);
 #if (defined SLJIT_BIG_ENDIAN && SLJIT_BIG_ENDIAN)
-    if (args[0].arg & SLJIT_MEM) {
+    if (SLJIT_IS_MEM(args[0].arg)) {
         args[0].argw += bigEndianIncrease;
     }
 #endif /* SLJIT_BIG_ENDIAN */
@@ -329,7 +329,7 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
 
     // If the operand is an immediate then it is necesarry to move it into a
     // register because immediate source arguments are not supported.
-    if (args[0].arg & SLJIT_IMM) {
+    if (SLJIT_IS_IMM(args[0].arg)) {
         sljit_s32 mov = SLJIT_MOV;
 
         if (instr->info() & Instruction::kIs32Bit) {
@@ -371,7 +371,7 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
         type |= SLJIT_32;
     }
 
-    if (!IS_SOURCE_REG(args[1].arg)) {
+    if (!SLJIT_IS_REG(args[1].arg)) {
         sljit_emit_op1(compiler, movOpcode, targetReg, 0, args[1].arg, args[1].argw);
         args[1].arg = targetReg;
     }
@@ -513,7 +513,7 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I32WrapI64Opcode:
-        if (args[0].arg & SLJIT_MEM) {
+        if (SLJIT_IS_MEM(args[0].arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, args[0].arg, args[0].argw);
             sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, SLJIT_R0, 0);
         } else {

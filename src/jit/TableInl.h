@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2022-present Samsung Electronics Co., Ltd
  *
@@ -166,7 +165,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
 
         sljit_s32 sourceReg = GET_SOURCE_REG(src[0].arg, SLJIT_R0);
 
-        if (!IS_SOURCE_REG(src[0].arg)) {
+        if (!SLJIT_IS_REG(src[0].arg)) {
             MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, src[0].arg, src[0].argw);
             src[0].arg = sourceReg;
             src[0].argw = 0;
@@ -185,7 +184,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
 
         sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_R0);
 
-        if (!IS_SOURCE_REG(srcArg.arg)) {
+        if (!SLJIT_IS_REG(srcArg.arg)) {
             MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, srcArg.arg, srcArg.argw);
             srcArg.arg = sourceReg;
             srcArg.argw = 0;
