@@ -433,7 +433,8 @@ public:
 
     Instance* instantiate(ExecutionState& state, const ExternVector& imports);
 
-    void jitCompile(int verboseLevel);
+    /* Passing 0 as functionsLength compiles all functions. */
+    void jitCompile(ModuleFunction** functions, size_t functionsLength, int verboseLevel);
 
 private:
     Store* m_store;
