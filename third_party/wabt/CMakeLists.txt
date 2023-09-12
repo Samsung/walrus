@@ -175,39 +175,36 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${WABT_SOURCE_DIR}/cmake)
 add_custom_target(everything)
 
 set(WABT_LIBRARY_SRC
-  src/binary.cc
-  src/binary-reader.cc
   src/binary-reader-logging.cc
+  src/binary-reader.cc
+  src/binary.cc
   src/binding-hash.cc
   src/common.cc
-  src/config.h.in
-  src/config.cc
-  src/error-formatter.cc
+  src/config.cc # for window build
   src/expr-visitor.cc
   src/feature.cc
   src/leb128.cc
-  src/opcode.cc
   src/opcode-code-table.c
+  src/opcode.cc
   src/option-parser.cc
-  src/stream.cc
-  src/utf8.cc
-  src/validator.cc
   src/shared-validator.cc
+  src/stream.cc
   src/type-checker.cc
- 
+  src/utf8.cc
+
   src/walrus/binary-reader-walrus.cc
 
   # files for testing
+  src/binary-reader-ir.cc
+  src/binary-writer.cc
+  src/ir.cc
+  src/lexer-source.cc
+  src/literal.cc
+  src/resolve-names.cc
+  src/token.cc
+
   src/wast-lexer.cc
   src/wast-parser.cc
-  src/ir.cc
-  src/literal.cc
-  src/token.cc
-  src/resolve-names.cc
-  src/binary-reader-ir.cc
-  src/lexer-source.cc
-  src/lexer-source-line-finder.cc
-  src/binary-writer.cc
 )
 
 if (COMPILER_IS_MSVC)
