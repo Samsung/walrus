@@ -35,7 +35,7 @@ namespace {
 }  // namespace
 
 WastLexer::WastLexer(std::unique_ptr<LexerSource> source,
-                     std::string_view filename)
+                     nonstd::string_view filename)
     : source_(std::move(source)),
       filename_(filename),
       line_(1),
@@ -47,7 +47,7 @@ WastLexer::WastLexer(std::unique_ptr<LexerSource> source,
 
 // static
 std::unique_ptr<WastLexer> WastLexer::CreateBufferLexer(
-    std::string_view filename,
+    nonstd::string_view filename,
     const void* data,
     size_t size) {
   return MakeUnique<WastLexer>(MakeUnique<LexerSource>(data, size), filename);
@@ -183,8 +183,8 @@ Location WastLexer::GetLocation() {
   return Location(filename_, line_, column(token_start_), column(cursor_));
 }
 
-std::string_view WastLexer::GetText(size_t offset) {
-  return std::string_view(token_start_ + offset,
+nonstd::string_view WastLexer::GetText(size_t offset) {
+  return nonstd::string_view(token_start_ + offset,
                           (cursor_ - token_start_) - offset);
 }
 
@@ -216,7 +216,7 @@ bool WastLexer::MatchChar(char c) {
   return false;
 }
 
-bool WastLexer::MatchString(std::string_view s) {
+bool WastLexer::MatchString(nonstd::string_view s) {
   const char* saved_cursor = cursor_;
   for (char c : s) {
     if (ReadChar() != c) {
@@ -546,7 +546,7 @@ Token WastLexer::GetNanToken() {
   return GetKeywordToken();
 }
 
-Token WastLexer::GetNameEqNumToken(std::string_view name,
+Token WastLexer::GetNameEqNumToken(nonstd::string_view name,
                                    TokenType token_type) {
   if (MatchString(name)) {
     if (MatchString("0x")) {

@@ -22,7 +22,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <set>
-#include <string_view>
+#include "string-view-lite/string_view.h"
 #include <vector>
 
 #include "wabt/config.h"
@@ -40,7 +40,7 @@
 namespace wabt {
 
 void WriteStr(Stream* stream,
-              std::string_view s,
+              nonstd::string_view s,
               const char* desc,
               PrintChars print_chars) {
   WriteU32Leb128(stream, s.length(), "string length");
@@ -82,8 +82,8 @@ void WriteLimits(Stream* stream, const Limits* limits) {
   }
 }
 
-void WriteDebugName(Stream* stream, std::string_view name, const char* desc) {
-  std::string_view stripped_name = name;
+void WriteDebugName(Stream* stream, nonstd::string_view name, const char* desc) {
+  nonstd::string_view stripped_name = name;
   if (!stripped_name.empty()) {
     // Strip leading $ from name
     assert(stripped_name.front() == '$');
@@ -141,7 +141,7 @@ class Symbol {
 
  private:
   SymbolType type_;
-  std::string_view name_;
+  nonstd::string_view name_;
   uint8_t flags_;
   union {
     Function function_;
@@ -153,21 +153,21 @@ class Symbol {
   };
 
  public:
-  Symbol(const std::string_view& name, uint8_t flags, const Function& f)
+  Symbol(const nonstd::string_view& name, uint8_t flags, const Function& f)
       : type_(Function::type), name_(name), flags_(flags), function_(f) {}
-  Symbol(const std::string_view& name, uint8_t flags, const Data& d)
+  Symbol(const nonstd::string_view& name, uint8_t flags, const Data& d)
       : type_(Data::type), name_(name), flags_(flags), data_(d) {}
-  Symbol(const std::string_view& name, uint8_t flags, const Global& g)
+  Symbol(const nonstd::string_view& name, uint8_t flags, const Global& g)
       : type_(Global::type), name_(name), flags_(flags), global_(g) {}
-  Symbol(const std::string_view& name, uint8_t flags, const Section& s)
+  Symbol(const nonstd::string_view& name, uint8_t flags, const Section& s)
       : type_(Section::type), name_(name), flags_(flags), section_(s) {}
-  Symbol(const std::string_view& name, uint8_t flags, const Tag& e)
+  Symbol(const nonstd::string_view& name, uint8_t flags, const Tag& e)
       : type_(Tag::type), name_(name), flags_(flags), tag_(e) {}
-  Symbol(const std::string_view& name, uint8_t flags, const Table& t)
+  Symbol(const nonstd::string_view& name, uint8_t flags, const Table& t)
       : type_(Table::type), name_(name), flags_(flags), table_(t) {}
 
   SymbolType type() const { return type_; }
-  const std::string_view& name() const { return name_; }
+  const nonstd::string_view& name() const { return name_; }
   uint8_t flags() const { return flags_; }
 
   SymbolVisibility visibility() const {
@@ -226,9 +226,9 @@ class SymbolTable {
   std::vector<Index> tables_;
   std::vector<Index> globals_;
 
-  std::set<std::string_view> seen_names_;
+  std::set<nonstd::string_view> seen_names_;
 
-  Result EnsureUnique(const std::string_view& name) {
+  Result EnsureUnique(const nonstd::string_view& name) {
     if (seen_names_.count(name)) {
       fprintf(stderr,
               "error: duplicate symbol when writing relocatable "
@@ -242,7 +242,7 @@ class SymbolTable {
 
   template <typename T>
   Result AddSymbol(std::vector<Index>* map,
-                   std::string_view name,
+                   nonstd::string_view name,
                    bool imported,
                    bool exported,
                    T&& sym) {
@@ -252,7 +252,7 @@ class SymbolTable {
       // Wabt currently has no way for a user to explicitly specify the name of
       // an import, so never set the EXPLICIT_NAME flag, and ignore any display
       // name fabricated by wabt.
-      name = std::string_view();
+      name = nonstd::string_view();
     } else {
       if (name.empty()) {
         // Definitions without a name are local.
@@ -370,7 +370,7 @@ struct FuncCodeMetadata {
 struct CodeMetadataSection {
   std::vector<FuncCodeMetadata> entries;
 };
-typedef std::unordered_map<std::string_view, CodeMetadataSection>
+typedef std::unordered_map<nonstd::string_view, CodeMetadataSection>
     CodeMetadataSections;
 
 class BinaryWriter {
@@ -1758,7 +1758,7 @@ void BinaryWriter::WriteCodeMetadataSections() {
   stream_ = &tmp_stream;
   for (auto& s : code_metadata_sections_) {
     std::string name = "metadata.code.";
-    name.append(s.first);
+    name.append(nonstd::to_string(s.first));
     auto& section = s.second;
     BeginCustomSection(name.c_str());
     WriteU32Leb128(stream_, section.entries.size(), "function count");

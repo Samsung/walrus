@@ -77,7 +77,7 @@ static Result ReadStdin(std::vector<uint8_t>* out_data) {
   }
 }
 
-Result ReadFile(std::string_view filename, std::vector<uint8_t>* out_data) {
+Result ReadFile(nonstd::string_view filename, std::vector<uint8_t>* out_data) {
   std::string filename_str(filename);
   const char* filename_cstr = filename_str.c_str();
 
