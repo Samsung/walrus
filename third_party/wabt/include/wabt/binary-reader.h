@@ -19,7 +19,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <string_view>
+#include "string-view-lite/string_view.h"
 
 #include "wabt/binary.h"
 #include "wabt/common.h"
@@ -86,7 +86,7 @@ class BinaryReaderDelegate {
   /* Custom section */
   virtual Result BeginCustomSection(Index section_index,
                                     Offset size,
-                                    std::string_view section_name) = 0;
+                                    nonstd::string_view section_name) = 0;
   virtual Result EndCustomSection() = 0;
 
   /* Type section */
@@ -108,33 +108,33 @@ class BinaryReaderDelegate {
   virtual Result OnImportCount(Index count) = 0;
   virtual Result OnImport(Index index,
                           ExternalKind kind,
-                          std::string_view module_name,
-                          std::string_view field_name) = 0;
+                          nonstd::string_view module_name,
+                          nonstd::string_view field_name) = 0;
   virtual Result OnImportFunc(Index import_index,
-                              std::string_view module_name,
-                              std::string_view field_name,
+                              nonstd::string_view module_name,
+                              nonstd::string_view field_name,
                               Index func_index,
                               Index sig_index) = 0;
   virtual Result OnImportTable(Index import_index,
-                               std::string_view module_name,
-                               std::string_view field_name,
+                               nonstd::string_view module_name,
+                               nonstd::string_view field_name,
                                Index table_index,
                                Type elem_type,
                                const Limits* elem_limits) = 0;
   virtual Result OnImportMemory(Index import_index,
-                                std::string_view module_name,
-                                std::string_view field_name,
+                                nonstd::string_view module_name,
+                                nonstd::string_view field_name,
                                 Index memory_index,
                                 const Limits* page_limits) = 0;
   virtual Result OnImportGlobal(Index import_index,
-                                std::string_view module_name,
-                                std::string_view field_name,
+                                nonstd::string_view module_name,
+                                nonstd::string_view field_name,
                                 Index global_index,
                                 Type type,
                                 bool mutable_) = 0;
   virtual Result OnImportTag(Index import_index,
-                             std::string_view module_name,
-                             std::string_view field_name,
+                             nonstd::string_view module_name,
+                             nonstd::string_view field_name,
                              Index tag_index,
                              Index sig_index) = 0;
   virtual Result EndImportSection() = 0;
@@ -174,7 +174,7 @@ class BinaryReaderDelegate {
   virtual Result OnExport(Index index,
                           ExternalKind kind,
                           Index item_index,
-                          std::string_view name) = 0;
+                          nonstd::string_view name) = 0;
   virtual Result EndExportSection() = 0;
 
   /* Start section */
@@ -375,13 +375,13 @@ class BinaryReaderDelegate {
   virtual Result OnModuleNameSubsection(Index index,
                                         uint32_t name_type,
                                         Offset subsection_size) = 0;
-  virtual Result OnModuleName(std::string_view name) = 0;
+  virtual Result OnModuleName(nonstd::string_view name) = 0;
   virtual Result OnFunctionNameSubsection(Index index,
                                           uint32_t name_type,
                                           Offset subsection_size) = 0;
   virtual Result OnFunctionNamesCount(Index num_functions) = 0;
   virtual Result OnFunctionName(Index function_index,
-                                std::string_view function_name) = 0;
+                                nonstd::string_view function_name) = 0;
   virtual Result OnLocalNameSubsection(Index index,
                                        uint32_t name_type,
                                        Offset subsection_size) = 0;
@@ -390,14 +390,14 @@ class BinaryReaderDelegate {
                                        Index num_locals) = 0;
   virtual Result OnLocalName(Index function_index,
                              Index local_index,
-                             std::string_view local_name) = 0;
+                             nonstd::string_view local_name) = 0;
   virtual Result OnNameSubsection(Index index,
                                   NameSectionSubsection subsection_type,
                                   Offset subsection_size) = 0;
   virtual Result OnNameCount(Index num_names) = 0;
   virtual Result OnNameEntry(NameSectionSubsection type,
                              Index index,
-                             std::string_view name) = 0;
+                             nonstd::string_view name) = 0;
   virtual Result EndNamesSection() = 0;
 
   /* Reloc section */
@@ -417,18 +417,18 @@ class BinaryReaderDelegate {
                               uint32_t table_align_log2) = 0;
   virtual Result OnDylinkImportCount(Index count) = 0;
   virtual Result OnDylinkExportCount(Index count) = 0;
-  virtual Result OnDylinkImport(std::string_view module,
-                                std::string_view name,
+  virtual Result OnDylinkImport(nonstd::string_view module,
+                                nonstd::string_view name,
                                 uint32_t flags) = 0;
-  virtual Result OnDylinkExport(std::string_view name, uint32_t flags) = 0;
+  virtual Result OnDylinkExport(nonstd::string_view name, uint32_t flags) = 0;
   virtual Result OnDylinkNeededCount(Index count) = 0;
-  virtual Result OnDylinkNeeded(std::string_view so_name) = 0;
+  virtual Result OnDylinkNeeded(nonstd::string_view so_name) = 0;
   virtual Result EndDylinkSection() = 0;
 
   /* target_features section */
   virtual Result BeginTargetFeaturesSection(Offset size) = 0;
   virtual Result OnFeatureCount(Index count) = 0;
-  virtual Result OnFeature(uint8_t prefix, std::string_view name) = 0;
+  virtual Result OnFeature(uint8_t prefix, nonstd::string_view name) = 0;
   virtual Result EndTargetFeaturesSection() = 0;
 
   /* Linking section */
@@ -436,38 +436,38 @@ class BinaryReaderDelegate {
   virtual Result OnSymbolCount(Index count) = 0;
   virtual Result OnDataSymbol(Index index,
                               uint32_t flags,
-                              std::string_view name,
+                              nonstd::string_view name,
                               Index segment,
                               uint32_t offset,
                               uint32_t size) = 0;
   virtual Result OnFunctionSymbol(Index index,
                                   uint32_t flags,
-                                  std::string_view name,
+                                  nonstd::string_view name,
                                   Index function_index) = 0;
   virtual Result OnGlobalSymbol(Index index,
                                 uint32_t flags,
-                                std::string_view name,
+                                nonstd::string_view name,
                                 Index global_index) = 0;
   virtual Result OnSectionSymbol(Index index,
                                  uint32_t flags,
                                  Index section_index) = 0;
   virtual Result OnTagSymbol(Index index,
                              uint32_t flags,
-                             std::string_view name,
+                             nonstd::string_view name,
                              Index tag_index) = 0;
   virtual Result OnTableSymbol(Index index,
                                uint32_t flags,
-                               std::string_view name,
+                               nonstd::string_view name,
                                Index table_index) = 0;
   virtual Result OnSegmentInfoCount(Index count) = 0;
   virtual Result OnSegmentInfo(Index index,
-                               std::string_view name,
+                               nonstd::string_view name,
                                Address alignment_log2,
                                uint32_t flags) = 0;
   virtual Result OnInitFunctionCount(Index count) = 0;
   virtual Result OnInitFunction(uint32_t priority, Index function_index) = 0;
   virtual Result OnComdatCount(Index count) = 0;
-  virtual Result OnComdatBegin(std::string_view name,
+  virtual Result OnComdatBegin(nonstd::string_view name,
                                uint32_t flags,
                                Index count) = 0;
   virtual Result OnComdatEntry(ComdatType kind, Index index) = 0;
@@ -480,7 +480,7 @@ class BinaryReaderDelegate {
   virtual Result EndTagSection() = 0;
 
   /* Code Metadata sections */
-  virtual Result BeginCodeMetadataSection(std::string_view name,
+  virtual Result BeginCodeMetadataSection(nonstd::string_view name,
                                           Offset size) = 0;
   virtual Result OnCodeMetadataFuncCount(Index count) = 0;
   virtual Result OnCodeMetadataCount(Index function_index, Index count) = 0;

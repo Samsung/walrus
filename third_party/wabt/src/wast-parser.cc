@@ -42,7 +42,7 @@ bool IsPowerOfTwo(uint32_t x) {
 }
 
 template <typename OutputIter>
-void RemoveEscapes(std::string_view text, OutputIter dest) {
+void RemoveEscapes(nonstd::string_view text, OutputIter dest) {
   // Remove surrounding quotes; if any. This may be empty if the string was
   // invalid (e.g. if it contained a bad escape sequence).
   if (text.size() <= 2) {
@@ -142,11 +142,11 @@ void RemoveEscapes(std::string_view text, OutputIter dest) {
   }
 }
 
-typedef std::vector<std::string_view> TextVector;
+typedef std::vector<nonstd::string_view> TextVector;
 
 template <typename OutputIter>
 void RemoveEscapes(const TextVector& texts, OutputIter out) {
-  for (std::string_view text : texts)
+  for (nonstd::string_view text : texts)
     RemoveEscapes(text, out);
 }
 
@@ -544,8 +544,8 @@ Result ResolveFuncTypes(Module* module, Errors* errors) {
         // local variables share the same index space, we need to increment the
         // local indexes bound to a given name by the number of parameters in
         // the function.
-        for (auto& [name, binding] : func->bindings) {
-          binding.index += func->GetNumParams();
+        for (auto& it : func->bindings) {
+            it.second.index += func->GetNumParams();
         }
       }
 
@@ -768,7 +768,7 @@ Result WastParser::ParseVar(Var* out_var) {
   WABT_TRACE(ParseVar);
   if (PeekMatch(TokenType::Nat)) {
     Token token = Consume();
-    std::string_view sv = token.literal().text;
+    nonstd::string_view sv = token.literal().text;
     uint64_t index = kInvalidIndex;
     if (Failed(ParseUint64(sv, &index))) {
       // Print an error, but don't fail parsing.
@@ -1041,7 +1041,7 @@ bool WastParser::ParseOffsetOpt(Address* out_offset) {
   if (PeekMatch(TokenType::OffsetEqNat)) {
     Token token = Consume();
     uint64_t offset64;
-    std::string_view sv = token.text();
+    nonstd::string_view sv = token.text();
     if (Failed(ParseInt64(sv, &offset64, ParseIntType::SignedAndUnsigned))) {
       Error(token.loc, "invalid offset \"" PRIstringview "\"",
             WABT_PRINTF_STRING_VIEW_ARG(sv));
@@ -1062,7 +1062,7 @@ bool WastParser::ParseAlignOpt(Address* out_align) {
   WABT_TRACE(ParseAlignOpt);
   if (PeekMatch(TokenType::AlignEqNat)) {
     Token token = Consume();
-    std::string_view sv = token.text();
+    nonstd::string_view sv = token.text();
     if (Failed(ParseInt64(sv, out_align, ParseIntType::UnsignedOnly))) {
       Error(token.loc, "invalid alignment \"" PRIstringview "\"",
             WABT_PRINTF_STRING_VIEW_ARG(sv));
@@ -1141,7 +1141,7 @@ Result WastParser::ParseNat(uint64_t* out_nat, bool is_64) {
   }
 
   Token token = Consume();
-  std::string_view sv = token.literal().text;
+  nonstd::string_view sv = token.literal().text;
   if (Failed(ParseUint64(sv, out_nat)) || (!is_64 && *out_nat > 0xffffffffu)) {
     Error(token.loc, "invalid int \"" PRIstringview "\"",
           WABT_PRINTF_STRING_VIEW_ARG(sv));
@@ -1942,7 +1942,7 @@ Result WastParser::ParseInstr(ExprList* exprs) {
 Result WastParser::ParseCodeMetadataAnnotation(ExprList* exprs) {
   WABT_TRACE(ParseCodeMetadataAnnotation);
   Token tk = Consume();
-  std::string_view name = tk.text();
+  nonstd::string_view name = tk.text();
   name.remove_prefix(sizeof("metadata.code.") - 1);
   std::string data_text;
   CHECK_RESULT(ParseQuotedText(&data_text, false));
@@ -2548,7 +2548,7 @@ Result WastParser::ParseSimdV128Const(Const* const_,
     // For each type, parse the next literal, bound check it, and write it to
     // the array of bytes:
     if (integer) {
-      std::string_view sv = Consume().literal().text;
+      nonstd::string_view sv = Consume().literal().text;
 
       switch (lane_count) {
         case 16: {
@@ -2750,7 +2750,7 @@ Result WastParser::ParseExternref(Const* const_) {
   }
 
   Literal literal;
-  std::string_view sv;
+  nonstd::string_view sv;
   const_->loc = GetLocation();
   TokenType token_type = Peek();
 
