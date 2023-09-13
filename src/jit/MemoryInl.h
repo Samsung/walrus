@@ -378,8 +378,16 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         JITArg valueArg;
         floatOperandToArg(compiler, operands + 1, valueArg, SLJIT_FR0);
 
-        // TODO: sljit_emit_fmem for unaligned access
+#if (defined SLJIT_FPU_UNALIGNED && SLJIT_FPU_UNALIGNED)
         sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, addr.memArg.arg, addr.memArg.argw);
+#else /* SLJIT_FPU_UNALIGNED */
+        sljit_s32 tmpReg = GET_TARGET_REG(valueArg.arg, SLJIT_FR0);
+        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, tmpReg, addr.memArg.arg, addr.memArg.argw);
+
+        if (SLJIT_IS_MEM(valueArg.arg)) {
+            sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, tmpReg, 0);
+        }
+#endif /* SLJIT_FPU_UNALIGNED */
         return;
     }
 
@@ -417,13 +425,13 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
         if (opcode == SLJIT_MOV) {
             sljit_s32 dstReg2 = GET_TARGET_REG(valueArgPair.arg2, SLJIT_R1);
+            sljit_emit_mem(compiler, SLJIT_MOV | SLJIT_MEM_LOAD | SLJIT_MEM_UNALIGNED, SLJIT_REG_PAIR(dstReg1, dstReg2), addr.memArg.arg, addr.memArg.argw);
 
-            sljit_emit_mem(compiler, opcode | SLJIT_MEM_LOAD, SLJIT_REG_PAIR(dstReg1, dstReg2), addr.memArg.arg, addr.memArg.argw);
             if (SLJIT_IS_MEM(valueArgPair.arg1)) {
 #if (defined SLJIT_BIG_ENDIAN && SLJIT_BIG_ENDIAN)
-                sljit_emit_mem(compiler, opcode | SLJIT_MEM_STORE, SLJIT_REG_PAIR(dstReg1, dstReg2), valueArgPair.arg2, valueArgPair.arg2w);
+                sljit_emit_mem(compiler, SLJIT_MOV | SLJIT_MEM_STORE, SLJIT_REG_PAIR(dstReg1, dstReg2), valueArgPair.arg2, valueArgPair.arg2w);
 #else /* !SLJIT_BIG_ENDIAN */
-                sljit_emit_mem(compiler, opcode | SLJIT_MEM_STORE, SLJIT_REG_PAIR(dstReg1, dstReg2), valueArgPair.arg1, valueArgPair.arg1w);
+                sljit_emit_mem(compiler, SLJIT_MOV | SLJIT_MEM_STORE, SLJIT_REG_PAIR(dstReg1, dstReg2), valueArgPair.arg1, valueArgPair.arg1w);
 #endif /* SLJIT_BIG_ENDIAN */
             }
             return;
@@ -701,8 +709,11 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
             addr.loadArg.argw = 0;
         }
 
-        // TODO: sljit_emit_fmem for unaligned access
+#if (defined SLJIT_FPU_UNALIGNED && SLJIT_FPU_UNALIGNED)
         sljit_emit_fop1(compiler, opcode, addr.memArg.arg, addr.memArg.argw, addr.loadArg.arg, addr.loadArg.argw);
+#else /* SLJIT_FPU_UNALIGNED */
+        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, addr.loadArg.arg, addr.memArg.arg, addr.memArg.argw);
+#endif /* SLJIT_FPU_UNALIGNED */
         return;
     }
 
@@ -740,7 +751,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_BIG_ENDIAN */
         }
 
-        sljit_emit_mem(compiler, opcode | SLJIT_MEM_STORE, SLJIT_REG_PAIR(dstReg1, dstReg2), addr.memArg.arg, addr.memArg.argw);
+        sljit_emit_mem(compiler, SLJIT_MOV | SLJIT_MEM_STORE | SLJIT_MEM_UNALIGNED, SLJIT_REG_PAIR(dstReg1, dstReg2), addr.memArg.arg, addr.memArg.argw);
         return;
     }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
