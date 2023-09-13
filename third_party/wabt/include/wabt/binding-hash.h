@@ -19,7 +19,7 @@
 
 #include <functional>
 #include <string>
-#include <string_view>
+#include "string-view-lite/string_view.h"
 #include <unordered_map>
 #include <vector>
 
@@ -54,7 +54,7 @@ class BindingHash : public std::unordered_multimap<std::string, Binding> {
     return iter != end() ? iter->second.index : kInvalidIndex;
   }
 
-  Index FindIndex(std::string_view name) const {
+  Index FindIndex(nonstd::string_view name) const {
     return FindIndex(std::string(name));
   }
 

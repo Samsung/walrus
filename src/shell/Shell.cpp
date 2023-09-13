@@ -832,7 +832,7 @@ static void runExports(Store* store, const std::string& filename, const std::vec
 
 static void parseArguments(int argc, char* argv[], ArgParser& argParser)
 {
-    const std::vector<std::string_view> args(argv + 1, argv + argc);
+    const std::vector<nonstd::string_view> args(argv + 1, argv + argc);
 
     for (auto it = args.begin(); it != args.end(); ++it) {
         if (*it == "--run-export") {
@@ -842,12 +842,15 @@ static void parseArguments(int argc, char* argv[], ArgParser& argParser)
             }
 
             std::advance(it, 1);
-            argParser.exportToRun = *it;
-        } else if (auto arg = std::string(*it); endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
-            argParser.fileNames.emplace_back(*it);
+            argParser.exportToRun = nonstd::to_string(*it);
         } else {
-            fprintf(stderr, "error: unknown argument: %s\n", it->data());
-            exit(1);
+            auto arg = nonstd::to_string(*it);
+            if (endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
+                argParser.fileNames.emplace_back(*it);
+            } else {
+                fprintf(stderr, "error: unknown argument: %s\n", it->data());
+                exit(1);
+            }
         }
     }
 

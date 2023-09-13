@@ -189,7 +189,7 @@ public:
     }
 
     /* Custom section */
-    Result BeginCustomSection(Index section_index, Offset size, std::string_view section_name) override {
+    Result BeginCustomSection(Index section_index, Offset size, nonstd::string_view section_name) override {
         return Result::Ok;
     }
     Result EndCustomSection() override {
@@ -230,31 +230,31 @@ public:
         m_externalDelegate->OnImportCount(count);
         return Result::Ok;
     }
-    Result OnImport(Index index, ExternalKind kind, std::string_view module_name, std::string_view field_name) override {
+    Result OnImport(Index index, ExternalKind kind, nonstd::string_view module_name, nonstd::string_view field_name) override {
         return Result::Ok;
     }
-    Result OnImportFunc(Index import_index, std::string_view module_name, std::string_view field_name, Index func_index, Index sig_index) override {
+    Result OnImportFunc(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index func_index, Index sig_index) override {
         CHECK_RESULT(m_validator.OnFunction(GetLocation(), Var(sig_index, GetLocation())));
         m_externalDelegate->OnImportFunc(import_index, std::string(module_name), std::string(field_name), func_index, sig_index);
         return Result::Ok;
     }
-    Result OnImportTable(Index import_index, std::string_view module_name, std::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
+    Result OnImportTable(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
         CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits));
         m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
     }
-    Result OnImportMemory(Index import_index, std::string_view module_name, std::string_view field_name, Index memory_index, const Limits *page_limits) override {
+    Result OnImportMemory(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index memory_index, const Limits *page_limits) override {
         CHECK_RESULT(m_validator.OnMemory(GetLocation(), *page_limits));
         m_externalDelegate->OnImportMemory(import_index, std::string(module_name), std::string(field_name), memory_index, page_limits->initial, page_limits->has_max ? page_limits->max : (page_limits->is_64? WABT_MAX_PAGES64 : WABT_MAX_PAGES32));
         return Result::Ok;
     }
-    Result OnImportGlobal(Index import_index, std::string_view module_name, std::string_view field_name, Index global_index, Type type, bool mutable_) override {
+    Result OnImportGlobal(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index global_index, Type type, bool mutable_) override {
         CHECK_RESULT(m_validator.OnGlobalImport(GetLocation(), type, mutable_));
         m_externalDelegate->OnImportGlobal(import_index, std::string(module_name), std::string(field_name), global_index, type, mutable_);
         return Result::Ok;
     }
-    Result OnImportTag(Index import_index, std::string_view module_name, std::string_view field_name, Index tag_index, Index sig_index) override {
+    Result OnImportTag(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index tag_index, Index sig_index) override {
         CHECK_RESULT(m_validator.OnTag(GetLocation(), Var(sig_index, GetLocation())));
         m_externalDelegate->OnImportTag(import_index, std::string(module_name), std::string(field_name), tag_index, sig_index);
         return Result::Ok;
@@ -361,7 +361,7 @@ public:
         m_externalDelegate->OnExportCount(count);
         return Result::Ok;
     }
-    Result OnExport(Index index, ExternalKind kind, Index item_index, std::string_view name) override {
+    Result OnExport(Index index, ExternalKind kind, Index item_index, nonstd::string_view name) override {
         CHECK_RESULT(m_validator.OnExport(GetLocation(), kind, Var(item_index, GetLocation()), name));
         m_externalDelegate->OnExport(static_cast<int>(kind), index, std::string(name), item_index);
         return Result::Ok;
@@ -1102,7 +1102,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnModuleName(std::string_view name) override {
+    Result OnModuleName(nonstd::string_view name) override {
         abort();
         return Result::Ok;
     }
@@ -1114,7 +1114,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnFunctionName(Index function_index, std::string_view function_name) override {
+    Result OnFunctionName(Index function_index, nonstd::string_view function_name) override {
         abort();
         return Result::Ok;
     }
@@ -1130,7 +1130,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnLocalName(Index function_index, Index local_index, std::string_view local_name) override {
+    Result OnLocalName(Index function_index, Index local_index, nonstd::string_view local_name) override {
         abort();
         return Result::Ok;
     }
@@ -1147,7 +1147,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnNameEntry(NameSectionSubsection type, Index index, std::string_view name) override {
+    Result OnNameEntry(NameSectionSubsection type, Index index, nonstd::string_view name) override {
         abort();
         return Result::Ok;
     }
@@ -1188,7 +1188,7 @@ public:
     }
 
     /* Code Metadata sections */
-    Result BeginCodeMetadataSection(std::string_view name, Offset size) override {
+    Result BeginCodeMetadataSection(nonstd::string_view name, Offset size) override {
         abort();
         return Result::Ok;
     }
@@ -1222,7 +1222,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnDylinkNeeded(std::string_view so_name) override {
+    Result OnDylinkNeeded(nonstd::string_view so_name) override {
         abort();
         return Result::Ok;
     }
@@ -1234,11 +1234,11 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnDylinkImport(std::string_view module, std::string_view name, uint32_t flags) override {
+    Result OnDylinkImport(nonstd::string_view module, nonstd::string_view name, uint32_t flags) override {
         abort();
         return Result::Ok;
     }
-    Result OnDylinkExport(std::string_view name, uint32_t flags) override {
+    Result OnDylinkExport(nonstd::string_view name, uint32_t flags) override {
         abort();
         return Result::Ok;
     }
@@ -1256,7 +1256,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnFeature(uint8_t prefix, std::string_view name) override {
+    Result OnFeature(uint8_t prefix, nonstd::string_view name) override {
         abort();
         return Result::Ok;
     }
@@ -1274,15 +1274,15 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnDataSymbol(Index index, uint32_t flags, std::string_view name, Index segment, uint32_t offset, uint32_t size) override {
+    Result OnDataSymbol(Index index, uint32_t flags, nonstd::string_view name, Index segment, uint32_t offset, uint32_t size) override {
         abort();
         return Result::Ok;
     }
-    Result OnFunctionSymbol(Index index, uint32_t flags, std::string_view name, Index func_index) override {
+    Result OnFunctionSymbol(Index index, uint32_t flags, nonstd::string_view name, Index func_index) override {
         abort();
         return Result::Ok;
     }
-    Result OnGlobalSymbol(Index index, uint32_t flags, std::string_view name, Index global_index) override {
+    Result OnGlobalSymbol(Index index, uint32_t flags, nonstd::string_view name, Index global_index) override {
         abort();
         return Result::Ok;
     }
@@ -1290,11 +1290,11 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnTagSymbol(Index index, uint32_t flags, std::string_view name, Index tag_index) override {
+    Result OnTagSymbol(Index index, uint32_t flags, nonstd::string_view name, Index tag_index) override {
         abort();
         return Result::Ok;
     }
-    Result OnTableSymbol(Index index, uint32_t flags, std::string_view name, Index table_index) override {
+    Result OnTableSymbol(Index index, uint32_t flags, nonstd::string_view name, Index table_index) override {
         abort();
         return Result::Ok;
     }
@@ -1302,7 +1302,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnSegmentInfo(Index index, std::string_view name, Address alignment, uint32_t flags) override {
+    Result OnSegmentInfo(Index index, nonstd::string_view name, Address alignment, uint32_t flags) override {
         abort();
         return Result::Ok;
     }
@@ -1318,7 +1318,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnComdatBegin(std::string_view name, uint32_t flags, Index count) override {
+    Result OnComdatBegin(nonstd::string_view name, uint32_t flags, Index count) override {
         abort();
         return Result::Ok;
     }
