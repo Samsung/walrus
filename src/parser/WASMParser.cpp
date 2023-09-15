@@ -846,7 +846,6 @@ public:
 
         m_elementModuleFunction = nullptr;
         m_elementTableIndex = 0;
-        m_elementFunctionIndex.clear();
         m_segmentMode = Walrus::SegmentMode::None;
     }
 

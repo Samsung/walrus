@@ -868,7 +868,8 @@ struct Table {
 typedef std::vector<ExprList> ExprListVector;
 
 struct ElemSegment {
-  explicit ElemSegment(nonstd::string_view name) : name(name) {}
+  explicit ElemSegment(nonstd::string_view name)
+      : name(name), elem_type(Type::Void) {}
   uint8_t GetFlags(const Module*) const;
 
   SegmentKind kind = SegmentKind::Active;

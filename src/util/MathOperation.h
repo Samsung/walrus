@@ -591,7 +591,7 @@ T saturatingRoundingQMul(ExecutionState& state, T lhs, T rhs)
 {
     constexpr int size_in_bits = sizeof(T) * 8;
     int round_const = 1 << (size_in_bits - 2);
-    int64_t product = lhs * rhs;
+    int64_t product = (int64_t)lhs * rhs;
     product += round_const;
     product >>= (size_in_bits - 1);
     return saturate<T, int64_t>(product);

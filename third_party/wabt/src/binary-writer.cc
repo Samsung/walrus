@@ -455,8 +455,8 @@ class BinaryWriter {
   bool has_data_segment_instruction_ = false;
 
   CodeMetadataSections code_metadata_sections_;
-  Offset cur_func_start_offset_;
-  Index cur_func_index_;
+  Offset cur_func_start_offset_ = 0;
+  Index cur_func_index_ = 0;
 };
 
 static uint8_t log2_u32(uint32_t x) {
