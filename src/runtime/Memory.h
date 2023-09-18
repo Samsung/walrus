@@ -133,6 +133,7 @@ private:
     inline void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
     uint64_t m_sizeInByte;
+    uint64_t m_reservedSizeInByte;
     uint64_t m_maximumSizeInByte;
     uint8_t* m_buffer;
 };

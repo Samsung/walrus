@@ -246,7 +246,8 @@ public:
     }
     Result OnImportMemory(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index memory_index, const Limits *page_limits) override {
         CHECK_RESULT(m_validator.OnMemory(GetLocation(), *page_limits));
-        m_externalDelegate->OnImportMemory(import_index, std::string(module_name), std::string(field_name), memory_index, page_limits->initial, page_limits->has_max ? page_limits->max : (page_limits->is_64? WABT_MAX_PAGES64 : WABT_MAX_PAGES32));
+        m_externalDelegate->OnImportMemory(import_index, std::string(module_name), std::string(field_name), memory_index, page_limits->initial,
+            page_limits->has_max ? page_limits->max : (page_limits->is_64? (WABT_MAX_PAGES64 - 1) : (WABT_MAX_PAGES32 - 1)));
         return Result::Ok;
     }
     Result OnImportGlobal(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index global_index, Type type, bool mutable_) override {
@@ -308,7 +309,8 @@ public:
     }
     Result OnMemory(Index index, const Limits *limits) override {
         CHECK_RESULT(m_validator.OnMemory(GetLocation(), *limits));
-        m_externalDelegate->OnMemory(index, limits->initial, limits->has_max ? limits->max : (limits->is_64? WABT_MAX_PAGES64 : WABT_MAX_PAGES32));
+        m_externalDelegate->OnMemory(index, limits->initial,
+            limits->has_max ? limits->max : (limits->is_64 ? (WABT_MAX_PAGES64 - 1) : (WABT_MAX_PAGES32 - 1)));
         return Result::Ok;
     }
     Result EndMemorySection() override {
