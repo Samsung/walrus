@@ -1,0 +1,7 @@
+# Exclude external third-party libraries
+/walrus/third_party/wabt/include/wabt/wast-parser.h
+/walrus/third_party/wabt/src/binary-reader.cc
+
+# Exclude parser/interpreter codes which have intensive control statements and similar patterns essentially used for compilation and execution
+/walrus/src/parser/WASMParser.cpp
+/walrus/src/runtime/Module.h
