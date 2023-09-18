@@ -712,7 +712,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #if (defined SLJIT_FPU_UNALIGNED && SLJIT_FPU_UNALIGNED)
         sljit_emit_fop1(compiler, opcode, addr.memArg.arg, addr.memArg.argw, addr.loadArg.arg, addr.loadArg.argw);
 #else /* SLJIT_FPU_UNALIGNED */
-        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, addr.loadArg.arg, addr.memArg.arg, addr.memArg.argw);
+        ASSERT(addr.memArg.argw == 0);
+        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_STORE | SLJIT_MEM_UNALIGNED, addr.loadArg.arg, addr.memArg.arg, addr.memArg.argw);
 #endif /* SLJIT_FPU_UNALIGNED */
         return;
     }
