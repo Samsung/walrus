@@ -17,4 +17,5 @@
   (memory 0)
   (func (export "grow") (param i32) (result i32) (memory.grow (local.get 0)))
 )
-(assert_return (invoke "grow" (i32.const 0x10000)) (i32.const 0))
+(assert_return (invoke "grow" (i32.const 0x1000)) (i32.const 0))
+(assert_return (invoke "grow" (i32.const 0x10000)) (i32.const -1))
