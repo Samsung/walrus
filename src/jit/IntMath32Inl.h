@@ -376,7 +376,7 @@ static void emitRotate64(sljit_compiler* compiler, sljit_s32 op, JITArgPair* arg
     sljit_set_label(jump1, sljit_emit_label(compiler));
 
 #if !(defined SLJIT_MASKED_SHIFT && SLJIT_MASKED_SHIFT)
-    if (tmpReg != SLJIT_R2) {
+    if (tmpReg == SLJIT_R2) {
         sljit_emit_op2(compiler, SLJIT_AND, SLJIT_R3, 0, rotateReg, 0, SLJIT_IMM, 0x1f);
         rotateReg = SLJIT_R3;
     } else {
@@ -611,13 +611,13 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
             opcode = SLJIT_XOR;
             break;
         case ByteCode::I32ShlOpcode:
-            opcode = SLJIT_SHL;
+            opcode = SLJIT_MSHL32;
             break;
         case ByteCode::I32ShrSOpcode:
-            opcode = SLJIT_ASHR;
+            opcode = SLJIT_MASHR32;
             break;
         case ByteCode::I32ShrUOpcode:
-            opcode = SLJIT_LSHR;
+            opcode = SLJIT_MLSHR32;
             break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
