@@ -24,10 +24,7 @@ constexpr uint8_t getHighRegister(sljit_s32 reg)
 namespace SimdOp {
 
 #if (defined SLJIT_CONFIG_ARM_THUMB2 && SLJIT_CONFIG_ARM_THUMB2)
-constexpr uint8_t sizeOffset = 20;
-constexpr uint8_t singleSizeOffset = 18;
 constexpr uint32_t unsignedBit = 0b1 << 28;
-constexpr uint32_t lBit = 0b1 << 7;
 
 enum Type : uint32_t {
     vadd = 0xef000840,
@@ -69,12 +66,52 @@ enum Type : uint32_t {
     vtrn = 0xffB20080,
 };
 #else
-constexpr uint8_t sizeOffset = 0;
+constexpr uint32_t unsignedBit = 0b1 << 24;
 
 enum Type : uint32_t {
-    // TODO
+    vadd = 0xf2000840,
+    vand = 0xf2000150,
+    vbic = 0xf2100150,
+    vbsl = 0xf3100150,
+    vceq = 0xf3000850,
+    vceqImm = 0xf3b10140,
+    vcge = 0xf2000350,
+    vcgt = 0xf2000340,
+    vcvtftf = 0xeb70ac0,
+    vcvtftiSIMD = 0xf3b30640,
+    vcvtfti = 0xebc08c0,
+    vcvtitfSIMD = 0xf3b30640,
+    vcvtitf = 0xeb80840,
+    veor = 0xf3000150,
+    vmlal = 0xf2800800,
+    vmovl = 0xf2800a10,
+    vmul = 0xf2000950,
+    vmull = 0xf2800C00,
+    vmvn = 0xf3b005c0,
+    vneg = 0xf3b103c0,
+    vorn = 0xf2300150,
+    vorr = 0xf2200150,
+    vpadd = 0xf2000b10,
+    vpaddl = 0xf3b00240,
+    vpmax = 0xf2000A00,
+    vpmin = 0xf2000A10,
+    vrev64 = 0xf3b00040,
+    vqadd = 0xf2000050,
+    vqrdmulh = 0xf3000b40,
+    vqmovn = 0xf3b20200,
+    vqsub = 0xf2000250,
+    vshlImm = 0xf2800550,
+    vshl = 0xf2000440,
+    vshrImm = 0xf2800050,
+    vsub = 0xf3000840,
+    vtbl = 0xf3b00800,
+    vtrn = 0xf3b20080,
 };
 #endif
+
+constexpr uint8_t sizeOffset = 20;
+constexpr uint8_t singleSizeOffset = 18;
+constexpr uint32_t lBit = 0b1 << 7;
 
 enum IntSizeType : uint32_t {
     I8 = 0x0 << sizeOffset,
