@@ -308,6 +308,13 @@ struct CompileContext {
 #if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM)
 #define HAS_SIMD
 
+#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+constexpr uint8_t getHighRegister(sljit_s32 reg)
+{
+    return reg + 1;
+}
+#endif /* SLJIT_CONFIG_ARM_32 */
+
 static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 type, sljit_s32 srcReg)
 {
     InstructionListItem* item = operand->item;
