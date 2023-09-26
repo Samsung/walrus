@@ -16,11 +16,6 @@
 
 /* Only included by jit-backend.cc */
 
-constexpr uint8_t getHighRegister(sljit_s32 reg)
-{
-    return reg + 1;
-}
-
 namespace SimdOp {
 
 #if (defined SLJIT_CONFIG_ARM_THUMB2 && SLJIT_CONFIG_ARM_THUMB2)
