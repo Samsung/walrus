@@ -528,6 +528,11 @@ public:
     };
     // clang-format on
 
+    static size_t pointerAlignedSize(const size_t originalSize)
+    {
+        return (originalSize + (sizeof(void*) - 1)) & ~(sizeof(void*) - 1);
+    }
+
     Opcode opcode() const;
     size_t getSize();
 
