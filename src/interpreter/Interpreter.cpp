@@ -1313,8 +1313,8 @@ NEVER_INLINE void Interpreter::callOperation(
     Call* code = (Call*)programCounter;
     Function* target = instance->function(code->index());
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-    programCounter += (sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
-                       + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+    programCounter += ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                                                   + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 
 NEVER_INLINE void Interpreter::callIndirectOperation(
@@ -1340,7 +1340,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-    programCounter += (sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
-                       + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+    programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                                                   + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 } // namespace Walrus
