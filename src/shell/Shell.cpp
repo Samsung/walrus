@@ -971,8 +971,6 @@ static void parseArguments(int argc, char* argv[], ArgParser& argParser)
             jitVerbose = 1;
         } else if (*it == "--jit-verbose-color") {
             jitVerbose = 2;
-        } else if (auto arg = std::string(*it); endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
-            argParser.fileNames.emplace_back(*it);
         } else {
             auto arg = nonstd::to_string(*it);
             if (endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
