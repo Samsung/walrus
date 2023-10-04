@@ -465,10 +465,12 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 
-    if (!isDSTNormalRegister) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, dst, args[1].arg, args[1].argw);
-    } else {
-        sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, dst, 0);
+    if (SLJIT_IS_MEM(args[1].arg)) {
+        if (!isDSTNormalRegister) {
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, dst, args[1].arg, args[1].argw);
+        } else {
+            sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, dst, 0);
+        }
     }
 }
 

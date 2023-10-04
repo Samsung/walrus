@@ -161,10 +161,11 @@ enum ExtendType : uint32_t {
 using unaryCallbackFunction = std::add_pointer<void(void*, void*)>::type;
 using binaryCallbackFunction = std::add_pointer<void(void*, void*, void*)>::type;
 
-void setArgs(Operand* operand, JITArg& arg) {
+void setArgs(Operand* operand, JITArg& arg)
+{
     if (operand->item != nullptr && operand->item->asInstruction()->opcode() == ByteCode::Const128Opcode) {
         arg.arg = SLJIT_MEM0();
-        arg.argw = (sljit_sw)reinterpret_cast<Const128*>(operand->item->asInstruction()->byteCode())->value();
+        arg.argw = (sljit_sw) reinterpret_cast<Const128*>(operand->item->asInstruction()->byteCode())->value();
     } else {
         arg.set(operand);
     }
