@@ -41,7 +41,7 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte)
     , m_maximumSizeInByte(maximumSizeInByte)
     , m_buffer(nullptr)
 {
-    RELEASE_ASSERT(initialSizeInByte <= std::numeric_limits<size_t>::max());
+    ASSERT(initialSizeInByte <= std::numeric_limits<size_t>::max());
 #if defined(WALRUS_USE_MMAP)
     if (m_maximumSizeInByte) {
 #ifndef WALRUS_32_MEMORY_INITIAL_MMAP_RESERVED_ADDRESS_SIZE

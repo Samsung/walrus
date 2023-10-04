@@ -530,10 +530,11 @@ private:
         }
 
         m_vmStack.push_back(VMStackInfo(*this, type, pos, m_functionStackSizeSoFar, localIndex));
-        m_functionStackSizeSoFar += Walrus::valueStackAllocatedSize(type);
-        if (UNLIKELY(m_functionStackSizeSoFar > std::numeric_limits<Walrus::ByteCodeStackOffset>::max())) {
+        size_t allocSize = Walrus::valueStackAllocatedSize(type);
+        if (UNLIKELY(m_functionStackSizeSoFar + allocSize > std::numeric_limits<Walrus::ByteCodeStackOffset>::max())) {
             throw std::string("too many stack usage. we could not support this(yet).");
         }
+        m_functionStackSizeSoFar += allocSize;
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
