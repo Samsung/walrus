@@ -67,13 +67,41 @@ static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     JITArg args[2];
-    simdOperandToArg(compiler, operands + 0, args[0], type & ~(SLJIT_SIMD_LANE_SIGNED | SLJIT_32), SLJIT_FR0);
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    JITArgPair dstArgPair;
+
+    if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
+        dstArgPair.set(operands + 1);
+
+        if (SLJIT_IS_MEM(dstArgPair.arg1)) {
+            type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+            args[1].arg = dstArgPair.arg1;
+            args[1].argw = dstArgPair.arg1w - WORD_LOW_OFFSET;
+        }
+    } else {
+        args[1].set(operands + 1);
+    }
+#else /* !SLJIT_32BIT_ARCHITECTURE */
     args[1].set(operands + 1);
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+    simdOperandToArg(compiler, operands + 0, args[0], type & ~(SLJIT_SIMD_LANE_SIGNED | SLJIT_32), SLJIT_FR0);
 
     if (type & SLJIT_SIMD_FLOAT) {
         sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index, args[1].arg, args[1].argw);
         return;
     }
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
+        index <<= 1;
+        type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
+
+        sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index, dstArgPair.arg1, dstArgPair.arg1w);
+        sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index + 1, dstArgPair.arg2, dstArgPair.arg2w);
+        return;
+    }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
 
     sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, SLJIT_R0);
     sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index, dstReg, 0);
@@ -82,12 +110,6 @@ static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
         sljit_s32 op = (type & SLJIT_32) ? SLJIT_MOV32 : SLJIT_MOV;
         sljit_emit_op1(compiler, op, args[1].arg, args[1].argw, dstReg, 0);
-#elif (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
-        if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
-            sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_64 | SLJIT_SIMD_ELEM_8, index == 0 ? dstReg : getHighRegister(dstReg), args[1].arg, args[1].argw);
-        } else {
-            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, dstReg, 0);
-        }
 #else /* !SLJIT_64BIT_ARCHITECTURE && !SLJIT_CONFIG_ARM_32 */
         sljit_s32 op = SLJIT_MOV;
         sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, dstReg, 0);
@@ -134,38 +156,34 @@ static void emitReplaceLaneSIMD(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | (type & ~SLJIT_32), dstReg, args[0].arg, 0);
     }
 
-
-#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
     if (type & SLJIT_SIMD_FLOAT) {
         floatOperandToArg(compiler, operands + 1, args[1], SLJIT_FR1);
-        sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | type, dstReg, index, args[1].arg, args[1].argw);
-    } else if (!((operands + 1)->item == nullptr || (operands + 1)->item->group() != Instruction::Immediate) && (operands + 1)->item->asInstruction()->opcode() == ByteCode::Const64Opcode) {
-        uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(value64));
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(value64 >> 32));
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    } else if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
+        JITArgPair srcArgPair(operands + 1);
 
-        ASSERT(index < 2);
+        if (SLJIT_IS_MEM(srcArgPair.arg1)) {
+            type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
 
-        sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_32, dstReg, (index * 2), SLJIT_R0, 0);
-        sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_32, dstReg, (index * 2) + 1, SLJIT_R1, 0);
-    } else {
-        args[1].set(operands + 1);
-
-        if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
-            sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_64 | SLJIT_SIMD_ELEM_8, index == 0 ? dstReg : getHighRegister(dstReg), args[1].arg, args[1].argw);
+            args[1].arg = srcArgPair.arg1;
+            args[1].argw = srcArgPair.arg1w - WORD_LOW_OFFSET;
         } else {
-            sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | type, dstReg, index, args[1].arg, args[1].argw);
+            index <<= 1;
+            type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_32;
+
+            sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | type, dstReg, index, srcArgPair.arg1, srcArgPair.arg1w);
+            index++;
+
+            args[1].arg = srcArgPair.arg2;
+            args[1].argw = srcArgPair.arg2w;
         }
-    }
-#else /* !SLJIT_CONFIG_ARM_32 */
-    if (type & SLJIT_SIMD_FLOAT) {
-        floatOperandToArg(compiler, operands + 1, args[1], SLJIT_FR1);
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     } else {
         args[1].set(operands + 1);
     }
 
     sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | type, dstReg, index, args[1].arg, args[1].argw);
-#endif /* SLJIT_CONFIG_ARM_32 */
+
     if (SLJIT_IS_MEM(args[2].arg)) {
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | (type & ~SLJIT_32), dstReg, args[2].arg, args[2].argw);
     }
@@ -199,19 +217,34 @@ static void emitSplatSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 
-    JITArg args[2] = { operands + 0, operands + 1 };
+    JITArg args[2];
+    args[1].set(operands + 1);
+
     sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, SLJIT_FR0);
 
-#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_64 | SLJIT_SIMD_ELEM_8, SLJIT_FR0, args[0].arg, args[0].argw);
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_64 | SLJIT_SIMD_ELEM_8, SLJIT_FR1, SLJIT_FR0, 0);
+        JITArgPair srcArgPair(operands + 1);
+
+        if (SLJIT_IS_MEM(srcArgPair.arg1)) {
+            type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+            sljit_emit_simd_replicate(compiler, type, dstReg, srcArgPair.arg1, srcArgPair.arg1w - WORD_LOW_OFFSET);
+        } else {
+            type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
+            sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | type, dstReg, 0, srcArgPair.arg1, srcArgPair.arg1w);
+            sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_LOAD | type, dstReg, 1, srcArgPair.arg2, srcArgPair.arg2w);
+
+            type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+            sljit_emit_simd_lane_replicate(compiler, type, dstReg, dstReg, 0);
+        }
     } else {
-#endif /* SLJIT_CONFIG_ARM_32 */
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+        args[0].set(operands);
         sljit_emit_simd_replicate(compiler, type, dstReg, args[0].arg, args[0].argw);
-#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     }
-#endif /* SLJIT_CONFIG_ARM_32 */
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
     if (SLJIT_IS_MEM(args[1].arg)) {
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | type, dstReg, args[1].arg, args[1].argw);
     }

@@ -305,7 +305,7 @@ struct CompileContext {
         sljit_emit_op1(compiler, mov_op, (arg), (argw), (source_reg), 0); \
     }
 
-#if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM)
+#if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM) || (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
 #define HAS_SIMD
 
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
@@ -370,7 +370,9 @@ static void emitStoreImmediateParams(sljit_compiler* compiler, Instruction* inst
 #include "TableInl.h"
 #include "TryCatchInl.h"
 
-#if (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+#include "SimdX86Inl.h"
+#elif (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
 #include "SimdArm64Inl.h"
 #elif (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
 #include "SimdArm32Inl.h"
