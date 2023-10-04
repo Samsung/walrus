@@ -655,8 +655,9 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     auto result = wabt::ParseWastScript(lexer.get(), &script, &errors, &parse_wast_options);
     if (!wabt::Succeeded(result)) {
         printf("Syntax error(s):\n");
-        for (auto e : errors)
+        for (auto& e : errors) {
             printf("  %s\n", e.message.c_str());
+        }
         printf("\n");
         RELEASE_ASSERT_NOT_REACHED();
     }
@@ -1000,7 +1001,7 @@ int main(int argc, char* argv[])
         FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
             fseek(fp, 0, SEEK_END);
-            auto sz = ftell(fp);
+            size_t sz = ftell(fp);
             fseek(fp, 0, SEEK_SET);
             std::vector<uint8_t> buf;
             buf.resize(sz);
@@ -1008,7 +1009,7 @@ int main(int argc, char* argv[])
             fclose(fp);
             // read again with binary mode if result is not success
             // this one needs for windows
-            if (ret != sz) {
+            if (UNLIKELY((size_t)ret != sz)) {
                 FILE* fp = fopen(filePath.data(), "rb");
                 fread(buf.data(), sz, 1, fp);
                 fclose(fp);
