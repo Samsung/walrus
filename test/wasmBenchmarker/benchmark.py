@@ -63,6 +63,7 @@ def prepare_arg_pars():
                         const='10', default=10, type=int)
     parser.add_argument('--compile-anyway', help='compile the tests even if they are compiled', action='store_true')
     parser.add_argument('--enable-simd', help='run SIMD tests too', action='store_true')
+    parser.add_argument('--jit', help='use JIT version of Walrus', action='store_true')
     return parser.parse_args()
 
 
@@ -143,14 +144,16 @@ def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, simd=F
 
     return test_names
 
-def run_wasm(engine, path, name):
+def run_wasm(engine, path, name, jit=False):
     if not os.path.exists(path):
         print("invalid path for run")
         exit(1)
 
     tc_path = path + "/wasm/" + name + ".wasm"
     print("TC path: " + tc_path)
-    result = subprocess.check_output(engine + " --run-export runtime " + tc_path, shell=True)
+    flags = "--run-export runtime" + (" --jit" if jit else "")
+
+    result = subprocess.check_output(engine + " " + flags + " " + tc_path, shell=True)
 
     if float(f'{float(result):.9f}') != float(expectedValues[name]):
         print("run failed with " + name + ".wasm", file=sys.stderr)
@@ -161,13 +164,13 @@ def run_wasm(engine, path, name):
     return True
 
 
-def measure_time(path, name, functon, engine=None):
+def measure_time(path, name, function, engine=None, jit=False):
     start_time = time.perf_counter_ns()
 
     if engine is None:
-        ret_val = functon(path, name)
+        ret_val = function(None, path, name, jit)
     else:
-        ret_val = functon(engine, path, name)
+        ret_val = function(engine, path, name, jit)
 
     end_time = time.perf_counter_ns()
 
@@ -177,7 +180,7 @@ def measure_time(path, name, functon, engine=None):
         return math.nan
 
 
-def run_tests(path, test_names, engines, number_of_runs):
+def run_tests(path, test_names, engines, number_of_runs, jit=False):
     ret_val = []
     for name in test_names:
         print("running " + name)
@@ -188,7 +191,7 @@ def run_tests(path, test_names, engines, number_of_runs):
         for i in range(0, number_of_runs):
             print("round " + str(i + 1))
             for e in engines:
-                measurements_engines[e].append(measure_time(path, name, run_wasm, e))
+                measurements_engines[e].append(measure_time(path, name, run_wasm, e, jit))
 
         result_list = {"test": name}
 
@@ -228,7 +231,7 @@ def main():
     emcc_path = get_emcc()
     test_names = compile_tests(emcc_path, args.test_dir, args.only_game, args.compile_anyway, args.enable_simd, args.run)
     generate_report(
-        run_tests(args.test_dir, test_names, args.engines, args.iterations),
+        run_tests(args.test_dir, test_names, args.engines, args.iterations, args.jit),
         args.report)
 
 
