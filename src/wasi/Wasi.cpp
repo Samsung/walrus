@@ -15,10 +15,14 @@
  */
 
 #include "wasi/Wasi.h"
+#include "wasi/Fd.h"
 
 // https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md
 
 namespace Walrus {
+
+WASI::WasiFunc WASI::m_wasiFunctions[FuncEnd];
+uvwasi_t* WASI::m_uvwasi;
 
 WASI::WasiFunc* WASI::find(std::string funcName)
 {
@@ -30,7 +34,30 @@ WASI::WasiFunc* WASI::find(std::string funcName)
     return nullptr;
 }
 
-void WASI::proc_exit(ExecutionState& state, Value* argv, Value* result, void* data)
+bool WASI::checkStr(Memory* memory, uint32_t memoryOffset, std::string& str)
+{
+    for (uint32_t i = memoryOffset; i < memory->sizeInByte(); ++i) {
+        if (memoryOffset >= memory->sizeInByte()) {
+            return false;
+        } else if (*reinterpret_cast<char*>(memory->buffer() + memoryOffset + i) == '\0') {
+            str = std::string(reinterpret_cast<char*>(memory->buffer() + memoryOffset));
+            break;
+        }
+    }
+
+    return true;
+}
+
+bool WASI::checkMemOffset(Memory* memory, uint32_t memoryOffset, uint32_t length)
+{
+    if (memoryOffset + length >= memory->sizeInByte()) {
+        return false;
+    }
+
+    return true;
+}
+
+void WASI::proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     ASSERT(argv[0].type() == Value::I32);
     exit(argv[0].asI32());
@@ -50,6 +77,24 @@ void WASI::fillWasiFuncTable()
 WASI::WASI()
 {
     fillWasiFuncTable();
+
+    uvwasi_t uvwasi;
+    WASI::m_uvwasi = reinterpret_cast<uvwasi_t*>(malloc(sizeof(uvwasi_t)));
+
+    uvwasi_options_t init_options;
+    init_options.in = 0;
+    init_options.out = 1;
+    init_options.err = 2;
+    init_options.fd_table_size = 3;
+    init_options.argc = 0;
+    init_options.argv = nullptr;
+    init_options.envp = nullptr;
+    init_options.preopenc = 0;
+    init_options.preopen_socketc = 0;
+    init_options.allocator = nullptr;
+
+    uvwasi_errno_t err = uvwasi_init(WASI::m_uvwasi, &init_options);
+    assert(err == UVWASI_ESUCCESS);
 }
 
 } // namespace Walrus

@@ -873,7 +873,8 @@ Result BinaryReader::ReadInstructions(bool stop_on_end,
 
       case Opcode::V128Const: {
         v128 value_bits;
-        ZeroMemory(value_bits);
+        WABT_STATIC_ASSERT(std::is_pod<v128>::value);
+        memset(&value_bits, 0, sizeof(v128));
         CHECK_RESULT(ReadV128(&value_bits, "v128.const value"));
         CALLBACK(OnV128ConstExpr, value_bits);
         CALLBACK(OnOpcodeV128, value_bits);

@@ -149,4 +149,47 @@ void ImportedFunction::call(ExecutionState& state, Value* argv, Value* result)
     m_callback(newState, argv, result, m_data);
 }
 
+WasiFunction* WasiFunction::createWasiFunction(Store* store,
+                                               FunctionType* functionType,
+                                               WasiFunctionCallback callback)
+{
+    WasiFunction* func = new WasiFunction(functionType,
+                                          callback);
+    store->appendExtern(func);
+    return func;
+}
+
+void WasiFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                   uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
+{
+    const FunctionType* ft = functionType();
+    const ValueTypeVector& paramTypeInfo = ft->param();
+    const ValueTypeVector& resultTypeInfo = ft->result();
+
+    ALLOCA(Value, paramVector, sizeof(Value) * paramTypeInfo.size());
+    ALLOCA(Value, resultVector, sizeof(Value) * resultTypeInfo.size());
+
+    size_t offsetIndex = 0;
+    size_t size = paramTypeInfo.size();
+    Value* paramVectorStart = paramVector;
+    for (size_t i = 0; i < size; i++) {
+        paramVector[i] = Value(paramTypeInfo[i], bp + offsets[offsetIndex]);
+        offsetIndex += valueFunctionCopyCount(paramTypeInfo[i]);
+    }
+
+    call(state, paramVectorStart, resultVector);
+
+    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
+        resultVector[i].writeToMemory(bp + offsets[offsetIndex]);
+        offsetIndex += valueFunctionCopyCount(resultTypeInfo[i]);
+    }
+}
+
+void WasiFunction::call(ExecutionState& state, Value* argv, Value* result)
+{
+    ExecutionState newState(state, this);
+    CHECK_STACK_LIMIT(newState);
+    m_callback(newState, argv, result, this->m_runningInstance);
+}
+
 } // namespace Walrus
