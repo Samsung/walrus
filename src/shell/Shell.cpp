@@ -110,7 +110,7 @@ static void printF64(double v)
     printf("%s : f64\n", formatDecmialString(ss.str()).c_str());
 }
 
-static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes, WASI* wasi,
+static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
     auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
@@ -239,15 +239,14 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             }
         } else if (import->moduleName() == "wasi_snapshot_preview1") {
-            Walrus::WASI::WasiFunc* wasiImportFunc = wasi->find(import->fieldName());
+            Walrus::WASI::WasiFunc* wasiImportFunc = WASI::find(import->fieldName());
             if (wasiImportFunc != nullptr) {
                 FunctionType* fn = functionTypes[wasiImportFunc->functionType];
                 if (fn->equals(import->functionType())) {
-                    importValues.push_back(ImportedFunction::createImportedFunction(
+                    importValues.push_back(WasiFunction::createWasiFunction(
                         store,
                         const_cast<FunctionType*>(import->functionType()),
-                        wasiImportFunc->ptr,
-                        nullptr));
+                        wasiImportFunc->ptr));
                 }
             }
         } else if (registeredInstanceMap) {
@@ -647,7 +646,7 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
     return registeredInstanceMap[moduleVar.name()];
 }
 
-static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes, WASI* wasi)
+static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes)
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
     if (lexer == nullptr) {
@@ -679,7 +678,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::ScriptModule: {
             auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
-            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, wasi, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
             if (trapResult.exception) {
                 std::string& errorMessage = trapResult.exception->message();
                 printf("Error: %s\n", errorMessage.c_str());
@@ -760,7 +759,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 RELEASE_ASSERT_NOT_REACHED();
             }
             auto buf = readModuleData(&tsm->module);
-            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, wasi, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
             RELEASE_ASSERT(trapResult.exception);
             std::string& s = trapResult.exception->message();
             if (s.find(assertModuleUninstantiable->text) != 0) {
@@ -808,7 +807,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, functionTypes, wasi);
+            auto trapResult = executeWASM(store, filename, buf, functionTypes);
             if (trapResult.exception == nullptr) {
                 printf("Execute WASM returned nullptr (in wabt::CommandType::AssertInvalid case)\n");
                 printf("Expected exception:%s\n", assertModuleInvalid->text.data());
@@ -839,7 +838,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, functionTypes, wasi);
+            auto trapResult = executeWASM(store, filename, buf, functionTypes);
             if (trapResult.exception == nullptr) {
                 printf("Execute WASM returned nullptr (in wabt::CommandType::AssertUnlinkable case)\n");
                 printf("Expected exception:%s\n", assertUnlinkable->text.data());
@@ -1036,14 +1035,14 @@ int main(int argc, char* argv[])
                 if (!argParser.exportToRun.empty()) {
                     runExports(store, filePath, buf, argParser.exportToRun);
                 } else {
-                    auto trapResult = executeWASM(store, filePath, buf, functionTypes, wasi);
+                    auto trapResult = executeWASM(store, filePath, buf, functionTypes);
                     if (trapResult.exception) {
                         fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
                         return -1;
                     }
                 }
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
-                executeWAST(store, filePath, buf, functionTypes, wasi);
+                executeWAST(store, filePath, buf, functionTypes);
             }
         } else {
             printf("Cannot open file %s\n", filePath.data());

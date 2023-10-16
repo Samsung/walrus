@@ -43,6 +43,7 @@ class FunctionType;
 class ModuleFunction;
 class DefinedFunction;
 class ImportedFunction;
+class WasiFunction;
 
 class Function : public Extern {
 public:
@@ -72,6 +73,11 @@ public:
         return false;
     }
 
+    virtual bool isWasiFunction() const
+    {
+        return false;
+    }
+
     DefinedFunction* asDefinedFunction()
     {
         ASSERT(isDefinedFunction());
@@ -82,6 +88,12 @@ public:
     {
         ASSERT(isImportedFunction());
         return reinterpret_cast<ImportedFunction*>(this);
+    }
+
+    WasiFunction* asWasiFunction()
+    {
+        ASSERT(isWasiFunction());
+        return reinterpret_cast<WasiFunction*>(this);
     }
 
 protected:
@@ -166,6 +178,41 @@ protected:
 
     ImportedFunctionCallback m_callback;
     void* m_data;
+};
+
+class WasiFunction : public Function {
+public:
+    typedef std::function<void(ExecutionState& state, Value* argv, Value* result, Instance* instance)> WasiFunctionCallback;
+
+    static WasiFunction* createWasiFunction(Store* store,
+                                            FunctionType* functionType,
+                                            WasiFunctionCallback callback);
+
+    virtual bool isWasiFunction() const override
+    {
+        return true;
+    }
+
+    void setRunningInstance(Instance* instance)
+    {
+        m_runningInstance = instance;
+    }
+
+    virtual void call(ExecutionState& state, Value* argv, Value* result) override;
+    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
+
+protected:
+    WasiFunction(FunctionType* functionType,
+                 WasiFunctionCallback callback)
+        : Function(functionType)
+        , m_callback(callback)
+        , m_runningInstance(nullptr)
+    {
+    }
+
+    WasiFunctionCallback m_callback;
+    Instance* m_runningInstance;
 };
 
 } // namespace Walrus

@@ -173,11 +173,16 @@ Dst WABT_VECTORCALL Bitcast(Src&& value) {
   return result;
 }
 
+/*
+This function caused build problems on windows,
+probably because libuv implements a function with the same name.
+
 template <typename T>
 void ZeroMemory(T& v) {
   WABT_STATIC_ASSERT(std::is_pod<T>::value);
   memset(&v, 0, sizeof(v));
 }
+*/
 
 // Placement construct
 template <typename T, typename... Args>

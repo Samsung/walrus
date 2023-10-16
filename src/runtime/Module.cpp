@@ -28,6 +28,7 @@
 #include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 #include "parser/WASMParser.h"
+#include "wasi/Wasi.h"
 
 namespace Walrus {
 
@@ -151,7 +152,11 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             if (!imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType())) {
                 Trap::throwException(state, "imported function type mismatch");
             }
-            instance->m_functions[funcIndex++] = imports[i]->asFunction();
+            instance->m_functions[funcIndex] = imports[i]->asFunction();
+            if (imports[i]->asFunction()->isWasiFunction()) {
+                instance->m_functions[funcIndex]->asWasiFunction()->setRunningInstance(instance);
+            }
+            funcIndex++;
             break;
         }
         case ImportType::Global: {

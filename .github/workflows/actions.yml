@@ -133,7 +133,7 @@ jobs:
 
         install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12 git
           #FIXME fix clang version as to 12
           ln -s /usr/bin/clang-12 /usr/bin/clang
           ln -s /usr/bin/clang++-12 /usr/bin/clang++
@@ -164,7 +164,7 @@ jobs:
 
         install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12 git
           #FIXME fix clang version as to 12
           ln -s /usr/bin/clang-12 /usr/bin/clang
           ln -s /usr/bin/clang++-12 /usr/bin/clang++

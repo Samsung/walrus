@@ -19,6 +19,9 @@
 #include "runtime/Function.h"
 #include "runtime/ObjectType.h"
 #include "runtime/SpecTest.h"
+#include "runtime/Memory.h"
+#include "runtime/Instance.h"
+#include <uvwasi.h>
 
 namespace Walrus {
 
@@ -112,22 +115,29 @@ public:
     } wasi_errno_t;
 #undef TO_ENUM
 
+    typedef struct wasi_iovec {
+        uint8_t* buf;
+        uint32_t len;
+    } wasi_iovec_t;
+
     // end of type definitions
 
     WASI();
 
     ~WASI()
     {
+        ::uvwasi_destroy(m_uvwasi);
     }
 
     struct WasiFunc {
         std::string name;
         SpecTestFunctionTypes::Index functionType;
-        ImportedFunction::ImportedFunctionCallback ptr;
+        WasiFunction::WasiFunctionCallback ptr;
     };
 
 #define FOR_EACH_WASI_FUNC(F) \
-    F(proc_exit, I32R)
+    F(proc_exit, I32R)        \
+    F(fd_write, I32I32I32I32_RI32)
 
     enum WasiFuncName : size_t {
 #define DECLARE_FUNCTION(NAME, FUNCTYPE) NAME##FUNC,
@@ -137,11 +147,15 @@ public:
     };
 
     void fillWasiFuncTable();
-    WasiFunc* find(std::string funcName);
+    static WasiFunc* find(std::string funcName);
+    static bool checkStr(Memory* memory, uint32_t memoryOffset, std::string& str);
+    static bool checkMemOffset(Memory* memory, uint32_t memoryOffset, uint32_t length);
 
-    static void proc_exit(ExecutionState& state, Value* argv, Value* result, void* data);
+    static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
 
-    WasiFunc m_wasiFunctions[FuncEnd];
+    static WasiFunc m_wasiFunctions[FuncEnd];
+    static uvwasi_t* m_uvwasi;
 };
 
 } // namespace Walrus
