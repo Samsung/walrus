@@ -154,6 +154,7 @@ enum Type : uint32_t {
     punpcklbw = 0x60 | SimdOp::prefix66,
     punpcklwd = 0x61 | SimdOp::prefix66,
     pxor = 0xef | SimdOp::prefix66,
+    roundps = 0x08 | SimdOp::opcode3A | SimdOp::prefix66,
     roundpd = 0x09 | SimdOp::opcode3A | SimdOp::prefix66,
     shufps = 0xc6,
     sqrtpd = 0x51 | SimdOp::prefix66,
@@ -696,6 +697,10 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::F32X4NegOpcode:
     case ByteCode::F32X4SqrtOpcode:
+    case ByteCode::F32X4CeilOpcode:
+    case ByteCode::F32X4FloorOpcode:
+    case ByteCode::F32X4TruncOpcode:
+    case ByteCode::F32X4NearestOpcode:
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         break;
@@ -710,6 +715,10 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::F64X2NegOpcode:
     case ByteCode::F64X2SqrtOpcode:
+    case ByteCode::F64X2CeilOpcode:
+    case ByteCode::F64X2FloorOpcode:
+    case ByteCode::F64X2TruncOpcode:
+    case ByteCode::F64X2NearestOpcode:
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
@@ -802,6 +811,18 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F32X4NegOpcode:
         simdEmitUnaryImm(compiler, SimdOp::xorps, dst, args[0].arg);
         break;
+    case ByteCode::F32X4CeilOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundps, 0b0010), dst, args[0].arg);
+        break;
+    case ByteCode::F32X4FloorOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundps, 0b0001), dst, args[0].arg);
+        break;
+    case ByteCode::F32X4TruncOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundps, 0b0000), dst, args[0].arg);
+        break;
+    case ByteCode::F32X4NearestOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundps, 0b0011), dst, args[0].arg);
+        break;
     case ByteCode::I32X4TruncSatF32X4SOpcode:
         simdEmitTruncSatS(compiler, dst, args[0].arg, true);
         break;
@@ -834,6 +855,18 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::F64X2NegOpcode:
         simdEmitUnaryImm(compiler, SimdOp::xorpd, dst, args[0].arg);
+        break;
+    case ByteCode::F64X2CeilOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundpd, 0b0010), dst, args[0].arg);
+        break;
+    case ByteCode::F64X2FloorOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundpd, 0b0001), dst, args[0].arg);
+        break;
+    case ByteCode::F64X2TruncOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundpd, 0b0000), dst, args[0].arg);
+        break;
+    case ByteCode::F64X2NearestOpcode:
+        simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::roundpd, 0b0011), dst, args[0].arg);
         break;
     case ByteCode::F64X2SqrtOpcode:
         simdEmitSSEOp(compiler, SimdOp::sqrtpd, dst, args[0].arg);
