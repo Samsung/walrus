@@ -22,6 +22,11 @@
 
 #include <map>
 
+#if defined(COMPILER_MSVC)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 namespace Walrus {
 
 #define COMPUTE_OFFSET(idx, offset) \

@@ -549,7 +549,7 @@ static void emitDivRem64(sljit_compiler* compiler, sljit_s32 opcode, JITArgPair*
         break;
     }
 
-    sljit_s32 argTypes = isImm ? SLJIT_ARGS3(VOID, W, W, W) : SLJIT_ARGS3(W, W, W, W);
+    sljit_s32 argTypes = isImm ? SLJIT_ARGS3V(W, W, W) : SLJIT_ARGS3(W, W, W, W);
     sljit_emit_icall(compiler, SLJIT_CALL, argTypes, SLJIT_IMM, addr);
 
     if (!isImm) {
@@ -715,7 +715,7 @@ static void emitCountZeroes(sljit_compiler* compiler, sljit_s32 op, JITArgPair* 
 
 static sljit_sw popcnt32(sljit_sw arg)
 {
-    return __builtin_popcount(arg);
+    return popCount((unsigned)arg);
 }
 
 static void emitPopcnt(sljit_compiler* compiler, JITArg* args)
@@ -729,7 +729,7 @@ static void emitPopcnt(sljit_compiler* compiler, JITArg* args)
 
 static sljit_sw popcnt64(sljit_sw arg1, sljit_sw arg2)
 {
-    return __builtin_popcount(arg1) + __builtin_popcount(arg2);
+    return popCount((unsigned)arg1) + popCount((unsigned)arg2);
 }
 
 static void emitPopcnt64(sljit_compiler* compiler, JITArgPair* args)

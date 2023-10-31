@@ -370,7 +370,7 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
     argTypes |= SLJIT_ARG_RETURN(SLJIT_ARG_TYPE_W) | SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_W, 2);
 #else /* !SLJIT_64BIT_ARCHITECTURE */
     argTypes |= SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_W, 2);
-    argTypes |= (flags & IsTruncSat) ? SLJIT_ARG_RETURN(SLJIT_ARG_TYPE_VOID) : SLJIT_ARG_RETURN(SLJIT_ARG_TYPE_W);
+    argTypes |= (flags & IsTruncSat) ? SLJIT_ARG_RETURN(SLJIT_ARG_TYPE_RET_VOID) : SLJIT_ARG_RETURN(SLJIT_ARG_TYPE_W);
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
     sljit_emit_icall(compiler, SLJIT_CALL, argTypes, SLJIT_IMM, addr);

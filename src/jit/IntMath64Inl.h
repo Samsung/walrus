@@ -246,12 +246,12 @@ static void emitBinary(sljit_compiler* compiler, Instruction* instr)
 
 static sljit_s32 popcnt32(sljit_s32 arg)
 {
-    return __builtin_popcount(arg);
+    return popCount((unsigned)arg);
 }
 
 static sljit_sw popcnt64(sljit_sw arg)
 {
-    return __builtin_popcountl(arg);
+    return popCount((unsigned long)arg);
 }
 
 static void emitPopcnt(sljit_compiler* compiler, ByteCode::Opcode opcode, JITArg* args)

@@ -247,7 +247,7 @@ static void emitThrow(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(instr->byteCode()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, kContextReg, 0);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(VOID, W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwTag));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwTag));
 
     CompileContext* context = CompileContext::get(compiler);
     sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_JUMP);
