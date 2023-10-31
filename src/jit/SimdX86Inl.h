@@ -48,6 +48,8 @@ enum Type : uint32_t {
     cmpleps = OPCODE_AND_IMM(0xc2, 2),
     cmpltpd = OPCODE_AND_IMM(0xc2, 1) | SimdOp::prefix66,
     cmpltps = OPCODE_AND_IMM(0xc2, 1),
+    cmpunordpd = OPCODE_AND_IMM(0xc2, 3) | SimdOp::prefix66,
+    cmpunordps = OPCODE_AND_IMM(0xc2, 3),
     cmpneqpd = OPCODE_AND_IMM(0xc2, 4) | SimdOp::prefix66,
     cmpneqps = OPCODE_AND_IMM(0xc2, 4),
     cmpnltpd = OPCODE_AND_IMM(0xc2, 5) | SimdOp::prefix66,
@@ -63,6 +65,7 @@ enum Type : uint32_t {
     maxpd = 0x5f | SimdOp::prefix66,
     maxps = 0x5f,
     minpd = 0x5d | SimdOp::prefix66,
+    minps = 0x5d,
     mulpd = 0x59 | SimdOp::prefix66,
     mulps = 0x59,
     orpd = 0x56 | SimdOp::prefix66,
@@ -626,6 +629,21 @@ static void simdEmitTruncSatF32x4U(sljit_compiler* compiler, sljit_s32 rd, sljit
     simdEmitSSEOp(compiler, SimdOp::paddd, rd, tmp1);
 }
 
+static void simdEmitAbs(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, bool is64)
+{
+    sljit_s32 tmp = SLJIT_FR1;
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::pcmpeqq : SimdOp::pcmpeqd), tmp, tmp);
+    simdEmitSSEOp(compiler, OPCODE_AND_IMM((is64 ? SimdOp::psrlq_i : SimdOp::psrld_i), 1), SimdOp::psrl_i_arg, tmp);
+    if (rd != rn) {
+        if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
+            simdEmitVexOp(compiler, (is64 ? SimdOp::andpd : SimdOp::andps), rd, rn, tmp);
+            return;
+        }
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, rd, rn, 0);
+    }
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::andpd : SimdOp::andps), rd, tmp);
+}
+
 static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
@@ -695,6 +713,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         srcType = SLJIT_SIMD_ELEM_64;
         dstType = SLJIT_SIMD_ELEM_64;
         break;
+    case ByteCode::F32X4AbsOpcode:
     case ByteCode::F32X4NegOpcode:
     case ByteCode::F32X4SqrtOpcode:
     case ByteCode::F32X4CeilOpcode:
@@ -713,6 +732,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
+    case ByteCode::F64X2AbsOpcode:
     case ByteCode::F64X2NegOpcode:
     case ByteCode::F64X2SqrtOpcode:
     case ByteCode::F64X2CeilOpcode:
@@ -808,6 +828,9 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::pshufd, 0xe), dst, args[0].arg);
         simdEmitSSEOp(compiler, SimdOp::pmovzxwd, dst, dst);
         break;
+    case ByteCode::F32X4AbsOpcode:
+        simdEmitAbs(compiler, dst, args[0].arg, false);
+        break;
     case ByteCode::F32X4NegOpcode:
         simdEmitUnaryImm(compiler, SimdOp::xorps, dst, args[0].arg);
         break;
@@ -852,6 +875,9 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::F32X4DemoteF64X2ZeroOpcode:
         simdEmitSSEOp(compiler, SimdOp::cvtpd2ps, dst, args[0].arg);
+        break;
+    case ByteCode::F64X2AbsOpcode:
+        simdEmitAbs(compiler, dst, args[0].arg, true);
         break;
     case ByteCode::F64X2NegOpcode:
         simdEmitUnaryImm(compiler, SimdOp::xorpd, dst, args[0].arg);
@@ -938,6 +964,54 @@ static void simdEmitPMinMax(sljit_compiler* compiler, uint32_t operation, sljit_
 
     simdEmitSSEOp(compiler, is64 ? SimdOp::andnpd : SimdOp::andnps, tmp, rm);
     simdEmitSSEOp(compiler, is64 ? SimdOp::orpd : SimdOp::orps, rd, tmp);
+}
+
+static void simdEmitFloatMaxMinHelper(sljit_compiler* compiler, SimdOp::Type opcode, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, sljit_s32 tmp)
+{
+    if (rd == rn || rd == rm) {
+        sljit_s32 src = (rd == rn) ? rm : rn;
+        if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
+            simdEmitVexOp(compiler, opcode, tmp, src, rd);
+            simdEmitVexOp(compiler, opcode, rd, rd, src);
+        } else {
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, tmp, src, 0);
+            simdEmitSSEOp(compiler, opcode, tmp, rd);
+            simdEmitSSEOp(compiler, opcode, rd, src);
+        }
+    } else {
+        if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
+            simdEmitVexOp(compiler, opcode, tmp, rn, rm);
+            simdEmitVexOp(compiler, opcode, rd, rm, rn);
+        } else {
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, tmp, rn, 0);
+            simdEmitSSEOp(compiler, opcode, tmp, rm);
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, rd, rm, 0);
+            simdEmitSSEOp(compiler, opcode, rd, rn);
+        }
+    }
+}
+
+static void simdEmitFloatMax(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, bool is64)
+{
+    sljit_s32 tmp = SLJIT_FR2;
+    simdEmitFloatMaxMinHelper(compiler, (is64 ? SimdOp::maxpd : SimdOp::maxps), rd, rn, rm, tmp);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::xorpd : SimdOp::xorps), rd, tmp);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::subpd : SimdOp::subps), tmp, rd);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::cmpunordpd : SimdOp::cmpunordps), rd, tmp);
+    simdEmitSSEOp(compiler, (is64 ? OPCODE_AND_IMM(SimdOp::psrlq_i, 13) : OPCODE_AND_IMM(SimdOp::psrld_i, 10)), SimdOp::psrl_i_arg, rd);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::andnpd : SimdOp::andnps), rd, tmp);
+}
+
+static void simdEmitFloatMin(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, bool is64)
+{
+    sljit_s32 tmp = SLJIT_FR2;
+    simdEmitFloatMaxMinHelper(compiler, (is64 ? SimdOp::minpd : SimdOp::minps), rd, rn, rm, tmp);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::cmpunordpd : SimdOp::cmpunordps), rd, tmp);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
+    simdEmitSSEOp(compiler, (is64 ? OPCODE_AND_IMM(SimdOp::psrlq_i, 13) : OPCODE_AND_IMM(SimdOp::psrld_i, 10)), SimdOp::psrl_i_arg, rd);
+    simdEmitSSEOp(compiler, (is64 ? SimdOp::andnpd : SimdOp::andnps), rd, tmp);
 }
 
 static void simdEmitI64X2Mul(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
@@ -1294,6 +1368,8 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F32X4LeOpcode:
     case ByteCode::F32X4PMinOpcode:
     case ByteCode::F32X4PMaxOpcode:
+    case ByteCode::F32X4MaxOpcode:
+    case ByteCode::F32X4MinOpcode:
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         break;
@@ -1312,6 +1388,8 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F64X2LeOpcode:
     case ByteCode::F64X2PMinOpcode:
     case ByteCode::F64X2PMaxOpcode:
+    case ByteCode::F64X2MaxOpcode:
+    case ByteCode::F64X2MinOpcode:
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
@@ -1613,6 +1691,14 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F32X4PMaxOpcode:
         simdEmitPMinMax(compiler, 0, dst, args[0].arg, args[1].arg);
         break;
+    case ByteCode::F32X4MaxOpcode: {
+        simdEmitFloatMax(compiler, dst, args[0].arg, args[1].arg, false);
+        break;
+    }
+    case ByteCode::F32X4MinOpcode: {
+        simdEmitFloatMin(compiler, dst, args[0].arg, args[1].arg, false);
+        break;
+    }
     case ByteCode::F64X2AddOpcode:
         simdEmitOp(compiler, SimdOp::addpd, dst, args[0].arg, args[1].arg);
         break;
@@ -1651,6 +1737,12 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::F64X2PMaxOpcode:
         simdEmitPMinMax(compiler, SimdOp::is64, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::F64X2MaxOpcode:
+        simdEmitFloatMax(compiler, dst, args[0].arg, args[1].arg, true);
+        break;
+    case ByteCode::F64X2MinOpcode:
+        simdEmitFloatMin(compiler, dst, args[0].arg, args[1].arg, true);
         break;
     case ByteCode::V128AndOpcode:
         simdEmitOp(compiler, SimdOp::pand, dst, args[0].arg, args[1].arg);
