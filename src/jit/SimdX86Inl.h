@@ -365,7 +365,7 @@ static void simdEmitINeg(sljit_compiler* compiler, uint32_t signOpcode, uint32_t
             return;
         }
 
-        ASSERT(subOpcode = SimdOp::psubq);
+        ASSERT(subOpcode == SimdOp::psubq);
 
         if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
             simdEmitSSEOp(compiler, SimdOp::pxor, tmp, tmp);

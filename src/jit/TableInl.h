@@ -97,7 +97,7 @@ static void emitElemDrop(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(elemDrop->segmentIndex()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kContextReg, 0);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(VOID, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, dropElement));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, dropElement));
 }
 
 static void emitTable(sljit_compiler* compiler, Instruction* instr)
@@ -111,7 +111,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, (reinterpret_cast<TableInit*>(instr->byteCode()))->tableIndex());
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2), SLJIT_IMM, (reinterpret_cast<TableInit*>(instr->byteCode()))->segmentIndex());
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(VOID, 32, 32, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, initTable));
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4V(32, 32, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, initTable));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
         sljit_set_label(sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError), context->trapLabel);
         break;
@@ -129,7 +129,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, ((reinterpret_cast<TableCopy*>(instr->byteCode()))->srcIndex()));
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2), SLJIT_IMM, ((reinterpret_cast<TableCopy*>(instr->byteCode()))->dstIndex()));
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(VOID, 32, 32, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, copyTable));
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4V(32, 32, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, copyTable));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
         sljit_set_label(sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError), context->trapLabel);
         break;
@@ -138,7 +138,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         emitLoad3Arguments(compiler, instr->operands());
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, ((reinterpret_cast<TableFill*>(instr->byteCode()))->tableIndex()));
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(VOID, 32, P, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, fillTable));
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4V(32, P, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, fillTable));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
         sljit_set_label(sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError), context->trapLabel);
         break;

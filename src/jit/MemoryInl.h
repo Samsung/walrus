@@ -925,5 +925,5 @@ static void emitDataDrop(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kContextReg, 0);
 
     sljit_sw addr = GET_FUNC_ADDR(sljit_sw, dropData);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(VOID, 32, W), SLJIT_IMM, addr);
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(32, W), SLJIT_IMM, addr);
 }

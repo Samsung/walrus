@@ -251,9 +251,6 @@ ALWAYS_INLINE T floatCopysign(ExecutionState& state, T lhs, T rhs)
 }
 #endif
 
-#if COMPILER_IS_MSVC
-#else
-#endif
 
 template <typename T>
 ALWAYS_INLINE T floatNeg(T val)
@@ -394,7 +391,7 @@ void resetPrecisionControl(FPControl old_ctrl)
 #endif
 
 
-double convertUint64ToDouble(uint64_t x)
+inline double convertUint64ToDouble(uint64_t x)
 {
 #if defined(WALRUS_X86_64)
     // MSVC on x64 generates uint64 -> float conversions but doesn't do
@@ -425,7 +422,8 @@ double convertUint64ToDouble(uint64_t x)
     return static_cast<double>(x);
 #endif
 }
-float convertUint64ToFloat(uint64_t x)
+
+inline float convertUint64ToFloat(uint64_t x)
 {
 #if defined(WALRUS_X86_64)
     // MSVC on x64 generates uint64 -> float conversions but doesn't do
@@ -456,7 +454,8 @@ float convertUint64ToFloat(uint64_t x)
     return static_cast<float>(x);
 #endif
 }
-double convertInt64ToDouble(int64_t x)
+
+inline double convertInt64ToDouble(int64_t x)
 {
 #if defined(CPU_X86)
     double result;
@@ -467,7 +466,8 @@ double convertInt64ToDouble(int64_t x)
     return static_cast<double>(x);
 #endif
 }
-float convertInt64ToFloat(int64_t x)
+
+inline float convertInt64ToFloat(int64_t x)
 {
 #if defined(CPU_X86)
     float result;

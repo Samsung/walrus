@@ -672,7 +672,7 @@ static void simdEmitFloatUnaryOpWithCB(sljit_compiler* compiler, JITArg src, JIT
     }
 
     sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, dst.argw);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(VOID, P, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, cb));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(P, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, cb));
 }
 
 static void simdEmitFloatBinaryOpWithCB(sljit_compiler* compiler, JITArg src[2], JITArg dst, binaryCallbackFunction cb)
@@ -692,7 +692,7 @@ static void simdEmitFloatBinaryOpWithCB(sljit_compiler* compiler, JITArg src[2],
     }
 
     sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kFrameReg, 0, SLJIT_IMM, dst.argw);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(VOID, P, P, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, cb));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(P, P, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, cb));
 }
 
 static void simdEmitF32x4Compare(sljit_compiler* compiler, JITArg src[2], JITArg dst, sljit_s32 opcode, sljit_s32 flag)
