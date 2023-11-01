@@ -503,11 +503,12 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::V128Load64LaneOpcode);
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE) \
+    && !(defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
-#else /* !SLJIT_32BIT_ARCHITECTURE */
+#else /* !SLJIT_32BIT_ARCHITECTURE || SLJIT_CONFIG_ARM_32 */
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
-#endif /* !SLJIT_32BIT_ARCHITECTURE */
+#endif /* SLJIT_32BIT_ARCHITECTURE && !SLJIT_CONFIG_ARM_32 */
         size = 8;
         break;
     }

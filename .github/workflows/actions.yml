@@ -144,6 +144,7 @@ jobs:
           rm ./test/wasm-spec/core/call.wast
           rm ./test/wasm-spec/core/call_indirect.wast
           python3 ./tools/run-tests.py --engine="./out/debug/walrus"
+          python3 ./tools/run-tests.py --jit --engine="./out/debug/walrus"
 
   build-test-on-aarch64:
     runs-on: ubuntu-latest
@@ -171,6 +172,7 @@ jobs:
           CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
           ninja -Cout/release
           python3 ./tools/run-tests.py --engine="./out/release/walrus"
+          python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
 
   test-on-windows-x86-x64:
     runs-on: windows-2022
