@@ -2,9 +2,9 @@ name: Actions
 
 on:
   push:
-    branches: [ interp ]
+    branches: [ main ]
   pull_request:
-    branches: [ interp ]
+    branches: [ main ]
 
 env:
   RUNNER: tools/run-tests.py
