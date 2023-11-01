@@ -224,7 +224,7 @@ static void emitSplatSIMD(sljit_compiler* compiler, Instruction* instr)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
-        JITArgPair srcArgPair(operands + 1);
+        JITArgPair srcArgPair(operands);
 
         if (SLJIT_IS_MEM(srcArgPair.arg1)) {
             type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
