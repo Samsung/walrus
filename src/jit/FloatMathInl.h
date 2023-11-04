@@ -438,34 +438,38 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
         RELEASE_ASSERT_NOT_REACHED();
     }
 
-    Instruction* nextInstr = instr->next()->asInstruction();
+    Instruction* nextInstr = nullptr;
     bool isSelect = false;
 
-    ASSERT(nextInstr != nullptr);
+    ASSERT(instr->next() != nullptr);
 
-    switch (nextInstr->opcode()) {
-    case ByteCode::JumpIfTrueOpcode:
-    case ByteCode::JumpIfFalseOpcode:
-        if (nextInstr->getParam(0)->item == instr) {
-            if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
-                type ^= 0x1;
+    if (instr->next()->isInstruction()) {
+        nextInstr = instr->next()->asInstruction();
+
+        switch (nextInstr->opcode()) {
+        case ByteCode::JumpIfTrueOpcode:
+        case ByteCode::JumpIfFalseOpcode:
+            if (nextInstr->getParam(0)->item == instr) {
+                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+                    type ^= 0x1;
+                }
+
+                type |= (opcode & SLJIT_32);
+
+                sljit_jump* jump = sljit_emit_fcmp(compiler, type, params[0].arg, params[0].argw,
+                                                   params[1].arg, params[1].argw);
+                nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
+                return true;
             }
-
-            type |= (opcode & SLJIT_32);
-
-            sljit_jump* jump = sljit_emit_fcmp(compiler, type, params[0].arg, params[0].argw,
-                                               params[1].arg, params[1].argw);
-            nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
-            return true;
+            break;
+        case ByteCode::SelectOpcode:
+            if (nextInstr->getParam(2)->item == instr) {
+                isSelect = true;
+            }
+            break;
+        default:
+            break;
         }
-        break;
-    case ByteCode::SelectOpcode:
-        if (nextInstr->getParam(2)->item == instr) {
-            isSelect = true;
-        }
-        break;
-    default:
-        break;
     }
 
     sljit_emit_fop1(compiler, opcode, params[0].arg, params[0].argw,
