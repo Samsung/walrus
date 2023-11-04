@@ -32,6 +32,44 @@
     ))
     i32.const 200
   )
+  (func (export "br_if_cmp")(param i32 i32 i64 f32 f64)(result i32 i32 i32 i32)
+    block (result i32)
+      i32.const -1
+      local.get 0
+      br_if 0
+      drop
+      local.get 1
+      i32.const 100
+      i32.eq
+    end
+    block (result i32)
+      i32.const -1
+      local.get 0
+      br_if 0
+      drop
+      local.get 2
+      i64.const 100
+      i64.eq
+    end
+    block (result i32)
+      i32.const -1
+      local.get 0
+      br_if 0
+      drop
+      local.get 3
+      f32.const 100.0
+      f32.eq
+    end
+    block (result i32)
+      i32.const -1
+      local.get 0
+      br_if 0
+      drop
+      local.get 4
+      f64.const 100.0
+      f64.eq
+    end
+  )
 )
 
 (assert_return (invoke "br0") (i32.const 1)(i32.const 2)(i32.const 3))
@@ -41,4 +79,5 @@
 (assert_return (invoke "check") (i32.const 107))
 (assert_return (invoke "br0_1"(i32.const 1))(i32.const 100))
 (assert_return (invoke "br0_1"(i32.const 0))(i32.const 200))
-
+(assert_return (invoke "br_if_cmp"(i32.const 0)(i32.const 100)(i64.const 100)(f32.const 100.0)(f64.const 100.0))
+   (i32.const 1)(i32.const 1)(i32.const 1)(i32.const 1))

@@ -591,7 +591,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         case ByteCode::F32X4ExtractLaneOpcode:
         case ByteCode::F64X2ExtractLaneOpcode: {
             SIMDExtractLane* extractLane = reinterpret_cast<SIMDExtractLane*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::ExtractLaneSIMD, opcode, 2, 0);
+            Instruction* instr = compiler->append(byteCode, Instruction::ExtractLaneSIMD, opcode, 1, 1);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
