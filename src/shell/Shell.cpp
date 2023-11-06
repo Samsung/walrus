@@ -145,6 +145,8 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
           (func (export "print_f64_f64") (param f64 f64))
         )
     */
+    bool hasWasiImport = false;
+
     for (size_t i = 0; i < importTypes.size(); i++) {
         auto import = importTypes[i];
         if (import->moduleName() == "spectest") {
@@ -244,6 +246,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                         const_cast<FunctionType*>(import->functionType()),
                         wasiImportFunc->ptr));
                 }
+                hasWasiImport = true;
             }
         } else if (registeredInstanceMap) {
             auto iter = registeredInstanceMap->find(import->moduleName());
@@ -282,11 +285,38 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     struct RunData {
         Module* module;
         ExternVector& importValues;
-    } data = { module.value(), importValues };
+        bool hasWasiImport;
+    } data = { module.value(), importValues, hasWasiImport };
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
-        data->module->instantiate(state, data->importValues);
+        Instance* instance = data->module->instantiate(state, data->importValues);
+
+        if (data->hasWasiImport) {
+            for (auto&& exp : data->module->exports()) {
+                if (exp->exportType() == ExportType::Function) {
+                    if ("_start" != exp->name()) {
+                        continue;
+                    }
+
+                    auto fn = instance->function(exp->itemIndex());
+                    FunctionType* fnType = fn->asDefinedFunction()->moduleFunction()->functionType();
+
+                    if (!fnType->param().empty()) {
+                        printf("warning: function %s has params, but params are not supported\n", exp->name().c_str());
+                        return;
+                    }
+
+                    if (!fnType->result().empty()) {
+                        printf("warning: function %s has results, but results are not supported\n", exp->name().c_str());
+                        return;
+                    }
+
+
+                    fn->call(state, nullptr, nullptr);
+                }
+            }
+        }
     },
                     &data);
 }
@@ -868,7 +898,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     }
 }
 
-static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun)
+static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun, SpecTestFunctionTypes& functionTypes)
 {
     auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), useJIT, jitVerbose);
     if (!parseResult.second.empty()) {
@@ -878,21 +908,38 @@ static void runExports(Store* store, const std::string& filename, const std::vec
 
     auto module = parseResult.first;
     const auto& importTypes = module->imports();
+    ExternVector importValues;
+    importValues.reserve(importTypes.size());
 
-    if (importTypes.size() != 0) {
-        fprintf(stderr, "error: module has imports, but imports are not supported\n");
-        return;
+    for (size_t i = 0; i < importTypes.size(); i++) {
+        auto import = importTypes[i];
+        if (import->moduleName() == "wasi_snapshot_preview1") {
+            Walrus::WASI::WasiFunc* wasiImportFunc = WASI::find(import->fieldName());
+            if (wasiImportFunc != nullptr) {
+                FunctionType* fn = functionTypes[wasiImportFunc->functionType];
+                if (fn->equals(import->functionType())) {
+                    importValues.push_back(WasiFunction::createWasiFunction(
+                        store,
+                        const_cast<FunctionType*>(import->functionType()),
+                        wasiImportFunc->ptr));
+                }
+            }
+        } else {
+            fprintf(stderr, "error: module has imports, but imports are not supported\n");
+            return;
+        }
     }
 
     struct RunData {
         Module* module;
+        ExternVector& importValues;
         std::string* exportToRun;
-    } data = { module.value(), &exportToRun };
+    } data = { module.value(), importValues, &exportToRun };
     Walrus::Trap trap;
 
     trap.run([](ExecutionState& state, void* d) {
         auto data = reinterpret_cast<RunData*>(d);
-        Instance* instance = data->module->instantiate(state, ExternVector());
+        Instance* instance = data->module->instantiate(state, data->importValues);
 
         for (auto&& exp : data->module->exports()) {
             if (exp->exportType() == ExportType::Function) {
@@ -1023,7 +1070,7 @@ int main(int argc, char* argv[])
             }
             if (endsWith(filePath, "wasm")) {
                 if (!argParser.exportToRun.empty()) {
-                    runExports(store, filePath, buf, argParser.exportToRun);
+                    runExports(store, filePath, buf, argParser.exportToRun, functionTypes);
                 } else {
                     auto trapResult = executeWASM(store, filePath, buf, functionTypes);
                     if (trapResult.exception) {
@@ -1041,9 +1088,9 @@ int main(int argc, char* argv[])
     }
 
     // finalize
+    delete wasi;
     delete store;
     delete engine;
-    delete wasi;
 
 #if defined(WALRUS_GOOGLE_PERF)
     ProfilerStop();

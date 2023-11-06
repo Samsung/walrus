@@ -114,12 +114,6 @@ public:
         ERRORS(TO_ENUM)
     } wasi_errno_t;
 #undef TO_ENUM
-
-    typedef struct wasi_iovec {
-        uint8_t* buf;
-        uint32_t len;
-    } wasi_iovec_t;
-
     // end of type definitions
 
     WASI();
