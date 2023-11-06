@@ -634,7 +634,7 @@ public:
 
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
-    const uint8_t* value() const { return m_value; }
+    const uint8_t* value() const { return reinterpret_cast<const uint8_t*>(m_value); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -646,7 +646,8 @@ public:
 
 protected:
     ByteCodeStackOffset m_dstOffset;
-    uint8_t m_value[16];
+    // Maintains 32 bit alignment.
+    uint32_t m_value[4];
 };
 
 // dummy ByteCode for binary operation

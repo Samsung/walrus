@@ -158,9 +158,6 @@ enum ExtendType : uint32_t {
 
 }; // namespace SimdOp
 
-using unaryCallbackFunction = std::add_pointer<void(void*, void*)>::type;
-using binaryCallbackFunction = std::add_pointer<void(void*, void*, void*)>::type;
-
 void setArgs(Operand* operand, JITArg& arg)
 {
     if (operand->item != nullptr && operand->item->asInstruction()->opcode() == ByteCode::Const128Opcode) {
@@ -171,305 +168,134 @@ void setArgs(Operand* operand, JITArg& arg)
     }
 }
 
-static void inline prepareF32(void* src0, float** src0Ptr, float src0Storage[4], void* src1, float** src1Ptr, float src1Storage[4])
+static void F32x4Ceil(float* src, float* dst)
 {
-    if (LIKELY(reinterpret_cast<uintptr_t>(src0) & 15) == 0) {
-        *src0Ptr = reinterpret_cast<float*>(src0);
-    } else {
-        *src0Ptr = src0Storage;
-        memcpy(src0Storage, src0, 4 * sizeof(float));
+    for (int i = 0; i < 4; i++) {
+        dst[i] = std::ceil(src[i]);
     }
+}
 
-    if (src1 != nullptr) {
-        if (LIKELY(((unsigned long)src1 & 15) == 0)) {
-            *src1Ptr = reinterpret_cast<float*>(src1);
+static void F32x4Floor(float* src, float* dst)
+{
+    for (int i = 0; i < 4; i++) {
+        dst[i] = std::floor(src[i]);
+    }
+}
+
+static void F32x4Trunc(float* src, float* dst)
+{
+    for (int i = 0; i < 4; i++) {
+        dst[i] = std::trunc(src[i]);
+    }
+}
+
+static void F32x4NearestInt(float* src, float* dst)
+{
+    for (int i = 0; i < 4; i++) {
+        dst[i] = std::nearbyint(src[i]);
+    }
+}
+
+static void F32x4Min(float* src0, float* src1, float* dst)
+{
+    for (int i = 0; i < 4; i++) {
+        if (UNLIKELY(std::isnan(src0[i]) || std::isnan(src1[i]))) {
+            dst[i] = std::numeric_limits<float>::quiet_NaN();
+        } else if (UNLIKELY(src0[i] == 0 && src1[i] == 0)) {
+            dst[i] = std::signbit(src0[i]) ? src0[i] : src1[i];
         } else {
-            *src1Ptr = src1Storage;
-            memcpy(src1Storage, src1, 4 * sizeof(float));
+            dst[i] = std::min(src0[i], src1[i]);
         }
     }
 }
 
-static void inline prepareF64(void* src0, double** src0Ptr, double src0Storage[4], void* src1, double** src1Ptr, double src1Storage[4])
+static void F32x4Max(float* src0, float* src1, float* dst)
 {
-    if (LIKELY((unsigned long)src0 & 15) == 0) {
-        *src0Ptr = reinterpret_cast<double*>(src0);
-    } else {
-        *src0Ptr = src0Storage;
-        memcpy(src0Storage, src0, 2 * sizeof(double));
-    }
-
-    if (src1 != nullptr) {
-        if (LIKELY(((unsigned long)src1 & 15) == 0)) {
-            *src1Ptr = reinterpret_cast<double*>(src1);
+    for (int i = 0; i < 4; i++) {
+        if (UNLIKELY(std::isnan(src0[i]) || std::isnan(src1[i]))) {
+            dst[i] = std::numeric_limits<float>::quiet_NaN();
+        } else if (UNLIKELY(src0[i] == 0 && src1[i] == 0)) {
+            dst[i] = std::signbit(src0[i]) ? src1[i] : src0[i];
         } else {
-            *src1Ptr = src1Storage;
-            memcpy(src1Storage, src1, 2 * sizeof(double));
+            dst[i] = std::max(src0[i], src1[i]);
         }
     }
 }
 
-static void F32x4Ceil(void* src0, void* dst)
+static void F32x4PMin(float* src0, float* src1, float* dst)
 {
-    float* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
-
-    float src0Storage[4];
-
-    prepareF32(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        dstPtr[i] = std::ceil(src0Ptr[i]);
+    for (int i = 0; i < 4; i++) {
+        dst[i] = src1[i] < src0[i] ? src1[i] : src0[i];
     }
 }
 
-static void F32x4Floor(void* src0, void* dst)
+static void F32x4PMax(float* src0, float* src1, float* dst)
 {
-    float* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
-
-    float src0Storage[4];
-
-    prepareF32(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        dstPtr[i] = std::floor(src0Ptr[i]);
+    for (int i = 0; i < 4; i++) {
+        dst[i] = src0[i] < src1[i] ? src1[i] : src0[i];
     }
 }
 
-static void F32x4Trunc(void* src0, void* dst)
+static void F64x2Ceil(double* src, double* dst)
 {
-    float* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
-    float src0Storage[4];
-
-    prepareF32(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        dstPtr[i] = std::trunc(src0Ptr[i]);
-    }
+    dst[0] = std::ceil(src[0]);
+    dst[1] = std::ceil(src[1]);
 }
 
-static void F32x4NearestInt(void* src0, void* dst)
+static void F64x2Floor(double* src, double* dst)
 {
-    float* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
-
-    float src0Storage[4];
-
-    prepareF32(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        dstPtr[i] = std::nearbyint(src0Ptr[i]);
-    }
+    dst[0] = std::floor(src[0]);
+    dst[1] = std::floor(src[1]);
 }
 
-static void F32x4Min(void* src0, void* src1, void* dst)
+static void F64x2Trunc(double* src, double* dst)
 {
-    float* src0Ptr = nullptr;
-    float* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
+    dst[0] = std::trunc(src[0]);
+    dst[1] = std::trunc(src[1]);
+}
 
-    float src0Storage[4];
-    float src1Storage[4];
+static void F64x2NearestInt(double* src, double* dst)
+{
+    dst[0] = std::nearbyint(src[0]);
+    dst[1] = std::nearbyint(src[1]);
+}
 
-    prepareF32(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        if (UNLIKELY(std::isnan(src0Ptr[i]) || std::isnan(src1Ptr[i]))) {
-            dstPtr[i] = std::numeric_limits<float>::quiet_NaN();
-        } else if (UNLIKELY(src0Ptr[i] == 0 && src1Ptr[i] == 0)) {
-            dstPtr[i] = std::signbit(src0Ptr[i]) ? src0Ptr[i] : src1Ptr[i];
+static void F64x2Min(double* src0, double* src1, double* dst)
+{
+    for (int i = 0; i < 2; i++) {
+        if (UNLIKELY(std::isnan(src0[i]) || std::isnan(src1[i]))) {
+            dst[i] = std::numeric_limits<double>::quiet_NaN();
+        } else if (UNLIKELY(src0[i] == 0 && src1[i] == 0)) {
+            dst[i] = std::signbit(src0[i]) ? src0[i] : src1[i];
         } else {
-            dstPtr[i] = std::min(src0Ptr[i], src1Ptr[i]);
+            dst[i] = std::min(src0[i], src1[i]);
         }
     }
 }
 
-static void F32x4Max(void* src0, void* src1, void* dst)
+static void F64x2Max(double* src0, double* src1, double* dst)
 {
-    float* src0Ptr = nullptr;
-    float* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
-
-    float src0Storage[4];
-    float src1Storage[4];
-
-    prepareF32(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        if (UNLIKELY(std::isnan(src0Ptr[i]) || std::isnan(src1Ptr[i]))) {
-            dstPtr[i] = std::numeric_limits<float>::quiet_NaN();
-        } else if (UNLIKELY(src0Ptr[i] == 0 && src1Ptr[i] == 0)) {
-            dstPtr[i] = std::signbit(src0Ptr[i]) ? src1Ptr[i] : src0Ptr[i];
+    for (int i = 0; i < 2; i++) {
+        if (UNLIKELY(std::isnan(src0[i]) || std::isnan(src1[i]))) {
+            dst[i] = std::numeric_limits<double>::quiet_NaN();
+        } else if (UNLIKELY(src0[i] == 0 && src1[i] == 0)) {
+            dst[i] = std::signbit(src0[i]) ? src1[i] : src0[i];
         } else {
-            dstPtr[i] = std::max(src0Ptr[i], src1Ptr[i]);
+            dst[i] = std::max(src0[i], src1[i]);
         }
     }
 }
 
-static void F32x4PMin(void* src0, void* src1, void* dst)
+static void F64x2PMin(double* src0, double* src1, double* dst)
 {
-    float* src0Ptr = nullptr;
-    float* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
-
-    float src0Storage[4];
-    float src1Storage[4];
-
-    prepareF32(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        dstPtr[i] = src1Ptr[i] < src0Ptr[i] ? src1Ptr[i] : src0Ptr[i];
-    }
+    dst[0] = src1[0] < src0[0] ? src1[0] : src0[0];
+    dst[1] = src1[1] < src0[1] ? src1[1] : src0[1];
 }
 
-static void F32x4PMax(void* src0, void* src1, void* dst)
+static void F64x2PMax(double* src0, double* src1, double* dst)
 {
-    float* src0Ptr = nullptr;
-    float* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<float*>(dst);
-
-    float src0Storage[4];
-    float src1Storage[4];
-
-    prepareF32(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 4; i++) {
-        dstPtr[i] = src0Ptr[i] < src1Ptr[i] ? src1Ptr[i] : src0Ptr[i];
-    }
-}
-
-static void F64x2Ceil(void* src0, void* dst)
-{
-    double* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[2];
-
-    prepareF64(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        dstPtr[i] = std::ceil(src0Ptr[i]);
-    }
-}
-
-static void F64x2Floor(void* src0, void* dst)
-{
-    double* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[2];
-
-    prepareF64(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        dstPtr[i] = std::floor(src0Ptr[i]);
-    }
-}
-
-static void F64x2Trunc(void* src0, void* dst)
-{
-    double* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[2];
-
-    prepareF64(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        dstPtr[i] = std::trunc(src0Ptr[i]);
-    }
-}
-
-static void F64x2NearestInt(void* src0, void* dst)
-{
-    double* src0Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[2];
-
-    prepareF64(src0, &src0Ptr, src0Storage, nullptr, nullptr, nullptr);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        dstPtr[i] = std::nearbyint(src0Ptr[i]);
-    }
-}
-
-static void F64x2Min(void* src0, void* src1, void* dst)
-{
-    double* src0Ptr = nullptr;
-    double* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[4];
-    double src1Storage[4];
-
-    prepareF64(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        if (UNLIKELY(std::isnan(src0Ptr[i]) || std::isnan(src1Ptr[i]))) {
-            dstPtr[i] = std::numeric_limits<double>::quiet_NaN();
-        } else if (UNLIKELY(src0Ptr[i] == 0 && src1Ptr[i] == 0)) {
-            dstPtr[i] = std::signbit(src0Ptr[i]) ? src0Ptr[i] : src1Ptr[i];
-        } else {
-            dstPtr[i] = std::min(src0Ptr[i], src1Ptr[i]);
-        }
-    }
-}
-
-static void F64x2Max(void* src0, void* src1, void* dst)
-{
-    double* src0Ptr = nullptr;
-    double* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[4];
-    double src1Storage[4];
-
-    prepareF64(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        if (UNLIKELY(std::isnan(src0Ptr[i]) || std::isnan(src1Ptr[i]))) {
-            dstPtr[i] = std::numeric_limits<double>::quiet_NaN();
-        } else if (UNLIKELY(src0Ptr[i] == 0 && src1Ptr[i] == 0)) {
-            dstPtr[i] = std::signbit(src0Ptr[i]) ? src1Ptr[i] : src0Ptr[i];
-        } else {
-            dstPtr[i] = std::max(src0Ptr[i], src1Ptr[i]);
-        }
-    }
-}
-
-static void F64x2PMin(void* src0, void* src1, void* dst)
-{
-    double* src0Ptr = nullptr;
-    double* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[4];
-    double src1Storage[4];
-
-    prepareF64(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        dstPtr[i] = src1Ptr[i] < src0Ptr[i] ? src1Ptr[i] : src0Ptr[i];
-    }
-}
-
-static void F64x2PMax(void* src0, void* src1, void* dst)
-{
-    double* src0Ptr = nullptr;
-    double* src1Ptr = nullptr;
-    auto dstPtr = reinterpret_cast<double*>(dst);
-
-    double src0Storage[4];
-    double src1Storage[4];
-
-    prepareF64(src0, &src0Ptr, src0Storage, src1, &src1Ptr, src1Storage);
-
-    for (uint8_t i = 0; i < 2; i++) {
-        dstPtr[i] = src0Ptr[i] < src1Ptr[i] ? src1Ptr[i] : src0Ptr[i];
-    }
+    dst[0] = src0[0] < src1[0] ? src1[0] : src0[0];
+    dst[1] = src0[1] < src1[1] ? src1[1] : src0[1];
 }
 
 static void simdEmitOp(sljit_compiler* compiler, uint32_t opcode, sljit_s32 vd, sljit_s32 vn, sljit_s32 vm)
@@ -662,37 +488,40 @@ static void simdEmitF32x4Binary(sljit_compiler* compiler, JITArg src[2], JITArg 
     }
 }
 
-static void simdEmitFloatUnaryOpWithCB(sljit_compiler* compiler, JITArg src, JITArg dst, unaryCallbackFunction cb)
+static void simdEmitFloatUnaryOpWithCB(sljit_compiler* compiler, JITArg src, JITArg dst, sljit_sw funcAddr)
 {
     if (src.arg == SLJIT_MEM1(kFrameReg)) {
+        ASSERT((src.argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kFrameReg, 0, SLJIT_IMM, src.argw);
     } else {
-        ASSERT(src.arg == SLJIT_MEM0());
+        ASSERT(src.arg == SLJIT_MEM0() && (src.argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, src.argw);
     }
 
     sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, dst.argw);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(P, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, cb));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(P, P), SLJIT_IMM, funcAddr);
 }
 
-static void simdEmitFloatBinaryOpWithCB(sljit_compiler* compiler, JITArg src[2], JITArg dst, binaryCallbackFunction cb)
+static void simdEmitFloatBinaryOpWithCB(sljit_compiler* compiler, JITArg src[2], JITArg dst, sljit_sw funcAddr)
 {
     if (src[0].arg == SLJIT_MEM1(kFrameReg)) {
+        ASSERT((src[0].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kFrameReg, 0, SLJIT_IMM, src[0].argw);
     } else {
-        ASSERT(src[0].arg == SLJIT_MEM0());
+        ASSERT(src[0].arg == SLJIT_MEM0() && (src[0].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, src[0].argw);
     }
 
     if (src[1].arg == SLJIT_MEM1(kFrameReg)) {
+        ASSERT((src[1].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, src[1].argw);
     } else {
-        ASSERT(src[1].arg == SLJIT_MEM0());
+        ASSERT(src[1].arg == SLJIT_MEM0() && (src[1].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, src[1].argw);
     }
 
     sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kFrameReg, 0, SLJIT_IMM, dst.argw);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(P, P, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, cb));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(P, P, P), SLJIT_IMM, funcAddr);
 }
 
 static void simdEmitF32x4Compare(sljit_compiler* compiler, JITArg src[2], JITArg dst, sljit_s32 opcode, sljit_s32 flag)
@@ -997,16 +826,16 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::Type::vneg | SimdOp::S32 | SimdOp::floatBit, dst, 0, args[0].arg);
         break;
     case ByteCode::F32X4CeilOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F32x4Ceil);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F32x4Ceil));
         break;
     case ByteCode::F32X4FloorOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F32x4Floor);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F32x4Floor));
         break;
     case ByteCode::F32X4TruncOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F32x4Trunc);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F32x4Trunc));
         break;
     case ByteCode::F32X4NearestOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F32x4NearestInt);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F32x4NearestInt));
         break;
     case ByteCode::F64X2AbsOpcode:
         simdEmitF64x2Unary(compiler, args[0], args[1], SLJIT_ABS_F64);
@@ -1018,16 +847,16 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitF64x2Unary(compiler, args[0], args[1], SLJIT_NEG_F64);
         break;
     case ByteCode::F64X2CeilOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F64x2Ceil);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F64x2Ceil));
         break;
     case ByteCode::F64X2FloorOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F64x2Floor);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F64x2Floor));
         break;
     case ByteCode::F64X2TruncOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F64x2Trunc);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F64x2Trunc));
         break;
     case ByteCode::F64X2NearestOpcode:
-        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], F64x2NearestInt);
+        simdEmitFloatUnaryOpWithCB(compiler, args[0], args[1], GET_FUNC_ADDR(sljit_sw, F64x2NearestInt));
         break;
     default:
         ASSERT_NOT_REACHED();
@@ -1467,16 +1296,16 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitF32x4Binary(compiler, args, args[2], SLJIT_DIV_F32);
         break;
     case ByteCode::F32X4MinOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F32x4Min);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F32x4Min));
         break;
     case ByteCode::F32X4MaxOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F32x4Max);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F32x4Max));
         break;
     case ByteCode::F32X4PMinOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F32x4PMin);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F32x4PMin));
         break;
     case ByteCode::F32X4PMaxOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F32x4PMax);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F32x4PMax));
         break;
     case ByteCode::F64X2EqOpcode:
         simdEmitF64x2Compare(compiler, args, args[2], SLJIT_SET_ORDERED_EQUAL, SLJIT_ORDERED_EQUAL);
@@ -1509,16 +1338,16 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitF64x2Binary(compiler, args, args[2], SLJIT_DIV_F64);
         break;
     case ByteCode::F64X2MinOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F64x2Min);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F64x2Min));
         break;
     case ByteCode::F64X2MaxOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F64x2Max);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F64x2Max));
         break;
     case ByteCode::F64X2PMinOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F64x2PMin);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F64x2PMin));
         break;
     case ByteCode::F64X2PMaxOpcode:
-        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], F64x2PMax);
+        simdEmitFloatBinaryOpWithCB(compiler, args, args[2], GET_FUNC_ADDR(sljit_sw, F64x2PMax));
         break;
     default:
         ASSERT_NOT_REACHED();
