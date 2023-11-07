@@ -95,6 +95,8 @@ public:
         BinarySIMD,
         // Unary SIMD opcodes (e.g. F64X2Abs)
         UnarySIMD,
+        // Unary Conditional SIMD opcodes (e.g. I8x16AllTrue)
+        UnaryCondSIMD,
         // Load lane SIMD opcodes (e.g. V128Load16Lane)
         LoadLaneSIMD,
         // Bitmask SIMD opcodes (e.g. I16X8Bitmask)
