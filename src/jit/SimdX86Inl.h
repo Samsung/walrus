@@ -401,17 +401,6 @@ static void simdEmitUnaryImm(sljit_compiler* compiler, uint32_t opcode, sljit_s3
     simdEmitSSEOp(compiler, opcode, rd, tmp);
 }
 
-static void simdEmitAllTrue(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
-{
-    sljit_s32 tmp = SLJIT_FR1;
-
-    simdEmitSSEOp(compiler, SimdOp::pxor, tmp, tmp);
-    simdEmitSSEOp(compiler, opcode, tmp, rn);
-    simdEmitSSEOp(compiler, SimdOp::ptest, tmp, tmp);
-    sljit_set_current_flags(compiler, SLJIT_SET_Z);
-    sljit_emit_op_flags(compiler, SLJIT_MOV32, rd, 0, SLJIT_ZERO);
-}
-
 static void simdEmitExtAdd(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
 {
     sljit_s32 tmp = SLJIT_FR2;
@@ -653,10 +642,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 dstType = SLJIT_SIMD_ELEM_128;
 
     switch (instr->opcode()) {
-    case ByteCode::I8X16AllTrueOpcode:
-        srcType = SLJIT_SIMD_ELEM_8;
-        dstType = -1;
-        break;
     case ByteCode::I8X16NegOpcode:
         srcType = SLJIT_SIMD_ELEM_8;
         dstType = SLJIT_SIMD_ELEM_8;
@@ -668,19 +653,11 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         srcType = SLJIT_SIMD_ELEM_8;
         dstType = SLJIT_SIMD_ELEM_16;
         break;
-    case ByteCode::I16X8AllTrueOpcode:
-        srcType = SLJIT_SIMD_ELEM_16;
-        dstType = -1;
-        break;
     case ByteCode::I16X8NegOpcode:
     case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
     case ByteCode::I16X8ExtaddPairwiseI8X16UOpcode:
         srcType = SLJIT_SIMD_ELEM_16;
         dstType = SLJIT_SIMD_ELEM_16;
-        break;
-    case ByteCode::I32X4AllTrueOpcode:
-        srcType = SLJIT_SIMD_ELEM_32;
-        dstType = -1;
         break;
     case ByteCode::I32X4NegOpcode:
     case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
@@ -704,10 +681,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
         srcType = SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
         dstType = SLJIT_SIMD_ELEM_32;
-        break;
-    case ByteCode::I64X2AllTrueOpcode:
-        srcType = SLJIT_SIMD_ELEM_64;
-        dstType = -1;
         break;
     case ByteCode::I64X2NegOpcode:
         srcType = SLJIT_SIMD_ELEM_64;
@@ -751,10 +724,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
-    case ByteCode::V128AnyTrueOpcode:
-        srcType = SLJIT_SIMD_ELEM_128;
-        dstType = -1;
-        break;
     case ByteCode::V128NotOpcode:
         srcType = SLJIT_SIMD_ELEM_128;
         dstType = SLJIT_SIMD_ELEM_128;
@@ -767,12 +736,9 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     simdOperandToArg(compiler, operands, args[0], srcType, SLJIT_FR0);
 
     args[1].set(operands + 1);
-    sljit_s32 dst = GET_TARGET_REG(args[1].arg, dstType == 0 ? SLJIT_R0 : SLJIT_FR0);
+    sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_FR0);
 
     switch (instr->opcode()) {
-    case ByteCode::I8X16AllTrueOpcode:
-        simdEmitAllTrue(compiler, SimdOp::pcmpeqb, dst, args[0].arg);
-        break;
     case ByteCode::I8X16NegOpcode:
         simdEmitINeg(compiler, SimdOp::psignb, SimdOp::psubb, dst, args[0].arg);
         break;
@@ -790,9 +756,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::pshufd, 0xe), dst, args[0].arg);
         simdEmitSSEOp(compiler, SimdOp::pmovzxbw, dst, dst);
         break;
-    case ByteCode::I16X8AllTrueOpcode:
-        simdEmitAllTrue(compiler, SimdOp::pcmpeqw, dst, args[0].arg);
-        break;
     case ByteCode::I16X8NegOpcode:
         simdEmitINeg(compiler, SimdOp::psignw, SimdOp::psubw, dst, args[0].arg);
         break;
@@ -801,9 +764,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I16X8ExtaddPairwiseI8X16UOpcode:
         simdEmitExtAdd(compiler, SimdOp::pmaddubsw, dst, args[0].arg);
-        break;
-    case ByteCode::I32X4AllTrueOpcode:
-        simdEmitAllTrue(compiler, SimdOp::pcmpeqd, dst, args[0].arg);
         break;
     case ByteCode::I32X4NegOpcode:
         simdEmitINeg(compiler, SimdOp::psignd, SimdOp::psubd, dst, args[0].arg);
@@ -858,9 +818,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
         simdEmitTruncSatF64x2U(compiler, dst, args[0].arg);
         break;
-    case ByteCode::I64X2AllTrueOpcode:
-        simdEmitAllTrue(compiler, SimdOp::pcmpeqq, dst, args[0].arg);
-        break;
     case ByteCode::I64X2NegOpcode:
         simdEmitINeg(compiler, 0, SimdOp::psubq, dst, args[0].arg);
         break;
@@ -906,11 +863,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F64X2PromoteLowF32X4Opcode:
         simdEmitSSEOp(compiler, SimdOp::cvtps2pd, dst, args[0].arg);
         break;
-    case ByteCode::V128AnyTrueOpcode:
-        simdEmitSSEOp(compiler, SimdOp::ptest, args[0].arg, args[0].arg);
-        sljit_set_current_flags(compiler, SLJIT_SET_Z);
-        sljit_emit_op_flags(compiler, SLJIT_MOV32, dst, 0, SLJIT_NOT_ZERO);
-        break;
     case ByteCode::V128NotOpcode:
         if (dst == args[0].arg) {
             sljit_s32 tmp = SLJIT_FR1;
@@ -927,11 +879,75 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (SLJIT_IS_MEM(args[1].arg)) {
-        if (dstType != -1) {
-            sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | dstType, dst, args[1].arg, args[1].argw);
-        } else {
-            sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, dst, 0);
-        }
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | dstType, dst, args[1].arg, args[1].argw);
+    }
+}
+
+static void simdEmitAllTrue(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
+{
+    sljit_s32 tmp = SLJIT_FR1;
+
+    simdEmitSSEOp(compiler, SimdOp::pxor, tmp, tmp);
+    simdEmitSSEOp(compiler, opcode, tmp, rn);
+    simdEmitSSEOp(compiler, SimdOp::ptest, tmp, tmp);
+    sljit_set_current_flags(compiler, SLJIT_SET_Z);
+    sljit_emit_op_flags(compiler, SLJIT_MOV32, rd, 0, SLJIT_ZERO);
+}
+
+static void emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operands = instr->operands();
+    JITArg args[2];
+
+    sljit_s32 srcType = SLJIT_SIMD_ELEM_128;
+
+    switch (instr->opcode()) {
+    case ByteCode::I8X16AllTrueOpcode:
+        srcType = SLJIT_SIMD_ELEM_8;
+        break;
+    case ByteCode::I16X8AllTrueOpcode:
+        srcType = SLJIT_SIMD_ELEM_16;
+        break;
+    case ByteCode::I32X4AllTrueOpcode:
+        srcType = SLJIT_SIMD_ELEM_32;
+        break;
+    case ByteCode::I64X2AllTrueOpcode:
+        srcType = SLJIT_SIMD_ELEM_64;
+        break;
+    default:
+        ASSERT(instr->opcode() == ByteCode::V128AnyTrueOpcode);
+        srcType = SLJIT_SIMD_ELEM_128;
+        break;
+    }
+
+    simdOperandToArg(compiler, operands, args[0], srcType, SLJIT_FR0);
+
+    args[1].set(operands + 1);
+    sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_R0);
+
+    switch (instr->opcode()) {
+    case ByteCode::I8X16AllTrueOpcode:
+        simdEmitAllTrue(compiler, SimdOp::pcmpeqb, dst, args[0].arg);
+        break;
+    case ByteCode::I16X8AllTrueOpcode:
+        simdEmitAllTrue(compiler, SimdOp::pcmpeqw, dst, args[0].arg);
+        break;
+    case ByteCode::I32X4AllTrueOpcode:
+        simdEmitAllTrue(compiler, SimdOp::pcmpeqd, dst, args[0].arg);
+        break;
+    case ByteCode::I64X2AllTrueOpcode:
+        simdEmitAllTrue(compiler, SimdOp::pcmpeqq, dst, args[0].arg);
+        break;
+    default:
+        ASSERT(instr->opcode() == ByteCode::V128AnyTrueOpcode);
+        simdEmitSSEOp(compiler, SimdOp::ptest, args[0].arg, args[0].arg);
+        sljit_set_current_flags(compiler, SLJIT_SET_Z);
+        sljit_emit_op_flags(compiler, SLJIT_MOV32, dst, 0, SLJIT_NOT_ZERO);
+        break;
+    }
+
+    if (SLJIT_IS_MEM(args[1].arg)) {
+        sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, dst, 0);
     }
 }
 
