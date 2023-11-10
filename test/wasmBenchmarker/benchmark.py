@@ -21,6 +21,7 @@ import subprocess
 import sys
 import time
 from tqdm import tqdm
+import shutil
 
 from os.path import abspath, dirname, join
 from markdownTable import markdownTable  # pip install py-markdown-table
@@ -89,8 +90,12 @@ def check_programs(engines, verbose):
     if (verbose): print("Checks done")
 
 
-def get_emcc(verbose):
-    emcc_path = None 
+def get_emcc():
+    emcc_path = shutil.which("emcc")
+    if emcc_path is not None:
+        print("Found emcc on $PATH")
+        return emcc_path
+
     if os.getenv('EMSDK'):
         emcc_path = join(os.getenv('EMSDK'), 'upstream/emscripten/emcc.py')
         if os.path.exists(emcc_path):
