@@ -37,6 +37,7 @@ expectedValues = {
     "huffman": 0,
     "k_nucleotide": 1,
     "mandelbrot": 775007,
+    "matrix_multiply": 3920.0,
     "nbody": -0.1691057,
     "nqueens": 0,
     "prime": 48611,
@@ -44,12 +45,13 @@ expectedValues = {
     "red-black": 4000000,
     "salesman": 840,
     "simdMandelbrot": 775007,
-    "simdNbody": -0.1691057
+    "simdNbody": -0.1691057,
+    "simd_matrix_multiply": 3920.0,
 }
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
 gameTests = ["mandelbrot", "nbody", "gregory", "fannkuch", "k_nucleotide"]
 
-simdTests = ["simdMandelbrot", "simdNbody"]
+simdTests = ["simdMandelbrot", "simdNbody", "simd_matrix_multiply"]
 
 def prepare_arg_pars():
     parser = argparse.ArgumentParser()
