@@ -90,11 +90,8 @@ public:
     void load(ExecutionState& state, uint32_t offset, T* out) const
     {
         checkAccess(state, offset, sizeof(T));
-#if defined(WALRUS_BIG_ENDIAN)
-        *out = *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset]));
-#else
-        *out = *(reinterpret_cast<T*>(&m_buffer[offset]));
-#endif
+
+        load(state, offset, 0, out);
     }
 
     template <typename T>
@@ -109,11 +106,8 @@ public:
     void store(ExecutionState& state, uint32_t offset, const T& val) const
     {
         checkAccess(state, offset, sizeof(T));
-#if defined(WALRUS_BIG_ENDIAN)
-        *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset])) = val;
-#else
-        *(reinterpret_cast<T*>(&m_buffer[offset])) = val;
-#endif
+
+        store(state, offset, 0, val);
     }
 
     void init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
