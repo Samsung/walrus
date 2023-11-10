@@ -701,10 +701,10 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
             if (SLJIT_IS_MEM(valueArgPair.arg1)) {
                 addr.options = MemAddress::LoadToReg2;
+            }
 
-                if (opcode == SLJIT_MOV) {
-                    addr.options |= MemAddress::DontSetR1;
-                }
+            if (opcode == SLJIT_MOV && !SLJIT_IS_REG(valueArgPair.arg1)) {
+                addr.options |= MemAddress::DontSetR1;
             }
         }
 #else /* !SLJIT_32BIT_ARCHITECTURE */
