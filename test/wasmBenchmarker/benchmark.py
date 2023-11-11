@@ -42,6 +42,7 @@ expectedValues = {
     "prime": 48611,
     "quick_sort": 0,
     "red-black": 4000000,
+    "rsa": 0,
     "salesman": 840,
     "simdMandelbrot": 775007,
     "simdNbody": -0.1691057
