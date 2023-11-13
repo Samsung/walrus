@@ -891,15 +891,15 @@ static void simdEmitAllTrue(sljit_compiler* compiler, uint32_t opcode, sljit_s32
     simdEmitSSEOp(compiler, opcode, tmp, rn);
     simdEmitSSEOp(compiler, SimdOp::ptest, tmp, tmp);
     sljit_set_current_flags(compiler, SLJIT_SET_Z);
-    sljit_emit_op_flags(compiler, SLJIT_MOV32, rd, 0, SLJIT_ZERO);
 }
 
-static void emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
+static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
     JITArg args[2];
 
     sljit_s32 srcType = SLJIT_SIMD_ELEM_128;
+    sljit_s32 type = SLJIT_ZERO;
 
     switch (instr->opcode()) {
     case ByteCode::I8X16AllTrueOpcode:
@@ -917,6 +917,7 @@ static void emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
     default:
         ASSERT(instr->opcode() == ByteCode::V128AnyTrueOpcode);
         srcType = SLJIT_SIMD_ELEM_128;
+        type = SLJIT_NOT_ZERO;
         break;
     }
 
@@ -942,13 +943,44 @@ static void emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
         ASSERT(instr->opcode() == ByteCode::V128AnyTrueOpcode);
         simdEmitSSEOp(compiler, SimdOp::ptest, args[0].arg, args[0].arg);
         sljit_set_current_flags(compiler, SLJIT_SET_Z);
-        sljit_emit_op_flags(compiler, SLJIT_MOV32, dst, 0, SLJIT_NOT_ZERO);
         break;
     }
+
+    ASSERT(instr->next() != nullptr);
+
+    if (instr->next()->isInstruction()) {
+        Instruction* nextInstr = instr->next()->asInstruction();
+
+        switch (nextInstr->opcode()) {
+        case ByteCode::JumpIfTrueOpcode:
+        case ByteCode::JumpIfFalseOpcode:
+            if (nextInstr->getParam(0)->item == instr) {
+                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+                    type ^= 0x1;
+                }
+
+                nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
+                return true;
+            }
+            break;
+        case ByteCode::SelectOpcode:
+            if (nextInstr->getParam(2)->item == instr) {
+                emitSelect(compiler, nextInstr, type);
+                return true;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    sljit_emit_op_flags(compiler, SLJIT_MOV32, dst, 0, type);
 
     if (SLJIT_IS_MEM(args[1].arg)) {
         sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, dst, 0);
     }
+
+    return false;
 }
 
 static void simdEmitPMinMax(sljit_compiler* compiler, uint32_t operation, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
