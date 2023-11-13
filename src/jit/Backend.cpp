@@ -829,7 +829,9 @@ void JITCompiler::compile()
             break;
         }
         case Instruction::UnaryCondSIMD: {
-            emitUnaryCondSIMD(m_compiler, item->asInstruction());
+            if (emitUnaryCondSIMD(m_compiler, item->asInstruction())) {
+                item = item->next();
+            }
             break;
         }
         case Instruction::LoadLaneSIMD: {

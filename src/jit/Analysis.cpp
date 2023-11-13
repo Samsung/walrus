@@ -235,8 +235,16 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize, size_t next
         end = operand + instr->resultCount();
 
         // Only certain instructions are collected
-        if (instr->group() != Instruction::Immediate && instr->group() != Instruction::Compare && instr->group() != Instruction::CompareFloat) {
+        switch (instr->group()) {
+        case Instruction::Immediate:
+        case Instruction::Compare:
+        case Instruction::CompareFloat:
+        case Instruction::UnaryCondSIMD:
+            break;
+
+        default:
             instr = nullptr;
+            break;
         }
 
         while (operand < end) {

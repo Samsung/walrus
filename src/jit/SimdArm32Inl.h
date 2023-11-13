@@ -771,7 +771,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
-static void emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
+static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
     JITArg args[2];
@@ -825,11 +825,44 @@ static void emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_LANE_SIGNED | SLJIT_32 | srcType, tmpReg, 0, dst, 0);
     sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, dst, 0, SLJIT_IMM, 0);
+
+    ASSERT(instr->next() != nullptr);
+
+    if (instr->next()->isInstruction()) {
+        Instruction* nextInstr = instr->next()->asInstruction();
+
+        switch (nextInstr->opcode()) {
+        case ByteCode::JumpIfTrueOpcode:
+        case ByteCode::JumpIfFalseOpcode:
+            if (nextInstr->getParam(0)->item == instr) {
+                sljit_s32 type = SLJIT_NOT_EQUAL;
+
+                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+                    type ^= 0x1;
+                }
+
+                nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
+                return true;
+            }
+            break;
+        case ByteCode::SelectOpcode:
+            if (nextInstr->getParam(2)->item == instr) {
+                emitSelect(compiler, nextInstr, SLJIT_NOT_EQUAL);
+                return true;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
     sljit_emit_op_flags(compiler, SLJIT_MOV, dst, 0, SLJIT_NOT_EQUAL);
 
     if (SLJIT_IS_MEM(args[1].arg)) {
         sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, dst, 0);
     }
+
+    return false;
 }
 
 static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
