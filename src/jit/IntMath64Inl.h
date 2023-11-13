@@ -355,6 +355,14 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
         return emitFloatSelect(compiler, instr, type);
     }
 
+    if (select->valueSize() == 16) {
+#ifdef HAS_SIMD
+        return emitSelect128(compiler, instr, type);
+#else /* HAS_SIMD */
+        RELEASE_ASSERT_NOT_REACHED();
+#endif /* HAS_SIMD */
+    }
+
     bool is32 = select->valueSize() == 4;
     sljit_s32 movOpcode = is32 ? SLJIT_MOV32 : SLJIT_MOV;
     JITArg args[3] = { operands, operands + 1, operands + 3 };
