@@ -311,3 +311,37 @@ static void emitGlobalSet128(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalSet->index() * sizeof(void*));
     sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src.arg, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset());
 }
+
+void emitSelect128(sljit_compiler* compiler, Instruction* instr, sljit_s32 jump_type)
+{
+    Operand* operands = instr->operands();
+    assert(instr->opcode() == ByteCode::SelectOpcode && instr->paramCount() == 3);
+
+    JITArg args[2];
+
+
+    JITArg target(operands + 3);
+    sljit_s32 dstReg = GET_TARGET_REG(target.arg, SLJIT_FR0);
+
+    sljit_s32 arg1_reg = sljit_has_cpu_feature(SLJIT_SIMD_REGS_ARE_PAIRS) ? SLJIT_FR2 : SLJIT_FR1;
+
+    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, SLJIT_FR0);
+    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, arg1_reg);
+
+    const sljit_s32 mov_type = SLJIT_SIMD_ELEM_128 | SLJIT_SIMD_REG_128;
+
+    if (jump_type == -1) {
+        JITArg cond(operands + 2);
+        sljit_emit_op2u(compiler, SLJIT_SUB32 | SLJIT_SET_Z, cond.arg, cond.argw, SLJIT_IMM, 0);
+        jump_type = SLJIT_NOT_ZERO;
+    }
+
+    sljit_emit_simd_mov(compiler, mov_type, dstReg, args[0].arg, args[0].argw);
+    sljit_jump* jump = sljit_emit_jump(compiler, jump_type);
+    sljit_emit_simd_mov(compiler, mov_type, dstReg, args[1].arg, args[1].argw);
+    sljit_set_label(jump, sljit_emit_label(compiler));
+
+    if (SLJIT_IS_MEM(target.arg)) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | mov_type, dstReg, target.arg, target.argw);
+    }
+}

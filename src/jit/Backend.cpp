@@ -344,6 +344,8 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
 
 #include "FloatMathInl.h"
 
+void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
+
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 #include "IntMath32Inl.h"
 #else /* !SLJIT_32BIT_ARCHITECTURE */
