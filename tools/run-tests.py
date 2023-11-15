@@ -204,7 +204,7 @@ def main():
     success, fail = [], []
 
     for suite in args.suite:
-        print(COLOR_PURPLE + 'running test suite: ' + suite + COLOR_RESET)
+        print(COLOR_PURPLE + f'running test suite{ " with jit" if jit else ""}: ' + suite + COLOR_RESET)
         try:
             RUNNERS[suite](args.engine)
             success += [suite]
