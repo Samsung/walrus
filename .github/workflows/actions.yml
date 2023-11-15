@@ -76,6 +76,7 @@ jobs:
         rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
         rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
         $RUNNER --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
+        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
 
   build-test-on-x86:
     runs-on: ubuntu-latest
@@ -94,7 +95,9 @@ jobs:
         cmake -H. -Bout/linux/x86 $BUILD_OPTIONS
         ninja -Cout/linux/x86
     - name: Run Tests
-      run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
+      run: |
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
+          $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
 
   build-test-on-x64:
     runs-on: ubuntu-latest
@@ -113,7 +116,9 @@ jobs:
         cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
         ninja -Cout/linux/x64
     - name: Run Tests
-      run: $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
+      run: |
+         $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
+         $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
 
   build-test-on-armv7:
     runs-on: ubuntu-latest
