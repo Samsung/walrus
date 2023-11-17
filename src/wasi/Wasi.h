@@ -131,6 +131,7 @@ public:
 
 #define FOR_EACH_WASI_FUNC(F)  \
     F(proc_exit, I32R)         \
+    F(proc_raise, I32_RI32)    \
     F(random_get, I32I32_RI32) \
     F(fd_write, I32I32I32I32_RI32)
 
@@ -147,6 +148,7 @@ public:
     static bool checkMemOffset(Memory* memory, uint32_t memoryOffset, uint32_t length);
 
     static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
 

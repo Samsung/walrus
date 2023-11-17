@@ -64,6 +64,12 @@ void WASI::proc_exit(ExecutionState& state, Value* argv, Value* result, Instance
     ASSERT_NOT_REACHED();
 }
 
+void WASI::proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    ASSERT(argv[0].type() == Value::I32);
+    result[0] = Value(uvwasi_proc_raise(WASI::m_uvwasi, argv[0].asI32()));
+}
+
 void WASI::random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     ASSERT(argv[0].type() == Value::I32);
