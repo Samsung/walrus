@@ -64,6 +64,19 @@ void WASI::proc_exit(ExecutionState& state, Value* argv, Value* result, Instance
     ASSERT_NOT_REACHED();
 }
 
+void WASI::random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    ASSERT(argv[0].type() == Value::I32);
+    ASSERT(argv[1].type() == Value::I32);
+    if (!WASI::checkMemOffset(instance->memory(0), argv[0].asI32(), argv[1].asI32())) {
+        result[0] = Value(WASI::wasi_errno::inval);
+    }
+
+    void* buf = (void*)(instance->memory(0)->buffer() + argv[0].asI32());
+    uvwasi_size_t length = argv[1].asI32();
+    result[0] = Value(uvwasi_random_get(WASI::m_uvwasi, buf, length));
+}
+
 void WASI::fillWasiFuncTable()
 {
 #define WASI_FUNC_TABLE(NAME, FUNCTYPE)                                                             \
