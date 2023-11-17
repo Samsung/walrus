@@ -27,6 +27,7 @@ public:
         NONE = 0,
         I32R,
         I32_RI32,
+        I32I32_RI32,
         I32I32I32I32_RI32,
         RI32,
         I64R,
@@ -63,6 +64,15 @@ public:
             // I32_RI32
             param = new ValueTypeVector();
             result = new ValueTypeVector();
+            param->push_back(Value::Type::I32);
+            result->push_back(Value::Type::I32);
+            m_vector[index++] = new FunctionType(param, result);
+        }
+        {
+            // I32I32_RI32
+            param = new ValueTypeVector();
+            result = new ValueTypeVector();
+            param->push_back(Value::Type::I32);
             param->push_back(Value::Type::I32);
             result->push_back(Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);

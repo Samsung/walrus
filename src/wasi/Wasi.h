@@ -135,8 +135,9 @@ public:
         WasiFunction::WasiFunctionCallback ptr;
     };
 
-#define FOR_EACH_WASI_FUNC(F) \
-    F(proc_exit, I32R)        \
+#define FOR_EACH_WASI_FUNC(F)  \
+    F(proc_exit, I32R)         \
+    F(random_get, I32I32_RI32) \
     F(fd_write, I32I32I32I32_RI32)
 
     enum WasiFuncName : size_t {
@@ -153,6 +154,7 @@ public:
 
     static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
 
     static WasiFunc m_wasiFunctions[FuncEnd];
     static uvwasi_t* m_uvwasi;
