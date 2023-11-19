@@ -48,6 +48,7 @@ expectedValues = {
     "simdMandelbrot": 775007,
     "simdNbody": -0.1691057,
     "simd_matrix_multiply": 3920.0,
+    "ticTacToe": 4748900
 }
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
 gameTests = ["mandelbrot", "nbody", "gregory", "fannkuch", "k_nucleotide"]
