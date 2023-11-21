@@ -860,11 +860,13 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
     JITArg cond;
     ASSERT(instr->opcode() == ByteCode::SelectOpcode && instr->paramCount() == 3);
 
-    if (false) {
+    Select* select = reinterpret_cast<Select*>(instr->byteCode());
+
+    if (select->isFloat()) {
         return emitFloatSelect(compiler, instr, type);
     }
 
-    if (reinterpret_cast<Select*>(instr->byteCode())->valueSize() == 4) {
+    if (select->valueSize() == 4) {
         JITArg args[3] = { operands, operands + 1, operands + 3 };
 
         if (type == -1) {

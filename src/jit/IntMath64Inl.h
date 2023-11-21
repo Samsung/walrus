@@ -349,11 +349,13 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
     Operand* operands = instr->operands();
     assert(instr->opcode() == ByteCode::SelectOpcode && instr->paramCount() == 3);
 
-    if (false) {
+    Select* select = reinterpret_cast<Select*>(instr->byteCode());
+
+    if (select->isFloat()) {
         return emitFloatSelect(compiler, instr, type);
     }
 
-    bool is32 = reinterpret_cast<Select*>(instr->byteCode())->valueSize() == 4;
+    bool is32 = select->valueSize() == 4;
     sljit_s32 movOpcode = is32 ? SLJIT_MOV32 : SLJIT_MOV;
     JITArg args[3] = { operands, operands + 1, operands + 3 };
 

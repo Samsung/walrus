@@ -1132,10 +1132,11 @@ protected:
 
 class Select : public ByteCode {
 public:
-    Select(ByteCodeStackOffset condOffset, uint16_t size, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
+    Select(ByteCodeStackOffset condOffset, uint16_t size, bool isFloat, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
         : ByteCode(Opcode::SelectOpcode)
         , m_condOffset(condOffset)
         , m_valueSize(size)
+        , m_isFloat(isFloat)
         , m_src0Offset(src0)
         , m_src1Offset(src1)
         , m_dstOffset(dst)
@@ -1143,10 +1144,8 @@ public:
     }
 
     ByteCodeStackOffset condOffset() const { return m_condOffset; }
-    uint16_t valueSize() const
-    {
-        return m_valueSize;
-    }
+    uint16_t valueSize() const { return m_valueSize; }
+    bool isFloat() const { return m_isFloat != 0; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
@@ -1164,7 +1163,8 @@ public:
 
 protected:
     ByteCodeStackOffset m_condOffset;
-    uint16_t m_valueSize;
+    uint8_t m_valueSize;
+    uint8_t m_isFloat;
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_dstOffset;
