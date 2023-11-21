@@ -1847,7 +1847,8 @@ public:
         auto src1 = popVMStack();
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(type);
-        pushByteCode(Walrus::Select(stackPos, Walrus::valueSize(type), src0, src1, dst), WASMOpcode::SelectOpcode);
+        bool isFloat = type == Walrus::Value::F32 || type == Walrus::Value::F64;
+        pushByteCode(Walrus::Select(stackPos, Walrus::valueSize(type), isFloat, src0, src1, dst), WASMOpcode::SelectOpcode);
     }
 
     virtual void OnThrowExpr(Index tagIndex) override
