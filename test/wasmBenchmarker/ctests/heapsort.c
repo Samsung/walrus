@@ -15,109 +15,22 @@
  */
 
 #include <stdio.h>
-#include <stdint.h>
 
-#define ARRAY_LENGTH 32000
-#define ITERATIONS 16
+#include "include/random.h"
 
-// constants for the random numbers
-#define m UINT16_MAX
-#define a 33278
-#define c 1256
-#define seed 55682
+#define ARRAY_LENGTH 15000
+#define ITERATIONS 64
 
 #define NO_CHILD 0
-#define NO_PARENT UINT16_MAX
+#define NO_PARENT 65535
 
-/**
- * Generate random number according to
- * the linear congruential generator (LCG).
- *
- * Xˇ(n+1) = (a * Xˇ(n) + c) mod m
- *
- * where:
- * - 0 < m
- * - 0 < a < m
- * - 0 <= c < m
- * - 0 <= Xˇ(0) <= m
-*/
-uint16_t random();
-
-
-/**
- * Sort the given array according to
- * the heapsort algorithm.
-*/
-void heapsort(uint16_t array[], uint16_t array_length);
-
-
-/**
- * Convert a heap to a max-heap
- * (where parents have greater value than their children)
-*/
-void toMaxHeap(uint16_t array[], uint16_t array_length);
-
-
-/**
- * Set the children's index accordingly.
- *
- * If there's no child, it sets NO_CHILD.
-*/
-void getChildrenIndex(uint16_t array_length, uint16_t parentIndex, uint16_t *childIndex1, uint16_t *childIndex2);
-
-
-/**
- * Set the parent's index.
- *
- * If there is no parent, it returns NO_PARENT.
-*/
-uint16_t getParentIndex(uint16_t childIndex);
-
-
-/**
- * Correct the tree if needed from the given index
- * to be correct to the max heap.
-*/
-void correct(uint16_t array[], uint16_t array_length, uint16_t elementInxex);
-
-
-/**
- * Swap the values of given elements
-*/
-void swap(uint16_t array[], uint16_t elementIndex1, uint16_t elementIndex2);
-
-
-uint8_t runtime();
-
-
-int main() {
-    printf("%u\n", (unsigned int) runtime());
-    return 0;
+void swap(unsigned int array[], unsigned int elementIndex1, unsigned int elementIndex2) {
+    unsigned int temp = array[elementIndex1];
+    array[elementIndex1] = array[elementIndex2];
+    array[elementIndex2] = temp;
 }
 
-
-uint16_t random() {
-    static uint16_t previous = seed;
-    previous = (a * previous + c) % m;
-    return previous;
-}
-
-void heapsort(uint16_t array[], uint16_t array_length) {
-    toMaxHeap(array, array_length);
-    while (array_length > 1) {
-        swap(array, 0, array_length - 1);
-        array_length -= 1;
-        correct(array, array_length, 0);
-    }
-}
-
-void toMaxHeap(uint16_t array[], uint16_t array_length) {
-    for (int i = array_length - 1; i >= 1; i--) {
-        correct(array, array_length, getParentIndex(i));
-    }
-}
-
-void getChildrenIndex(uint16_t array_length, uint16_t parentIndex, uint16_t *childIndex1, uint16_t *childIndex2) {
+void getChildrenIndex(unsigned int array_length, unsigned int parentIndex, unsigned int* childIndex1, unsigned int* childIndex2) {
     if (array_length > (parentIndex * 2) + 1) {
         *childIndex1 = (parentIndex * 2) + 1;
         if (array_length > (parentIndex * 2) + 2) {
@@ -131,7 +44,7 @@ void getChildrenIndex(uint16_t array_length, uint16_t parentIndex, uint16_t *chi
     }
 }
 
-uint16_t getParentIndex(uint16_t childIndex) {
+unsigned int getParentIndex(unsigned int childIndex) {
     if (childIndex == 0) {
         return NO_PARENT;
     } else {
@@ -139,9 +52,9 @@ uint16_t getParentIndex(uint16_t childIndex) {
     }
 }
 
-void correct(uint16_t array[], uint16_t array_length, uint16_t elementInxex) {
-    uint16_t childIndex1;
-    uint16_t childIndex2;
+void correct(unsigned int array[], unsigned int array_length, unsigned int elementInxex) {
+    unsigned int childIndex1;
+    unsigned int childIndex2;
     getChildrenIndex(array_length, elementInxex, &childIndex1, &childIndex2);
     if (childIndex1 == NO_CHILD && childIndex2 == NO_CHILD) {
         return;
@@ -168,26 +81,40 @@ void correct(uint16_t array[], uint16_t array_length, uint16_t elementInxex) {
     }
 }
 
-void swap(uint16_t array[], uint16_t elementIndex1, uint16_t elementIndex2) {
-    uint16_t temp = array[elementIndex1];
-    array[elementIndex1] = array[elementIndex2];
-    array[elementIndex2] = temp;
+void toMaxHeap(unsigned int array[], unsigned int array_length) {
+    for (unsigned int i = array_length - 1; i >= 1; i--) {
+        correct(array, array_length, getParentIndex(i));
+    }
 }
 
-uint8_t runtime() {
-    for (int i = 0; i < ITERATIONS; i++) {
-        uint16_t array[ARRAY_LENGTH];
+void heapsort(unsigned int array[], unsigned int array_length) {
+    toMaxHeap(array, array_length);
+    while (array_length > 1) {
+        swap(array, 0, array_length - 1);
+        array_length--;
+        correct(array, array_length, 0);
+    }
+}
+
+int runtime() {
+    for (unsigned int i = 0; i < ITERATIONS; i++) {
+        unsigned int array[ARRAY_LENGTH];
         for (int j = 0; j < ARRAY_LENGTH; j++) {
             array[j] = random();
         }
 
         heapsort(array, ARRAY_LENGTH);
 
-        for (int j = 0; j < ARRAY_LENGTH - 1; j++) {
+        for (unsigned int j = 0; j < ARRAY_LENGTH - 1; j++) {
             if (array[j] > array[j + 1]) {
                 return j;
             }
         }
     }
+    return 0;
+}
+
+int main() {
+    printf("%d\n", runtime());
     return 0;
 }
