@@ -14,6 +14,21 @@
  * limitations under the License.
  */
 
+#ifndef MANDELBROT_H
+#define MANDELBROT_H
+
+#ifndef FLOAT_SIZE
+#error define FLOAT_SIZE! (float = 4 | double = 8)
+#endif
+
+#if FLOAT_SIZE == 4
+#define TYPE float
+#elif FLOAT_SIZE == 8
+#define TYPE double
+#else
+#error FLOAT_SIZE has to be 4 or 8! (float = 4 | double = 8)
+#endif
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <math.h>
@@ -32,22 +47,27 @@
 
 #define setNthBit(b, n) b = b | (1 << (7 - n))
 
-#define ABS_COMPLEX(z_real, z_complex) (sqrtf(z_real * z_real + z_complex * z_complex))
+#if FLOAT_SIZE == 4
+#define complexAbs(z_real, z_complex) (sqrtf(z_real * z_real + z_complex * z_complex))
+#else // FLOAT_SIZE == 8
+#define complexAbs(z_real, z_complex) (sqrt(z_real * z_real + z_complex * z_complex))
+#endif
+
+#define square(a) a * a
 
 typedef uint8_t byte;
 
-byte isInMandelbrotSet(float c_real, float c_imaginary)
-{
+byte isInMandelbrotSet(TYPE c_real, TYPE c_imaginary) {
     byte result = 0b10000000;
-    float z_real = 0;
-    float z_imaginary = 0;
-    for (size_t k = 0; k < N; k++) {
-        float complex_abs = ABS_COMPLEX(z_real, z_imaginary);
-        if (getNthBit(result, 0) == 1 && complex_abs > 2) {
+    TYPE z_real = 0;
+    TYPE z_imaginary = 0;
+    for (int k = 0; k < N; k++) {
+        TYPE abs = complexAbs(z_real, z_imaginary);
+        if (getNthBit(result, 0) == 1 && abs > (TYPE)2.0) {
             clearNthBit(result, 0);
         } else {
-            float next_z_real = (z_real * z_real - z_imaginary * z_imaginary) + c_real;
-            float next_z_imaginary = ((float)2.0 * z_real * z_imaginary) + c_imaginary;
+            TYPE next_z_real = (square(z_real) - square(z_imaginary)) + c_real;
+            TYPE next_z_imaginary = ((TYPE)2.0 * z_real * z_imaginary) + c_imaginary;
             z_real = next_z_real;
             z_imaginary = next_z_imaginary;
         }
@@ -59,13 +79,13 @@ byte isInMandelbrotSet(float c_real, float c_imaginary)
     return result;
 }
 
-uint32_t runtime() {
-    uint32_t setSize = 0;
+int runtime() {
+    int setSize = 0;
     for (int i = 0; i < HIGHT; i++) {
         for (int j = 0; j < WIDTH; j++) {
-            float real = ((float)j * (float)ZOOM) + (float)REAL_AXIS_SHIFT;
-            float imaginary = ((float)i * (float)ZOOM) + (float)IMAGINARY_AXIS_SHIFT;
-            if (getNthBit(isInMandelbrotSet(real, imaginary),0)) {
+            TYPE real = ((TYPE)j *(TYPE)ZOOM) + (TYPE)REAL_AXIS_SHIFT;
+            TYPE imaginary = ((TYPE)i * (TYPE)ZOOM) + (TYPE)IMAGINARY_AXIS_SHIFT;
+            if (getNthBit(isInMandelbrotSet(real, imaginary), 0)) {
                 setSize++;
             }
         }
@@ -73,8 +93,9 @@ uint32_t runtime() {
     return setSize;
 }
 
-
 int main() {
     printf("%u\n", runtime());
     return 0;
 }
+
+#endif /* MANDELBROT_H */
