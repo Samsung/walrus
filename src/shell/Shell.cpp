@@ -113,7 +113,7 @@ static void printF64(double v)
 static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), useJIT, jitVerbose);
     if (!parseResult.second.empty()) {
         Trap::TrapResult tr;
         tr.exception = Exception::create(parseResult.second);
@@ -121,10 +121,6 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     }
 
     auto module = parseResult.first;
-    if (useJIT) {
-        module->jitCompile(nullptr, 0, jitVerbose);
-    }
-
     const auto& importTypes = module->imports();
 
     ExternVector importValues;
@@ -874,19 +870,13 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
 
 static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size());
-
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), useJIT, jitVerbose);
     if (!parseResult.second.empty()) {
         fprintf(stderr, "parse error: %s\n", parseResult.second.c_str());
         return;
     }
 
     auto module = parseResult.first;
-
-    if (useJIT) {
-        module->jitCompile(nullptr, 0, jitVerbose);
-    }
-
     const auto& importTypes = module->imports();
 
     if (importTypes.size() != 0) {
