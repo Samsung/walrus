@@ -9,7 +9,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
   list(APPEND uvwasi_cflags -Wno-unused-parameter)
 endif()
 
-set( CMAKE_C_FLAGS -fPIC)
+set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
 
 if(DEFINED WALRUS_ARCH)
   if(${WALRUS_ARCH} STREQUAL "x86")
