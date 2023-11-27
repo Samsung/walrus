@@ -1429,7 +1429,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F64X2SubOpcode:
     case ByteCode::F64X2MulOpcode:
     case ByteCode::F64X2DivOpcode:
-    case ByteCode::F64X2SqrtOpcode:
     case ByteCode::F64X2EqOpcode:
     case ByteCode::F64X2NeOpcode:
     case ByteCode::F64X2LtOpcode:
@@ -1758,9 +1757,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::F64X2DivOpcode:
         simdEmitOp(compiler, SimdOp::divpd, dst, args[0].arg, args[1].arg);
-        break;
-    case ByteCode::F64X2SqrtOpcode:
-        simdEmitOp(compiler, SimdOp::sqrtpd, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::F64X2EqOpcode:
         simdEmitOp(compiler, SimdOp::cmpeqpd, dst, args[0].arg, args[1].arg);

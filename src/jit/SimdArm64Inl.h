@@ -199,70 +199,102 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
     JITArg args[2];
 
-    sljit_s32 type = SLJIT_SIMD_ELEM_128;
+    sljit_s32 srcType = SLJIT_SIMD_ELEM_128;
+    sljit_s32 dstType = SLJIT_SIMD_ELEM_128;
 
     switch (instr->opcode()) {
-    case ByteCode::F32X4AbsOpcode:
-    case ByteCode::F32X4CeilOpcode:
-    case ByteCode::F32X4FloorOpcode:
-    case ByteCode::F32X4NearestOpcode:
-    case ByteCode::F32X4NegOpcode:
-    case ByteCode::F32X4SqrtOpcode:
-    case ByteCode::F32X4TruncOpcode:
-    case ByteCode::F64X2PromoteLowF32X4Opcode:
-    case ByteCode::I32X4TruncSatF32X4SOpcode:
-    case ByteCode::I32X4TruncSatF32X4UOpcode:
-    case ByteCode::I32X4TruncSatF64X2SZeroOpcode:
-    case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
-        type = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
-        break;
-    case ByteCode::F64X2AbsOpcode:
-    case ByteCode::F64X2CeilOpcode:
-    case ByteCode::F64X2FloorOpcode:
-    case ByteCode::F64X2NearestOpcode:
-    case ByteCode::F64X2NegOpcode:
-    case ByteCode::F64X2SqrtOpcode:
-    case ByteCode::F64X2TruncOpcode:
-    case ByteCode::F32X4DemoteF64X2ZeroOpcode:
-        type = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
-        break;
     case ByteCode::I8X16NegOpcode:
+        srcType = SLJIT_SIMD_ELEM_8;
+        dstType = SLJIT_SIMD_ELEM_8;
+        break;
     case ByteCode::I16X8ExtendLowI8X16SOpcode:
     case ByteCode::I16X8ExtendHighI8X16SOpcode:
     case ByteCode::I16X8ExtendLowI8X16UOpcode:
     case ByteCode::I16X8ExtendHighI8X16UOpcode:
-        type = SLJIT_SIMD_ELEM_8;
+        srcType = SLJIT_SIMD_ELEM_8;
+        dstType = SLJIT_SIMD_ELEM_16;
         break;
+    case ByteCode::I16X8NegOpcode:
     case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
     case ByteCode::I16X8ExtaddPairwiseI8X16UOpcode:
-    case ByteCode::I16X8NegOpcode:
+        srcType = SLJIT_SIMD_ELEM_16;
+        dstType = SLJIT_SIMD_ELEM_16;
+        break;
+    case ByteCode::I32X4NegOpcode:
+    case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
+    case ByteCode::I32X4ExtaddPairwiseI16X8UOpcode:
+        srcType = SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_ELEM_32;
+        break;
     case ByteCode::I32X4ExtendLowI16X8SOpcode:
     case ByteCode::I32X4ExtendHighI16X8SOpcode:
     case ByteCode::I32X4ExtendLowI16X8UOpcode:
     case ByteCode::I32X4ExtendHighI16X8UOpcode:
-        type = SLJIT_SIMD_ELEM_16;
+        srcType = SLJIT_SIMD_ELEM_16;
+        dstType = SLJIT_SIMD_ELEM_32;
         break;
-    case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
-    case ByteCode::I32X4ExtaddPairwiseI16X8UOpcode:
-    case ByteCode::I32X4NegOpcode:
-    case ByteCode::F32X4ConvertI32X4SOpcode:
-    case ByteCode::F32X4ConvertI32X4UOpcode:
-    case ByteCode::F64X2ConvertLowI32X4SOpcode:
-    case ByteCode::F64X2ConvertLowI32X4UOpcode:
-        type = SLJIT_SIMD_ELEM_32;
+    case ByteCode::I32X4TruncSatF32X4SOpcode:
+    case ByteCode::I32X4TruncSatF32X4UOpcode:
+        srcType = SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_FLOAT;
+        dstType = SLJIT_SIMD_ELEM_32;
+        break;
+    case ByteCode::I32X4TruncSatF64X2SZeroOpcode:
+    case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
+        srcType = SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+        dstType = SLJIT_SIMD_ELEM_32;
         break;
     case ByteCode::I64X2NegOpcode:
-        type = SLJIT_SIMD_ELEM_64;
+        srcType = SLJIT_SIMD_ELEM_64;
+        dstType = SLJIT_SIMD_ELEM_64;
+        break;
+    case ByteCode::F32X4AbsOpcode:
+    case ByteCode::F32X4NegOpcode:
+    case ByteCode::F32X4SqrtOpcode:
+    case ByteCode::F32X4CeilOpcode:
+    case ByteCode::F32X4FloorOpcode:
+    case ByteCode::F32X4TruncOpcode:
+    case ByteCode::F32X4NearestOpcode:
+        srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
+        break;
+    case ByteCode::F32X4ConvertI32X4SOpcode:
+    case ByteCode::F32X4ConvertI32X4UOpcode:
+        srcType = SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
+        break;
+    case ByteCode::F32X4DemoteF64X2ZeroOpcode:
+        srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
+        break;
+    case ByteCode::F64X2AbsOpcode:
+    case ByteCode::F64X2NegOpcode:
+    case ByteCode::F64X2SqrtOpcode:
+    case ByteCode::F64X2CeilOpcode:
+    case ByteCode::F64X2FloorOpcode:
+    case ByteCode::F64X2TruncOpcode:
+    case ByteCode::F64X2NearestOpcode:
+        srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
+        break;
+    case ByteCode::F64X2ConvertLowI32X4SOpcode:
+    case ByteCode::F64X2ConvertLowI32X4UOpcode:
+        srcType = SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
+        break;
+    case ByteCode::F64X2PromoteLowF32X4Opcode:
+        srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::V128NotOpcode:
-        type = SLJIT_SIMD_ELEM_128;
+        srcType = SLJIT_SIMD_ELEM_128;
+        dstType = SLJIT_SIMD_ELEM_128;
         break;
     default:
         ASSERT_NOT_REACHED();
         break;
     }
 
-    simdOperandToArg(compiler, operands, args[0], type, SLJIT_FR0);
+    simdOperandToArg(compiler, operands, args[0], srcType, SLJIT_FR0);
 
     args[1].set(operands + 1);
     sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_FR0);
@@ -401,7 +433,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (SLJIT_IS_MEM(args[1].arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, dst, args[1].arg, args[1].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | dstType, dst, args[1].arg, args[1].argw);
     }
 }
 
@@ -536,7 +568,8 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
     JITArg args[3];
 
-    sljit_s32 type = SLJIT_SIMD_ELEM_128;
+    sljit_s32 srcType = SLJIT_SIMD_ELEM_128;
+    sljit_s32 dstType = SLJIT_SIMD_ELEM_128;
     bool isDSTModified = false;
 
     switch (instr->opcode()) {
@@ -556,13 +589,14 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I8X16GtUOpcode:
     case ByteCode::I8X16GeSOpcode:
     case ByteCode::I8X16GeUOpcode:
-    case ByteCode::I16X8ExtmulLowI8X16SOpcode:
-    case ByteCode::I16X8ExtmulHighI8X16SOpcode:
-    case ByteCode::I16X8ExtmulLowI8X16UOpcode:
-    case ByteCode::I16X8ExtmulHighI8X16UOpcode:
+    case ByteCode::I8X16SwizzleOpcode:
+        srcType = SLJIT_SIMD_ELEM_8;
+        dstType = SLJIT_SIMD_ELEM_8;
+        break;
     case ByteCode::I8X16NarrowI16X8SOpcode:
     case ByteCode::I8X16NarrowI16X8UOpcode:
-        type = SLJIT_SIMD_ELEM_8;
+        srcType = SLJIT_SIMD_ELEM_16;
+        dstType = SLJIT_SIMD_ELEM_8;
         break;
     case ByteCode::I16X8AddOpcode:
     case ByteCode::I16X8SubOpcode:
@@ -581,15 +615,21 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8GtUOpcode:
     case ByteCode::I16X8GeSOpcode:
     case ByteCode::I16X8GeUOpcode:
-    case ByteCode::I32X4ExtmulLowI16X8SOpcode:
-    case ByteCode::I32X4ExtmulHighI16X8SOpcode:
-    case ByteCode::I32X4ExtmulLowI16X8UOpcode:
-    case ByteCode::I32X4ExtmulHighI16X8UOpcode:
+    case ByteCode::I16X8Q15mulrSatSOpcode:
+        srcType = SLJIT_SIMD_ELEM_16;
+        dstType = SLJIT_SIMD_ELEM_16;
+        break;
+    case ByteCode::I16X8ExtmulLowI8X16SOpcode:
+    case ByteCode::I16X8ExtmulHighI8X16SOpcode:
+    case ByteCode::I16X8ExtmulLowI8X16UOpcode:
+    case ByteCode::I16X8ExtmulHighI8X16UOpcode:
+        srcType = SLJIT_SIMD_ELEM_8;
+        dstType = SLJIT_SIMD_ELEM_16;
+        break;
     case ByteCode::I16X8NarrowI32X4SOpcode:
     case ByteCode::I16X8NarrowI32X4UOpcode:
-    case ByteCode::I16X8Q15mulrSatSOpcode:
-    case ByteCode::I32X4DotI16X8SOpcode:
-        type = SLJIT_SIMD_ELEM_16;
+        srcType = SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I32X4AddOpcode:
     case ByteCode::I32X4SubOpcode:
@@ -604,11 +644,16 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4GtUOpcode:
     case ByteCode::I32X4GeSOpcode:
     case ByteCode::I32X4GeUOpcode:
-    case ByteCode::I64X2ExtmulLowI32X4SOpcode:
-    case ByteCode::I64X2ExtmulHighI32X4SOpcode:
-    case ByteCode::I64X2ExtmulLowI32X4UOpcode:
-    case ByteCode::I64X2ExtmulHighI32X4UOpcode:
-        type = SLJIT_SIMD_ELEM_32;
+        srcType = SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_ELEM_32;
+        break;
+    case ByteCode::I32X4ExtmulLowI16X8SOpcode:
+    case ByteCode::I32X4ExtmulHighI16X8SOpcode:
+    case ByteCode::I32X4ExtmulLowI16X8UOpcode:
+    case ByteCode::I32X4ExtmulHighI16X8UOpcode:
+    case ByteCode::I32X4DotI16X8SOpcode:
+        srcType = SLJIT_SIMD_ELEM_16;
+        dstType = SLJIT_SIMD_ELEM_32;
         break;
     case ByteCode::I64X2AddOpcode:
     case ByteCode::I64X2SubOpcode:
@@ -619,58 +664,69 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64X2LeSOpcode:
     case ByteCode::I64X2GtSOpcode:
     case ByteCode::I64X2GeSOpcode:
-        type = SLJIT_SIMD_ELEM_64;
+        srcType = SLJIT_SIMD_ELEM_64;
+        dstType = SLJIT_SIMD_ELEM_64;
+        break;
+    case ByteCode::I64X2ExtmulLowI32X4SOpcode:
+    case ByteCode::I64X2ExtmulHighI32X4SOpcode:
+    case ByteCode::I64X2ExtmulLowI32X4UOpcode:
+    case ByteCode::I64X2ExtmulHighI32X4UOpcode:
+        srcType = SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::F32X4PMinOpcode:
     case ByteCode::F32X4PMaxOpcode:
         isDSTModified = true;
         FALLTHROUGH;
     case ByteCode::F32X4AddOpcode:
-    case ByteCode::F32X4DivOpcode:
-    case ByteCode::F32X4MaxOpcode:
-    case ByteCode::F32X4MinOpcode:
-    case ByteCode::F32X4MulOpcode:
     case ByteCode::F32X4SubOpcode:
+    case ByteCode::F32X4MulOpcode:
+    case ByteCode::F32X4DivOpcode:
     case ByteCode::F32X4EqOpcode:
     case ByteCode::F32X4NeOpcode:
     case ByteCode::F32X4LtOpcode:
     case ByteCode::F32X4LeOpcode:
     case ByteCode::F32X4GtOpcode:
     case ByteCode::F32X4GeOpcode:
-        type = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
+    case ByteCode::F32X4MaxOpcode:
+    case ByteCode::F32X4MinOpcode:
+        srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         break;
     case ByteCode::F64X2PMinOpcode:
     case ByteCode::F64X2PMaxOpcode:
         isDSTModified = true;
         FALLTHROUGH;
     case ByteCode::F64X2AddOpcode:
-    case ByteCode::F64X2DivOpcode:
-    case ByteCode::F64X2MaxOpcode:
-    case ByteCode::F64X2MinOpcode:
-    case ByteCode::F64X2MulOpcode:
     case ByteCode::F64X2SubOpcode:
+    case ByteCode::F64X2MulOpcode:
+    case ByteCode::F64X2DivOpcode:
+    case ByteCode::F64X2SqrtOpcode:
     case ByteCode::F64X2EqOpcode:
     case ByteCode::F64X2NeOpcode:
     case ByteCode::F64X2LtOpcode:
     case ByteCode::F64X2LeOpcode:
     case ByteCode::F64X2GtOpcode:
     case ByteCode::F64X2GeOpcode:
-        type = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
+    case ByteCode::F64X2MaxOpcode:
+    case ByteCode::F64X2MinOpcode:
+        srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
+        dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::V128AndOpcode:
     case ByteCode::V128OrOpcode:
     case ByteCode::V128XorOpcode:
     case ByteCode::V128AndnotOpcode:
-    case ByteCode::I8X16SwizzleOpcode:
-        type = SLJIT_SIMD_ELEM_128;
+        srcType = SLJIT_SIMD_ELEM_128;
+        dstType = SLJIT_SIMD_ELEM_128;
         break;
     default:
         ASSERT_NOT_REACHED();
         break;
     }
 
-    simdOperandToArg(compiler, operands, args[0], type, SLJIT_FR0);
-    simdOperandToArg(compiler, operands + 1, args[1], type, SLJIT_FR1);
+    simdOperandToArg(compiler, operands, args[0], srcType, SLJIT_FR0);
+    simdOperandToArg(compiler, operands + 1, args[1], srcType, SLJIT_FR1);
 
     args[2].set(operands + 2);
     sljit_s32 dst = GET_TARGET_REG(args[2].arg, isDSTModified ? SLJIT_FR2 : SLJIT_FR0);
@@ -1054,7 +1110,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (SLJIT_IS_MEM(args[2].arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | type, dst, args[2].arg, args[2].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | dstType, dst, args[2].arg, args[2].argw);
     }
 }
 
