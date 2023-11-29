@@ -21,6 +21,8 @@
 // 4x4 square matrix
 #define MATRIX_SIZE 16
 
+#define ITERATION 3500000
+
 void multiply_scalar(const double m1[], const double m2[], double out_m[])
 {
 	/* unrolled matrix multiplication */
@@ -83,15 +85,17 @@ double runtime()
     double m1[MATRIX_SIZE];
     double m2[MATRIX_SIZE];
     double out[MATRIX_SIZE];
-    double sum=0;
-
     for (int i = 0; i < MATRIX_SIZE; i++) {
         m1[i] = (double)i;
         m2[i] = (double)i;
     }
-    multiply_scalar(m1, m2, out);
-    for (int i = 0; i < MATRIX_SIZE; i++) {
-	    sum += out[i];
+    double sum;
+    for (unsigned int i = 0; i < ITERATION; i++) {
+        sum = 0;
+        multiply_scalar(m1, m2, out);
+        for (int i = 0; i < MATRIX_SIZE; i++) {
+            sum += out[i];
+        }
     }
     return sum;
 }
