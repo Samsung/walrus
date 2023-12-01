@@ -534,7 +534,18 @@ static void printConstVector(wabt::ConstVector& v)
             break;
         }
         case wabt::Type::V128: {
-            printf("v128");
+            char result[16 * 3];
+            char* ptr = result;
+            for (int i = 0; i < 16; i++) {
+                uint8_t left = (c.vec128().u8(i) & 0xf0) >> 4;
+                uint8_t right = c.vec128().u8(i) & 0x0f;
+                ptr[0] = (left < 10) ? ('0' + left) : ('a' + (left - 10));
+                ptr[1] = (right < 10) ? ('0' + right) : ('a' + (right - 10));
+                ptr[2] = ':';
+                ptr += 3;
+            }
+            ptr[-1] = '\0';
+            printf("%s", result);
             break;
         }
         case wabt::Type::ExternRef: {

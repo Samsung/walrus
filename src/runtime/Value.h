@@ -53,6 +53,22 @@ struct Vec128 {
         return memcmp(m_data, src.m_data, 16) == 0;
     }
 
+    operator std::string() const
+    {
+        char result[16 * 3];
+        char* ptr = result;
+        for (int i = 0; i < 16; i++) {
+            char left = (m_data[i] & 0xf0) >> 4;
+            char right = m_data[i] & 0x0f;
+            ptr[0] = (left < 10) ? ('0' + left) : ('a' + (left - 10));
+            ptr[1] = (right < 10) ? ('0' + right) : ('a' + (right - 10));
+            ptr[2] = ':';
+            ptr += 3;
+        }
+        ptr[-1] = '\0';
+        return std::string(result);
+    }
+
     float asF32(int lane) const { return to<float>(lane); }
     uint32_t asF32Bits(int lane) const { return to<uint32_t>(lane); }
     double asF64(int lane) const { return to<double>(lane); }
@@ -376,6 +392,8 @@ public:
             return std::to_string(asF32());
         case F64:
             return std::to_string(asF64());
+        case V128:
+            return (std::string)(asV128());
         case FuncRef:
         case ExternRef:
             return std::to_string((size_t)(asExternal()));
