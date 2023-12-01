@@ -213,6 +213,7 @@ public:
         SignedDivide32,
         SignedModulo,
         SignedModulo32,
+        ConvertIntFromFloat,
     };
 
     SlowCase(Type type, sljit_jump* jump_from, sljit_label* resume_label, Instruction* instr)
@@ -462,6 +463,10 @@ void SlowCase::emit(sljit_compiler* compiler)
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
         sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), m_resumeLabel);
+        return;
+    }
+    case Type::ConvertIntFromFloat: {
+        reinterpret_cast<ConvertIntFromFloatSlowCase*>(this)->emitSlowCase(compiler);
         return;
     }
     default: {
