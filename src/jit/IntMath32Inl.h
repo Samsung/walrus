@@ -1057,7 +1057,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         }
 
         if (isSelect) {
-            emitSelect(compiler, instr, type);
+            emitSelect(compiler, nextInstr, type);
             return true;
         }
 

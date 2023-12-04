@@ -98,6 +98,14 @@
 
     select
 )
+
+(func (export "test7") (param i64) (result i32)
+   i32.const 5
+   i32.const 8
+   local.get 0
+   i64.eqz
+   select
+)
 )
 
 (assert_return (invoke "test1") (i32.const 5) (i32.const 267386880))
@@ -106,3 +114,5 @@
 (assert_return (invoke "test4") (i32.const 6))
 (assert_return (invoke "test5") (f64.const 6.6))
 (assert_return (invoke "test6") (i32.const 6))
+(assert_return (invoke "test7" (i64.const 0)) (i32.const 5))
+(assert_return (invoke "test7" (i64.const 100)) (i32.const 8))
