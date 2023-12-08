@@ -98,6 +98,13 @@
 
     select
 )
+(func (export "fused64") (result i32)
+    i32.const 0xaa
+    i32.const 0xbb
+    i64.const 0
+    i64.eqz
+    select
+)
 )
 
 (assert_return (invoke "test1") (i32.const 5) (i32.const 267386880))
@@ -106,3 +113,4 @@
 (assert_return (invoke "test4") (i32.const 6))
 (assert_return (invoke "test5") (f64.const 6.6))
 (assert_return (invoke "test6") (i32.const 6))
+(assert_return (invoke "fused64") (i32.const 0xaa))
