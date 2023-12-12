@@ -89,7 +89,7 @@ void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<si
     }
 }
 
-static void createInstructionList(JITCompiler* compiler, ModuleFunction* function, Module* module)
+static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
     size_t idx = 0;
     size_t endIdx = function->currentByteCodeSize();
@@ -155,7 +155,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         it->second = new Label();
     }
 
-    size_t nextTryBlock = compiler->tryBlocks().size();
+    compiler->initTryBlockStart();
     buildCatchInfo(compiler, function, labels);
 
     it = labels.begin();
@@ -1247,7 +1247,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
         idx += byteCode->getSize();
     }
 
-    compiler->buildParamDependencies(STACK_OFFSET(function->requiredStackSize()), nextTryBlock);
+    compiler->buildParamDependencies(STACK_OFFSET(function->requiredStackSize()));
 
     if (compiler->verboseLevel() >= 1) {
         compiler->dump();
@@ -1256,8 +1256,7 @@ static void createInstructionList(JITCompiler* compiler, ModuleFunction* functio
     Walrus::JITFunction* jitFunc = new JITFunction();
 
     function->setJITFunction(jitFunc);
-    compiler->appendFunction(jitFunc, true);
-    compiler->clear();
+    compiler->compileFunction(jitFunc, true);
 }
 
 void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int verboseLevel)
@@ -1273,7 +1272,7 @@ void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int 
                     printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(i));
                 }
 
-                createInstructionList(&compiler, m_functions[i], this);
+                compileFunction(&compiler, m_functions[i], this);
             }
         }
     } else {
@@ -1283,14 +1282,14 @@ void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int 
                     printf("[[[[[[[  Function %p  ]]]]]]]\n", *functions);
                 }
 
-                createInstructionList(&compiler, *functions, this);
+                compileFunction(&compiler, *functions, this);
             }
 
             functions++;
         } while (--functionsLength != 0);
     }
 
-    compiler.compile();
+    compiler.generateCode();
 }
 
 } // namespace Walrus
