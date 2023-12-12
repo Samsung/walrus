@@ -63,7 +63,7 @@ InstanceConstData::InstanceConstData(std::vector<TrapBlock>& trapBlocks, std::ve
         m_tryBlocks.push_back(TryBlock(catchStart, catchCount, it.parent, sljit_get_label_addr(it.returnToLabel)));
 
         for (auto catchIt : it.catchBlocks) {
-            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.handler->label()), catchIt.stackSizeToBe, catchIt.tagIndex));
+            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.u.handlerLabel), catchIt.stackSizeToBe, catchIt.tagIndex));
         }
 
         catchStart += catchCount;
@@ -124,7 +124,7 @@ void InstanceConstData::append(std::vector<TrapBlock>& trapBlocks, std::vector<W
         m_tryBlocks.push_back(TryBlock(catchStart, catchCount, parent, sljit_get_label_addr(it.returnToLabel)));
 
         for (auto catchIt : it.catchBlocks) {
-            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.handler->label()), catchIt.stackSizeToBe, catchIt.tagIndex));
+            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.u.handlerLabel), catchIt.stackSizeToBe, catchIt.tagIndex));
         }
 
         catchStart += catchCount;

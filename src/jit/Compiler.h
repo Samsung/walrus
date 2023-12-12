@@ -340,9 +340,8 @@ public:
     // Various info bits.
     static const uint16_t kHasJumpList = 1 << 0;
     static const uint16_t kHasLabelData = 1 << 1;
-    static const uint16_t kNewFunction = 1 << 2;
-    static const uint16_t kHasTryInfo = 1 << 3;
-    static const uint16_t kHasCatchInfo = 1 << 4;
+    static const uint16_t kHasTryInfo = 1 << 2;
+    static const uint16_t kHasCatchInfo = 1 << 3;
 
     typedef std::vector<Instruction*> DependencyList;
 
@@ -388,13 +387,16 @@ private:
 struct TryBlock {
     struct CatchBlock {
         CatchBlock(Label* handler, size_t stackSizeToBe, uint32_t tagIndex)
-            : handler(handler)
-            , stackSizeToBe(stackSizeToBe)
+            : stackSizeToBe(stackSizeToBe)
             , tagIndex(tagIndex)
         {
+            u.handler = handler;
         }
 
-        Label* handler;
+        union {
+            Label* handler;
+            sljit_label* handlerLabel;
+        } u;
         size_t stackSizeToBe;
         uint32_t tagIndex;
     };
@@ -415,6 +417,57 @@ struct TryBlock {
     std::vector<sljit_jump*> throwJumps;
 };
 
+class JITCompiler;
+class SlowCase;
+
+struct TrapBlock {
+    TrapBlock(sljit_label* endLabel, size_t tryBlockId)
+        : endLabel(endLabel)
+    {
+        u.tryBlockId = tryBlockId;
+    }
+
+    TrapBlock(sljit_label* endLabel, sljit_label* handlerLabel)
+        : endLabel(endLabel)
+    {
+        u.handlerLabel = handlerLabel;
+    }
+
+    sljit_label* endLabel;
+
+    union {
+        sljit_label* handlerLabel;
+        size_t tryBlockId;
+    } u;
+};
+
+struct CompileContext {
+    CompileContext(Module* module, JITCompiler* compiler);
+
+    static CompileContext* get(sljit_compiler* compiler);
+
+    void add(SlowCase* slowCase) { slowCases.push_back(slowCase); }
+    void emitSlowCases(sljit_compiler* compiler);
+
+    JITCompiler* compiler;
+    sljit_label* trapLabel;
+    sljit_label* memoryTrapLabel;
+    sljit_label* returnToLabel;
+    uintptr_t branchTableOffset;
+    size_t globalsStart;
+    size_t tableStart;
+    size_t functionsStart;
+    size_t nextTryBlock;
+    size_t currentTryBlock;
+    size_t trapBlocksStart;
+    uint64_t initialMemorySize;
+    uint64_t maximumMemorySize;
+    std::vector<TrapBlock> trapBlocks;
+    std::vector<size_t> tryBlockStack;
+    std::vector<SlowCase*> slowCases;
+    std::vector<sljit_jump*> earlyReturns;
+};
+
 class JITCompiler {
 public:
     static const uint32_t kHasCondMov = 1 << 0;
@@ -424,7 +477,7 @@ public:
     ~JITCompiler()
     {
         clear();
-        releaseFunctionList();
+        m_functionList.clear();
     }
 
     Module* module() { return m_module; }
@@ -452,21 +505,20 @@ public:
         m_branchTableSize += value;
     }
 
-    void appendFunction(JITFunction* jitFunc, bool isExternal);
     void dump();
+    void buildParamDependencies(uint32_t requiredStackSize);
 
-    void buildParamDependencies(uint32_t requiredStackSize, size_t nextTryBlock);
-    void compile();
+    void compileFunction(JITFunction* jitFunc, bool isExternal);
+    void generateCode();
 
     std::vector<TryBlock>& tryBlocks() { return m_tryBlocks; }
-    Label* getFunctionEntry(size_t i) { return m_functionList[i].entryLabel; }
+    void initTryBlockStart() { m_tryBlockStart = m_tryBlocks.size(); }
     size_t tryBlockOffset() { return m_tryBlockOffset; }
 
 private:
     struct FunctionList {
-        FunctionList(JITFunction* jitFunc, Label* entryLabel, bool isExported, size_t branchTableSize)
+        FunctionList(JITFunction* jitFunc, bool isExported, size_t branchTableSize)
             : jitFunc(jitFunc)
-            , entryLabel(entryLabel)
             , exportEntryLabel(nullptr)
             , isExported(isExported)
             , branchTableSize(branchTableSize)
@@ -474,7 +526,6 @@ private:
         }
 
         JITFunction* jitFunc;
-        Label* entryLabel;
         sljit_label* exportEntryLabel;
         bool isExported;
         size_t branchTableSize;
@@ -485,21 +536,19 @@ private:
     void replace(InstructionListItem* item, InstructionListItem* newItem);
 
     // Backend operations.
-    void releaseFunctionList();
-    void emitProlog(size_t index, CompileContext& context);
-    void emitEpilog(size_t index, CompileContext& context);
+    void emitProlog();
+    void emitEpilog();
 
     InstructionListItem* m_first;
     InstructionListItem* m_last;
 
-    // List of functions. Multiple functions are compiled
-    // in one step to allow direct calls between them.
-    InstructionListItem* m_functionListFirst;
-    InstructionListItem* m_functionListLast;
-
     sljit_compiler* m_compiler;
+    CompileContext m_context;
     Module* m_module;
     size_t m_branchTableSize;
+    // Start inside the m_tryBlocks vector.
+    size_t m_tryBlockStart;
+    // Start inside the instance const data.
     size_t m_tryBlockOffset;
     int m_verboseLevel;
     uint32_t m_options;

@@ -97,25 +97,6 @@ void Label::merge(Label* other)
     }
 }
 
-void JITCompiler::clear()
-{
-    InstructionListItem* item = m_first;
-
-    m_first = nullptr;
-    m_last = nullptr;
-    m_branchTableSize = 0;
-
-    while (item != nullptr) {
-        InstructionListItem* next = item->next();
-
-        ASSERT(next == nullptr || next->m_prev == item);
-        ASSERT(!item->isLabel() || item->asLabel()->branches().size() > 0);
-
-        delete item;
-        item = next;
-    }
-}
-
 Instruction* JITCompiler::append(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount)
 {
     Instruction* instr;
@@ -218,29 +199,6 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
     return branch;
 }
 
-void JITCompiler::appendFunction(JITFunction* jitFunc, bool isExternal)
-{
-    ASSERT(m_first != nullptr && m_last != nullptr);
-
-    Label* entryLabel = new Label(m_functionListLast);
-    entryLabel->addInfo(Label::kNewFunction);
-    entryLabel->m_next = m_first;
-    m_first->m_prev = entryLabel;
-
-    if (m_functionListFirst == nullptr) {
-        ASSERT(m_functionListLast == nullptr);
-        m_functionListFirst = entryLabel;
-    } else {
-        ASSERT(m_functionListLast != nullptr);
-        m_functionListLast->m_next = entryLabel;
-    }
-
-    m_functionListLast = m_last;
-    m_first = nullptr;
-    m_last = nullptr;
-    m_functionList.push_back(FunctionList(jitFunc, entryLabel, isExternal, m_branchTableSize));
-}
-
 void JITCompiler::dump()
 {
     std::map<InstructionListItem*, int> instrIndex;
@@ -326,8 +284,7 @@ void JITCompiler::dump()
 
             Label* label = item->asLabel();
 
-            printf("Label:%s%s%s\n", (label->info() & Label::kNewFunction) ? " newFunction" : "",
-                   (label->info() & Label::kHasTryInfo) ? " hasTryInfo" : "",
+            printf("Label:%s%s\n", (label->info() & Label::kHasTryInfo) ? " hasTryInfo" : "",
                    (label->info() & Label::kHasCatchInfo) ? " hasCatchInfo" : "");
 
             for (auto it : label->branches()) {

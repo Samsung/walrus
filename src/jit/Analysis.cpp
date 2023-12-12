@@ -134,7 +134,7 @@ static bool isSameConst(std::vector<Instruction*>& instDeps)
     return true;
 }
 
-void JITCompiler::buildParamDependencies(uint32_t requiredStackSize, size_t nextTryBlock)
+void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
 {
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
@@ -142,6 +142,7 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize, size_t next
         }
     }
 
+    size_t nextTryBlock = m_tryBlockStart;
     bool updateDeps = true;
     std::vector<InstructionListItem*> currentDeps(requiredStackSize);
 
@@ -162,12 +163,12 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize, size_t next
                 do {
                     for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
                         if (it.tagIndex == std::numeric_limits<uint32_t>::max()) {
-                            it.handler->m_dependencyCtx->update(currentDeps);
+                            it.u.handler->m_dependencyCtx->update(currentDeps);
                         } else {
                             TagType* tagType = module()->tagType(it.tagIndex);
                             uint32_t size = module()->functionType(tagType->sigIndex())->param().size();
 
-                            it.handler->m_dependencyCtx->update(currentDeps, it.stackSizeToBe, it.stackSizeToBe + size);
+                            it.u.handler->m_dependencyCtx->update(currentDeps, it.stackSizeToBe, it.stackSizeToBe + size);
                         }
                     }
 
