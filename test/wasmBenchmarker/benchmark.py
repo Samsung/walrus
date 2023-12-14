@@ -20,6 +20,7 @@ import os
 import subprocess
 import sys
 import time
+from tqdm import tqdm
 
 from os.path import abspath, dirname, join
 from markdownTable import markdownTable  # pip install py-markdown-table
@@ -70,10 +71,11 @@ def prepare_arg_pars():
     parser.add_argument('--compile-anyway', help='compile the tests even if they are compiled', action='store_true')
     parser.add_argument('--enable-simd', help='run SIMD tests too', action='store_true')
     parser.add_argument('--jit', help='use JIT version of Walrus', action='store_true')
+    parser.add_argument('--verbose', help='prints extra informations e.g. paths', action='store_true')
     return parser.parse_args()
 
 
-def check_programs(engines):
+def check_programs(engines, verbose):
     if os.system("git --version >/dev/null") != 0:
         print("git not found")
         exit(1)
@@ -84,15 +86,15 @@ def check_programs(engines):
             print(path + " not found")
             exit(1)
 
-    print("Checks done")
+    if (verbose): print("Checks done")
 
 
-def get_emcc():
+def get_emcc(verbose):
     emcc_path = None 
     if os.getenv('EMSDK'):
         emcc_path = join(os.getenv('EMSDK'), 'upstream/emscripten/emcc.py')
         if os.path.exists(emcc_path):
-            print("EMCC already installed: " + emcc_path)
+            if (verbose): print("EMCC already installed: " + emcc_path)
             return emcc_path
 
     if os.path.exists("./emsdk/.git"):
@@ -106,11 +108,11 @@ def get_emcc():
         os.system("./emsdk/emsdk activate latest >/dev/null")
 
     emcc_path = "./emsdk/upstream/emscripten/emcc"
-    print("EMCC install done: " + emcc_path)
+    if (verbose): print("EMCC install done: " + emcc_path)
     return emcc_path
 
 
-def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, simd=False, run=None):
+def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, simd=False, run=None, verbose=False):
     if not os.path.exists(emcc_path):
         print("invalid path for emcc: " + emcc_path)
         exit(1)
@@ -138,25 +140,24 @@ def compile_tests(emcc_path, path, only_game=False, compile_anyway=False, simd=F
         test_names.append(name)
 
         if not compile_anyway and os.path.exists(path + "/wasm/" + name + ".wasm"):
-            print("target files are found; compilation skipped")
+            if (verbose): print(name + ".wasm is found; compilation skipped")
             continue
 
         extraFlags = "-msimd128" if file.startswith("simd") else ""
 
-        print("compiling " + name)
+        if (verbose): print("compiling " + name)
         bob_the_stringbuilder = emcc_path + " " + path + "/" + file + " " + extraFlags + " --no-entry -s WASM=1 -s EXPORTED_FUNCTIONS=_runtime -s EXPORTED_RUNTIME_METHODS=ccall,cwrap -o " + path + "/wasm/" + name + ".wasm"
-        print(bob_the_stringbuilder)
+        if verbose: print(bob_the_stringbuilder)
         os.system(bob_the_stringbuilder)
 
     return test_names
 
-def run_wasm(engine, path, name, jit=False):
+def run_wasm(engine, path, name, jit=False, verbose=False):
     if not os.path.exists(path):
         print("invalid path for run")
         exit(1)
 
     tc_path = path + "/wasm/" + name + ".wasm"
-    print("TC path: " + tc_path)
     flags = "--run-export runtime" + (" --jit" if jit else "")
 
     result = subprocess.check_output(engine + " " + flags + " " + tc_path, shell=True)
@@ -165,18 +166,18 @@ def run_wasm(engine, path, name, jit=False):
         print("run failed with " + name + ".wasm", file=sys.stderr)
         print("Expected: " + str(expectedValues[name]), file=sys.stderr)
         print("Got: " + str(result), file=sys.stderr)
-        return False
+        exit()
 
     return True
 
 
-def measure_time(path, name, function, engine=None, jit=False):
+def measure_time(path, name, function, engine=None, jit=False, verbose=False):
     start_time = time.perf_counter_ns()
 
     if engine is None:
-        ret_val = function(None, path, name, jit)
+        ret_val = function(None, path, name, jit, verbose)
     else:
-        ret_val = function(engine, path, name, jit)
+        ret_val = function(engine, path, name, jit, verbose)
 
     end_time = time.perf_counter_ns()
 
@@ -186,58 +187,81 @@ def measure_time(path, name, function, engine=None, jit=False):
         return math.nan
 
 
-def run_tests(path, test_names, engines, number_of_runs, jit=False):
+def run_tests(path, test_names, engines, number_of_runs, jit=False, verbose=False):
     ret_val = []
-    for name in test_names:
-        print("running " + name)
-        measurements_engines = {}
-        for e in engines:
-            measurements_engines[e] = []
-
-        for i in range(0, number_of_runs):
-            print("round " + str(i + 1))
+    if verbose:
+        for name in test_names:
+            tc_path = path + "/wasm/" + name + ".wasm"
+            print("running " + name + " (TC path: "+ tc_path  + ")")
+            measurements_engines = {}
             for e in engines:
-                measurements_engines[e].append(measure_time(path, name, run_wasm, e, jit))
-
-        result_list = {"test": name}
-
-        compare_result = False
-        results = {}
-        for e in engines:
-            results[e] = sum(measurements_engines[e])/len(measurements_engines[e])
-            if compare_result is False:
-                compare_result = results[e]
-
-        for e in engines:
-            result_list[e + " [s]"] = "{:.3f}".format(results[e] / 1000000000) + " ({:.3f}x)".format((results[e] / compare_result))
-
-        ret_val.append(result_list)
-
+                measurements_engines[e] = []
+            for i in range(0, number_of_runs):
+                print("round " + str(i + 1))
+                for e in engines:
+                    measurements_engines[e].append(measure_time(path, name, run_wasm, e, jit))
+            record = {"test": name}
+            for e in engines:
+                record[e] = "{:.3f}".format(min(measurements_engines[e]) / 1e9)
+            ret_val.append(record)
+    else:
+        results = dict()
+        for i in tqdm(range(0, len(test_names) * number_of_runs), desc ="Benchmark"):
+            name=test_names[int(i / number_of_runs)]
+            measurements_engines = {}
+            for e in engines:
+                measurements_engines[e] = measure_time(path, name, run_wasm, e, jit, verbose)
+            if name in results:
+                for e in engines:
+                    if measurements_engines[e] < results[name][e]:
+                        results[name][e] = measurements_engines[e]
+            else:
+                results[name] = dict()
+                for e in engines: results[name][e] = measurements_engines[e]
+        for testName in results.keys():
+            record = {"test": testName}
+            for e in engines:
+                record[e] = "{:.3f}".format(results[testName][e] / 1e9)
+            ret_val.append(record)
     return ret_val
 
 
-def generate_report(data, file=None):
-    if file is None:
-        file = sys.stdout
-    else:
-        file = open(file, "w")
-
-    print(markdownTable(data).setParams(row_sep='markdown', quote=False).getMarkdown(), file=file)
+def generate_report(data, fileName=None):
+    if fileName is None:
+        print(markdownTable(data).setParams(row_sep='markdown', quote=False).getMarkdown())
+        return
+    with open(fileName, 'w') as file:
+        if fileName.endswith(".csv"):
+            header = "test"
+            engineNames = list()
+            if len(data) > 0:
+                engineNames = list(data[0].keys())
+                engineNames.remove("test")
+            for engineName in engineNames:
+                header += ";" + engineName
+            print(header, file=file)
+            for record in data:
+                line = record["test"]
+                for engineName in engineNames:
+                    line += ";" + record[engineName]
+                print(line, file=file)
+            return
+        print(markdownTable(data).setParams(row_sep='markdown', quote=False).getMarkdown(), file=file)
 
 
 def main():
     args = prepare_arg_pars()
-    print(TEST_DIR)
+    if (args.verbose): print("Test dir: " + TEST_DIR)
 
     if args.engines is None:
         print("You need to specify the engine locations")
         exit(1)
 
-    check_programs(args.engines)
-    emcc_path = get_emcc()
-    test_names = compile_tests(emcc_path, args.test_dir, args.only_game, args.compile_anyway, args.enable_simd, args.run)
+    check_programs(args.engines, args.verbose)
+    emcc_path = get_emcc(args.verbose)
+    test_names = compile_tests(emcc_path, args.test_dir, args.only_game, args.compile_anyway, args.enable_simd, args.run, args.verbose)
     generate_report(
-        run_tests(args.test_dir, test_names, args.engines, args.iterations, args.jit),
+        run_tests(args.test_dir, test_names, args.engines, args.iterations, args.jit, args.verbose),
         args.report)
 
 
