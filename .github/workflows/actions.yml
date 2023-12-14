@@ -230,6 +230,7 @@ jobs:
         sudo apt update
         sudo apt install -y ninja-build gcc-multilib g++-multilib
         sudo pip install py-markdown-table
+        sudo pip install tqdm
     - name: Build x64
       env:
         BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
@@ -237,7 +238,7 @@ jobs:
         cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
         ninja -Cout/linux/x64
     - name: Run Tests
-      run: test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 3
+      run: test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 3 --verbose
 
   built-test-wasm-c-api:
     runs-on: ubuntu-latest
