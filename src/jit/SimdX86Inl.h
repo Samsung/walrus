@@ -1014,8 +1014,9 @@ static void simdEmitPMinMax(sljit_compiler* compiler, uint32_t operation, sljit_
     simdEmitSSEOp(compiler, is64 ? SimdOp::orpd : SimdOp::orps, rd, tmp);
 }
 
-static void simdEmitFloatMaxMinHelper(sljit_compiler* compiler, SimdOp::Type opcode, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, sljit_s32 tmp)
+static void simdEmitFloatMinMax(sljit_compiler* compiler, SimdOp::Type opcode, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
+    sljit_s32 tmp = SLJIT_FR2;
     if (rd == rn || rd == rm) {
         sljit_s32 src = (rd == rn) ? rm : rn;
         if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
@@ -1037,27 +1038,17 @@ static void simdEmitFloatMaxMinHelper(sljit_compiler* compiler, SimdOp::Type opc
             simdEmitSSEOp(compiler, opcode, rd, rn);
         }
     }
-}
-
-static void simdEmitFloatMax(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, bool is64)
-{
-    sljit_s32 tmp = SLJIT_FR2;
-    simdEmitFloatMaxMinHelper(compiler, (is64 ? SimdOp::maxpd : SimdOp::maxps), rd, rn, rm, tmp);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::xorpd : SimdOp::xorps), rd, tmp);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::subpd : SimdOp::subps), tmp, rd);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::cmpunordpd : SimdOp::cmpunordps), rd, tmp);
-    simdEmitSSEOp(compiler, (is64 ? OPCODE_AND_IMM(SimdOp::psrlq_i, 13) : OPCODE_AND_IMM(SimdOp::psrld_i, 10)), SimdOp::psrl_i_arg, rd);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::andnpd : SimdOp::andnps), rd, tmp);
-}
-
-static void simdEmitFloatMin(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, bool is64)
-{
-    sljit_s32 tmp = SLJIT_FR2;
-    simdEmitFloatMaxMinHelper(compiler, (is64 ? SimdOp::minpd : SimdOp::minps), rd, rn, rm, tmp);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::cmpunordpd : SimdOp::cmpunordps), rd, tmp);
-    simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
+    bool is64 = (opcode == SimdOp::maxpd || opcode == SimdOp::minpd);
+    if (opcode == SimdOp::maxps || opcode == SimdOp::maxpd) {
+        simdEmitSSEOp(compiler, (is64 ? SimdOp::xorpd : SimdOp::xorps), rd, tmp);
+        simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
+        simdEmitSSEOp(compiler, (is64 ? SimdOp::subpd : SimdOp::subps), tmp, rd);
+        simdEmitSSEOp(compiler, (is64 ? SimdOp::cmpunordpd : SimdOp::cmpunordps), rd, tmp);
+    } else { // opcode = SimdOp::minps || opcode = SimdOp::minpd
+        simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
+        simdEmitSSEOp(compiler, (is64 ? SimdOp::cmpunordpd : SimdOp::cmpunordps), rd, tmp);
+        simdEmitSSEOp(compiler, (is64 ? SimdOp::orpd : SimdOp::orps), tmp, rd);
+    }
     simdEmitSSEOp(compiler, (is64 ? OPCODE_AND_IMM(SimdOp::psrlq_i, 13) : OPCODE_AND_IMM(SimdOp::psrld_i, 10)), SimdOp::psrl_i_arg, rd);
     simdEmitSSEOp(compiler, (is64 ? SimdOp::andnpd : SimdOp::andnps), rd, tmp);
 }
@@ -1738,14 +1729,12 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F32X4PMaxOpcode:
         simdEmitPMinMax(compiler, 0, dst, args[0].arg, args[1].arg);
         break;
-    case ByteCode::F32X4MaxOpcode: {
-        simdEmitFloatMax(compiler, dst, args[0].arg, args[1].arg, false);
+    case ByteCode::F32X4MaxOpcode:
+        simdEmitFloatMinMax(compiler, SimdOp::maxps, dst, args[0].arg, args[1].arg);
         break;
-    }
-    case ByteCode::F32X4MinOpcode: {
-        simdEmitFloatMin(compiler, dst, args[0].arg, args[1].arg, false);
+    case ByteCode::F32X4MinOpcode:
+        simdEmitFloatMinMax(compiler, SimdOp::minps, dst, args[0].arg, args[1].arg);
         break;
-    }
     case ByteCode::F64X2AddOpcode:
         simdEmitOp(compiler, SimdOp::addpd, dst, args[0].arg, args[1].arg);
         break;
@@ -1783,10 +1772,10 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitPMinMax(compiler, SimdOp::is64, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::F64X2MaxOpcode:
-        simdEmitFloatMax(compiler, dst, args[0].arg, args[1].arg, true);
+        simdEmitFloatMinMax(compiler, SimdOp::maxpd, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::F64X2MinOpcode:
-        simdEmitFloatMin(compiler, dst, args[0].arg, args[1].arg, true);
+        simdEmitFloatMinMax(compiler, SimdOp::minpd, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::V128AndOpcode:
         simdEmitOp(compiler, SimdOp::pand, dst, args[0].arg, args[1].arg);
