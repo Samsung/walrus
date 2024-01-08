@@ -1,0 +1,4 @@
+normal fails:
+huffman (out of bounds memory)
+simd stuff
+sometimes stuff with jit, due to reg alloc

@@ -29,6 +29,7 @@
 #include "interpreter/Interpreter.h"
 #include "parser/WASMParser.h"
 #include "wasi/WASI.h"
+#include <cstdint>
 
 namespace Walrus {
 
@@ -444,8 +445,18 @@ void ModuleFunction::dumpByteCode()
         pos += valueStackAllocatedSize(m_functionType->param()[i]);
     }
     for (size_t i = 0; i < m_local.size(); i++) {
-        printf("(local %zu, %s, pos %zu) ", i, typeName(m_local[i]), m_localDebugData[i]);
+        if (m_localDebugData[i].stackPosition == SIZE_MAX || m_localDebugData[i].starts.empty()) {
+            printf("\n(local %zu, optimized out)", i);
+        } else {
+            printf("\n(local %zu, %s, pos %zu ", i, typeName(m_local[i]), m_localDebugData[i].stackPosition);
+            printf("ranges");
+            for (size_t j = 0; j < m_localDebugData[i].starts.size(); j++) {
+                printf(" start %zu, end %zu", m_localDebugData[i].starts[j], m_localDebugData[i].ends[j]);
+            }
+            printf(")");
+        }
     }
+    printf("\n");
     for (size_t i = 0; i < m_constantDebugData.size(); i++) {
         printf("(constant ");
         dumpValue(m_constantDebugData[i].first);
@@ -454,6 +465,13 @@ void ModuleFunction::dumpByteCode()
     printf("....]\n");
 
     printf("bytecode size: %zu bytes\n", m_byteCode.size());
+
+    // printf("variable ranges: ");
+    // for (size_t j = 0; j < m_variabeRange.size(); j++) {
+    //     printf("(range %zu ", j);
+
+    //     printf("start %u, end %u) ", m_variabeRange[j].first, m_variabeRange[j].second);
+    // }
     printf("\n");
 
     size_t idx = 0;
