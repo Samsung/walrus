@@ -193,6 +193,7 @@ public:
         SignedModulo,
         SignedModulo32,
         ConvertIntFromFloat,
+        ConvertUnsignedIntFromFloat,
     };
 
     SlowCase(Type type, sljit_jump* jump_from, sljit_label* resume_label, Instruction* instr)
@@ -426,6 +427,15 @@ void SlowCase::emit(sljit_compiler* compiler)
         reinterpret_cast<ConvertIntFromFloatSlowCase*>(this)->emitSlowCase(compiler);
         return;
     }
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE) && (SLJIT_CONV_NAN_FLOAT != SLJIT_CONV_RESULT_ZERO)
+    case Type::ConvertUnsignedIntFromFloat: {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
+        reinterpret_cast<ConvertUnsignedIntFromFloatSlowCase*>(this)->emitCompareUnordered(compiler);
+        sljit_emit_select(compiler, SLJIT_UNORDERED, SLJIT_R2, SLJIT_IMM, ExecutionContext::InvalidConversionToIntegerError, SLJIT_R2);
+        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+        return;
+    }
+#endif /* SLJIT_64BIT_ARCHITECTURE */
     default: {
         RELEASE_ASSERT_NOT_REACHED();
         break;

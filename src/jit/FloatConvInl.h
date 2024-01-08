@@ -39,12 +39,12 @@ enum FloatConversionFlags : uint32_t {
         return ExecutionContext::NoError;                             \
     }
 
-CONVERT_FROM_FLOAT(convertF32ToU32, sljit_f32, uint32_t)
-CONVERT_FROM_FLOAT(convertF64ToU32, sljit_f64, uint32_t)
 CONVERT_FROM_FLOAT(convertF32ToU64, sljit_f32, uint64_t)
 CONVERT_FROM_FLOAT(convertF64ToU64, sljit_f64, uint64_t)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+CONVERT_FROM_FLOAT(convertF32ToU32, sljit_f32, uint32_t)
+CONVERT_FROM_FLOAT(convertF64ToU32, sljit_f64, uint32_t)
 CONVERT_FROM_FLOAT(convertF32ToS64, sljit_f32, int64_t)
 CONVERT_FROM_FLOAT(convertF64ToS64, sljit_f64, int64_t)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -64,10 +64,10 @@ CONVERT_FROM_FLOAT(convertF64ToS64, sljit_f64, int64_t)
                                  : std::numeric_limits<result_type>::max(); \
     }
 
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+
 TRUNC_SAT(truncSatF32ToU32, sljit_f32, uint32_t)
 TRUNC_SAT(truncSatF64ToU32, sljit_f64, uint32_t)
-
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 
 #undef TRUNC_SAT
 #define TRUNC_SAT(name, arg_type, result_type)                                 \
@@ -281,6 +281,67 @@ void ConvertIntFromFloatSlowCase::emitSlowCase(sljit_compiler* compiler)
     sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), m_resumeLabel);
 }
 
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+
+#if (SLJIT_CONV_NAN_FLOAT != SLJIT_CONV_RESULT_ZERO)
+
+class ConvertUnsignedIntFromFloatSlowCase : public SlowCase {
+public:
+    ConvertUnsignedIntFromFloatSlowCase(Type type, sljit_jump* jumpFrom, Instruction* instr,
+                                        sljit_s32 opcode, sljit_s32 sourceReg)
+        : SlowCase(type, jumpFrom, nullptr, instr)
+        , m_opcode(opcode)
+        , m_sourceReg(sourceReg)
+    {
+    }
+
+    void emitCompareUnordered(sljit_compiler* compiler)
+    {
+        sljit_emit_fop1(compiler, SLJIT_CMP_F64 | SLJIT_SET_UNORDERED | (m_opcode & SLJIT_32), m_sourceReg, 0, m_sourceReg, 0);
+    }
+
+private:
+    sljit_s32 m_opcode;
+    sljit_s32 m_sourceReg;
+};
+
+#endif /* SLJIT_CONV_NAN_FLOAT != SLJIT_CONV_RESULT_ZERO */
+
+static void emitConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    Operand* operands = instr->operands();
+
+    JITArg srcArg(operands);
+    JITArg dstArg(operands + 1);
+
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_FR0);
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, SLJIT_R0);
+
+    MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
+    sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
+
+#if (SLJIT_CONV_NAN_FLOAT != SLJIT_CONV_RESULT_ZERO)
+    sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL, resultReg, 0, SLJIT_IMM, 0x100000000);
+    context->add(new ConvertUnsignedIntFromFloatSlowCase(SlowCase::Type::ConvertUnsignedIntFromFloat,
+                                                         cmp, instr, opcode, sourceReg));
+#else /* SLJIT_CONV_NAN_FLOAT == SLJIT_CONV_RESULT_ZERO */
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::InvalidConversionToIntegerError);
+    sljit_jump* cmp = sljit_emit_fcmp(compiler, SLJIT_UNORDERED | (opcode & SLJIT_32), sourceReg, 0, sourceReg, 0);
+    sljit_set_label(cmp, context->trapLabel);
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
+    cmp = sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL, resultReg, 0, SLJIT_IMM, 0x100000000);
+    sljit_set_label(cmp, context->trapLabel);
+#endif /* SLJIT_CONV_NAN_FLOAT != SLJIT_CONV_RESULT_ZERO */
+
+    /* Usually a nop. */
+    sljit_emit_op1(compiler, SLJIT_MOV32, resultReg, 0, resultReg, 0);
+    MOVE_FROM_REG(compiler, SLJIT_MOV32, dstArg.arg, dstArg.argw, resultReg);
+}
+
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+
 static void emitSaturatedConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
 {
     Operand* operands = instr->operands();
@@ -352,6 +413,41 @@ static void emitSaturatedConvertIntegerFromFloat(sljit_compiler* compiler, Instr
     MOVE_FROM_REG(compiler, flag32 ? SLJIT_MOV32 : SLJIT_MOV, dstArg.arg, dstArg.argw, resultReg);
 }
 
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+
+static void emitSaturatedConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
+{
+    Operand* operands = instr->operands();
+
+    JITArg srcArg(operands);
+    JITArg dstArg(operands + 1);
+
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_FR0);
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, SLJIT_R0);
+    sljit_s32 tmpFReg = SLJIT_FR1;
+
+    MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
+    sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
+
+    if (opcode == SLJIT_CONV_SW_FROM_F64) {
+        sljit_emit_fset64(compiler, tmpFReg, 0.0);
+    } else {
+        sljit_emit_fset32(compiler, tmpFReg, 0.0);
+    }
+
+    sljit_emit_fop1(compiler, SLJIT_CMP_F64 | SLJIT_SET_UNORDERED_OR_LESS | (opcode & SLJIT_32), sourceReg, 0, tmpFReg, 0);
+    sljit_emit_select(compiler, SLJIT_UNORDERED_OR_LESS, resultReg, SLJIT_IMM, 0, resultReg);
+
+    sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_GREATER_EQUAL, resultReg, 0, SLJIT_IMM, 0x100000000);
+    sljit_emit_select(compiler, SLJIT_GREATER_EQUAL, resultReg, SLJIT_IMM, -1, resultReg);
+
+    /* Usually a nop. */
+    sljit_emit_op1(compiler, SLJIT_MOV32, resultReg, 0, resultReg, 0);
+    MOVE_FROM_REG(compiler, SLJIT_MOV32, dstArg.arg, dstArg.argw, resultReg);
+}
+
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+
 static void checkConvertResult(sljit_compiler* compiler)
 {
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
@@ -371,18 +467,28 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
         return;
     }
     case ByteCode::I32TruncF32UOpcode: {
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIsFloat;
         addr = GET_FUNC_ADDR(sljit_sw, convertF32ToU32);
         break;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+        emitConvertUnsigned32FromFloat(compiler, instr, SLJIT_CONV_SW_FROM_F32);
+        return;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     }
     case ByteCode::I32TruncF64SOpcode: {
         emitConvertIntegerFromFloat(compiler, instr, SLJIT_CONV_S32_FROM_F64);
         return;
     }
     case ByteCode::I32TruncF64UOpcode: {
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIsFloat | SourceIs64Bit;
         addr = GET_FUNC_ADDR(sljit_sw, convertF64ToU32);
         break;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+        emitConvertUnsigned32FromFloat(compiler, instr, SLJIT_CONV_SW_FROM_F64);
+        return;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     }
     case ByteCode::I64TruncF32SOpcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -419,18 +525,28 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
         return;
     }
     case ByteCode::I32TruncSatF32UOpcode: {
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIsFloat | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF32ToU32);
         break;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+        emitSaturatedConvertUnsigned32FromFloat(compiler, instr, SLJIT_CONV_SW_FROM_F32);
+        return;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     }
     case ByteCode::I32TruncSatF64SOpcode: {
         emitSaturatedConvertIntegerFromFloat(compiler, instr, SLJIT_CONV_S32_FROM_F64);
         return;
     }
     case ByteCode::I32TruncSatF64UOpcode: {
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         flags = SourceIsFloat | SourceIs64Bit | IsTruncSat;
         addr = GET_FUNC_ADDR(sljit_sw, truncSatF64ToU32);
         break;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+        emitSaturatedConvertUnsigned32FromFloat(compiler, instr, SLJIT_CONV_SW_FROM_F64);
+        return;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     }
     case ByteCode::I64TruncSatF32SOpcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
