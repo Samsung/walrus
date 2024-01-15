@@ -24,22 +24,13 @@
 #include "runtime/Table.h"
 #include "runtime/Tag.h"
 #include "jit/Compiler.h"
+#include "jit/SljitLir.h"
 #include "util/MathOperation.h"
 
 #include <math.h>
 #include <map>
 
 // Inlined platform independent assembler backend.
-#define SLJIT_CONFIG_AUTO 1
-#define SLJIT_CONFIG_STATIC 1
-#define SLJIT_VERBOSE 0
-
-#if defined(NDEBUG)
-#define SLJIT_DEBUG 0
-#else
-#define SLJIT_DEBUG 1
-#endif
-
 extern "C" {
 #include "../../third_party/sljit/sljit_src/sljitLir.c"
 }

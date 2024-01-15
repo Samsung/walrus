@@ -18,28 +18,45 @@
 
 struct MemAddress {
     enum Options : uint32_t {
-        LoadToReg2 = 1 << 0,
-        LoadToFReg0 = 1 << 1,
+        LoadInteger = 1 << 0,
+        LoadFloat = 1 << 1,
         Load32 = 1 << 2,
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-        DontSetR1 = 1 << 3,
-#endif /* SLJIT_32BIT_ARCHITECTURE */
 #ifdef HAS_SIMD
-        LoadToSimdReg0 = 1 << 4,
+        LoadSimd = 1 << 3,
 #endif /* HAS_SIMD */
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        DontUseOffsetReg = 1 << 4,
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     };
 
-    void check(sljit_compiler* compiler, Operand* params, sljit_u32 offset, sljit_u32 size);
+    MemAddress(uint8_t baseReg, uint8_t offsetReg, uint8_t limitReg, uint8_t sourceReg)
+        : options(0)
+        , baseReg(baseReg)
+        , offsetReg(offsetReg)
+        , limitReg(limitReg)
+        , sourceReg(sourceReg)
+    {
+    }
+
+    void check(sljit_compiler* compiler, Operand* params, sljit_uw offset, sljit_u32 size);
     void load(sljit_compiler* compiler);
 
     uint32_t options;
+    uint8_t baseReg;
+    // Also used by 64 bit moves on 32 bit systems
+    uint8_t offsetReg;
+    uint8_t limitReg;
+    uint8_t sourceReg;
     JITArg memArg;
     JITArg loadArg;
 };
 
-void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u32 offset, sljit_u32 size)
+void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_uw offset, sljit_u32 size)
 {
     CompileContext* context = CompileContext::get(compiler);
+
+    ASSERT(!(options & LoadInteger) || baseReg != sourceReg);
+    ASSERT(!(options & LoadInteger) || offsetReg != sourceReg);
 
     if (UNLIKELY(context->maximumMemorySize < size)) {
         // This memory load is never successful.
@@ -52,62 +69,64 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
     if (SLJIT_IS_IMM(offsetArg.arg)) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_uw totalOffset = offset + static_cast<sljit_u32>(offsetArg.argw);
+        offset += static_cast<sljit_u32>(offsetArg.argw);
 #else /* !SLJIT_64BIT_ARCHITECTURE */
-        sljit_u32 totalOffset = static_cast<sljit_u32>(offsetArg.argw);
+        sljit_uw offsetArgw = static_cast<sljit_uw>(offsetArg.argw);
 
-        if (totalOffset + offset < (totalOffset | offset)) {
+        if (offset + offsetArgw < (offset | offsetArgw)) {
             // This memory load is never successful.
             sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->memoryTrapLabel);
             memArg.arg = 0;
             return;
         }
 
-        totalOffset += offset;
+        offset += offsetArgw;
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
-        if (UNLIKELY(totalOffset > context->maximumMemorySize - size)) {
+        if (UNLIKELY(offset > context->maximumMemorySize - size)) {
             // This memory load is never successful.
             sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->memoryTrapLabel);
             memArg.arg = 0;
             return;
         }
 
-        if (totalOffset + size <= context->initialMemorySize) {
-            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg),
+        if (offset + size <= context->initialMemorySize) {
+            ASSERT(baseReg != 0);
+            sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg),
                            OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, buffer));
-            memArg.arg = SLJIT_MEM1(SLJIT_R0);
-            memArg.argw = totalOffset;
+            memArg.arg = SLJIT_MEM1(baseReg);
+            memArg.argw = offset;
             load(compiler);
             return;
         }
 
+        ASSERT(baseReg != 0 && offsetReg != 0 && limitReg != 0);
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+        sljit_emit_op1(compiler, SLJIT_MOV, limitReg, 0, SLJIT_MEM1(kContextReg),
                        OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte));
 #else /* !SLJIT_64BIT_ARCHITECTURE */
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+        sljit_emit_op1(compiler, SLJIT_MOV, limitReg, 0, SLJIT_MEM1(kContextReg),
                        OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(totalOffset + size));
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg),
+        sljit_emit_op1(compiler, SLJIT_MOV, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset + size));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg),
                        OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, buffer));
 
-        if (!(options & LoadToReg2)) {
+        if (!(options & LoadInteger) || (limitReg != sourceReg)) {
             load(compiler);
         }
 
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, SLJIT_R1, 0, SLJIT_R2, 0), context->memoryTrapLabel);
+        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, limitReg, 0), context->memoryTrapLabel);
 
-        if (options & LoadToReg2) {
+        if ((options & LoadInteger) && limitReg == sourceReg) {
             load(compiler);
         }
 
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_R1, 0);
+        sljit_emit_op2(compiler, SLJIT_ADD, baseReg, 0, baseReg, 0, offsetReg, 0);
 
-        memArg.arg = SLJIT_MEM1(SLJIT_R0);
+        memArg.arg = SLJIT_MEM1(baseReg);
         memArg.argw = -static_cast<sljit_sw>(size);
         return;
     }
@@ -119,70 +138,69 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
         return;
     }
 
-    sljit_s32 offsetReg = GET_SOURCE_REG(offsetArg.arg, SLJIT_R1);
-    sljit_uw totalOffset = offset;
-
+    ASSERT(baseReg != 0 && offsetReg != 0);
     MOVE_TO_REG(compiler, SLJIT_MOV_U32, offsetReg, offsetArg.arg, offsetArg.argw);
 
     if (context->initialMemorySize != context->maximumMemorySize) {
+        ASSERT(limitReg != 0);
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+        sljit_emit_op1(compiler, SLJIT_MOV, limitReg, 0, SLJIT_MEM1(kContextReg),
                        OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte));
 #else /* !SLJIT_64BIT_ARCHITECTURE */
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(kContextReg),
+        sljit_emit_op1(compiler, SLJIT_MOV, limitReg, 0, SLJIT_MEM1(kContextReg),
                        OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
 #endif /* SLJIT_64BIT_ARCHITECTURE */
-        totalOffset += size;
+        offset += size;
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg),
+    sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg),
                    OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, buffer));
 
-    if (!(options & LoadToReg2) || context->initialMemorySize == context->maximumMemorySize) {
+    if (!(options & LoadInteger) || (limitReg != sourceReg) || context->initialMemorySize == context->maximumMemorySize) {
         load(compiler);
     }
 
-    if (totalOffset > 0) {
+    if (offset > 0) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(totalOffset));
+        sljit_emit_op2(compiler, SLJIT_ADD, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
 #else /* !SLJIT_64BIT_ARCHITECTURE */
-        sljit_emit_op2(compiler, SLJIT_ADD | SLJIT_SET_CARRY, SLJIT_R1, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(totalOffset));
+        sljit_emit_op2(compiler, SLJIT_ADD | SLJIT_SET_CARRY, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
         sljit_set_label(sljit_emit_jump(compiler, SLJIT_CARRY), context->memoryTrapLabel);
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     }
 
     if (context->initialMemorySize == context->maximumMemorySize) {
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, SLJIT_R1, 0, SLJIT_IMM, static_cast<sljit_sw>(context->maximumMemorySize - size)), context->memoryTrapLabel);
+        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(context->maximumMemorySize - size)), context->memoryTrapLabel);
 
-        memArg.arg = SLJIT_MEM2(SLJIT_R0, SLJIT_R1);
+        memArg.arg = SLJIT_MEM2(baseReg, offsetReg);
         memArg.argw = 0;
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-        if (options & DontSetR1) {
-            sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_R1, 0);
-            memArg.arg = SLJIT_MEM1(SLJIT_R0);
+        if (options & DontUseOffsetReg) {
+            sljit_emit_op2(compiler, SLJIT_ADD, baseReg, 0, baseReg, 0, offsetReg, 0);
+            memArg.arg = SLJIT_MEM1(baseReg);
         }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
         return;
     }
 
-    sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, SLJIT_R1, 0, SLJIT_R2, 0), context->memoryTrapLabel);
+    sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, limitReg, 0), context->memoryTrapLabel);
 
-    if (options & LoadToReg2) {
+    if ((options & LoadInteger) && limitReg == sourceReg) {
         load(compiler);
     }
 
-    sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_R1, 0);
+    sljit_emit_op2(compiler, SLJIT_ADD, baseReg, 0, baseReg, 0, offsetReg, 0);
 
-    memArg.arg = SLJIT_MEM1(SLJIT_R0);
+    memArg.arg = SLJIT_MEM1(baseReg);
     memArg.argw = -static_cast<sljit_sw>(size);
 }
 
 void MemAddress::load(sljit_compiler* compiler)
 {
-    if (options & LoadToReg2) {
-        SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg));
+    if (options & LoadInteger) {
+        SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg) && sourceReg != 0);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         sljit_s32 opcode = SLJIT_MOV;
@@ -190,20 +208,20 @@ void MemAddress::load(sljit_compiler* compiler)
         sljit_s32 opcode = (options & Load32) ? SLJIT_MOV32 : SLJIT_MOV;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-        sljit_emit_op1(compiler, opcode, SLJIT_R2, 0, loadArg.arg, loadArg.argw);
+        sljit_emit_op1(compiler, opcode, sourceReg, 0, loadArg.arg, loadArg.argw);
         return;
     }
 
-    if (options & LoadToFReg0) {
-        SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg));
-        sljit_emit_fop1(compiler, (options & Load32) ? SLJIT_MOV_F32 : SLJIT_MOV_F64, SLJIT_FR0, 0, loadArg.arg, loadArg.argw);
+    if (options & LoadFloat) {
+        SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg) && sourceReg != 0);
+        sljit_emit_fop1(compiler, (options & Load32) ? SLJIT_MOV_F32 : SLJIT_MOV_F64, sourceReg, 0, loadArg.arg, loadArg.argw);
         return;
     }
 
 #ifdef HAS_SIMD
-    if (options & LoadToSimdReg0) {
-        SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg));
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, loadArg.arg, loadArg.argw);
+    if (options & LoadSimd) {
+        SLJIT_ASSERT(SLJIT_IS_MEM(loadArg.arg) && sourceReg != 0);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, sourceReg, loadArg.arg, loadArg.argw);
         return;
     }
 #endif /* HAS_SIMD */
@@ -365,9 +383,8 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
     }
 
     Operand* operands = instr->operands();
-    MemAddress addr;
+    MemAddress addr(instr->tmpReg(0), instr->tmpReg(1), instr->tmpReg(2), 0);
 
-    addr.options = 0;
     addr.check(compiler, operands, offset, size);
 
     if (addr.memArg.arg == 0) {
@@ -376,12 +393,12 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
     if (opcode == SLJIT_MOV_F64 || opcode == SLJIT_MOV_F32) {
         JITArg valueArg;
-        floatOperandToArg(compiler, operands + 1, valueArg, SLJIT_FR0);
+        floatOperandToArg(compiler, operands + 1, valueArg, instr->tmpReg(3));
 
 #if (defined SLJIT_FPU_UNALIGNED && SLJIT_FPU_UNALIGNED)
         sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, addr.memArg.arg, addr.memArg.argw);
 #else /* SLJIT_FPU_UNALIGNED */
-        sljit_s32 tmpReg = GET_TARGET_REG(valueArg.arg, SLJIT_FR0);
+        sljit_s32 tmpReg = GET_TARGET_REG(valueArg.arg, instr->tmpReg(3));
         sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, tmpReg, addr.memArg.arg, addr.memArg.argw);
 
         if (SLJIT_IS_MEM(valueArg.arg)) {
@@ -396,7 +413,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         ASSERT((SLJIT_SIMD_EXTEND_16 >> 24) == 1);
 
         JITArg valueArg(operands + 1);
-        sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, SLJIT_FR0);
+        sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, instr->tmpReg(3));
 
         // TODO: support aligned access
         if (size == 16) {
@@ -421,7 +438,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
         if (SLJIT_IS_MEM(valueArg.arg)) {
             simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128;
-            sljit_emit_simd_mov(compiler, simdType, SLJIT_FR0, valueArg.arg, valueArg.argw);
+            sljit_emit_simd_mov(compiler, simdType, dstReg, valueArg.arg, valueArg.argw);
         }
         return;
     }
@@ -431,10 +448,10 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
     if (!(opcode & SLJIT_32) && opcode != SLJIT_MOV32) {
         JITArgPair valueArgPair(operands + 1);
 
-        sljit_s32 dstReg1 = GET_TARGET_REG(valueArgPair.arg1, SLJIT_R0);
+        sljit_s32 dstReg1 = GET_TARGET_REG(valueArgPair.arg1, instr->tmpReg(3));
 
         if (opcode == SLJIT_MOV) {
-            sljit_s32 dstReg2 = GET_TARGET_REG(valueArgPair.arg2, SLJIT_R1);
+            sljit_s32 dstReg2 = GET_TARGET_REG(valueArgPair.arg2, instr->tmpReg(1));
             sljit_emit_mem(compiler, SLJIT_MOV | SLJIT_MEM_LOAD | SLJIT_MEM_UNALIGNED, SLJIT_REG_PAIR(dstReg1, dstReg2), addr.memArg.arg, addr.memArg.argw);
 
             if (SLJIT_IS_MEM(valueArgPair.arg1)) {
@@ -463,7 +480,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
     JITArg valueArg(operands + 1);
-    sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, SLJIT_R0);
+    sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, instr->tmpReg(3));
 
     // TODO: sljit_emit_mem for unaligned access
     sljit_emit_op1(compiler, opcode, dstReg, 0, addr.memArg.arg, addr.memArg.argw);
@@ -516,14 +533,12 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(instr->byteCode());
     Operand* operands = instr->operands();
     JITArg valueArg(operands + 2);
-    sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, SLJIT_FR0);
+    sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, instr->tmpReg(3));
 
     JITArg initValue;
     simdOperandToArg(compiler, operands + 1, initValue, simdType, dstReg);
 
-    MemAddress addr;
-
-    addr.options = 0;
+    MemAddress addr(instr->tmpReg(0), instr->tmpReg(1), instr->tmpReg(2), 0);
     addr.check(compiler, operands, loadOperation->offset(), size);
 
     if (addr.memArg.arg == 0) {
@@ -541,7 +556,7 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_CONFIG_ARM_32 */
 
     if (SLJIT_IS_MEM(valueArg.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | simdType, SLJIT_FR0, valueArg.arg, valueArg.argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | simdType, dstReg, valueArg.arg, valueArg.argw);
     }
 }
 
@@ -651,7 +666,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     }
 
     Operand* operands = instr->operands();
-    MemAddress addr;
+    MemAddress addr(instr->tmpReg(0), instr->tmpReg(1), instr->tmpReg(2), instr->tmpReg(3));
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     JITArgPair valueArgPair;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -659,10 +674,10 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     addr.options = 0;
 
     if (opcode == SLJIT_MOV_F64 || opcode == SLJIT_MOV_F32) {
-        floatOperandToArg(compiler, operands + 1, addr.loadArg, SLJIT_FR0);
+        floatOperandToArg(compiler, operands + 1, addr.loadArg, instr->tmpReg(3));
 
         if (SLJIT_IS_MEM(addr.loadArg.arg)) {
-            addr.options = MemAddress::LoadToFReg0;
+            addr.options = MemAddress::LoadFloat;
 
             if (opcode == SLJIT_MOV_F32) {
                 addr.options |= MemAddress::Load32;
@@ -682,7 +697,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         }
 
         if (SLJIT_IS_MEM(addr.loadArg.arg)) {
-            addr.options = MemAddress::LoadToSimdReg0;
+            addr.options = MemAddress::LoadSimd;
         }
 #endif /* HAS_SIMD */
     } else {
@@ -691,7 +706,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
             addr.loadArg.set(operands + 1);
 
             if (SLJIT_IS_MEM(addr.loadArg.arg)) {
-                addr.options = MemAddress::LoadToReg2;
+                addr.options = MemAddress::LoadInteger;
             }
         } else {
             valueArgPair.set(operands + 1);
@@ -700,18 +715,18 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
             addr.loadArg.argw = valueArgPair.arg1w;
 
             if (SLJIT_IS_MEM(valueArgPair.arg1)) {
-                addr.options = MemAddress::LoadToReg2;
+                addr.options = MemAddress::LoadInteger;
             }
 
             if (opcode == SLJIT_MOV && !SLJIT_IS_REG(valueArgPair.arg1)) {
-                addr.options |= MemAddress::DontSetR1;
+                addr.options |= MemAddress::DontUseOffsetReg;
             }
         }
 #else /* !SLJIT_32BIT_ARCHITECTURE */
         addr.loadArg.set(operands + 1);
 
         if (SLJIT_IS_MEM(addr.loadArg.arg)) {
-            addr.options = MemAddress::LoadToReg2;
+            addr.options = MemAddress::LoadInteger;
 
             if (opcode == SLJIT_MOV32 || (opcode & SLJIT_32)) {
                 addr.options |= MemAddress::Load32;
@@ -727,8 +742,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (opcode == SLJIT_MOV_F64 || opcode == SLJIT_MOV_F32) {
-        if (addr.options & MemAddress::LoadToFReg0) {
-            addr.loadArg.arg = SLJIT_FR0;
+        if (addr.options & MemAddress::LoadFloat) {
+            addr.loadArg.arg = instr->tmpReg(3);
             addr.loadArg.argw = 0;
         }
 
@@ -742,8 +757,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
 #ifdef HAS_SIMD
     if (opcode == 0) {
-        if (addr.options & MemAddress::LoadToSimdReg0) {
-            addr.loadArg.arg = SLJIT_FR0;
+        if (addr.options & MemAddress::LoadSimd) {
+            addr.loadArg.arg = instr->tmpReg(3);
             addr.loadArg.argw = 0;
         }
 
@@ -765,8 +780,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (opcode == SLJIT_MOV) {
-        sljit_s32 dstReg1 = GET_SOURCE_REG(valueArgPair.arg1, SLJIT_R2);
-        sljit_s32 dstReg2 = GET_SOURCE_REG(valueArgPair.arg2, SLJIT_R1);
+        sljit_s32 dstReg1 = GET_SOURCE_REG(valueArgPair.arg1, instr->tmpReg(3));
+        sljit_s32 dstReg2 = GET_SOURCE_REG(valueArgPair.arg2, instr->tmpReg(1));
 
         if (SLJIT_IS_MEM(valueArgPair.arg1)) {
             sljit_emit_op1(compiler, SLJIT_MOV, dstReg2, 0, valueArgPair.arg2, valueArgPair.arg2w);
@@ -785,8 +800,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-    if (addr.options & MemAddress::LoadToReg2) {
-        addr.loadArg.arg = SLJIT_R2;
+    if (addr.options & MemAddress::LoadInteger) {
+        addr.loadArg.arg = instr->tmpReg(3);
         addr.loadArg.argw = 0;
     }
 
@@ -855,6 +870,8 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
     switch (opcode) {
     case ByteCode::MemorySizeOpcode: {
+        ASSERT(!(instr->info() & Instruction::kIsCallback));
+
         JITArg dstArg(params);
 
         sljit_emit_op2(compiler, SLJIT_LSHR32, dstArg.arg, dstArg.argw,
@@ -864,6 +881,8 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::MemoryInitOpcode:
     case ByteCode::MemoryCopyOpcode:
     case ByteCode::MemoryFillOpcode: {
+        ASSERT(instr->info() & Instruction::kIsCallback);
+
         JITArg srcArg;
 
         for (int i = 0; i < 3; i++) {
@@ -892,7 +911,8 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
         sljit_set_label(sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError), context->memoryTrapLabel);
         return;
     }
-    case ByteCode::MemoryGrowOpcode: {
+    default: {
+        ASSERT(opcode == ByteCode::MemoryGrowOpcode && (instr->info() & Instruction::kIsCallback));
         JITArg arg(params);
 
         MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R0, arg.arg, arg.argw);
@@ -903,9 +923,6 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
         arg.set(params + 1);
         MOVE_FROM_REG(compiler, SLJIT_MOV32, arg.arg, arg.argw, SLJIT_R0);
-        return;
-    }
-    default: {
         return;
     }
     }
@@ -920,6 +937,8 @@ static void dropData(uint32_t segmentIndex, ExecutionContext* context)
 static void emitDataDrop(sljit_compiler* compiler, Instruction* instr)
 {
     DataDrop* dataDrop = reinterpret_cast<DataDrop*>(instr->byteCode());
+
+    ASSERT(instr->info() & Instruction::kIsCallback);
 
     sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(dataDrop->segmentIndex()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kContextReg, 0);
