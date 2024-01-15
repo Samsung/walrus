@@ -93,7 +93,8 @@ static void dropElement(uint32_t segmentIndex, ExecutionContext* context)
 
 static void emitElemDrop(sljit_compiler* compiler, Instruction* instr)
 {
-    auto elemDrop = reinterpret_cast<ElemDrop*>(instr->byteCode());
+    ASSERT(instr->info() & Instruction::kIsCallback);
+    ElemDrop* elemDrop = reinterpret_cast<ElemDrop*>(instr->byteCode());
 
     sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(elemDrop->segmentIndex()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kContextReg, 0);
@@ -107,6 +108,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::TableInitOpcode: {
+        ASSERT(instr->info() & Instruction::kIsCallback);
         emitLoad3Arguments(compiler, instr->operands());
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, (reinterpret_cast<TableInit*>(instr->byteCode()))->tableIndex());
@@ -118,13 +120,15 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     }
     case ByteCode::TableSizeOpcode: {
         JITArg dstArg(instr->operands());
+        sljit_s32 tmpReg = instr->tmpReg(0);
 
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->tableStart + ((reinterpret_cast<TableSize*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
-        sljit_emit_op1(compiler, SLJIT_MOV32, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::tableSizeOffset());
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), context->tableStart + ((reinterpret_cast<TableSize*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
+        sljit_emit_op1(compiler, SLJIT_MOV32, dstArg.arg, dstArg.argw, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableSizeOffset());
         break;
     }
     case ByteCode::TableCopyOpcode: {
+        ASSERT(instr->info() & Instruction::kIsCallback);
         emitLoad3Arguments(compiler, instr->operands());
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, ((reinterpret_cast<TableCopy*>(instr->byteCode()))->srcIndex()));
@@ -135,6 +139,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         break;
     }
     case ByteCode::TableFillOpcode: {
+        ASSERT(instr->info() & Instruction::kIsCallback);
         emitLoad3Arguments(compiler, instr->operands());
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, ((reinterpret_cast<TableFill*>(instr->byteCode()))->tableIndex()));
@@ -144,8 +149,9 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         break;
     }
     case ByteCode::TableGrowOpcode: {
-        JITArg arg(instr->operands());
+        ASSERT(instr->info() & Instruction::kIsCallback);
 
+        JITArg arg(instr->operands());
         MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R0, arg.arg, arg.argw);
 
         arg.set(instr->operands() + 1);
@@ -161,9 +167,11 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         break;
     }
     case ByteCode::TableSetOpcode: {
+        ASSERT(!(instr->info() & Instruction::kIsCallback));
         JITArg src[2] = { instr->operands(), instr->operands() + 1 };
 
-        sljit_s32 sourceReg = GET_SOURCE_REG(src[0].arg, SLJIT_R0);
+        sljit_s32 sourceReg = GET_SOURCE_REG(src[0].arg, instr->tmpReg(0));
+        sljit_s32 tmpReg = instr->tmpReg(1);
 
         if (!SLJIT_IS_REG(src[0].arg)) {
             MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, src[0].arg, src[0].argw);
@@ -171,18 +179,20 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
             src[0].argw = 0;
         }
 
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::OutOfBoundsTableAccessError);
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), context->tableStart + ((reinterpret_cast<TableSet*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, sourceReg, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableSizeOffset()), context->trapLabel);
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableElements());
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM2(SLJIT_R1, sourceReg), SLJIT_WORD_SHIFT, src[1].arg, src[1].argw);
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), context->tableStart + ((reinterpret_cast<TableSet*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
+        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, sourceReg, 0, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableSizeOffset()), context->trapLabel);
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableElements());
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM2(tmpReg, sourceReg), SLJIT_WORD_SHIFT, src[1].arg, src[1].argw);
         break;
     }
     case ByteCode::TableGetOpcode: {
+        ASSERT(!(instr->info() & Instruction::kIsCallback));
         JITArg srcArg(instr->operands());
 
-        sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_R0);
+        sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
+        sljit_s32 tmpReg = instr->tmpReg(1);
 
         if (!SLJIT_IS_REG(srcArg.arg)) {
             MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, srcArg.arg, srcArg.argw);
@@ -190,15 +200,15 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
             srcArg.argw = 0;
         }
 
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::OutOfBoundsTableAccessError);
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), context->tableStart + ((reinterpret_cast<TableGet*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, sourceReg, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableSizeOffset()), context->trapLabel);
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), context->tableStart + ((reinterpret_cast<TableGet*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
+        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, sourceReg, 0, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableSizeOffset()), context->trapLabel);
 
         JITArg dstArg(instr->operands() + 1);
 
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), JITFieldAccessor::tableElements());
-        sljit_emit_op1(compiler, SLJIT_MOV_P, dstArg.arg, dstArg.argw, SLJIT_MEM2(SLJIT_R1, sourceReg), SLJIT_WORD_SHIFT);
+        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableElements());
+        sljit_emit_op1(compiler, SLJIT_MOV_P, dstArg.arg, dstArg.argw, SLJIT_MEM2(tmpReg, sourceReg), SLJIT_WORD_SHIFT);
         break;
     }
     default: {

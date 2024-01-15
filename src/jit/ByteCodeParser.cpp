@@ -17,6 +17,7 @@
 #include "Walrus.h"
 
 #include "jit/Compiler.h"
+#include "jit/SljitLir.h"
 #include "runtime/JITExec.h"
 #include "runtime/Module.h"
 
@@ -88,6 +89,23 @@ void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<si
         tryBlocks[idx].catchBlocks.push_back(TryBlock::CatchBlock(catchLabel, it.m_stackSizeToBe, it.m_tagIndex));
     }
 }
+
+enum TmpInit : uint8_t {
+    // No initialization of temporaries
+    InitNone,
+    // Temporary floatin point registers for arguments
+    InitFloat,
+    // Temporary floatin point registers for arguments and destination
+    InitFloatDst,
+    // Temporary registers for integer to floating point conversion
+    InitIntegerFromFloat,
+    // Temporary registers for saturated integer to floating point conversion
+    InitSaturatedIntegerFromFloat,
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+    // Temporary registers floating point to integer conversion
+    InitUnsignedIntegerFromFloat,
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+};
 
 static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
@@ -182,6 +200,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         ByteCode::Opcode opcode = byteCode->opcode();
         Instruction::Group group = Instruction::Any;
         uint8_t paramCount = 0;
+        TmpInit tmpInit = InitNone;
         uint16_t info = 0;
 
         switch (opcode) {
@@ -258,18 +277,30 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F32SubOpcode:
         case ByteCode::F32MulOpcode:
         case ByteCode::F32DivOpcode:
-        case ByteCode::F32MaxOpcode:
-        case ByteCode::F32MinOpcode:
-        case ByteCode::F32CopysignOpcode:
         case ByteCode::F64AddOpcode:
         case ByteCode::F64SubOpcode:
         case ByteCode::F64MulOpcode:
-        case ByteCode::F64DivOpcode:
+        case ByteCode::F64DivOpcode: {
+            group = Instruction::BinaryFloat;
+            paramCount = 2;
+            tmpInit = InitFloat;
+            break;
+        }
+        case ByteCode::F32MaxOpcode:
+        case ByteCode::F32MinOpcode:
         case ByteCode::F64MaxOpcode:
-        case ByteCode::F64MinOpcode:
+        case ByteCode::F64MinOpcode: {
+            group = Instruction::BinaryFloat;
+            paramCount = 2;
+            tmpInit = InitFloat;
+            info = Instruction::kIsCallback;
+            break;
+        }
+        case ByteCode::F32CopysignOpcode:
         case ByteCode::F64CopysignOpcode: {
             group = Instruction::BinaryFloat;
             paramCount = 2;
+            tmpInit = InitFloatDst;
             break;
         }
         case ByteCode::F32EqOpcode:
@@ -286,6 +317,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F64GeOpcode: {
             group = Instruction::CompareFloat;
             paramCount = 2;
+            tmpInit = InitFloat;
             break;
         }
         case ByteCode::I32ClzOpcode:
@@ -313,19 +345,26 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F32TruncOpcode:
         case ByteCode::F32NearestOpcode:
         case ByteCode::F32SqrtOpcode:
-        case ByteCode::F32AbsOpcode:
-        case ByteCode::F32NegOpcode:
         case ByteCode::F64CeilOpcode:
         case ByteCode::F64FloorOpcode:
         case ByteCode::F64TruncOpcode:
         case ByteCode::F64NearestOpcode:
-        case ByteCode::F64SqrtOpcode:
+        case ByteCode::F64SqrtOpcode: {
+            group = Instruction::UnaryFloat;
+            paramCount = 1;
+            tmpInit = InitFloat;
+            info = Instruction::kIsCallback;
+            break;
+        }
+        case ByteCode::F32AbsOpcode:
+        case ByteCode::F32NegOpcode:
         case ByteCode::F64AbsOpcode:
         case ByteCode::F64NegOpcode:
         case ByteCode::F32DemoteF64Opcode:
         case ByteCode::F64PromoteF32Opcode: {
             group = Instruction::UnaryFloat;
             paramCount = 1;
+            tmpInit = InitFloat;
             break;
         }
         case ByteCode::I32EqzOpcode: {
@@ -346,38 +385,80 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             paramCount = 1;
             break;
         }
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        case ByteCode::I64TruncF32SOpcode:
+        case ByteCode::I64TruncF64SOpcode:
+#endif /* SLJIT_64BIT_ARCHITECTURE */
         case ByteCode::I32TruncF32SOpcode:
+        case ByteCode::I32TruncF64SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            tmpInit = InitIntegerFromFloat;
+            break;
+        }
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         case ByteCode::I32TruncF32UOpcode:
-        case ByteCode::I32TruncF64SOpcode:
         case ByteCode::I32TruncF64UOpcode:
         case ByteCode::I64TruncF32SOpcode:
-        case ByteCode::I64TruncF32UOpcode:
         case ByteCode::I64TruncF64SOpcode:
-        case ByteCode::I64TruncF64UOpcode:
-        case ByteCode::I32TruncSatF32SOpcode:
         case ByteCode::I32TruncSatF32UOpcode:
-        case ByteCode::I32TruncSatF64SOpcode:
         case ByteCode::I32TruncSatF64UOpcode:
         case ByteCode::I64TruncSatF32SOpcode:
-        case ByteCode::I64TruncSatF32UOpcode:
         case ByteCode::I64TruncSatF64SOpcode:
-        case ByteCode::I64TruncSatF64UOpcode:
-        case ByteCode::F32ConvertI32SOpcode:
-        case ByteCode::F32ConvertI32UOpcode:
         case ByteCode::F32ConvertI64SOpcode:
         case ByteCode::F32ConvertI64UOpcode:
-        case ByteCode::F64ConvertI32SOpcode:
-        case ByteCode::F64ConvertI32UOpcode:
         case ByteCode::F64ConvertI64SOpcode:
-        case ByteCode::F64ConvertI64UOpcode: {
+        case ByteCode::F64ConvertI64UOpcode:
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+        case ByteCode::I64TruncF32UOpcode:
+        case ByteCode::I64TruncF64UOpcode:
+        case ByteCode::I64TruncSatF32UOpcode:
+        case ByteCode::I64TruncSatF64UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            info = Instruction::kIsCallback;
+            break;
+        }
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        case ByteCode::I64TruncSatF32SOpcode:
+        case ByteCode::I64TruncSatF64SOpcode:
+        case ByteCode::I32TruncSatF32UOpcode:
+        case ByteCode::I32TruncSatF64UOpcode:
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+        case ByteCode::I32TruncSatF32SOpcode:
+        case ByteCode::I32TruncSatF64SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            tmpInit = InitSaturatedIntegerFromFloat;
+            break;
+        }
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        case ByteCode::I32TruncF32UOpcode:
+        case ByteCode::I32TruncF64UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            tmpInit = InitUnsignedIntegerFromFloat;
+            break;
+        }
+        case ByteCode::F32ConvertI64SOpcode:
+        case ByteCode::F32ConvertI64UOpcode:
+        case ByteCode::F64ConvertI64SOpcode:
+        case ByteCode::F64ConvertI64UOpcode:
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+        case ByteCode::F32ConvertI32SOpcode:
+        case ByteCode::F32ConvertI32UOpcode:
+        case ByteCode::F64ConvertI32SOpcode:
+        case ByteCode::F64ConvertI32UOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
             break;
         }
         case ByteCode::SelectOpcode: {
-            auto instr = compiler->append(byteCode, group, opcode, 3, 1);
-            auto select = reinterpret_cast<Select*>(byteCode);
-            auto operands = instr->operands();
+            Instruction* instr = compiler->append(byteCode, group, opcode, 3, 1);
+            Select* select = reinterpret_cast<Select*>(byteCode);
+            Operand* operands = instr->operands();
+
+            instr->setTmpReg3(SLJIT_FR0, SLJIT_FR1, SLJIT_FR0);
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(select->src0Offset());
@@ -454,6 +535,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Load32Opcode: {
             Load32* load32 = reinterpret_cast<Load32*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -465,6 +547,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Load64Opcode: {
             Load64* load64 = reinterpret_cast<Load64*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -484,7 +567,18 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I64Load16SOpcode:
         case ByteCode::I64Load16UOpcode:
         case ByteCode::I64Load32SOpcode:
-        case ByteCode::I64Load32UOpcode:
+        case ByteCode::I64Load32UOpcode: {
+            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            break;
+        }
         case ByteCode::F32LoadOpcode:
         case ByteCode::F64LoadOpcode:
         case ByteCode::V128LoadOpcode:
@@ -502,6 +596,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128Load64ZeroOpcode: {
             MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -516,6 +611,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128Load64LaneOpcode: {
             SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::LoadLaneSIMD, opcode, 2, 1);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -529,6 +625,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Store32Opcode: {
             Store32* store32 = reinterpret_cast<Store32*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -540,6 +637,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Store64Opcode: {
             Store64* store64 = reinterpret_cast<Store64*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -554,12 +652,24 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I64StoreOpcode:
         case ByteCode::I64Store8Opcode:
         case ByteCode::I64Store16Opcode:
-        case ByteCode::I64Store32Opcode:
+        case ByteCode::I64Store32Opcode: {
+            MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+
+            Operand* operands = instr->operands();
+            operands[0].item = nullptr;
+            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].item = nullptr;
+            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            break;
+        }
         case ByteCode::F32StoreOpcode:
         case ByteCode::F64StoreOpcode:
         case ByteCode::V128StoreOpcode: {
             MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -574,6 +684,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128Store64LaneOpcode: {
             SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -640,6 +751,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableInit = reinterpret_cast<TableInit*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -654,6 +766,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableSize = reinterpret_cast<TableSize*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 0, 1);
+            instr->setTmpReg(0, SLJIT_R0);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -664,6 +777,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableCopy = reinterpret_cast<TableCopy*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -678,6 +792,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableFill = reinterpret_cast<TableFill*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -692,6 +807,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableGrow = reinterpret_cast<TableGrow*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 1);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -706,6 +822,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableSet = reinterpret_cast<TableSet*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 0);
+            instr->setTmpReg2(SLJIT_R0, SLJIT_R1);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -718,6 +835,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableGet = reinterpret_cast<TableGet*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 1, 1);
+            instr->setTmpReg2(SLJIT_R0, SLJIT_R1);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -740,6 +858,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             MemoryInit* memoryInit = reinterpret_cast<MemoryInit*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -754,6 +873,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             MemoryCopy* memoryCopy = reinterpret_cast<MemoryCopy*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -768,6 +888,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             MemoryFill* memoryFill = reinterpret_cast<MemoryFill*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -782,6 +903,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             MemoryGrow* memoryGrow = reinterpret_cast<MemoryGrow*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 1, 1);
+            instr->addInfo(Instruction::kIsCallback);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -790,8 +912,16 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             operands[1].offset = STACK_OFFSET(memoryGrow->dstOffset());
             break;
         }
-        case ByteCode::DataDropOpcode:
-        case ByteCode::ElemDropOpcode:
+        case ByteCode::DataDropOpcode: {
+            Instruction* instr = compiler->append(byteCode, group, opcode, 0, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            break;
+        }
+        case ByteCode::ElemDropOpcode: {
+            Instruction* instr = compiler->append(byteCode, group, opcode, 0, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            break;
+        }
         case ByteCode::UnreachableOpcode: {
             compiler->append(byteCode, group, opcode, 0, 0);
             break;
@@ -1229,6 +1359,17 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             operands[1].offset = STACK_OFFSET(binaryOperation->srcOffset()[1]);
             operands[2].item = nullptr;
             operands[2].offset = STACK_OFFSET(binaryOperation->dstOffset());
+
+            switch (tmpInit) {
+            case InitFloat:
+                instr->setTmpReg2(SLJIT_FR0, SLJIT_FR1);
+                break;
+            case InitFloatDst:
+                instr->setTmpReg3(SLJIT_FR0, SLJIT_FR1, SLJIT_FR0);
+                break;
+            default:
+                break;
+            }
         } else if (paramCount == 1) {
             ASSERT(group != Instruction::Any);
 
@@ -1242,6 +1383,25 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             operands[0].offset = STACK_OFFSET(unaryOperation->srcOffset());
             operands[1].item = nullptr;
             operands[1].offset = STACK_OFFSET(unaryOperation->dstOffset());
+
+            switch (tmpInit) {
+            case InitFloat:
+                instr->setTmpReg(0, SLJIT_FR0);
+                break;
+            case InitIntegerFromFloat:
+                instr->setTmpReg3(SLJIT_FR0, SLJIT_R0, SLJIT_R1);
+                break;
+            case InitSaturatedIntegerFromFloat:
+                instr->setTmpReg3(SLJIT_FR0, SLJIT_R0, SLJIT_FR1);
+                break;
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+            case InitUnsignedIntegerFromFloat:
+                instr->setTmpReg2(SLJIT_FR0, SLJIT_R0);
+                break;
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+            default:
+                break;
+            }
         }
 
         idx += byteCode->getSize();

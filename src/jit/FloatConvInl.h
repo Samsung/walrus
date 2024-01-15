@@ -113,18 +113,12 @@ CONVERT_TO_FLOAT(convertU64ToF64, uint64_t, sljit_f64)
 
 static void emitConvertFloatFromInteger(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
 {
+    ASSERT(!(instr->info() & Instruction::kIsCallback));
+
     Operand* operands = instr->operands();
 
     JITArg srcArg(operands);
     JITArg dstArg(operands + 1);
-
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-    if (instr->opcode() == ByteCode::F32ConvertI32UOpcode || instr->opcode() == ByteCode::F64ConvertI32UOpcode) {
-        sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R0, 0, srcArg.arg, srcArg.argw);
-        srcArg.arg = SLJIT_R0;
-        srcArg.argw = 0;
-    }
-#endif /* SLJIT_64BIT_ARCHITECTURE */
 
     sljit_emit_fop1(compiler, opcode, dstArg.arg, dstArg.argw, srcArg.arg, srcArg.argw);
 }
@@ -150,17 +144,19 @@ private:
 
 static void emitConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
 {
+    ASSERT(!(instr->info() & Instruction::kIsCallback));
+
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
 
     JITArg srcArg;
     JITArg dstArg(operands + 1);
 
-    floatOperandToArg(compiler, operands, srcArg, SLJIT_FR0);
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
+    sljit_s32 tmpReg = instr->tmpReg(2);
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_FR0);
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, SLJIT_R0);
-    sljit_s32 tmpReg = SLJIT_R1;
+    floatOperandToArg(compiler, operands, srcArg, sourceReg);
 
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::InvalidConversionToIntegerError);
@@ -309,14 +305,16 @@ private:
 
 static void emitConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
 {
+    ASSERT(!(instr->info() & Instruction::kIsCallback));
+
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
 
     JITArg srcArg(operands);
     JITArg dstArg(operands + 1);
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_FR0);
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, SLJIT_R0);
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
 
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
@@ -344,6 +342,8 @@ static void emitConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction
 
 static void emitSaturatedConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
 {
+    ASSERT(!(instr->info() & Instruction::kIsCallback));
+
     Operand* operands = instr->operands();
 
     JITArg srcArg;
@@ -351,9 +351,9 @@ static void emitSaturatedConvertIntegerFromFloat(sljit_compiler* compiler, Instr
 
     floatOperandToArg(compiler, operands, srcArg, SLJIT_FR0);
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_FR0);
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, SLJIT_R0);
-    sljit_s32 tmpFReg = SLJIT_FR1;
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
+    sljit_s32 tmpFReg = instr->tmpReg(2);
 
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
@@ -417,14 +417,16 @@ static void emitSaturatedConvertIntegerFromFloat(sljit_compiler* compiler, Instr
 
 static void emitSaturatedConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction* instr, sljit_s32 opcode)
 {
+    ASSERT(!(instr->info() & Instruction::kIsCallback));
+
     Operand* operands = instr->operands();
 
     JITArg srcArg(operands);
     JITArg dstArg(operands + 1);
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, SLJIT_FR0);
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, SLJIT_R0);
-    sljit_s32 tmpFReg = SLJIT_FR1;
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
+    sljit_s32 tmpFReg = instr->tmpReg(2);
 
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
@@ -637,6 +639,7 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
     }
     }
 
+    ASSERT(instr->info() & Instruction::kIsCallback);
     ASSERT((flags & SourceIsFloat) | (flags & DestinationIsFloat));
 
     JITArg arg;

@@ -165,8 +165,9 @@ class Instruction : public InstructionListItem {
 public:
     // Various info bits. Depends on type.
     static const uint16_t kIs32Bit = 1 << 0;
-    static const uint16_t kKeepInstruction = 1 << 1;
-    static const uint16_t kEarlyReturn = 1 << 2;
+    static const uint16_t kIsCallback = 1 << 1;
+    static const uint16_t kKeepInstruction = 1 << 2;
+    static const uint16_t kEarlyReturn = 1 << 3;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -202,30 +203,63 @@ public:
         return reinterpret_cast<BrTableInstruction*>(this);
     }
 
+    uint8_t tmpReg(size_t n)
+    {
+        ASSERT(n < sizeof(m_tmpRegs));
+        return m_tmpRegs[n];
+    }
+
+    void setTmpReg(size_t n, uint8_t value)
+    {
+        ASSERT(n < sizeof(m_tmpRegs));
+        m_tmpRegs[n] = value;
+    }
+
+    inline void setTmpReg2(uint8_t value1, uint8_t value2)
+    {
+        m_tmpRegs[0] = value1;
+        m_tmpRegs[1] = value2;
+    }
+
+    inline void setTmpReg3(uint8_t value1, uint8_t value2, uint8_t value3)
+    {
+        setTmpReg2(value1, value2);
+        m_tmpRegs[2] = value3;
+    }
+
+    inline void setTmpReg4(uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4)
+    {
+        setTmpReg3(value1, value2, value3);
+        m_tmpRegs[3] = value4;
+    }
+
 protected:
     explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
         : InstructionListItem(group, prev)
         , m_byteCode(byteCode)
+        , m_operands(operands)
         , m_opcode(opcode)
         , m_paramCount(paramCount)
-        , m_operands(operands)
     {
+        memset(m_tmpRegs, 0, sizeof(m_tmpRegs));
     }
 
     explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, InstructionListItem* prev)
         : InstructionListItem(group, prev)
         , m_byteCode(byteCode)
+        , m_operands(nullptr)
         , m_opcode(opcode)
         , m_paramCount(0)
-        , m_operands(nullptr)
     {
+        memset(m_tmpRegs, 0, sizeof(m_tmpRegs));
     }
 
 private:
     ByteCode* m_byteCode;
+    Operand* m_operands;
     ByteCode::Opcode m_opcode;
     uint32_t m_paramCount;
-    Operand* m_operands;
+    uint8_t m_tmpRegs[4];
 };
 
 union InstructionValue {
