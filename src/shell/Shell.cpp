@@ -26,6 +26,7 @@
 #include "wabt/wast-lexer.h"
 #include "wabt/wast-parser.h"
 #include "wabt/binary-writer.h"
+#include "string-view-lite/string_view.h"
 
 struct spectestseps : std::numpunct<char> {
     char do_thousands_sep() const { return '_'; }
@@ -39,6 +40,7 @@ struct ArgParser {
 
 static bool useJIT = false;
 static int jitVerbose = 0;
+static bool shareHostEnv = false;
 
 using namespace Walrus;
 
@@ -999,11 +1001,12 @@ static void runExports(Store* store, const std::string& filename, const std::vec
              &data);
 }
 
-static void parseArguments(int argc, char* argv[], ArgParser& argParser)
+static void parseArguments(int argc, char* argv[], ArgParser& argParser, std::vector<uvwasi_preopen_s>& preopenDirs)
 {
     const std::vector<nonstd::string_view> args(argv + 1, argv + argc);
 
-    for (auto it = args.begin(); it != args.end(); ++it) {
+    auto it = args.begin();
+    while (it != args.end()) {
         if (*it == "--run-export") {
             if (*it == args.back()) {
                 fprintf(stderr, "error: --run-export requires an argument\n");
@@ -1018,6 +1021,40 @@ static void parseArguments(int argc, char* argv[], ArgParser& argParser)
             jitVerbose = 1;
         } else if (*it == "--jit-verbose-color") {
             jitVerbose = 2;
+        } else if (*it == "--mapdirs") {
+            it++;
+            while (it != args.end() && nonstd::to_string(*it).find("--") == std::string::npos) {
+                if (it + 1 == args.end()) {
+                    break;
+                }
+
+                uvwasi_preopen_s preopen;
+                preopen.real_path = reinterpret_cast<char*>(calloc(1, it->length() + 1));
+                it->nonstd::sv_lite::string_view::copy(const_cast<char*>(preopen.real_path), it->length());
+
+                it++;
+
+                preopen.mapped_path = reinterpret_cast<char*>(calloc(1, it->length() + 1));
+                it->nonstd::sv_lite::string_view::copy(const_cast<char*>(preopen.mapped_path), it->length());
+                preopenDirs.push_back(preopen);
+                it++;
+            }
+            it--;
+        } else if (*it == "--env") {
+            shareHostEnv = true;
+        } else if (*it == "--help" || *it == "-h") {
+            fprintf(stdout, "Run a WebAssembly wasm, wat or wast file.\n\n");
+            fprintf(stdout, "Usage: walrus [OPTIONS] <INPUT>\n\n");
+            fprintf(stdout, "OPTIONS:\n");
+            fprintf(stdout, "\t-h, --help\n\t\tShow this message then exit.\n\n");
+            fprintf(stdout, "\t--jit\n\t\tEnable just-in-time interpretation.\n\n");
+            fprintf(stdout, "\t--jit-verbose\n\t\tEnable verbose output for just-in-time interpretation.\n\n");
+            fprintf(stdout, "\t--jit-verbose-color\n\t\tEnable colored verbose output for just-in-time interpretation.\n\n");
+            fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
+            fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
+
+
+            exit(0);
         } else {
             auto arg = nonstd::to_string(*it);
             if (endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
@@ -1027,6 +1064,7 @@ static void parseArguments(int argc, char* argv[], ArgParser& argParser)
                 exit(1);
             }
         }
+        ++it;
     }
 
     if (argParser.fileNames.empty()) {
@@ -1055,12 +1093,13 @@ int main(int argc, char* argv[])
 
     Engine* engine = new Engine();
     Store* store = new Store(engine);
-    WASI* wasi = new WASI();
 
+    std::vector<uvwasi_preopen_s> preopenDirs;
     SpecTestFunctionTypes functionTypes;
     ArgParser argParser;
 
-    parseArguments(argc, argv, argParser);
+    parseArguments(argc, argv, argParser, preopenDirs);
+    WASI* wasi = new WASI(preopenDirs, shareHostEnv);
 
     for (const auto& filePath : argParser.fileNames) {
         FILE* fp = fopen(filePath.data(), "r");

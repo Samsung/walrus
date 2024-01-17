@@ -20,7 +20,8 @@ import os
 import traceback
 import sys
 import time
-import re, fnmatch
+import re
+import fnmatch
 
 from argparse import ArgumentParser
 from difflib import unified_diff
@@ -101,10 +102,11 @@ def readfile(filename):
     with open(filename, 'r') as f:
         return f.readlines()
 
+
 def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
-        proc = Popen([engine, file], stdout=PIPE) if not jit else Popen([engine, '--jit', file], stdout=PIPE)
+        proc = Popen([engine, "--mapdirs", "./test/wasi", "/var", file], stdout=PIPE) if not jit else Popen([engine,  "--mapdirs", "./test/wasi", "/var", "--jit", file], stdout=PIPE)
         out, _ = proc.communicate()
 
         if is_fail and proc.returncode or not is_fail and not proc.returncode:
@@ -135,6 +137,7 @@ def run_basic_tests(engine):
     if fail_total > 0:
         raise Exception("basic tests failed")
 
+
 @runner('wasm-test-core', default=True)
 def run_core_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-spec', 'core')
@@ -151,6 +154,7 @@ def run_core_tests(engine):
 
     if fail_total > 0:
         raise Exception("wasm-test-core failed")
+
 
 @runner('wasi', default=True)
 def run_basic_tests(engine):
@@ -169,6 +173,7 @@ def run_basic_tests(engine):
     if fail_total > 0:
         raise Exception("basic wasi tests failed")
 
+
 @runner('jit', default=True)
 def run_basic_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'jit')
@@ -185,6 +190,7 @@ def run_basic_tests(engine):
 
     if fail_total > 0:
         raise Exception("basic wasm-test-core failed")
+
 
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
