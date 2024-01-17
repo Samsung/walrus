@@ -16,6 +16,8 @@
 
 #include "wasi/Wasi.h"
 #include "wasi/Fd.h"
+#include "wasi/Path.h"
+#include "wasi/Environ.h"
 
 // https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md
 
@@ -93,11 +95,10 @@ void WASI::fillWasiFuncTable()
 #undef WASI_FUNC_TABLE
 }
 
-WASI::WASI()
+WASI::WASI(std::vector<uvwasi_preopen_s>& preopenDirs, bool shareHostEnv)
 {
     fillWasiFuncTable();
 
-    uvwasi_t uvwasi;
     WASI::m_uvwasi = reinterpret_cast<uvwasi_t*>(malloc(sizeof(uvwasi_t)));
 
     uvwasi_options_t init_options;
@@ -108,12 +109,83 @@ WASI::WASI()
     init_options.argc = 0;
     init_options.argv = nullptr;
     init_options.envp = nullptr;
-    init_options.preopenc = 0;
+    if (shareHostEnv) {
+        std::vector<std::string> variables = {
+            // Common Unix environment variables.
+            "PATH",
+            "LIB",
+            "PWD",
+            "SHELL",
+            "TERM",
+            "HOME",
+            "LOGNAME",
+            "HOSTNAME",
+            "UID",
+            "TEMP",
+            "EDITOR"
+            "LANG",
+            "LC_TIME",
+            // Common Windows environment variables.
+            "APPDATA",
+            "USERPROFILE",
+            "USERDOMAIN",
+            "windir",
+            "ProgramFiles",
+            "OS"
+            "LOCALAPPDATA",
+            "SystemRoot",
+            "SystemDrive",
+        };
+
+        char** envp = (char**)malloc(sizeof(char**) * variables.size());
+
+        size_t j = 0;
+        for (size_t i = 0; i < variables.size(); i++) {
+            if (getenv(variables[i].c_str()) == nullptr) {
+                continue;
+            }
+
+            size_t length = strlen(variables[i].c_str());
+            length += strlen(getenv(variables[i].c_str()));
+            length += 2;
+            envp[j] = (char*)malloc(length);
+            strcpy(envp[j], variables[i].c_str());
+            envp[j][variables[i].size()] = '=';
+            strcpy(envp[j] + variables[i].size() + 1, getenv(variables[i].c_str()));
+            envp[j][length - 1] = '\0';
+            j++;
+        }
+
+        while (j < variables.size()) {
+            envp[j] = nullptr;
+            j++;
+        }
+
+        init_options.envp = const_cast<const char**>(envp);
+    }
+    init_options.preopenc = preopenDirs.size();
+    init_options.preopens = preopenDirs.data();
     init_options.preopen_socketc = 0;
     init_options.allocator = nullptr;
 
     uvwasi_errno_t err = uvwasi_init(WASI::m_uvwasi, &init_options);
     assert(err == UVWASI_ESUCCESS);
+
+    if (init_options.envp != nullptr) {
+        for (size_t i = 0; init_options.envp[i] != nullptr; i++) {
+            free((void*)init_options.envp[i]);
+        }
+        free(init_options.envp);
+    }
+
+    for (auto& elem : preopenDirs) {
+        if (elem.mapped_path != nullptr) {
+            free((void*)elem.mapped_path);
+        }
+        if (elem.real_path != nullptr) {
+            free((void*)elem.real_path);
+        }
+    }
 }
 
 } // namespace Walrus

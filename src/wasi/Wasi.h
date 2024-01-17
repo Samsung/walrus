@@ -116,11 +116,12 @@ public:
 #undef TO_ENUM
     // end of type definitions
 
-    WASI();
+    WASI(std::vector<uvwasi_preopen_s>& preopenDirs, bool shareHostEnv);
 
     ~WASI()
     {
         ::uvwasi_destroy(m_uvwasi);
+        free(m_uvwasi);
     }
 
     struct WasiFunc {
@@ -129,11 +130,17 @@ public:
         WasiFunction::WasiFunctionCallback ptr;
     };
 
-#define FOR_EACH_WASI_FUNC(F)  \
-    F(proc_exit, I32R)         \
-    F(proc_raise, I32_RI32)    \
-    F(random_get, I32I32_RI32) \
-    F(fd_write, I32I32I32I32_RI32)
+#define FOR_EACH_WASI_FUNC(F)                      \
+    F(proc_exit, I32R)                             \
+    F(proc_raise, I32_RI32)                        \
+    F(random_get, I32I32_RI32)                     \
+    F(fd_write, I32I32I32I32_RI32)                 \
+    F(fd_read, I32I32I32I32_RI32)                  \
+    F(fd_close, I32_RI32)                          \
+    F(fd_seek, I32I64I32I32_RI32)                  \
+    F(path_open, I32I32I32I32I32I64I64I32I32_RI32) \
+    F(environ_get, I32I32_RI32)                    \
+    F(environ_sizes_get, I32I32_RI32)
 
     enum WasiFuncName : size_t {
 #define DECLARE_FUNCTION(NAME, FUNCTYPE) NAME##FUNC,
@@ -150,6 +157,12 @@ public:
     static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void fd_read(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void fd_close(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void path_open(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void environ_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void environ_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
 
     static WasiFunc m_wasiFunctions[FuncEnd];
