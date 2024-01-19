@@ -238,7 +238,9 @@ jobs:
         cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
         ninja -Cout/linux/x64
     - name: Run Tests
-      run: test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 3 --verbose
+      run: |
+        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --verbose
+        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --jit --verbose
 
   built-test-wasm-c-api:
     runs-on: ubuntu-latest

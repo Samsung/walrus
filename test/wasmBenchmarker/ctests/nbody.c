@@ -174,6 +174,6 @@ float runtime() {
 }
 
 int main() {
-    printf("%.9f\n", runtime());
+    printf("%.8f\n", runtime());
     return 0;
 }

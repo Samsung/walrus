@@ -177,3 +177,8 @@ float runtime() {
 
     return energy(solarBodies);
 }
+
+int main() {
+    printf("%.8f\n", runtime());
+    return 0;
+}
