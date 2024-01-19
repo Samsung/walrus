@@ -135,3 +135,8 @@ double runtime()
     }
     return sum;
 }
+
+int main() {
+    printf("%.8lf\n", runtime());
+    return 0;
+}

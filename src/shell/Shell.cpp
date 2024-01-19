@@ -981,11 +981,11 @@ static void runExports(Store* store, const std::string& filename, const std::vec
                         break;
                     }
                     case Value::F32: {
-                        printf("%.7f\n", r.asF32());
+                        printf("%.8f\n", r.asF32());
                         break;
                     }
                     case Value::F64: {
-                        printf("%.15lf\n", r.asF64());
+                        printf("%.8lf\n", r.asF64());
                         break;
                     }
                     default:

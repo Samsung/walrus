@@ -32,6 +32,6 @@ double runtime() {
 }
 
 int main() {
-    printf("%.9lf\n", runtime());
+    printf("%.8lf\n", runtime());
 }
 
