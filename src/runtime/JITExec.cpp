@@ -64,13 +64,13 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::TypeMismatchError:
             Trap::throwException(state, "type mismatch");
             return resultOffsets;
-        case ExecutionContext::UndefinedElement:
+        case ExecutionContext::UndefinedElementError:
             Trap::throwException(state, "undefined element");
             return resultOffsets;
-        case ExecutionContext::UninitializedElement:
+        case ExecutionContext::UninitializedElementError:
             Trap::throwException(state, "uninitialized element");
             return resultOffsets;
-        case ExecutionContext::IndirectCallTypeMismatch:
+        case ExecutionContext::IndirectCallTypeMismatchError:
             Trap::throwException(state, "indirect call type mismatch");
             return resultOffsets;
         case ExecutionContext::InvalidConversionToIntegerError:

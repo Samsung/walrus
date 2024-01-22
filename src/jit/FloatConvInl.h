@@ -159,10 +159,9 @@ static void emitConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* i
     floatOperandToArg(compiler, operands, srcArg, sourceReg);
 
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::InvalidConversionToIntegerError);
 
     sljit_jump* cmp = sljit_emit_fcmp(compiler, SLJIT_UNORDERED | (opcode & SLJIT_32), sourceReg, 0, sourceReg, 0);
-    sljit_set_label(cmp, context->trapLabel);
+    context->appendTrapJump(ExecutionContext::InvalidConversionToIntegerError, cmp);
 
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
 
@@ -250,12 +249,9 @@ void ConvertIntFromFloatSlowCase::emitSlowCase(sljit_compiler* compiler)
         sljit_set_label(cmp, m_resumeLabel);
 #endif /* SLJIT_CONV_MAX_FLOAT != SLJIT_CONV_RESULT_MAX_INT */
 
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+        context->appendTrapJump(ExecutionContext::IntegerOverflowError, sljit_emit_jump(compiler, SLJIT_JUMP));
         return;
     }
-
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
 
 #if (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_MIN_FLOAT) && (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_RESULT_MAX_INT)
     sljit_emit_fset64(compiler, tmpFReg, 0);
@@ -264,7 +260,7 @@ void ConvertIntFromFloatSlowCase::emitSlowCase(sljit_compiler* compiler)
 #endif /* (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_MIN_FLOAT) && (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_RESULT_MAX_INT) */
 
     sljit_jump* cmp = sljit_emit_fcmp(compiler, SLJIT_F_LESS_EQUAL, m_sourceReg, 0, tmpFReg, 0);
-    sljit_set_label(cmp, context->trapLabel);
+    context->appendTrapJump(ExecutionContext::IntegerOverflowError, cmp);
 
 #if (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_MIN_FLOAT) && (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_RESULT_MIN_INT)
     sljit_emit_fset64(compiler, tmpFReg, 0.);
@@ -273,7 +269,7 @@ void ConvertIntFromFloatSlowCase::emitSlowCase(sljit_compiler* compiler)
 #endif /* (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_MIN_FLOAT) && (SLJIT_CONV_MAX_FLOAT == SLJIT_CONV_RESULT_MIN_INT) */
 
     cmp = sljit_emit_fcmp(compiler, SLJIT_F_GREATER_EQUAL, m_sourceReg, 0, tmpFReg, 0);
-    sljit_set_label(cmp, context->trapLabel);
+    context->appendTrapJump(ExecutionContext::IntegerOverflowError, cmp);
     sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), m_resumeLabel);
 }
 
@@ -291,9 +287,9 @@ public:
     {
     }
 
-    void emitCompareUnordered(sljit_compiler* compiler)
+    sljit_jump* emitCompareUnordered(sljit_compiler* compiler)
     {
-        sljit_emit_fop1(compiler, SLJIT_CMP_F64 | SLJIT_SET_UNORDERED | (m_opcode & SLJIT_32), m_sourceReg, 0, m_sourceReg, 0);
+        return sljit_emit_fcmp(compiler, SLJIT_UNORDERED | (m_opcode & SLJIT_32), m_sourceReg, 0, m_sourceReg, 0);
     }
 
 private:
@@ -324,13 +320,11 @@ static void emitConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction
     context->add(new ConvertUnsignedIntFromFloatSlowCase(SlowCase::Type::ConvertUnsignedIntFromFloat,
                                                          cmp, instr, opcode, sourceReg));
 #else /* SLJIT_CONV_NAN_FLOAT == SLJIT_CONV_RESULT_ZERO */
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::InvalidConversionToIntegerError);
     sljit_jump* cmp = sljit_emit_fcmp(compiler, SLJIT_UNORDERED | (opcode & SLJIT_32), sourceReg, 0, sourceReg, 0);
-    sljit_set_label(cmp, context->trapLabel);
+    context->appendTrapJump(ExecutionContext::InvalidConversionToIntegerError, cmp);
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
     cmp = sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL, resultReg, 0, SLJIT_IMM, 0x100000000);
-    sljit_set_label(cmp, context->trapLabel);
+    context->appendTrapJump(ExecutionContext::IntegerOverflowError, cmp);
 #endif /* SLJIT_CONV_NAN_FLOAT != SLJIT_CONV_RESULT_ZERO */
 
     /* Usually a nop. */
@@ -452,10 +446,8 @@ static void emitSaturatedConvertUnsigned32FromFloat(sljit_compiler* compiler, In
 
 static void checkConvertResult(sljit_compiler* compiler)
 {
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
-
     sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
-    sljit_set_label(cmp, CompileContext::get(compiler)->trapLabel);
+    CompileContext::get(compiler)->appendTrapJump(ExecutionContext::GenericTrap, cmp);
 }
 
 static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)

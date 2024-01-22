@@ -146,7 +146,6 @@ static void emitTry(CompileContext* context, Label* label)
     do {
         TryBlock& block = tryBlocks[context->nextTryBlock];
         block.parent = context->currentTryBlock;
-        block.returnToLabel = context->returnToLabel;
 
         context->tryBlockStack.push_back(context->currentTryBlock);
         context->currentTryBlock = context->nextTryBlock++;
@@ -253,7 +252,7 @@ static void emitThrow(sljit_compiler* compiler, Instruction* instr)
     sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_JUMP);
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {
-        sljit_set_label(jump, context->returnToLabel);
+        context->appendTrapJump(ExecutionContext::ReturnToLabel, jump);
         return;
     }
 

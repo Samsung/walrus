@@ -47,11 +47,16 @@ struct ExecutionContext {
         OutOfBoundsMemAccessError,
         OutOfBoundsTableAccessError,
         TypeMismatchError,
-        UndefinedElement,
-        UninitializedElement,
-        IndirectCallTypeMismatch,
+        UndefinedElementError,
+        UninitializedElementError,
+        IndirectCallTypeMismatchError,
         InvalidConversionToIntegerError,
         UnreachableError,
+
+        // These three in this order must be the last items of the list.
+        GenericTrap, // Error code received in SLJIT_R0.
+        ReturnToLabel, // Used for returning with an exception.
+        ErrorCodesEnd,
     };
 
     ExecutionContext(InstanceConstData* currentInstanceConstData, ExecutionState& state, Instance* instance)

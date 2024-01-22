@@ -99,8 +99,7 @@ static void emitDivRem32(sljit_compiler* compiler, sljit_s32 opcode, JITArg* arg
 
     if (SLJIT_IS_IMM(args[1].arg)) {
         if (args[1].argw == 0) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+            context->appendTrapJump(ExecutionContext::DivideByZeroError, sljit_emit_jump(compiler, SLJIT_JUMP));
             return;
         } else if (args[1].argw == -1 && opcode == SLJIT_DIVMOD_SW) {
             sljit_emit_op1(compiler, SLJIT_MOV, args[2].arg, args[2].argw, SLJIT_IMM, 0);
@@ -115,10 +114,8 @@ static void emitDivRem32(sljit_compiler* compiler, sljit_s32 opcode, JITArg* arg
 
     if (SLJIT_IS_IMM(args[1].arg)) {
         if (opcode == SLJIT_DIV_SW && args[1].argw == -1) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
-
             sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(INT32_MIN));
-            sljit_set_label(cmp, context->trapLabel);
+            context->appendTrapJump(ExecutionContext::IntegerOverflowError, cmp);
         }
     } else if (opcode == SLJIT_DIV_SW || opcode == SLJIT_DIVMOD_SW) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, 1);
@@ -134,10 +131,8 @@ static void emitDivRem32(sljit_compiler* compiler, sljit_s32 opcode, JITArg* arg
 
         sljit_emit_op2(compiler, SLJIT_SUB, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, 1);
     } else {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-
         sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R1, 0, SLJIT_IMM, 0);
-        sljit_set_label(cmp, context->trapLabel);
+        context->appendTrapJump(ExecutionContext::DivideByZeroError, cmp);
     }
 
     sljit_emit_op0(compiler, opcode);
@@ -490,8 +485,7 @@ static void emitDivRem64(sljit_compiler* compiler, sljit_s32 opcode, JITArgPair*
 
     if (isImm) {
         if ((args[1].arg1w | args[1].arg2w) == 0) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+            context->appendTrapJump(ExecutionContext::DivideByZeroError, sljit_emit_jump(compiler, SLJIT_JUMP));
             return;
         }
         if ((args[1].arg1w & args[1].arg2w) == -1 && opcode == SLJIT_DIVMOD_SW) {
@@ -553,9 +547,8 @@ static void emitDivRem64(sljit_compiler* compiler, sljit_s32 opcode, JITArgPair*
     sljit_emit_icall(compiler, SLJIT_CALL, argTypes, SLJIT_IMM, addr);
 
     if (!isImm) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_R0, 0);
         sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
-        sljit_set_label(cmp, context->trapLabel);
+        context->appendTrapJump(ExecutionContext::GenericTrap, cmp);
     }
 
     if (args[2].arg1 != SLJIT_MEM1(kFrameReg)) {

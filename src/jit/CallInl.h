@@ -46,20 +46,20 @@ static sljit_sw callFunctionIndirect(
 
     uint32_t idx = *reinterpret_cast<uint32_t*>(bp + code->calleeOffset());
     if (idx >= table->size()) {
-        context->error = ExecutionContext::UndefinedElement;
-        return ExecutionContext::UndefinedElement;
+        context->error = ExecutionContext::UndefinedElementError;
+        return ExecutionContext::UndefinedElementError;
     }
 
     auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
     if (UNLIKELY(Value::isNull(target))) {
-        context->error = ExecutionContext::UninitializedElement;
-        return ExecutionContext::UninitializedElement;
+        context->error = ExecutionContext::UninitializedElementError;
+        return ExecutionContext::UninitializedElementError;
     }
 
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
-        context->error = ExecutionContext::IndirectCallTypeMismatch;
-        return ExecutionContext::IndirectCallTypeMismatch;
+        context->error = ExecutionContext::IndirectCallTypeMismatchError;
+        return ExecutionContext::IndirectCallTypeMismatchError;
     }
 
     sljit_sw error = ExecutionContext::NoError;
@@ -93,7 +93,7 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     CompileContext* context = CompileContext::get(compiler);
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {
-        sljit_set_label(jump, context->returnToLabel);
+        context->appendTrapJump(ExecutionContext::ReturnToLabel, jump);
         return;
     }
 

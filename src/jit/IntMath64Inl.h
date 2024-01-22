@@ -58,8 +58,7 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
 
     if (SLJIT_IS_IMM(args[1].arg)) {
         if (args[1].argw == 0) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+            context->appendTrapJump(ExecutionContext::DivideByZeroError, sljit_emit_jump(compiler, SLJIT_JUMP));
             return;
         } else if (args[1].argw == -1 && opcode == SLJIT_DIVMOD_SW) {
             sljit_emit_op1(compiler, movOpcode, args[2].arg, args[2].argw, SLJIT_IMM, 0);
@@ -74,8 +73,6 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
 
     if (SLJIT_IS_IMM(args[1].arg)) {
         if ((options & DivRemSigned) && args[1].argw == -1) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
-
             sljit_s32 type = SLJIT_EQUAL;
             sljit_sw min = static_cast<sljit_sw>(INT64_MIN);
 
@@ -85,7 +82,7 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
             }
 
             sljit_jump* cmp = sljit_emit_cmp(compiler, type, SLJIT_R0, 0, SLJIT_IMM, min);
-            sljit_set_label(cmp, context->trapLabel);
+            context->appendTrapJump(ExecutionContext::IntegerOverflowError, cmp);
         }
     } else if (options & DivRemSigned) {
         sljit_s32 addOpcode = (options & DivRem32) ? SLJIT_ADD32 : SLJIT_ADD;
@@ -110,15 +107,13 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
 
         sljit_emit_op2(compiler, subOpcode, SLJIT_R1, 0, SLJIT_R1, 0, SLJIT_IMM, 1);
     } else {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-
         sljit_s32 type = SLJIT_EQUAL;
         if (options & DivRem32) {
             type |= SLJIT_32;
         }
 
         sljit_jump* cmp = sljit_emit_cmp(compiler, type, SLJIT_R1, 0, SLJIT_IMM, 0);
-        sljit_set_label(cmp, context->trapLabel);
+        context->appendTrapJump(ExecutionContext::DivideByZeroError, cmp);
     }
 
     sljit_emit_op0(compiler, opcode);

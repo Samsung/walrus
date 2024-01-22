@@ -475,18 +475,32 @@ struct TrapBlock {
     } u;
 };
 
+struct TrapJump {
+    TrapJump(uint32_t jumpType, sljit_jump* jump)
+        : jumpType(jumpType)
+        , jump(jump)
+    {
+    }
+
+    bool operator<(const TrapJump& other) const
+    {
+        return jumpType < other.jumpType;
+    }
+
+    uint32_t jumpType;
+    sljit_jump* jump;
+};
+
 struct CompileContext {
     CompileContext(Module* module, JITCompiler* compiler);
 
     static CompileContext* get(sljit_compiler* compiler);
 
     void add(SlowCase* slowCase) { slowCases.push_back(slowCase); }
+    void appendTrapJump(uint32_t jumpType, sljit_jump* jump) { trapJumps.push_back(TrapJump(jumpType, jump)); }
     void emitSlowCases(sljit_compiler* compiler);
 
     JITCompiler* compiler;
-    sljit_label* trapLabel;
-    sljit_label* memoryTrapLabel;
-    sljit_label* returnToLabel;
     uintptr_t branchTableOffset;
     size_t globalsStart;
     size_t tableStart;
@@ -500,6 +514,7 @@ struct CompileContext {
     std::vector<size_t> tryBlockStack;
     std::vector<SlowCase*> slowCases;
     std::vector<sljit_jump*> earlyReturns;
+    std::vector<TrapJump> trapJumps;
 };
 
 class JITCompiler {

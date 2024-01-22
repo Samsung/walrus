@@ -208,8 +208,6 @@ protected:
 
 CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     : compiler(compiler)
-    , trapLabel(nullptr)
-    , memoryTrapLabel(nullptr)
     , nextTryBlock(0)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
@@ -356,8 +354,6 @@ void SlowCase::emit(sljit_compiler* compiler)
     case Type::SignedDivide32:
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     case Type::SignedDivide: {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-
         sljit_s32 current_flags = SLJIT_CURRENT_FLAGS_SUB | SLJIT_CURRENT_FLAGS_COMPARE | SLJIT_SET_LESS_EQUAL | SLJIT_SET_Z;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
         if (m_type == Type::SignedDivide32) {
@@ -366,8 +362,9 @@ void SlowCase::emit(sljit_compiler* compiler)
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
         sljit_set_current_flags(compiler, current_flags);
+
         /* Division by zero. */
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_EQUAL), context->trapLabel);
+        context->appendTrapJump(ExecutionContext::DivideByZeroError, sljit_emit_jump(compiler, SLJIT_EQUAL));
 
         sljit_s32 type = SLJIT_NOT_EQUAL;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -384,16 +381,13 @@ void SlowCase::emit(sljit_compiler* compiler)
         sljit_jump* cmp = sljit_emit_cmp(compiler, type, SLJIT_R0, 0, SLJIT_IMM, intMin);
         sljit_set_label(cmp, m_resumeLabel);
 
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+        context->appendTrapJump(ExecutionContext::IntegerOverflowError, sljit_emit_jump(compiler, SLJIT_JUMP));
         return;
     }
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     case Type::SignedModulo32:
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     case Type::SignedModulo: {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::DivideByZeroError);
-
         sljit_s32 current_flags = SLJIT_CURRENT_FLAGS_SUB | SLJIT_CURRENT_FLAGS_COMPARE | SLJIT_SET_LESS_EQUAL | SLJIT_SET_Z;
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
         if (m_type == Type::SignedModulo32) {
@@ -402,8 +396,9 @@ void SlowCase::emit(sljit_compiler* compiler)
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
         sljit_set_current_flags(compiler, current_flags);
+
         /* Division by zero. */
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_EQUAL), context->trapLabel);
+        context->appendTrapJump(ExecutionContext::DivideByZeroError, sljit_emit_jump(compiler, SLJIT_EQUAL));
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
         sljit_emit_op1(compiler, (m_type == Type::SignedModulo32) ? SLJIT_MOV32 : SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, 0);
@@ -420,10 +415,9 @@ void SlowCase::emit(sljit_compiler* compiler)
     }
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE) && (SLJIT_CONV_NAN_FLOAT != SLJIT_CONV_RESULT_ZERO)
     case Type::ConvertUnsignedIntFromFloat: {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::IntegerOverflowError);
-        reinterpret_cast<ConvertUnsignedIntFromFloatSlowCase*>(this)->emitCompareUnordered(compiler);
-        sljit_emit_select(compiler, SLJIT_UNORDERED, SLJIT_R2, SLJIT_IMM, ExecutionContext::InvalidConversionToIntegerError, SLJIT_R2);
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->trapLabel);
+        sljit_jump* cmp = reinterpret_cast<ConvertUnsignedIntFromFloatSlowCase*>(this)->emitCompareUnordered(compiler);
+        context->appendTrapJump(ExecutionContext::InvalidConversionToIntegerError, cmp);
+        context->appendTrapJump(ExecutionContext::IntegerOverflowError, sljit_emit_jump(compiler, SLJIT_JUMP));
         return;
     }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
@@ -864,8 +858,8 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
                 break;
             }
             case ByteCode::UnreachableOpcode: {
-                sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::UnreachableError);
-                sljit_set_label(sljit_emit_jump(m_compiler, SLJIT_JUMP), m_context.trapLabel);
+                sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::UnreachableError);
+                m_context.appendTrapJump(ExecutionContext::GenericTrap, sljit_emit_jump(m_compiler, SLJIT_JUMP));
                 break;
             }
             case ByteCode::EndOpcode: {
@@ -961,29 +955,14 @@ void JITCompiler::clear()
         delete item;
         item = next;
     }
+
+    m_context.trapJumps.clear();
 }
 
 void JITCompiler::emitProlog()
 {
     FunctionList& func = m_functionList.back();
     sljit_s32 savedRegCount = 4;
-
-    sljit_set_context(m_compiler, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2), SLJIT_ARGS0(P),
-                      SLJIT_NUMBER_OF_SCRATCH_REGISTERS, savedRegCount,
-                      SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, 0, sizeof(ExecutionContext::CallFrame));
-
-    m_context.memoryTrapLabel = sljit_emit_label(m_compiler);
-    sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, ExecutionContext::OutOfBoundsMemAccessError);
-
-    m_context.trapLabel = sljit_emit_label(m_compiler);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_U32, SLJIT_MEM1(kContextReg), OffsetOfContextField(error), SLJIT_R2, 0);
-
-    m_context.returnToLabel = sljit_emit_label(m_compiler);
-
-    sljit_emit_op_dst(m_compiler, SLJIT_GET_RETURN_ADDRESS, SLJIT_R1, 0);
-    sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
-    sljit_emit_icall(m_compiler, SLJIT_CALL, SLJIT_ARGS2(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, getTrapHandler));
-    sljit_emit_return_to(m_compiler, SLJIT_R0, 0);
 
     if (func.isExported) {
         func.exportEntryLabel = sljit_emit_label(m_compiler);
@@ -1036,6 +1015,87 @@ void JITCompiler::emitEpilog()
 
     m_context.emitSlowCases(m_compiler);
 
+    std::vector<TrapJump>& trapJumps = m_context.trapJumps;
+    // The actual maximum is smaller, but the extra stack consumption is small.
+    sljit_jump* jumps[ExecutionContext::GenericTrap];
+    size_t jumpCount = 0;
+    size_t trapJumpIndex;
+    sljit_label* lastLabel = nullptr;
+    uint32_t lastJumpType = ExecutionContext::ErrorCodesEnd;
+
+    std::sort(trapJumps.begin(), trapJumps.end());
+
+    for (trapJumpIndex = 0; trapJumpIndex < trapJumps.size(); trapJumpIndex++) {
+        TrapJump& it = trapJumps[trapJumpIndex];
+
+        if (it.jumpType == lastJumpType) {
+            sljit_set_label(it.jump, lastLabel);
+            continue;
+        }
+
+        if (it.jumpType >= ExecutionContext::GenericTrap) {
+            break;
+        }
+
+        if (lastJumpType != ExecutionContext::ErrorCodesEnd) {
+            jumps[jumpCount++] = sljit_emit_jump(m_compiler, SLJIT_JUMP);
+        }
+
+        lastJumpType = it.jumpType;
+        lastLabel = sljit_emit_label(m_compiler);
+
+        sljit_set_label(it.jump, lastLabel);
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(it.jumpType));
+    }
+
+    if (trapJumpIndex > 0 || (trapJumps.size() > 0 && trapJumps[0].jumpType == ExecutionContext::GenericTrap)) {
+        lastLabel = sljit_emit_label(m_compiler);
+        sljit_emit_op1(m_compiler, SLJIT_MOV_U32, SLJIT_MEM1(kContextReg), OffsetOfContextField(error), SLJIT_R0, 0);
+
+        for (size_t i = 0; i < jumpCount; i++) {
+            sljit_set_label(jumps[i], lastLabel);
+        }
+
+        while (trapJumpIndex < trapJumps.size()) {
+            if (trapJumps[trapJumpIndex].jumpType != ExecutionContext::GenericTrap) {
+                break;
+            }
+
+            sljit_set_label(trapJumps[trapJumpIndex++].jump, lastLabel);
+        }
+    }
+
+    if (trapJumps.size() > 0 || m_tryBlockStart < m_tryBlocks.size()) {
+        lastLabel = sljit_emit_label(m_compiler);
+
+        sljit_emit_op_dst(m_compiler, SLJIT_GET_RETURN_ADDRESS, SLJIT_R1, 0);
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
+        sljit_emit_icall(m_compiler, SLJIT_CALL, SLJIT_ARGS2(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, getTrapHandler));
+        sljit_emit_return_to(m_compiler, SLJIT_R0, 0);
+
+        while (trapJumpIndex < trapJumps.size()) {
+            ASSERT(trapJumps[trapJumpIndex].jumpType == ExecutionContext::ReturnToLabel);
+            sljit_set_label(trapJumps[trapJumpIndex++].jump, lastLabel);
+        }
+    }
+
+    if (func.branchTableSize > 0) {
+        sljit_label** branchList = reinterpret_cast<sljit_label**>(func.jitFunc->m_branchList);
+        ASSERT(branchList != nullptr);
+
+        sljit_label** end = branchList + func.branchTableSize;
+
+        do {
+            *branchList = reinterpret_cast<Label*>(*branchList)->m_label;
+            branchList++;
+        } while (branchList < end);
+    }
+
+    if (lastLabel == nullptr) {
+        ASSERT(m_context.trapBlocksStart == m_context.trapBlocks.size() && m_tryBlockStart == m_tryBlocks.size());
+        return;
+    }
+
     sljit_label* endLabel = sljit_emit_label(m_compiler);
     std::vector<TrapBlock>& trapBlocks = m_context.trapBlocks;
 
@@ -1051,22 +1111,13 @@ void JITCompiler::emitEpilog()
     }
 
     m_context.trapBlocksStart = end + 1;
-    m_context.trapBlocks.push_back(TrapBlock(endLabel, m_context.returnToLabel));
-
-    if (func.branchTableSize > 0) {
-        sljit_label** branchList = reinterpret_cast<sljit_label**>(func.jitFunc->m_branchList);
-        ASSERT(branchList != nullptr);
-
-        sljit_label** end = branchList + func.branchTableSize;
-
-        do {
-            *branchList = reinterpret_cast<Label*>(*branchList)->m_label;
-            branchList++;
-        } while (branchList < end);
-    }
+    m_context.trapBlocks.push_back(TrapBlock(endLabel, lastLabel));
 
     end = m_tryBlocks.size();
     for (size_t i = m_tryBlockStart; i < end; i++) {
+        ASSERT(m_tryBlocks[i].returnToLabel == nullptr);
+        m_tryBlocks[i].returnToLabel = lastLabel;
+
         std::vector<TryBlock::CatchBlock>& catchBlocks = m_tryBlocks[i].catchBlocks;
 
         for (size_t j = 0; j < catchBlocks.size(); j++) {
