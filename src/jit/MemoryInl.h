@@ -60,7 +60,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
     if (UNLIKELY(context->maximumMemorySize < size)) {
         // This memory load is never successful.
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->memoryTrapLabel);
+        context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
         memArg.arg = 0;
         return;
     }
@@ -75,7 +75,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
         if (offset + offsetArgw < (offset | offsetArgw)) {
             // This memory load is never successful.
-            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->memoryTrapLabel);
+            context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
             memArg.arg = 0;
             return;
         }
@@ -85,7 +85,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
         if (UNLIKELY(offset > context->maximumMemorySize - size)) {
             // This memory load is never successful.
-            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->memoryTrapLabel);
+            context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
             memArg.arg = 0;
             return;
         }
@@ -118,7 +118,8 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
             load(compiler);
         }
 
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, limitReg, 0), context->memoryTrapLabel);
+        sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, limitReg, 0);
+        context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, cmp);
 
         if ((options & LoadInteger) && limitReg == sourceReg) {
             load(compiler);
@@ -133,7 +134,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
     if (offset > context->maximumMemorySize - size) {
         // This memory load is never successful.
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->memoryTrapLabel);
+        context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
         memArg.arg = 0;
         return;
     }
@@ -166,12 +167,13 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
         sljit_emit_op2(compiler, SLJIT_ADD, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
 #else /* !SLJIT_64BIT_ARCHITECTURE */
         sljit_emit_op2(compiler, SLJIT_ADD | SLJIT_SET_CARRY, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
-        sljit_set_label(sljit_emit_jump(compiler, SLJIT_CARRY), context->memoryTrapLabel);
+        context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_CARRY));
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     }
 
     if (context->initialMemorySize == context->maximumMemorySize) {
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(context->maximumMemorySize - size)), context->memoryTrapLabel);
+        sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(context->maximumMemorySize - size));
+        context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, cmp);
 
         memArg.arg = SLJIT_MEM2(baseReg, offsetReg);
         memArg.argw = 0;
@@ -185,7 +187,8 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
         return;
     }
 
-    sljit_set_label(sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, limitReg, 0), context->memoryTrapLabel);
+    sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_GREATER, offsetReg, 0, limitReg, 0);
+    context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, cmp);
 
     if ((options & LoadInteger) && limitReg == sourceReg) {
         load(compiler);
@@ -907,8 +910,8 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, 32, 32, 32, W), SLJIT_IMM, addr);
 
-        // Currently all traps are OutOfBoundsMemAccessError.
-        sljit_set_label(sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError), context->memoryTrapLabel);
+        sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
+        context->appendTrapJump(ExecutionContext::GenericTrap, cmp);
         return;
     }
     default: {
