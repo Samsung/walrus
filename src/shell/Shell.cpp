@@ -602,7 +602,7 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
     auto trapResult = trap.run([](Walrus::ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
         Walrus::ValueVector result;
-        result.resize(data->expectedResult.size());
+        result.resize(data->fn->functionType()->result().size());
         data->fn->call(state, data->args.data(), result.data());
         if (data->expectedResult.size()) {
             if (data->fn->functionType()->result().size() != data->expectedResult.size()) {
