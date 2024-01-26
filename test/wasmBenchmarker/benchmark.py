@@ -158,7 +158,7 @@ def run_check_wasm(engine, path, name, jit=False, verbose=False):
         exit(1)
 
     tc_path = path + "/wasm/" + name + ".wasm"
-    flags = " --jit" if (jit and "walrus" in engine) else ""
+    flags = ("--jit" if (jit and "walrus" in engine) else "") + " --run-export runtime"
 
     result = subprocess.check_output(engine + " " + flags + " " + tc_path, shell=True)
 
