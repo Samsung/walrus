@@ -97,6 +97,22 @@ public:
 #endif
     }
 
+#ifdef CPU_ARM32
+
+#define defineUnalignedLoad(TYPE)                                                              \
+    template <typename T = TYPE>                                                               \
+    void load(ExecutionState& state, uint32_t offset, TYPE* out) const                         \
+    {                                                                                          \
+        checkAccess(state, offset, sizeof(TYPE));                                              \
+        memcpyEndianAware(out, m_buffer, sizeof(TYPE), m_sizeInByte, 0, offset, sizeof(TYPE)); \
+    }
+    defineUnalignedLoad(uint64_t);
+    defineUnalignedLoad(int64_t);
+    defineUnalignedLoad(double);
+#undef defineUnalignedLoad
+
+#endif
+
     template <typename T>
     void store(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
     {
@@ -115,6 +131,22 @@ public:
         *(reinterpret_cast<T*>(&m_buffer[offset])) = val;
 #endif
     }
+
+#ifdef CPU_ARM32
+
+#define defineUnalignedStore(TYPE)                                                              \
+    template <typename T = TYPE>                                                                \
+    void store(ExecutionState& state, uint32_t offset, const TYPE& val) const                   \
+    {                                                                                           \
+        checkAccess(state, offset, sizeof(TYPE));                                               \
+        memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(TYPE), offset, 0, sizeof(TYPE)); \
+    }
+    defineUnalignedStore(uint64_t);
+    defineUnalignedStore(int64_t);
+    defineUnalignedStore(double);
+#undef defineUnalignedStore
+
+#endif
 
     void init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
     void copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size);
