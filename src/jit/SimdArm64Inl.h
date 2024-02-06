@@ -134,8 +134,8 @@ static void simdEmitOp(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, 
 
 static void simdEmitI64x2Mul(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    auto tmpReg1 = SLJIT_FR2;
-    auto tmpReg2 = SLJIT_FR3;
+    auto tmpReg1 = SLJIT_TMP_FR0;
+    auto tmpReg2 = SLJIT_TMP_FR1;
 
     simdEmitOp(compiler, SimdOp::rev64 | SimdOp::S4, tmpReg2, rm, 0);
     simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, tmpReg2, tmpReg2, rn);
@@ -439,7 +439,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
 
 static void simdEmitAllTrue(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, SimdOp::IntSizeType size)
 {
-    sljit_s32 tmpReg = SLJIT_FR1;
+    sljit_s32 tmpReg = SLJIT_TMP_FR0;
 
     ASSERT(size != SimdOp::D2);
     simdEmitOp(compiler, SimdOp::uminv | size, tmpReg, rn, 0);
@@ -458,7 +458,7 @@ static void simdEmitAllTrue(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn
 
 static void simdEmitI64x2AllTrue(sljit_compiler* compiler, sljit_s32 rn)
 {
-    sljit_s32 tmpReg = SLJIT_FR1;
+    sljit_s32 tmpReg = SLJIT_TMP_FR0;
 
     simdEmitOp(compiler, SimdOp::cmeqz | SimdOp::D2, tmpReg, rn, rn);
     simdEmitOp(compiler, SimdOp::addp | SimdOp::D2, tmpReg, tmpReg, tmpReg);
@@ -467,7 +467,7 @@ static void simdEmitI64x2AllTrue(sljit_compiler* compiler, sljit_s32 rn)
 
 static void simdEmitV128AnyTrue(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn)
 {
-    sljit_s32 tmpReg = SLJIT_FR1;
+    sljit_s32 tmpReg = SLJIT_TMP_FR0;
 
     simdEmitOp(compiler, SimdOp::umaxp | SimdOp::S4, tmpReg, rn, rn);
     sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_STORE, tmpReg, 0, rd, 0);
@@ -859,28 +859,28 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::ucmge | SimdOp::H8, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I16X8ExtmulLowI8X16SOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 19), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 19), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::H8, dst, dst, tmpReg);
         break;
     }
     case ByteCode::I16X8ExtmulHighI8X16SOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 19) | (0x1 << 30), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 19) | (0x1 << 30), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::H8, dst, dst, tmpReg);
         break;
     }
     case ByteCode::I16X8ExtmulLowI8X16UOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 19), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 19), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::H8, dst, dst, tmpReg);
         break;
     }
     case ByteCode::I16X8ExtmulHighI8X16UOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 19) | (0x1 << 30), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 19) | (0x1 << 30), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::H8, dst, dst, tmpReg);
@@ -936,28 +936,28 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::ucmge | SimdOp::S4, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I32X4ExtmulLowI16X8SOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 20), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 20), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, dst, dst, tmpReg);
         break;
     }
     case ByteCode::I32X4ExtmulHighI16X8SOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 20) | (0x1 << 30), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::sxtl | (0x1 << 20) | (0x1 << 30), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, dst, dst, tmpReg);
         break;
     }
     case ByteCode::I32X4ExtmulLowI16X8UOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 20), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 20), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, dst, dst, tmpReg);
         break;
     }
     case ByteCode::I32X4ExtmulHighI16X8UOpcode: {
-        auto tmpReg = SLJIT_FR2;
+        auto tmpReg = SLJIT_TMP_FR0;
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 20) | (0x1 << 30), dst, args[0].arg, 0);
         simdEmitOp(compiler, SimdOp::uxtl | (0x1 << 20) | (0x1 << 30), tmpReg, args[1].arg, 0);
         simdEmitOp(compiler, SimdOp::mul | SimdOp::S4, dst, dst, tmpReg);

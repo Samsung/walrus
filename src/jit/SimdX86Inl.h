@@ -361,7 +361,7 @@ static void simdEmitINot(sljit_compiler* compiler, uint32_t operation, sljit_s32
 static void simdEmitINeg(sljit_compiler* compiler, uint32_t signOpcode, uint32_t subOpcode, sljit_s32 rd, sljit_s32 rn)
 {
     if (rd == rn) {
-        sljit_s32 tmp = SLJIT_FR1;
+        sljit_s32 tmp = SLJIT_TMP_FR0;
 
         if (signOpcode != 0) {
             simdEmitSSEOp(compiler, SimdOp::pcmpeqd, tmp, tmp);
@@ -387,7 +387,7 @@ static void simdEmitINeg(sljit_compiler* compiler, uint32_t signOpcode, uint32_t
 
 static void simdEmitUnaryImm(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
 {
-    sljit_s32 tmp = SLJIT_FR1;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
 
     if (rd != rn) {
         tmp = rd;
@@ -447,7 +447,7 @@ static void simdEmit16X8ExtAddS(sljit_compiler* compiler, sljit_s32 rd, sljit_s3
 
 static void simdEmit32X4ExtAddU(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn)
 {
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
 
     if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
         simdEmitVexOp(compiler, OPCODE_AND_IMM(SimdOp::psrld_i, 16), SimdOp::psrl_i_arg, tmp, rn);
@@ -473,7 +473,7 @@ static void simdEmit32X4ExtAddU(sljit_compiler* compiler, sljit_s32 rd, sljit_s3
 static void simdEmitConvertI32X4U(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, bool toSingle)
 {
     sljit_s32 tmp1 = SLJIT_FR1;
-    sljit_s32 tmp2 = SLJIT_FR2;
+    sljit_s32 tmp2 = SLJIT_TMP_FR0;
 
     // Special constant: 2^53
     sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_LANE_ZERO, tmp1, 0, SLJIT_IMM, 0x43300000);
@@ -506,7 +506,7 @@ static void simdEmitConvertI32X4U(sljit_compiler* compiler, sljit_s32 rd, sljit_
 
 static void simdEmitTruncSatS(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, bool is32)
 {
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
 
     if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
         simdEmitVexOp(compiler, is32 ? SimdOp::cmpeqps : SimdOp::cmpeqpd, tmp, rn, rn);
@@ -620,7 +620,7 @@ static void simdEmitTruncSatF32x4U(sljit_compiler* compiler, sljit_s32 rd, sljit
 
 static void simdEmitAbs(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, bool is64)
 {
-    sljit_s32 tmp = SLJIT_FR1;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
     simdEmitSSEOp(compiler, (is64 ? SimdOp::pcmpeqq : SimdOp::pcmpeqd), tmp, tmp);
     simdEmitSSEOp(compiler, OPCODE_AND_IMM((is64 ? SimdOp::psrlq_i : SimdOp::psrld_i), 1), SimdOp::psrl_i_arg, tmp);
     if (rd != rn) {
@@ -865,7 +865,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::V128NotOpcode:
         if (dst == args[0].arg) {
-            sljit_s32 tmp = SLJIT_FR1;
+            sljit_s32 tmp = SLJIT_TMP_FR0;
             simdEmitSSEOp(compiler, SimdOp::pcmpeqd, tmp, tmp);
             simdEmitSSEOp(compiler, SimdOp::pxor, dst, tmp);
         } else {
@@ -885,7 +885,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
 
 static void simdEmitAllTrue(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
 {
-    sljit_s32 tmp = SLJIT_FR1;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
 
     simdEmitSSEOp(compiler, SimdOp::pxor, tmp, tmp);
     simdEmitSSEOp(compiler, opcode, tmp, rn);
@@ -985,7 +985,7 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
 static void simdEmitPMinMax(sljit_compiler* compiler, uint32_t operation, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
     bool is64 = (operation & SimdOp::is64) != 0;
     bool isMin = (operation & SimdOp::isMin) != 0;
 
@@ -1016,7 +1016,7 @@ static void simdEmitPMinMax(sljit_compiler* compiler, uint32_t operation, sljit_
 
 static void simdEmitFloatMinMax(sljit_compiler* compiler, SimdOp::Type opcode, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
     if (rd == rn || rd == rm) {
         sljit_s32 src = (rd == rn) ? rm : rn;
         if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
@@ -1056,7 +1056,7 @@ static void simdEmitFloatMinMax(sljit_compiler* compiler, SimdOp::Type opcode, s
 static void simdEmitI64X2Mul(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
     sljit_s32 tmp1 = SLJIT_FR2;
-    sljit_s32 tmp2 = SLJIT_FR3;
+    sljit_s32 tmp2 = SLJIT_TMP_FR0;
 
     if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
         simdEmitVexOp(compiler, OPCODE_AND_IMM(SimdOp::psrlq_i, 32), SimdOp::psrl_i_arg, tmp1, rn);
@@ -1126,8 +1126,8 @@ static void simdEmitOpI64X2Cmp(sljit_compiler* compiler, uint32_t operation, slj
 {
     bool isGreater = (operation & SimdOp::isGreater) != 0;
     bool isInvert = (operation & SimdOp::isInvert) != 0;
-    sljit_s32 tmp1 = SLJIT_FR2;
-    sljit_s32 tmp2 = SLJIT_FR3;
+    sljit_s32 tmp1 = SLJIT_TMP_FR0;
+    sljit_s32 tmp2 = SLJIT_FR2;
 
     if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
         if (!isGreater) {
@@ -1206,7 +1206,7 @@ static void simdEmitSwizzle(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn
 static void simdEmitI16X8Extmul(sljit_compiler* compiler, uint32_t operation, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
     bool isSigned = (operation & SimdOp::isSigned) != 0;
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
 
     if (operation & SimdOp::isHigh) {
         simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::pshufd, 0xe), tmp, rm);
@@ -1229,7 +1229,7 @@ static void simdEmitI16X8Extmul(sljit_compiler* compiler, uint32_t operation, sl
 static void simdEmitI32X4Extmul(sljit_compiler* compiler, uint32_t operation, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
     bool isSigned = (operation & SimdOp::isSigned) != 0;
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
 
     if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
         simdEmitVexOp(compiler, isSigned ? SimdOp::pmulhw : SimdOp::pmulhuw, tmp, rn, rm);
@@ -1250,7 +1250,7 @@ static void simdEmitI32X4Extmul(sljit_compiler* compiler, uint32_t operation, sl
 
 static void simdEmitI64X2Extmul(sljit_compiler* compiler, uint32_t operation, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
     uint8_t imm = (operation & SimdOp::isHigh) ? 0xfa : 0x50;
 
     simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::pshufd, imm), tmp, rm);
@@ -1260,7 +1260,7 @@ static void simdEmitI64X2Extmul(sljit_compiler* compiler, uint32_t operation, sl
 
 static void simdEmitQ15mulrSatS(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    sljit_s32 tmp = SLJIT_FR2;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
 
     simdEmitSSEOp(compiler, SimdOp::pcmpeqd, tmp, tmp);
     simdEmitSSEOp(compiler, OPCODE_AND_IMM(SimdOp::psllw_i, 15), SimdOp::psll_i_arg, tmp);
@@ -1806,7 +1806,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
 static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    sljit_s32 tmp = SLJIT_FR3;
+    sljit_s32 tmp = SLJIT_TMP_FR0;
     JITArg args[4];
 
     simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, SLJIT_FR2);
@@ -1899,7 +1899,7 @@ static void simdEmitI8X16ShiftUImm(sljit_compiler* compiler, bool isLeft, sljit_
 
 static void simdEmitI8X16Shl(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, JITArg& rm)
 {
-    sljit_s32 tmp1 = SLJIT_FR1;
+    sljit_s32 tmp1 = SLJIT_TMP_FR0;
     sljit_s32 tmp2 = SLJIT_FR2;
 
     ASSERT(!SLJIT_IS_IMM(rm.arg));
@@ -1914,7 +1914,7 @@ static void simdEmitI8X16Shl(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 r
 
 static void simdEmitI8X16Shr(sljit_compiler* compiler, bool isUnsigned, sljit_s32 rd, sljit_s32 rn, JITArg& rm)
 {
-    sljit_s32 tmp1 = SLJIT_FR1;
+    sljit_s32 tmp1 = SLJIT_TMP_FR0;
     sljit_s32 tmp2 = SLJIT_FR2;
 
     simdEmitSSEOp(compiler, SimdOp::punpckhbw, tmp1, rn);
@@ -1940,7 +1940,7 @@ static void simdEmitI8X16Shr(sljit_compiler* compiler, bool isUnsigned, sljit_s3
 static void simdEmitI64X2ShrS(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, JITArg& rm)
 {
     // Convert signed to unsigned, and do an unsigned shift, then convert back.
-    sljit_s32 tmp1 = SLJIT_FR1;
+    sljit_s32 tmp1 = SLJIT_TMP_FR0;
     sljit_s32 tmp2 = SLJIT_FR2;
 
     simdEmitSSEOp(compiler, SimdOp::pcmpeqd, tmp1, tmp1);
@@ -2109,7 +2109,7 @@ static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)
         if (SLJIT_IS_IMM(args[1].arg)) {
             simdEmitOpArg(compiler, OPCODE_AND_IMM(shiftImmOp, args[1].argw & 0xff), shiftImmArg, dst, args[0].arg);
         } else {
-            sljit_s32 tmp1 = SLJIT_FR1;
+            sljit_s32 tmp1 = SLJIT_TMP_FR0;
 
             sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_LANE_ZERO, tmp1, 0, args[1].arg, args[1].argw);
             simdEmitOp(compiler, shiftOp, dst, args[0].arg, tmp1);
