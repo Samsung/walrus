@@ -206,6 +206,11 @@ public:
         m_byteCode.resizeWithUninitializedValues(m_byteCode.size() + s);
     }
 
+    void resizeByteCode(size_t newSize)
+    {
+        m_byteCode.resizeWithUninitializedValues(newSize);
+    }
+
     size_t currentByteCodeSize() const
     {
         return m_byteCode.size();

@@ -49,29 +49,29 @@ ByteCode::Opcode ByteCode::opcode() const
 }
 #endif
 
-size_t ByteCode::getSize()
+size_t ByteCode::getSize() const
 {
     switch (this->opcode()) {
     case ThrowOpcode: {
-        Throw* throwCode = reinterpret_cast<Throw*>(this);
+        const Throw* throwCode = reinterpret_cast<const Throw*>(this);
         return ByteCode::pointerAlignedSize(sizeof(Throw) + sizeof(ByteCodeStackOffset) * throwCode->offsetsSize());
     }
     case CallOpcode: {
-        Call* call = reinterpret_cast<Call*>(this);
+        const Call* call = reinterpret_cast<const Call*>(this);
         return ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * call->parameterOffsetsSize()
                                             + sizeof(ByteCodeStackOffset) * call->resultOffsetsSize());
     }
     case BrTableOpcode: {
-        BrTable* brTable = reinterpret_cast<BrTable*>(this);
+        const BrTable* brTable = reinterpret_cast<const BrTable*>(this);
         return ByteCode::pointerAlignedSize(sizeof(BrTable) + sizeof(int32_t) * brTable->tableSize());
     }
     case CallIndirectOpcode: {
-        CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(this);
+        const CallIndirect* callIndirect = reinterpret_cast<const CallIndirect*>(this);
         return ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * callIndirect->parameterOffsetsSize()
                                             + sizeof(ByteCodeStackOffset) * callIndirect->resultOffsetsSize());
     }
     case EndOpcode: {
-        End* end = reinterpret_cast<End*>(this);
+        const End* end = reinterpret_cast<const End*>(this);
         return ByteCode::pointerAlignedSize(sizeof(End) + sizeof(ByteCodeStackOffset) * end->offsetsSize());
     }
     default: {

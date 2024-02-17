@@ -534,7 +534,7 @@ public:
     }
 
     Opcode opcode() const;
-    size_t getSize();
+    size_t getSize() const;
 
 protected:
     friend class Interpreter;
@@ -2204,7 +2204,7 @@ public:
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Throw));
     }
 
-    uint32_t offsetsSize()
+    uint32_t offsetsSize() const
     {
         return m_offsetsSize;
     }
@@ -2260,7 +2260,7 @@ public:
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(End));
     }
 
-    uint32_t offsetsSize()
+    uint32_t offsetsSize() const
     {
         return m_offsetsSize;
     }
@@ -2268,10 +2268,13 @@ public:
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        auto arr = resultOffsets();
-        printf("end resultOffsets: ");
-        for (size_t i = 0; i < offsetsSize(); i++) {
-            printf("%" PRIu32 " ", arr[i]);
+        printf("end");
+        if (offsetsSize()) {
+            printf(" resultOffsets: ");
+            auto arr = resultOffsets();
+            for (size_t i = 0; i < offsetsSize(); i++) {
+                printf("%" PRIu32 " ", arr[i]);
+            }
         }
     }
 #endif
