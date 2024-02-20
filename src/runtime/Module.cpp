@@ -28,7 +28,7 @@
 #include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 #include "parser/WASMParser.h"
-#include "wasi/Wasi.h"
+#include "wasi/WASI.h"
 
 namespace Walrus {
 

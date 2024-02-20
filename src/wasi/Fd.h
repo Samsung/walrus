@@ -23,8 +23,8 @@ void WASI::fd_write(ExecutionState& state, Value* argv, Value* result, Instance*
     uint32_t iovcnt = argv[2].asI32();
     uint32_t out = argv[3].asI32();
 
-    if (!WASI::checkMemOffset(instance->memory(0), iovptr, iovcnt)) {
-        result[0] = Value(static_cast<int16_t>(WASI::wasi_errno::inval));
+    if (uint64_t(iovptr) + iovcnt >= instance->memory(0)->sizeInByte()) {
+        result[0] = Value(static_cast<int16_t>(WasiErrNo::inval));
         return;
     }
 
@@ -36,7 +36,7 @@ void WASI::fd_write(ExecutionState& state, Value* argv, Value* result, Instance*
 
     uvwasi_size_t* out_addr = (uvwasi_size_t*)(instance->memory(0)->buffer() + out);
 
-    result[0] = Value(static_cast<int16_t>(uvwasi_fd_write(WASI::m_uvwasi, fd, iovs.data(), iovs.size(), out_addr)));
+    result[0] = Value(static_cast<int16_t>(uvwasi_fd_write(WASI::g_uvwasi, fd, iovs.data(), iovs.size(), out_addr)));
     *(instance->memory(0)->buffer() + out) = *out_addr;
 }
 
@@ -55,7 +55,7 @@ void WASI::fd_read(ExecutionState& state, Value* argv, Value* result, Instance* 
 
     uvwasi_size_t* out_addr = (uvwasi_size_t*)(instance->memory(0)->buffer() + out);
 
-    result[0] = Value(static_cast<int16_t>(uvwasi_fd_read(WASI::m_uvwasi, fd, iovs.data(), iovs.size(), out_addr)));
+    result[0] = Value(static_cast<int16_t>(uvwasi_fd_read(WASI::g_uvwasi, fd, iovs.data(), iovs.size(), out_addr)));
     *(instance->memory(0)->buffer() + out) = *out_addr;
 }
 
@@ -63,7 +63,7 @@ void WASI::fd_close(ExecutionState& state, Value* argv, Value* result, Instance*
 {
     uint32_t fd = argv[0].asI32();
 
-    result[0] = Value(static_cast<int16_t>(uvwasi_fd_close(WASI::m_uvwasi, fd)));
+    result[0] = Value(static_cast<int16_t>(uvwasi_fd_close(WASI::g_uvwasi, fd)));
 }
 
 void WASI::fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* instance)
@@ -75,7 +75,7 @@ void WASI::fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* 
 
     uvwasi_filesize_t out_addr = *(instance->memory(0)->buffer() + newOffset);
 
-    result[0] = Value(static_cast<int16_t>(uvwasi_fd_seek(WASI::m_uvwasi, fd, fileDelta, whence, &out_addr)));
+    result[0] = Value(static_cast<int16_t>(uvwasi_fd_seek(WASI::g_uvwasi, fd, fileDelta, whence, &out_addr)));
     *(instance->memory(0)->buffer() + newOffset) = out_addr;
 }
 
