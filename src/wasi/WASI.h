@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef __WalrusWASI__
+#define __WalrusWASI__
+
 #include "Walrus.h"
 #include "runtime/Function.h"
 #include "runtime/ObjectType.h"
@@ -161,3 +164,5 @@ private:
 };
 
 } // namespace Walrus
+
+#endif // __WalrusWASI__
