@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef __WalrusDefinedFunctionTypes__
+#define __WalrusDefinedFunctionTypes__
+
 #include "Walrus.h"
 
 namespace Walrus {
@@ -190,3 +193,5 @@ private:
 };
 
 } // namespace Walrus
+
+#endif //__WalrusDefinedFunctionTypes__
