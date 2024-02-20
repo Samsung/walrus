@@ -60,53 +60,10 @@ class runner(object):
             DEFAULT_RUNNERS.append(self.suite)
         return fn
 
-
-def run(args, cwd=None, env=None, stdout=None, checkresult=True, report=False):
-    if cwd:
-        print(COLOR_BLUE + 'cd ' + cwd + ' && \\' + COLOR_RESET)
-    if env:
-        for var, val in sorted(env.items()):
-            print(COLOR_BLUE + var + '=' + val + ' \\' + COLOR_RESET)
-    print(COLOR_BLUE + ' '.join(args) + COLOR_RESET)
-
-    if env is not None:
-        full_env = dict(os.environ)
-        full_env.update(env)
-        env = full_env
-
-    proc = Popen(args, cwd=cwd, env=env, stdout=PIPE if report else stdout)
-
-    counter = 0
-
-    while report:
-        nextline = proc.stdout.readline()
-        if nextline == '' and proc.poll() is not None:
-            break
-        stdout.write(nextline)
-        stdout.flush()
-        if counter % 250 == 0:
-            print('Ran %d tests..' % (counter))
-        counter += 1
-
-    out, _ = proc.communicate()
-
-    if out:
-        print(out)
-
-    if checkresult and proc.returncode:
-        raise Exception('command `%s` exited with %s' % (' '.join(args), proc.returncode))
-    return out
-
-
-def readfile(filename):
-    with open(filename, 'r') as f:
-        return f.readlines()
-
-
 def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
-        proc = Popen([engine, "--mapdirs", "./test/wasi", "/var", file], stdout=PIPE) if not jit else Popen([engine,  "--mapdirs", "./test/wasi", "/var", "--jit", file], stdout=PIPE)
+        proc = Popen([engine, "--mapdirs", "./test/wasi", "/var", file], stdout=PIPE) if not jit else Popen([engine, "--mapdirs", "./test/wasi", "/var", "--jit", file], stdout=PIPE)
         out, _ = proc.communicate()
 
         if is_fail and proc.returncode or not is_fail and not proc.returncode:
@@ -167,7 +124,7 @@ def run_basic_tests(engine):
     tests_total = len(xpass)
     fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
-    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
 
     if fail_total > 0:

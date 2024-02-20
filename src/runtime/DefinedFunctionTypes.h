@@ -18,7 +18,7 @@
 
 namespace Walrus {
 
-class SpecTestFunctionTypes {
+class DefinedFunctionTypes {
     MAKE_STACK_ALLOCATED();
 
 public:
@@ -41,7 +41,7 @@ public:
         INDEX_NUM,
     };
 
-    SpecTestFunctionTypes()
+    DefinedFunctionTypes()
     {
         m_vector.reserve(INDEX_NUM);
         size_t index = 0;
@@ -172,7 +172,7 @@ public:
         ASSERT(index == INDEX_NUM);
     }
 
-    ~SpecTestFunctionTypes()
+    ~DefinedFunctionTypes()
     {
         for (size_t i = 0; i < m_vector.size(); i++) {
             delete m_vector[i];
