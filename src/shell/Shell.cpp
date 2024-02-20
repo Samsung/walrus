@@ -20,8 +20,7 @@
 #include "runtime/Tag.h"
 #include "runtime/Trap.h"
 #include "parser/WASMParser.h"
-#include "wasi/Wasi.h"
-
+#include "wasi/WASI.h"
 
 #include "wabt/wast-lexer.h"
 #include "wabt/wast-parser.h"
@@ -33,14 +32,17 @@ struct spectestseps : std::numpunct<char> {
     std::string do_grouping() const { return "\3"; }
 };
 
-struct ArgParser {
+struct ParseOptions {
     std::string exportToRun;
     std::vector<std::string> fileNames;
+
+    // WASI options
+    std::vector<std::string> wasi_envs;
+    std::vector<std::pair<std::string, std::string>> wasi_dirs;
 };
 
-static bool useJIT = false;
-static int jitVerbose = 0;
-static bool shareHostEnv = false;
+static bool s_useJIT = false;
+static int s_jitVerbose = 0;
 
 using namespace Walrus;
 
@@ -112,10 +114,10 @@ static void printF64(double v)
     printf("%s : f64\n", formatDecmialString(ss.str()).c_str());
 }
 
-static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes,
+static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), useJIT, jitVerbose);
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_useJIT, s_jitVerbose);
     if (!parseResult.second.empty()) {
         Trap::TrapResult tr;
         tr.exception = Exception::create(parseResult.second);
@@ -153,7 +155,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         auto import = importTypes[i];
         if (import->moduleName() == "spectest") {
             if (import->fieldName() == "print") {
-                auto ft = functionTypes[SpecTestFunctionTypes::NONE];
+                auto ft = functionTypes[DefinedFunctionTypes::NONE];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -161,7 +163,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i32") {
-                auto ft = functionTypes[SpecTestFunctionTypes::I32R];
+                auto ft = functionTypes[DefinedFunctionTypes::I32R];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -170,7 +172,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i64") {
-                auto ft = functionTypes[SpecTestFunctionTypes::I64R];
+                auto ft = functionTypes[DefinedFunctionTypes::I64R];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -179,7 +181,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_f32") {
-                auto ft = functionTypes[SpecTestFunctionTypes::F32R];
+                auto ft = functionTypes[DefinedFunctionTypes::F32R];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -188,7 +190,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_f64") {
-                auto ft = functionTypes[SpecTestFunctionTypes::F64R];
+                auto ft = functionTypes[DefinedFunctionTypes::F64R];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -197,7 +199,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i32_f32") {
-                auto ft = functionTypes[SpecTestFunctionTypes::I32F32R];
+                auto ft = functionTypes[DefinedFunctionTypes::I32F32R];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -207,7 +209,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_f64_f64") {
-                auto ft = functionTypes[SpecTestFunctionTypes::F64F64R];
+                auto ft = functionTypes[DefinedFunctionTypes::F64F64R];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -230,7 +232,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 importValues.push_back(Memory::createMemory(store, 1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize));
             } else {
                 // import wrong value for test
-                auto ft = functionTypes[SpecTestFunctionTypes::INVALID];
+                auto ft = functionTypes[DefinedFunctionTypes::INVALID];
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -239,13 +241,13 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     nullptr));
             }
         } else if (import->moduleName() == "wasi_snapshot_preview1") {
-            Walrus::WASI::WasiFunc* wasiImportFunc = WASI::find(import->fieldName());
-            if (wasiImportFunc != nullptr) {
-                FunctionType* fn = functionTypes[wasiImportFunc->functionType];
-                if (fn->equals(import->functionType())) {
+            WASI::WasiFuncInfo* wasiImportFunc = WASI::find(import->fieldName());
+            if (wasiImportFunc) {
+                FunctionType* ft = functionTypes[wasiImportFunc->functionType];
+                if (ft->equals(import->functionType())) {
                     importValues.push_back(WasiFunction::createWasiFunction(
                         store,
-                        const_cast<FunctionType*>(import->functionType()),
+                        ft,
                         wasiImportFunc->ptr));
                 }
                 hasWasiImport = true;
@@ -325,7 +327,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
 
 static bool endsWith(const std::string& str, const std::string& suffix)
 {
-    return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
+    return str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 static Walrus::Value toWalrusValue(wabt::Const& c)
@@ -685,7 +687,7 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
     return registeredInstanceMap[moduleVar.name()];
 }
 
-static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, SpecTestFunctionTypes& functionTypes)
+static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes)
 {
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
     if (lexer == nullptr) {
@@ -911,9 +913,9 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     }
 }
 
-static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun, SpecTestFunctionTypes& functionTypes)
+static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun, DefinedFunctionTypes& functionTypes)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), useJIT, jitVerbose);
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_useJIT, s_jitVerbose);
     if (!parseResult.second.empty()) {
         fprintf(stderr, "parse error: %s\n", parseResult.second.c_str());
         return;
@@ -927,13 +929,13 @@ static void runExports(Store* store, const std::string& filename, const std::vec
     for (size_t i = 0; i < importTypes.size(); i++) {
         auto import = importTypes[i];
         if (import->moduleName() == "wasi_snapshot_preview1") {
-            Walrus::WASI::WasiFunc* wasiImportFunc = WASI::find(import->fieldName());
+            Walrus::WASI::WasiFuncInfo* wasiImportFunc = WASI::find(import->fieldName());
             if (wasiImportFunc != nullptr) {
-                FunctionType* fn = functionTypes[wasiImportFunc->functionType];
-                if (fn->equals(import->functionType())) {
+                FunctionType* ft = functionTypes[wasiImportFunc->functionType];
+                if (ft->equals(import->functionType())) {
                     importValues.push_back(WasiFunction::createWasiFunction(
                         store,
-                        const_cast<FunctionType*>(import->functionType()),
+                        ft,
                         wasiImportFunc->ptr));
                 }
             }
@@ -1001,73 +1003,71 @@ static void runExports(Store* store, const std::string& filename, const std::vec
              &data);
 }
 
-static void parseArguments(int argc, char* argv[], ArgParser& argParser, std::vector<uvwasi_preopen_s>& preopenDirs)
+static void parseArguments(int argc, char* argv[], ParseOptions& options)
 {
-    const std::vector<nonstd::string_view> args(argv + 1, argv + argc);
-
-    auto it = args.begin();
-    while (it != args.end()) {
-        if (*it == "--run-export") {
-            if (*it == args.back()) {
-                fprintf(stderr, "error: --run-export requires an argument\n");
-                exit(1);
-            }
-
-            std::advance(it, 1);
-            argParser.exportToRun = nonstd::to_string(*it);
-        } else if (*it == "--jit") {
-            useJIT = true;
-        } else if (*it == "--jit-verbose") {
-            jitVerbose = 1;
-        } else if (*it == "--jit-verbose-color") {
-            jitVerbose = 2;
-        } else if (*it == "--mapdirs") {
-            it++;
-            while (it != args.end() && nonstd::to_string(*it).find("--") == std::string::npos) {
-                if (it + 1 == args.end()) {
-                    break;
+    for (int i = 1; i < argc; i++) {
+        if (strlen(argv[i]) >= 2 && argv[i][0] == '-') { // parse command line option
+            if (argv[i][1] == '-') { // `--option` case
+                if (strcmp(argv[i], "--run-export") == 0) {
+                    if (i + 1 == argc || argv[i + 1][0] == '-') {
+                        fprintf(stderr, "error: --run-export requires an argument\n");
+                        exit(1);
+                    }
+                    ++i;
+                    options.exportToRun = argv[i];
+                    continue;
+                } else if (strcmp(argv[i], "--jit") == 0) {
+                    s_useJIT = true;
+                    continue;
+                } else if (strcmp(argv[i], "--jit-verbose") == 0) {
+                    s_jitVerbose = 1;
+                    continue;
+                } else if (strcmp(argv[i], "--jit-verbose-color") == 0) {
+                    s_jitVerbose = 2;
+                    continue;
+                } else if (strcmp(argv[i], "--env") == 0) {
+                    if (i + 1 == argc || argv[i + 1][0] == '-') {
+                        fprintf(stderr, "error: --env requires an argument\n");
+                        exit(1);
+                    }
+                    ++i;
+                    options.wasi_envs.emplace_back(argv[i]);
+                    continue;
+                } else if (strcmp(argv[i], "--mapdirs") == 0) {
+                    if (i + 2 >= argc || argv[i + 1][0] == '-' || argv[i + 2][0] == '-') {
+                        fprintf(stderr, "error: --mapdirs requires two arguments\n");
+                        exit(1);
+                    }
+                    // pair of (mapped path, real_path)
+                    options.wasi_dirs.push_back(std::make_pair(argv[i + 2], argv[i + 1]));
+                    i += 2;
+                    continue;
+                } else if (strcmp(argv[i], "--help") == 0) {
+                    fprintf(stdout, "Usage: walrus [OPTIONS] <INPUT>\n\n");
+                    fprintf(stdout, "OPTIONS:\n");
+                    fprintf(stdout, "\t--help\n\t\tShow this message then exit.\n\n");
+                    fprintf(stdout, "\t--jit\n\t\tEnable just-in-time interpretation.\n\n");
+                    fprintf(stdout, "\t--jit-verbose\n\t\tEnable verbose output for just-in-time interpretation.\n\n");
+                    fprintf(stdout, "\t--jit-verbose-color\n\t\tEnable colored verbose output for just-in-time interpretation.\n\n");
+                    fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
+                    fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
+                    exit(0);
                 }
-
-                uvwasi_preopen_s preopen;
-                preopen.real_path = reinterpret_cast<char*>(calloc(1, it->length() + 1));
-                it->nonstd::sv_lite::string_view::copy(const_cast<char*>(preopen.real_path), it->length());
-
-                it++;
-
-                preopen.mapped_path = reinterpret_cast<char*>(calloc(1, it->length() + 1));
-                it->nonstd::sv_lite::string_view::copy(const_cast<char*>(preopen.mapped_path), it->length());
-                preopenDirs.push_back(preopen);
-                it++;
             }
-            it--;
-        } else if (*it == "--env") {
-            shareHostEnv = true;
-        } else if (*it == "--help" || *it == "-h") {
-            fprintf(stdout, "Run a WebAssembly wasm, wat or wast file.\n\n");
-            fprintf(stdout, "Usage: walrus [OPTIONS] <INPUT>\n\n");
-            fprintf(stdout, "OPTIONS:\n");
-            fprintf(stdout, "\t-h, --help\n\t\tShow this message then exit.\n\n");
-            fprintf(stdout, "\t--jit\n\t\tEnable just-in-time interpretation.\n\n");
-            fprintf(stdout, "\t--jit-verbose\n\t\tEnable verbose output for just-in-time interpretation.\n\n");
-            fprintf(stdout, "\t--jit-verbose-color\n\t\tEnable colored verbose output for just-in-time interpretation.\n\n");
-            fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
-            fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
-
-
-            exit(0);
+            fprintf(stderr, "error: unknown argument: %s\n", argv[i]);
+            exit(1);
         } else {
-            auto arg = nonstd::to_string(*it);
-            if (endsWith(arg, "wat") || endsWith(arg, "wast") || endsWith(arg, "wasm")) {
-                argParser.fileNames.emplace_back(*it);
+            std::string fileName = argv[i];
+            if (endsWith(fileName, "wat") || endsWith(fileName, "wast") || endsWith(fileName, "wasm")) {
+                options.fileNames.emplace_back(argv[i]);
             } else {
-                fprintf(stderr, "error: unknown argument: %s\n", it->data());
+                fprintf(stderr, "error: unknown argument: %s\n", argv[i]);
                 exit(1);
             }
         }
-        ++it;
     }
 
-    if (argParser.fileNames.empty()) {
+    if (options.fileNames.empty()) {
         fprintf(stderr, "error: no input files\n");
         exit(1);
     }
@@ -1094,14 +1094,45 @@ int main(int argc, char* argv[])
     Engine* engine = new Engine();
     Store* store = new Store(engine);
 
-    std::vector<uvwasi_preopen_s> preopenDirs;
-    SpecTestFunctionTypes functionTypes;
-    ArgParser argParser;
+    DefinedFunctionTypes functionTypes;
+    ParseOptions options;
 
-    parseArguments(argc, argv, argParser, preopenDirs);
-    WASI* wasi = new WASI(preopenDirs, shareHostEnv);
+    parseArguments(argc, argv, options);
 
-    for (const auto& filePath : argParser.fileNames) {
+
+    // initialize WASI
+    uvwasi_t uvwasi;
+
+    std::vector<const char*> envp;
+    for (auto& s : options.wasi_envs) {
+        envp.push_back(s.c_str());
+    }
+    envp.push_back(nullptr);
+
+    std::vector<uvwasi_preopen_t> dirs;
+    for (auto& dir : options.wasi_dirs) {
+        dirs.push_back({ dir.first.c_str(), dir.second.c_str() });
+    }
+
+    uvwasi_options_t init_options;
+    init_options.in = 0;
+    init_options.out = 1;
+    init_options.err = 2;
+    init_options.fd_table_size = 3;
+    init_options.argc = 0;
+    init_options.argv = nullptr;
+    init_options.envp = envp.data();
+    init_options.preopenc = dirs.size();
+    init_options.preopens = dirs.data();
+    init_options.preopen_socketc = 0;
+    init_options.allocator = nullptr;
+
+    uvwasi_errno_t err = uvwasi_init(&uvwasi, &init_options);
+    assert(err == UVWASI_ESUCCESS);
+
+    WASI::initialize(&uvwasi);
+
+    for (const auto& filePath : options.fileNames) {
         FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
             fseek(fp, 0, SEEK_END);
@@ -1119,8 +1150,8 @@ int main(int argc, char* argv[])
                 fclose(fp);
             }
             if (endsWith(filePath, "wasm")) {
-                if (!argParser.exportToRun.empty()) {
-                    runExports(store, filePath, buf, argParser.exportToRun, functionTypes);
+                if (!options.exportToRun.empty()) {
+                    runExports(store, filePath, buf, options.exportToRun, functionTypes);
                 } else {
                     auto trapResult = executeWASM(store, filePath, buf, functionTypes);
                     if (trapResult.exception) {
@@ -1138,7 +1169,6 @@ int main(int argc, char* argv[])
     }
 
     // finalize
-    delete wasi;
     delete store;
     delete engine;
 

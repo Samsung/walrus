@@ -24,7 +24,7 @@ void WASI::environ_sizes_get(ExecutionState& state, Value* argv, Value* result, 
     uvwasi_size_t* uvCount = reinterpret_cast<uvwasi_size_t*>(instance->memory(0)->buffer() + count);
     uvwasi_size_t* uvBufSize = reinterpret_cast<uvwasi_size_t*>(instance->memory(0)->buffer() + buf);
 
-    result[0] = Value(static_cast<uint16_t>(uvwasi_environ_sizes_get(WASI::m_uvwasi, uvCount, uvBufSize)));
+    result[0] = Value(static_cast<uint16_t>(uvwasi_environ_sizes_get(WASI::g_uvwasi, uvCount, uvBufSize)));
 }
 
 void WASI::environ_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
@@ -35,7 +35,7 @@ void WASI::environ_get(ExecutionState& state, Value* argv, Value* result, Instan
     char** uvEnviron = reinterpret_cast<char**>(instance->memory(0)->buffer() + env);
     char* uvEnvironBuf = reinterpret_cast<char*>(instance->memory(0)->buffer() + environBuf);
 
-    result[0] = Value(static_cast<uint16_t>(uvwasi_environ_get(WASI::m_uvwasi, uvEnviron, uvEnvironBuf)));
+    result[0] = Value(static_cast<uint16_t>(uvwasi_environ_get(WASI::g_uvwasi, uvEnviron, uvEnvironBuf)));
 }
 
 } // namespace Walrus

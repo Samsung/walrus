@@ -15,20 +15,32 @@
  */
 
 #include "Walrus.h"
-#include "runtime/Value.h"
 #include "runtime/Function.h"
 #include "runtime/ObjectType.h"
-#include "runtime/SpecTest.h"
-#include "runtime/Memory.h"
-#include "runtime/Instance.h"
+#include "runtime/DefinedFunctionTypes.h"
 #include <uvwasi.h>
 
 namespace Walrus {
+
+class Value;
+class Instance;
 
 class WASI {
 public:
     // type definitions according to preview1
     // https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md
+
+#define FOR_EACH_WASI_FUNC(F)                      \
+    F(proc_exit, I32R)                             \
+    F(proc_raise, I32_RI32)                        \
+    F(random_get, I32I32_RI32)                     \
+    F(fd_write, I32I32I32I32_RI32)                 \
+    F(fd_read, I32I32I32I32_RI32)                  \
+    F(fd_close, I32_RI32)                          \
+    F(fd_seek, I32I64I32I32_RI32)                  \
+    F(path_open, I32I32I32I32I32I64I64I32I32_RI32) \
+    F(environ_get, I32I32_RI32)                    \
+    F(environ_sizes_get, I32I32_RI32)
 
 #define ERRORS(ERR)                                                   \
     ERR(success, "no error")                                          \
@@ -109,51 +121,30 @@ public:
     ERR(xdec, "cross-device link")                                    \
     ERR(notcapable, "capabilities insufficient")
 
+    enum WasiErrNo : uint16_t {
 #define TO_ENUM(ERR, MSG) ERR,
-    typedef enum wasi_errno : uint16_t {
         ERRORS(TO_ENUM)
-    } wasi_errno_t;
 #undef TO_ENUM
-    // end of type definitions
+    };
 
-    WASI(std::vector<uvwasi_preopen_s>& preopenDirs, bool shareHostEnv);
-
-    ~WASI()
-    {
-        ::uvwasi_destroy(m_uvwasi);
-        free(m_uvwasi);
-    }
-
-    struct WasiFunc {
+    struct WasiFuncInfo {
         std::string name;
-        SpecTestFunctionTypes::Index functionType;
+        DefinedFunctionTypes::Index functionType;
         WasiFunction::WasiFunctionCallback ptr;
     };
 
-#define FOR_EACH_WASI_FUNC(F)                      \
-    F(proc_exit, I32R)                             \
-    F(proc_raise, I32_RI32)                        \
-    F(random_get, I32I32_RI32)                     \
-    F(fd_write, I32I32I32I32_RI32)                 \
-    F(fd_read, I32I32I32I32_RI32)                  \
-    F(fd_close, I32_RI32)                          \
-    F(fd_seek, I32I64I32I32_RI32)                  \
-    F(path_open, I32I32I32I32I32I64I64I32I32_RI32) \
-    F(environ_get, I32I32_RI32)                    \
-    F(environ_sizes_get, I32I32_RI32)
-
-    enum WasiFuncName : size_t {
+    enum WasiFuncIndex : size_t {
 #define DECLARE_FUNCTION(NAME, FUNCTYPE) NAME##FUNC,
         FOR_EACH_WASI_FUNC(DECLARE_FUNCTION)
 #undef DECLARE_FUNCTION
             FuncEnd,
     };
 
-    void fillWasiFuncTable();
-    static WasiFunc* find(std::string funcName);
-    static bool checkStr(Memory* memory, uint32_t memoryOffset, std::string& str);
-    static bool checkMemOffset(Memory* memory, uint32_t memoryOffset, uint32_t length);
+    static void initialize(uvwasi_t* uvwasi);
+    static WasiFuncInfo* find(const std::string& funcName);
 
+private:
+    // wasi functions
     static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
@@ -165,8 +156,8 @@ public:
     static void environ_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
 
-    static WasiFunc m_wasiFunctions[FuncEnd];
-    static uvwasi_t* m_uvwasi;
+    static uvwasi_t* g_uvwasi;
+    static WasiFuncInfo g_wasiFunctions[FuncEnd];
 };
 
 } // namespace Walrus

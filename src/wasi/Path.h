@@ -33,7 +33,7 @@ void WASI::path_open(ExecutionState& state, Value* argv, Value* result, Instance
     const char* path = reinterpret_cast<char*>(instance->memory(0)->buffer() + path_offset);
 
     result[0] = Value(static_cast<uint16_t>(
-        uvwasi_path_open(WASI::m_uvwasi,
+        uvwasi_path_open(WASI::g_uvwasi,
                          fd,
                          dirflags,
                          path,
