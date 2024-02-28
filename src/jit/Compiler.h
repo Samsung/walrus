@@ -163,11 +163,48 @@ class Instruction : public InstructionListItem {
     friend class JITCompiler;
 
 public:
+    enum OperandDescriptor : uint8_t {
+        // Int64LowOperand is a special destination operand type for 32 bit
+        // systems. It represents that a single register is enough to allocate
+        // when the operand is memory (must be combined with TmpRequired).
+        Int64LowOperand = 0,
+        PtrOperand = 1,
+        Int32Operand = 2,
+        Int64Operand = 3,
+        Float32Operand = 4,
+        Float64Operand = 5,
+        V128Operand = 6,
+        TypeMask = 0x7,
+        // A temporary register must be allocated for the source or destination
+        // operand. In case of source operands, the register is not modified.
+        TmpRequired = (1 << 3),
+        // Flags for source operands.
+        TmpNotAllowed = (1 << 4),
+        // Similar to Int64LowOperand, except it applies to source operands
+        LowerHalfNeeded = (1 << 5),
+        // Flags for destination and temporary operands.
+        // Source operands can be used as temporaries.
+        Src0Allowed = (1 << 4),
+        Src1Allowed = (1 << 5),
+        Src2Allowed = (1 << 6),
+    };
+
+    struct OperandDescriptorList {
+        // Zero terminated list of operands.
+        uint8_t list[8];
+    };
+
+    static const uint32_t TemporaryTypeShift = 4;
+    static const uint32_t TemporaryTypeMask = 0xf;
+
     // Various info bits. Depends on type.
     static const uint16_t kIs32Bit = 1 << 0;
+    static const uint16_t kIsGlobalFloatBit = kIs32Bit;
     static const uint16_t kIsCallback = 1 << 1;
-    static const uint16_t kKeepInstruction = 1 << 2;
-    static const uint16_t kEarlyReturn = 1 << 3;
+    static const uint16_t kDestroysR0R1 = 1 << 2;
+    static const uint16_t kIsShift = 1 << 3;
+    static const uint16_t kKeepInstruction = 1 << 4;
+    static const uint16_t kEarlyReturn = 1 << 5;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -203,34 +240,26 @@ public:
         return reinterpret_cast<BrTableInstruction*>(this);
     }
 
-    uint8_t tmpReg(size_t n)
+    void setRequiredRegsDescriptor(uint32_t requiredRegsDescriptor)
     {
-        ASSERT(n < sizeof(m_tmpRegs));
-        return m_tmpRegs[n];
+        u.m_requiredRegsDescriptor = requiredRegsDescriptor;
     }
 
-    void setTmpReg(size_t n, uint8_t value)
+    uint8_t requiredReg(size_t n)
     {
-        ASSERT(n < sizeof(m_tmpRegs));
-        m_tmpRegs[n] = value;
+        ASSERT(n < sizeof(u.m_requiredRegs));
+        return u.m_requiredRegs[n];
     }
 
-    inline void setTmpReg2(uint8_t value1, uint8_t value2)
+    void setRequiredReg(size_t n, uint8_t value)
     {
-        m_tmpRegs[0] = value1;
-        m_tmpRegs[1] = value2;
+        ASSERT(n < sizeof(u.m_requiredRegs));
+        u.m_requiredRegs[n] = value;
     }
 
-    inline void setTmpReg3(uint8_t value1, uint8_t value2, uint8_t value3)
+    inline const OperandDescriptorList& getOperandDescriptor()
     {
-        setTmpReg2(value1, value2);
-        m_tmpRegs[2] = value3;
-    }
-
-    inline void setTmpReg4(uint8_t value1, uint8_t value2, uint8_t value3, uint8_t value4)
-    {
-        setTmpReg3(value1, value2, value3);
-        m_tmpRegs[3] = value4;
+        return m_operandDescriptors[u.m_requiredRegsDescriptor];
     }
 
 protected:
@@ -241,7 +270,7 @@ protected:
         , m_opcode(opcode)
         , m_paramCount(paramCount)
     {
-        memset(m_tmpRegs, 0, sizeof(m_tmpRegs));
+        u.m_requiredRegsDescriptor = 0;
     }
 
     explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, InstructionListItem* prev)
@@ -251,15 +280,20 @@ protected:
         , m_opcode(opcode)
         , m_paramCount(0)
     {
-        memset(m_tmpRegs, 0, sizeof(m_tmpRegs));
+        u.m_requiredRegsDescriptor = 0;
     }
 
 private:
+    static const OperandDescriptorList m_operandDescriptors[];
+
     ByteCode* m_byteCode;
     Operand* m_operands;
     ByteCode::Opcode m_opcode;
     uint32_t m_paramCount;
-    uint8_t m_tmpRegs[4];
+    union {
+        uint32_t m_requiredRegsDescriptor;
+        uint8_t m_requiredRegs[4];
+    } u;
 };
 
 union InstructionValue {
@@ -556,6 +590,7 @@ public:
 
     void dump();
     void buildParamDependencies(uint32_t requiredStackSize);
+    void allocateRegisters();
 
     void compileFunction(JITFunction* jitFunc, bool isExternal);
     void generateCode();

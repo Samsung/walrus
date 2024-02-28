@@ -152,12 +152,11 @@ static void emitConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* i
     JITArg srcArg;
     JITArg dstArg(operands + 1);
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
-    sljit_s32 tmpReg = instr->tmpReg(2);
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(0));
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(1));
+    sljit_s32 tmpReg = instr->requiredReg(2);
 
     floatOperandToArg(compiler, operands, srcArg, sourceReg);
-
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
 
     sljit_jump* cmp = sljit_emit_fcmp(compiler, SLJIT_UNORDERED | (opcode & SLJIT_32), sourceReg, 0, sourceReg, 0);
@@ -199,7 +198,7 @@ static void emitConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* i
 void ConvertIntFromFloatSlowCase::emitSlowCase(sljit_compiler* compiler)
 {
     CompileContext* context = CompileContext::get(compiler);
-    sljit_s32 tmpFReg = SLJIT_FR1;
+    sljit_s32 tmpFReg = SLJIT_TMP_DEST_FREG;
 
     if (m_opcode != SLJIT_CONV_S32_FROM_F64) {
 #if SLJIT_CONV_MAX_FLOAT != SLJIT_CONV_MIN_FLOAT
@@ -309,8 +308,8 @@ static void emitConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction
     JITArg srcArg(operands);
     JITArg dstArg(operands + 1);
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(1));
 
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
@@ -343,12 +342,11 @@ static void emitSaturatedConvertIntegerFromFloat(sljit_compiler* compiler, Instr
     JITArg srcArg;
     JITArg dstArg(operands + 1);
 
-    floatOperandToArg(compiler, operands, srcArg, SLJIT_FR0);
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(1));
+    sljit_s32 tmpFReg = SLJIT_TMP_DEST_FREG;
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
-    sljit_s32 tmpFReg = instr->tmpReg(2);
-
+    floatOperandToArg(compiler, operands, srcArg, sourceReg);
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
 
@@ -418,9 +416,9 @@ static void emitSaturatedConvertUnsigned32FromFloat(sljit_compiler* compiler, In
     JITArg srcArg(operands);
     JITArg dstArg(operands + 1);
 
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->tmpReg(1));
-    sljit_s32 tmpFReg = instr->tmpReg(2);
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(1));
+    sljit_s32 tmpFReg = SLJIT_TMP_DEST_FREG;
 
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);

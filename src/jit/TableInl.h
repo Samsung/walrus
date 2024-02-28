@@ -121,11 +121,10 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     }
     case ByteCode::TableSizeOpcode: {
         JITArg dstArg(instr->operands());
-        sljit_s32 tmpReg = instr->tmpReg(0);
 
-        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-        sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), context->tableStart + ((reinterpret_cast<TableSize*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
-        sljit_emit_op1(compiler, SLJIT_MOV32, dstArg.arg, dstArg.argw, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableSizeOffset());
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), context->tableStart + ((reinterpret_cast<TableSize*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
+        moveIntToDest(compiler, SLJIT_MOV32, dstArg, JITFieldAccessor::tableSizeOffset());
         break;
     }
     case ByteCode::TableCopyOpcode: {
@@ -173,32 +172,32 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         ASSERT(!(instr->info() & Instruction::kIsCallback));
         JITArg src[2] = { instr->operands(), instr->operands() + 1 };
 
-        sljit_s32 sourceReg = GET_SOURCE_REG(src[0].arg, instr->tmpReg(0));
-        sljit_s32 tmpReg = instr->tmpReg(1);
+        sljit_s32 destinationReg = instr->requiredReg(0);
+        sljit_s32 tmpReg = instr->requiredReg(1);
 
-        if (!SLJIT_IS_REG(src[0].arg)) {
-            MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, src[0].arg, src[0].argw);
-            src[0].arg = sourceReg;
+        if (src[0].arg != destinationReg) {
+            MOVE_TO_REG(compiler, SLJIT_MOV32, destinationReg, src[0].arg, src[0].argw);
+            src[0].arg = destinationReg;
             src[0].argw = 0;
         }
 
         sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
         sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), context->tableStart + ((reinterpret_cast<TableSet*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
 
-        sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, sourceReg, 0, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableSizeOffset());
+        sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, destinationReg, 0, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableSizeOffset());
         context->appendTrapJump(ExecutionContext::OutOfBoundsTableAccessError, cmp);
         sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(tmpReg), JITFieldAccessor::tableElements());
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM2(tmpReg, sourceReg), SLJIT_WORD_SHIFT, src[1].arg, src[1].argw);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM2(tmpReg, destinationReg), SLJIT_WORD_SHIFT, src[1].arg, src[1].argw);
         break;
     }
     case ByteCode::TableGetOpcode: {
         ASSERT(!(instr->info() & Instruction::kIsCallback));
         JITArg srcArg(instr->operands());
 
-        sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->tmpReg(0));
-        sljit_s32 tmpReg = instr->tmpReg(1);
+        sljit_s32 sourceReg = instr->requiredReg(0);
+        sljit_s32 tmpReg = instr->requiredReg(1);
 
-        if (!SLJIT_IS_REG(srcArg.arg)) {
+        if (srcArg.arg != sourceReg) {
             MOVE_TO_REG(compiler, SLJIT_MOV32, sourceReg, srcArg.arg, srcArg.argw);
             srcArg.arg = sourceReg;
             srcArg.argw = 0;

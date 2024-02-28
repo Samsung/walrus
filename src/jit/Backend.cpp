@@ -236,8 +236,30 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
 
 CompileContext* CompileContext::get(sljit_compiler* compiler)
 {
-    void* context = sljit_get_allocator_data(compiler);
+    void* context = sljit_compiler_get_user_data(compiler);
     return reinterpret_cast<CompileContext*>(context);
+}
+
+static void moveIntToDest(sljit_compiler* compiler, sljit_s32 movOp, JITArg& dstArg, sljit_sw offset)
+{
+    if (SLJIT_IS_REG(dstArg.arg)) {
+        sljit_emit_op1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+        return;
+    }
+
+    sljit_emit_op1(compiler, movOp, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+    sljit_emit_op1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_TMP_DEST_REG, 0);
+}
+
+static void moveFloatToDest(sljit_compiler* compiler, sljit_s32 movOp, JITArg& dstArg, sljit_sw offset)
+{
+    if (SLJIT_IS_REG(dstArg.arg)) {
+        sljit_emit_fop1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+        return;
+    }
+
+    sljit_emit_fop1(compiler, movOp, SLJIT_TMP_DEST_FREG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+    sljit_emit_fop1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_TMP_DEST_FREG, 0);
 }
 
 #define GET_TARGET_REG(arg, default_reg) \
@@ -520,31 +542,54 @@ static void emitMove32(sljit_compiler* compiler, Instruction* instr)
 static void emitGlobalGet32(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    JITArg dst(instr->operands());
-
     GlobalGet32* globalGet = reinterpret_cast<GlobalGet32*>(instr->byteCode());
+    JITArg dstArg(instr->operands());
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalGet->index() * sizeof(void*));
-    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset());
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), context->globalsStart + globalGet->index() * sizeof(void*));
+
+    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+        moveFloatToDest(compiler, SLJIT_MOV_F32, dstArg, JITFieldAccessor::globalValueOffset());
+    } else {
+        moveIntToDest(compiler, SLJIT_MOV32, dstArg, JITFieldAccessor::globalValueOffset());
+    }
 }
 
 static void emitGlobalSet32(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    JITArg src(instr->operands());
-
     GlobalSet32* globalSet = reinterpret_cast<GlobalSet32*>(instr->byteCode());
+    JITArg src;
+    sljit_s32 baseReg;
+
+    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+        floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
+        baseReg = SLJIT_TMP_MEM_REG;
+    } else {
+        src.set(instr->operands());
+        baseReg = instr->requiredReg(0);
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
 
     if (SLJIT_IS_MEM(src.arg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, src.arg, src.argw);
-        src.arg = SLJIT_R1;
+        if (instr->info() & Instruction::kIsGlobalFloatBit) {
+            sljit_emit_fop1(compiler, SLJIT_MOV_F32, SLJIT_TMP_DEST_FREG, 0, src.arg, src.argw);
+            src.arg = SLJIT_TMP_DEST_FREG;
+        } else {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, src.arg, src.argw);
+            src.arg = SLJIT_TMP_DEST_REG;
+        }
         src.argw = 0;
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalSet->index() * sizeof(void*));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(baseReg), context->globalsStart + globalSet->index() * sizeof(void*));
+
+    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+        sljit_emit_fop1(compiler, SLJIT_MOV_F32, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+    } else {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+    }
 }
 
 static void emitRefFunc(sljit_compiler* compiler, Instruction* instr)
@@ -553,8 +598,8 @@ static void emitRefFunc(sljit_compiler* compiler, Instruction* instr)
 
     CompileContext* context = CompileContext::get(compiler);
 
-    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV_P, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_R0), context->functionsStart + (sizeof(Function*) * (reinterpret_cast<RefFunc*>(instr->byteCode()))->funcIndex()));
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    moveIntToDest(compiler, SLJIT_MOV_P, dstArg, context->functionsStart + (sizeof(Function*) * (reinterpret_cast<RefFunc*>(instr->byteCode()))->funcIndex()));
 }
 
 JITModule::~JITModule()
@@ -635,7 +680,8 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 
     if (m_compiler == nullptr) {
         // First compiled function.
-        m_compiler = sljit_create_compiler(reinterpret_cast<void*>(&m_context), nullptr);
+        m_compiler = sljit_create_compiler(nullptr);
+        sljit_compiler_set_user_data(m_compiler, reinterpret_cast<void*>(&m_context));
 
         if (module()->m_jitModule == nullptr) {
             // Follows the declaration of FunctionDescriptor::ExternalDecl().
@@ -889,7 +935,7 @@ void JITCompiler::generateCode()
         return;
     }
 
-    void* code = sljit_generate_code(m_compiler);
+    void* code = sljit_generate_code(m_compiler, 0, nullptr);
 
     if (code != nullptr) {
         JITModule* moduleDescriptor = module()->m_jitModule;

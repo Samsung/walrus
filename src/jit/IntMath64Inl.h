@@ -25,8 +25,8 @@ static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instru
     case ByteCode::Const128Opcode: {
         const uint8_t* value = reinterpret_cast<Const128*>(instr->byteCode())->value();
 
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, SLJIT_MEM0(), (sljit_sw)value);
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, SLJIT_MEM1(kFrameReg), offset);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR0, SLJIT_MEM0(), (sljit_sw)value);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR0, SLJIT_MEM1(kFrameReg), offset);
         return;
     }
 #endif /* HAS_SIMD */
@@ -263,9 +263,8 @@ static void emitPopcnt(sljit_compiler* compiler, ByteCode::Opcode opcode, JITArg
 
 static void emitExtend(sljit_compiler* compiler, sljit_s32 opcode, sljit_s32 bigEndianIncrease, JITArg* args)
 {
-    sljit_s32 reg = GET_TARGET_REG(args[1].arg, SLJIT_R0);
+    sljit_s32 reg = GET_TARGET_REG(args[1].arg, SLJIT_TMP_DEST_REG);
 
-    assert((args[0].arg >> 8) == 0);
 #if (defined SLJIT_BIG_ENDIAN && SLJIT_BIG_ENDIAN)
     if (SLJIT_IS_MEM(args[0].arg)) {
         args[0].argw += bigEndianIncrease;
@@ -287,15 +286,31 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I32ClzOpcode:
+        if (SLJIT_IS_IMM(args[0].arg)) {
+            sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, SLJIT_IMM, clz((sljit_u32)args[0].argw));
+            return;
+        }
         opcode = SLJIT_CLZ32;
         break;
     case ByteCode::I32CtzOpcode:
+        if (SLJIT_IS_IMM(args[0].arg)) {
+            sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, SLJIT_IMM, ctz((sljit_u32)args[0].argw));
+            return;
+        }
         opcode = SLJIT_CTZ32;
         break;
     case ByteCode::I64ClzOpcode:
+        if (SLJIT_IS_IMM(args[0].arg)) {
+            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_IMM, clz((sljit_uw)args[0].argw));
+            return;
+        }
         opcode = SLJIT_CLZ;
         break;
     case ByteCode::I64CtzOpcode:
+        if (SLJIT_IS_IMM(args[0].arg)) {
+            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_IMM, ctz((sljit_uw)args[0].argw));
+            return;
+        }
         opcode = SLJIT_CTZ;
         break;
     case ByteCode::I32PopcntOpcode:
@@ -320,20 +335,6 @@ static void emitUnary(sljit_compiler* compiler, Instruction* instr)
     default:
         RELEASE_ASSERT_NOT_REACHED();
         break;
-    }
-
-    // If the operand is an immediate then it is necesarry to move it into a
-    // register because immediate source arguments are not supported.
-    if (SLJIT_IS_IMM(args[0].arg)) {
-        sljit_s32 mov = SLJIT_MOV;
-
-        if (instr->info() & Instruction::kIs32Bit) {
-            mov = SLJIT_MOV32;
-        }
-
-        sljit_emit_op1(compiler, mov, SLJIT_R0, 0, args[0].arg, args[0].argw);
-        args[0].arg = SLJIT_R0;
-        args[0].argw = 0;
     }
 
     sljit_emit_op1(compiler, opcode, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
@@ -370,7 +371,7 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
         type = SLJIT_NOT_ZERO;
     }
 
-    sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, SLJIT_R0);
+    sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, instr->requiredReg(0));
 
     if (is32) {
         type |= SLJIT_32;
@@ -518,19 +519,20 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I32WrapI64Opcode:
+#if (defined SLJIT_BIG_ENDIAN && SLJIT_BIG_ENDIAN)
         if (SLJIT_IS_MEM(args[0].arg)) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, args[0].arg, args[0].argw);
-            sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, SLJIT_R0, 0);
-        } else {
-            sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
+            sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, args[0].arg, args[0].argw + sizeof(sljit_i32));
+            return;
         }
+#endif /* SLJIT_BIG_ENDIAN */
+        sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
         return;
     case ByteCode::I64ExtendI32SOpcode:
         if (SLJIT_IS_IMM(args[0].arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, args[0].arg, static_cast<sljit_s32>(args[0].argw));
         } else if (SLJIT_IS_MEM(args[0].arg)) {
-            sljit_emit_op1(compiler, SLJIT_MOV_S32, SLJIT_R0, 0, args[0].arg, args[0].argw);
-            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_R0, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV_S32, SLJIT_TMP_DEST_REG, 0, args[0].arg, args[0].argw);
+            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_TMP_DEST_REG, 0);
         } else {
             sljit_emit_op1(compiler, SLJIT_MOV_S32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
         }
@@ -539,8 +541,8 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
         if (SLJIT_IS_IMM(args[0].arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, args[0].arg, static_cast<sljit_u32>(args[0].argw));
         } else if (SLJIT_IS_MEM(args[0].arg)) {
-            sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_R0, 0, args[0].arg, args[0].argw);
-            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_R0, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_TMP_DEST_REG, 0, args[0].arg, args[0].argw);
+            sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_TMP_DEST_REG, 0);
         } else {
             sljit_emit_op1(compiler, SLJIT_MOV_U32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
         }
@@ -563,29 +565,52 @@ static void emitMove64(sljit_compiler* compiler, Instruction* instr)
 static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    JITArg dst(instr->operands());
-
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
+    JITArg dstArg(instr->operands());
 
-    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalGet->index() * sizeof(void*));
-    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset());
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), context->globalsStart + globalGet->index() * sizeof(void*));
+
+    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+        moveFloatToDest(compiler, SLJIT_MOV_F64, dstArg, JITFieldAccessor::globalValueOffset());
+    } else {
+        moveIntToDest(compiler, SLJIT_MOV, dstArg, JITFieldAccessor::globalValueOffset());
+    }
 }
 
 static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    JITArg src(instr->operands());
-
     GlobalSet64* globalSet = reinterpret_cast<GlobalSet64*>(instr->byteCode());
+    JITArg src;
+    sljit_s32 baseReg;
+
+    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+        floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
+        baseReg = SLJIT_TMP_MEM_REG;
+    } else {
+        src.set(instr->operands());
+        baseReg = instr->requiredReg(0);
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
 
     if (SLJIT_IS_MEM(src.arg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, src.arg, src.argw);
-        src.arg = SLJIT_R1;
+        if (instr->info() & Instruction::kIsGlobalFloatBit) {
+            sljit_emit_fop1(compiler, SLJIT_MOV_F64, SLJIT_TMP_DEST_FREG, 0, src.arg, src.argw);
+            src.arg = SLJIT_TMP_DEST_FREG;
+        } else {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, src.arg, src.argw);
+            src.arg = SLJIT_TMP_DEST_REG;
+        }
         src.argw = 0;
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalSet->index() * sizeof(void*));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(baseReg), context->globalsStart + globalSet->index() * sizeof(void*));
+
+    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+        sljit_emit_fop1(compiler, SLJIT_MOV_F64, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+    } else {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
+    }
 }
