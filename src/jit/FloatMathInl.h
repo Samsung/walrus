@@ -182,8 +182,8 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
 
     ASSERT(instr->paramCount() == 2 && instr->resultCount() == 1);
 
-    floatOperandToArg(compiler, operands, args[0], instr->tmpReg(0));
-    floatOperandToArg(compiler, operands + 1, args[1], instr->tmpReg(1));
+    floatOperandToArg(compiler, operands, args[0], instr->requiredReg(0));
+    floatOperandToArg(compiler, operands + 1, args[1], instr->requiredReg(1));
     floatOperandToArg(compiler, operands + 2, args[2], 0);
 
     sljit_s32 opcode = SLJIT_NOP;
@@ -230,11 +230,11 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::F32CopysignOpcode:
     case ByteCode::F64CopysignOpcode:
-        dstReg = GET_TARGET_REG(args[2].arg, instr->tmpReg(2));
+        dstReg = GET_TARGET_REG(args[2].arg, instr->requiredReg(2));
         opcode = instr->opcode() == ByteCode::F32CopysignOpcode ? SLJIT_COPYSIGN_F32 : SLJIT_COPYSIGN_F64;
         sljit_emit_fop2r(compiler, opcode, dstReg, args[0].arg, args[0].argw, args[1].arg, args[1].argw);
         opcode = instr->opcode() == ByteCode::F32CopysignOpcode ? SLJIT_MOV_F32 : SLJIT_MOV_F64;
-        MOVE_FROM_FREG(compiler, opcode, args[2].arg, args[2].argw, instr->tmpReg(2));
+        MOVE_FROM_FREG(compiler, opcode, args[2].arg, args[2].argw, instr->requiredReg(2));
         return;
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -269,7 +269,7 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
 
     ASSERT(instr->paramCount() == 1 && instr->resultCount() == 1);
 
-    floatOperandToArg(compiler, operands, args[0], instr->tmpReg(0));
+    floatOperandToArg(compiler, operands, args[0], instr->requiredReg(0));
     floatOperandToArg(compiler, operands + 1, args[1], 0);
 
     sljit_s32 opcode;
@@ -350,10 +350,11 @@ static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_
     Operand* operands = instr->operands();
     bool is32 = reinterpret_cast<Select*>(instr->byteCode())->valueSize() == 4;
     sljit_s32 movOpcode = is32 ? SLJIT_MOV_F32 : SLJIT_MOV_F64;
+    sljit_s32 targetReg = instr->requiredReg(1);
     JITArg args[3];
 
-    floatOperandToArg(compiler, operands + 0, args[0], instr->tmpReg(0));
-    floatOperandToArg(compiler, operands + 1, args[1], instr->tmpReg(1));
+    floatOperandToArg(compiler, operands + 0, args[0], instr->requiredReg(0));
+    floatOperandToArg(compiler, operands + 1, args[1], targetReg);
     floatOperandToArg(compiler, operands + 3, args[2], 0);
 
     if (type == -1) {
@@ -364,18 +365,16 @@ static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_
         type = SLJIT_NOT_ZERO;
     }
 
-    sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, instr->tmpReg(2));
 
-    if (!SLJIT_IS_REG(args[1].arg)) {
+    if (args[1].arg != targetReg) {
         sljit_emit_fop1(compiler, movOpcode, targetReg, 0, args[1].arg, args[1].argw);
-        args[1].arg = targetReg;
     }
 
     if (is32) {
         type |= SLJIT_32;
     }
 
-    sljit_emit_fselect(compiler, type, targetReg, args[0].arg, args[0].argw, args[1].arg);
+    sljit_emit_fselect(compiler, type, targetReg, args[0].arg, args[0].argw, targetReg);
     MOVE_FROM_FREG(compiler, movOpcode, args[2].arg, args[2].argw, targetReg);
 }
 
@@ -388,7 +387,7 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
     ASSERT(instr->paramCount() == 2);
 
     for (uint32_t i = 0; i < 2; ++i, operand++) {
-        floatOperandToArg(compiler, operand, params[i], instr->tmpReg(i));
+        floatOperandToArg(compiler, operand, params[i], instr->requiredReg(i));
     }
 
     switch (instr->opcode()) {

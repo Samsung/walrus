@@ -54,7 +54,7 @@ private:
     size_t m_end;
 };
 
-void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<size_t, Label*>& labels)
+static void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<size_t, Label*>& labels)
 {
     std::map<TryRange, size_t> ranges;
 
@@ -90,22 +90,174 @@ void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std::map<si
     }
 }
 
-enum TmpInit : uint8_t {
-    // No initialization of temporaries
-    InitNone,
-    // Temporary floatin point registers for arguments
-    InitFloat,
-    // Temporary floatin point registers for arguments and destination
-    InitFloatDst,
-    // Temporary registers for integer to floating point conversion
-    InitIntegerFromFloat,
-    // Temporary registers for saturated integer to floating point conversion
-    InitSaturatedIntegerFromFloat,
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-    // Temporary registers floating point to integer conversion
-    InitUnsignedIntegerFromFloat,
-#endif /* SLJIT_64BIT_ARCHITECTURE */
+static bool isFloatGlobal(uint32_t globalIndex, Module* module)
+{
+    Value::Type type = module->globalType(globalIndex)->type();
+
+    return type == Value::F32 || type == Value::F64;
+}
+
+// Helpers for simplifying descriptor definitions.
+
+// OL = Operand List
+#define OL7(FUNC, name, o1, o2, o3, o4, o5, o6, o7) \
+    FUNC(name, o1, o2, o3, o4, o5, o6, o7)
+#define OL6(FUNC, name, o1, o2, o3, o4, o5, o6) \
+    OL7(FUNC, name, o1, o2, o3, o4, o5, o6, 0)
+#define OL5(FUNC, name, o1, o2, o3, o4, o5) \
+    OL6(FUNC, name, o1, o2, o3, o4, o5, 0)
+#define OL4(FUNC, name, o1, o2, o3, o4) \
+    OL5(FUNC, name, o1, o2, o3, o4, 0)
+#define OL3(FUNC, name, o1, o2, o3) \
+    OL4(FUNC, name, o1, o2, o3, 0)
+#define OL2(FUNC, name, o1, o2) \
+    OL3(FUNC, name, o1, o2, 0)
+#define OL1(FUNC, name, o1) \
+    OL2(FUNC, name, o1, 0)
+
+#define I64_LOW (Instruction::Int64LowOperand | Instruction::TmpRequired)
+#define PTR Instruction::PtrOperand
+#define I32 Instruction::Int32Operand
+#define I64 Instruction::Int64Operand
+#define F32 Instruction::Float32Operand
+#define F64 Instruction::Float64Operand
+#define V128 Instruction::V128Operand
+#define TMP Instruction::TmpRequired
+#define NOTMP Instruction::TmpNotAllowed
+#define LOW Instruction::LowerHalfNeeded
+#define S0 Instruction::Src0Allowed
+#define S1 Instruction::Src1Allowed
+#define S2 Instruction::Src2Allowed
+
+// S/D/T represents Source Destination operands and Temporary registers.
+// Example: SSDTT represents two source and one destination operands and two temporary registers.
+
+// General rules:
+//    - Registers assigned to source operands are read only, unless
+//      a destination/temporary register is also assigned to a source register
+//    - Destination operands may also require to be temporary registers
+//    - Destination/temporary registers must be different registers
+//    - Destination/temporary registers can reuse source registers
+//      when Src0Allowed .. Src2Allowed flags are specified
+//    - On 32 bit systems, i64 types requires two registers
+//      The lower 32 bit (LowerHalfNeeded) might be enough for source registers
+//    - On 32 bit systems, i64 types cannot be assigned to temporary registers
+
+// Operand examples:
+//   [SOURCE_TYPE] : A register is auto-assigned for float/simd immediates,
+//                   no effect otherwise
+//   [SOURCE_TYPE] | TMP : A temporary register must be assigned which is not modified
+//   [SOURCE_TYPE] | NOTMP : A register is never assigned to this source value
+//   [DESTINATION_TYPE] : No register is assigned to this destination operand
+//   [DESTINATION_TYPE] | TMP : A temporary register must be required for this destination operand
+//   [TEMPORARY_TYPE] | S0 | S2 : A temporary register is required, which can
+//                                be the same as the first or third source operands
+
+#define OPERAND_TYPE_LIST(FUNC)                                                               \
+    OL1(FUNC, OTNone, 0)                                                                      \
+    OL2(FUNC, OTOp1I32, /* SD */ I32, I32)                                                    \
+    OL3(FUNC, OTOp2I32, /* SSD */ I32, I32, I32 | S0 | S1)                                    \
+    OL2(FUNC, OTOp1I64, /* SD */ I64, I64)                                                    \
+    OL2(FUNC, OTOp1F32, /* SSD */ F32, F32 | S0)                                              \
+    OL2(FUNC, OTOp1F64, /* SSD */ F64, F64 | S0)                                              \
+    OL3(FUNC, OTOp2F32, /* SSD */ F32, F32, F32 | S0 | S1)                                    \
+    OL3(FUNC, OTOp2F64, /* SSD */ F64, F64, F64 | S0 | S1)                                    \
+    OL1(FUNC, OTToI32, /* D */ I32 | TMP)                                                     \
+    OL1(FUNC, OTToPTR, /* D */ I32 | PTR)                                                     \
+    OL3(FUNC, OTCompareI64, /* SSD */ I64, I64, I32 | S0 | S1)                                \
+    OL3(FUNC, OTCompareF32, /* SSD */ F32, F32, I32)                                          \
+    OL3(FUNC, OTCompareF64, /* SSD */ F64, F64, I32)                                          \
+    OL3(FUNC, OTCopySignF32, /* SSD */ F32, F32, F32 | TMP | S0 | S1)                         \
+    OL3(FUNC, OTCopySignF64, /* SSD */ F64, F64, F64 | TMP | S0 | S1)                         \
+    OL2(FUNC, OTDemoteF64, /* SD */ F64, F32)                                                 \
+    OL2(FUNC, OTPromoteF32, /* SD */ F32, F64)                                                \
+    OL4(FUNC, OTLoadI32, /* SDTT */ I32, I32, PTR, I32 | S0)                                  \
+    OL4(FUNC, OTLoadI64, /* SDTT */ I32, I64, PTR, I32 | S0)                                  \
+    OL4(FUNC, OTLoadF32, /* SDTT */ I32, F32, PTR, I32 | S0)                                  \
+    OL4(FUNC, OTLoadF64, /* SDTT */ I32, F64, PTR, I32 | S0)                                  \
+    OL4(FUNC, OTLoadV128, /* SDTT */ I32, V128 | TMP, PTR, I32 | S0)                          \
+    OL5(FUNC, OTLoadLaneV128, /* SSDTTT */ I32, V128 | NOTMP, V128 | TMP | S1, PTR, I32 | S0) \
+    OL5(FUNC, OTStoreI32, /* SSTTT */ I32, I32, PTR, I32 | S0, I32 | S1)                      \
+    OL5(FUNC, OTStoreI64, /* SSTTT */ I32, I64, PTR, I32 | S0, PTR | S1)                      \
+    OL4(FUNC, OTStoreF32, /* SSTT */ I32, F32 | NOTMP, PTR, I32 | S0)                         \
+    OL4(FUNC, OTStoreF64, /* SSTT */ I32, F64 | NOTMP, PTR, I32 | S0)                         \
+    OL4(FUNC, OTStoreV128, /* SSTT */ I32, V128 | TMP, PTR, I32 | S0)                         \
+    OL3(FUNC, OTCallback3Arg, /* SSS */ I32, I32, I32)                                        \
+    OL3(FUNC, OTTableGrow, /* SSD */ I32, PTR, I32)                                           \
+    OL4(FUNC, OTTableSet, /* SSTT */ I32, PTR, I32 | S0, PTR)                                 \
+    OL3(FUNC, OTTableGet, /* SDT */ I32, PTR | TMP | S0, I32)                                 \
+    OL1(FUNC, OTGlobalGetF32, /* D */ F32)                                                    \
+    OL1(FUNC, OTGlobalGetF64, /* D */ F64)                                                    \
+    OL2(FUNC, OTGlobalSetI32, /* ST */ I32, PTR)                                              \
+    OL2(FUNC, OTGlobalSetI64, /* ST */ I64, PTR)                                              \
+    OL1(FUNC, OTGlobalSetF32, /* S */ F32 | NOTMP)                                            \
+    OL1(FUNC, OTGlobalSetF64, /* S */ F64 | NOTMP)                                            \
+    OL2(FUNC, OTConvertInt32FromInt64, /* SD */ I64, I32)                                     \
+    OL2(FUNC, OTConvertInt64FromInt32, /* SD */ I32, I64)                                     \
+    OL4(FUNC, OTConvertInt32FromFloat32, /* SDT */ F32 | NOTMP, I32 | TMP, F32 | S0, I32)     \
+    OL4(FUNC, OTConvertInt32FromFloat64, /* SDT */ F64 | NOTMP, I32 | TMP, F64 | S0, I32)     \
+    OL2(FUNC, OTConvertInt64FromFloat32Callback, /* SD */ F32, I64)                           \
+    OL2(FUNC, OTConvertInt64FromFloat64Callback, /* SD */ F64, I64)                           \
+    OL2(FUNC, OTSatConvertInt32FromFloat32, /* SDT */ F32 | TMP, I32 | TMP)                   \
+    OL2(FUNC, OTSatConvertInt32FromFloat64, /* SDT */ F64 | TMP, I32 | TMP)                   \
+    OL2(FUNC, OTConvertFloat32FromInt32, /* SD */ I32, F32)                                   \
+    OL2(FUNC, OTConvertFloat64FromInt32, /* SD */ I32, F64)                                   \
+    OL2(FUNC, OTConvertFloat32FromInt64, /* SD */ I64, F32)                                   \
+    OL2(FUNC, OTConvertFloat64FromInt64, /* SD */ I64, F64)                                   \
+    OL4(FUNC, OTSelectI32, /* SSSD */ I32, I32, I32, I32 | TMP | S1)                          \
+    OL4(FUNC, OTSelectI64, /* SSSD */ I64, I64, I32, I64 | TMP | S1)                          \
+    OL4(FUNC, OTSelectF32, /* SSSD */ F32, F32 | NOTMP, I32, F32 | TMP | S1)                  \
+    OL4(FUNC, OTSelectF64, /* SSSD */ F64, F64 | NOTMP, I32, F64 | TMP | S1)                  \
+    OL4(FUNC, OTSelectV128, /* SSSD */ V128, V128, I32, V128 | TMP | S1)
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+
+#define OPERAND_TYPE_LIST_MATH(FUNC)                                              \
+    OL3(FUNC, OTOp2I64, /* SSD */ I64, I64, I64 | TMP | S0 | S1)                  \
+    OL3(FUNC, OTShiftI64, /* SSD */ I64, I64, I64 | TMP | S0)                     \
+    OL4(FUNC, OTMulI64, /* SSDT */ I64, I64, I64 | TMP | S0, I32 | S1)            \
+    OL3(FUNC, OTDivRemI64, /* SSD */ I64, I64, I64 | S0 | S1)                     \
+    OL2(FUNC, OTCountZeroesI64, /* SD */ I64, I64 | TMP | S0)                     \
+    OL5(FUNC, OTStoreI64Low, /* SSTTT */ I32, I64 | LOW, PTR, I32 | S0, PTR | S1) \
+    OL1(FUNC, OTGlobalGetI64, /* D */ I64_LOW)                                    \
+    OL2(FUNC, OTConvertInt32FromFloat32Callback, /* SD */ F32, I32)               \
+    OL2(FUNC, OTConvertInt32FromFloat64Callback, /* SD */ F64, I32)
+
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+
+#define OPERAND_TYPE_LIST_MATH(FUNC)                                                      \
+    OL3(FUNC, OTOp2I64, /* SSD */ I64, I64, I64 | S0 | S1)                                \
+    OL1(FUNC, OTGlobalGetI64, /* D */ I64)                                                \
+    OL2(FUNC, OTConvertUnsignedInt32FromFloat32, /* SD */ F32 | TMP, I32 | TMP)           \
+    OL2(FUNC, OTConvertUnsignedInt32FromFloat64, /* SD */ F64 | TMP, I32 | TMP)           \
+    OL4(FUNC, OTConvertInt64FromFloat32, /* SDT */ F32 | NOTMP, I64 | TMP, F32 | S0, I64) \
+    OL4(FUNC, OTConvertInt64FromFloat64, /* SDT */ F64 | NOTMP, I64 | TMP, F64 | S0, I64) \
+    OL2(FUNC, OTSatConvertInt64FromFloat32, /* SD */ F32 | TMP, I64 | TMP)                \
+    OL2(FUNC, OTSatConvertInt64FromFloat64, /* SD */ F64 | TMP, I64 | TMP)
+
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+// Constructing read-only operand descriptors.
+
+#define OPERAND_LIST(name, o1, o2, o3, o4, o5, o6, o7) \
+    { (o1), (o2), (o3), (o4), (o5), (o6), (o7), 0 },
+
+const Instruction::OperandDescriptorList Instruction::m_operandDescriptors[] = {
+    OPERAND_TYPE_LIST(OPERAND_LIST)
+        OPERAND_TYPE_LIST_MATH(OPERAND_LIST)
 };
+
+#undef OPERAND_LIST
+
+#define OPERAND_TYPE_NAMES(name, o1, o2, o3, o4, o5, o6, o7) \
+    name,
+
+enum OperandTypes : uint32_t {
+    OPERAND_TYPE_LIST(OPERAND_TYPE_NAMES)
+        OPERAND_TYPE_LIST_MATH(OPERAND_TYPE_NAMES)
+};
+
+#undef OPERAND_TYPE_NAMES
 
 static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
@@ -200,7 +352,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         ByteCode::Opcode opcode = byteCode->opcode();
         Instruction::Group group = Instruction::Any;
         uint8_t paramCount = 0;
-        TmpInit tmpInit = InitNone;
+        uint32_t requiredInit = OTNone;
         uint16_t info = 0;
 
         switch (opcode) {
@@ -208,40 +360,85 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32AddOpcode:
         case ByteCode::I32SubOpcode:
         case ByteCode::I32MulOpcode:
-        case ByteCode::I32DivSOpcode:
-        case ByteCode::I32DivUOpcode:
-        case ByteCode::I32RemSOpcode:
-        case ByteCode::I32RemUOpcode:
         case ByteCode::I32RotlOpcode:
         case ByteCode::I32RotrOpcode:
         case ByteCode::I32AndOpcode:
         case ByteCode::I32OrOpcode:
-        case ByteCode::I32XorOpcode:
+        case ByteCode::I32XorOpcode: {
+            group = Instruction::Binary;
+            paramCount = 2;
+            info = Instruction::kIs32Bit;
+            requiredInit = OTOp2I32;
+            break;
+        }
         case ByteCode::I32ShlOpcode:
         case ByteCode::I32ShrSOpcode:
         case ByteCode::I32ShrUOpcode: {
-            info = Instruction::kIs32Bit;
             group = Instruction::Binary;
             paramCount = 2;
+            info = Instruction::kIs32Bit | Instruction::kIsShift;
+            requiredInit = OTOp2I32;
+            break;
+        }
+        case ByteCode::I32DivSOpcode:
+        case ByteCode::I32DivUOpcode:
+        case ByteCode::I32RemSOpcode:
+        case ByteCode::I32RemUOpcode: {
+            group = Instruction::Binary;
+            paramCount = 2;
+            info = Instruction::kIs32Bit | Instruction::kDestroysR0R1;
+            requiredInit = OTOp2I32;
             break;
         }
         case ByteCode::I64AddOpcode:
         case ByteCode::I64SubOpcode:
-        case ByteCode::I64MulOpcode:
+        case ByteCode::I64AndOpcode:
+        case ByteCode::I64OrOpcode:
+        case ByteCode::I64XorOpcode: {
+            group = Instruction::Binary;
+            paramCount = 2;
+            requiredInit = OTOp2I64;
+            break;
+        }
+        case ByteCode::I64MulOpcode: {
+            group = Instruction::Binary;
+            paramCount = 2;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kDestroysR0R1;
+            requiredInit = OTMulI64;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTOp2I64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
         case ByteCode::I64DivSOpcode:
         case ByteCode::I64DivUOpcode:
         case ByteCode::I64RemSOpcode:
-        case ByteCode::I64RemUOpcode:
+        case ByteCode::I64RemUOpcode: {
+            group = Instruction::Binary;
+            paramCount = 2;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTDivRemI64;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            info = Instruction::kDestroysR0R1;
+            requiredInit = OTOp2I64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
         case ByteCode::I64RotlOpcode:
         case ByteCode::I64RotrOpcode:
-        case ByteCode::I64AndOpcode:
-        case ByteCode::I64OrOpcode:
-        case ByteCode::I64XorOpcode:
         case ByteCode::I64ShlOpcode:
         case ByteCode::I64ShrSOpcode:
         case ByteCode::I64ShrUOpcode: {
             group = Instruction::Binary;
             paramCount = 2;
+            info = Instruction::kIsShift;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            requiredInit = OTShiftI64;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTOp2I64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
             break;
         }
         case ByteCode::I32EqOpcode:
@@ -254,9 +451,10 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32LeUOpcode:
         case ByteCode::I32GeSOpcode:
         case ByteCode::I32GeUOpcode: {
-            info = Instruction::kIs32Bit;
             group = Instruction::Compare;
             paramCount = 2;
+            info = Instruction::kIs32Bit;
+            requiredInit = OTOp2I32;
             break;
         }
         case ByteCode::I64EqOpcode:
@@ -271,36 +469,43 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I64GeUOpcode: {
             group = Instruction::Compare;
             paramCount = 2;
+            requiredInit = OTCompareI64;
             break;
         }
         case ByteCode::F32AddOpcode:
         case ByteCode::F32SubOpcode:
         case ByteCode::F32MulOpcode:
         case ByteCode::F32DivOpcode:
+            requiredInit = OTOp2F32;
+            FALLTHROUGH;
         case ByteCode::F64AddOpcode:
         case ByteCode::F64SubOpcode:
         case ByteCode::F64MulOpcode:
         case ByteCode::F64DivOpcode: {
             group = Instruction::BinaryFloat;
             paramCount = 2;
-            tmpInit = InitFloat;
+            if (requiredInit == OTNone)
+                requiredInit = OTOp2F64;
             break;
         }
         case ByteCode::F32MaxOpcode:
         case ByteCode::F32MinOpcode:
+            requiredInit = OTOp2F32;
+            FALLTHROUGH;
         case ByteCode::F64MaxOpcode:
         case ByteCode::F64MinOpcode: {
             group = Instruction::BinaryFloat;
             paramCount = 2;
-            tmpInit = InitFloat;
             info = Instruction::kIsCallback;
+            if (requiredInit == OTNone)
+                requiredInit = OTOp2F64;
             break;
         }
         case ByteCode::F32CopysignOpcode:
         case ByteCode::F64CopysignOpcode: {
             group = Instruction::BinaryFloat;
             paramCount = 2;
-            tmpInit = InitFloatDst;
+            requiredInit = opcode == ByteCode::F32CopysignOpcode ? OTCopySignF32 : OTCopySignF64;
             break;
         }
         case ByteCode::F32EqOpcode:
@@ -309,6 +514,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F32GtOpcode:
         case ByteCode::F32LeOpcode:
         case ByteCode::F32GeOpcode:
+            requiredInit = OTCompareF32;
+            FALLTHROUGH;
         case ByteCode::F64EqOpcode:
         case ByteCode::F64NeOpcode:
         case ByteCode::F64LtOpcode:
@@ -317,27 +524,57 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F64GeOpcode: {
             group = Instruction::CompareFloat;
             paramCount = 2;
-            tmpInit = InitFloat;
+            if (requiredInit == OTNone)
+                requiredInit = OTCompareF64;
             break;
         }
-        case ByteCode::I32ClzOpcode:
-        case ByteCode::I32CtzOpcode:
-        case ByteCode::I32PopcntOpcode:
+        case ByteCode::I32PopcntOpcode: {
+            group = Instruction::Unary;
+            paramCount = 1;
+            info = Instruction::kIs32Bit | Instruction::kIsCallback;
+            requiredInit = OTOp1I32;
+            break;
+        }
         case ByteCode::I32Extend8SOpcode:
         case ByteCode::I32Extend16SOpcode: {
             group = Instruction::Unary;
             paramCount = 1;
             info = Instruction::kIs32Bit;
+            requiredInit = OTOp1I32;
+            break;
+        }
+        case ByteCode::I32ClzOpcode:
+        case ByteCode::I32CtzOpcode: {
+            group = Instruction::Unary;
+            paramCount = 1;
+            info = Instruction::kIs32Bit;
+            requiredInit = OTOp1I32;
             break;
         }
         case ByteCode::I64ClzOpcode:
-        case ByteCode::I64CtzOpcode:
-        case ByteCode::I64PopcntOpcode:
+        case ByteCode::I64CtzOpcode: {
+            group = Instruction::Unary;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            requiredInit = OTCountZeroesI64;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTOp1I64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
+        case ByteCode::I64PopcntOpcode: {
+            group = Instruction::Unary;
+            paramCount = 1;
+            info = Instruction::kIsCallback;
+            requiredInit = OTOp1I64;
+            break;
+        }
         case ByteCode::I64Extend8SOpcode:
         case ByteCode::I64Extend16SOpcode:
         case ByteCode::I64Extend32SOpcode: {
             group = Instruction::Unary;
             paramCount = 1;
+            requiredInit = OTOp1I64;
             break;
         }
         case ByteCode::F32CeilOpcode:
@@ -345,6 +582,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F32TruncOpcode:
         case ByteCode::F32NearestOpcode:
         case ByteCode::F32SqrtOpcode:
+            requiredInit = OTOp1F32;
+            FALLTHROUGH;
         case ByteCode::F64CeilOpcode:
         case ByteCode::F64FloorOpcode:
         case ByteCode::F64TruncOpcode:
@@ -352,105 +591,216 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F64SqrtOpcode: {
             group = Instruction::UnaryFloat;
             paramCount = 1;
-            tmpInit = InitFloat;
             info = Instruction::kIsCallback;
+            if (requiredInit == OTNone)
+                requiredInit = OTOp1F64;
             break;
         }
         case ByteCode::F32AbsOpcode:
         case ByteCode::F32NegOpcode:
+            requiredInit = OTOp1F32;
+            FALLTHROUGH;
         case ByteCode::F64AbsOpcode:
-        case ByteCode::F64NegOpcode:
+        case ByteCode::F64NegOpcode: {
+            group = Instruction::UnaryFloat;
+            paramCount = 1;
+            if (requiredInit == OTNone)
+                requiredInit = OTOp1F64;
+            break;
+        }
         case ByteCode::F32DemoteF64Opcode:
         case ByteCode::F64PromoteF32Opcode: {
             group = Instruction::UnaryFloat;
             paramCount = 1;
-            tmpInit = InitFloat;
+            requiredInit = opcode == ByteCode::F32DemoteF64Opcode ? OTDemoteF64 : OTPromoteF32;
             break;
         }
         case ByteCode::I32EqzOpcode: {
             group = Instruction::Compare;
             paramCount = 1;
             info = Instruction::kIs32Bit;
+            requiredInit = OTOp1I32;
             break;
         }
         case ByteCode::I64EqzOpcode: {
             group = Instruction::Compare;
             paramCount = 1;
+            requiredInit = OTOp1I64;
             break;
         }
-        case ByteCode::I32WrapI64Opcode:
+        case ByteCode::I32WrapI64Opcode: {
+            group = Instruction::Convert;
+            paramCount = 1;
+            requiredInit = OTConvertInt32FromInt64;
+            break;
+        }
         case ByteCode::I64ExtendI32SOpcode:
         case ByteCode::I64ExtendI32UOpcode: {
             group = Instruction::Convert;
             paramCount = 1;
+            requiredInit = OTConvertInt64FromInt32;
             break;
         }
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        case ByteCode::I64TruncF32SOpcode:
-        case ByteCode::I64TruncF64SOpcode:
-#endif /* SLJIT_64BIT_ARCHITECTURE */
-        case ByteCode::I32TruncF32SOpcode:
+        case ByteCode::I32TruncF32SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            requiredInit = OTConvertInt32FromFloat32;
+            break;
+        }
+        case ByteCode::I32TruncF32UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt32FromFloat32Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTConvertUnsignedInt32FromFloat32;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
         case ByteCode::I32TruncF64SOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
-            tmpInit = InitIntegerFromFloat;
+            requiredInit = OTConvertInt32FromFloat64;
             break;
         }
+        case ByteCode::I32TruncF64UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-        case ByteCode::I32TruncF32UOpcode:
-        case ByteCode::I32TruncF64UOpcode:
-        case ByteCode::I64TruncF32SOpcode:
-        case ByteCode::I64TruncF64SOpcode:
-        case ByteCode::I32TruncSatF32UOpcode:
-        case ByteCode::I32TruncSatF64UOpcode:
-        case ByteCode::I64TruncSatF32SOpcode:
-        case ByteCode::I64TruncSatF64SOpcode:
-        case ByteCode::F32ConvertI64SOpcode:
-        case ByteCode::F32ConvertI64UOpcode:
-        case ByteCode::F64ConvertI64SOpcode:
-        case ByteCode::F64ConvertI64UOpcode:
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt32FromFloat64Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTConvertUnsignedInt32FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
+        case ByteCode::I64TruncF32SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt64FromFloat32Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTConvertInt64FromFloat32;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
         case ByteCode::I64TruncF32UOpcode:
+        case ByteCode::I64TruncSatF32UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt64FromFloat32Callback;
+            break;
+        }
+        case ByteCode::I64TruncF64SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt64FromFloat64Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTConvertInt64FromFloat64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
         case ByteCode::I64TruncF64UOpcode:
-        case ByteCode::I64TruncSatF32UOpcode:
         case ByteCode::I64TruncSatF64UOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
             info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt64FromFloat64Callback;
             break;
         }
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        case ByteCode::I64TruncSatF32SOpcode:
-        case ByteCode::I64TruncSatF64SOpcode:
-        case ByteCode::I32TruncSatF32UOpcode:
-        case ByteCode::I32TruncSatF64UOpcode:
-#endif /* SLJIT_64BIT_ARCHITECTURE */
-        case ByteCode::I32TruncSatF32SOpcode:
+        case ByteCode::I32TruncSatF32SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            requiredInit = OTSatConvertInt32FromFloat32;
+            break;
+        }
+        case ByteCode::I32TruncSatF32UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt32FromFloat32Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTSatConvertInt32FromFloat32;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
         case ByteCode::I32TruncSatF64SOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
-            tmpInit = InitSaturatedIntegerFromFloat;
+            requiredInit = OTSatConvertInt32FromFloat64;
             break;
         }
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        case ByteCode::I32TruncF32UOpcode:
-        case ByteCode::I32TruncF64UOpcode: {
+        case ByteCode::I32TruncSatF64UOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
-            tmpInit = InitUnsignedIntegerFromFloat;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt32FromFloat64Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTSatConvertInt32FromFloat64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
+        case ByteCode::I64TruncSatF32SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt64FromFloat32Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTSatConvertInt64FromFloat32;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
+        case ByteCode::I64TruncSatF64SOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+            requiredInit = OTConvertInt64FromFloat64Callback;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTSatConvertInt64FromFloat64;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            break;
+        }
+        case ByteCode::F32ConvertI32SOpcode:
+        case ByteCode::F32ConvertI32UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+            requiredInit = OTConvertFloat32FromInt32;
             break;
         }
         case ByteCode::F32ConvertI64SOpcode:
-        case ByteCode::F32ConvertI64UOpcode:
-        case ByteCode::F64ConvertI64SOpcode:
-        case ByteCode::F64ConvertI64UOpcode:
-#endif /* SLJIT_64BIT_ARCHITECTURE */
-        case ByteCode::F32ConvertI32SOpcode:
-        case ByteCode::F32ConvertI32UOpcode:
+        case ByteCode::F32ConvertI64UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTConvertFloat32FromInt64;
+            break;
+        }
         case ByteCode::F64ConvertI32SOpcode:
         case ByteCode::F64ConvertI32UOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
+            requiredInit = OTConvertFloat64FromInt32;
+            break;
+        }
+        case ByteCode::F64ConvertI64SOpcode:
+        case ByteCode::F64ConvertI64UOpcode: {
+            group = Instruction::ConvertFloat;
+            paramCount = 1;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            info = Instruction::kIsCallback;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            requiredInit = OTConvertFloat64FromInt64;
             break;
         }
         case ByteCode::SelectOpcode: {
@@ -458,7 +808,15 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             Select* select = reinterpret_cast<Select*>(byteCode);
             Operand* operands = instr->operands();
 
-            instr->setTmpReg3(SLJIT_FR0, SLJIT_FR1, SLJIT_FR0);
+            if (select->valueSize() == 16) {
+                requiredInit = OTSelectV128;
+            } else if (!select->isFloat()) {
+                requiredInit = select->valueSize() == 4 ? OTSelectI32 : OTSelectI64;
+            } else {
+                requiredInit = select->valueSize() == 4 ? OTSelectF32 : OTSelectF64;
+            }
+
+            instr->setRequiredRegsDescriptor(requiredInit);
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(select->src0Offset());
@@ -535,7 +893,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Load32Opcode: {
             Load32* load32 = reinterpret_cast<Load32*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+            instr->setRequiredRegsDescriptor(OTLoadI32);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -547,7 +905,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Load64Opcode: {
             Load64* load64 = reinterpret_cast<Load64*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+            instr->setRequiredRegsDescriptor(OTLoadI64);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -561,6 +919,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32Load8UOpcode:
         case ByteCode::I32Load16SOpcode:
         case ByteCode::I32Load16UOpcode:
+            requiredInit = OTLoadI32;
+            FALLTHROUGH;
         case ByteCode::I64LoadOpcode:
         case ByteCode::I64Load8SOpcode:
         case ByteCode::I64Load8UOpcode:
@@ -570,7 +930,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I64Load32UOpcode: {
             MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTLoadI64);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -596,7 +956,15 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128Load64ZeroOpcode: {
             MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
+
+            if (opcode == ByteCode::F32LoadOpcode)
+                requiredInit = OTLoadF32;
+            else if (opcode == ByteCode::F64LoadOpcode)
+                requiredInit = OTLoadF64;
+            else
+                requiredInit = OTLoadV128;
+
+            instr->setRequiredRegsDescriptor(requiredInit);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -611,7 +979,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128Load64LaneOpcode: {
             SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::LoadLaneSIMD, opcode, 2, 1);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
+            instr->setRequiredRegsDescriptor(OTLoadLaneV128);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -625,7 +993,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Store32Opcode: {
             Store32* store32 = reinterpret_cast<Store32*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+            instr->setRequiredRegsDescriptor(OTStoreI32);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -637,7 +1005,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::Store64Opcode: {
             Store64* store64 = reinterpret_cast<Store64*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+            instr->setRequiredRegsDescriptor(OTStoreI64);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -649,13 +1017,20 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32StoreOpcode:
         case ByteCode::I32Store8Opcode:
         case ByteCode::I32Store16Opcode:
-        case ByteCode::I64StoreOpcode:
+            requiredInit = OTStoreI32;
+            FALLTHROUGH;
         case ByteCode::I64Store8Opcode:
         case ByteCode::I64Store16Opcode:
-        case ByteCode::I64Store32Opcode: {
+        case ByteCode::I64Store32Opcode:
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            if (requiredInit == OTNone)
+                requiredInit = OTStoreI64Low;
+            FALLTHROUGH;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+        case ByteCode::I64StoreOpcode: {
             MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_R2);
+            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTStoreI64);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -669,7 +1044,15 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128StoreOpcode: {
             MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
+
+            if (opcode == ByteCode::F32StoreOpcode)
+                requiredInit = OTStoreF32;
+            else if (opcode == ByteCode::F64StoreOpcode)
+                requiredInit = OTStoreF64;
+            else
+                requiredInit = OTStoreV128;
+
+            instr->setRequiredRegsDescriptor(requiredInit);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -684,7 +1067,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128Store64LaneOpcode: {
             SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setTmpReg4(SLJIT_R0, SLJIT_R1, SLJIT_R2, SLJIT_FR0);
+            instr->setRequiredRegsDescriptor(OTStoreV128);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -752,6 +1135,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -766,7 +1150,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableSize = reinterpret_cast<TableSize*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 0, 1);
-            instr->setTmpReg(0, SLJIT_R0);
+            instr->setRequiredRegsDescriptor(OTToI32);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -778,6 +1162,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -793,6 +1178,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -808,6 +1194,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 1);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTTableGrow);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -822,7 +1209,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableSet = reinterpret_cast<TableSet*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 0);
-            instr->setTmpReg2(SLJIT_R0, SLJIT_R1);
+            instr->setRequiredRegsDescriptor(OTTableSet);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -835,7 +1222,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableGet = reinterpret_cast<TableGet*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 1, 1);
-            instr->setTmpReg2(SLJIT_R0, SLJIT_R1);
+            instr->setRequiredRegsDescriptor(OTTableGet);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -848,6 +1235,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             MemorySize* memorySize = reinterpret_cast<MemorySize*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTToI32);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -859,6 +1247,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -874,6 +1263,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -889,6 +1279,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -904,6 +1295,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 1, 1);
             instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTOp1I32);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -1028,9 +1420,15 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::GlobalGet32Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet32Opcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTToI32);
 
             GlobalGet32* globalGet32 = reinterpret_cast<GlobalGet32*>(byteCode);
             Operand* operands = instr->operands();
+
+            if (isFloatGlobal(globalGet32->index(), module)) {
+                instr->addInfo(Instruction::kIsGlobalFloatBit);
+                instr->setRequiredRegsDescriptor(OTGlobalGetF32);
+            }
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(globalGet32->dstOffset());
@@ -1038,9 +1436,15 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::GlobalGet64Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet64Opcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTGlobalGetI64);
 
             GlobalGet64* globalGet64 = reinterpret_cast<GlobalGet64*>(byteCode);
             Operand* operands = instr->operands();
+
+            if (isFloatGlobal(globalGet64->index(), module)) {
+                instr->addInfo(Instruction::kIsGlobalFloatBit);
+                instr->setRequiredRegsDescriptor(OTGlobalGetF64);
+            }
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(globalGet64->dstOffset());
@@ -1058,9 +1462,15 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::GlobalSet32Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet32Opcode, 1, 0);
+            instr->setRequiredRegsDescriptor(OTGlobalSetI32);
 
             GlobalSet32* globalSet32 = reinterpret_cast<GlobalSet32*>(byteCode);
             Operand* operands = instr->operands();
+
+            if (isFloatGlobal(globalSet32->index(), module)) {
+                instr->addInfo(Instruction::kIsGlobalFloatBit);
+                instr->setRequiredRegsDescriptor(OTGlobalSetF32);
+            }
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(globalSet32->srcOffset());
@@ -1068,9 +1478,15 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::GlobalSet64Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet64Opcode, 1, 0);
+            instr->setRequiredRegsDescriptor(OTGlobalSetI64);
 
             GlobalSet64* globalSet64 = reinterpret_cast<GlobalSet64*>(byteCode);
             Operand* operands = instr->operands();
+
+            if (isFloatGlobal(globalSet64->index(), module)) {
+                instr->addInfo(Instruction::kIsGlobalFloatBit);
+                instr->setRequiredRegsDescriptor(OTGlobalSetF64);
+            }
 
             operands[0].item = nullptr;
             operands[0].offset = STACK_OFFSET(globalSet64->srcOffset());
@@ -1088,6 +1504,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::RefFuncOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::RefFuncOpcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTToPTR);
 
             auto refFunc = reinterpret_cast<RefFunc*>(byteCode);
             auto operands = instr->operands();
@@ -1349,6 +1766,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             Instruction* instr = compiler->append(byteCode, group, opcode, 2, 1);
             instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit);
 
             BinaryOperation* binaryOperation = reinterpret_cast<BinaryOperation*>(byteCode);
             Operand* operands = instr->operands();
@@ -1359,22 +1777,12 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             operands[1].offset = STACK_OFFSET(binaryOperation->srcOffset()[1]);
             operands[2].item = nullptr;
             operands[2].offset = STACK_OFFSET(binaryOperation->dstOffset());
-
-            switch (tmpInit) {
-            case InitFloat:
-                instr->setTmpReg2(SLJIT_FR0, SLJIT_FR1);
-                break;
-            case InitFloatDst:
-                instr->setTmpReg3(SLJIT_FR0, SLJIT_FR1, SLJIT_FR0);
-                break;
-            default:
-                break;
-            }
         } else if (paramCount == 1) {
             ASSERT(group != Instruction::Any);
 
             Instruction* instr = compiler->append(byteCode, group, opcode, 1, 1);
             instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit);
 
             UnaryOperation* unaryOperation = reinterpret_cast<UnaryOperation*>(byteCode);
 
@@ -1383,31 +1791,13 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             operands[0].offset = STACK_OFFSET(unaryOperation->srcOffset());
             operands[1].item = nullptr;
             operands[1].offset = STACK_OFFSET(unaryOperation->dstOffset());
-
-            switch (tmpInit) {
-            case InitFloat:
-                instr->setTmpReg(0, SLJIT_FR0);
-                break;
-            case InitIntegerFromFloat:
-                instr->setTmpReg3(SLJIT_FR0, SLJIT_R0, SLJIT_R1);
-                break;
-            case InitSaturatedIntegerFromFloat:
-                instr->setTmpReg3(SLJIT_FR0, SLJIT_R0, SLJIT_FR1);
-                break;
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-            case InitUnsignedIntegerFromFloat:
-                instr->setTmpReg2(SLJIT_FR0, SLJIT_R0);
-                break;
-#endif /* SLJIT_64BIT_ARCHITECTURE */
-            default:
-                break;
-            }
         }
 
         idx += byteCode->getSize();
     }
 
     compiler->buildParamDependencies(STACK_OFFSET(function->requiredStackSize()));
+    compiler->allocateRegisters();
 
     if (compiler->verboseLevel() >= 1) {
         compiler->dump();
