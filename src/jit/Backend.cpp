@@ -314,7 +314,7 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
 
 #include "FloatMathInl.h"
 
-void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
+static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 #include "IntMath32Inl.h"
@@ -960,10 +960,10 @@ void JITCompiler::generateCode()
             it.jitFunc->m_exportEntry = reinterpret_cast<void*>(sljit_get_label_addr(it.exportEntryLabel));
 
             if (it.branchTableSize > 0) {
-                sljit_p* branchList = reinterpret_cast<sljit_p*>(it.jitFunc->m_branchList);
+                sljit_up* branchList = reinterpret_cast<sljit_up*>(it.jitFunc->m_branchList);
                 ASSERT(branchList != nullptr);
 
-                sljit_p* end = branchList + it.branchTableSize;
+                sljit_up* end = branchList + it.branchTableSize;
 
                 do {
                     *branchList = sljit_get_label_addr(reinterpret_cast<sljit_label*>(*branchList));
@@ -1029,7 +1029,7 @@ void JITCompiler::emitProlog()
     m_context.branchTableOffset = 0;
 
     if (func.branchTableSize > 0) {
-        void* branchList = malloc(func.branchTableSize * sizeof(sljit_p));
+        void* branchList = malloc(func.branchTableSize * sizeof(sljit_up));
 
         func.jitFunc->m_branchList = branchList;
         m_context.branchTableOffset = reinterpret_cast<uintptr_t>(branchList);
