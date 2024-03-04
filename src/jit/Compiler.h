@@ -183,7 +183,7 @@ public:
         // Similar to Int64LowOperand, except it applies to source operands
         LowerHalfNeeded = (1 << 5),
         // Flags for destination and temporary operands.
-        // Source operands can be used as temporaries.
+        // Registers assigned to these operands can take the role of source operands
         Src0Allowed = (1 << 4),
         Src1Allowed = (1 << 5),
         Src2Allowed = (1 << 6),
@@ -198,8 +198,9 @@ public:
     static const uint16_t kIsCallback = 1 << 1;
     static const uint16_t kDestroysR0R1 = 1 << 2;
     static const uint16_t kIsShift = 1 << 3;
-    static const uint16_t kKeepInstruction = 1 << 4;
-    static const uint16_t kEarlyReturn = 1 << 5;
+    static const uint16_t kIsCompare = 1 << 4;
+    static const uint16_t kKeepInstruction = 1 << 5;
+    static const uint16_t kEarlyReturn = 1 << 6;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -568,7 +569,7 @@ public:
 
     Instruction* append(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
     ExtendedInstruction* appendExtended(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
-    void appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset);
+    Instruction* appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset);
     BrTableInstruction* appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset);
 
     void appendLabel(Label* label)

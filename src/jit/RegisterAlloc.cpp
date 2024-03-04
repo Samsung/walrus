@@ -44,6 +44,10 @@ void JITCompiler::allocateRegisters()
 
         if (*list == 0) {
             // No register assignment required.
+            ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
+                   || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
+                   || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
+                   || instr->opcode() == ByteCode::JumpOpcode || instr->opcode() == ByteCode::UnreachableOpcode);
             continue;
         }
 
@@ -57,6 +61,12 @@ void JITCompiler::allocateRegisters()
                 if ((*list & Instruction::TmpRequired)
                     || (operand->item != nullptr && operand->item->group() == Instruction::Immediate)) {
                     instr->setRequiredReg(tmpIndex, nextFloatIndex++);
+#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+                    if ((*list & Instruction::TypeMask) == Instruction::V128Operand) {
+                        // Quad registers are register pairs.
+                        nextFloatIndex++;
+                    }
+#endif /* SLJIT_CONFIG_ARM_32 */
                 }
                 tmpIndex++;
             }
@@ -89,6 +99,12 @@ void JITCompiler::allocateRegisters()
                 instr->setRequiredReg(tmpIndex, nextIntIndex++);
             } else {
                 instr->setRequiredReg(tmpIndex, nextFloatIndex++);
+#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+                if ((*list & Instruction::TypeMask) == Instruction::V128Operand) {
+                    // Quad registers are register pairs.
+                    nextFloatIndex++;
+                }
+#endif /* SLJIT_CONFIG_ARM_32 */
             }
             tmpIndex++;
         }

@@ -165,7 +165,7 @@ ExtendedInstruction* JITCompiler::appendExtended(ByteCode* byteCode, Instruction
     return instr;
 }
 
-void JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset)
+Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset)
 {
     ASSERT(opcode == ByteCode::JumpOpcode || opcode == ByteCode::JumpIfTrueOpcode || opcode == ByteCode::JumpIfFalseOpcode);
     ASSERT(label != nullptr);
@@ -185,6 +185,7 @@ void JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Labe
     branch->value().targetLabel = label;
     label->m_branches.push_back(branch);
     append(branch);
+    return branch;
 }
 
 BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset)

@@ -25,8 +25,8 @@ static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instru
     case ByteCode::Const128Opcode: {
         const uint8_t* value = reinterpret_cast<Const128*>(instr->byteCode())->value();
 
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR0, SLJIT_MEM0(), (sljit_sw)value);
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR0, SLJIT_MEM1(kFrameReg), offset);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, SLJIT_MEM0(), (sljit_sw)value);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, SLJIT_MEM1(kFrameReg), offset);
         return;
     }
 #endif /* HAS_SIMD */
@@ -371,18 +371,26 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
         type = SLJIT_NOT_ZERO;
     }
 
-    sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, instr->requiredReg(0));
+    sljit_s32 targetReg = GET_TARGET_REG(args[2].arg, SLJIT_TMP_DEST_REG);
+    sljit_s32 baseReg = 0;
+
+    if (args[1].arg == targetReg || (SLJIT_IS_IMM(args[1].arg) && !SLJIT_IS_IMM(args[0].arg) && args[0].arg != targetReg)) {
+        baseReg = 1;
+    } else {
+        type ^= 1;
+    }
 
     if (is32) {
         type |= SLJIT_32;
     }
 
-    if (!SLJIT_IS_REG(args[1].arg)) {
-        sljit_emit_op1(compiler, movOpcode, targetReg, 0, args[1].arg, args[1].argw);
-        args[1].arg = targetReg;
+    if (!SLJIT_IS_REG(args[baseReg].arg)) {
+        sljit_emit_op1(compiler, movOpcode, targetReg, 0, args[baseReg].arg, args[baseReg].argw);
+        args[baseReg].arg = targetReg;
     }
 
-    sljit_emit_select(compiler, type, targetReg, args[0].arg, args[0].argw, args[1].arg);
+    sljit_s32 otherReg = baseReg ^ 0x1;
+    sljit_emit_select(compiler, type, targetReg, args[otherReg].arg, args[otherReg].argw, args[baseReg].arg);
     MOVE_FROM_REG(compiler, movOpcode, args[2].arg, args[2].argw, targetReg);
     return;
 }
