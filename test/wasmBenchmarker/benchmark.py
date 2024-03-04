@@ -39,6 +39,7 @@ expectedValues = {
     "mandelbrotFloat": 775007,
     "mandelbrotDouble": 775007,
     "matrixMultiply": 3920.0,
+    "miniWalrus": 27449,
     "nbody": -0.16910574,
     "nqueens": 0,
     "prime": 48611,
