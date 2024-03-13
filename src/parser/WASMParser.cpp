@@ -1429,10 +1429,6 @@ public:
     void keepBlockResultsIfNeeds(BlockInfo& blockInfo, const std::pair<size_t, size_t>& dropSize)
     {
         if (blockInfo.m_shouldRestoreVMStackAtEnd) {
-            if (dropSize.second) {
-                generateMoveValuesCodeRegardToDrop(dropSize);
-            }
-
             if (!blockInfo.m_byteCodeGenerationStopped) {
                 if (blockInfo.m_returnValueType.IsIndex()) {
                     auto ft = m_result.m_functionTypes[blockInfo.m_returnValueType];
