@@ -33,7 +33,7 @@ void JITCompiler::allocateRegisters()
 
         Instruction* instr = item->asInstruction();
         Operand* operand = instr->operands();
-        const uint8_t* list = instr->getOperandDescriptor().list;
+        const uint8_t* list = instr->getOperandDescriptor();
         uint32_t paramCount = instr->paramCount();
         uint32_t resultCount = instr->resultCount();
         uint32_t tmpIndex = 0;

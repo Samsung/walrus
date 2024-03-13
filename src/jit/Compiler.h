@@ -189,11 +189,6 @@ public:
         Src2Allowed = (1 << 6),
     };
 
-    struct OperandDescriptorList {
-        // Zero terminated list of operands.
-        uint8_t list[8];
-    };
-
     static const uint32_t TemporaryTypeShift = 4;
     static const uint32_t TemporaryTypeMask = 0xf;
 
@@ -257,9 +252,9 @@ public:
         u.m_requiredRegs[n] = value;
     }
 
-    inline const OperandDescriptorList& getOperandDescriptor()
+    inline const uint8_t* getOperandDescriptor()
     {
-        return m_operandDescriptors[u.m_requiredRegsDescriptor];
+        return m_operandDescriptors + u.m_requiredRegsDescriptor;
     }
 
 protected:
@@ -284,7 +279,7 @@ protected:
     }
 
 private:
-    static const OperandDescriptorList m_operandDescriptors[];
+    static const uint8_t m_operandDescriptors[];
 
     ByteCode* m_byteCode;
     Operand* m_operands;
