@@ -99,22 +99,6 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 // Helpers for simplifying descriptor definitions.
 
-// OL = Operand List
-#define OL7(FUNC, name, o1, o2, o3, o4, o5, o6, o7) \
-    FUNC(name, o1, o2, o3, o4, o5, o6, o7)
-#define OL6(FUNC, name, o1, o2, o3, o4, o5, o6) \
-    OL7(FUNC, name, o1, o2, o3, o4, o5, o6, 0)
-#define OL5(FUNC, name, o1, o2, o3, o4, o5) \
-    OL6(FUNC, name, o1, o2, o3, o4, o5, 0)
-#define OL4(FUNC, name, o1, o2, o3, o4) \
-    OL5(FUNC, name, o1, o2, o3, o4, 0)
-#define OL3(FUNC, name, o1, o2, o3) \
-    OL4(FUNC, name, o1, o2, o3, 0)
-#define OL2(FUNC, name, o1, o2) \
-    OL3(FUNC, name, o1, o2, 0)
-#define OL1(FUNC, name, o1) \
-    OL2(FUNC, name, o1, 0)
-
 #define I64_LOW (Instruction::Int64LowOperand | Instruction::TmpRequired)
 #define PTR Instruction::PtrOperand
 #define I32 Instruction::Int32Operand
@@ -153,111 +137,140 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 //   [TEMPORARY_TYPE] | S0 | S2 : A temporary register is required, which can
 //                                be the same as the first or third source operands
 
-#define OPERAND_TYPE_LIST(FUNC)                                                               \
-    OL1(FUNC, OTNone, 0)                                                                      \
-    OL2(FUNC, OTOp1I32, /* SD */ I32, I32)                                                    \
-    OL3(FUNC, OTOp2I32, /* SSD */ I32, I32, I32 | S0 | S1)                                    \
-    OL2(FUNC, OTOp1I64, /* SD */ I64, I64)                                                    \
-    OL2(FUNC, OTOp1F32, /* SSD */ F32, F32 | S0)                                              \
-    OL2(FUNC, OTOp1F64, /* SSD */ F64, F64 | S0)                                              \
-    OL3(FUNC, OTOp2F32, /* SSD */ F32, F32, F32 | S0 | S1)                                    \
-    OL3(FUNC, OTOp2F64, /* SSD */ F64, F64, F64 | S0 | S1)                                    \
-    OL1(FUNC, OTToI32, /* D */ I32 | TMP)                                                     \
-    OL1(FUNC, OTToPTR, /* D */ I32 | PTR)                                                     \
-    OL3(FUNC, OTCompareI64, /* SSD */ I64, I64, I32 | S0 | S1)                                \
-    OL3(FUNC, OTCompareF32, /* SSD */ F32, F32, I32)                                          \
-    OL3(FUNC, OTCompareF64, /* SSD */ F64, F64, I32)                                          \
-    OL3(FUNC, OTCopySignF32, /* SSD */ F32, F32, F32 | TMP | S0 | S1)                         \
-    OL3(FUNC, OTCopySignF64, /* SSD */ F64, F64, F64 | TMP | S0 | S1)                         \
-    OL2(FUNC, OTDemoteF64, /* SD */ F64, F32)                                                 \
-    OL2(FUNC, OTPromoteF32, /* SD */ F32, F64)                                                \
-    OL4(FUNC, OTLoadI32, /* SDTT */ I32, I32, PTR, I32 | S0)                                  \
-    OL4(FUNC, OTLoadI64, /* SDTT */ I32, I64, PTR, I32 | S0)                                  \
-    OL4(FUNC, OTLoadF32, /* SDTT */ I32, F32, PTR, I32 | S0)                                  \
-    OL4(FUNC, OTLoadF64, /* SDTT */ I32, F64, PTR, I32 | S0)                                  \
-    OL4(FUNC, OTLoadV128, /* SDTT */ I32, V128 | TMP, PTR, I32 | S0)                          \
-    OL5(FUNC, OTLoadLaneV128, /* SSDTTT */ I32, V128 | NOTMP, V128 | TMP | S1, PTR, I32 | S0) \
-    OL5(FUNC, OTStoreI32, /* SSTTT */ I32, I32, PTR, I32 | S0, I32 | S1)                      \
-    OL5(FUNC, OTStoreI64, /* SSTTT */ I32, I64, PTR, I32 | S0, PTR | S1)                      \
-    OL4(FUNC, OTStoreF32, /* SSTT */ I32, F32 | NOTMP, PTR, I32 | S0)                         \
-    OL4(FUNC, OTStoreF64, /* SSTT */ I32, F64 | NOTMP, PTR, I32 | S0)                         \
-    OL4(FUNC, OTStoreV128, /* SSTT */ I32, V128 | TMP, PTR, I32 | S0)                         \
-    OL3(FUNC, OTCallback3Arg, /* SSS */ I32, I32, I32)                                        \
-    OL3(FUNC, OTTableGrow, /* SSD */ I32, PTR, I32)                                           \
-    OL4(FUNC, OTTableSet, /* SSTT */ I32, PTR, I32 | S0, PTR)                                 \
-    OL3(FUNC, OTTableGet, /* SDT */ I32, PTR | TMP | S0, I32)                                 \
-    OL1(FUNC, OTGlobalGetF32, /* D */ F32)                                                    \
-    OL1(FUNC, OTGlobalGetF64, /* D */ F64)                                                    \
-    OL2(FUNC, OTGlobalSetI32, /* ST */ I32, PTR)                                              \
-    OL2(FUNC, OTGlobalSetI64, /* ST */ I64, PTR)                                              \
-    OL1(FUNC, OTGlobalSetF32, /* S */ F32 | NOTMP)                                            \
-    OL1(FUNC, OTGlobalSetF64, /* S */ F64 | NOTMP)                                            \
-    OL2(FUNC, OTConvertInt32FromInt64, /* SD */ I64, I32)                                     \
-    OL2(FUNC, OTConvertInt64FromInt32, /* SD */ I32, I64)                                     \
-    OL4(FUNC, OTConvertInt32FromFloat32, /* SDT */ F32 | NOTMP, I32 | TMP, F32 | S0, I32)     \
-    OL4(FUNC, OTConvertInt32FromFloat64, /* SDT */ F64 | NOTMP, I32 | TMP, F64 | S0, I32)     \
-    OL2(FUNC, OTConvertInt64FromFloat32Callback, /* SD */ F32, I64)                           \
-    OL2(FUNC, OTConvertInt64FromFloat64Callback, /* SD */ F64, I64)                           \
-    OL2(FUNC, OTSatConvertInt32FromFloat32, /* SDT */ F32 | TMP, I32 | TMP)                   \
-    OL2(FUNC, OTSatConvertInt32FromFloat64, /* SDT */ F64 | TMP, I32 | TMP)                   \
-    OL2(FUNC, OTConvertFloat32FromInt32, /* SD */ I32, F32)                                   \
-    OL2(FUNC, OTConvertFloat64FromInt32, /* SD */ I32, F64)                                   \
-    OL2(FUNC, OTConvertFloat32FromInt64, /* SD */ I64, F32)                                   \
-    OL2(FUNC, OTConvertFloat64FromInt64, /* SD */ I64, F64)                                   \
-    OL4(FUNC, OTSelectI32, /* SSSD */ I32, I32, I32, I32 | TMP | S1)                          \
-    OL4(FUNC, OTSelectI64, /* SSSD */ I64, I64, I32, I64 | TMP | S1)                          \
-    OL4(FUNC, OTSelectF32, /* SSSD */ F32, F32 | NOTMP, I32, F32 | TMP | S1)                  \
-    OL4(FUNC, OTSelectF64, /* SSSD */ F64, F64 | NOTMP, I32, F64 | TMP | S1)                  \
-    OL4(FUNC, OTSelectV128, /* SSSD */ V128, V128, I32, V128 | TMP | S1)
+#define OPERAND_TYPE_LIST                                                               \
+    OL2(OTOp1I32, /* SD */ I32, I32)                                                    \
+    OL3(OTOp2I32, /* SSD */ I32, I32, I32 | S0 | S1)                                    \
+    OL2(OTOp1I64, /* SD */ I64, I64)                                                    \
+    OL2(OTOp1F32, /* SSD */ F32, F32 | S0)                                              \
+    OL2(OTOp1F64, /* SSD */ F64, F64 | S0)                                              \
+    OL3(OTOp2F32, /* SSD */ F32, F32, F32 | S0 | S1)                                    \
+    OL3(OTOp2F64, /* SSD */ F64, F64, F64 | S0 | S1)                                    \
+    OL1(OTToI32, /* D */ I32 | TMP)                                                     \
+    OL1(OTToPTR, /* D */ I32 | PTR)                                                     \
+    OL3(OTCompareI64, /* SSD */ I64, I64, I32 | S0 | S1)                                \
+    OL3(OTCompareF32, /* SSD */ F32, F32, I32)                                          \
+    OL3(OTCompareF64, /* SSD */ F64, F64, I32)                                          \
+    OL3(OTCopySignF32, /* SSD */ F32, F32, F32 | TMP | S0 | S1)                         \
+    OL3(OTCopySignF64, /* SSD */ F64, F64, F64 | TMP | S0 | S1)                         \
+    OL2(OTDemoteF64, /* SD */ F64, F32)                                                 \
+    OL2(OTPromoteF32, /* SD */ F32, F64)                                                \
+    OL4(OTLoadI32, /* SDTT */ I32, I32, PTR, I32 | S0)                                  \
+    OL4(OTLoadI64, /* SDTT */ I32, I64, PTR, I32 | S0)                                  \
+    OL4(OTLoadF32, /* SDTT */ I32, F32, PTR, I32 | S0)                                  \
+    OL4(OTLoadF64, /* SDTT */ I32, F64, PTR, I32 | S0)                                  \
+    OL4(OTLoadV128, /* SDTT */ I32, V128 | TMP, PTR, I32 | S0)                          \
+    OL5(OTLoadLaneV128, /* SSDTTT */ I32, V128 | NOTMP, V128 | TMP | S1, PTR, I32 | S0) \
+    OL5(OTStoreI32, /* SSTTT */ I32, I32, PTR, I32 | S0, I32 | S1)                      \
+    OL5(OTStoreI64, /* SSTTT */ I32, I64, PTR, I32 | S0, PTR | S1)                      \
+    OL4(OTStoreF32, /* SSTT */ I32, F32 | NOTMP, PTR, I32 | S0)                         \
+    OL4(OTStoreF64, /* SSTT */ I32, F64 | NOTMP, PTR, I32 | S0)                         \
+    OL4(OTStoreV128, /* SSTT */ I32, V128 | TMP, PTR, I32 | S0)                         \
+    OL3(OTCallback3Arg, /* SSS */ I32, I32, I32)                                        \
+    OL3(OTTableGrow, /* SSD */ I32, PTR, I32)                                           \
+    OL4(OTTableSet, /* SSTT */ I32, PTR, I32 | S0, PTR)                                 \
+    OL3(OTTableGet, /* SDT */ I32, PTR | TMP | S0, I32)                                 \
+    OL1(OTGlobalGetF32, /* D */ F32)                                                    \
+    OL1(OTGlobalGetF64, /* D */ F64)                                                    \
+    OL2(OTGlobalSetI32, /* ST */ I32, PTR)                                              \
+    OL2(OTGlobalSetI64, /* ST */ I64, PTR)                                              \
+    OL1(OTGlobalSetF32, /* S */ F32 | NOTMP)                                            \
+    OL1(OTGlobalSetF64, /* S */ F64 | NOTMP)                                            \
+    OL2(OTConvertInt32FromInt64, /* SD */ I64, I32)                                     \
+    OL2(OTConvertInt64FromInt32, /* SD */ I32, I64)                                     \
+    OL4(OTConvertInt32FromFloat32, /* SDT */ F32 | NOTMP, I32 | TMP, F32 | S0, I32)     \
+    OL4(OTConvertInt32FromFloat64, /* SDT */ F64 | NOTMP, I32 | TMP, F64 | S0, I32)     \
+    OL2(OTConvertInt64FromFloat32Callback, /* SD */ F32, I64)                           \
+    OL2(OTConvertInt64FromFloat64Callback, /* SD */ F64, I64)                           \
+    OL2(OTSatConvertInt32FromFloat32, /* SDT */ F32 | TMP, I32 | TMP)                   \
+    OL2(OTSatConvertInt32FromFloat64, /* SDT */ F64 | TMP, I32 | TMP)                   \
+    OL2(OTConvertFloat32FromInt32, /* SD */ I32, F32)                                   \
+    OL2(OTConvertFloat64FromInt32, /* SD */ I32, F64)                                   \
+    OL2(OTConvertFloat32FromInt64, /* SD */ I64, F32)                                   \
+    OL2(OTConvertFloat64FromInt64, /* SD */ I64, F64)                                   \
+    OL4(OTSelectI32, /* SSSD */ I32, I32, I32, I32 | TMP | S1)                          \
+    OL4(OTSelectI64, /* SSSD */ I64, I64, I32, I64 | TMP | S1)                          \
+    OL4(OTSelectF32, /* SSSD */ F32, F32 | NOTMP, I32, F32 | TMP | S1)                  \
+    OL4(OTSelectF64, /* SSSD */ F64, F64 | NOTMP, I32, F64 | TMP | S1)                  \
+    OL4(OTSelectV128, /* SSSD */ V128, V128, I32, V128 | TMP | S1)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 
-#define OPERAND_TYPE_LIST_MATH(FUNC)                                              \
-    OL3(FUNC, OTOp2I64, /* SSD */ I64, I64, I64 | TMP | S0 | S1)                  \
-    OL3(FUNC, OTShiftI64, /* SSD */ I64, I64, I64 | TMP | S0)                     \
-    OL4(FUNC, OTMulI64, /* SSDT */ I64, I64, I64 | TMP | S0, I32 | S1)            \
-    OL3(FUNC, OTDivRemI64, /* SSD */ I64, I64, I64 | S0 | S1)                     \
-    OL2(FUNC, OTCountZeroesI64, /* SD */ I64, I64 | TMP | S0)                     \
-    OL5(FUNC, OTStoreI64Low, /* SSTTT */ I32, I64 | LOW, PTR, I32 | S0, PTR | S1) \
-    OL1(FUNC, OTGlobalGetI64, /* D */ I64_LOW)                                    \
-    OL2(FUNC, OTConvertInt32FromFloat32Callback, /* SD */ F32, I32)               \
-    OL2(FUNC, OTConvertInt32FromFloat64Callback, /* SD */ F64, I32)
+#define OPERAND_TYPE_LIST_MATH                                              \
+    OL3(OTOp2I64, /* SSD */ I64, I64, I64 | TMP | S0 | S1)                  \
+    OL3(OTShiftI64, /* SSD */ I64, I64, I64 | TMP | S0)                     \
+    OL4(OTMulI64, /* SSDT */ I64, I64, I64 | TMP | S0, I32 | S1)            \
+    OL3(OTDivRemI64, /* SSD */ I64, I64, I64 | S0 | S1)                     \
+    OL2(OTCountZeroesI64, /* SD */ I64, I64 | TMP | S0)                     \
+    OL5(OTStoreI64Low, /* SSTTT */ I32, I64 | LOW, PTR, I32 | S0, PTR | S1) \
+    OL1(OTGlobalGetI64, /* D */ I64_LOW)                                    \
+    OL2(OTConvertInt32FromFloat32Callback, /* SD */ F32, I32)               \
+    OL2(OTConvertInt32FromFloat64Callback, /* SD */ F64, I32)
 
 #else /* !SLJIT_32BIT_ARCHITECTURE */
 
-#define OPERAND_TYPE_LIST_MATH(FUNC)                                                      \
-    OL3(FUNC, OTOp2I64, /* SSD */ I64, I64, I64 | S0 | S1)                                \
-    OL1(FUNC, OTGlobalGetI64, /* D */ I64)                                                \
-    OL2(FUNC, OTConvertUnsignedInt32FromFloat32, /* SD */ F32 | TMP, I32 | TMP)           \
-    OL2(FUNC, OTConvertUnsignedInt32FromFloat64, /* SD */ F64 | TMP, I32 | TMP)           \
-    OL4(FUNC, OTConvertInt64FromFloat32, /* SDT */ F32 | NOTMP, I64 | TMP, F32 | S0, I64) \
-    OL4(FUNC, OTConvertInt64FromFloat64, /* SDT */ F64 | NOTMP, I64 | TMP, F64 | S0, I64) \
-    OL2(FUNC, OTSatConvertInt64FromFloat32, /* SD */ F32 | TMP, I64 | TMP)                \
-    OL2(FUNC, OTSatConvertInt64FromFloat64, /* SD */ F64 | TMP, I64 | TMP)
+#define OPERAND_TYPE_LIST_MATH                                                      \
+    OL3(OTOp2I64, /* SSD */ I64, I64, I64 | S0 | S1)                                \
+    OL1(OTGlobalGetI64, /* D */ I64)                                                \
+    OL2(OTConvertUnsignedInt32FromFloat32, /* SD */ F32 | TMP, I32 | TMP)           \
+    OL2(OTConvertUnsignedInt32FromFloat64, /* SD */ F64 | TMP, I32 | TMP)           \
+    OL4(OTConvertInt64FromFloat32, /* SDT */ F32 | NOTMP, I64 | TMP, F32 | S0, I64) \
+    OL4(OTConvertInt64FromFloat64, /* SDT */ F64 | NOTMP, I64 | TMP, F64 | S0, I64) \
+    OL2(OTSatConvertInt64FromFloat32, /* SD */ F32 | TMP, I64 | TMP)                \
+    OL2(OTSatConvertInt64FromFloat64, /* SD */ F64 | TMP, I64 | TMP)
 
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
 // Constructing read-only operand descriptors.
 
-#define OPERAND_LIST(name, o1, o2, o3, o4, o5, o6, o7) \
-    { (o1), (o2), (o3), (o4), (o5), (o6), (o7), 0 },
+// OL = Operand List
+#define OL1(name, o1) \
+    o1, 0,
+#define OL2(name, o1, o2) \
+    o1, o2, 0,
+#define OL3(name, o1, o2, o3) \
+    o1, o2, o3, 0,
+#define OL4(name, o1, o2, o3, o4) \
+    o1, o2, o3, o4, 0,
+#define OL5(name, o1, o2, o3, o4, o5) \
+    o1, o2, o3, o4, o5, 0,
 
-const Instruction::OperandDescriptorList Instruction::m_operandDescriptors[] = {
-    OPERAND_TYPE_LIST(OPERAND_LIST)
-        OPERAND_TYPE_LIST_MATH(OPERAND_LIST)
+const uint8_t Instruction::m_operandDescriptors[] = {
+    0,
+    OPERAND_TYPE_LIST
+        OPERAND_TYPE_LIST_MATH
 };
 
-#undef OPERAND_LIST
+#undef OL1
+#undef OL2
+#undef OL3
+#undef OL4
+#undef OL5
 
-#define OPERAND_TYPE_NAMES(name, o1, o2, o3, o4, o5, o6, o7) \
-    name,
+// Besides the list names, these macros define enum
+// types with ByteN suffix. These are unused.
+
+#define OL1(name, o1) \
+    name, name##Byte1,
+#define OL2(name, o1, o2) \
+    name, name##Byte1, name##Byte2,
+#define OL3(name, o1, o2, o3) \
+    name, name##Byte1, name##Byte2, name##Byte3,
+#define OL4(name, o1, o2, o3, o4) \
+    name, name##Byte1, name##Byte2, name##Byte3, name##Byte4,
+#define OL5(name, o1, o2, o3, o4, o5) \
+    name, name##Byte1, name##Byte2, name##Byte3, name##Byte4, name##Byte5,
 
 enum OperandTypes : uint32_t {
-    OPERAND_TYPE_LIST(OPERAND_TYPE_NAMES)
-        OPERAND_TYPE_LIST_MATH(OPERAND_TYPE_NAMES)
+    OTNone,
+    OPERAND_TYPE_LIST
+        OPERAND_TYPE_LIST_MATH
 };
 
-#undef OPERAND_TYPE_NAMES
+#undef OL1
+#undef OL2
+#undef OL3
+#undef OL4
+#undef OL5
 
 static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Module* module)
 {
