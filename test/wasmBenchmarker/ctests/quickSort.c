@@ -31,7 +31,7 @@
  * @param size the size of the array to be ordered
 */
 void quickSort(unsigned int* array, unsigned int size) {
-    if (size <= 1 || array == nullptr) {
+    if (size <= 1 || array == NULL) {
         return;
     }
     unsigned int* smallerOrEqual = (unsigned int*)allocateMemory(size * sizeof(unsigned int));

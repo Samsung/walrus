@@ -19,6 +19,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "include/memory.h"
+
 // DEFINITIONS
 
 typedef uint8_t byte;
@@ -64,53 +66,6 @@ char* message = "Lorem ipsum dolor sit amet, et wisi primis duo."
                 "dicunt assentior eu, mel ne case postulant, "
                 "quando feugiat voluptaria eam ne.\n";
 
-// MEMORY HANDLING DEFINITIONS
-
-#define nullptr ((void*)0)
-#define MEMORY_SIZE  6000 // in bytes
-#define RECORDS_SIZE 1000 // in pieces
-
-byte memory[MEMORY_SIZE];
-
-typedef struct {
-    byte* address;
-    size_t size;
-} memoryRecord;
-
-size_t memoryCurrentSize = 0;
-memoryRecord MemoryAllocationTable[RECORDS_SIZE];
-
-// bm = BenchMark (to avoid function name collision)
-
-/**
- * Allocate memory with uninitialised values.
- * @param size the size of the memory to be allocated
- * @return the address of the memory, or nullptr
-*/
-void* malloc_bm(size_t size);
-
-/**
- * Allocate memory and initialise its values with 0.
- * @param size the size of the memory to be allocated
- * @return the address of the memory, or nullptr
-*/
-void* calloc_bm(size_t size);
-
-/**
- * Resize the given allocated memory.
- * Its values will be identical to the values of the
- * original memory up to the lesser size.
- * @param ptr the pointer of the original memory
- * @param size the size of the new memory
- * @return the address of the new memory, or nullptr
-*/
-void* realloc_bm(void* ptr, size_t size);
-
-/**
- * Free the memory at the given address.
- * @param the address of the memory to be freed
-*/
-void free_bm(void* ptr);
 
 // HUFFMAN CODING DEFINITIONS
 
@@ -160,13 +115,13 @@ int main() {
 
 byte runtime() {
     for (size_t i = 0; i < ITERATIONS; i++) {
-        zip* encoded = nullptr;
+        zip* encoded = NULL;
         byte error;
         encodeHuffman((byte*)message, strlen(message) + 1, &encoded, &error);
         if (error == ERROR_OCCURED) {
             return 2;
         }
-        char* decoded = nullptr;
+        char* decoded = NULL;
         size_t decodedSize;
         decodeHuffman(encoded, (byte**)&decoded, &decodedSize, &error);
         if (error == ERROR_OCCURED) {
@@ -175,107 +130,23 @@ byte runtime() {
         if (strcmp(message, decoded) != 0) {
             return 1;
         }
-        free_bm(encoded->letterCodes);
-        free_bm(encoded->compressed);
-        free_bm(encoded);
-        free_bm(decoded);
+        freeMemory(encoded->letterCodes);
+        freeMemory(encoded->compressed);
+        freeMemory(encoded);
+        freeMemory(decoded);
     }
     return 0;
-}
-
-// MEMORY HANDLING DEFINITIONS
-
-void* malloc_bm(size_t size) {
-    if (size > MEMORY_SIZE || size == 0 || memoryCurrentSize == RECORDS_SIZE) {
-        return nullptr;
-    }
-    for (size_t i = 0; i <= MEMORY_SIZE - size; i++) {
-        bool collision = false;
-        for (size_t j = 0; j < memoryCurrentSize; j++) {
-            if (
-                    ((memory + i) <= MemoryAllocationTable[j].address && MemoryAllocationTable[j].address <= (memory + i + size - 1)) ||
-                    ((memory + i) <= (MemoryAllocationTable[j].address + MemoryAllocationTable[j].size - 1) && (MemoryAllocationTable[j].address + MemoryAllocationTable[j].size - 1) <= (memory + i + size - 1)) ||
-                    (MemoryAllocationTable[j].address <= (memory + i) && (memory + i + size - 1) <= (MemoryAllocationTable[j].address + MemoryAllocationTable[j].size - 1))
-               ) {
-                collision = true;
-                break;
-            }
-        }
-        if (collision == false) {
-            MemoryAllocationTable[memoryCurrentSize].address = memory + i;
-            MemoryAllocationTable[memoryCurrentSize].size = size;
-            memoryCurrentSize += 1;
-            return MemoryAllocationTable[memoryCurrentSize - 1].address;
-        }
-    }
-    return nullptr;
-}
-
-void* calloc_bm(size_t size) {
-    byte* ret = malloc_bm(size);
-    if (ret != nullptr) {
-        for (size_t i = 0; i < size; i++) {
-            ret[i] = 0;
-        }
-    }
-    return ret;
-}
-
-void* realloc_bm(void* ptr, size_t size) {
-    if (ptr != nullptr) {
-        size_t index = 0;
-        while (ptr != MemoryAllocationTable[index].address) {
-            index += 1;
-        }
-        if (size == 0) {
-            free_bm(MemoryAllocationTable[index].address);
-            return nullptr;
-        }
-        if (size <= MemoryAllocationTable[index].size) {
-            MemoryAllocationTable[index].size = size;
-            return MemoryAllocationTable[index].address;
-        }
-        void* new = malloc_bm(size);
-        if (new != nullptr) {
-            for (size_t i = 0; i < MemoryAllocationTable[index].size; i++) {
-                ((byte*)new)[i] = ((byte*)ptr)[i];
-            }
-        }
-        free_bm(ptr);
-        return new;
-    }
-    if (size == 0) {
-        return nullptr;
-    }
-    void* new = malloc_bm(size);
-    return new;
-}
-
-void free_bm(void* address) {
-    if (address == nullptr) {
-        return;
-    }
-    for (size_t i = 0; i < memoryCurrentSize; i++) {
-        if (MemoryAllocationTable[i].address == address) {
-            for (size_t j = i; j < memoryCurrentSize - 1; j++) {
-                MemoryAllocationTable[j].address = MemoryAllocationTable[j + 1].address;
-                MemoryAllocationTable[j].size = MemoryAllocationTable[j + 1].size;
-            }
-            memoryCurrentSize -= 1;
-            return;
-        }
-    }
 }
 
 struct element {
         struct element* left;   // less or equal
         struct element* right;  // greater
-        byte letter;            // use only if left and right are nullptr
-        size_t occurance;       // use only if left and right are nullptr
+        byte letter;            // use only if left and right are NULL
+        size_t occurance;       // use only if left and right are NULL
 };
 
 size_t getOccuranceSum(struct element* e) {
-    if (e->left == nullptr && e->right == nullptr) {
+    if (e->left == NULL && e->right == NULL) {
         return e->occurance;
     } else {
         return getOccuranceSum(e->left) + getOccuranceSum(e->right);
@@ -285,13 +156,13 @@ size_t getOccuranceSum(struct element* e) {
 void countLetters(byte* input, size_t inputLength, struct element** output, size_t* outputLength, byte* error) {
     *error = NO_ERROR;
     // 1st character
-    (*output) = (struct element*)malloc_bm(1 * sizeof(struct element));
-    if ((*output) == nullptr) {
+    (*output) = (struct element*)allocateMemory(1 * sizeof(struct element));
+    if ((*output) == NULL) {
         *error = ERROR_OCCURED;
         return;
     }
-    (*output)[0].left      = nullptr;
-    (*output)[0].right     = nullptr;
+    (*output)[0].left      = NULL;
+    (*output)[0].right     = NULL;
     (*output)[0].letter    = input[0];
     (*output)[0].occurance = 1;
     (*outputLength) = 1;
@@ -310,13 +181,13 @@ void countLetters(byte* input, size_t inputLength, struct element** output, size
             continue;
         }
         // If it's not in the list, then add it to the list.
-        (*output) = (struct element*)realloc_bm((*output), ((*outputLength) + 1) * sizeof(struct element));
-        if ((*output) == nullptr) {
+        (*output) = (struct element*)reallocateMemory((*output), ((*outputLength) + 1) * sizeof(struct element));
+        if ((*output) == NULL) {
             *error = ERROR_OCCURED;
             return;
         }
-        (*output)[(*outputLength)].left      = nullptr;
-        (*output)[(*outputLength)].right     = nullptr;
+        (*output)[(*outputLength)].left      = NULL;
+        (*output)[(*outputLength)].right     = NULL;
         (*output)[(*outputLength)].letter    = input[i];
         (*output)[(*outputLength)].occurance = 1;
         (*outputLength)++;
@@ -343,19 +214,19 @@ void orderElements(struct element* elements, size_t elementsSize) {
 void unifyLastTwo(struct element** elements, size_t* elementsSize, byte* error) {
     *error = NO_ERROR;
     struct element new;
-    new.left = (struct element*)malloc_bm(sizeof(struct element));
-    if (new.left == nullptr) {
+    new.left = (struct element*)allocateMemory(sizeof(struct element));
+    if (new.left == NULL) {
         *error = ERROR_OCCURED;
         return;
     }
-    new.right = (struct element*)malloc_bm(sizeof(struct element));
-    if (new.right == nullptr) {
+    new.right = (struct element*)allocateMemory(sizeof(struct element));
+    if (new.right == NULL) {
         *error = ERROR_OCCURED;
         return;
     }
     *(new.left)  = (*elements)[(*elementsSize) - 2];
     *(new.right) = (*elements)[(*elementsSize) - 1];
-    (*elements) = (struct element*)realloc_bm((*elements), ((*elementsSize) - 1) * sizeof(struct element));
+    (*elements) = (struct element*)reallocateMemory((*elements), ((*elementsSize) - 1) * sizeof(struct element));
     (*elementsSize)--;
     (*elements)[(*elementsSize) - 1] = new;
 }
@@ -371,7 +242,7 @@ uint32_t appendBit(uint32_t code, byte codeLength, byte newDigit, byte* error) {
 
 void elementsToCodeTable(struct element* e, zip* output, uint32_t code, byte codeLength, byte* error) {
     *error = NO_ERROR;
-    if (e->left == nullptr && e->right == nullptr) {
+    if (e->left == NULL && e->right == NULL) {
         (*output).letterCodes[(*output).letterCodesSize].letter = e->letter;
         (*output).letterCodes[(*output).letterCodesSize].code = code;
         (*output).letterCodes[(*output).letterCodesSize].codeLength = codeLength;
@@ -398,25 +269,25 @@ void elementsToCodeTable(struct element* e, zip* output, uint32_t code, byte cod
 }
 
 void deleteElement(struct element* e) {
-    if (e->left != nullptr) {
+    if (e->left != NULL) {
         deleteElement(e->left);
     }
-    if (e->right != nullptr) {
+    if (e->right != NULL) {
         deleteElement(e->right);
     }
-    free_bm(e);
+    freeMemory(e);
 }
 
 void createCodeTable(byte* input, size_t inputLength, zip** output, byte* error) {
     *error = NO_ERROR;
-    struct element* elements = nullptr;
+    struct element* elements = NULL;
     size_t elementsSize = 0;
     countLetters(input, inputLength, &elements, &elementsSize, error);
     if (*error == ERROR_OCCURED) {
         return;
     }
-    (*output)->letterCodes = (letterCode*)calloc_bm(elementsSize * sizeof(letterCode));
-    if ((*output)->letterCodes == nullptr) {
+    (*output)->letterCodes = (letterCode*)CAllocateMemory(elementsSize * sizeof(letterCode));
+    if ((*output)->letterCodes == NULL) {
         *error = ERROR_OCCURED;
         return;
     }
@@ -437,7 +308,7 @@ void createCodeTable(byte* input, size_t inputLength, zip** output, byte* error)
 
 void codeInput(byte* input, size_t inputLength, zip** output, byte* error) {
     *error = NO_ERROR;
-    (*output)->compressed = nullptr;
+    (*output)->compressed = NULL;
     (*output)->compressedSize = 0;
     for (size_t i = 0; i < inputLength; i++) {
         // Finding the current letter in the table
@@ -448,8 +319,8 @@ void codeInput(byte* input, size_t inputLength, zip** output, byte* error) {
         // Print each digit individually
         for (size_t k = 0; k < (*output)->letterCodes[j].codeLength; k++) {
             if ((*output)->compressedSize % 8 == 0) {
-                (*output)->compressed = (byte*)realloc_bm((*output)->compressed, ((*output)->compressedSize / 8) + 1);
-                if ((*output)->compressed == nullptr) {
+                (*output)->compressed = (byte*)reallocateMemory((*output)->compressed, ((*output)->compressedSize / 8) + 1);
+                if ((*output)->compressed == NULL) {
                     *error = ERROR_OCCURED;
                     return;
                 }
@@ -465,12 +336,12 @@ void codeInput(byte* input, size_t inputLength, zip** output, byte* error) {
 
 void encodeHuffman(byte* input, size_t inputLength, zip** output, byte* error) {
     *error = NO_ERROR;
-    if (input == nullptr || inputLength == 0) {
-        (*output) = nullptr;
+    if (input == NULL || inputLength == 0) {
+        (*output) = NULL;
         return;
     }
-    (*output) = (zip*)calloc_bm(sizeof(zip));
-    if ((*output) == nullptr) {
+    (*output) = (zip*)CAllocateMemory(sizeof(zip));
+    if ((*output) == NULL) {
         *error = ERROR_OCCURED;
         return;
     }
@@ -484,10 +355,10 @@ void encodeHuffman(byte* input, size_t inputLength, zip** output, byte* error) {
 void decodeHuffman(zip* coded, byte** output, size_t* outputLength, byte* error) {
     *error = NO_ERROR;
     // Early Return
-    if (coded == nullptr) {
+    if (coded == NULL) {
         return;
     }
-    (*output) = nullptr;
+    (*output) = NULL;
     (*outputLength) = 0;
     for (size_t i = 0; i < coded->compressedSize; i++) {
         static uint32_t word = 0;
@@ -501,8 +372,8 @@ void decodeHuffman(zip* coded, byte** output, size_t* outputLength, byte* error)
         for (size_t j = 0; j < coded->letterCodesSize; j++) {
             if (coded->letterCodes[j].code == word && coded->letterCodes[j].codeLength == wordLength) {
                 // add letter
-                (*output) = realloc_bm((*output), (*outputLength) + 1);
-                if ((*output) == nullptr) {
+                (*output) = reallocateMemory((*output), (*outputLength) + 1);
+                if ((*output) == NULL) {
                     *error = ERROR_OCCURED;
                     return;
                 }
