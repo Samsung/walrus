@@ -45,8 +45,7 @@ struct ParseOptions {
     std::vector<std::pair<std::string, std::string>> wasi_dirs;
 };
 
-static bool s_useJIT = false;
-static int s_jitVerbose = 0;
+static uint32_t s_JITFlags = 0;
 
 using namespace Walrus;
 
@@ -121,7 +120,7 @@ static void printF64(double v)
 static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_useJIT, s_jitVerbose);
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags);
     if (!parseResult.second.empty()) {
         Trap::TrapResult tr;
         tr.exception = Exception::create(parseResult.second);
@@ -923,7 +922,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
 
 static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun, DefinedFunctionTypes& functionTypes)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_useJIT, s_jitVerbose);
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags);
     if (!parseResult.second.empty()) {
         fprintf(stderr, "parse error: %s\n", parseResult.second.c_str());
         return;
@@ -1030,15 +1029,25 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
                     options.exportToRun = argv[i];
                     continue;
                 } else if (strcmp(argv[i], "--jit") == 0) {
-                    s_useJIT = true;
+                    s_JITFlags |= JITFlagValue::useJIT;
                     continue;
                 } else if (strcmp(argv[i], "--jit-verbose") == 0) {
-                    s_jitVerbose = 1;
+                    s_JITFlags |= JITFlagValue::JITVerbose;
                     continue;
                 } else if (strcmp(argv[i], "--jit-verbose-color") == 0) {
-                    s_jitVerbose = 2;
+                    s_JITFlags |= JITFlagValue::JITVerboseColor;
                     continue;
-                } else if (strcmp(argv[i], "--env") == 0) {
+                } else if (strcmp(argv[i], "--perf") == 0) {
+#ifdef WALRUS_JITPERF
+                    s_JITFlags |= JITFlagValue::enableJITDump;
+#else
+                    fprintf(stderr, "error: --perf is not supported in this build\n");
+                    exit(1);
+#endif
+                    continue;
+                }
+
+                else if (strcmp(argv[i], "--env") == 0) {
                     if (i + 1 == argc || argv[i + 1][0] == '-') {
                         fprintf(stderr, "error: --env requires an argument\n");
                         exit(1);
@@ -1062,6 +1071,9 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
                     fprintf(stdout, "\t--jit\n\t\tEnable just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose\n\t\tEnable verbose output for just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose-color\n\t\tEnable colored verbose output for just-in-time interpretation.\n\n");
+#ifdef WALRUS_JITPERF
+                    fprintf(stdout, "\t--perf\n\t\tEnable JITDump for Perf tool.\n\n");
+#endif
                     fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
                     fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
                     exit(0);

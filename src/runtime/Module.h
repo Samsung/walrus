@@ -34,6 +34,13 @@ class JITModule;
 
 struct WASMParsingResult;
 
+enum JITFlagValue : uint32_t {
+    useJIT = 1 << 0,
+    JITVerbose = 1 << 1,
+    JITVerboseColor = 1 << 2,
+    enableJITDump = 1 << 3
+};
+
 enum class SegmentMode {
     None,
     Active,
@@ -439,7 +446,7 @@ public:
     Instance* instantiate(ExecutionState& state, const ExternVector& imports);
 
     /* Passing 0 as functionsLength compiles all functions. */
-    void jitCompile(ModuleFunction** functions, size_t functionsLength, int verboseLevel);
+    void jitCompile(ModuleFunction** functions, size_t functionsLength, uint32_t JITFlags);
 
 private:
     Store* m_store;

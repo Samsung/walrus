@@ -255,7 +255,7 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
 
 void JITCompiler::dump()
 {
-    bool enableColors = (verboseLevel() >= 2);
+    bool enableColors = (JITFlags() & JITFlagValue::JITVerboseColor);
     int counter = 0;
 
     static const char* byteCodeName[] = {

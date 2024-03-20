@@ -628,7 +628,7 @@ class JITCompiler {
 public:
     static const uint32_t kHasCondMov = 1 << 0;
 
-    JITCompiler(Module* module, int verboseLevel);
+    JITCompiler(Module* module, uint32_t JITFlags);
 
     ~JITCompiler()
     {
@@ -637,8 +637,8 @@ public:
     }
 
     Module* module() { return m_module; }
-    ModuleFunction* moduleFunction() { return m_moduleFunction; };
-    int verboseLevel() { return m_verboseLevel; }
+    ModuleFunction* moduleFunction() { return m_moduleFunction; }
+    uint32_t JITFlags() { return m_JITFlags; }
     uint32_t options() { return m_options; }
     InstructionListItem* first() { return m_first; }
     InstructionListItem* last() { return m_last; }
@@ -711,7 +711,7 @@ private:
     size_t m_tryBlockStart;
     // Start inside the instance const data.
     size_t m_tryBlockOffset;
-    int m_verboseLevel;
+    uint32_t m_JITFlags;
     uint32_t m_options;
 
     std::vector<TryBlock> m_tryBlocks;
