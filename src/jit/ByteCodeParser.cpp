@@ -1900,7 +1900,7 @@ static void compileFunction(JITCompiler* compiler)
 
     compiler->buildVariables(STACK_OFFSET(function->requiredStackSize()));
 
-    if (compiler->verboseLevel() >= 1) {
+    if (compiler->JITFlags() & JITFlagValue::JITVerbose) {
         compiler->dump();
     }
 
@@ -1912,16 +1912,16 @@ static void compileFunction(JITCompiler* compiler)
     compiler->compileFunction(jitFunc, true);
 }
 
-void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int verboseLevel)
+void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, uint32_t JITFlags)
 {
-    JITCompiler compiler(this, verboseLevel);
+    JITCompiler compiler(this, JITFlags);
 
     if (functionsLength == 0) {
         size_t functionCount = m_functions.size();
 
         for (size_t i = 0; i < functionCount; i++) {
             if (m_functions[i]->jitFunction() == nullptr) {
-                if (verboseLevel >= 1) {
+                if (JITFlags & JITFlagValue::JITVerbose) {
                     printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(i));
                 }
 
@@ -1932,7 +1932,7 @@ void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int 
     } else {
         do {
             if ((*functions)->jitFunction() == nullptr) {
-                if (verboseLevel >= 1) {
+                if (JITFlags & JITFlagValue::JITVerbose) {
                     printf("[[[[[[[  Function %p  ]]]]]]]\n", *functions);
                 }
 

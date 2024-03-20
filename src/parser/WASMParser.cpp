@@ -2586,7 +2586,7 @@ void WASMParsingResult::clear()
     }
 }
 
-std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len, const bool useJIT, const int jitVerbose)
+std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len, const uint32_t JITFlags)
 {
     wabt::WASMBinaryReader delegate;
 
@@ -2596,8 +2596,8 @@ std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, 
     }
 
     Module* module = new Module(store, delegate.parsingResult());
-    if (useJIT) {
-        module->jitCompile(nullptr, 0, jitVerbose);
+    if (JITFlags & JITFlagValue::useJIT) {
+        module->jitCompile(nullptr, 0, JITFlags);
     }
 
     return std::make_pair(module, std::string());
