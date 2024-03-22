@@ -20,9 +20,93 @@
 #include "runtime/Store.h"
 #include "runtime/Module.h"
 
+#include "runtime/Value.h"
 #include "wabt/walrus/binary-reader-walrus.h"
+#include <cstdint>
+#include <vector>
 
 namespace wabt {
+
+bool isWalrusBinaryOperation(Walrus::ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+#define GENERATE_BINARY_CODE_CASE(name, ...) \
+    case Walrus::ByteCode::name##Opcode:
+        FOR_EACH_BYTECODE_BINARY_OP(GENERATE_BINARY_CODE_CASE)
+        FOR_EACH_BYTECODE_SIMD_BINARY_OP(GENERATE_BINARY_CODE_CASE)
+        FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(GENERATE_BINARY_CODE_CASE)
+        FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(GENERATE_BINARY_CODE_CASE)
+#undef GENERATE_BINARY_CODE_CASE
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWalrusUnaryOperation(Walrus::ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+#define GENERATE_UNARY_CODE_CASE(name, ...) \
+    case Walrus::ByteCode::name##Opcode:
+        FOR_EACH_BYTECODE_UNARY_OP(GENERATE_UNARY_CODE_CASE)
+        FOR_EACH_BYTECODE_UNARY_OP_2(GENERATE_UNARY_CODE_CASE)
+        FOR_EACH_BYTECODE_SIMD_UNARY_OP(GENERATE_UNARY_CODE_CASE)
+        FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(GENERATE_UNARY_CODE_CASE)
+        FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
+#undef GENERATE_UNARY_CODE_CASE
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWalrusLoadOperation(Walrus::ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+    case Walrus::ByteCode::Load32Opcode:
+    case Walrus::ByteCode::Load64Opcode:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWalrusMemoryLoad(Walrus::ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+#define GENERATE_MEMORY_LOAD_CODE_CASE(name, ...) \
+    case Walrus::ByteCode::name##Opcode:
+        FOR_EACH_BYTECODE_LOAD_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
+#undef GENERATE_MEMORY_LOAD_CODE_CASE
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWalrusStoreOperation(Walrus::ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+    case Walrus::ByteCode::Store32Opcode:
+    case Walrus::ByteCode::Store64Opcode:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isWalrusMemoryStore(Walrus::ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+#define GENERATE_MEMORY_STORE_CODE_CASE(name, ...) \
+    case Walrus::ByteCode::name##Opcode:
+        FOR_EACH_BYTECODE_STORE_OP(GENERATE_MEMORY_STORE_CODE_CASE)
+#undef GENERATE_MEMORY_STORE_CODE_CASE
+        return true;
+    default:
+        return false;
+    }
+}
 
 enum class WASMOpcode : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
@@ -1023,10 +1107,13 @@ public:
 #ifndef WALRUS_ENABLE_LOCAL_VARIABLE_PACKING_MIN_SIZE
 #define WALRUS_ENABLE_LOCAL_VARIABLE_PACKING_MIN_SIZE 64
 #endif
+
         // pack local variables if needs
         constexpr size_t enableLocalVaraiblePackingMinSize = WALRUS_ENABLE_LOCAL_VARIABLE_PACKING_MIN_SIZE;
+
         if (m_initialFunctionStackSize >= enableLocalVaraiblePackingMinSize) {
             m_initialFunctionStackSize = m_currentFunctionType->paramStackSize();
+
             // put already aligned variables first
             for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
                 auto& info = m_localInfo[i];
@@ -1064,6 +1151,7 @@ public:
             }
         }
 #endif
+
 
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
         m_currentFunction->m_requiredStackSize = m_functionStackSizeSoFar;
@@ -2196,10 +2284,548 @@ public:
             }
         } else {
             generateEndCode(true);
+
+            // változó életciklus dump is legyen
+
+            if (!m_preprocessData.m_inPreprocess && m_currentFunctionType->param().size() != m_localInfo.size()) {
+                //   variable life analysis start
+
+                // variableRange & blocks stuct pair helyet
+
+                std::vector<std::pair<Walrus::ByteCodeStackOffset, Walrus::ByteCodeStackOffset>> variableRange;
+                std::vector<std::pair<Walrus::ByteCodeStackOffset, Walrus::ByteCodeStackOffset>> blocks;
+                std::vector<Walrus::End*> ends; // szükséges? + throw + call, callindirect
+
+                variableRange.reserve(m_localInfo.size());
+
+                for (unsigned i = 0; i < variableRange.capacity(); i++) {
+                    if (i < m_currentFunctionType->param().size()) {
+                        variableRange.push_back({ 0, UINT16_MAX });
+                    } else {
+                        variableRange.push_back({ UINT16_MAX, 0 });
+                    }
+                }
+
+                Walrus::ByteCodeStackOffset offset = 0;
+                for (size_t i = 0; i < m_currentFunction->currentByteCodeSize();) {
+                    Walrus::ByteCode* byteCode = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(m_currentFunction->byteCode() + i));
+
+                    // switch?
+
+                    // tömbre átírni
+                    int32_t jumpOffset = INT32_MAX;
+                    Walrus::ByteCodeStackOffset opOffset = UINT16_MAX;
+                    Walrus::ByteCodeStackOffset srcOffset1 = UINT16_MAX;
+                    Walrus::ByteCodeStackOffset srcOffset2 = UINT16_MAX;
+                    if (isWalrusBinaryOperation(byteCode->opcode())) {
+                        opOffset = reinterpret_cast<Walrus::BinaryOperation*>(byteCode)->dstOffset();
+                        srcOffset1 = reinterpret_cast<Walrus::BinaryOperation*>(byteCode)->srcOffset()[0];
+                        srcOffset2 = reinterpret_cast<Walrus::BinaryOperation*>(byteCode)->srcOffset()[1];
+                    } else if (isWalrusUnaryOperation(byteCode->opcode())) {
+                        opOffset = reinterpret_cast<Walrus::UnaryOperation*>(byteCode)->dstOffset();
+                        srcOffset1 = reinterpret_cast<Walrus::UnaryOperation*>(byteCode)->srcOffset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::Move32Opcode
+                               || byteCode->opcode() == Walrus::ByteCode::Move64Opcode
+                               || byteCode->opcode() == Walrus::ByteCode::Move128Opcode) {
+                        opOffset = reinterpret_cast<Walrus::Move32*>(byteCode)->dstOffset();
+                        srcOffset1 = reinterpret_cast<Walrus::Move32*>(byteCode)->srcOffset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::GlobalGet32Opcode
+                               || byteCode->opcode() == Walrus::ByteCode::GlobalGet64Opcode
+                               || byteCode->opcode() == Walrus::ByteCode::GlobalGet128Opcode) {
+                        opOffset = reinterpret_cast<Walrus::GlobalGet32*>(byteCode)->dstOffset();
+                    } else if (isWalrusLoadOperation(byteCode->opcode())) {
+                        opOffset = reinterpret_cast<Walrus::Load32*>(byteCode)->dstOffset();
+                        srcOffset1 = reinterpret_cast<Walrus::Load32*>(byteCode)->srcOffset();
+                    } else if (isWalrusStoreOperation(byteCode->opcode())) {
+                        srcOffset1 = reinterpret_cast<Walrus::Store32*>(byteCode)->src0Offset();
+                        srcOffset2 = reinterpret_cast<Walrus::Store32*>(byteCode)->src1Offset();
+                    } else if (isWalrusMemoryLoad(byteCode->opcode())) {
+                        opOffset = reinterpret_cast<Walrus::MemoryLoad*>(byteCode)->dstOffset();
+                        srcOffset1 = reinterpret_cast<Walrus::MemoryLoad*>(byteCode)->srcOffset();
+                    } else if (isWalrusMemoryStore(byteCode->opcode())) {
+                        srcOffset1 = reinterpret_cast<Walrus::MemoryStore*>(byteCode)->src0Offset();
+                        srcOffset2 = reinterpret_cast<Walrus::MemoryStore*>(byteCode)->src1Offset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::SelectOpcode) {
+                        opOffset = reinterpret_cast<Walrus::Select*>(byteCode)->dstOffset();
+                        srcOffset1 = reinterpret_cast<Walrus::Select*>(byteCode)->src0Offset();
+                        srcOffset2 = reinterpret_cast<Walrus::Select*>(byteCode)->src1Offset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::JumpOpcode) {
+                        jumpOffset = reinterpret_cast<Walrus::Jump*>(byteCode)->offset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::JumpIfTrueOpcode
+                               || byteCode->opcode() == Walrus::ByteCode::JumpIfFalseOpcode) {
+                        jumpOffset = reinterpret_cast<Walrus::JumpIfFalse*>(byteCode)->offset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::EndOpcode) {
+                        ends.push_back(reinterpret_cast<Walrus::End*>(byteCode));
+                    } else {
+                        i += byteCode->getSize();
+                        continue;
+                    }
+
+                    for (size_t j = 0; j < m_localInfo.size(); j++) {
+                        if (opOffset == UINT16_MAX && srcOffset1 == UINT16_MAX && srcOffset1 == UINT16_MAX) {
+                            break;
+                        }
+
+                        if (variableRange[j].second == UINT16_MAX) {
+                            continue;
+                        }
+                        if (m_localInfo[j].m_position == opOffset
+                            || m_localInfo[j].m_position == srcOffset1
+                            || m_localInfo[j].m_position == srcOffset2) {
+                            if (variableRange[j].first > i) {
+                                variableRange[j].first = i;
+                            }
+                            // if nem szükséges
+                            if (variableRange[j].second < i) {
+                                variableRange[j].second = i;
+                            }
+                        }
+                    }
+
+                    // érdemes lehet előre hozni, az end nem biztos hogy kell
+                    for (size_t j = 0; j < m_localInfo.size(); j++) {
+                        for (auto& end : ends) {
+                            for (size_t count = 0; count < end->offsetsSize(); count++) {
+                                if (m_localInfo[j].m_position == end->resultOffsets()[count]) {
+                                    if (variableRange[j].first > i) {
+                                        variableRange[j].first = i;
+                                    }
+                                    if (variableRange[j].second < i) {
+                                        variableRange[j].second = i;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // br table is lehet kell ide
+                    // jumpoffset >= 0-ra ki lehet cserélni
+                    if (jumpOffset != INT32_MAX) {
+                        blocks.push_back(
+                            std::pair<Walrus::ByteCodeStackOffset,
+                                      Walrus::ByteCodeStackOffset>(
+                                std::min(i + byteCode->getSize(), i + byteCode->getSize() + jumpOffset),
+                                std::max(i + byteCode->getSize(), i + byteCode->getSize() + jumpOffset)));
+                    }
+
+                    i += byteCode->getSize();
+                }
+
+                std::sort(blocks.begin(), blocks.end(), [](const std::pair<int, int>& left, const std::pair<int, int>& right) {
+                    return left.first < right.first;
+                });
+
+                // forward és backward blockok külön kezelése
+                // az életciklust már nem csak előre hanem hátra is ki kell terjeszteni !
+                // multimapra cserélni a blocks-ot [position, target] elemekkel
+                for (auto& elem : variableRange) {
+                    for (size_t i = elem.second; i < m_currentFunction->currentByteCodeSize();) {
+                        Walrus::ByteCode* byteCode = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(m_currentFunction->byteCode() + i));
+
+                        bool skip = false;
+                        for (auto& block : blocks) {
+                            if (block.first == i) {
+                                if (elem.second < block.second) {
+                                    elem.second = block.second;
+                                    skip = true;
+                                }
+                            }
+                        }
+
+                        i -= byteCode->getSize();
+                        if (skip) {
+                            i = m_currentFunction->currentByteCodeSize();
+                        }
+                    }
+                }
+
+                unsigned overlapping32 = 0;
+                unsigned overlapping64 = 0;
+                unsigned overlapping128 = 0;
+
+                std::vector<unsigned> containingLives(variableRange.size());
+                for (auto& num : containingLives) {
+                    num = 1;
+                }
+
+                for (size_t j = 0; j < variableRange.size(); j++) {
+                    for (size_t k = 0; k < variableRange.size(); k++) {
+                        if (variableRange[j] == variableRange[k] || m_localInfo[j].m_valueType != m_localInfo[k].m_valueType) {
+                            continue;
+                        }
+                        if ((variableRange[j].first < variableRange[k].first && variableRange[j].second >= variableRange[k].second)
+                            || (variableRange[j].first < variableRange[k].first && variableRange[j].second <= variableRange[k].second)) {
+                            containingLives[j]++;
+                        }
+                    }
+                }
+
+                for (size_t j = m_currentFunctionType->param().size(); j < containingLives.capacity(); j++) {
+                    switch (m_localInfo[j].m_valueType) {
+                    case Walrus::Value::I32:
+                    case Walrus::Value::F32: {
+                        if (overlapping32 < containingLives[j]) {
+                            overlapping32 = containingLives[j];
+                        }
+                        break;
+                    }
+                    case Walrus::Value::F64:
+                    case Walrus::Value::I64: {
+                        if (overlapping64 < containingLives[j]) {
+                            overlapping64 = containingLives[j];
+                        }
+                        break;
+                    }
+                    case Walrus::Value::V128: {
+                        if (overlapping128 < containingLives[j]) {
+                            overlapping128 = containingLives[j];
+                        }
+                        break;
+                    }
+
+                    default:
+                        break;
+                    }
+                }
+
+                unsigned numberOf32 = 0;
+                unsigned numberOf64 = 0;
+                unsigned numberOf128 = 0;
+                for (size_t j = m_currentFunctionType->param().size(); j < m_localInfo.size(); j++) {
+                    switch (m_localInfo[j].m_valueType) {
+                    case Walrus::Value::F32:
+                    case Walrus::Value::I32: {
+                        numberOf32++;
+                        break;
+                    }
+                    case Walrus::Value::F64:
+                    case Walrus::Value::I64: {
+                        numberOf64++;
+                        break;
+                    }
+                    case Walrus::Value::V128: {
+                        numberOf128++;
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+                }
+
+                struct variableInfo {
+                    Walrus::Value::Type type;
+                    Walrus::ByteCodeStackOffset pos;
+                    Walrus::ByteCodeStackOffset originalPos;
+                    Walrus::ByteCodeStackOffset end;
+                    bool free;
+                };
+
+                for (auto& param : m_currentFunctionType->param()) {
+                    offset += Walrus::valueStackAllocatedSize(param);
+                }
+
+                Walrus::Vector<variableInfo> infos;
+                for (int i = overlapping32 > 0 ? overlapping32 : numberOf32; i > 0; i--) {
+                    variableInfo var;
+                    var.free = true;
+                    var.type = Walrus::Value::I32;
+                    var.pos = offset;
+                    var.originalPos = UINT16_MAX - 1;
+                    infos.push_back(var);
+                    offset += 4; // Walrus::valueStackAllocatedSize(Walrus::Value::I32);
+                }
+
+                for (int i = overlapping64 > 0 ? overlapping64 : numberOf64; i > 0; i--) {
+                    variableInfo var;
+                    var.free = true;
+                    var.type = Walrus::Value::I64;
+                    var.pos = offset;
+                    var.originalPos = UINT16_MAX - 1;
+                    infos.push_back(var);
+                    offset += Walrus::valueStackAllocatedSize(Walrus::Value::I64);
+                }
+
+                for (int i = overlapping128 > 0 ? overlapping128 : numberOf128; i > 0; i--) {
+                    variableInfo var;
+                    var.free = true;
+                    var.type = Walrus::Value::V128;
+                    var.pos = offset;
+                    var.originalPos = UINT16_MAX - 1;
+                    infos.push_back(var);
+                    offset += Walrus::valueStackAllocatedSize(Walrus::Value::V128);
+                }
+
+                for (size_t i = 0; i < m_currentFunction->currentByteCodeSize();) {
+                    Walrus::ByteCode* byteCode = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(m_currentFunction->byteCode() + i));
+
+                    for (auto& info : infos) {
+                        if (info.end < i && !info.free) {
+                            info.free = true;
+                            info.end = 0;
+                        }
+                    }
+
+                    Walrus::ByteCodeStackOffset offsets[] = { UINT16_MAX, UINT16_MAX, UINT16_MAX, UINT16_MAX };
+                    if (byteCode->opcode() == Walrus::ByteCode::Move32Opcode
+                        || byteCode->opcode() == Walrus::ByteCode::Move64Opcode
+                        || byteCode->opcode() == Walrus::ByteCode::Move128Opcode) {
+                        Walrus::Move32* move = reinterpret_cast<Walrus::Move32*>(byteCode);
+                        offsets[0] = move->dstOffset();
+                        offsets[1] = move->srcOffset();
+                    } else if (isWalrusBinaryOperation(byteCode->opcode())) {
+                        Walrus::BinaryOperation* binOp = reinterpret_cast<Walrus::BinaryOperation*>(byteCode);
+                        offsets[0] = binOp->dstOffset();
+                        offsets[1] = binOp->srcOffset()[0];
+                        offsets[2] = binOp->srcOffset()[1];
+                    } else if (isWalrusUnaryOperation(byteCode->opcode())) {
+                        Walrus::UnaryOperation* unOp = reinterpret_cast<Walrus::UnaryOperation*>(byteCode);
+                        offsets[0] = unOp->dstOffset();
+                        offsets[1] = unOp->srcOffset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::GlobalGet32Opcode
+                               || byteCode->opcode() == Walrus::ByteCode::GlobalGet64Opcode
+                               || byteCode->opcode() == Walrus::ByteCode::GlobalGet128Opcode) {
+                        Walrus::GlobalGet32* get = reinterpret_cast<Walrus::GlobalGet32*>(byteCode);
+                        offsets[0] = get->dstOffset();
+                    } else if (isWalrusLoadOperation(byteCode->opcode())) {
+                        Walrus::Load32* load = reinterpret_cast<Walrus::Load32*>(byteCode);
+                        offsets[0] = load->dstOffset();
+                        offsets[1] = load->srcOffset();
+                    } else if (isWalrusMemoryLoad(byteCode->opcode())) {
+                        Walrus::MemoryLoad* load = reinterpret_cast<Walrus::MemoryLoad*>(byteCode);
+                        offsets[0] = load->dstOffset();
+                        offsets[1] = load->srcOffset();
+                    } else if (isWalrusStoreOperation(byteCode->opcode())) {
+                        Walrus::Store32* store = reinterpret_cast<Walrus::Store32*>(byteCode);
+                        offsets[1] = store->src0Offset();
+                        offsets[2] = store->src1Offset();
+                    } else if (isWalrusMemoryStore(byteCode->opcode())) {
+                        Walrus::MemoryStore* store = reinterpret_cast<Walrus::MemoryStore*>(byteCode);
+                        offsets[1] = store->src0Offset();
+                        offsets[2] = store->src1Offset();
+                    } else if (byteCode->opcode() == Walrus::ByteCode::SelectOpcode) {
+                        Walrus::Select* select = reinterpret_cast<Walrus::Select*>(byteCode);
+                        offsets[0] = select->dstOffset();
+                        offsets[1] = select->src0Offset();
+                        offsets[2] = select->src1Offset();
+                        offsets[3] = select->condOffset();
+                    }
+
+                    if (offsets[0] == UINT16_MAX && offsets[1] == UINT16_MAX && offsets[2] == UINT16_MAX) {
+                        i += byteCode->getSize();
+                        continue;
+                    }
+
+                    for (size_t i = 0; i < m_currentFunctionType->param().size(); i++) {
+                        for (size_t j = 0; j < 3; j++) {
+                            if (m_localInfo[i].m_position == offsets[j]) {
+                                offsets[j] = UINT16_MAX;
+                            }
+                        }
+                    }
+
+
+                    bool isDstLocal = false;
+                    bool isSrc1Local = false;
+                    bool isSrc2Local = false;
+                    for (size_t j = m_currentFunctionType->param().size(); j < m_localInfo.size(); j++) {
+                        if (offsets[0] == m_localInfo[j].m_position) {
+                            isDstLocal = true;
+                        }
+                        if (offsets[1] == m_localInfo[j].m_position) {
+                            isSrc1Local = true;
+                        }
+                        if (offsets[2] == m_localInfo[j].m_position) {
+                            isSrc2Local = true;
+                        }
+                    }
+
+                    if (!isDstLocal && !isSrc1Local && !isSrc2Local) {
+                        i += byteCode->getSize();
+                        continue;
+                    }
+
+                    if (!isDstLocal) {
+                        offsets[0] = UINT16_MAX;
+                    }
+                    if (!isSrc1Local) {
+                        offsets[1] = UINT16_MAX;
+                    }
+                    if (!isSrc2Local) {
+                        offsets[2] = UINT16_MAX;
+                    }
+
+
+                    for (auto& range : variableRange) {
+                        if (range.first <= i && range.second >= i) {
+                            bool skip = false;
+                            for (auto& offset : offsets) {
+                                if (offset == UINT16_MAX) {
+                                    continue;
+                                }
+
+                                for (auto& info : infos) {
+                                    if (info.originalPos == offset && !info.free) {
+                                        skip = true;
+                                        if (range.second > info.end) {
+                                            info.end = range.second;
+                                        }
+                                    }
+                                }
+
+                                Walrus::Value::Type type = Walrus::Value::Void;
+                                for (auto& info : m_localInfo) {
+                                    if (info.m_position == offset) {
+                                        type = info.m_valueType;
+                                    }
+                                }
+
+                                for (size_t k = 0; k < infos.size() && !skip; k++) {
+                                    if (infos[k].free && offset != UINT16_MAX && infos[k].type == type) {
+                                        infos[k].free = false;
+                                        infos[k].originalPos = offset;
+                                        infos[k].end = range.second;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    for (size_t j = 0; j < infos.size(); j++) {
+                        if (infos[j].originalPos == offsets[0] && offsets[0] != UINT16_MAX) {
+                            if (byteCode->opcode() == Walrus::ByteCode::Move32Opcode
+                                || byteCode->opcode() == Walrus::ByteCode::Move64Opcode
+                                || byteCode->opcode() == Walrus::ByteCode::Move128Opcode) {
+                                Walrus::Move32* move = reinterpret_cast<Walrus::Move32*>(byteCode);
+                                move->setDstOffset(infos[j].pos);
+                            } else if (byteCode->opcode() == Walrus::ByteCode::GlobalGet32Opcode
+                                       || byteCode->opcode() == Walrus::ByteCode::GlobalGet64Opcode
+                                       || byteCode->opcode() == Walrus::ByteCode::GlobalGet128Opcode) {
+                                Walrus::GlobalGet32* get = reinterpret_cast<Walrus::GlobalGet32*>(byteCode);
+                                get->setDstOffset(infos[j].pos);
+                            } else if (isWalrusBinaryOperation(byteCode->opcode())) {
+                                Walrus::BinaryOperation* binOp = reinterpret_cast<Walrus::BinaryOperation*>(byteCode);
+                                binOp->setDstOffset(infos[j].pos);
+                            } else if (isWalrusUnaryOperation(byteCode->opcode())) {
+                                Walrus::UnaryOperation* unOp = reinterpret_cast<Walrus::UnaryOperation*>(byteCode);
+                                unOp->setDstOffset(infos[j].pos);
+                            } else if (isWalrusLoadOperation(byteCode->opcode())) {
+                                Walrus::Load32* load = reinterpret_cast<Walrus::Load32*>(byteCode);
+                                load->setDstOffset(infos[j].pos);
+                            } else if (isWalrusMemoryLoad(byteCode->opcode())) {
+                                Walrus::MemoryLoad* load = reinterpret_cast<Walrus::MemoryLoad*>(byteCode);
+                                load->setDstOffset(infos[j].pos);
+                            } else if (Walrus::Select* select = reinterpret_cast<Walrus::Select*>(byteCode)) {
+                                select->setDstOffset(infos[j].pos);
+                            }
+                        }
+
+                        if (infos[j].originalPos == offsets[1] && offsets[1] != UINT16_MAX) {
+                            if (byteCode->opcode() == Walrus::ByteCode::Move32Opcode
+                                || byteCode->opcode() == Walrus::ByteCode::Move64Opcode
+                                || byteCode->opcode() == Walrus::ByteCode::Move128Opcode) {
+                                Walrus::Move32* move = reinterpret_cast<Walrus::Move32*>(byteCode);
+                                move->setSrcOffset(infos[j].pos);
+                            } else if (isWalrusBinaryOperation(byteCode->opcode())) {
+                                Walrus::BinaryOperation* binOp = reinterpret_cast<Walrus::BinaryOperation*>(byteCode);
+                                binOp->setSrcOffset(infos[j].pos, 0);
+                            } else if (isWalrusUnaryOperation(byteCode->opcode())) {
+                                Walrus::UnaryOperation* unOp = reinterpret_cast<Walrus::UnaryOperation*>(byteCode);
+                                unOp->setSrcOffset(infos[j].pos);
+                            } else if (isWalrusLoadOperation(byteCode->opcode())) {
+                                Walrus::Load32* load = reinterpret_cast<Walrus::Load32*>(byteCode);
+                                load->setSrcOffset(infos[j].pos);
+                            } else if (isWalrusStoreOperation(byteCode->opcode())) {
+                                Walrus::Store32* store = reinterpret_cast<Walrus::Store32*>(byteCode);
+                                store->setSrc0Offset(infos[j].pos);
+                            } else if (isWalrusMemoryLoad(byteCode->opcode())) {
+                                Walrus::MemoryLoad* load = reinterpret_cast<Walrus::MemoryLoad*>(byteCode);
+                                load->setSrcOffset(infos[j].pos);
+                            } else if (isWalrusMemoryStore(byteCode->opcode())) {
+                                Walrus::MemoryStore* store = reinterpret_cast<Walrus::MemoryStore*>(byteCode);
+                                store->setSrc0Offset(infos[j].pos);
+                            } else if (Walrus::Select* select = reinterpret_cast<Walrus::Select*>(byteCode)) {
+                                select->setSrc0Offset(infos[j].pos);
+                            }
+                        }
+
+                        if (infos[j].originalPos == offsets[2] && offsets[2] != UINT16_MAX) {
+                            if (isWalrusBinaryOperation(byteCode->opcode())) {
+                                Walrus::BinaryOperation* binOp = reinterpret_cast<Walrus::BinaryOperation*>(byteCode);
+                                binOp->setSrcOffset(infos[j].pos, 1);
+                            } else if (isWalrusStoreOperation(byteCode->opcode())) {
+                                Walrus::Store32* store = reinterpret_cast<Walrus::Store32*>(byteCode);
+                                store->setSrc1Offset(infos[j].pos);
+                            } else if (isWalrusMemoryStore(byteCode->opcode())) {
+                                Walrus::MemoryStore* store = reinterpret_cast<Walrus::MemoryStore*>(byteCode);
+                                store->setSrc1Offset(infos[j].pos);
+                            } else if (Walrus::Select* select = reinterpret_cast<Walrus::Select*>(byteCode)) {
+                                select->setSrc1Offset(infos[j].pos);
+                            }
+                        }
+                        if (infos[j].originalPos == offsets[3] && offsets[3] != UINT16_MAX) {
+                            if (byteCode->opcode() == Walrus::ByteCode::SelectOpcode) {
+                                Walrus::Select* select = reinterpret_cast<Walrus::Select*>(byteCode);
+                                select->setCondOffset(infos[j].pos);
+                            }
+                        }
+                    }
+
+                    i += byteCode->getSize();
+                }
+
+                for (size_t i = 0; i < m_currentFunction->currentByteCodeSize();) {
+                    Walrus::ByteCode* byteCode = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(m_currentFunction->byteCode() + i));
+
+                    if (byteCode->opcode() == Walrus::ByteCode::Const32Opcode
+                        || byteCode->opcode() == Walrus::ByteCode::Const64Opcode
+                        || byteCode->opcode() == Walrus::ByteCode::Const128Opcode) {
+                        Walrus::Const32* code = reinterpret_cast<Walrus::Const32*>(byteCode);
+
+                        for (auto& info : infos) {
+                            if (code->dstOffset() == info.originalPos) {
+                                code->setDstOffset(info.pos);
+                                break;
+                            }
+                        }
+                    } else {
+                        i = m_currentFunction->currentByteCodeSize();
+                    }
+
+                    i += byteCode->getSize();
+                }
+
+                m_localInfo.clear();
+                m_currentFunction->m_local.clear();
+                for (auto& info : infos) {
+                    if (info.originalPos != UINT16_MAX - 1) {
+                        m_localInfo.push_back({ info.type, info.pos });
+                        m_currentFunction->m_local.push_back(info.type);
+                    }
+
+
+                    for (auto& end : ends) {
+                        for (size_t i = 0; i < end->offsetsSize(); i++) {
+                            if (end->resultOffsets()[i] == info.originalPos) {
+                                end->resultOffsets()[i] = info.pos;
+                            }
+                        }
+                    }
+                }
+
+#if !defined(NDEBUG)
+                m_currentFunction->m_localDebugData.clear();
+                for (auto& info : m_localInfo) {
+                    m_currentFunction->m_localDebugData.push_back(info.m_position);
+                }
+#endif
+                // variable life analysis end
+            }
         }
     }
 
-    virtual void OnUnreachableExpr() override
+    virtual void
+    OnUnreachableExpr() override
     {
         m_preprocessData.seenBranch();
         pushByteCode(Walrus::Unreachable(), WASMOpcode::UnreachableOpcode);
@@ -2443,7 +3069,6 @@ public:
 } // namespace wabt
 
 namespace Walrus {
-
 WASMParsingResult::WASMParsingResult()
     : m_seenStartAttribute(false)
     , m_version(0)

@@ -1,0 +1,15 @@
+live_analysis
+
+get-ből való kiindulás azért jobb mert valaminek be kell állítania az értékét
+
+egy adott getből keresem vissza hogy milyen utakon lehet visszamenni az őt beállító utasításokig
+multimap jó
+
+listákban tartom az összes változóra a set-jeit és a get-jeit
+
+jump + sets [T,p]
+T - target, ahova ugrunk
+p - position, ahonnan ugrottunk
++ listában a set-ek amelyek abban a blokban vannak
+
+dump!!! - variableRange
