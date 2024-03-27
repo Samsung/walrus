@@ -138,24 +138,30 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 //                                be the same as the first or third source operands
 
 #define OPERAND_TYPE_LIST                                                               \
-    OL2(OTOp1I32, /* SD */ I32, I32)                                                    \
+    OL2(OTOp1I32, /* SD */ I32, I32 | S0)                                               \
     OL3(OTOp2I32, /* SSD */ I32, I32, I32 | S0 | S1)                                    \
-    OL2(OTOp1I64, /* SD */ I64, I64)                                                    \
-    OL2(OTOp1F32, /* SSD */ F32, F32 | S0)                                              \
-    OL2(OTOp1F64, /* SSD */ F64, F64 | S0)                                              \
+    OL2(OTOp1I64, /* SD */ I64, I64 | S0)                                               \
+    OL2(OTOp1F32, /* SD */ F32, F32 | S0)                                               \
+    OL2(OTOp1F64, /* SD */ F64, F64 | S0)                                               \
     OL3(OTOp2F32, /* SSD */ F32, F32, F32 | S0 | S1)                                    \
     OL3(OTOp2F64, /* SSD */ F64, F64, F64 | S0 | S1)                                    \
-    OL1(OTToI32, /* D */ I32 | TMP)                                                     \
-    OL1(OTToPTR, /* D */ I32 | PTR)                                                     \
+    OL1(OTGetI32, /* S */ I32)                                                          \
+    OL1(OTPutI32, /* D */ I32 | TMP)                                                    \
+    OL1(OTPutI64, /* D */ I64)                                                          \
+    OL1(OTPutV128, /* D */ V128)                                                        \
+    OL1(OTPutPTR, /* D */ PTR)                                                          \
+    OL2(OTMoveI32, /* SD */ I32, I32 | S0)                                              \
+    OL2(OTMoveI64, /* SD */ I64, I64 | S0)                                              \
+    OL2(OTMoveV128, /* SD */ V128, V128 | S0)                                           \
     OL3(OTCompareI64, /* SSD */ I64, I64, I32 | S0 | S1)                                \
     OL3(OTCompareF32, /* SSD */ F32, F32, I32)                                          \
     OL3(OTCompareF64, /* SSD */ F64, F64, I32)                                          \
     OL3(OTCopySignF32, /* SSD */ F32, F32, F32 | TMP | S0 | S1)                         \
     OL3(OTCopySignF64, /* SSD */ F64, F64, F64 | TMP | S0 | S1)                         \
-    OL2(OTDemoteF64, /* SD */ F64, F32)                                                 \
-    OL2(OTPromoteF32, /* SD */ F32, F64)                                                \
-    OL4(OTLoadI32, /* SDTT */ I32, I32, PTR, I32 | S0)                                  \
-    OL4(OTLoadI64, /* SDTT */ I32, I64, PTR, I32 | S0)                                  \
+    OL2(OTDemoteF64, /* SD */ F64, F32 | S0)                                            \
+    OL2(OTPromoteF32, /* SD */ F32, F64 | S0)                                           \
+    OL4(OTLoadI32, /* SDTT */ I32, I32 | S0, PTR, I32 | S0)                             \
+    OL4(OTLoadI64, /* SDTT */ I32, I64 | S0, PTR, I32 | S0)                             \
     OL4(OTLoadF32, /* SDTT */ I32, F32, PTR, I32 | S0)                                  \
     OL4(OTLoadF64, /* SDTT */ I32, F64, PTR, I32 | S0)                                  \
     OL4(OTLoadV128, /* SDTT */ I32, V128 | TMP, PTR, I32 | S0)                          \
@@ -166,7 +172,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTStoreF64, /* SSTT */ I32, F64 | NOTMP, PTR, I32 | S0)                         \
     OL4(OTStoreV128, /* SSTT */ I32, V128 | TMP, PTR, I32 | S0)                         \
     OL3(OTCallback3Arg, /* SSS */ I32, I32, I32)                                        \
-    OL3(OTTableGrow, /* SSD */ I32, PTR, I32)                                           \
+    OL3(OTTableGrow, /* SSD */ I32, PTR, I32 | S0 | S1)                                 \
     OL4(OTTableSet, /* SSTT */ I32, PTR, I32 | S0, PTR)                                 \
     OL3(OTTableGet, /* SDT */ I32, PTR | TMP | S0, I32)                                 \
     OL1(OTGlobalGetF32, /* D */ F32)                                                    \
@@ -175,50 +181,117 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTGlobalSetI64, /* ST */ I64, PTR)                                              \
     OL1(OTGlobalSetF32, /* S */ F32 | NOTMP)                                            \
     OL1(OTGlobalSetF64, /* S */ F64 | NOTMP)                                            \
-    OL2(OTConvertInt32FromInt64, /* SD */ I64, I32)                                     \
-    OL2(OTConvertInt64FromInt32, /* SD */ I32, I64)                                     \
-    OL4(OTConvertInt32FromFloat32, /* SDT */ F32 | NOTMP, I32 | TMP, F32 | S0, I32)     \
-    OL4(OTConvertInt32FromFloat64, /* SDT */ F64 | NOTMP, I32 | TMP, F64 | S0, I32)     \
+    OL2(OTConvertInt32FromInt64, /* SD */ I64, I32 | S0)                                \
+    OL2(OTConvertInt64FromInt32, /* SD */ I32, I64 | S0)                                \
+    OL2(OTConvertInt32FromFloat32, /* SD */ F32 | TMP, I32 | TMP)                       \
+    OL2(OTConvertInt32FromFloat64, /* SD */ F64 | TMP, I32 | TMP)                       \
     OL2(OTConvertInt64FromFloat32Callback, /* SD */ F32, I64)                           \
     OL2(OTConvertInt64FromFloat64Callback, /* SD */ F64, I64)                           \
-    OL2(OTSatConvertInt32FromFloat32, /* SDT */ F32 | TMP, I32 | TMP)                   \
-    OL2(OTSatConvertInt32FromFloat64, /* SDT */ F64 | TMP, I32 | TMP)                   \
     OL2(OTConvertFloat32FromInt32, /* SD */ I32, F32)                                   \
     OL2(OTConvertFloat64FromInt32, /* SD */ I32, F64)                                   \
     OL2(OTConvertFloat32FromInt64, /* SD */ I64, F32)                                   \
     OL2(OTConvertFloat64FromInt64, /* SD */ I64, F64)                                   \
-    OL4(OTSelectI32, /* SSSD */ I32, I32, I32, I32 | TMP | S1)                          \
-    OL4(OTSelectI64, /* SSSD */ I64, I64, I32, I64 | TMP | S1)                          \
-    OL4(OTSelectF32, /* SSSD */ F32, F32 | NOTMP, I32, F32 | TMP | S1)                  \
-    OL4(OTSelectF64, /* SSSD */ F64, F64 | NOTMP, I32, F64 | TMP | S1)                  \
-    OL4(OTSelectV128, /* SSSD */ V128, V128, I32, V128 | TMP | S1)
+    OL4(OTSelectI32, /* SSSD */ I32, I32, I32, I32 | S0 | S1)                           \
+    OL4(OTSelectF32, /* SSSD */ F32, F32, I32, F32 | S0 | S1)                           \
+    OL4(OTSelectF64, /* SSSD */ F64, F64, I32, F64 | S0 | S1)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 
 #define OPERAND_TYPE_LIST_MATH                                              \
     OL3(OTOp2I64, /* SSD */ I64, I64, I64 | TMP | S0 | S1)                  \
-    OL3(OTShiftI64, /* SSD */ I64, I64, I64 | TMP | S0)                     \
+    OL3(OTShiftI64, /* SSD */ I64, I64 | LOW, I64 | TMP | S0)               \
     OL4(OTMulI64, /* SSDT */ I64, I64, I64 | TMP | S0, I32 | S1)            \
     OL3(OTDivRemI64, /* SSD */ I64, I64, I64 | S0 | S1)                     \
     OL2(OTCountZeroesI64, /* SD */ I64, I64 | TMP | S0)                     \
     OL5(OTStoreI64Low, /* SSTTT */ I32, I64 | LOW, PTR, I32 | S0, PTR | S1) \
     OL1(OTGlobalGetI64, /* D */ I64_LOW)                                    \
     OL2(OTConvertInt32FromFloat32Callback, /* SD */ F32, I32)               \
-    OL2(OTConvertInt32FromFloat64Callback, /* SD */ F64, I32)
+    OL2(OTConvertInt32FromFloat64Callback, /* SD */ F64, I32)               \
+    OL4(OTSelectI64, /* SSSD */ I64, I64, I32, I64_LOW | S0 | S1)
 
 #else /* !SLJIT_32BIT_ARCHITECTURE */
 
-#define OPERAND_TYPE_LIST_MATH                                                      \
-    OL3(OTOp2I64, /* SSD */ I64, I64, I64 | S0 | S1)                                \
-    OL1(OTGlobalGetI64, /* D */ I64)                                                \
-    OL2(OTConvertUnsignedInt32FromFloat32, /* SD */ F32 | TMP, I32 | TMP)           \
-    OL2(OTConvertUnsignedInt32FromFloat64, /* SD */ F64 | TMP, I32 | TMP)           \
-    OL4(OTConvertInt64FromFloat32, /* SDT */ F32 | NOTMP, I64 | TMP, F32 | S0, I64) \
-    OL4(OTConvertInt64FromFloat64, /* SDT */ F64 | NOTMP, I64 | TMP, F64 | S0, I64) \
-    OL2(OTSatConvertInt64FromFloat32, /* SD */ F32 | TMP, I64 | TMP)                \
-    OL2(OTSatConvertInt64FromFloat64, /* SD */ F64 | TMP, I64 | TMP)
+#define OPERAND_TYPE_LIST_MATH                                    \
+    OL3(OTOp2I64, /* SSD */ I64, I64, I64 | S0 | S1)              \
+    OL1(OTGlobalGetI64, /* D */ I64)                              \
+    OL2(OTConvertInt64FromFloat32, /* SD */ F32 | TMP, I64 | TMP) \
+    OL2(OTConvertInt64FromFloat64, /* SD */ F64 | TMP, I64 | TMP) \
+    OL4(OTSelectI64, /* SSSD */ I64, I64, I32, I64 | S0 | S1)
 
 #endif /* SLJIT_32BIT_ARCHITECTURE */
+
+#define OPERAND_TYPE_LIST_SIMD                                                             \
+    OL2(OTOp1V128, /* SD */ V128 | NOTMP, V128 | TMP | S0)                                 \
+    OL2(OTOpCondV128, /* SD */ V128 | TMP, I32)                                            \
+    OL1(OTGlobalGetV128, /* D */ V128)                                                     \
+    OL1(OTGlobalSetV128, /* S */ V128 | NOTMP)                                             \
+    OL2(OTSplatI32, /* SD */ I32, V128 | TMP)                                              \
+    OL2(OTSplatI64, /* SD */ I64, V128 | TMP)                                              \
+    OL2(OTSplatF32, /* SD */ F32 | NOTMP, V128 | TMP | S0)                                 \
+    OL2(OTSplatF64, /* SD */ F64 | NOTMP, V128 | TMP | S0)                                 \
+    OL2(OTV128ToI32, /* SD */ V128 | TMP, I32)                                             \
+    OL4(OTBitSelectV128, /* SSSD */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2) \
+    OL2(OTExtractLaneI64, /* SD */ V128 | TMP, I64)                                        \
+    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32 | S0)                                   \
+    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64 | S0)                                   \
+    OL3(OTReplaceLaneI32, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                    \
+    OL3(OTReplaceLaneI64, /* SSD */ V128 | NOTMP, I64, V128 | TMP | S0)                    \
+    OL3(OTReplaceLaneF32, /* SSD */ V128 | NOTMP, F32 | NOTMP, V128 | TMP | S0)            \
+    OL3(OTReplaceLaneF64, /* SSD */ V128 | NOTMP, F64 | NOTMP, V128 | TMP | S0)            \
+    OL4(OTSelectV128, /* SSSD */ V128, V128, I32, V128 | S0 | S1)
+
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+
+#define OPERAND_TYPE_LIST_SIMD_ARCH                                                \
+    OL3(OTOp2V128, /* SSD */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0)            \
+    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)               \
+    OL4(OTOp2V128Tmp, /* SSDT */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0, V128)  \
+    OL3(OTOp2V128Rev, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)         \
+    OL4(OTShuffleV128, /* SSDT */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1, V128) \
+    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                 \
+    OL4(OTShiftV128Tmp, /* SSDT */ V128 | NOTMP, I32, V128 | TMP | S0, V128)
+
+// List of aliases.
+#define OTOp1V128CB OTOp1V128
+#define OTMinMaxV128 OTOp2V128
+#define OTPMinMaxV128 OTOp2V128
+#define OTSwizzleV128 OTOp2V128
+
+#elif (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
+
+#define OPERAND_TYPE_LIST_SIMD_ARCH                                                \
+    OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)         \
+    OL3(OTPMinMaxV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)               \
+    OL3(OTShuffleV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0 | S1) \
+    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
+
+// List of aliases.
+#define OTOp1V128Tmp OTOp1V128
+#define OTOp1V128CB OTOp1V128
+#define OTOp2V128Tmp OTOp2V128
+#define OTOp2V128Rev OTOp2V128
+#define OTMinMaxV128 OTOp2V128
+#define OTSwizzleV128 OTOp2V128
+#define OTShiftV128Tmp OTShiftV128
+
+#elif (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+
+#define OPERAND_TYPE_LIST_SIMD_ARCH                                         \
+    OL2(OTOp1V128CB, /* SD */ V128 | NOTMP, V128 | NOTMP)                   \
+    OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)  \
+    OL3(OTMinMaxV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | NOTMP)   \
+    OL3(OTSwizzleV128, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1) \
+    OL3(OTShuffleV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)        \
+    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
+
+// List of aliases.
+#define OTOp1V128Tmp OTOp1V128
+#define OTOp2V128Tmp OTOp2V128
+#define OTOp2V128Rev OTOp2V128
+#define OTPMinMaxV128 OTOp2V128
+#define OTShiftV128Tmp OTShiftV128
+
+#endif /* SLJIT_CONFIG_ARM */
 
 // Constructing read-only operand descriptors.
 
@@ -236,8 +309,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 const uint8_t Instruction::m_operandDescriptors[] = {
     0,
-    OPERAND_TYPE_LIST
-        OPERAND_TYPE_LIST_MATH
+    OPERAND_TYPE_LIST OPERAND_TYPE_LIST_MATH
+        OPERAND_TYPE_LIST_SIMD OPERAND_TYPE_LIST_SIMD_ARCH
 };
 
 #undef OL1
@@ -264,6 +337,8 @@ enum OperandTypes : uint32_t {
     OTNone,
     OPERAND_TYPE_LIST
         OPERAND_TYPE_LIST_MATH
+            OPERAND_TYPE_LIST_SIMD
+                OPERAND_TYPE_LIST_SIMD_ARCH
 };
 
 #undef OL1
@@ -466,7 +541,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32GeUOpcode: {
             group = Instruction::Compare;
             paramCount = 2;
-            info = Instruction::kIs32Bit;
+            info = Instruction::kIs32Bit | Instruction::kIsCompare;
             requiredInit = OTOp2I32;
             break;
         }
@@ -482,6 +557,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I64GeUOpcode: {
             group = Instruction::Compare;
             paramCount = 2;
+            info = Instruction::kIsCompare;
             requiredInit = OTCompareI64;
             break;
         }
@@ -524,19 +600,20 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F32EqOpcode:
         case ByteCode::F32NeOpcode:
         case ByteCode::F32LtOpcode:
-        case ByteCode::F32GtOpcode:
         case ByteCode::F32LeOpcode:
+        case ByteCode::F32GtOpcode:
         case ByteCode::F32GeOpcode:
             requiredInit = OTCompareF32;
             FALLTHROUGH;
         case ByteCode::F64EqOpcode:
         case ByteCode::F64NeOpcode:
         case ByteCode::F64LtOpcode:
-        case ByteCode::F64GtOpcode:
         case ByteCode::F64LeOpcode:
+        case ByteCode::F64GtOpcode:
         case ByteCode::F64GeOpcode: {
             group = Instruction::CompareFloat;
             paramCount = 2;
+            info = Instruction::kIsCompare;
             if (requiredInit == OTNone)
                 requiredInit = OTCompareF64;
             break;
@@ -654,7 +731,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             requiredInit = OTConvertInt64FromInt32;
             break;
         }
-        case ByteCode::I32TruncF32SOpcode: {
+        case ByteCode::I32TruncF32SOpcode:
+        case ByteCode::I32TruncSatF32SOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
             requiredInit = OTConvertInt32FromFloat32;
@@ -667,11 +745,12 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat32Callback;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-            requiredInit = OTConvertUnsignedInt32FromFloat32;
+            requiredInit = OTConvertInt32FromFloat32;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             break;
         }
-        case ByteCode::I32TruncF64SOpcode: {
+        case ByteCode::I32TruncF64SOpcode:
+        case ByteCode::I32TruncSatF64SOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
             requiredInit = OTConvertInt32FromFloat64;
@@ -684,7 +763,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat64Callback;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-            requiredInit = OTConvertUnsignedInt32FromFloat64;
+            requiredInit = OTConvertInt32FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             break;
         }
@@ -726,12 +805,6 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             requiredInit = OTConvertInt64FromFloat64Callback;
             break;
         }
-        case ByteCode::I32TruncSatF32SOpcode: {
-            group = Instruction::ConvertFloat;
-            paramCount = 1;
-            requiredInit = OTSatConvertInt32FromFloat32;
-            break;
-        }
         case ByteCode::I32TruncSatF32UOpcode: {
             group = Instruction::ConvertFloat;
             paramCount = 1;
@@ -739,14 +812,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat32Callback;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-            requiredInit = OTSatConvertInt32FromFloat32;
+            requiredInit = OTConvertInt32FromFloat32;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-            break;
-        }
-        case ByteCode::I32TruncSatF64SOpcode: {
-            group = Instruction::ConvertFloat;
-            paramCount = 1;
-            requiredInit = OTSatConvertInt32FromFloat64;
             break;
         }
         case ByteCode::I32TruncSatF64UOpcode: {
@@ -756,7 +823,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat64Callback;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-            requiredInit = OTSatConvertInt32FromFloat64;
+            requiredInit = OTConvertInt32FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             break;
         }
@@ -767,7 +834,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat32Callback;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-            requiredInit = OTSatConvertInt64FromFloat32;
+            requiredInit = OTConvertInt64FromFloat32;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             break;
         }
@@ -778,7 +845,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat64Callback;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-            requiredInit = OTSatConvertInt64FromFloat64;
+            requiredInit = OTConvertInt64FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             break;
         }
@@ -1094,11 +1161,22 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I16X8ExtractLaneSOpcode:
         case ByteCode::I16X8ExtractLaneUOpcode:
         case ByteCode::I32X4ExtractLaneOpcode:
+            requiredInit = OTV128ToI32;
+            FALLTHROUGH;
         case ByteCode::I64X2ExtractLaneOpcode:
+            if (requiredInit == OTNone) {
+                requiredInit = OTExtractLaneI64;
+            }
+            FALLTHROUGH;
         case ByteCode::F32X4ExtractLaneOpcode:
+            if (requiredInit == OTNone) {
+                requiredInit = OTExtractLaneF32;
+            }
+            FALLTHROUGH;
         case ByteCode::F64X2ExtractLaneOpcode: {
             SIMDExtractLane* extractLane = reinterpret_cast<SIMDExtractLane*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::ExtractLaneSIMD, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(requiredInit == OTNone ? OTExtractLaneF64 : requiredInit);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -1110,11 +1188,22 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I8X16ReplaceLaneOpcode:
         case ByteCode::I16X8ReplaceLaneOpcode:
         case ByteCode::I32X4ReplaceLaneOpcode:
+            requiredInit = OTReplaceLaneI32;
+            FALLTHROUGH;
         case ByteCode::I64X2ReplaceLaneOpcode:
+            if (requiredInit == OTNone) {
+                requiredInit = OTReplaceLaneI64;
+            }
+            FALLTHROUGH;
         case ByteCode::F32X4ReplaceLaneOpcode:
+            if (requiredInit == OTNone) {
+                requiredInit = OTReplaceLaneF32;
+            }
+            FALLTHROUGH;
         case ByteCode::F64X2ReplaceLaneOpcode: {
             SIMDReplaceLane* replaceLane = reinterpret_cast<SIMDReplaceLane*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::ReplaceLaneSIMD, opcode, 2, 1);
+            instr->setRequiredRegsDescriptor(requiredInit == OTNone ? OTReplaceLaneF64 : requiredInit);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -1127,12 +1216,28 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::I8X16SplatOpcode:
         case ByteCode::I16X8SplatOpcode:
-        case ByteCode::I32X4SplatOpcode:
-        case ByteCode::I64X2SplatOpcode:
-        case ByteCode::F32X4SplatOpcode:
+        case ByteCode::I32X4SplatOpcode: {
+            group = Instruction::SplatSIMD;
+            paramCount = 1;
+            requiredInit = OTSplatI32;
+            break;
+        }
+        case ByteCode::I64X2SplatOpcode: {
+            group = Instruction::SplatSIMD;
+            paramCount = 1;
+            requiredInit = OTSplatI64;
+            break;
+        }
+        case ByteCode::F32X4SplatOpcode: {
+            group = Instruction::SplatSIMD;
+            paramCount = 1;
+            requiredInit = OTSplatF32;
+            break;
+        }
         case ByteCode::F64X2SplatOpcode: {
             group = Instruction::SplatSIMD;
             paramCount = 1;
+            requiredInit = OTSplatF64;
             break;
         }
         case ByteCode::I8X16BitmaskOpcode:
@@ -1141,6 +1246,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I64X2BitmaskOpcode: {
             group = Instruction::BitMaskSIMD;
             paramCount = 1;
+            requiredInit = OTV128ToI32;
             break;
         }
         case ByteCode::TableInitOpcode: {
@@ -1163,7 +1269,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto tableSize = reinterpret_cast<TableSize*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTToI32);
+            instr->setRequiredRegsDescriptor(OTPutI32);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -1248,7 +1354,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             MemorySize* memorySize = reinterpret_cast<MemorySize*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTToI32);
+            instr->setRequiredRegsDescriptor(OTPutI32);
 
             Operand* operands = instr->operands();
             operands[0].item = nullptr;
@@ -1338,20 +1444,24 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::JumpIfTrueOpcode: {
             JumpIfTrue* jumpIfTrue = reinterpret_cast<JumpIfTrue*>(byteCode);
-            compiler->appendBranch(jumpIfTrue, opcode, labels[COMPUTE_OFFSET(idx, jumpIfTrue->offset())], STACK_OFFSET(jumpIfTrue->srcOffset()));
+            Instruction* instr = compiler->appendBranch(jumpIfTrue, opcode, labels[COMPUTE_OFFSET(idx, jumpIfTrue->offset())], STACK_OFFSET(jumpIfTrue->srcOffset()));
+            instr->setRequiredRegsDescriptor(OTGetI32);
             break;
         }
         case ByteCode::JumpIfFalseOpcode: {
             JumpIfFalse* jumpIfFalse = reinterpret_cast<JumpIfFalse*>(byteCode);
-            compiler->appendBranch(jumpIfFalse, opcode, labels[COMPUTE_OFFSET(idx, jumpIfFalse->offset())], STACK_OFFSET(jumpIfFalse->srcOffset()));
+            Instruction* instr = compiler->appendBranch(jumpIfFalse, opcode, labels[COMPUTE_OFFSET(idx, jumpIfFalse->offset())], STACK_OFFSET(jumpIfFalse->srcOffset()));
+            instr->setRequiredRegsDescriptor(OTGetI32);
             break;
         }
         case ByteCode::BrTableOpcode: {
             BrTable* brTable = reinterpret_cast<BrTable*>(byteCode);
             uint32_t tableSize = brTable->tableSize();
             BrTableInstruction* instr = compiler->appendBrTable(brTable, tableSize, STACK_OFFSET(brTable->condOffset()));
-            Label** labelList = instr->targetLabels();
 
+            instr->setRequiredRegsDescriptor(OTGetI32);
+
+            Label** labelList = instr->targetLabels();
             int32_t* jumpOffsets = brTable->jumpOffsets();
             int32_t* jumpOffsetsEnd = jumpOffsets + tableSize;
 
@@ -1377,6 +1487,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::Const32Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Immediate, ByteCode::Const32Opcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTPutI32);
 
             Const32* const32 = reinterpret_cast<Const32*>(byteCode);
             Operand* operands = instr->operands();
@@ -1387,6 +1498,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::Const64Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Immediate, ByteCode::Const64Opcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTPutI64);
 
             Const64* const64 = reinterpret_cast<Const64*>(byteCode);
             Operand* operands = instr->operands();
@@ -1397,6 +1509,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::Move32Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move32Opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(OTMoveI32);
 
             Move32* move32 = reinterpret_cast<Move32*>(byteCode);
             Operand* operands = instr->operands();
@@ -1409,6 +1522,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::Move64Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move64Opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(OTMoveI64);
 
             Move64* move64 = reinterpret_cast<Move64*>(byteCode);
             Operand* operands = instr->operands();
@@ -1421,6 +1535,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::Move128Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move128Opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(OTMoveV128);
 
             Move128* move128 = reinterpret_cast<Move128*>(byteCode);
             Operand* operands = instr->operands();
@@ -1433,7 +1548,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::GlobalGet32Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet32Opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTToI32);
+            instr->setRequiredRegsDescriptor(OTPutI32);
 
             GlobalGet32* globalGet32 = reinterpret_cast<GlobalGet32*>(byteCode);
             Operand* operands = instr->operands();
@@ -1465,6 +1580,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::GlobalGet128Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet128Opcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTGlobalGetV128);
 
             GlobalGet128* globalGet128 = reinterpret_cast<GlobalGet128*>(byteCode);
             Operand* operands = instr->operands();
@@ -1507,6 +1623,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::GlobalSet128Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet128Opcode, 1, 0);
+            instr->setRequiredRegsDescriptor(OTGlobalSetV128);
 
             GlobalSet128* globalSet128 = reinterpret_cast<GlobalSet128*>(byteCode);
             Operand* operands = instr->operands();
@@ -1517,7 +1634,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::RefFuncOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::RefFuncOpcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTToPTR);
+            instr->setRequiredRegsDescriptor(OTPutPTR);
 
             auto refFunc = reinterpret_cast<RefFunc*>(byteCode);
             auto operands = instr->operands();
@@ -1551,6 +1668,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         /* SIMD support. */
         case ByteCode::Const128Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Immediate, ByteCode::Const128Opcode, 0, 1);
+            instr->setRequiredRegsDescriptor(OTPutV128);
 
             Const128* const128 = reinterpret_cast<Const128*>(byteCode);
             Operand* operands = instr->operands();
@@ -1621,13 +1739,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32X4DotI16X8SOpcode:
         case ByteCode::I64X2AddOpcode:
         case ByteCode::I64X2SubOpcode:
-        case ByteCode::I64X2MulOpcode:
         case ByteCode::I64X2EqOpcode:
         case ByteCode::I64X2NeOpcode:
-        case ByteCode::I64X2LtSOpcode:
-        case ByteCode::I64X2LeSOpcode:
-        case ByteCode::I64X2GtSOpcode:
-        case ByteCode::I64X2GeSOpcode:
         case ByteCode::I64X2ExtmulLowI32X4SOpcode:
         case ByteCode::I64X2ExtmulHighI32X4SOpcode:
         case ByteCode::I64X2ExtmulLowI32X4UOpcode:
@@ -1636,37 +1749,71 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F32X4NeOpcode:
         case ByteCode::F32X4LtOpcode:
         case ByteCode::F32X4LeOpcode:
-        case ByteCode::F32X4GtOpcode:
-        case ByteCode::F32X4GeOpcode:
         case ByteCode::F32X4AddOpcode:
         case ByteCode::F32X4DivOpcode:
-        case ByteCode::F32X4MaxOpcode:
-        case ByteCode::F32X4MinOpcode:
         case ByteCode::F32X4MulOpcode:
-        case ByteCode::F32X4PMaxOpcode:
-        case ByteCode::F32X4PMinOpcode:
         case ByteCode::F32X4SubOpcode:
         case ByteCode::F64X2AddOpcode:
         case ByteCode::F64X2DivOpcode:
-        case ByteCode::F64X2MaxOpcode:
-        case ByteCode::F64X2MinOpcode:
         case ByteCode::F64X2MulOpcode:
-        case ByteCode::F64X2PMaxOpcode:
-        case ByteCode::F64X2PMinOpcode:
         case ByteCode::F64X2SubOpcode:
         case ByteCode::F64X2EqOpcode:
         case ByteCode::F64X2NeOpcode:
         case ByteCode::F64X2LtOpcode:
         case ByteCode::F64X2LeOpcode:
-        case ByteCode::F64X2GtOpcode:
-        case ByteCode::F64X2GeOpcode:
         case ByteCode::V128AndOpcode:
         case ByteCode::V128OrOpcode:
-        case ByteCode::V128XorOpcode:
-        case ByteCode::V128AndnotOpcode:
+        case ByteCode::V128XorOpcode: {
+            group = Instruction::BinarySIMD;
+            paramCount = 2;
+            requiredInit = OTOp2V128;
+            break;
+        }
         case ByteCode::I8X16SwizzleOpcode: {
             group = Instruction::BinarySIMD;
             paramCount = 2;
+            requiredInit = OTSwizzleV128;
+            break;
+        }
+        case ByteCode::I64X2MulOpcode:
+        case ByteCode::I64X2LtSOpcode:
+        case ByteCode::I64X2LeSOpcode:
+        case ByteCode::I64X2GtSOpcode:
+        case ByteCode::I64X2GeSOpcode: {
+            group = Instruction::BinarySIMD;
+            paramCount = 2;
+            requiredInit = OTOp2V128Tmp;
+            break;
+        }
+        case ByteCode::F32X4MaxOpcode:
+        case ByteCode::F32X4MinOpcode:
+        case ByteCode::F64X2MaxOpcode:
+        case ByteCode::F64X2MinOpcode: {
+            group = Instruction::BinarySIMD;
+            paramCount = 2;
+#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+            info = Instruction::kIsCallback;
+#endif /* SLJIT_CONFIG_ARM_32 */
+            requiredInit = OTMinMaxV128;
+            break;
+        }
+        case ByteCode::F32X4PMaxOpcode:
+        case ByteCode::F32X4PMinOpcode:
+        case ByteCode::F64X2PMaxOpcode:
+        case ByteCode::F64X2PMinOpcode: {
+            group = Instruction::BinarySIMD;
+            paramCount = 2;
+            requiredInit = OTPMinMaxV128;
+            break;
+        }
+        case ByteCode::F32X4GtOpcode:
+        case ByteCode::F32X4GeOpcode:
+        case ByteCode::F64X2GtOpcode:
+        case ByteCode::F64X2GeOpcode:
+        case ByteCode::V128AndnotOpcode: {
+            group = Instruction::BinarySIMD;
+            paramCount = 2;
+            requiredInit = OTOp2V128Rev;
             break;
         }
         case ByteCode::I8X16NegOpcode:
@@ -1685,33 +1832,47 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32X4ExtendLowI16X8UOpcode:
         case ByteCode::I32X4ExtendHighI16X8UOpcode:
         case ByteCode::I32X4TruncSatF32X4SOpcode:
-        case ByteCode::I32X4TruncSatF32X4UOpcode:
         case ByteCode::I32X4TruncSatF64X2SZeroOpcode:
         case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
         case ByteCode::I64X2NegOpcode:
         case ByteCode::F32X4AbsOpcode:
-        case ByteCode::F32X4CeilOpcode:
-        case ByteCode::F32X4FloorOpcode:
-        case ByteCode::F32X4NearestOpcode:
         case ByteCode::F32X4NegOpcode:
         case ByteCode::F32X4SqrtOpcode:
-        case ByteCode::F32X4TruncOpcode:
         case ByteCode::F32X4DemoteF64X2ZeroOpcode:
         case ByteCode::F32X4ConvertI32X4SOpcode:
-        case ByteCode::F32X4ConvertI32X4UOpcode:
         case ByteCode::F64X2AbsOpcode:
-        case ByteCode::F64X2CeilOpcode:
-        case ByteCode::F64X2FloorOpcode:
-        case ByteCode::F64X2NearestOpcode:
         case ByteCode::F64X2NegOpcode:
         case ByteCode::F64X2SqrtOpcode:
-        case ByteCode::F64X2TruncOpcode:
         case ByteCode::F64X2PromoteLowF32X4Opcode:
         case ByteCode::F64X2ConvertLowI32X4SOpcode:
-        case ByteCode::F64X2ConvertLowI32X4UOpcode:
         case ByteCode::V128NotOpcode: {
             group = Instruction::UnarySIMD;
             paramCount = 1;
+            requiredInit = OTOp1V128;
+            break;
+        }
+        case ByteCode::F32X4CeilOpcode:
+        case ByteCode::F32X4FloorOpcode:
+        case ByteCode::F32X4TruncOpcode:
+        case ByteCode::F32X4NearestOpcode:
+        case ByteCode::F64X2CeilOpcode:
+        case ByteCode::F64X2FloorOpcode:
+        case ByteCode::F64X2TruncOpcode:
+        case ByteCode::F64X2NearestOpcode: {
+            group = Instruction::UnarySIMD;
+            paramCount = 1;
+#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+            info = Instruction::kIsCallback;
+#endif /* SLJIT_CONFIG_ARM_32 */
+            requiredInit = OTOp1V128CB;
+            break;
+        }
+        case ByteCode::I32X4TruncSatF32X4UOpcode:
+        case ByteCode::F32X4ConvertI32X4UOpcode:
+        case ByteCode::F64X2ConvertLowI32X4UOpcode: {
+            group = Instruction::UnarySIMD;
+            paramCount = 1;
+            requiredInit = OTOp1V128Tmp;
             break;
         }
         case ByteCode::I8X16AllTrueOpcode:
@@ -1721,11 +1882,10 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128AnyTrueOpcode: {
             group = Instruction::UnaryCondSIMD;
             paramCount = 1;
+            info = Instruction::kIsCompare;
+            requiredInit = OTOpCondV128;
             break;
         }
-        case ByteCode::I8X16ShlOpcode:
-        case ByteCode::I8X16ShrSOpcode:
-        case ByteCode::I8X16ShrUOpcode:
         case ByteCode::I16X8ShlOpcode:
         case ByteCode::I16X8ShrSOpcode:
         case ByteCode::I16X8ShrUOpcode:
@@ -1733,14 +1893,24 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32X4ShrSOpcode:
         case ByteCode::I32X4ShrUOpcode:
         case ByteCode::I64X2ShlOpcode:
-        case ByteCode::I64X2ShrSOpcode:
         case ByteCode::I64X2ShrUOpcode: {
             group = Instruction::ShiftSIMD;
             paramCount = 2;
+            requiredInit = OTShiftV128;
+            break;
+        }
+        case ByteCode::I8X16ShlOpcode:
+        case ByteCode::I8X16ShrSOpcode:
+        case ByteCode::I8X16ShrUOpcode:
+        case ByteCode::I64X2ShrSOpcode: {
+            group = Instruction::ShiftSIMD;
+            paramCount = 2;
+            requiredInit = OTShiftV128Tmp;
             break;
         }
         case ByteCode::V128BitSelectOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, 3, 1);
+            instr->setRequiredRegsDescriptor(OTBitSelectV128);
 
             V128BitSelect* bitSelect = reinterpret_cast<V128BitSelect*>(byteCode);
             Operand* operands = instr->operands();
@@ -1757,6 +1927,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::I8X16ShuffleOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, 2, 1);
+            instr->setRequiredRegsDescriptor(OTShuffleV128);
 
             I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(byteCode);
             Operand* operands = instr->operands();

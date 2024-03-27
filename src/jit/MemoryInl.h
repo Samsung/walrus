@@ -392,10 +392,10 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #if (defined SLJIT_FPU_UNALIGNED && SLJIT_FPU_UNALIGNED)
         sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, addr.memArg.arg, addr.memArg.argw);
 #else /* SLJIT_FPU_UNALIGNED */
-        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, SLJIT_TMP_FR0, addr.memArg.arg, addr.memArg.argw);
+        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, SLJIT_TMP_DEST_FREG, addr.memArg.arg, addr.memArg.argw);
 
         if (SLJIT_IS_MEM(valueArg.arg)) {
-            sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, SLJIT_TMP_FR0, 0);
+            sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, SLJIT_TMP_DEST_FREG, 0);
         }
 #endif /* SLJIT_FPU_UNALIGNED */
         return;

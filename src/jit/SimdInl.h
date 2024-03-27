@@ -22,12 +22,12 @@ static void emitMove128(sljit_compiler* compiler, Instruction* instr)
     JITArg dst(operands + 1);
     JITArg src;
 
-    sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_FR0);
+    sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_TMP_DEST_FREG);
 
-    simdOperandToArg(compiler, operands + 0, src, SLJIT_SIMD_REG_128, dstReg);
+    simdOperandToArg(compiler, operands + 0, src, SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_FREG);
 
     if (SLJIT_IS_MEM(dst.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, dstReg, dst.arg, dst.argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_FREG, dst.arg, dst.argw);
     }
 }
 
@@ -85,7 +85,7 @@ static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     args[1].set(operands + 1);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-    simdOperandToArg(compiler, operands + 0, args[0], type & ~(SLJIT_SIMD_LANE_SIGNED | SLJIT_32), SLJIT_FR0);
+    simdOperandToArg(compiler, operands + 0, args[0], type & ~(SLJIT_SIMD_LANE_SIGNED | SLJIT_32), instr->requiredReg(0));
 
     if (type & SLJIT_SIMD_FLOAT) {
         sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index, args[1].arg, args[1].argw);
@@ -103,7 +103,7 @@ static void emitExtractLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-    sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, SLJIT_R0);
+    sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, SLJIT_TMP_DEST_REG);
     sljit_emit_simd_lane_mov(compiler, SLJIT_SIMD_STORE | type, args[0].arg, index, dstReg, 0);
 
     if (SLJIT_IS_MEM(args[1].arg)) {
@@ -149,7 +149,7 @@ static void emitReplaceLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     JITArg args[3];
     args[2].set(operands + 2);
 
-    sljit_s32 dstReg = GET_TARGET_REG(args[2].arg, SLJIT_FR0);
+    sljit_s32 dstReg = GET_TARGET_REG(args[2].arg, instr->requiredReg(0));
     simdOperandToArg(compiler, operands + 0, args[0], type & ~SLJIT_32, dstReg);
 
     if (args[0].arg != dstReg) {
@@ -157,7 +157,7 @@ static void emitReplaceLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (type & SLJIT_SIMD_FLOAT) {
-        floatOperandToArg(compiler, operands + 1, args[1], SLJIT_FR1);
+        floatOperandToArg(compiler, operands + 1, args[1], SLJIT_TMP_DEST_FREG);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     } else if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
         JITArgPair srcArgPair(operands + 1);
@@ -220,7 +220,7 @@ static void emitSplatSIMD(sljit_compiler* compiler, Instruction* instr)
     JITArg args[2];
     args[1].set(operands + 1);
 
-    sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, SLJIT_FR0);
+    sljit_s32 dstReg = GET_TARGET_REG(args[1].arg, instr->requiredReg(0));
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (type == (SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64)) {
@@ -273,7 +273,7 @@ static void emitBitMaskSIMD(sljit_compiler* compiler, Instruction* instr)
     }
 
     JITArg src;
-    simdOperandToArg(compiler, operands, src, type, SLJIT_FR0);
+    simdOperandToArg(compiler, operands, src, type, instr->requiredReg(0));
 
     JITArg dst(operands + 1);
     sljit_emit_simd_sign(compiler, SLJIT_SIMD_STORE | type | SLJIT_32, src.arg, dst.arg, dst.argw);
@@ -286,10 +286,10 @@ static void emitGlobalGet128(sljit_compiler* compiler, Instruction* instr)
 
     GlobalGet128* globalGet = reinterpret_cast<GlobalGet128*>(instr->byteCode());
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalGet->index() * sizeof(void*));
-    sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset());
-    sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, dst.arg, dst.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), context->globalsStart + globalGet->index() * sizeof(void*));
+    sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, SLJIT_MEM1(SLJIT_TMP_MEM_REG), JITFieldAccessor::globalValueOffset());
+    sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, dst.arg, dst.argw);
 }
 
 static void emitGlobalSet128(sljit_compiler* compiler, Instruction* instr)
@@ -297,51 +297,59 @@ static void emitGlobalSet128(sljit_compiler* compiler, Instruction* instr)
     CompileContext* context = CompileContext::get(compiler);
     JITArg src;
 
-    simdOperandToArg(compiler, instr->operands(), src, SLJIT_SIMD_ELEM_128, SLJIT_FR0);
+    simdOperandToArg(compiler, instr->operands(), src, SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG);
 
     GlobalSet128* globalSet = reinterpret_cast<GlobalSet128*>(instr->byteCode());
 
     if (SLJIT_IS_MEM(src.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_FR0, src.arg, src.argw);
-        src.arg = SLJIT_FR0;
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, src.arg, src.argw);
+        src.arg = SLJIT_TMP_DEST_FREG;
         src.argw = 0;
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), context->globalsStart + globalSet->index() * sizeof(void*));
-    sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src.arg, SLJIT_MEM1(SLJIT_R0), JITFieldAccessor::globalValueOffset());
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), context->globalsStart + globalSet->index() * sizeof(void*));
+    sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src.arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), JITFieldAccessor::globalValueOffset());
 }
 
-void emitSelect128(sljit_compiler* compiler, Instruction* instr, sljit_s32 jump_type)
+static void emitSelect128(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
 {
     Operand* operands = instr->operands();
     assert(instr->opcode() == ByteCode::SelectOpcode && instr->paramCount() == 3);
 
     JITArg args[2];
-
-
     JITArg target(operands + 3);
-    sljit_s32 dstReg = GET_TARGET_REG(target.arg, SLJIT_FR0);
 
-    sljit_s32 arg1_reg = sljit_has_cpu_feature(SLJIT_SIMD_REGS_ARE_PAIRS) ? SLJIT_FR2 : SLJIT_FR1;
+    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, instr->requiredReg(0));
+    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, instr->requiredReg(1));
 
-    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, SLJIT_FR0);
-    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, arg1_reg);
 
-    const sljit_s32 mov_type = SLJIT_SIMD_ELEM_128 | SLJIT_SIMD_REG_128;
-
-    if (jump_type == -1) {
+    if (type == -1) {
         JITArg cond(operands + 2);
         sljit_emit_op2u(compiler, SLJIT_SUB32 | SLJIT_SET_Z, cond.arg, cond.argw, SLJIT_IMM, 0);
-        jump_type = SLJIT_NOT_ZERO;
+        type = SLJIT_NOT_ZERO;
     }
 
-    sljit_emit_simd_mov(compiler, mov_type, dstReg, args[0].arg, args[0].argw);
-    sljit_jump* jump = sljit_emit_jump(compiler, jump_type);
-    sljit_emit_simd_mov(compiler, mov_type, dstReg, args[1].arg, args[1].argw);
+    const sljit_s32 mov_type = SLJIT_SIMD_ELEM_128 | SLJIT_SIMD_REG_128;
+    sljit_s32 targetReg = GET_TARGET_REG(target.arg, SLJIT_TMP_DEST_FREG);
+    sljit_s32 baseReg = 0;
+
+    if (args[1].arg == targetReg) {
+        baseReg = 1;
+        type ^= 1;
+    }
+
+    if (args[0].arg != targetReg) {
+        sljit_emit_simd_mov(compiler, mov_type, targetReg, args[0].arg, args[0].argw);
+    }
+
+    sljit_jump* jump = sljit_emit_jump(compiler, type);
+    sljit_s32 otherReg = baseReg ^ 0x1;
+
+    sljit_emit_simd_mov(compiler, mov_type, targetReg, args[otherReg].arg, args[otherReg].argw);
     sljit_set_label(jump, sljit_emit_label(compiler));
 
     if (SLJIT_IS_MEM(target.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | mov_type, dstReg, target.arg, target.argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | mov_type, targetReg, target.arg, target.argw);
     }
 }

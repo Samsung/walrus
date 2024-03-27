@@ -152,9 +152,9 @@ static void emitConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* i
     JITArg srcArg;
     JITArg dstArg(operands + 1);
 
-    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(0));
-    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(1));
-    sljit_s32 tmpReg = instr->requiredReg(2);
+    sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(0));
+    sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(1));
+    sljit_s32 tmpReg = SLJIT_TMP_DEST_REG;
 
     floatOperandToArg(compiler, operands, srcArg, sourceReg);
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
