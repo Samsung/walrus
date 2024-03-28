@@ -17,134 +17,321 @@
 #include "Walrus.h"
 
 #include "jit/Compiler.h"
+#include "jit/SljitLir.h"
 
 #include <set>
 
 namespace Walrus {
 
-class DependencyGenContext {
-public:
-    static const uint8_t kOptReferenced = 1 << 0;
-    static const uint8_t kOptHasAnyInstruction = 1 << 1;
-    static const uint8_t kOptDependencyComputed = 1 << 2;
-
-    struct StackItem {
-        StackItem()
-            : options(0)
-        {
-        }
-
-        std::set<InstructionListItem*> dependencies;
-        uint8_t options;
+struct DependencyGenContext {
+    enum Type : VariableRef {
+        // Label must be 0, since labels are pointers.
+        Label = Operand::Immediate,
+        Variable = Operand::Register,
     };
 
-    DependencyGenContext(uint32_t requiredStackSize)
+    // Also uses: VariableList::kConstraints.
+    static const uint8_t kOptReferenced = 1 << 0;
+    static const uint8_t kOptDependencyComputed = 1 << 1;
+
+    static const VariableRef kNoRef = ~(VariableRef)0;
+
+    typedef std::set<VariableRef> DependencyList;
+
+    DependencyGenContext(size_t dependencySize, size_t requiredStackSize)
     {
-        m_stack.resize(requiredStackSize);
+        currentDependencies.resize(requiredStackSize);
+        currentOptions.resize(requiredStackSize);
+
+        if (dependencySize == 0) {
+            // No labels in the code.
+            return;
+        }
+
+        ASSERT((dependencySize % requiredStackSize) == 0);
+
+        dependencies.resize(dependencySize);
+        options.resize(dependencySize);
+        maxDistance.resize(dependencySize / requiredStackSize);
     }
 
-    std::vector<StackItem>* stack() { return &m_stack; }
-    StackItem& stackItem(size_t index) { return m_stack[index]; }
+    void update(size_t dependencyStart, size_t id);
+    void update(size_t dependencyStart, size_t id, size_t excludeStart, const ValueTypeVector& param, VariableList* variableList);
+    void updateWithGetter(VariableList* variableList, VariableRef ref, Instruction* getter);
+    void assignReference(VariableRef ref, size_t offset, uint32_t typeInfo);
 
-    void update(std::vector<InstructionListItem*>& dependencies);
-    void update(std::vector<InstructionListItem*>& dependencies, size_t excludeStart, size_t excludeSize);
-
-private:
-    std::vector<StackItem> m_stack;
+    std::vector<DependencyList> dependencies;
+    std::vector<uint8_t> options;
+    std::vector<size_t> maxDistance;
+    std::vector<VariableRef> currentDependencies;
+    std::vector<uint8_t> currentOptions;
 };
 
-void DependencyGenContext::update(std::vector<InstructionListItem*>& dependencies)
+void DependencyGenContext::update(size_t dependencyStart, size_t id)
 {
-    assert(dependencies.size() == m_stack.size());
+    size_t size = currentDependencies.size();
 
-    size_t size = m_stack.size();
+    ASSERT(dependencyStart + size <= dependencies.size()
+           && (dependencyStart % size) == 0
+           && maxDistance[dependencyStart / size] <= id);
+
+    maxDistance[dependencyStart / size] = id;
 
     for (size_t i = 0; i < size; i++) {
-        InstructionListItem* dependency = dependencies[i];
+        VariableRef ref = currentDependencies[i];
 
-        if (dependency == nullptr) {
-            m_stack[i].options |= DependencyGenContext::kOptHasAnyInstruction;
-            continue;
+        if (ref != 0) {
+            dependencies[dependencyStart + i].insert(currentDependencies[i]);
+            options[dependencyStart + i] |= currentOptions[i] & VariableList::kConstraints;
         }
-
-        m_stack[i].dependencies.insert(dependency);
     }
 }
 
-void DependencyGenContext::update(std::vector<InstructionListItem*>& dependencies, size_t excludeStart, size_t excludeSize)
+void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excludeStart, const ValueTypeVector& param, VariableList* variableList)
 {
-    assert(dependencies.size() == m_stack.size());
+    size_t size = currentDependencies.size();
+    size_t offset = excludeStart;
 
-    excludeStart = STACK_OFFSET(excludeStart);
+    ASSERT(dependencyStart + size <= dependencies.size()
+           && (dependencyStart % size) == 0
+           && maxDistance[dependencyStart / size] <= id);
 
-    size_t excludeEnd = excludeStart + STACK_OFFSET(excludeSize);
-    size_t size = m_stack.size();
+    for (auto it : param) {
+        VariableRef ref = variableList->variables.size();
+
+        dependencies[dependencyStart + offset].insert(VARIABLE_SET(ref, Variable));
+        variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(offset, Operand::Offset), 0, id));
+
+        offset += STACK_OFFSET(valueStackAllocatedSize(it));
+    }
 
     for (size_t i = 0; i < size; i++) {
-        if (i >= excludeStart && i < excludeEnd) {
-            m_stack[i].options |= DependencyGenContext::kOptHasAnyInstruction;
+        if (i >= excludeStart && i < offset) {
             continue;
         }
 
-        InstructionListItem* dependency = dependencies[i];
+        VariableRef ref = currentDependencies[i];
 
-        if (dependency == nullptr) {
-            m_stack[i].options |= DependencyGenContext::kOptHasAnyInstruction;
-            continue;
+        if (ref != 0) {
+            dependencies[dependencyStart + i].insert(currentDependencies[i]);
+            options[dependencyStart + i] |= currentOptions[i] & VariableList::kConstraints;
         }
-
-        m_stack[i].dependencies.insert(dependency);
     }
 }
 
-static bool isSameConst(std::vector<Instruction*>& instDeps)
+void DependencyGenContext::updateWithGetter(VariableList* variableList, VariableRef ref, Instruction* getter)
 {
-    Instruction* constInstr = instDeps[0];
+    VariableList::Variable& variable = variableList->variables[ref];
 
-    if (constInstr->group() != Instruction::Immediate) {
-        return false;
+    if (variable.info & VariableList::kIsImmediate) {
+        return;
     }
 
-    if (constInstr->opcode() == ByteCode::Const32Opcode) {
-        uint32_t value = reinterpret_cast<Const32*>(constInstr->byteCode())->value();
-        size_t end = instDeps.size();
+    variable.info |= currentOptions[VARIABLE_GET_REF(variable.value)] & VariableList::kConstraints;
 
-        for (size_t i = 1; i < end; i++) {
-            Instruction* instr = instDeps[i];
+    if (getter->id() < variable.u.rangeStart) {
+        variable.u.rangeStart = getter->id();
+    } else if (variable.rangeEnd < getter->id()) {
+        variable.rangeEnd = getter->id();
+    }
+}
 
-            if (instr->opcode() != ByteCode::Const32Opcode || reinterpret_cast<Const32*>(instr->byteCode())->value() != value) {
-                return false;
-            }
+void DependencyGenContext::assignReference(VariableRef ref, size_t offset, uint32_t typeInfo)
+{
+    switch (typeInfo) {
+    case Instruction::Int64Operand:
+    case Instruction::Float64Operand:
+        currentDependencies[offset + 1] = 0;
+        currentOptions[offset + 1] = 0;
+        break;
+
+    case Instruction::V128Operand:
+        currentDependencies[offset + 1] = 0;
+        currentOptions[offset + 1] = 0;
+        currentDependencies[offset + 2] = 0;
+        currentOptions[offset + 2] = 0;
+        currentDependencies[offset + 3] = 0;
+        currentOptions[offset + 3] = 0;
+        break;
+    }
+
+    currentDependencies[offset] = ref;
+    currentOptions[offset] = 0;
+}
+
+static bool checkSameConst(VariableList* variableList, std::set<VariableRef>& dependencies)
+{
+    VariableRef constRef = 0;
+    Instruction* constInstr = nullptr;
+    uint32_t value32 = 0;
+    uint32_t value64 = 0;
+    const uint8_t* value128 = nullptr;
+
+    for (auto it : dependencies) {
+        if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
+            continue;
         }
 
-        return true;
-    }
+        ASSERT(VARIABLE_TYPE(it) == DependencyGenContext::Variable);
 
-    uint64_t value = reinterpret_cast<Const64*>(constInstr->byteCode())->value();
-    size_t end = instDeps.size();
+        VariableList::Variable& variable = variableList->variables[VARIABLE_GET_REF(it)];
 
-    for (size_t i = 1; i < end; i++) {
-        Instruction* instr = instDeps[i];
-
-        if (instr->opcode() != ByteCode::Const64Opcode || reinterpret_cast<Const64*>(instr->byteCode())->value() != value) {
+        if (!(variable.info & VariableList::kIsImmediate)) {
             return false;
         }
+
+        Instruction* instr = variable.u.immediate;
+
+        if (constInstr == nullptr) {
+            constRef = it;
+            constInstr = instr;
+
+            switch (constInstr->opcode()) {
+            case ByteCode::Const32Opcode:
+                value32 = reinterpret_cast<Const32*>(constInstr->byteCode())->value();
+                break;
+            case ByteCode::Const64Opcode:
+                value64 = reinterpret_cast<Const64*>(constInstr->byteCode())->value();
+                break;
+            default:
+                ASSERT(constInstr->opcode() == ByteCode::Const128Opcode);
+                value128 = reinterpret_cast<Const128*>(constInstr->byteCode())->value();
+                break;
+            }
+            continue;
+        }
+
+        ASSERT(instr->opcode() == constInstr->opcode());
+
+        switch (constInstr->opcode()) {
+        case ByteCode::Const32Opcode:
+            if (reinterpret_cast<Const32*>(instr->byteCode())->value() != value32) {
+                return false;
+            }
+            break;
+        case ByteCode::Const64Opcode:
+            if (reinterpret_cast<Const64*>(instr->byteCode())->value() != value64) {
+                return false;
+            }
+            break;
+        default:
+            ASSERT(constInstr->opcode() == ByteCode::Const128Opcode);
+            if (memcmp(reinterpret_cast<Const128*>(instr->byteCode())->value(), value128, 16) != 0) {
+                return false;
+            }
+            break;
+        }
     }
 
+    dependencies.clear();
+    dependencies.insert(constRef);
     return true;
 }
 
-void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
+static VariableRef mergeVariables(VariableList* variableList, VariableRef head, VariableRef other)
 {
+    ASSERT(!(variableList->variables[head].info & VariableList::kIsMerged));
+
+    other = variableList->getMergeHead(other);
+
+    if (head == other) {
+        return head;
+    }
+
+    if (UNLIKELY(head > other)) {
+        VariableRef tmp = head;
+        head = other;
+        other = tmp;
+    }
+
+    VariableList::Variable& variableHead = variableList->variables[head];
+    VariableList::Variable& variableOther = variableList->variables[other];
+
+    if (variableHead.info & VariableList::kIsImmediate) {
+        variableHead.info -= VariableList::kIsImmediate;
+        variableHead.u.rangeStart = variableHead.rangeEnd;
+    }
+
+    if (variableOther.info & VariableList::kIsImmediate) {
+        variableOther.info -= VariableList::kIsImmediate;
+        variableOther.u.rangeStart = variableOther.rangeEnd;
+    }
+
+    if (variableOther.u.rangeStart < variableHead.u.rangeStart) {
+        variableHead.u.rangeStart = variableOther.u.rangeStart;
+    }
+
+    if (variableHead.rangeEnd < variableOther.rangeEnd) {
+        variableHead.rangeEnd = variableOther.rangeEnd;
+    }
+
+    variableHead.info |= variableOther.info & (VariableList::kConstraints | Instruction::TypeMask);
+
+    variableOther.u.parent = head;
+    variableOther.info |= VariableList::kIsMerged;
+    return head;
+}
+
+#define VARIABLE_GET_LABEL(v) (reinterpret_cast<InstructionListItem*>(v)->asLabel())
+
+void JITCompiler::buildVariables(uint32_t requiredStackSize)
+{
+    ASSERT_STATIC(Instruction::Int32Operand < Instruction::Float32Operand
+                      && (Instruction::Int32Operand | Instruction::Float32Operand) == Instruction::Float32Operand,
+                  "Coverting Int32Operand to Float32Operand should be possible");
+    ASSERT_STATIC(Instruction::Int64Operand < Instruction::Float64Operand
+                      && (Instruction::Int64Operand | Instruction::Float64Operand) == Instruction::Float64Operand,
+                  "Coverting Int64Operand to Float64Operand should be possible");
+
+    size_t variableCount = requiredStackSize;
+    size_t dependencySize = 0;
+    size_t nextId = 0;
+    size_t nextTryBlock = m_tryBlockStart;
+
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        item->m_id = ++nextId;
+
         if (item->isLabel()) {
-            item->asLabel()->m_dependencyCtx = new DependencyGenContext(requiredStackSize);
+            Label* label = item->asLabel();
+
+            label->m_dependencyStart = dependencySize;
+            dependencySize += requiredStackSize;
+
+            if (label->info() & Label::kHasTryInfo) {
+                ASSERT(tryBlocks()[nextTryBlock].start == label);
+
+                do {
+                    for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
+                        if (it.tagIndex != std::numeric_limits<uint32_t>::max()) {
+                            TagType* tagType = module()->tagType(it.tagIndex);
+                            variableCount += module()->functionType(tagType->sigIndex())->param().size();
+                        }
+                    }
+
+                    nextTryBlock++;
+                } while (nextTryBlock < tryBlocks().size()
+                         && tryBlocks()[nextTryBlock].start == label);
+            }
+        } else {
+            variableCount += item->asInstruction()->resultCount();
         }
     }
 
-    size_t nextTryBlock = m_tryBlockStart;
+    if (requiredStackSize == 0) {
+        return;
+    }
+
+    DependencyGenContext dependencyCtx(dependencySize, requiredStackSize);
     bool updateDeps = true;
-    std::vector<InstructionListItem*> currentDeps(requiredStackSize);
+
+    m_variableList = new VariableList(variableCount);
+    nextTryBlock = m_tryBlockStart;
+
+    for (uint32_t i = 0; i < requiredStackSize; i++) {
+        m_variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(i, Operand::Offset), 0, static_cast<size_t>(0)));
+        dependencyCtx.currentDependencies[i] = VARIABLE_SET(i, DependencyGenContext::Variable);
+        dependencyCtx.currentOptions[i] = 0;
+    }
 
     // Phase 1: the direct dependencies are computed for instructions
     // and labels (only labels can have multiple dependencies).
@@ -154,7 +341,9 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
             Label* label = item->asLabel();
 
             if (updateDeps) {
-                label->m_dependencyCtx->update(currentDeps);
+                dependencyCtx.update(label->m_dependencyStart, label->id());
+            } else {
+                dependencyCtx.maxDistance[label->m_dependencyStart / requiredStackSize] = label->id();
             }
 
             if (label->info() & Label::kHasTryInfo) {
@@ -162,13 +351,16 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
 
                 do {
                     for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
+                        // Forward jump.
                         if (it.tagIndex == std::numeric_limits<uint32_t>::max()) {
-                            it.u.handler->m_dependencyCtx->update(currentDeps);
+                            dependencyCtx.update(it.u.handler->m_dependencyStart, label->id());
                         } else {
                             TagType* tagType = module()->tagType(it.tagIndex);
-                            uint32_t size = module()->functionType(tagType->sigIndex())->param().size();
+                            const ValueTypeVector& param = module()->functionType(tagType->sigIndex())->param();
+                            Label* catchLabel = it.u.handler;
 
-                            it.u.handler->m_dependencyCtx->update(currentDeps, it.stackSizeToBe, it.stackSizeToBe + size);
+                            dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
+                                                 STACK_OFFSET(it.stackSizeToBe), param, m_variableList);
                         }
                     }
 
@@ -177,8 +369,9 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
                          && tryBlocks()[nextTryBlock].start == label);
             }
 
-            for (uint32_t i = 0; i < requiredStackSize; ++i) {
-                currentDeps[i] = label;
+            for (size_t i = 0; i < requiredStackSize; ++i) {
+                dependencyCtx.currentDependencies[i] = VARIABLE_SET_PTR(label);
+                dependencyCtx.currentOptions[i] = 0;
             }
 
             updateDeps = true;
@@ -190,22 +383,25 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
         Operand* end = operand + instr->paramCount();
 
         while (operand < end) {
-            InstructionListItem* dependency = currentDeps[operand->offset];
+            VariableRef ref = dependencyCtx.currentDependencies[operand->ref];
 
-            if (dependency != nullptr) {
-                operand->item = dependency;
+            if (VARIABLE_TYPE(ref) == DependencyGenContext::Label) {
+                size_t offset = VARIABLE_GET_LABEL(ref)->m_dependencyStart + operand->ref;
+                dependencyCtx.options[offset] |= DependencyGenContext::kOptReferenced | (dependencyCtx.currentOptions[operand->ref] & VariableList::kConstraints);
 
-                if (dependency->isLabel()) {
-                    dependency->asLabel()->m_dependencyCtx->stackItem(operand->offset).options |= DependencyGenContext::kOptReferenced;
-                }
+                ref = VARIABLE_SET(operand->ref, DependencyGenContext::Label);
+            } else {
+                ASSERT(VARIABLE_TYPE(ref) == DependencyGenContext::Variable);
+                dependencyCtx.updateWithGetter(m_variableList, VARIABLE_GET_REF(ref), instr);
             }
 
+            operand->ref = ref;
             operand++;
         }
 
         if (instr->group() == Instruction::DirectBranch) {
             Label* label = instr->asExtended()->value().targetLabel;
-            label->m_dependencyCtx->update(currentDeps);
+            dependencyCtx.update(label->m_dependencyStart, instr->id());
 
             if (instr->opcode() == ByteCode::JumpOpcode) {
                 updateDeps = false;
@@ -220,7 +416,7 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
 
             while (label < end) {
                 if (updatedLabels.insert(*label).second) {
-                    (*label)->m_dependencyCtx->update(currentDeps);
+                    dependencyCtx.update((*label)->m_dependencyStart, instr->id());
                 }
                 label++;
             }
@@ -233,184 +429,324 @@ void JITCompiler::buildParamDependencies(uint32_t requiredStackSize)
             continue;
         }
 
-        end = operand + instr->resultCount();
-
-        // Only certain instructions are collected
-        switch (instr->group()) {
-        case Instruction::Immediate:
-        case Instruction::Compare:
-        case Instruction::CompareFloat:
-        case Instruction::UnaryCondSIMD:
-            break;
-
-        default:
-            instr = nullptr;
-            break;
+        if (instr->info() & Instruction::kIsCallback) {
+            for (size_t i = 0; i < requiredStackSize; i++) {
+                dependencyCtx.currentOptions[i] |= VariableList::kIsCallback;
+            }
         }
 
-        while (operand < end) {
-            currentDeps[operand->offset] = instr;
+        if (instr->info() & Instruction::kDestroysR0R1) {
+            for (size_t i = 0; i < requiredStackSize; i++) {
+                dependencyCtx.currentOptions[i] |= VariableList::kDestroysR0R1;
+            }
+        }
+
+        uint32_t resultCount = instr->resultCount();
+
+        if (resultCount == 0) {
+            continue;
+        }
+
+        if (instr->group() != Instruction::Call) {
+            ASSERT(resultCount == 1);
+
+            const uint8_t* list = instr->getOperandDescriptor();
+            ASSERT(list != 0);
+
+            VariableRef ref = VARIABLE_SET(m_variableList->variables.size(), DependencyGenContext::Variable);
+            uint32_t typeInfo = list[instr->paramCount()] & Instruction::TypeMask;
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            if (typeInfo == Instruction::Int64LowOperand) {
+                typeInfo = Instruction::Int64Operand;
+            }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+            VariableRef value = VARIABLE_SET(operand->ref, Operand::Offset);
+            m_variableList->variables.push_back(VariableList::Variable(value, typeInfo, instr));
+            dependencyCtx.assignReference(ref, operand->ref, typeInfo);
+
+            operand->ref = ref;
+            continue;
+        }
+
+        FunctionType* functionType;
+
+        if (instr->opcode() == ByteCode::CallOpcode) {
+            Call* call = reinterpret_cast<Call*>(instr->byteCode());
+            functionType = module()->function(call->index())->functionType();
+        } else {
+            CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
+            functionType = callIndirect->functionType();
+        }
+
+        ASSERT(functionType->result().size() == resultCount);
+
+        size_t id = instr->id();
+
+        for (auto it : functionType->result()) {
+            VariableRef ref = VARIABLE_SET(m_variableList->variables.size(), DependencyGenContext::Variable);
+            uint32_t typeInfo = Instruction::valueTypeToOperandType(it);
+
+            m_variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(operand->ref, Operand::Offset), typeInfo, id));
+            dependencyCtx.assignReference(ref, operand->ref, typeInfo);
+            operand->ref = ref;
             operand++;
         }
     }
 
+    ASSERT(variableCount == m_variableList->variables.size());
+
     // Phase 2: the indirect instruction
     // references are computed for labels.
-    std::vector<DependencyGenContext::StackItem>* lastStack = nullptr;
 
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (!item->isLabel()) {
-            Instruction* instr = item->asInstruction();
-            Operand* param = instr->params();
-
-            for (uint32_t i = instr->paramCount(); i > 0; --i) {
-                if (param->item != nullptr && param->item->isLabel()) {
-                    ASSERT(param->item->asLabel()->m_dependencyCtx->stack() == lastStack);
-
-                    DependencyGenContext::StackItem& item = (*lastStack)[param->offset];
-
-                    ASSERT(item.options & DependencyGenContext::kOptReferenced);
-
-                    if (!(item.options & DependencyGenContext::kOptDependencyComputed)) {
-                        // Exactly one item is present in the list, which is stored in
-                        // the instruction, not in the label to reduce memory consumption.
-                        if (item.options & DependencyGenContext::kOptHasAnyInstruction) {
-                            ASSERT(item.dependencies.begin() == item.dependencies.end());
-                            param->item = nullptr;
-                        } else {
-                            ASSERT(++item.dependencies.begin() == item.dependencies.end());
-                            param->item = *item.dependencies.begin();
-                        }
-                    }
-                }
-                param++;
-            }
             continue;
         }
 
         Label* currentLabel = item->asLabel();
-        lastStack = currentLabel->m_dependencyCtx->stack();
+        size_t dependencyStart = currentLabel->m_dependencyStart;
 
         // Compute the required size first
-        ASSERT(requiredStackSize == lastStack->size());
-        size_t end = requiredStackSize;
+        size_t end = dependencyStart + requiredStackSize;
 
-        while (end > 0) {
-            if ((*lastStack)[end - 1].options & DependencyGenContext::kOptReferenced) {
-                break;
-            }
-            end--;
-        }
+        for (uint32_t i = dependencyStart; i < end; ++i) {
+            ASSERT(!(dependencyCtx.options[i] & DependencyGenContext::kOptDependencyComputed));
 
-        currentLabel->m_dependencies.resize(end);
-
-        for (uint32_t i = 0; i < end; ++i) {
-            DependencyGenContext::StackItem& currentItem = (*lastStack)[i];
-
-            ASSERT(!(currentItem.options & DependencyGenContext::kOptDependencyComputed));
-
-            if (!(currentItem.options & DependencyGenContext::kOptReferenced)) {
+            if (!(dependencyCtx.options[i] & DependencyGenContext::kOptReferenced)) {
                 continue;
             }
 
             std::vector<Label*> unprocessedLabels;
-            Label::DependencyList instrDependencies;
-            std::set<InstructionListItem*>& dependencies = currentItem.dependencies;
-            bool hasAnyInstruction = (currentItem.options & DependencyGenContext::kOptHasAnyInstruction) != 0;
+            std::set<VariableRef>& dependencies = dependencyCtx.dependencies[i];
 
             for (auto it : dependencies) {
-                if (it->isLabel()) {
-                    unprocessedLabels.push_back(it->asLabel());
-                } else {
-                    instrDependencies.push_back(it->asInstruction());
+                if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
+                    unprocessedLabels.push_back(VARIABLE_GET_LABEL(it));
                 }
             }
 
             while (!unprocessedLabels.empty()) {
                 Label* label = unprocessedLabels.back();
-                DependencyGenContext::StackItem& item = label->m_dependencyCtx->stackItem(i);
+                std::set<VariableRef>& list = dependencyCtx.dependencies[i - dependencyStart + label->m_dependencyStart];
 
                 unprocessedLabels.pop_back();
 
-                if (item.options & DependencyGenContext::kOptDependencyComputed) {
-                    for (auto it : label->dependencies(i)) {
-                        if (it == nullptr) {
-                            hasAnyInstruction = true;
-                        } else if (dependencies.insert(it).second) {
-                            instrDependencies.push_back(it);
-                        }
-                    }
-                } else {
-                    for (auto it : item.dependencies) {
-                        if (dependencies.insert(it).second) {
-                            if (it->isLabel()) {
-                                unprocessedLabels.push_back(it->asLabel());
-                            } else {
-                                instrDependencies.push_back(it->asInstruction());
-                            }
+                for (auto it : list) {
+                    if (dependencies.insert(it).second) {
+                        if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
+                            unprocessedLabels.push_back(VARIABLE_GET_LABEL(it));
                         }
                     }
                 }
-
-                if (item.options & DependencyGenContext::kOptHasAnyInstruction) {
-                    hasAnyInstruction = true;
-                }
             }
 
-            dependencies.clear();
+            dependencyCtx.options[i] |= DependencyGenContext::kOptDependencyComputed;
 
-            if (hasAnyInstruction) {
-                currentItem.options |= DependencyGenContext::kOptHasAnyInstruction;
-            } else {
-                // At least one instruction dependency
-                // must be present if the input is valid.
-                assert(instrDependencies.size() > 0);
-
-                if (isSameConst(instrDependencies)) {
-                    dependencies.insert(instrDependencies[0]);
-                    continue;
-                }
-            }
-
-            size_t size = instrDependencies.size();
-
-            if (hasAnyInstruction) {
-                if (size == 0) {
-                    // One unknown instruction is present.
-                    continue;
-                }
-                size++;
-            } else if (size == 1) {
-                dependencies.insert(instrDependencies[0]);
+            // Compute variable dependencies.
+            if (checkSameConst(m_variableList, dependencies)) {
                 continue;
             }
 
-            ASSERT(size > 0);
+            VariableRef headRef = DependencyGenContext::kNoRef;
+            uint8_t options = 0;
+            size_t rangeStart = VariableList::kRangeMax;
+            size_t rangeEnd = dependencyCtx.maxDistance[currentLabel->m_dependencyStart / requiredStackSize];
 
-            currentItem.options |= DependencyGenContext::kOptDependencyComputed;
+            for (auto it : dependencies) {
+                if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
+                    Label* label = VARIABLE_GET_LABEL(it);
 
-            Label::DependencyList& list = currentLabel->m_dependencies[i];
-            list.reserve(size);
+                    if (label == currentLabel) {
+                        continue;
+                    }
 
-            for (auto it : instrDependencies) {
-                list.push_back(it);
+                    options |= dependencyCtx.options[label->m_dependencyStart + (i - dependencyStart)] & VariableList::kConstraints;
 
-                if (it->group() == Instruction::Immediate) {
-                    it->addInfo(Instruction::kKeepInstruction);
+                    if (rangeStart > label->id()) {
+                        rangeStart = label->id();
+                    }
+
+                    size_t end = dependencyCtx.maxDistance[label->m_dependencyStart / requiredStackSize];
+                    if (rangeEnd < end) {
+                        rangeEnd = end;
+                    }
+                    continue;
+                }
+
+                VariableRef ref = VARIABLE_GET_REF(it);
+
+                if (headRef == DependencyGenContext::kNoRef) {
+                    headRef = m_variableList->getMergeHead(ref);
+                } else {
+                    headRef = mergeVariables(m_variableList, headRef, ref);
                 }
             }
 
-            if (hasAnyInstruction) {
-                list.push_back(nullptr);
+            ASSERT(headRef != DependencyGenContext::kNoRef);
+
+            VariableList::Variable& variable = m_variableList->variables[headRef];
+            variable.info |= (options | dependencyCtx.options[i]) & VariableList::kConstraints;
+
+            if (variable.u.rangeStart > rangeStart) {
+                variable.u.rangeStart = rangeStart;
             }
+
+            if (variable.rangeEnd < rangeEnd) {
+                variable.rangeEnd = rangeEnd;
+            }
+
+            dependencies.clear();
+            dependencies.insert(VARIABLE_SET(headRef, DependencyGenContext::Variable));
         }
     }
 
     // Cleanup
+    size_t lastDependencyStart = 0;
+
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
-            delete item->asLabel()->m_dependencyCtx;
+            lastDependencyStart = item->asLabel()->m_dependencyStart;
+            continue;
         }
+
+        Instruction* instr = item->asInstruction();
+        Operand* param = instr->params();
+        Operand* end = param + instr->paramCount() + instr->resultCount();
+
+        while (param < end) {
+            VariableRef ref = param->ref;
+
+            if (VARIABLE_TYPE(ref) == DependencyGenContext::Label) {
+                size_t offset = lastDependencyStart + VARIABLE_GET_REF(ref);
+                DependencyGenContext::DependencyList& list = dependencyCtx.dependencies[offset];
+
+                ASSERT((dependencyCtx.options[offset] & DependencyGenContext::kOptDependencyComputed) && list.size() == 1);
+
+                ref = *list.begin();
+
+                ASSERT(VARIABLE_TYPE(ref) == DependencyGenContext::Variable);
+
+                ref = m_variableList->getMergeHead(VARIABLE_GET_REF(ref));
+                VariableList::Variable& variable = m_variableList->variables[ref];
+
+                if (!(variable.info & VariableList::kIsImmediate)) {
+                    ASSERT(variable.u.rangeStart < instr->id());
+
+                    if (variable.rangeEnd < instr->id()) {
+                        variable.rangeEnd = instr->id();
+                    }
+                }
+
+                param->ref = ref;
+            } else {
+                ASSERT(VARIABLE_TYPE(ref) == DependencyGenContext::Variable);
+                param->ref = m_variableList->getMergeHead(VARIABLE_GET_REF(ref));
+            }
+
+            param++;
+        }
+
+        if (instr->paramCount() > 0) {
+            // Force float type for variables which input needs to be float.
+            const uint8_t* list = instr->getOperandDescriptor();
+            param = instr->params();
+
+            if (*list != 0) {
+                end = param + instr->paramCount();
+
+                do {
+                    VariableList::Variable& variable = m_variableList->variables[param->ref];
+                    variable.info |= (*list & Instruction::TypeMask);
+                    param++;
+                    list++;
+                } while (param < end);
+            } else {
+                const ValueTypeVector* types = nullptr;
+
+                switch (instr->opcode()) {
+                case ByteCode::CallOpcode: {
+                    Call* call = reinterpret_cast<Call*>(instr->byteCode());
+                    types = &module()->function(call->index())->functionType()->param();
+                    break;
+                }
+                case ByteCode::CallIndirectOpcode: {
+                    CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
+                    types = &callIndirect->functionType()->param();
+                    break;
+                }
+                case ByteCode::ThrowOpcode: {
+                    Throw* throwTag = reinterpret_cast<Throw*>(instr->byteCode());
+                    TagType* tagType = module()->tagType(throwTag->tagIndex());
+                    types = &module()->functionType(tagType->sigIndex())->param();
+                    break;
+                }
+                default: {
+                    ASSERT(instr->opcode() == ByteCode::EndOpcode);
+                    types = &moduleFunction()->functionType()->result();
+                    break;
+                }
+                }
+
+                for (auto it : *types) {
+                    VariableList::Variable& variable = m_variableList->variables[param->ref];
+                    variable.info |= Instruction::valueTypeToOperandType(it);
+                    param++;
+                }
+
+                if (instr->opcode() == ByteCode::CallIndirectOpcode) {
+                    VariableList::Variable& variable = m_variableList->variables[param->ref];
+                    variable.info |= Instruction::Int32Operand;
+                }
+            }
+        }
+
+        if (instr->group() == Instruction::Immediate) {
+            VariableList::Variable& variable = m_variableList->variables[instr->getResult(0)->ref];
+
+            if (variable.info & VariableList::kIsImmediate) {
+                ASSERT(!(variable.info & VariableList::kIsMerged) && variable.u.immediate == instr);
+                variable.value = VARIABLE_SET_PTR(instr);
+            } else {
+                instr->addInfo(Instruction::kKeepInstruction);
+            }
+        }
+
+        if (!(instr->info() & Instruction::kIsMergeCompare)) {
+            continue;
+        }
+
+        ASSERT(instr->next() != nullptr);
+
+        VariableRef ref = instr->getResult(0)->ref;
+        VariableList::Variable& variable = m_variableList->variables[ref];
+
+        if (variable.u.rangeStart == instr->id() && variable.rangeEnd == instr->id() + 1) {
+            ASSERT(instr->next()->isInstruction());
+            Instruction* nextInstr = instr->next()->asInstruction();
+
+            switch (nextInstr->opcode()) {
+            case ByteCode::JumpIfTrueOpcode:
+            case ByteCode::JumpIfFalseOpcode:
+                // These instructions has only one argument.
+                ASSERT(nextInstr->getParam(0)->ref == VARIABLE_SET(ref, DependencyGenContext::Variable));
+                variable.info |= VariableList::kIsImmediate;
+                variable.value = VARIABLE_SET_PTR(nullptr);
+                continue;
+            case ByteCode::SelectOpcode:
+                if (nextInstr->getParam(2)->ref == VARIABLE_SET(ref, DependencyGenContext::Variable)) {
+                    variable.info |= VariableList::kIsImmediate;
+                    variable.value = VARIABLE_SET_PTR(nullptr);
+                    continue;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+
+        instr->clearInfo(Instruction::kIsMergeCompare);
     }
 }
 

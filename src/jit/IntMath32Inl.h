@@ -42,19 +42,19 @@ struct JITArgPair {
 
 void JITArgPair::set(Operand* operand)
 {
-    if (operand->item == nullptr || operand->item->group() != Instruction::Immediate) {
+    if (VARIABLE_TYPE(operand->ref) != Operand::Immediate) {
+        sljit_sw offset = static_cast<sljit_sw>(VARIABLE_GET_OFFSET(operand->ref));
+
         this->arg1 = SLJIT_MEM1(kFrameReg);
-        this->arg1w = static_cast<sljit_sw>((operand->offset << 2) + WORD_LOW_OFFSET);
+        this->arg1w = offset + WORD_LOW_OFFSET;
         this->arg2 = SLJIT_MEM1(kFrameReg);
-        this->arg2w = static_cast<sljit_sw>((operand->offset << 2) + WORD_HIGH_OFFSET);
+        this->arg2w = offset + WORD_HIGH_OFFSET;
         return;
     }
 
     this->arg1 = SLJIT_IMM;
     this->arg2 = SLJIT_IMM;
-    ASSERT(operand->item->group() == Instruction::Immediate);
-
-    Instruction* instr = operand->item->asInstruction();
+    Instruction* instr = VARIABLE_GET_IMM(operand->ref);
 
     uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
 
@@ -62,10 +62,8 @@ void JITArgPair::set(Operand* operand)
     this->arg2w = static_cast<sljit_sw>(value64 >> 32);
 }
 
-static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instruction* instr)
+static void emitStoreImmediate(sljit_compiler* compiler, sljit_sw offset, Instruction* instr)
 {
-    sljit_sw offset = static_cast<sljit_sw>(result->offset << 2);
-
     switch (instr->opcode()) {
 #ifdef HAS_SIMD
     case ByteCode::Const128Opcode: {
@@ -1033,28 +1031,16 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 
     Instruction* nextInstr = nullptr;
     bool isBranch = false;
-    bool isSelect = false;
 
     ASSERT(instr->next() != nullptr);
 
-    if (instr->next()->isInstruction()) {
+    if (instr->info() & Instruction::kIsMergeCompare) {
         nextInstr = instr->next()->asInstruction();
 
-        switch (nextInstr->opcode()) {
-        case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode:
-            if (nextInstr->getParam(0)->item == instr) {
-                isBranch = true;
-            }
-            break;
-        case ByteCode::SelectOpcode:
-            if (nextInstr->getParam(2)->item == instr) {
-                isSelect = true;
-            }
-            break;
-        default:
-            break;
-        }
+        ASSERT(nextInstr->opcode() == ByteCode::SelectOpcode
+               || nextInstr->opcode() == ByteCode::JumpIfTrueOpcode || nextInstr->opcode() == ByteCode::JumpIfFalseOpcode);
+
+        isBranch = (nextInstr->opcode() != ByteCode::SelectOpcode);
     }
 
     if (!(instr->info() & Instruction::kIs32Bit)) {
@@ -1075,18 +1061,18 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
             sljit_set_current_flags(compiler, (opcode - SLJIT_SUB) | SLJIT_CURRENT_FLAGS_SUB);
         }
 
-        if (isBranch) {
+        if (nextInstr != nullptr) {
+            if (!isBranch) {
+                emitSelect(compiler, nextInstr, type);
+                return true;
+            }
+
             if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
                 type ^= 0x1;
             }
 
             sljit_jump* jump = sljit_emit_jump(compiler, type);
             nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
-            return true;
-        }
-
-        if (isSelect) {
-            emitSelect(compiler, nextInstr, type);
             return true;
         }
 
@@ -1119,7 +1105,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
 
-    if (isSelect) {
+    if (nextInstr != nullptr) {
         emitSelect(compiler, nextInstr, type);
         return true;
     }

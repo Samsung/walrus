@@ -25,6 +25,10 @@ namespace Walrus {
 
 void JITCompiler::allocateRegisters()
 {
+    if (m_variableList == nullptr) {
+        return;
+    }
+
     // Dummy register allocator.
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
@@ -33,6 +37,7 @@ void JITCompiler::allocateRegisters()
 
         Instruction* instr = item->asInstruction();
         Operand* operand = instr->operands();
+        Operand* end = operand + instr->paramCount() + instr->resultCount();
         const uint8_t* list = instr->getOperandDescriptor();
         uint32_t paramCount = instr->paramCount();
         uint32_t resultCount = instr->resultCount();
@@ -40,6 +45,18 @@ void JITCompiler::allocateRegisters()
         uint32_t nextIntIndex = SLJIT_R0;
         uint32_t nextFloatIndex = SLJIT_FR0;
 
+        while (operand < end) {
+            VariableRef ref = operand->ref;
+
+            VariableList::Variable& variable = m_variableList->variables[ref];
+
+            ASSERT((variable.info & Instruction::TypeMask) > 0);
+            operand->ref = variable.value;
+
+            operand++;
+        }
+
+        operand = instr->operands();
         instr->setRequiredRegsDescriptor(0);
 
         if (*list == 0) {
@@ -52,14 +69,14 @@ void JITCompiler::allocateRegisters()
         }
 
         for (uint32_t i = 0; i < paramCount; i++) {
-            ASSERT((*list & Instruction::TypeMask) >= Instruction::PtrOperand
-                   && (*list & Instruction::TypeMask) <= Instruction::V128Operand);
+            ASSERT((*list & Instruction::TypeMask) >= Instruction::Int32Operand
+                   && (*list & Instruction::TypeMask) <= Instruction::Float64Operand);
 
-            if ((*list & Instruction::TypeMask) >= Instruction::Float32Operand
+            if ((*list & Instruction::TypeMask) >= Instruction::FloatOperandStart
                 && !(*list & Instruction::TmpNotAllowed)) {
                 // Source registers are read-only.
                 if ((*list & Instruction::TmpRequired)
-                    || (operand->item != nullptr && operand->item->group() == Instruction::Immediate)) {
+                    || (VARIABLE_TYPE(operand->ref) == Operand::Immediate)) {
                     instr->setRequiredReg(tmpIndex, nextFloatIndex++);
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
                     if ((*list & Instruction::TypeMask) == Instruction::V128Operand) {
@@ -77,8 +94,8 @@ void JITCompiler::allocateRegisters()
 
         for (; *list != 0; list++) {
             // Assign temporary registers.
-            ASSERT((*list & Instruction::TypeMask) <= Instruction::V128Operand
-                   && ((*list & Instruction::TypeMask) >= Instruction::PtrOperand || (*list & Instruction::TmpRequired)));
+            ASSERT(((*list & Instruction::TypeMask) >= Instruction::Int32Operand || (*list & Instruction::TmpRequired))
+                   && (*list & Instruction::TypeMask) <= Instruction::Float64Operand);
 
             if (resultCount > 0) {
                 --resultCount;
@@ -95,7 +112,7 @@ void JITCompiler::allocateRegisters()
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             }
 
-            if ((*list & Instruction::TypeMask) <= Instruction::Int64Operand) {
+            if ((*list & Instruction::TypeMask) < Instruction::FloatOperandStart) {
                 instr->setRequiredReg(tmpIndex, nextIntIndex++);
             } else {
                 instr->setRequiredReg(tmpIndex, nextFloatIndex++);
@@ -113,7 +130,7 @@ void JITCompiler::allocateRegisters()
         // 64 bit shifts / rotates requires special handling.
         if ((instr->info() & (Instruction::kIsShift | Instruction::kIs32Bit)) == Instruction::kIsShift) {
             ASSERT(operand == instr->operands() + 2);
-            bool isImmediate = (operand[-1].item != nullptr && operand[-1].item->group() == Instruction::Immediate);
+            bool isImmediate = (VARIABLE_TYPE(operand[-1].ref) == Operand::Immediate);
 
             if (instr->opcode() == ByteCode::I64RotlOpcode || instr->opcode() == ByteCode::I64RotrOpcode) {
                 instr->setRequiredReg(2, SLJIT_R2);
@@ -138,6 +155,9 @@ void JITCompiler::allocateRegisters()
 
         ASSERT(resultCount == 0);
     }
+
+    delete m_variableList;
+    m_variableList = nullptr;
 }
 
 } // namespace Walrus

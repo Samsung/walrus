@@ -76,21 +76,47 @@ static sljit_sw callFunctionIndirect(
 
 static void emitCall(sljit_compiler* compiler, Instruction* instr)
 {
-    emitStoreImmediateParams(compiler, instr);
+    FunctionType* functionType;
+    CompileContext* context = CompileContext::get(compiler);
+    ByteCodeStackOffset* stackOffset;
+    sljit_sw addr;
+
+    if (instr->opcode() == ByteCode::CallOpcode) {
+        Call* call = reinterpret_cast<Call*>(instr->byteCode());
+        addr = GET_FUNC_ADDR(sljit_sw, callFunction);
+        functionType = context->compiler->module()->function(call->index())->functionType();
+        stackOffset = call->stackOffsets();
+    } else {
+        CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
+        addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
+        functionType = callIndirect->functionType();
+        stackOffset = callIndirect->stackOffsets();
+    }
+
+    Operand* operand = instr->operands();
+    for (auto it : functionType->param()) {
+        if (VARIABLE_TYPE(operand->ref) == Operand::Immediate && !(VARIABLE_GET_IMM(operand->ref)->info() & Instruction::kKeepInstruction)) {
+            emitStoreImmediate(compiler, *stackOffset, VARIABLE_GET_IMM(operand->ref));
+        }
+
+        operand++;
+        stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
+    }
+
+    if (instr->opcode() == ByteCode::CallIndirectOpcode) {
+        if (VARIABLE_TYPE(operand->ref) == Operand::Immediate && !(VARIABLE_GET_IMM(operand->ref)->info() & Instruction::kKeepInstruction)) {
+            CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
+            emitStoreImmediate(compiler, callIndirect->calleeOffset(), VARIABLE_GET_IMM(operand->ref));
+        }
+    }
 
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(instr->byteCode()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, kContextReg, 0);
 
-    sljit_sw addr = GET_FUNC_ADDR(sljit_sw, callFunction);
-    if (instr->opcode() == ByteCode::CallIndirectOpcode) {
-        addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
-    }
-
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
     sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
-    CompileContext* context = CompileContext::get(compiler);
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {
         context->appendTrapJump(ExecutionContext::ReturnToLabel, jump);

@@ -106,6 +106,24 @@
    i64.eqz
    select
 )
+
+(func (export "test8") (param i32) (result i32 i32)
+   i32.const 5
+   i32.const 6
+
+   local.get 0
+   i32.const 7
+   i32.lt_s
+   select
+
+   local.get 0
+   i32.const 7
+   i32.gt_s
+
+   i32.const 8
+   local.get 0
+   select
+)
 )
 
 (assert_return (invoke "test1") (i32.const 5) (i32.const 267386880))
@@ -116,3 +134,4 @@
 (assert_return (invoke "test6") (i32.const 6))
 (assert_return (invoke "test7" (i64.const 0)) (i32.const 5))
 (assert_return (invoke "test7" (i64.const 100)) (i32.const 8))
+(assert_return (invoke "test8" (i32.const 20)) (i32.const 6) (i32.const 1))

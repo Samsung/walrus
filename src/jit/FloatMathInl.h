@@ -34,7 +34,7 @@ using f64Function1Param = std::add_pointer<sljit_f64(sljit_f64)>::type;
 
 static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 srcReg)
 {
-    if (operand->item == nullptr || operand->item->group() != Instruction::Immediate) {
+    if (VARIABLE_TYPE(operand->ref) != Operand::Immediate) {
         arg.set(operand);
         return;
     }
@@ -42,7 +42,7 @@ static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg
     arg.arg = srcReg;
     arg.argw = 0;
 
-    Instruction* instr = operand->item->asInstruction();
+    Instruction* instr = VARIABLE_GET_IMM(operand->ref);
     ASSERT(srcReg != 0);
 
     if (instr->opcode() == ByteCode::Const32Opcode) {
@@ -471,43 +471,32 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
     }
 
     Instruction* nextInstr = nullptr;
-    bool isSelect = false;
 
     ASSERT(instr->next() != nullptr);
 
-    if (instr->next()->isInstruction()) {
+    if (instr->info() & Instruction::kIsMergeCompare) {
         nextInstr = instr->next()->asInstruction();
 
-        switch (nextInstr->opcode()) {
-        case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode:
-            if (nextInstr->getParam(0)->item == instr) {
-                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
-                    type ^= 0x1;
-                }
+        if (nextInstr->opcode() != ByteCode::SelectOpcode) {
+            ASSERT(nextInstr->opcode() == ByteCode::JumpIfTrueOpcode || nextInstr->opcode() == ByteCode::JumpIfFalseOpcode);
 
-                type |= (opcode & SLJIT_32);
+            if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+                type ^= 0x1;
+            }
 
-                sljit_jump* jump = sljit_emit_fcmp(compiler, type, params[0].arg, params[0].argw,
-                                                   params[1].arg, params[1].argw);
-                nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
-                return true;
-            }
-            break;
-        case ByteCode::SelectOpcode:
-            if (nextInstr->getParam(2)->item == instr) {
-                isSelect = true;
-            }
-            break;
-        default:
-            break;
+            type |= (opcode & SLJIT_32);
+
+            sljit_jump* jump = sljit_emit_fcmp(compiler, type, params[0].arg, params[0].argw,
+                                               params[1].arg, params[1].argw);
+            nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
+            return true;
         }
     }
 
     sljit_emit_fop1(compiler, opcode, params[0].arg, params[0].argw,
                     params[1].arg, params[1].argw);
 
-    if (isSelect) {
+    if (nextInstr != nullptr) {
         emitSelect(compiler, nextInstr, type);
         return true;
     }

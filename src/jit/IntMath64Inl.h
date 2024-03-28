@@ -16,10 +16,8 @@
 
 /* Only included by jit-backend.cc */
 
-static void emitStoreImmediate(sljit_compiler* compiler, Operand* result, Instruction* instr)
+static void emitStoreImmediate(sljit_compiler* compiler, sljit_sw offset, Instruction* instr)
 {
-    sljit_sw offset = static_cast<sljit_sw>(result->offset << 2);
-
     switch (instr->opcode()) {
 #ifdef HAS_SIMD
     case ByteCode::Const128Opcode: {
@@ -470,37 +468,26 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
     }
 
     Instruction* nextInstr = nullptr;
-    bool isSelect = false;
 
     ASSERT(instr->next() != nullptr);
 
-    if (instr->next()->isInstruction()) {
+    if (instr->info() & Instruction::kIsMergeCompare) {
         nextInstr = instr->next()->asInstruction();
 
-        switch (nextInstr->opcode()) {
-        case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode:
-            if (nextInstr->getParam(0)->item == instr) {
-                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
-                    type ^= 0x1;
-                }
+        if (nextInstr->opcode() != ByteCode::SelectOpcode) {
+            ASSERT(nextInstr->opcode() == ByteCode::JumpIfTrueOpcode || nextInstr->opcode() == ByteCode::JumpIfFalseOpcode);
 
-                if (instr->info() & Instruction::kIs32Bit) {
-                    type |= SLJIT_32;
-                }
+            if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+                type ^= 0x1;
+            }
 
-                sljit_jump* jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
-                nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
-                return true;
+            if (instr->info() & Instruction::kIs32Bit) {
+                type |= SLJIT_32;
             }
-            break;
-        case ByteCode::SelectOpcode:
-            if (nextInstr->getParam(2)->item == instr) {
-                isSelect = true;
-            }
-            break;
-        default:
-            break;
+
+            sljit_jump* jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+            nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
+            return true;
         }
     }
 
@@ -510,7 +497,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
 
-    if (isSelect) {
+    if (nextInstr != nullptr) {
         emitSelect(compiler, nextInstr, type);
         return true;
     }

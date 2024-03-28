@@ -203,9 +203,10 @@ enum ExtendType : uint32_t {
 
 void setArgs(Operand* operand, JITArg& arg)
 {
-    if (operand->item != nullptr && operand->item->asInstruction()->opcode() == ByteCode::Const128Opcode) {
+    if (VARIABLE_TYPE(operand->ref) == Operand::Immediate) {
+        ASSERT(VARIABLE_GET_IMM(operand->ref)->opcode() == ByteCode::Const128Opcode);
         arg.arg = SLJIT_MEM0();
-        arg.argw = (sljit_sw) reinterpret_cast<Const128*>(operand->item->asInstruction()->byteCode())->value();
+        arg.argw = (sljit_sw) reinterpret_cast<Const128*>(VARIABLE_GET_IMM(operand->ref)->asInstruction()->byteCode())->value();
     } else {
         arg.set(operand);
     }
@@ -725,9 +726,13 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
     simdOperandToArg(compiler, operands, args[0], srcType, SLJIT_TMP_DEST_FREG);
 
-    args[1].set(operands + 1);
-    sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_TMP_DEST_REG);
+    sljit_s32 dst = SLJIT_TMP_DEST_REG;
     sljit_s32 tmpFReg = SLJIT_TMP_DEST_FREG;
+
+    if (!(instr->info() & Instruction::kIsMergeCompare)) {
+        args[1].set(operands + 1);
+        sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_TMP_DEST_REG);
+    }
 
     simdEmitOp(compiler, opcode, tmpFReg, args[0].arg, args[0].arg | highRegister);
 
@@ -745,32 +750,24 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
     ASSERT(instr->next() != nullptr);
 
-    if (instr->next()->isInstruction()) {
+    if (instr->info() & Instruction::kIsMergeCompare) {
         Instruction* nextInstr = instr->next()->asInstruction();
 
-        switch (nextInstr->opcode()) {
-        case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode:
-            if (nextInstr->getParam(0)->item == instr) {
-                sljit_s32 type = SLJIT_NOT_EQUAL;
-
-                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
-                    type ^= 0x1;
-                }
-
-                nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
-                return true;
-            }
-            break;
-        case ByteCode::SelectOpcode:
-            if (nextInstr->getParam(2)->item == instr) {
-                emitSelect(compiler, nextInstr, SLJIT_NOT_EQUAL);
-                return true;
-            }
-            break;
-        default:
-            break;
+        if (nextInstr->opcode() == ByteCode::SelectOpcode) {
+            emitSelect(compiler, nextInstr, SLJIT_NOT_EQUAL);
+            return true;
         }
+
+        ASSERT(nextInstr->opcode() == ByteCode::JumpIfTrueOpcode || nextInstr->opcode() == ByteCode::JumpIfFalseOpcode);
+
+        sljit_s32 type = SLJIT_NOT_EQUAL;
+
+        if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+            type ^= 0x1;
+        }
+
+        nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
+        return true;
     }
 
     sljit_emit_op_flags(compiler, SLJIT_MOV, dst, 0, SLJIT_NOT_EQUAL);

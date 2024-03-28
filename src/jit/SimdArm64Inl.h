@@ -443,8 +443,12 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
     simdOperandToArg(compiler, operands, args[0], srcType, instr->requiredReg(0));
 
-    args[1].set(operands + 1);
-    sljit_s32 dst = GET_TARGET_REG(args[1].arg, SLJIT_TMP_DEST_REG);
+    sljit_s32 dst = SLJIT_TMP_DEST_REG;
+
+    if (!(instr->info() & Instruction::kIsMergeCompare)) {
+        args[1].set(operands + 1);
+        dst = GET_TARGET_REG(args[1].arg, SLJIT_TMP_DEST_REG);
+    }
 
     switch (instr->opcode()) {
     case ByteCode::I8X16AllTrueOpcode:
@@ -467,30 +471,22 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
     ASSERT(instr->next() != nullptr);
 
-    if (instr->next()->isInstruction()) {
+    if (instr->info() & Instruction::kIsMergeCompare) {
         Instruction* nextInstr = instr->next()->asInstruction();
 
-        switch (nextInstr->opcode()) {
-        case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode:
-            if (nextInstr->getParam(0)->item == instr) {
-                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
-                    type ^= 0x1;
-                }
-
-                nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
-                return true;
-            }
-            break;
-        case ByteCode::SelectOpcode:
-            if (nextInstr->getParam(2)->item == instr) {
-                emitSelect(compiler, nextInstr, type);
-                return true;
-            }
-            break;
-        default:
-            break;
+        if (nextInstr->opcode() == ByteCode::SelectOpcode) {
+            emitSelect(compiler, nextInstr, type);
+            return true;
         }
+
+        ASSERT(nextInstr->opcode() == ByteCode::JumpIfTrueOpcode || nextInstr->opcode() == ByteCode::JumpIfFalseOpcode);
+
+        if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+            type ^= 0x1;
+        }
+
+        nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
+        return true;
     }
 
     sljit_emit_op_flags(compiler, SLJIT_MOV32, dst, 0, type);

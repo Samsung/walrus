@@ -685,15 +685,15 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         }
 #ifdef HAS_SIMD
     } else if (opcode == 0) {
-        InstructionListItem* item = operands[1].item;
+        VariableRef ref = operands[1].ref;
 
-        if (item == nullptr || item->group() != Instruction::Immediate) {
+        if (VARIABLE_TYPE(ref) != Operand::Immediate) {
             addr.loadArg.set(operands + 1);
         } else {
-            ASSERT(item->asInstruction()->opcode() == ByteCode::Const128Opcode);
+            ASSERT(VARIABLE_GET_IMM(ref)->opcode() == ByteCode::Const128Opcode);
 
             addr.loadArg.arg = SLJIT_MEM0();
-            addr.loadArg.argw = reinterpret_cast<sljit_sw>(reinterpret_cast<Const128*>(item->asInstruction()->byteCode())->value());
+            addr.loadArg.argw = reinterpret_cast<sljit_sw>(reinterpret_cast<Const128*>(VARIABLE_GET_IMM(ref)->byteCode())->value());
         }
 
         if (SLJIT_IS_MEM(addr.loadArg.arg)) {

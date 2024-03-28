@@ -100,18 +100,23 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 // Helpers for simplifying descriptor definitions.
 
 #define I64_LOW (Instruction::Int64LowOperand | Instruction::TmpRequired)
-#define PTR Instruction::PtrOperand
 #define I32 Instruction::Int32Operand
 #define I64 Instruction::Int64Operand
+#define V128 Instruction::V128Operand
 #define F32 Instruction::Float32Operand
 #define F64 Instruction::Float64Operand
-#define V128 Instruction::V128Operand
 #define TMP Instruction::TmpRequired
 #define NOTMP Instruction::TmpNotAllowed
 #define LOW Instruction::LowerHalfNeeded
 #define S0 Instruction::Src0Allowed
 #define S1 Instruction::Src1Allowed
 #define S2 Instruction::Src2Allowed
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+#define PTR I32
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+#define PTR I64
+#endif /* SLJIT_32BIT_ARCHITECTURE */
 
 // S/D/T represents Source Destination operands and Temporary registers.
 // Example: SSDTT represents two source and one destination operands and two temporary registers.
@@ -349,9 +354,10 @@ enum OperandTypes : uint32_t {
 #undef OL4
 #undef OL5
 
-static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Module* module)
+static void compileFunction(JITCompiler* compiler)
 {
     size_t idx = 0;
+    ModuleFunction* function = compiler->moduleFunction();
     size_t endIdx = function->currentByteCodeSize();
 
     if (endIdx == 0) {
@@ -543,7 +549,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32GeUOpcode: {
             group = Instruction::Compare;
             paramCount = 2;
-            info = Instruction::kIs32Bit | Instruction::kIsCompare;
+            info = Instruction::kIs32Bit | Instruction::kIsMergeCompare;
             requiredInit = OTOp2I32;
             break;
         }
@@ -559,7 +565,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I64GeUOpcode: {
             group = Instruction::Compare;
             paramCount = 2;
-            info = Instruction::kIsCompare;
+            info = Instruction::kIsMergeCompare;
             requiredInit = OTCompareI64;
             break;
         }
@@ -615,7 +621,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::F64GeOpcode: {
             group = Instruction::CompareFloat;
             paramCount = 2;
-            info = Instruction::kIsCompare;
+            info = Instruction::kIsMergeCompare;
             if (requiredInit == OTNone)
                 requiredInit = OTCompareF64;
             break;
@@ -710,13 +716,14 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::I32EqzOpcode: {
             group = Instruction::Compare;
             paramCount = 1;
-            info = Instruction::kIs32Bit;
+            info = Instruction::kIs32Bit | Instruction::kIsMergeCompare;
             requiredInit = OTOp1I32;
             break;
         }
         case ByteCode::I64EqzOpcode: {
             group = Instruction::Compare;
             paramCount = 1;
+            info = Instruction::kIsMergeCompare;
             requiredInit = OTOp1I64;
             break;
         }
@@ -900,14 +907,10 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             instr->setRequiredRegsDescriptor(requiredInit);
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(select->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(select->src1Offset());
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(select->condOffset());
-            operands[3].item = nullptr;
-            operands[3].offset = STACK_OFFSET(select->dstOffset());
+            operands[0].ref = STACK_OFFSET(select->src0Offset());
+            operands[1].ref = STACK_OFFSET(select->src1Offset());
+            operands[2].ref = STACK_OFFSET(select->condOffset());
+            operands[3].ref = STACK_OFFSET(select->dstOffset());
             break;
         }
         case ByteCode::CallOpcode:
@@ -918,7 +921,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
 
             if (opcode == ByteCode::CallOpcode) {
                 Call* call = reinterpret_cast<Call*>(byteCode);
-                functionType = module->function(call->index())->functionType();
+                functionType = compiler->module()->function(call->index())->functionType();
                 stackOffset = call->stackOffsets();
                 callerCount = 0;
             } else {
@@ -933,21 +936,18 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             Operand* operand = instr->operands();
 
             for (auto it : functionType->param()) {
-                operand->item = nullptr;
-                operand->offset = STACK_OFFSET(*stackOffset);
+                operand->ref = STACK_OFFSET(*stackOffset);
                 operand++;
                 stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
 
             if (opcode == ByteCode::CallIndirectOpcode) {
-                operand->item = nullptr;
-                operand->offset = STACK_OFFSET(reinterpret_cast<CallIndirect*>(byteCode)->calleeOffset());
+                operand->ref = STACK_OFFSET(reinterpret_cast<CallIndirect*>(byteCode)->calleeOffset());
                 operand++;
             }
 
             for (auto it : functionType->result()) {
-                operand->item = nullptr;
-                operand->offset = STACK_OFFSET(*stackOffset);
+                operand->ref = STACK_OFFSET(*stackOffset);
                 operand++;
                 stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
@@ -957,8 +957,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         }
         case ByteCode::ThrowOpcode: {
             Throw* throwTag = reinterpret_cast<Throw*>(byteCode);
-            TagType* tagType = module->tagType(throwTag->tagIndex());
-            uint32_t size = module->functionType(tagType->sigIndex())->param().size();
+            TagType* tagType = compiler->module()->tagType(throwTag->tagIndex());
+            uint32_t size = compiler->module()->functionType(tagType->sigIndex())->param().size();
 
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, size, 0);
             Operand* param = instr->params();
@@ -966,8 +966,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             ByteCodeStackOffset* offsets = throwTag->dataOffsets();
 
             while (param < end) {
-                param->item = nullptr;
-                param->offset = STACK_OFFSET(*offsets++);
+                param->ref = STACK_OFFSET(*offsets++);
                 param++;
             }
             break;
@@ -978,10 +977,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTLoadI32);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(load32->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(load32->dstOffset());
+            operands[0].ref = STACK_OFFSET(load32->srcOffset());
+            operands[1].ref = STACK_OFFSET(load32->dstOffset());
             break;
         }
         case ByteCode::Load64Opcode: {
@@ -990,10 +987,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTLoadI64);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(load64->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(load64->dstOffset());
+            operands[0].ref = STACK_OFFSET(load64->srcOffset());
+            operands[1].ref = STACK_OFFSET(load64->dstOffset());
             break;
         }
         case ByteCode::I32LoadOpcode:
@@ -1015,10 +1010,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTLoadI64);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            operands[0].ref = STACK_OFFSET(loadOperation->srcOffset());
+            operands[1].ref = STACK_OFFSET(loadOperation->dstOffset());
             break;
         }
         case ByteCode::F32LoadOpcode:
@@ -1049,10 +1042,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(requiredInit);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(loadOperation->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(loadOperation->dstOffset());
+            operands[0].ref = STACK_OFFSET(loadOperation->srcOffset());
+            operands[1].ref = STACK_OFFSET(loadOperation->dstOffset());
             break;
         }
         case ByteCode::V128Load8LaneOpcode:
@@ -1064,12 +1055,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTLoadLaneV128);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(loadOperation->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(loadOperation->src1Offset());
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(loadOperation->dstOffset());
+            operands[0].ref = STACK_OFFSET(loadOperation->src0Offset());
+            operands[1].ref = STACK_OFFSET(loadOperation->src1Offset());
+            operands[2].ref = STACK_OFFSET(loadOperation->dstOffset());
             break;
         }
         case ByteCode::Store32Opcode: {
@@ -1078,10 +1066,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTStoreI32);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(store32->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(store32->src1Offset());
+            operands[0].ref = STACK_OFFSET(store32->src0Offset());
+            operands[1].ref = STACK_OFFSET(store32->src1Offset());
             break;
         }
         case ByteCode::Store64Opcode: {
@@ -1090,10 +1076,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTStoreI64);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(store64->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(store64->src1Offset());
+            operands[0].ref = STACK_OFFSET(store64->src0Offset());
+            operands[1].ref = STACK_OFFSET(store64->src1Offset());
             break;
         }
         case ByteCode::I32StoreOpcode:
@@ -1115,10 +1099,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTStoreI64);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            operands[0].ref = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].ref = STACK_OFFSET(storeOperation->src1Offset());
             break;
         }
         case ByteCode::F32StoreOpcode:
@@ -1137,10 +1119,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(requiredInit);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            operands[0].ref = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].ref = STACK_OFFSET(storeOperation->src1Offset());
             break;
         }
         case ByteCode::V128Store8LaneOpcode:
@@ -1152,10 +1132,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTStoreV128);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(storeOperation->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(storeOperation->src1Offset());
+            operands[0].ref = STACK_OFFSET(storeOperation->src0Offset());
+            operands[1].ref = STACK_OFFSET(storeOperation->src1Offset());
             break;
         }
         case ByteCode::I8X16ExtractLaneSOpcode:
@@ -1181,10 +1159,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(requiredInit == OTNone ? OTExtractLaneF64 : requiredInit);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(extractLane->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(extractLane->dstOffset());
+            operands[0].ref = STACK_OFFSET(extractLane->srcOffset());
+            operands[1].ref = STACK_OFFSET(extractLane->dstOffset());
             break;
         }
         case ByteCode::I8X16ReplaceLaneOpcode:
@@ -1208,12 +1184,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(requiredInit == OTNone ? OTReplaceLaneF64 : requiredInit);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(replaceLane->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(replaceLane->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(replaceLane->dstOffset());
+            operands[0].ref = STACK_OFFSET(replaceLane->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(replaceLane->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(replaceLane->dstOffset());
             break;
         }
         case ByteCode::I8X16SplatOpcode:
@@ -1259,12 +1232,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(tableInit->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(tableInit->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(tableInit->srcOffsets()[2]);
+            operands[0].ref = STACK_OFFSET(tableInit->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(tableInit->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(tableInit->srcOffsets()[2]);
             break;
         }
         case ByteCode::TableSizeOpcode: {
@@ -1274,8 +1244,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTPutI32);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(tableSize->dstOffset());
+            operands[0].ref = STACK_OFFSET(tableSize->dstOffset());
             break;
         }
         case ByteCode::TableCopyOpcode: {
@@ -1286,12 +1255,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(tableCopy->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(tableCopy->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(tableCopy->srcOffsets()[2]);
+            operands[0].ref = STACK_OFFSET(tableCopy->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(tableCopy->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(tableCopy->srcOffsets()[2]);
             break;
         }
         case ByteCode::TableFillOpcode: {
@@ -1302,12 +1268,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(tableFill->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(tableFill->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(tableFill->srcOffsets()[2]);
+            operands[0].ref = STACK_OFFSET(tableFill->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(tableFill->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(tableFill->srcOffsets()[2]);
             break;
         }
         case ByteCode::TableGrowOpcode: {
@@ -1318,12 +1281,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTTableGrow);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(tableGrow->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(tableGrow->src1Offset());
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(tableGrow->dstOffset());
+            operands[0].ref = STACK_OFFSET(tableGrow->src0Offset());
+            operands[1].ref = STACK_OFFSET(tableGrow->src1Offset());
+            operands[2].ref = STACK_OFFSET(tableGrow->dstOffset());
             break;
         }
         case ByteCode::TableSetOpcode: {
@@ -1333,10 +1293,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTTableSet);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(tableSet->src0Offset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(tableSet->src1Offset());
+            operands[0].ref = STACK_OFFSET(tableSet->src0Offset());
+            operands[1].ref = STACK_OFFSET(tableSet->src1Offset());
             break;
         }
         case ByteCode::TableGetOpcode: {
@@ -1346,10 +1304,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTTableGet);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(tableGet->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(tableGet->dstOffset());
+            operands[0].ref = STACK_OFFSET(tableGet->srcOffset());
+            operands[1].ref = STACK_OFFSET(tableGet->dstOffset());
             break;
         }
         case ByteCode::MemorySizeOpcode: {
@@ -1359,8 +1315,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTPutI32);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(memorySize->dstOffset());
+            operands[0].ref = STACK_OFFSET(memorySize->dstOffset());
             break;
         }
         case ByteCode::MemoryInitOpcode: {
@@ -1371,12 +1326,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(memoryInit->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(memoryInit->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(memoryInit->srcOffsets()[2]);
+            operands[0].ref = STACK_OFFSET(memoryInit->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(memoryInit->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(memoryInit->srcOffsets()[2]);
             break;
         }
         case ByteCode::MemoryCopyOpcode: {
@@ -1387,12 +1339,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(memoryCopy->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(memoryCopy->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(memoryCopy->srcOffsets()[2]);
+            operands[0].ref = STACK_OFFSET(memoryCopy->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(memoryCopy->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(memoryCopy->srcOffsets()[2]);
             break;
         }
         case ByteCode::MemoryFillOpcode: {
@@ -1403,12 +1352,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(memoryFill->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(memoryFill->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(memoryFill->srcOffsets()[2]);
+            operands[0].ref = STACK_OFFSET(memoryFill->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(memoryFill->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(memoryFill->srcOffsets()[2]);
             break;
         }
         case ByteCode::MemoryGrowOpcode: {
@@ -1419,10 +1365,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             instr->setRequiredRegsDescriptor(OTOp1I32);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(memoryGrow->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(memoryGrow->dstOffset());
+            operands[0].ref = STACK_OFFSET(memoryGrow->srcOffset());
+            operands[1].ref = STACK_OFFSET(memoryGrow->dstOffset());
             break;
         }
         case ByteCode::DataDropOpcode: {
@@ -1494,8 +1438,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             Const32* const32 = reinterpret_cast<Const32*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(const32->dstOffset());
+            operands[0].ref = STACK_OFFSET(const32->dstOffset());
             break;
         }
         case ByteCode::Const64Opcode: {
@@ -1505,8 +1448,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             Const64* const64 = reinterpret_cast<Const64*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(const64->dstOffset());
+            operands[0].ref = STACK_OFFSET(const64->dstOffset());
             break;
         }
         case ByteCode::MoveI32Opcode:
@@ -1539,10 +1481,8 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             Move* move = reinterpret_cast<Move*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(move->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(move->dstOffset());
+            operands[0].ref = STACK_OFFSET(move->srcOffset());
+            operands[1].ref = STACK_OFFSET(move->dstOffset());
             break;
         }
         case ByteCode::GlobalGet32Opcode: {
@@ -1552,13 +1492,12 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             GlobalGet32* globalGet32 = reinterpret_cast<GlobalGet32*>(byteCode);
             Operand* operands = instr->operands();
 
-            if (isFloatGlobal(globalGet32->index(), module)) {
+            if (isFloatGlobal(globalGet32->index(), compiler->module())) {
                 instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalGetF32);
             }
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(globalGet32->dstOffset());
+            operands[0].ref = STACK_OFFSET(globalGet32->dstOffset());
             break;
         }
         case ByteCode::GlobalGet64Opcode: {
@@ -1568,13 +1507,12 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             GlobalGet64* globalGet64 = reinterpret_cast<GlobalGet64*>(byteCode);
             Operand* operands = instr->operands();
 
-            if (isFloatGlobal(globalGet64->index(), module)) {
+            if (isFloatGlobal(globalGet64->index(), compiler->module())) {
                 instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalGetF64);
             }
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(globalGet64->dstOffset());
+            operands[0].ref = STACK_OFFSET(globalGet64->dstOffset());
             break;
         }
         case ByteCode::GlobalGet128Opcode: {
@@ -1584,8 +1522,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             GlobalGet128* globalGet128 = reinterpret_cast<GlobalGet128*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(globalGet128->dstOffset());
+            operands[0].ref = STACK_OFFSET(globalGet128->dstOffset());
             break;
         }
         case ByteCode::GlobalSet32Opcode: {
@@ -1595,13 +1532,12 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             GlobalSet32* globalSet32 = reinterpret_cast<GlobalSet32*>(byteCode);
             Operand* operands = instr->operands();
 
-            if (isFloatGlobal(globalSet32->index(), module)) {
+            if (isFloatGlobal(globalSet32->index(), compiler->module())) {
                 instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalSetF32);
             }
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(globalSet32->srcOffset());
+            operands[0].ref = STACK_OFFSET(globalSet32->srcOffset());
             break;
         }
         case ByteCode::GlobalSet64Opcode: {
@@ -1611,13 +1547,12 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             GlobalSet64* globalSet64 = reinterpret_cast<GlobalSet64*>(byteCode);
             Operand* operands = instr->operands();
 
-            if (isFloatGlobal(globalSet64->index(), module)) {
+            if (isFloatGlobal(globalSet64->index(), compiler->module())) {
                 instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalSetF64);
             }
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(globalSet64->srcOffset());
+            operands[0].ref = STACK_OFFSET(globalSet64->srcOffset());
             break;
         }
         case ByteCode::GlobalSet128Opcode: {
@@ -1627,8 +1562,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             GlobalSet128* globalSet128 = reinterpret_cast<GlobalSet128*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(globalSet128->srcOffset());
+            operands[0].ref = STACK_OFFSET(globalSet128->srcOffset());
             break;
         }
         case ByteCode::RefFuncOpcode: {
@@ -1638,8 +1572,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             auto refFunc = reinterpret_cast<RefFunc*>(byteCode);
             auto operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(refFunc->dstOffset());
+            operands[0].ref = STACK_OFFSET(refFunc->dstOffset());
             break;
         }
         case ByteCode::EndOpcode: {
@@ -1650,8 +1583,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             ByteCodeStackOffset* offsets = reinterpret_cast<End*>(byteCode)->resultOffsets();
 
             for (auto it : result) {
-                param->item = nullptr;
-                param->offset = STACK_OFFSET(*offsets);
+                param->ref = STACK_OFFSET(*offsets);
                 param++;
                 offsets += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
@@ -1672,8 +1604,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             Const128* const128 = reinterpret_cast<Const128*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(const128->dstOffset());
+            operands[0].ref = STACK_OFFSET(const128->dstOffset());
             break;
         }
         case ByteCode::I8X16SubOpcode:
@@ -1881,7 +1812,7 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
         case ByteCode::V128AnyTrueOpcode: {
             group = Instruction::UnaryCondSIMD;
             paramCount = 1;
-            info = Instruction::kIsCompare;
+            info = Instruction::kIsMergeCompare;
             requiredInit = OTOpCondV128;
             break;
         }
@@ -1914,14 +1845,10 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             V128BitSelect* bitSelect = reinterpret_cast<V128BitSelect*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(bitSelect->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(bitSelect->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(bitSelect->srcOffsets()[2]);
-            operands[3].item = nullptr;
-            operands[3].offset = STACK_OFFSET(bitSelect->dstOffset());
+            operands[0].ref = STACK_OFFSET(bitSelect->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(bitSelect->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(bitSelect->srcOffsets()[2]);
+            operands[3].ref = STACK_OFFSET(bitSelect->dstOffset());
             break;
         }
         case ByteCode::I8X16ShuffleOpcode: {
@@ -1931,12 +1858,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(shuffle->srcOffsets()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(shuffle->srcOffsets()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(shuffle->dstOffset());
+            operands[0].ref = STACK_OFFSET(shuffle->srcOffsets()[0]);
+            operands[1].ref = STACK_OFFSET(shuffle->srcOffsets()[1]);
+            operands[2].ref = STACK_OFFSET(shuffle->dstOffset());
             break;
         }
         default: {
@@ -1954,12 +1878,9 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             BinaryOperation* binaryOperation = reinterpret_cast<BinaryOperation*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(binaryOperation->srcOffset()[0]);
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(binaryOperation->srcOffset()[1]);
-            operands[2].item = nullptr;
-            operands[2].offset = STACK_OFFSET(binaryOperation->dstOffset());
+            operands[0].ref = STACK_OFFSET(binaryOperation->srcOffset()[0]);
+            operands[1].ref = STACK_OFFSET(binaryOperation->srcOffset()[1]);
+            operands[2].ref = STACK_OFFSET(binaryOperation->dstOffset());
         } else if (paramCount == 1) {
             ASSERT(group != Instruction::Any);
 
@@ -1970,21 +1891,20 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             UnaryOperation* unaryOperation = reinterpret_cast<UnaryOperation*>(byteCode);
 
             Operand* operands = instr->operands();
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(unaryOperation->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(unaryOperation->dstOffset());
+            operands[0].ref = STACK_OFFSET(unaryOperation->srcOffset());
+            operands[1].ref = STACK_OFFSET(unaryOperation->dstOffset());
         }
 
         idx += byteCode->getSize();
     }
 
-    compiler->buildParamDependencies(STACK_OFFSET(function->requiredStackSize()));
-    compiler->allocateRegisters();
+    compiler->buildVariables(STACK_OFFSET(function->requiredStackSize()));
 
     if (compiler->verboseLevel() >= 1) {
         compiler->dump();
     }
+
+    compiler->allocateRegisters();
 
     Walrus::JITFunction* jitFunc = new JITFunction();
 
@@ -2005,7 +1925,8 @@ void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int 
                     printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(i));
                 }
 
-                compileFunction(&compiler, m_functions[i], this);
+                compiler.setModuleFunction(m_functions[i]);
+                compileFunction(&compiler);
             }
         }
     } else {
@@ -2015,7 +1936,8 @@ void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, int 
                     printf("[[[[[[[  Function %p  ]]]]]]]\n", *functions);
                 }
 
-                compileFunction(&compiler, *functions, this);
+                compiler.setModuleFunction(*functions);
+                compileFunction(&compiler);
             }
 
             functions++;
