@@ -945,30 +945,22 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
     ASSERT(instr->next() != nullptr);
 
-    if (instr->next()->isInstruction()) {
+    if (instr->info() & Instruction::kIsMergeCompare) {
         Instruction* nextInstr = instr->next()->asInstruction();
 
-        switch (nextInstr->opcode()) {
-        case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode:
-            if (nextInstr->getParam(0)->item == instr) {
-                if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
-                    type ^= 0x1;
-                }
-
-                nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
-                return true;
-            }
-            break;
-        case ByteCode::SelectOpcode:
-            if (nextInstr->getParam(2)->item == instr) {
-                emitSelect(compiler, nextInstr, type);
-                return true;
-            }
-            break;
-        default:
-            break;
+        if (nextInstr->opcode() == ByteCode::SelectOpcode) {
+            emitSelect(compiler, nextInstr, type);
+            return true;
         }
+
+        ASSERT(nextInstr->opcode() == ByteCode::JumpIfTrueOpcode || nextInstr->opcode() == ByteCode::JumpIfFalseOpcode);
+
+        if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+            type ^= 0x1;
+        }
+
+        nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
+        return true;
     }
 
     arg.set(operands + 1);

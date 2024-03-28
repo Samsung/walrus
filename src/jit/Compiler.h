@@ -108,8 +108,8 @@ public:
     virtual ~InstructionListItem() {}
 
     InstructionListItem* next() { return m_next; }
-    InstructionListItem* prev() { return m_prev; }
 
+    size_t id() { return m_id; }
     uint16_t info() { return m_info; }
     void setInfo(uint16_t value) { m_info = value; }
     void addInfo(uint16_t value) { m_info |= value; }
@@ -134,9 +134,9 @@ public:
     }
 
 protected:
-    explicit InstructionListItem(Group group, InstructionListItem* prev)
+    explicit InstructionListItem(Group group)
         : m_next(nullptr)
-        , m_prev(prev)
+        , m_id(0)
         , m_group(group)
         , m_resultCount(0)
         , m_info(0)
@@ -147,16 +147,32 @@ protected:
 
 private:
     InstructionListItem* m_next;
-    InstructionListItem* m_prev;
+    size_t m_id;
     uint8_t m_group;
     uint8_t m_resultCount;
     uint16_t m_info;
 };
 
+typedef uintptr_t VariableRef;
+
+// These macros provide VariableRefs related operations.
+#define VARIABLE_SET(v, type) ((static_cast<VariableRef>(v) << 2) | (type))
+#define VARIABLE_SET_PTR(v) (reinterpret_cast<VariableRef>(v))
+#define VARIABLE_TYPE(v) ((v)&0x3)
+#define VARIABLE_GET_REF(v) ((v) >> 2)
+#define VARIABLE_GET_OFFSET(v) ((v) & ~(VariableRef)0x3)
+#define VARIABLE_GET_IMM(v) (reinterpret_cast<InstructionListItem*>(v)->asInstruction())
+
 struct Operand {
-    // Dependency / immedate tracking.
-    InstructionListItem* item;
-    uint32_t offset;
+    enum Type : VariableRef {
+        // Immediate type must be 0, because immediates are ByteCode pointers.
+        Immediate = 0,
+        Register = 1,
+        Offset = 2,
+    };
+
+    // Variable / immedate tracking.
+    VariableRef ref;
 };
 
 class Instruction : public InstructionListItem {
@@ -168,12 +184,15 @@ public:
         // systems. It represents that a single register is enough to allocate
         // when the operand is memory (must be combined with TmpRequired).
         Int64LowOperand = 0,
-        PtrOperand = 1,
-        Int32Operand = 2,
-        Int64Operand = 3,
-        Float32Operand = 4,
-        Float64Operand = 5,
-        V128Operand = 6,
+        Int32Operand = 1,
+        Int64Operand = 2,
+        V128Operand = 4,
+        // Int32Operand | Float32Operand == Float32Operand
+        Float32Operand = 5,
+        // Int64Operand | Float64Operand == Float64Operand
+        Float64Operand = 6,
+        // Helper constants for managing type info.
+        FloatOperandStart = V128Operand,
         TypeMask = 0x7,
         // A temporary register must be allocated for the source or destination
         // operand. In case of source operands, the register is not modified.
@@ -198,7 +217,7 @@ public:
     static const uint16_t kIsCallback = 1 << 1;
     static const uint16_t kDestroysR0R1 = 1 << 2;
     static const uint16_t kIsShift = 1 << 3;
-    static const uint16_t kIsCompare = 1 << 4;
+    static const uint16_t kIsMergeCompare = 1 << 4;
     static const uint16_t kKeepInstruction = 1 << 5;
     static const uint16_t kEarlyReturn = 1 << 6;
 
@@ -258,9 +277,11 @@ public:
         return m_operandDescriptors + u.m_requiredRegsDescriptor;
     }
 
+    static uint32_t valueTypeToOperandType(Value::Type type);
+
 protected:
-    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
-        : InstructionListItem(group, prev)
+    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands)
+        : InstructionListItem(group)
         , m_byteCode(byteCode)
         , m_operands(operands)
         , m_opcode(opcode)
@@ -269,8 +290,8 @@ protected:
         u.m_requiredRegsDescriptor = 0;
     }
 
-    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, InstructionListItem* prev)
-        : InstructionListItem(group, prev)
+    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode)
+        : InstructionListItem(group)
         , m_byteCode(byteCode)
         , m_operands(nullptr)
         , m_opcode(opcode)
@@ -306,8 +327,8 @@ public:
     InstructionValue& value() { return m_value; }
 
 protected:
-    explicit ExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands, InstructionListItem* prev)
-        : Instruction(byteCode, group, opcode, paramCount, operands, prev)
+    explicit ExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands)
+        : Instruction(byteCode, group, opcode, paramCount, operands)
     {
         ASSERT(group == Instruction::DirectBranch || group == Instruction::Call);
     }
@@ -321,8 +342,8 @@ class SimpleInstruction : public Instruction {
     friend class JITCompiler;
 
 protected:
-    explicit SimpleInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, InstructionListItem* prev)
-        : Instruction(byteCode, group, opcode, paramCount, m_inlineOperands, prev)
+    explicit SimpleInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount)
+        : Instruction(byteCode, group, opcode, paramCount, m_inlineOperands)
     {
         ASSERT(paramCount == n || paramCount + 1 == n);
     }
@@ -336,8 +357,8 @@ class SimpleExtendedInstruction : public ExtendedInstruction {
     friend class JITCompiler;
 
 protected:
-    explicit SimpleExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, InstructionListItem* prev)
-        : ExtendedInstruction(byteCode, group, opcode, paramCount, m_inlineOperands, prev)
+    explicit SimpleExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount)
+        : ExtendedInstruction(byteCode, group, opcode, paramCount, m_inlineOperands)
     {
         ASSERT(paramCount <= n);
     }
@@ -353,8 +374,8 @@ public:
     ~ComplexInstruction() override;
 
 protected:
-    explicit ComplexInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount, InstructionListItem* prev)
-        : Instruction(byteCode, group, opcode, paramCount, new Operand[operandCount], prev)
+    explicit ComplexInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount)
+        : Instruction(byteCode, group, opcode, paramCount, new Operand[operandCount])
     {
         assert(operandCount >= paramCount && operandCount > 4);
         assert(opcode == ByteCode::EndOpcode);
@@ -368,8 +389,8 @@ public:
     ~ComplexExtendedInstruction() override;
 
 protected:
-    explicit ComplexExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount, InstructionListItem* prev)
-        : ExtendedInstruction(byteCode, group, opcode, paramCount, new Operand[operandCount], prev)
+    explicit ComplexExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount)
+        : ExtendedInstruction(byteCode, group, opcode, paramCount, new Operand[operandCount])
     {
         assert(operandCount >= paramCount && operandCount > 4);
     }
@@ -385,7 +406,7 @@ public:
     size_t targetLabelCount() { return m_targetLabelCount; }
 
 protected:
-    BrTableInstruction(ByteCode* byteCode, size_t targetLabelCount, InstructionListItem* prev);
+    BrTableInstruction(ByteCode* byteCode, size_t targetLabelCount);
 
 private:
     Operand m_inlineParam;
@@ -393,7 +414,6 @@ private:
     Label** m_targetLabels;
 };
 
-class DependencyGenContext;
 struct LabelJumpList;
 struct LabelData;
 
@@ -407,16 +427,12 @@ public:
     static const uint16_t kHasTryInfo = 1 << 2;
     static const uint16_t kHasCatchInfo = 1 << 3;
 
-    typedef std::vector<Instruction*> DependencyList;
-
     explicit Label()
-        : InstructionListItem(CodeLabel, nullptr)
+        : InstructionListItem(CodeLabel)
     {
     }
 
     const std::vector<Instruction*>& branches() { return m_branches; }
-    size_t dependencyCount() { return m_dependencies.size(); }
-    const DependencyList& dependencies(size_t i) { return m_dependencies[i]; }
 
     sljit_label* label()
     {
@@ -432,17 +448,11 @@ public:
     void emit(sljit_compiler* compiler);
 
 private:
-    explicit Label(InstructionListItem* prev)
-        : InstructionListItem(CodeLabel, prev)
-    {
-    }
-
     std::vector<Instruction*> m_branches;
-    std::vector<DependencyList> m_dependencies;
 
     // Contexts used by different compiling stages.
     union {
-        DependencyGenContext* m_dependencyCtx;
+        size_t m_dependencyStart;
         LabelJumpList* m_jumpList;
         sljit_label* m_label;
     };
@@ -547,6 +557,73 @@ struct CompileContext {
     std::vector<TrapJump> trapJumps;
 };
 
+struct VariableList {
+    // Used by DependencyGenContext
+    static const uint32_t kIsCallback = 1 << 4;
+    static const uint32_t kDestroysR0R1 = 1 << 5;
+    static const uint32_t kIsMerged = 1 << 6;
+    static const uint32_t kIsImmediate = 1 << 7;
+
+    static const uint32_t kConstraints = kIsCallback | kDestroysR0R1;
+    static const size_t kRangeMax = ~(VariableRef)0;
+
+    VariableList(size_t variableCount)
+    {
+        variables.reserve(variableCount);
+    }
+
+    struct Variable {
+        Variable(VariableRef value, uint32_t typeInfo, size_t id)
+            : value(value)
+            , info(typeInfo)
+            , reg1(0)
+            , reg2(0)
+            , rangeEnd(id)
+        {
+            u.rangeStart = id;
+        }
+
+        Variable(VariableRef value, uint32_t typeInfo, Instruction* instr)
+            : value(value)
+            , info(typeInfo)
+            , reg1(0)
+            , reg2(0)
+            , rangeEnd(instr->id())
+        {
+            if (instr->group() == Instruction::Immediate) {
+                info |= kIsImmediate;
+                u.immediate = instr;
+            } else {
+                u.rangeStart = rangeEnd;
+            }
+        }
+
+        VariableRef value;
+        uint16_t info;
+        uint8_t reg1;
+        uint8_t reg2;
+        union {
+            size_t rangeStart;
+            size_t parent;
+            Instruction* immediate;
+        } u;
+        size_t rangeEnd;
+    };
+
+    VariableRef getMergeHeadSlowCase(VariableRef ref);
+
+    VariableRef getMergeHead(VariableRef ref)
+    {
+        if (!(variables[ref].info & kIsMerged)) {
+            return ref;
+        }
+
+        return getMergeHeadSlowCase(ref);
+    }
+
+    std::vector<Variable> variables;
+};
+
 class JITCompiler {
 public:
     static const uint32_t kHasCondMov = 1 << 0;
@@ -560,6 +637,7 @@ public:
     }
 
     Module* module() { return m_module; }
+    ModuleFunction* moduleFunction() { return m_moduleFunction; };
     int verboseLevel() { return m_verboseLevel; }
     uint32_t options() { return m_options; }
     InstructionListItem* first() { return m_first; }
@@ -574,8 +652,6 @@ public:
 
     void appendLabel(Label* label)
     {
-        ASSERT(label->m_prev == nullptr);
-        label->m_prev = m_last;
         append(label);
     }
 
@@ -584,8 +660,13 @@ public:
         m_branchTableSize += value;
     }
 
+    void setModuleFunction(ModuleFunction* moduleFunction)
+    {
+        m_moduleFunction = moduleFunction;
+    }
+
     void dump();
-    void buildParamDependencies(uint32_t requiredStackSize);
+    void buildVariables(uint32_t requiredStackSize);
     void allocateRegisters();
 
     void compileFunction(JITFunction* jitFunc, bool isExternal);
@@ -612,8 +693,6 @@ private:
     };
 
     void append(InstructionListItem* item);
-    InstructionListItem* remove(InstructionListItem* item);
-    void replace(InstructionListItem* item, InstructionListItem* newItem);
 
     // Backend operations.
     void emitProlog();
@@ -625,6 +704,8 @@ private:
     sljit_compiler* m_compiler;
     CompileContext m_context;
     Module* m_module;
+    ModuleFunction* m_moduleFunction;
+    VariableList* m_variableList;
     size_t m_branchTableSize;
     // Start inside the m_tryBlocks vector.
     size_t m_tryBlockStart;

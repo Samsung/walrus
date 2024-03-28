@@ -69,15 +69,15 @@ struct JITArg {
 
 void JITArg::set(Operand* operand)
 {
-    if (operand->item == nullptr || operand->item->group() != Instruction::Immediate) {
+    if (VARIABLE_TYPE(operand->ref) != Operand::Immediate) {
         this->arg = SLJIT_MEM1(kFrameReg);
-        this->argw = static_cast<sljit_sw>(operand->offset << 2);
+        this->argw = static_cast<sljit_sw>(VARIABLE_GET_OFFSET(operand->ref));
         return;
     }
 
     this->arg = SLJIT_IMM;
 
-    Instruction* instr = operand->item->asInstruction();
+    Instruction* instr = VARIABLE_GET_IMM(operand->ref);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     ASSERT(instr->opcode() == ByteCode::Const32Opcode);
@@ -287,9 +287,9 @@ constexpr uint8_t getHighRegister(sljit_s32 reg)
 
 static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 type, sljit_s32 srcReg)
 {
-    InstructionListItem* item = operand->item;
+    VariableRef ref = operand->ref;
 
-    if (item == nullptr || item->group() != Instruction::Immediate) {
+    if (VARIABLE_TYPE(ref) != Operand::Immediate) {
         arg.set(operand);
 
         if (SLJIT_IS_MEM(arg.arg)) {
@@ -301,9 +301,10 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
         return;
     }
 
-    ASSERT(item->asInstruction()->opcode() == ByteCode::Const128Opcode);
+    Instruction* instr = VARIABLE_GET_IMM(ref);
+    ASSERT(instr->opcode() == ByteCode::Const128Opcode);
 
-    const uint8_t* value = reinterpret_cast<Const128*>(item->asInstruction()->byteCode())->value();
+    const uint8_t* value = reinterpret_cast<Const128*>(instr->byteCode())->value();
     sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | type, srcReg, SLJIT_MEM0(), (sljit_sw)value);
 
     arg.arg = srcReg;
@@ -321,20 +322,6 @@ static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
 #include "IntMath64Inl.h"
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-
-static void emitStoreImmediateParams(sljit_compiler* compiler, Instruction* instr)
-{
-    Operand* param = instr->params();
-    Operand* paramEnd = param + instr->paramCount();
-
-    while (param < paramEnd) {
-        if (param->item != nullptr && param->item->group() == Instruction::Immediate && !(param->item->info() & Instruction::kKeepInstruction)) {
-            emitStoreImmediate(compiler, param, param->item->asInstruction());
-        }
-
-        param++;
-    }
-}
 
 #include "FloatConvInl.h"
 #include "CallInl.h"
@@ -460,14 +447,30 @@ static void emitImmediate(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    emitStoreImmediate(compiler, result, instr);
+    emitStoreImmediate(compiler, static_cast<sljit_sw>(VARIABLE_GET_OFFSET(result->ref)), instr);
 }
 
 static void emitEnd(sljit_compiler* compiler, Instruction* instr)
 {
     End* end = reinterpret_cast<End*>(instr->byteCode());
 
-    emitStoreImmediateParams(compiler, instr);
+    Operand* param = instr->params();
+    Operand* paramEnd = param + instr->paramCount();
+    ByteCodeStackOffset* offsets = end->resultOffsets();
+    CompileContext* context = CompileContext::get(compiler);
+    const ValueTypeVector& result = context->compiler->moduleFunction()->functionType()->result();
+    size_t idx = 0;
+
+    while (param < paramEnd) {
+        if (VARIABLE_TYPE(param->ref) == Operand::Immediate && !(VARIABLE_GET_IMM(param->ref)->info() & Instruction::kKeepInstruction)) {
+            emitStoreImmediate(compiler, *offsets, VARIABLE_GET_IMM(param->ref));
+        }
+
+        offsets += (valueSize(result[idx]) + (sizeof(size_t) - 1)) / sizeof(size_t);
+        param++;
+        idx++;
+    }
+
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(end->resultOffsets()));
 
     if (instr->info() & Instruction::kEarlyReturn) {
@@ -656,6 +659,8 @@ JITCompiler::JITCompiler(Module* module, int verboseLevel)
     , m_compiler(nullptr)
     , m_context(module, this)
     , m_module(module)
+    , m_moduleFunction(nullptr)
+    , m_variableList(nullptr)
     , m_branchTableSize(0)
     , m_tryBlockStart(0)
     , m_tryBlockOffset(0)
@@ -998,8 +1003,6 @@ void JITCompiler::clear()
                 delete label->m_jumpList;
             }
         }
-
-        ASSERT(next == nullptr || next->m_prev == item);
 
         delete item;
         item = next;
