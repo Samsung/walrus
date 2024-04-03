@@ -149,7 +149,7 @@ static void emitConvertIntegerFromFloat(sljit_compiler* compiler, Instruction* i
     CompileContext* context = CompileContext::get(compiler);
     Operand* operands = instr->operands();
 
-    JITArg srcArg;
+    JITArg srcArg(operands);
     JITArg dstArg(operands + 1);
 
     sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(0));
@@ -339,7 +339,7 @@ static void emitSaturatedConvertIntegerFromFloat(sljit_compiler* compiler, Instr
 
     Operand* operands = instr->operands();
 
-    JITArg srcArg;
+    JITArg srcArg(operands);
     JITArg dstArg(operands + 1);
 
     sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(0));
