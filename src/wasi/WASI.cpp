@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#ifdef ENABLE_WASI
+
 #include "wasi/WASI.h"
 #include "runtime/Value.h"
 #include "runtime/Memory.h"
@@ -190,3 +192,5 @@ void WASI::random_get(ExecutionState& state, Value* argv, Value* result, Instanc
     result[0] = Value(uvwasi_random_get(WASI::g_uvwasi, buf, length));
 }
 } // namespace Walrus
+
+#endif

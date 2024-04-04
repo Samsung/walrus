@@ -70,13 +70,27 @@ jobs:
       run: |
         CC=clang CXX=clang++ cmake -H. -Bout/clang/x64 $BUILD_OPTIONS
         ninja -Cout/clang/x64
+    - name: Pure Build x86
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+      run: |
+        CC=clang CXX=clang++ cmake -H. -Bout/pure/x86 $BUILD_OPTIONS
+        ninja -Cout/pure/x86
+    - name: Pure Build x64
+      env:
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+      run: |
+        CC=clang CXX=clang++ cmake -H. -Bout/pure/x64 $BUILD_OPTIONS
+        ninja -Cout/pure/x64
     - name: Run Tests
       run: |
         # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
         rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
         rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
-        $RUNNER --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
+        $RUNNER --engine="$GITHUB_WORKSPACE/out/clang/x86/walrus"
         $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
+        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/pure/x86/walrus" basic-tests wasm-test-core jit
+        $RUNNER --engine="$GITHUB_WORKSPACE/out/pure/x64/walrus" basic-tests wasm-test-core jit
 
   build-test-on-x86:
     runs-on: ubuntu-latest
@@ -144,12 +158,16 @@ jobs:
           ln -s /usr/bin/clang++-12 /usr/bin/clang++
         run: |
           CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
           ninja -Cout/debug
+          ninja -Cout/pure
           # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
           rm ./test/wasm-spec/core/call.wast
           rm ./test/wasm-spec/core/call_indirect.wast
           python3 ./tools/run-tests.py --engine="./out/debug/walrus"
           python3 ./tools/run-tests.py --jit --engine="./out/debug/walrus"
+          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+          python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
   build-test-on-aarch64:
     runs-on: ubuntu-latest
@@ -175,9 +193,13 @@ jobs:
           ln -s /usr/bin/clang++-12 /usr/bin/clang++
         run: |
           CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
           ninja -Cout/release
+          ninja -Cout/pure
           python3 ./tools/run-tests.py --engine="./out/release/walrus"
           python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
+          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+          python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
   test-on-windows-x86-x64:
     runs-on: windows-2022
