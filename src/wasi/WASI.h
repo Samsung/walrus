@@ -17,6 +17,8 @@
 #ifndef __WalrusWASI__
 #define __WalrusWASI__
 
+#ifdef ENABLE_WASI
+
 #include "Walrus.h"
 #include "runtime/Function.h"
 #include "runtime/ObjectType.h"
@@ -164,5 +166,7 @@ private:
 };
 
 } // namespace Walrus
+
+#endif
 
 #endif // __WalrusWASI__

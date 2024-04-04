@@ -19,13 +19,17 @@
 #include "runtime/Global.h"
 #include "runtime/Tag.h"
 #include "runtime/Trap.h"
+#include "runtime/DefinedFunctionTypes.h"
 #include "parser/WASMParser.h"
-#include "wasi/WASI.h"
 
 #include "wabt/wast-lexer.h"
 #include "wabt/wast-parser.h"
 #include "wabt/binary-writer.h"
 #include "string-view-lite/string_view.h"
+
+#ifdef ENABLE_WASI
+#include "wasi/WASI.h"
+#endif
 
 struct spectestseps : std::numpunct<char> {
     char do_thousands_sep() const { return '_'; }
@@ -240,6 +244,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             }
+#ifdef ENABLE_WASI
         } else if (import->moduleName() == "wasi_snapshot_preview1") {
             WASI::WasiFuncInfo* wasiImportFunc = WASI::find(import->fieldName());
             if (wasiImportFunc) {
@@ -252,6 +257,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 }
                 hasWasiImport = true;
             }
+#endif
         } else if (registeredInstanceMap) {
             auto iter = registeredInstanceMap->find(import->moduleName());
             if (iter != registeredInstanceMap->end()) {
@@ -296,6 +302,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         RunData* data = reinterpret_cast<RunData*>(d);
         Instance* instance = data->module->instantiate(state, data->importValues);
 
+#ifdef ENABLE_WASI
         if (data->hasWasiImport) {
             for (auto&& exp : data->module->exports()) {
                 if (exp->exportType() == ExportType::Function) {
@@ -321,6 +328,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 }
             }
         }
+#endif
     },
                     &data);
 }
@@ -927,6 +935,7 @@ static void runExports(Store* store, const std::string& filename, const std::vec
     importValues.reserve(importTypes.size());
 
     for (size_t i = 0; i < importTypes.size(); i++) {
+#ifdef ENABLE_WASI
         auto import = importTypes[i];
         if (import->moduleName() == "wasi_snapshot_preview1") {
             Walrus::WASI::WasiFuncInfo* wasiImportFunc = WASI::find(import->fieldName());
@@ -943,6 +952,10 @@ static void runExports(Store* store, const std::string& filename, const std::vec
             fprintf(stderr, "error: module has imports, but imports are not supported\n");
             return;
         }
+#else
+        fprintf(stderr, "error: module has imports, but imports are not supported\n");
+        return;
+#endif
     }
 
     struct RunData {
@@ -1100,6 +1113,7 @@ int main(int argc, char* argv[])
     parseArguments(argc, argv, options);
 
 
+#ifdef ENABLE_WASI
     // initialize WASI
     uvwasi_t uvwasi;
 
@@ -1131,6 +1145,7 @@ int main(int argc, char* argv[])
     assert(err == UVWASI_ESUCCESS);
 
     WASI::initialize(&uvwasi);
+#endif
 
     for (const auto& filePath : options.fileNames) {
         FILE* fp = fopen(filePath.data(), "r");
