@@ -1592,15 +1592,32 @@ public:
 
     void generateMoveCodeIfNeeds(size_t srcPosition, size_t dstPosition, Walrus::Value::Type type)
     {
-        size_t size = Walrus::valueSize(type);
         if (srcPosition != dstPosition) {
-            if (size == 4) {
-                pushByteCode(Walrus::Move32(srcPosition, dstPosition), WASMOpcode::Move32Opcode);
-            } else if (size == 8) {
-                pushByteCode(Walrus::Move64(srcPosition, dstPosition), WASMOpcode::Move64Opcode);
-            } else {
-                ASSERT(size == 16);
-                pushByteCode(Walrus::Move128(srcPosition, dstPosition), WASMOpcode::Move128Opcode);
+            switch (type) {
+            case Walrus::Value::I32:
+                pushByteCode(Walrus::MoveI32(srcPosition, dstPosition), WASMOpcode::MoveI32Opcode);
+                break;
+            case Walrus::Value::F32:
+                pushByteCode(Walrus::MoveF32(srcPosition, dstPosition), WASMOpcode::MoveF32Opcode);
+                break;
+            case Walrus::Value::I64:
+                pushByteCode(Walrus::MoveI64(srcPosition, dstPosition), WASMOpcode::MoveI64Opcode);
+                break;
+            case Walrus::Value::F64:
+                pushByteCode(Walrus::MoveF64(srcPosition, dstPosition), WASMOpcode::MoveF64Opcode);
+                break;
+            case Walrus::Value::V128:
+                pushByteCode(Walrus::MoveV128(srcPosition, dstPosition), WASMOpcode::MoveV128Opcode);
+                break;
+            default:
+                ASSERT(type == Walrus::Value::FuncRef || type == Walrus::Value::ExternRef);
+
+                if (sizeof(size_t) == 4) {
+                    pushByteCode(Walrus::MoveI32(srcPosition, dstPosition), WASMOpcode::MoveI32Opcode);
+                } else {
+                    pushByteCode(Walrus::MoveI64(srcPosition, dstPosition), WASMOpcode::MoveI64Opcode);
+                }
+                break;
             }
         }
     }

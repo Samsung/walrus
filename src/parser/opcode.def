@@ -567,8 +567,10 @@ WABT_OPCODE(I64, I32, I64, I64, 2, 0xfe, 0x4d, I64AtomicRmw16CmpxchgU, "i64.atom
 WABT_OPCODE(I64, I32, I64, I64, 4, 0xfe, 0x4e, I64AtomicRmw32CmpxchgU, "i64.atomic.rmw32.cmpxchg_u", "")
 
 /* Walrus interpreter only opcodes */
-WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe7, Move32, "move_32", "")
-WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe8, Move64, "move_64", "")
-WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe9, Move128, "move_128", "")
-WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xea, Const32, "const_32", "")
-WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xeb, Const64, "const_64", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe7, MoveI32, "move_i32", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe8, MoveF32, "move_f32", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xe9, MoveI64, "move_i64", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xea, MoveF64, "move_f64", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xeb, MoveV128, "move_v128", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xec, Const32, "const_32", "")
+WABT_OPCODE(___, ___, ___, ___, 0, 0, 0xed, Const64, "const_64", "")

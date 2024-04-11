@@ -743,30 +743,48 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(Move32)
+    DEFINE_OPCODE(MoveI32)
         :
     {
-        Move32* code = (Move32*)programCounter;
+        MoveI32* code = (MoveI32*)programCounter;
         *reinterpret_cast<uint32_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint32_t*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(Move32);
+        ADD_PROGRAM_COUNTER(MoveI32);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(Move64)
+    DEFINE_OPCODE(MoveF32)
         :
     {
-        Move64* code = (Move64*)programCounter;
+        MoveF32* code = (MoveF32*)programCounter;
+        *reinterpret_cast<float*>(bp + code->dstOffset()) = *reinterpret_cast<float*>(bp + code->srcOffset());
+        ADD_PROGRAM_COUNTER(MoveF32);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MoveI64)
+        :
+    {
+        MoveI64* code = (MoveI64*)programCounter;
         *reinterpret_cast<uint64_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint64_t*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(Move64);
+        ADD_PROGRAM_COUNTER(MoveI64);
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(Move128)
+    DEFINE_OPCODE(MoveF64)
         :
     {
-        Move128* code = (Move128*)programCounter;
+        MoveF64* code = (MoveF64*)programCounter;
+        *reinterpret_cast<double*>(bp + code->dstOffset()) = *reinterpret_cast<double*>(bp + code->srcOffset());
+        ADD_PROGRAM_COUNTER(MoveF64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MoveV128)
+        :
+    {
+        MoveV128* code = (MoveV128*)programCounter;
         memcpy(bp + code->dstOffset(), bp + code->srcOffset(), 16);
-        ADD_PROGRAM_COUNTER(Move128);
+        ADD_PROGRAM_COUNTER(MoveV128);
         NEXT_INSTRUCTION();
     }
 

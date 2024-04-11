@@ -65,6 +65,24 @@ static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg
     sljit_emit_fset64(compiler, srcReg, u.number);
 }
 
+static void emitMoveFloat(sljit_compiler* compiler, Instruction* instr)
+{
+    Operand* operands = instr->operands();
+
+    JITArg src;
+    JITArg dst(operands + 1);
+    sljit_s32 tmpReg = GET_TARGET_REG(dst.arg, SLJIT_TMP_DEST_FREG);
+
+    floatOperandToArg(compiler, operands + 0, src, tmpReg);
+
+    sljit_s32 op = (instr->opcode() == ByteCode::MoveF32Opcode) ? SLJIT_MOV_F32 : SLJIT_MOV_F64;
+
+    // Immediate to register case has already been handled.
+    if (dst.arg != src.arg || dst.argw != src.argw) {
+        sljit_emit_fop1(compiler, op, dst.arg, dst.argw, src.arg, src.argw);
+    }
+}
+
 // Float operations.
 // TODO Canonical NaN
 static sljit_f32 floatFloor(sljit_f32 operand)

@@ -16,7 +16,7 @@
 
 /* Only included by jit-backend.cc */
 
-static void emitMove128(sljit_compiler* compiler, Instruction* instr)
+static void emitMoveV128(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
     JITArg dst(operands + 1);

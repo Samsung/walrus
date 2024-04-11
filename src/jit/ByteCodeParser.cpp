@@ -151,7 +151,9 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL1(OTPutV128, /* D */ V128)                                                        \
     OL1(OTPutPTR, /* D */ PTR)                                                          \
     OL2(OTMoveI32, /* SD */ I32, I32 | S0)                                              \
+    OL2(OTMoveF32, /* SD */ F32 | NOTMP, F32 | S0)                                      \
     OL2(OTMoveI64, /* SD */ I64, I64 | S0)                                              \
+    OL2(OTMoveF64, /* SD */ F64 | NOTMP, F64 | S0)                                      \
     OL2(OTMoveV128, /* SD */ V128, V128 | S0)                                           \
     OL3(OTCompareI64, /* SSD */ I64, I64, I32 | S0 | S1)                                \
     OL3(OTCompareF32, /* SSD */ F32, F32, I32)                                          \
@@ -1507,43 +1509,40 @@ static void compileFunction(JITCompiler* compiler, ModuleFunction* function, Mod
             operands[0].offset = STACK_OFFSET(const64->dstOffset());
             break;
         }
-        case ByteCode::Move32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move32Opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(OTMoveI32);
+        case ByteCode::MoveI32Opcode:
+        case ByteCode::MoveF32Opcode:
+        case ByteCode::MoveI64Opcode:
+        case ByteCode::MoveF64Opcode:
+        case ByteCode::MoveV128Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, opcode, 1, 1);
 
-            Move32* move32 = reinterpret_cast<Move32*>(byteCode);
+            switch (opcode) {
+            case ByteCode::MoveI32Opcode:
+                requiredInit = OTMoveI32;
+                break;
+            case ByteCode::MoveF32Opcode:
+                requiredInit = OTMoveF32;
+                break;
+            case ByteCode::MoveI64Opcode:
+                requiredInit = OTMoveI64;
+                break;
+            case ByteCode::MoveF64Opcode:
+                requiredInit = OTMoveF64;
+                break;
+            default:
+                requiredInit = OTMoveV128;
+                break;
+            }
+
+            instr->setRequiredRegsDescriptor(requiredInit);
+
+            Move* move = reinterpret_cast<Move*>(byteCode);
             Operand* operands = instr->operands();
 
             operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(move32->srcOffset());
+            operands[0].offset = STACK_OFFSET(move->srcOffset());
             operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(move32->dstOffset());
-            break;
-        }
-        case ByteCode::Move64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move64Opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(OTMoveI64);
-
-            Move64* move64 = reinterpret_cast<Move64*>(byteCode);
-            Operand* operands = instr->operands();
-
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(move64->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(move64->dstOffset());
-            break;
-        }
-        case ByteCode::Move128Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, ByteCode::Move128Opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(OTMoveV128);
-
-            Move128* move128 = reinterpret_cast<Move128*>(byteCode);
-            Operand* operands = instr->operands();
-
-            operands[0].item = nullptr;
-            operands[0].offset = STACK_OFFSET(move128->srcOffset());
-            operands[1].item = nullptr;
-            operands[1].offset = STACK_OFFSET(move128->dstOffset());
+            operands[1].offset = STACK_OFFSET(move->dstOffset());
             break;
         }
         case ByteCode::GlobalGet32Opcode: {
