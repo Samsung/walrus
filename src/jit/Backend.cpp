@@ -530,7 +530,7 @@ static void emitBrTable(sljit_compiler* compiler, BrTableInstruction* instr)
     context->branchTableOffset = reinterpret_cast<sljit_uw>(target);
 }
 
-static void emitMove32(sljit_compiler* compiler, Instruction* instr)
+static void emitMoveI32(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
     JITArg src(operands);
@@ -788,18 +788,21 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         }
         case Instruction::Move: {
             switch (item->asInstruction()->opcode()) {
-            case ByteCode::Move32Opcode:
-                emitMove32(m_compiler, item->asInstruction());
+            case ByteCode::MoveI32Opcode:
+                emitMoveI32(m_compiler, item->asInstruction());
+                break;
+            case ByteCode::MoveI64Opcode:
+                emitMoveI64(m_compiler, item->asInstruction());
                 break;
 #ifdef HAS_SIMD
-            case ByteCode::Move128Opcode:
-                emitMove128(m_compiler, item->asInstruction());
+            case ByteCode::MoveV128Opcode:
+                emitMoveV128(m_compiler, item->asInstruction());
                 break;
 #endif /* HAS_SIMD */
             default:
-                ASSERT(item->asInstruction()->opcode() == ByteCode::Move64Opcode);
-                emitMove64(m_compiler, item->asInstruction());
-                break;
+                ASSERT(item->asInstruction()->opcode() == ByteCode::MoveF32Opcode
+                       || item->asInstruction()->opcode() == ByteCode::MoveF64Opcode);
+                emitMoveFloat(m_compiler, item->asInstruction());
             }
             break;
         }

@@ -1180,7 +1180,7 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
-static void emitMove64(sljit_compiler* compiler, Instruction* instr)
+static void emitMoveI64(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
     JITArgPair src(operands);

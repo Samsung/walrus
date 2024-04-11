@@ -52,9 +52,11 @@ class FunctionType;
     F(TableSize)                \
     F(TableFill)                \
     F(RefFunc)                  \
-    F(Move32)                   \
-    F(Move64)                   \
-    F(Move128)                  \
+    F(MoveI32)                  \
+    F(MoveF32)                  \
+    F(MoveI64)                  \
+    F(MoveF64)                  \
+    F(MoveV128)                 \
     F(Jump)                     \
     F(JumpIfTrue)               \
     F(JumpIfFalse)              \
@@ -863,10 +865,10 @@ protected:
     uint16_t m_resultOffsetsSize;
 };
 
-class Move32 : public ByteCode {
+class Move : public ByteCode {
 public:
-    Move32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(Opcode::Move32Opcode)
+    Move(Opcode opcode, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : ByteCode(opcode)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)
     {
@@ -874,71 +876,95 @@ public:
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("move32 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-#endif
 
 protected:
     ByteCodeStackOffset m_srcOffset;
     ByteCodeStackOffset m_dstOffset;
 };
 
-class Move64 : public ByteCode {
+class MoveI32 : public Move {
 public:
-    Move64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(Opcode::Move64Opcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+    MoveI32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : Move(Opcode::MoveI32Opcode, srcOffset, dstOffset)
     {
     }
-
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("move64 ");
+        printf("movei32 ");
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
-class Move128 : public ByteCode {
+class MoveF32 : public Move {
 public:
-    Move128(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(Opcode::Move128Opcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+    MoveF32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : Move(Opcode::MoveF32Opcode, srcOffset, dstOffset)
     {
     }
-
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("move128 ");
+        printf("movef32 ");
         DUMP_BYTECODE_OFFSET(srcOffset);
         DUMP_BYTECODE_OFFSET(dstOffset);
     }
 #endif
+};
 
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
+class MoveI64 : public Move {
+public:
+    MoveI64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : Move(Opcode::MoveI64Opcode, srcOffset, dstOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("movei64 ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
+    }
+#endif
+};
+
+class MoveF64 : public Move {
+public:
+    MoveF64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : Move(Opcode::MoveF64Opcode, srcOffset, dstOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("movef64 ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
+    }
+#endif
+};
+
+class MoveV128 : public Move {
+public:
+    MoveV128(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : Move(Opcode::MoveV128Opcode, srcOffset, dstOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("movev128 ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
+    }
+#endif
 };
 
 class Load32 : public ByteCode {
