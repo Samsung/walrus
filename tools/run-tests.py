@@ -114,7 +114,7 @@ def run_core_tests(engine):
 
 
 @runner('wasi', default=True)
-def run_basic_tests(engine):
+def run_wasi_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi')
 
     print('Running wasi tests:')
@@ -132,7 +132,7 @@ def run_basic_tests(engine):
 
 
 @runner('jit', default=True)
-def run_basic_tests(engine):
+def run_jit_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'jit')
 
     print('Running jit tests:')
@@ -142,7 +142,7 @@ def run_basic_tests(engine):
     tests_total = len(xpass)
     fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
-    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total, COLOR_RESET))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
 
     if fail_total > 0:

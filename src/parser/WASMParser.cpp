@@ -535,9 +535,9 @@ private:
 
         m_vmStack.push_back(VMStackInfo(*this, type, pos, m_functionStackSizeSoFar, localIndex));
         size_t allocSize = Walrus::valueStackAllocatedSize(type);
-        if (UNLIKELY(m_functionStackSizeSoFar + allocSize > std::numeric_limits<Walrus::ByteCodeStackOffset>::max())) {
-            throw std::string("too many stack usage. we could not support this(yet).");
-        }
+        // FIXME too many stack usage. we could not support this(yet)
+        ASSERT(m_functionStackSizeSoFar + allocSize <= std::numeric_limits<Walrus::ByteCodeStackOffset>::max());
+
         m_functionStackSizeSoFar += allocSize;
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
@@ -545,6 +545,10 @@ private:
 
     VMStackInfo popVMStackInfo()
     {
+        // FIXME This error can occur during the parsing process because of invalid wasm instructions
+        // e.g. a function with no end opcode
+        ASSERT(m_vmStack.size() > 0);
+
         auto info = m_vmStack.back();
         m_functionStackSizeSoFar -= Walrus::valueStackAllocatedSize(info.valueType());
         m_vmStack.pop_back();
@@ -567,6 +571,14 @@ private:
         return info;
     }
 
+    VMStackInfo& peekVMStackInfo()
+    {
+        // FIXME This error can occur during the parsing process because of invalid wasm instructions
+        // e.g. a function with no end opcode
+        ASSERT(m_vmStack.size() > 0);
+        return m_vmStack.back();
+    }
+
     size_t popVMStack()
     {
         return popVMStackInfo().position();
@@ -574,17 +586,12 @@ private:
 
     size_t peekVMStack()
     {
-        return m_vmStack.back().position();
-    }
-
-    VMStackInfo& peekVMStackInfo()
-    {
-        return m_vmStack.back();
+        return peekVMStackInfo().position();
     }
 
     Walrus::Value::Type peekVMStackValueType()
     {
-        return m_vmStack.back().valueType();
+        return peekVMStackInfo().valueType();
     }
 
     void beginFunction(Walrus::ModuleFunction* mf, bool inInitExpr)
