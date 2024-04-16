@@ -1350,16 +1350,16 @@ std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, siz
     const bool kFailOnCustomSectionError = true;
     ReadBinaryOptions options(getFeatures(), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
     BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename);
-    try {
-        ReadBinary(data, size, &binaryReaderDelegateWalrus, options);
-    } catch(const std::string& err) {
-        // error from WASMBinaryReader
-        return err;
-    }
+    Result result = ReadBinary(data, size, &binaryReaderDelegateWalrus, options);
 
-    if (binaryReaderDelegateWalrus.m_errors.size()) {
+    if (WABT_UNLIKELY(binaryReaderDelegateWalrus.m_errors.size())) {
         return std::move(binaryReaderDelegateWalrus.m_errors.begin()->message);
     }
+
+    if (WABT_UNLIKELY(result != ::wabt::Result::Ok)) {
+        return std::string("read wasm error");
+    }
+
     return std::string();
 }
 
