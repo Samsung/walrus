@@ -633,12 +633,12 @@ private:
 
     inline bool canBeInverted(size_t stackPos)
     {
-        /**
-         * m_lastI32EqzPos + sizeof(Walrus::I32Eqz) == m_currentFunction->currentByteCodeSize()
-         * checks if last byteCode is I32Eqz
-         *
-         * m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos
-         * checks if the output of I32Eqz is the input of JumpIfTrue/JumpIfFalse
+        /*
+          m_lastI32EqzPos + sizeof(Walrus::I32Eqz) == m_currentFunction->currentByteCodeSize()
+          checks if last byteCode is I32Eqz
+
+          m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos
+          checks if the output of I32Eqz is the input of JumpIfTrue/JumpIfFalse
         */
         return (m_lastI32EqzPos + sizeof(Walrus::I32Eqz) == m_currentFunction->currentByteCodeSize())
             && (m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos);
@@ -1801,11 +1801,12 @@ public:
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
         if (dropSize.second) {
             size_t pos = m_currentFunction->currentByteCodeSize();
-            if (UNLIKELY(isInverted)) {
-                pushByteCode(Walrus::JumpIfTrue(stackPos), WASMOpcode::BrIfOpcode);
-            } else {
-                pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
-            }
+            // if (isInverted) {
+            //     pushByteCode(Walrus::JumpIfTrue(stackPos), WASMOpcode::BrIfOpcode);
+            // } else {
+            //     pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
+            // }
+            pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::BrIfOpcode);
             generateMoveValuesCodeRegardToDrop(dropSize);
 
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
