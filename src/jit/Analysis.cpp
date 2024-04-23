@@ -324,7 +324,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
     DependencyGenContext dependencyCtx(dependencySize, requiredStackSize);
     bool updateDeps = true;
 
-    m_variableList = new VariableList(variableCount);
+    m_variableList = new VariableList(variableCount, requiredStackSize);
     nextTryBlock = m_tryBlockStart;
 
     for (uint32_t i = 0; i < requiredStackSize; i++) {
@@ -358,6 +358,8 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                             TagType* tagType = module()->tagType(it.tagIndex);
                             const ValueTypeVector& param = module()->functionType(tagType->sigIndex())->param();
                             Label* catchLabel = it.u.handler;
+
+                            m_variableList->pushCatchUpdate(catchLabel, param.size());
 
                             dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
                                                  STACK_OFFSET(it.stackSizeToBe), param, m_variableList);

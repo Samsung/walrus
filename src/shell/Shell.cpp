@@ -1035,7 +1035,10 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
                     s_JITFlags |= JITFlagValue::JITVerbose;
                     continue;
                 } else if (strcmp(argv[i], "--jit-verbose-color") == 0) {
-                    s_JITFlags |= JITFlagValue::JITVerboseColor;
+                    s_JITFlags |= JITFlagValue::JITVerbose | JITFlagValue::JITVerboseColor;
+                    continue;
+                } else if (strcmp(argv[i], "--jit-no-reg-alloc") == 0) {
+                    s_JITFlags |= JITFlagValue::disableRegAlloc;
                     continue;
                 } else if (strcmp(argv[i], "--perf") == 0) {
 #ifdef WALRUS_JITPERF

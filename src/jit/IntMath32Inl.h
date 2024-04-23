@@ -43,6 +43,16 @@ struct JITArgPair {
 void JITArgPair::set(Operand* operand)
 {
     if (VARIABLE_TYPE(operand->ref) != Operand::Immediate) {
+        if (VARIABLE_TYPE(operand->ref) == Operand::Register) {
+            sljit_sw regs = VARIABLE_GET_REF(operand->ref);
+
+            this->arg1 = regs & 0xff;
+            this->arg1w = 0;
+            this->arg2 = regs >> 8;
+            this->arg2w = 0;
+            return;
+        }
+
         sljit_sw offset = static_cast<sljit_sw>(VARIABLE_GET_OFFSET(operand->ref));
 
         this->arg1 = SLJIT_MEM1(kFrameReg);
@@ -62,35 +72,6 @@ void JITArgPair::set(Operand* operand)
     this->arg2w = static_cast<sljit_sw>(value64 >> 32);
 }
 
-static void emitStoreImmediate(sljit_compiler* compiler, sljit_sw offset, Instruction* instr)
-{
-    switch (instr->opcode()) {
-#ifdef HAS_SIMD
-    case ByteCode::Const128Opcode: {
-        const uint8_t* value = reinterpret_cast<Const128*>(instr->byteCode())->value();
-
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, SLJIT_MEM0(), (sljit_sw)value);
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, SLJIT_MEM1(kFrameReg), offset);
-        return;
-    }
-#endif /* HAS_SIMD */
-    case ByteCode::Const32Opcode: {
-        uint32_t value32 = reinterpret_cast<Const32*>(instr->byteCode())->value();
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kFrameReg), offset, SLJIT_IMM, static_cast<sljit_sw>(value32));
-        return;
-    }
-    default: {
-        ASSERT(instr->opcode() == ByteCode::Const64Opcode);
-
-        uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
-
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kFrameReg), offset + WORD_LOW_OFFSET, SLJIT_IMM, static_cast<sljit_sw>(value64));
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kFrameReg), offset + WORD_HIGH_OFFSET, SLJIT_IMM, static_cast<sljit_sw>(value64 >> 32));
-        return;
-    }
-    }
-}
-
 static void emitDivRem32(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args)
 {
     CompileContext* context = CompileContext::get(compiler);
@@ -105,9 +86,7 @@ static void emitDivRem32(sljit_compiler* compiler, sljit_s32 opcode, JITArg* arg
         }
     }
 
-    MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R1, args[1].arg, args[1].argw);
-    MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, args[0].arg, args[0].argw);
-
+    emitInitR0R1(compiler, SLJIT_MOV, SLJIT_MOV, args);
     sljit_jump* moduloJumpFrom = nullptr;
 
     if (SLJIT_IS_IMM(args[1].arg)) {
@@ -154,16 +133,22 @@ static void emitSimpleBinary64(sljit_compiler* compiler, sljit_s32 op1, sljit_s3
     sljit_s32 dst0 = instr->requiredReg(0);
     sljit_s32 dst1 = instr->requiredReg(1);
 
-    for (int i = 0; i < 2; i++) {
-        if (SLJIT_IS_MEM(args[i].arg1)) {
-            sljit_emit_op1(compiler, SLJIT_MOV, dst0, 0, args[i].arg1, args[i].arg1w);
-            sljit_emit_op1(compiler, SLJIT_MOV, dst1, 0, args[i].arg2, args[i].arg2w);
+    if (args[0].arg1 != dst0 && args[1].arg1 != dst0) {
+        ASSERT(args[0].arg1 != dst1 && args[1].arg1 != dst1
+               && args[0].arg1 != dst0 && args[0].arg2 != dst1
+               && args[1].arg2 != dst0 && args[1].arg2 != dst1);
 
-            args[i].arg1 = dst0;
-            args[i].arg1w = 0;
-            args[i].arg2 = dst1;
-            args[i].arg2w = 0;
-            break;
+        for (int i = 0; i < 2; i++) {
+            if (SLJIT_IS_MEM(args[i].arg1)) {
+                sljit_emit_op1(compiler, SLJIT_MOV, dst0, 0, args[i].arg1, args[i].arg1w);
+                sljit_emit_op1(compiler, SLJIT_MOV, dst1, 0, args[i].arg2, args[i].arg2w);
+
+                args[i].arg1 = dst0;
+                args[i].arg1w = 0;
+                args[i].arg2 = dst1;
+                args[i].arg2w = 0;
+                break;
+            }
         }
     }
 
@@ -346,18 +331,14 @@ static void emitRotate64(sljit_compiler* compiler, sljit_s32 op, Instruction* in
 
 static void emitMul64(sljit_compiler* compiler, Instruction* instr, JITArgPair* args)
 {
-    sljit_s32 tmpReg = instr->requiredReg(2);
+    sljit_s32 tmpReg = instr->requiredReg(0);
 
-    ASSERT(instr->requiredReg(0) == SLJIT_R0 && instr->requiredReg(1) == SLJIT_R1);
-
-    if (args[1].arg1 == SLJIT_R0 || (!SLJIT_IS_IMM(args[1].arg1) && SLJIT_IS_IMM(args[0].arg1))) {
+    if (!SLJIT_IS_IMM(args[1].arg1) && SLJIT_IS_IMM(args[0].arg1)) {
         // Swap arguments.
         JITArgPair tmp = args[0];
         args[0] = args[1];
         args[1] = tmp;
     }
-
-    ASSERT(args[1].arg1 != SLJIT_R0 && args[1].arg2 != SLJIT_R1);
 
     if (SLJIT_IS_IMM(args[1].arg1)) {
         if (args[1].arg1w == 0) {
@@ -376,43 +357,75 @@ static void emitMul64(sljit_compiler* compiler, Instruction* instr, JITArgPair* 
             return;
         }
 
-        MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, args[0].arg1, args[0].arg1w);
+        sljit_s32 baseReg = SLJIT_R0;
+        sljit_s32 immReg = SLJIT_R1;
 
-        if (SLJIT_IS_MEM(args[0].arg2)) {
-            sljit_emit_op1(compiler, SLJIT_MOV, tmpReg, 0, args[0].arg2, args[0].arg2w);
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, args[1].arg1w);
-            sljit_emit_op2(compiler, SLJIT_MUL, tmpReg, 0, tmpReg, 0, SLJIT_R1, 0);
+        if (args[0].arg1 == SLJIT_R1) {
+            baseReg = SLJIT_R1;
+            immReg = SLJIT_R0;
         } else {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, args[1].arg1w);
-            sljit_emit_op2(compiler, SLJIT_MUL, tmpReg, 0, args[0].arg2, args[0].arg2w, SLJIT_R1, 0);
+            MOVE_TO_REG(compiler, SLJIT_MOV, baseReg, args[0].arg1, args[0].arg1w);
+        }
+
+        if (SLJIT_IS_MEM(args[0].arg2) || args[0].arg2 == immReg) {
+            sljit_emit_op1(compiler, SLJIT_MOV, tmpReg, 0, args[0].arg2, args[0].arg2w);
+            sljit_emit_op1(compiler, SLJIT_MOV, immReg, 0, SLJIT_IMM, args[1].arg1w);
+            sljit_emit_op2(compiler, SLJIT_MUL, tmpReg, 0, tmpReg, 0, immReg, 0);
+        } else {
+            sljit_emit_op1(compiler, SLJIT_MOV, immReg, 0, SLJIT_IMM, args[1].arg1w);
+            sljit_emit_op2(compiler, SLJIT_MUL, tmpReg, 0, args[0].arg2, args[0].arg2w, immReg, 0);
         }
 
         if (args[1].arg2w == 1) {
-            sljit_emit_op2(compiler, SLJIT_ADD, tmpReg, 0, tmpReg, 0, SLJIT_R0, 0);
+            sljit_emit_op2(compiler, SLJIT_ADD, tmpReg, 0, tmpReg, 0, baseReg, 0);
         } else if (args[1].arg2w != 0) {
-            sljit_emit_op2r(compiler, SLJIT_MULADD, tmpReg, SLJIT_R0, 0, SLJIT_IMM, args[1].arg2w);
+            sljit_emit_op2r(compiler, SLJIT_MULADD, tmpReg, baseReg, 0, SLJIT_IMM, args[1].arg2w);
+        }
+    } else {
+        if (args[1].arg1 == SLJIT_R0 || args[1].arg2 == SLJIT_R0) {
+            // Swap arguments.
+            JITArgPair tmp = args[0];
+            args[0] = args[1];
+            args[1] = tmp;
         }
 
-        sljit_emit_op0(compiler, SLJIT_LMUL_UW);
-        sljit_emit_op2(compiler, SLJIT_ADD, args[2].arg2, args[2].arg2w, SLJIT_R1, 0, tmpReg, 0);
-        MOVE_FROM_REG(compiler, SLJIT_MOV, args[2].arg1, args[2].arg1w, SLJIT_R0);
-        return;
+        sljit_s32 lowReg0 = SLJIT_R0;
+        sljit_s32 lowReg1 = SLJIT_R1;
+        sljit_s32 firstIndex = 0;
+
+        if (args[0].arg2 == SLJIT_R0) {
+            lowReg0 = SLJIT_R1;
+            lowReg1 = SLJIT_R0;
+        } else {
+            MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, args[0].arg1, args[0].arg1w);
+        }
+
+        if (args[1].arg2 == lowReg1) {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, args[1].arg2, args[1].arg2w);
+            args[1].arg2 = SLJIT_TMP_DEST_REG;
+            args[1].arg2w = 0;
+            firstIndex = 1;
+        } else if (args[0].arg2 == lowReg1 || SLJIT_IS_MEM(args[0].arg2)) {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, args[0].arg2, args[0].arg2w);
+            args[0].arg2 = SLJIT_TMP_DEST_REG;
+            args[0].arg2w = 0;
+        }
+
+        MOVE_TO_REG(compiler, SLJIT_MOV, lowReg1, args[1].arg1, args[1].arg1w);
+        sljit_emit_op2(compiler, SLJIT_MUL, tmpReg, 0, args[firstIndex].arg2, args[firstIndex].arg2w, lowReg1, 0);
+
+        firstIndex ^= 0x1;
+        if (args[firstIndex].arg2 != lowReg1) {
+            sljit_emit_op2r(compiler, SLJIT_MULADD, tmpReg, args[firstIndex].arg2, args[firstIndex].arg2w, lowReg0, 0);
+        } else {
+            sljit_emit_op2(compiler, SLJIT_SHL, tmpReg, 0, tmpReg, 0, SLJIT_IMM, 1);
+        }
     }
 
-    MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, args[0].arg1, args[0].arg1w);
-
-    if (args[0].arg2 == SLJIT_R1 || SLJIT_IS_MEM(args[0].arg2)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, args[0].arg2, args[0].arg2w);
-        args[0].arg2 = SLJIT_TMP_DEST_REG;
-        args[0].arg2w = 0;
-    }
-
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, args[1].arg1, args[1].arg1w);
-    sljit_emit_op2(compiler, SLJIT_MUL, tmpReg, 0, args[0].arg2, args[0].arg2w, SLJIT_R1, 0);
-    sljit_emit_op2r(compiler, SLJIT_MULADD, tmpReg, args[1].arg2, args[1].arg2w, SLJIT_R0, 0);
     sljit_emit_op0(compiler, SLJIT_LMUL_UW);
-    sljit_emit_op2(compiler, SLJIT_ADD, args[2].arg2, args[2].arg2w, SLJIT_R1, 0, tmpReg, 0);
+    sljit_emit_op2(compiler, SLJIT_ADD, tmpReg, 0, tmpReg, 0, SLJIT_R1, 0);
     MOVE_FROM_REG(compiler, SLJIT_MOV, args[2].arg1, args[2].arg1w, SLJIT_R0);
+    MOVE_FROM_REG(compiler, SLJIT_MOV, args[2].arg2, args[2].arg2w, tmpReg);
 }
 
 static sljit_sw signedDiv64(int64_t* dividend, int64_t* divisor, int64_t* quotient)
@@ -1180,12 +1193,12 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
-    sljit_s32 baseReg = (instr->info() & Instruction::kIsGlobalFloatBit) ? SLJIT_TMP_MEM_REG : instr->requiredReg(0);
+    sljit_s32 baseReg = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_TMP_MEM_REG : instr->requiredReg(0);
 
     sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
     sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(baseReg), context->globalsStart + globalGet->index() * sizeof(void*));
 
-    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+    if (instr->info() & Instruction::kHasFloatOperand) {
         JITArg dstArg(instr->operands());
         moveFloatToDest(compiler, SLJIT_MOV_F64, dstArg, JITFieldAccessor::globalValueOffset());
         return;
@@ -1212,7 +1225,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
 
     GlobalSet32* globalSet = reinterpret_cast<GlobalSet32*>(instr->byteCode());
 
-    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+    if (instr->info() & Instruction::kHasFloatOperand) {
         JITArg src;
         floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
         sljit_s32 baseReg = SLJIT_TMP_MEM_REG;

@@ -1100,18 +1100,19 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
     args[2].set(operands + 2);
     sljit_s32 dst = GET_TARGET_REG(args[2].arg, instr->requiredReg(0));
 
-    if (sljit_get_register_index(SLJIT_SIMD_REG_128, args[0].arg) + 1 != sljit_get_register_index(SLJIT_SIMD_REG_128, args[1].arg) || dst == args[0].arg || dst == args[1].arg) {
+    if (sljit_get_register_index(SLJIT_SIMD_REG_128, args[0].arg) + 1 != sljit_get_register_index(SLJIT_SIMD_REG_128, args[1].arg)) {
         if (args[0].arg != SLJIT_TMP_FR0) {
-            sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR0, args[0].arg, args[0].argw);
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR0, args[0].arg, args[0].argw);
             args[0].arg = SLJIT_TMP_FR0;
         }
 
         if (args[1].arg != SLJIT_TMP_FR1) {
-            sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR1, args[1].arg, args[1].argw);
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR1, args[1].arg, args[1].argw);
             args[1].arg = SLJIT_TMP_FR1;
         }
+    } else if (dst == args[0].arg || dst == args[1].arg) {
+        dst = SLJIT_TMP_FR0;
     }
-
 
     I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(instr->byteCode());
     const sljit_s32 type = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
@@ -1119,7 +1120,7 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
 
     simdEmitOp(compiler, SimdOp::tbl | (1 << 13), dst, args[0].arg, dst);
 
-    if (SLJIT_IS_MEM(args[2].arg)) {
+    if (args[2].arg != dst) {
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst, args[2].arg, args[2].argw);
     }
 }

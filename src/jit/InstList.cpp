@@ -253,6 +253,67 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
     return branch;
 }
 
+InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref)
+{
+    uint32_t type = variable.info & Instruction::TypeMask;
+    ByteCode::Opcode opcode;
+
+    switch (type) {
+    case Instruction::Int32Operand:
+        opcode = ByteCode::MoveI32Opcode;
+        break;
+    case Instruction::Int64Operand:
+        opcode = ByteCode::MoveI64Opcode;
+        break;
+    case Instruction::Float32Operand:
+        opcode = ByteCode::MoveF32Opcode;
+        break;
+    case Instruction::Float64Operand:
+        opcode = ByteCode::MoveF64Opcode;
+        break;
+    default:
+        ASSERT(type == Instruction::V128Operand);
+        opcode = ByteCode::MoveV128Opcode;
+        break;
+    }
+
+    ASSERT(!(variable.info & (VariableList::kIsMerged | VariableList::kIsImmediate)));
+
+    ExtendedInstruction* instr = new SimpleExtendedInstruction<1>(nullptr, Instruction::StackInit, opcode, 0);
+    instr->m_resultCount = 1;
+    instr->value().offset = variable.value;
+    instr->operands()->ref = ref;
+
+    if (m_last == prev) {
+        m_last = instr;
+    }
+
+    if (prev == nullptr) {
+        instr->m_next = m_first;
+        m_first = instr;
+    } else {
+        instr->m_next = prev->m_next;
+        prev->m_next = instr;
+    }
+
+    return instr;
+}
+
+void JITCompiler::insertStackInitList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize)
+{
+    size_t end = variableListStart + variableListSize;
+
+    for (size_t i = variableListStart; i < end; i++) {
+        VariableRef ref = m_variableList->getMergeHead(i);
+
+        VariableList::Variable& variable = m_variableList->variables[ref];
+
+        if (variable.reg1 != VariableList::kUnusedReg) {
+            prev = insertStackInit(prev, variable, i);
+        }
+    }
+}
+
 void JITCompiler::dump()
 {
     bool enableColors = (JITFlags() & JITFlagValue::JITVerboseColor);
@@ -300,6 +361,10 @@ void JITCompiler::dump()
                     printf("  Jump to: %s%d%s\n", labelText, static_cast<int>((*targetLabels)->id()), defaultText);
                     targetLabels++;
                 }
+                break;
+            }
+            case Instruction::StackInit: {
+                printf("  Offset:%d\n", static_cast<int>(VARIABLE_GET_OFFSET(instr->asExtended()->value().offset)));
                 break;
             }
             default: {
@@ -351,6 +416,34 @@ void JITCompiler::dump()
                     if (VARIABLE_TYPE(variable.value) == Operand::Offset) {
                         printf(" (O:%d) [%d-%d]", static_cast<int>(VARIABLE_GET_OFFSET(variable.value)),
                                static_cast<int>(variable.u.rangeStart), static_cast<int>(variable.rangeEnd));
+                    } else if (VARIABLE_TYPE(variable.value) == Operand::Register) {
+                        const char* prefix = "";
+                        uint32_t savedStart = SLJIT_R(SLJIT_NUMBER_OF_SCRATCH_REGISTERS);
+                        uint32_t savedEnd = SLJIT_S0;
+
+                        if (variable.info & Instruction::FloatOperandMarker) {
+                            prefix = "F";
+                            savedStart = SLJIT_FR(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS);
+                            savedEnd = SLJIT_FS0;
+                        }
+
+                        uint32_t reg1 = static_cast<uint32_t>(VARIABLE_GET_REF(variable.value));
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+                        if (SLJIT_IS_REG_PAIR(reg1)) {
+                            uint32_t reg2 = reg1 >> 8;
+                            reg1 &= 0xff;
+
+                            printf(" (%s%c%d,%s%c%d) [%d-%d]", prefix, reg1 >= savedStart ? 'S' : 'R', reg1 >= savedStart ? savedEnd - reg1 : reg1 - SLJIT_R0,
+                                   prefix, reg2 >= savedStart ? 'S' : 'R', reg2 >= savedStart ? savedEnd - reg2 : reg2 - SLJIT_R0,
+                                   static_cast<int>(variable.u.rangeStart), static_cast<int>(variable.rangeEnd));
+                        } else {
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+                            printf(" (%s%c%d) [%d-%d]", prefix, reg1 >= savedStart ? 'S' : 'R', reg1 >= savedStart ? savedEnd - reg1 : reg1 - SLJIT_R0,
+                                   static_cast<int>(variable.u.rangeStart), static_cast<int>(variable.rangeEnd));
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+                        }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
                     } else if (enableColors) {
                         printf(" (I:%p)", VARIABLE_GET_IMM(variable.value));
                     } else {
@@ -368,6 +461,28 @@ void JITCompiler::dump()
 
                 printf("\n");
                 operand++;
+            }
+
+            bool firstTmp = true;
+            for (size_t i = 0; i < 4; ++i) {
+                uint8_t reg = instr->requiredReg(i);
+
+                if (reg == 0) {
+                    continue;
+                }
+
+                if (firstTmp) {
+                    printf("  Temporary(");
+                    firstTmp = false;
+                } else {
+                    printf(",");
+                }
+
+                printf("%d:r%d", static_cast<int>(i), static_cast<int>(reg - 1));
+            }
+
+            if (!firstTmp) {
+                printf(")\n");
             }
         } else {
             printf("%s%d%s: Label", labelText, static_cast<int>(item->id()), defaultText);

@@ -332,7 +332,7 @@ static void simdEmitVexOp(sljit_compiler* compiler, uint32_t opcode, sljit_s32 r
 
 static void simdEmitOp(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    ASSERT(rd != rm && !(opcode & SimdOp::opcodeHasArg));
+    ASSERT(!(opcode & SimdOp::opcodeHasArg));
 
     if (rd == rn) {
         return simdEmitSSEOp(compiler, opcode, rd, rm);
@@ -1893,7 +1893,8 @@ static void simdEmitI8X16Shl(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 r
     simdEmitSSEOp(compiler, SimdOp::pcmpeqw, tmp2, tmp2);
     simdEmitOp(compiler, SimdOp::psllw, rd, rn, tmp1);
     simdEmitSSEOp(compiler, SimdOp::psllw, tmp2, tmp1);
-    sljit_emit_simd_lane_replicate(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8, tmp2, tmp2, 0);
+    simdEmitSSEOp(compiler, SimdOp::pxor, tmp1, tmp1);
+    simdEmitSSEOp(compiler, SimdOp::pshufb, tmp2, tmp1);
     simdEmitSSEOp(compiler, SimdOp::pand, rd, tmp2);
 }
 

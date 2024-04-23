@@ -151,20 +151,19 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL3(OTOp2F32, /* SSD */ F32, F32, F32 | S0 | S1)                                    \
     OL3(OTOp2F64, /* SSD */ F64, F64, F64 | S0 | S1)                                    \
     OL1(OTGetI32, /* S */ I32)                                                          \
-    OL1(OTPutI32, /* D */ I32 | TMP)                                                    \
+    OL1(OTPutI32, /* D */ I32)                                                          \
     OL1(OTPutI64, /* D */ I64)                                                          \
     OL1(OTPutV128, /* D */ V128)                                                        \
     OL1(OTPutPTR, /* D */ PTR)                                                          \
-    OL2(OTMoveI32, /* SD */ I32, I32 | S0)                                              \
     OL2(OTMoveF32, /* SD */ F32 | NOTMP, F32 | S0)                                      \
-    OL2(OTMoveI64, /* SD */ I64, I64 | S0)                                              \
     OL2(OTMoveF64, /* SD */ F64 | NOTMP, F64 | S0)                                      \
     OL2(OTMoveV128, /* SD */ V128, V128 | S0)                                           \
-    OL2(OTI32ReinterpretF32, /* SD */ I32, F32)                                         \
-    OL2(OTI64ReinterpretF64, /* SD */ I64, F64)                                         \
-    OL2(OTF32ReinterpretI32, /* SD */ F32, I32)                                         \
-    OL2(OTF64ReinterpretI64, /* SD */ F32, I32)                                         \
-    OL3(OTCompareI64, /* SSD */ I64, I64, I32 | S0 | S1)                                \
+    OL2(OTI32ReinterpretF32, /* SD */ F32, I32)                                         \
+    OL2(OTI64ReinterpretF64, /* SD */ F64, I64)                                         \
+    OL2(OTF32ReinterpretI32, /* SD */ I32, F32)                                         \
+    OL2(OTF64ReinterpretI64, /* SD */ I64, F64)                                         \
+    OL2(OTEqzI64, /* SD */ I64, I32)                                                    \
+    OL3(OTCompareI64, /* SSD */ I64, I64, I32)                                          \
     OL3(OTCompareF32, /* SSD */ F32, F32, I32)                                          \
     OL3(OTCompareF64, /* SSD */ F64, F64, I32)                                          \
     OL3(OTCopySignF32, /* SSD */ F32, F32, F32 | TMP | S0 | S1)                         \
@@ -172,14 +171,13 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTDemoteF64, /* SD */ F64, F32 | S0)                                            \
     OL2(OTPromoteF32, /* SD */ F32, F64 | S0)                                           \
     OL4(OTLoadI32, /* SDTT */ I32, I32 | S0, PTR, I32 | S0)                             \
-    OL4(OTLoadI64, /* SDTT */ I32, I64 | S0, PTR, I32 | S0)                             \
     OL4(OTLoadF32, /* SDTT */ I32, F32, PTR, I32 | S0)                                  \
     OL4(OTLoadF64, /* SDTT */ I32, F64, PTR, I32 | S0)                                  \
     OL4(OTLoadV128, /* SDTT */ I32, V128 | TMP, PTR, I32 | S0)                          \
     OL5(OTLoadLaneV128, /* SSDTTT */ I32, V128 | NOTMP, V128 | TMP | S1, PTR, I32 | S0) \
     OL5(OTStoreI32, /* SSTTT */ I32, I32, PTR, I32 | S0, I32 | S1)                      \
-    OL5(OTStoreI64, /* SSTTT */ I32, I64, PTR, I32 | S0, PTR | S1)                      \
     OL4(OTStoreF32, /* SSTT */ I32, F32 | NOTMP, PTR, I32 | S0)                         \
+    OL5(OTStoreI64, /* SSTTT */ I32, I64, PTR, I32 | S0, PTR | S1)                      \
     OL4(OTStoreF64, /* SSTT */ I32, F64 | NOTMP, PTR, I32 | S0)                         \
     OL4(OTStoreV128, /* SSTT */ I32, V128 | TMP, PTR, I32 | S0)                         \
     OL3(OTCallback3Arg, /* SSS */ I32, I32, I32)                                        \
@@ -192,8 +190,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTGlobalSetI64, /* ST */ I64, PTR)                                              \
     OL1(OTGlobalSetF32, /* S */ F32 | NOTMP)                                            \
     OL1(OTGlobalSetF64, /* S */ F64 | NOTMP)                                            \
-    OL2(OTConvertInt32FromInt64, /* SD */ I64, I32 | S0)                                \
-    OL2(OTConvertInt64FromInt32, /* SD */ I32, I64 | S0)                                \
+    OL2(OTConvertInt32FromInt64, /* SD */ I64, I32)                                     \
+    OL2(OTConvertInt64FromInt32, /* SD */ I32, I64)                                     \
     OL2(OTConvertInt32FromFloat32, /* SD */ F32 | TMP, I32 | TMP)                       \
     OL2(OTConvertInt32FromFloat64, /* SD */ F64 | TMP, I32 | TMP)                       \
     OL2(OTConvertInt64FromFloat32Callback, /* SD */ F32, I64)                           \
@@ -211,9 +209,10 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OPERAND_TYPE_LIST_MATH                                              \
     OL3(OTOp2I64, /* SSD */ I64, I64, I64 | TMP | S0 | S1)                  \
     OL3(OTShiftI64, /* SSD */ I64, I64 | LOW, I64 | TMP | S0)               \
-    OL4(OTMulI64, /* SSDT */ I64, I64, I64 | TMP | S0, I32 | S1)            \
+    OL3(OTMulI64, /* SSDT */ I64, I64, I64 | S0 | S1)                       \
     OL3(OTDivRemI64, /* SSD */ I64, I64, I64 | S0 | S1)                     \
     OL2(OTCountZeroesI64, /* SD */ I64, I64 | TMP | S0)                     \
+    OL4(OTLoadI64, /* SDTT */ I32, I64, PTR, I32 | S0)                      \
     OL5(OTStoreI64Low, /* SSTTT */ I32, I64 | LOW, PTR, I32 | S0, PTR | S1) \
     OL1(OTGlobalGetI64, /* D */ I64_LOW)                                    \
     OL2(OTConvertInt32FromFloat32Callback, /* SD */ F32, I32)               \
@@ -224,6 +223,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 #define OPERAND_TYPE_LIST_MATH                                    \
     OL3(OTOp2I64, /* SSD */ I64, I64, I64 | S0 | S1)              \
+    OL4(OTLoadI64, /* SDTT */ I32, I64 | S0, PTR, I32 | S0)       \
     OL1(OTGlobalGetI64, /* D */ I64)                              \
     OL2(OTConvertInt64FromFloat32, /* SD */ F32 | TMP, I64 | TMP) \
     OL2(OTConvertInt64FromFloat64, /* SD */ F64 | TMP, I64 | TMP) \
@@ -238,8 +238,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL1(OTGlobalSetV128, /* S */ V128 | NOTMP)                                             \
     OL2(OTSplatI32, /* SD */ I32, V128 | TMP)                                              \
     OL2(OTSplatI64, /* SD */ I64, V128 | TMP)                                              \
-    OL2(OTSplatF32, /* SD */ F32 | NOTMP, V128 | TMP | S0)                                 \
-    OL2(OTSplatF64, /* SD */ F64 | NOTMP, V128 | TMP | S0)                                 \
+    OL2(OTSplatF32, /* SD */ F32 | NOTMP, V128 | TMP)                                      \
+    OL2(OTSplatF64, /* SD */ F64 | NOTMP, V128 | TMP)                                      \
     OL2(OTV128ToI32, /* SD */ V128 | TMP, I32)                                             \
     OL4(OTBitSelectV128, /* SSSD */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2) \
     OL2(OTExtractLaneI64, /* SD */ V128 | TMP, I64)                                        \
@@ -569,7 +569,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64GeUOpcode: {
             group = Instruction::Compare;
             paramCount = 2;
-            info = Instruction::kIsMergeCompare;
+            info = Instruction::kIsMergeCompare | Instruction::kFreeUnusedEarly;
             requiredInit = OTCompareI64;
             break;
         }
@@ -727,13 +727,14 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64EqzOpcode: {
             group = Instruction::Compare;
             paramCount = 1;
-            info = Instruction::kIsMergeCompare;
-            requiredInit = OTOp1I64;
+            info = Instruction::kIsMergeCompare | Instruction::kFreeUnusedEarly;
+            requiredInit = OTEqzI64;
             break;
         }
         case ByteCode::I32WrapI64Opcode: {
             group = Instruction::Convert;
             paramCount = 1;
+            info = Instruction::kFreeUnusedEarly;
             requiredInit = OTConvertInt32FromInt64;
             break;
         }
@@ -741,6 +742,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64ExtendI32UOpcode: {
             group = Instruction::Convert;
             paramCount = 1;
+            info = Instruction::kFreeUnusedEarly;
             requiredInit = OTConvertInt64FromInt32;
             break;
         }
@@ -938,6 +940,7 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->appendExtended(byteCode, Instruction::Call, opcode,
                                                           functionType->param().size() + callerCount, functionType->result().size());
             Operand* operand = instr->operands();
+            instr->addInfo(Instruction::kIsCallback | Instruction::kFreeUnusedEarly);
 
             for (auto it : functionType->param()) {
                 operand->ref = STACK_OFFSET(*stackOffset);
@@ -1210,12 +1213,14 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32X4SplatOpcode: {
             group = Instruction::SplatSIMD;
             paramCount = 1;
+            info = Instruction::kFreeUnusedEarly;
             requiredInit = OTSplatF32;
             break;
         }
         case ByteCode::F64X2SplatOpcode: {
             group = Instruction::SplatSIMD;
             paramCount = 1;
+            info = Instruction::kFreeUnusedEarly;
             requiredInit = OTSplatF64;
             break;
         }
@@ -1468,13 +1473,13 @@ static void compileFunction(JITCompiler* compiler)
 
             switch (opcode) {
             case ByteCode::MoveI32Opcode:
-                requiredInit = OTMoveI32;
+                requiredInit = OTOp1I32;
                 break;
             case ByteCode::MoveF32Opcode:
                 requiredInit = OTMoveF32;
                 break;
             case ByteCode::MoveI64Opcode:
-                requiredInit = OTMoveI64;
+                requiredInit = OTOp1I64;
                 break;
             case ByteCode::MoveF64Opcode:
                 requiredInit = OTMoveF64;
@@ -1513,7 +1518,6 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operands = instr->operands();
 
             if (isFloatGlobal(globalGet32->index(), compiler->module())) {
-                instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalGetF32);
             }
 
@@ -1528,7 +1532,6 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operands = instr->operands();
 
             if (isFloatGlobal(globalGet64->index(), compiler->module())) {
-                instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalGetF64);
             }
 
@@ -1553,7 +1556,6 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operands = instr->operands();
 
             if (isFloatGlobal(globalSet32->index(), compiler->module())) {
-                instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalSetF32);
             }
 
@@ -1568,7 +1570,6 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operands = instr->operands();
 
             if (isFloatGlobal(globalSet64->index(), compiler->module())) {
-                instr->addInfo(Instruction::kIsGlobalFloatBit);
                 instr->setRequiredRegsDescriptor(OTGlobalSetF64);
             }
 
@@ -1920,16 +1921,55 @@ static void compileFunction(JITCompiler* compiler)
 
     compiler->buildVariables(STACK_OFFSET(function->requiredStackSize()));
 
+    if (compiler->JITFlags() & JITFlagValue::disableRegAlloc) {
+        compiler->allocateRegistersSimple();
+    } else {
+        compiler->allocateRegisters();
+    }
+
     if (compiler->JITFlags() & JITFlagValue::JITVerbose) {
         compiler->dump();
     }
 
-    compiler->allocateRegisters();
+    compiler->freeVariables();
 
     Walrus::JITFunction* jitFunc = new JITFunction();
 
     function->setJITFunction(jitFunc);
     compiler->compileFunction(jitFunc, true);
+}
+
+const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
+{
+    uint32_t requiredInit = OTNone;
+
+    switch (instr->opcode()) {
+    case ByteCode::Load32Opcode:
+        requiredInit = OTLoadF32;
+        break;
+    case ByteCode::Load64Opcode:
+        requiredInit = OTLoadF64;
+        break;
+    case ByteCode::Store32Opcode:
+        requiredInit = OTStoreF32;
+        break;
+    case ByteCode::Store64Opcode:
+        requiredInit = OTStoreF64;
+        break;
+    default:
+        break;
+    }
+
+    if (requiredInit != OTNone) {
+        ASSERT((instr->paramCount() + instr->resultCount()) == 2);
+        VariableList::Variable& variable = variables[instr->getParam(1)->ref];
+
+        if (variable.info & Instruction::FloatOperandMarker) {
+            return Instruction::getOperandDescriptorByOffset(requiredInit);
+        }
+    }
+
+    return instr->getOperandDescriptor();
 }
 
 void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, uint32_t JITFlags)

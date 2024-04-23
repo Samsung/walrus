@@ -16,33 +16,6 @@
 
 /* Only included by jit-backend.cc */
 
-static void emitStoreImmediate(sljit_compiler* compiler, sljit_sw offset, Instruction* instr)
-{
-    switch (instr->opcode()) {
-#ifdef HAS_SIMD
-    case ByteCode::Const128Opcode: {
-        const uint8_t* value = reinterpret_cast<Const128*>(instr->byteCode())->value();
-
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, SLJIT_MEM0(), (sljit_sw)value);
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG, SLJIT_MEM1(kFrameReg), offset);
-        return;
-    }
-#endif /* HAS_SIMD */
-    case ByteCode::Const32Opcode: {
-        uint32_t value32 = reinterpret_cast<Const32*>(instr->byteCode())->value();
-        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kFrameReg), offset, SLJIT_IMM, static_cast<sljit_s32>(value32));
-        return;
-    }
-    default: {
-        ASSERT(instr->opcode() == ByteCode::Const64Opcode);
-
-        uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kFrameReg), offset, SLJIT_IMM, static_cast<sljit_sw>(value64));
-        return;
-    }
-    }
-}
-
 enum DivRemOptions : sljit_s32 {
     DivRem32 = 1 << 1,
     DivRemSigned = 1 << 0,
@@ -64,8 +37,7 @@ static void emitDivRem(sljit_compiler* compiler, sljit_s32 opcode, JITArg* args,
         }
     }
 
-    MOVE_TO_REG(compiler, movOpcode, SLJIT_R1, args[1].arg, args[1].argw);
-    MOVE_TO_REG(compiler, movOpcode, SLJIT_R0, args[0].arg, args[0].argw);
+    emitInitR0R1(compiler, SLJIT_MOV, SLJIT_MOV, args);
 
     sljit_jump* moduloJumpFrom = nullptr;
 
@@ -566,7 +538,7 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), context->globalsStart + globalGet->index() * sizeof(void*));
 
-    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+    if (instr->info() & Instruction::kHasFloatOperand) {
         moveFloatToDest(compiler, SLJIT_MOV_F64, dstArg, JITFieldAccessor::globalValueOffset());
     } else {
         moveIntToDest(compiler, SLJIT_MOV, dstArg, JITFieldAccessor::globalValueOffset());
@@ -580,7 +552,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
     JITArg src;
     sljit_s32 baseReg;
 
-    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+    if (instr->info() & Instruction::kHasFloatOperand) {
         floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
         baseReg = SLJIT_TMP_MEM_REG;
     } else {
@@ -591,7 +563,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
 
     if (SLJIT_IS_MEM(src.arg)) {
-        if (instr->info() & Instruction::kIsGlobalFloatBit) {
+        if (instr->info() & Instruction::kHasFloatOperand) {
             sljit_emit_fop1(compiler, SLJIT_MOV_F64, SLJIT_TMP_DEST_FREG, 0, src.arg, src.argw);
             src.arg = SLJIT_TMP_DEST_FREG;
         } else {
@@ -603,7 +575,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(baseReg), context->globalsStart + globalSet->index() * sizeof(void*));
 
-    if (instr->info() & Instruction::kIsGlobalFloatBit) {
+    if (instr->info() & Instruction::kHasFloatOperand) {
         sljit_emit_fop1(compiler, SLJIT_MOV_F64, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
     } else {
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
