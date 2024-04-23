@@ -38,7 +38,8 @@ enum JITFlagValue : uint32_t {
     useJIT = 1 << 0,
     JITVerbose = 1 << 1,
     JITVerboseColor = 1 << 2,
-    enableJITDump = 1 << 3
+    disableRegAlloc = 1 << 3,
+    enableJITDump = 1 << 4
 };
 
 enum class SegmentMode {

@@ -18,13 +18,7 @@
 
 static void emitLoad3Arguments(sljit_compiler* compiler, Operand* params)
 {
-    JITArg srcArg;
-
-    for (int i = 0; i < 3; i++) {
-        srcArg.set(params + i);
-        MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R(i), srcArg.arg, srcArg.argw);
-    }
-
+    emitInitR0R1R2(compiler, SLJIT_MOV32, params);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
 }
 
@@ -48,8 +42,8 @@ static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize
 
 static sljit_sw copyTable(uint32_t dstIndex, uint32_t srcIndex, uint32_t n, ExecutionContext* context)
 {
-    auto srcTable = context->instance->table(context->tmp1);
-    auto dstTable = context->instance->table(context->tmp2);
+    auto srcTable = context->instance->table(context->tmp1[0]);
+    auto dstTable = context->instance->table(context->tmp2[0]);
 
     if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)dstTable->size()))) {
         return ExecutionContext::OutOfBoundsTableAccessError;
@@ -61,7 +55,7 @@ static sljit_sw copyTable(uint32_t dstIndex, uint32_t srcIndex, uint32_t n, Exec
 
 static sljit_sw fillTable(uint32_t index, void* ptr, uint32_t n, ExecutionContext* context)
 {
-    auto srcTable = context->instance->table(context->tmp1);
+    auto srcTable = context->instance->table(context->tmp1[0]);
 
     if ((uint64_t)index + (uint64_t)n > (uint64_t)srcTable->size()) {
         return ExecutionContext::OutOfBoundsTableAccessError;
@@ -153,19 +147,15 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::TableGrowOpcode: {
         ASSERT(instr->info() & Instruction::kIsCallback);
 
-        JITArg arg(instr->operands());
-        MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R0, arg.arg, arg.argw);
+        Operand* operands = instr->operands();
+        JITArg args[3] = { operands, operands + 1, operands + 2 };
 
-        arg.set(instr->operands() + 1);
+        emitInitR0R1(compiler, SLJIT_MOV32, SLJIT_MOV_P, args);
 
-        MOVE_TO_REG(compiler, SLJIT_MOV_P, SLJIT_R1, arg.arg, arg.argw);
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R2, 0, SLJIT_IMM, ((reinterpret_cast<TableGrow*>(instr->byteCode()))->tableIndex()));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, 32, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, growTable));
-
-        arg.set(instr->operands() + 2);
-
-        MOVE_FROM_REG(compiler, SLJIT_MOV32, arg.arg, arg.argw, SLJIT_R0);
+        MOVE_FROM_REG(compiler, SLJIT_MOV32, args[2].arg, args[2].argw, SLJIT_R0);
         break;
     }
     case ByteCode::TableSetOpcode: {

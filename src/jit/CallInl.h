@@ -95,8 +95,17 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
 
     Operand* operand = instr->operands();
     for (auto it : functionType->param()) {
-        if (VARIABLE_TYPE(operand->ref) == Operand::Immediate && !(VARIABLE_GET_IMM(operand->ref)->info() & Instruction::kKeepInstruction)) {
-            emitStoreImmediate(compiler, *stackOffset, VARIABLE_GET_IMM(operand->ref));
+        Operand dst;
+        dst.ref = VARIABLE_SET(STACK_OFFSET(*stackOffset), Operand::Offset);
+
+        switch (VARIABLE_TYPE(operand->ref)) {
+        case Operand::Immediate:
+            ASSERT(!(VARIABLE_GET_IMM(operand->ref)->info() & Instruction::kKeepInstruction));
+            emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(operand->ref), false);
+            break;
+        case Operand::Register:
+            emitMove(compiler, Instruction::valueTypeToOperandType(it), operand, &dst);
+            break;
         }
 
         operand++;
@@ -104,10 +113,22 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (instr->opcode() == ByteCode::CallIndirectOpcode) {
-        if (VARIABLE_TYPE(operand->ref) == Operand::Immediate && !(VARIABLE_GET_IMM(operand->ref)->info() & Instruction::kKeepInstruction)) {
-            CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
-            emitStoreImmediate(compiler, callIndirect->calleeOffset(), VARIABLE_GET_IMM(operand->ref));
+        CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
+
+        switch (VARIABLE_TYPE(operand->ref)) {
+        case Operand::Immediate: {
+            ASSERT(!(VARIABLE_GET_IMM(operand->ref)->info() & Instruction::kKeepInstruction));
+            Const32* value = reinterpret_cast<Const32*>(VARIABLE_GET_IMM(operand->ref)->byteCode());
+            sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kFrameReg), callIndirect->calleeOffset(), SLJIT_IMM, static_cast<sljit_s32>(value->value()));
+            break;
         }
+        case Operand::Register: {
+            sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kFrameReg), callIndirect->calleeOffset(), static_cast<sljit_s32>(VARIABLE_GET_REF(operand->ref)), 0);
+            break;
+        }
+        }
+
+        operand++;
     }
 
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(instr->byteCode()));
@@ -117,6 +138,20 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
     sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
+
+    for (auto it : functionType->result()) {
+        ASSERT(VARIABLE_TYPE(operand->ref) != Operand::Immediate);
+
+        if (VARIABLE_TYPE(operand->ref) == Operand::Register) {
+            Operand src;
+
+            src.ref = VARIABLE_SET(STACK_OFFSET(*stackOffset), Operand::Offset);
+            emitMove(compiler, Instruction::valueTypeToOperandType(it), &src, operand);
+        }
+
+        operand++;
+        stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
+    }
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {
         context->appendTrapJump(ExecutionContext::ReturnToLabel, jump);

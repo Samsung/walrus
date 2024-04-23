@@ -132,7 +132,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
     }
 
     ASSERT(baseReg != 0 && offsetReg != 0);
-    MOVE_TO_REG(compiler, SLJIT_MOV_U32, offsetReg, offsetArg.arg, offsetArg.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV_U32, offsetReg, 0, offsetArg.arg, offsetArg.argw);
 
     if (context->initialMemorySize != context->maximumMemorySize) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -226,11 +226,11 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::Load32Opcode:
-        opcode = SLJIT_MOV32;
+        opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F32 : SLJIT_MOV32;
         size = 4;
         break;
     case ByteCode::Load64Opcode:
-        opcode = SLJIT_MOV;
+        opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
     case ByteCode::I32LoadOpcode:
@@ -392,9 +392,10 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #if (defined SLJIT_FPU_UNALIGNED && SLJIT_FPU_UNALIGNED)
         sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, addr.memArg.arg, addr.memArg.argw);
 #else /* SLJIT_FPU_UNALIGNED */
-        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, SLJIT_TMP_DEST_FREG, addr.memArg.arg, addr.memArg.argw);
+        sljit_s32 dstReg = GET_TARGET_REG(valueArg.arg, SLJIT_TMP_DEST_FREG);
+        sljit_emit_fmem(compiler, opcode | SLJIT_MEM_UNALIGNED, dstReg, addr.memArg.arg, addr.memArg.argw);
 
-        if (SLJIT_IS_MEM(valueArg.arg)) {
+        if (dstReg == SLJIT_TMP_DEST_FREG) {
             sljit_emit_fop1(compiler, opcode, valueArg.arg, valueArg.argw, SLJIT_TMP_DEST_FREG, 0);
         }
 #endif /* SLJIT_FPU_UNALIGNED */
@@ -567,11 +568,11 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::Store32Opcode:
-        opcode = SLJIT_MOV32;
+        opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F32 : SLJIT_MOV32;
         size = 4;
         break;
     case ByteCode::Store64Opcode:
-        opcode = SLJIT_MOV;
+        opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
     case ByteCode::I32StoreOpcode:
@@ -883,13 +884,7 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::MemoryFillOpcode: {
         ASSERT(instr->info() & Instruction::kIsCallback);
 
-        JITArg srcArg;
-
-        for (int i = 0; i < 3; i++) {
-            srcArg.set(params + i);
-            sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R(i), 0, srcArg.arg, srcArg.argw);
-        }
-
+        emitInitR0R1R2(compiler, SLJIT_MOV32, params);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
 
         sljit_sw addr;

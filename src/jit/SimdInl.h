@@ -24,10 +24,11 @@ static void emitMoveV128(sljit_compiler* compiler, Instruction* instr)
 
     sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_TMP_DEST_FREG);
 
-    simdOperandToArg(compiler, operands + 0, src, SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_FREG);
+    simdOperandToArg(compiler, operands + 0, src, SLJIT_SIMD_REG_128, dstReg);
+    ASSERT(SLJIT_IS_REG(src.arg));
 
-    if (SLJIT_IS_MEM(dst.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_FREG, dst.arg, dst.argw);
+    if (dst.arg != src.arg) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, src.arg, dst.arg, dst.argw);
     }
 }
 

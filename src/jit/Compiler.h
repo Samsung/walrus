@@ -103,6 +103,8 @@ public:
         BitMaskSIMD,
         // Shift SIMD opcodes (e.g. I8X16SHL)
         ShiftSIMD,
+        // Special type for initializing values from the stack
+        StackInit,
     };
 
     virtual ~InstructionListItem() {}
@@ -192,7 +194,7 @@ public:
         // Int64Operand | Float64Operand == Float64Operand
         Float64Operand = 6,
         // Helper constants for managing type info.
-        FloatOperandStart = V128Operand,
+        FloatOperandMarker = V128Operand,
         TypeMask = 0x7,
         // A temporary register must be allocated for the source or destination
         // operand. In case of source operands, the register is not modified.
@@ -213,13 +215,14 @@ public:
 
     // Various info bits. Depends on type.
     static const uint16_t kIs32Bit = 1 << 0;
-    static const uint16_t kIsGlobalFloatBit = kIs32Bit;
     static const uint16_t kIsCallback = 1 << 1;
     static const uint16_t kDestroysR0R1 = 1 << 2;
-    static const uint16_t kIsShift = 1 << 3;
-    static const uint16_t kIsMergeCompare = 1 << 4;
-    static const uint16_t kKeepInstruction = 1 << 5;
-    static const uint16_t kEarlyReturn = 1 << 6;
+    static const uint16_t kHasFloatOperand = 1 << 3;
+    static const uint16_t kIsShift = 1 << 4;
+    static const uint16_t kIsMergeCompare = 1 << 5;
+    static const uint16_t kFreeUnusedEarly = 1 << 6;
+    static const uint16_t kKeepInstruction = 1 << 7;
+    static const uint16_t kEarlyReturn = kKeepInstruction;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -245,7 +248,7 @@ public:
 
     ExtendedInstruction* asExtended()
     {
-        ASSERT(group() == Instruction::DirectBranch);
+        ASSERT(group() == Instruction::DirectBranch || group() == Instruction::StackInit);
         return reinterpret_cast<ExtendedInstruction*>(this);
     }
 
@@ -275,6 +278,11 @@ public:
     inline const uint8_t* getOperandDescriptor()
     {
         return m_operandDescriptors + u.m_requiredRegsDescriptor;
+    }
+
+    static inline const uint8_t* getOperandDescriptorByOffset(uint32_t offset)
+    {
+        return m_operandDescriptors + offset;
     }
 
     static uint32_t valueTypeToOperandType(Value::Type type);
@@ -318,6 +326,8 @@ union InstructionValue {
     Label* targetLabel;
     // For calls.
     uint32_t resultCount;
+    // For StackInit group.
+    VariableRef offset;
 };
 
 class ExtendedInstruction : public Instruction {
@@ -330,7 +340,7 @@ protected:
     explicit ExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands)
         : Instruction(byteCode, group, opcode, paramCount, operands)
     {
-        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call);
+        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackInit);
     }
 
 private:
@@ -566,18 +576,14 @@ struct VariableList {
 
     static const uint32_t kConstraints = kIsCallback | kDestroysR0R1;
     static const size_t kRangeMax = ~(VariableRef)0;
-
-    VariableList(size_t variableCount)
-    {
-        variables.reserve(variableCount);
-    }
+    static const uint8_t kUnusedReg = 0xff;
 
     struct Variable {
         Variable(VariableRef value, uint32_t typeInfo, size_t id)
             : value(value)
             , info(typeInfo)
-            , reg1(0)
-            , reg2(0)
+            , reg1(kUnusedReg)
+            , reg2(kUnusedReg)
             , rangeEnd(id)
         {
             u.rangeStart = id;
@@ -586,8 +592,8 @@ struct VariableList {
         Variable(VariableRef value, uint32_t typeInfo, Instruction* instr)
             : value(value)
             , info(typeInfo)
-            , reg1(0)
-            , reg2(0)
+            , reg1(kUnusedReg)
+            , reg2(kUnusedReg)
             , rangeEnd(instr->id())
         {
             if (instr->group() == Instruction::Immediate) {
@@ -610,6 +616,25 @@ struct VariableList {
         size_t rangeEnd;
     };
 
+    struct CatchUpdate {
+        CatchUpdate(Label* handler, size_t variableListStart, size_t variableListSize)
+            : handler(handler)
+            , variableListStart(variableListStart)
+            , variableListSize(variableListSize)
+        {
+        }
+
+        Label* handler;
+        size_t variableListStart;
+        size_t variableListSize;
+    };
+
+    VariableList(size_t variableCount, size_t paramCount)
+        : paramCount(paramCount)
+    {
+        variables.reserve(variableCount);
+    }
+
     VariableRef getMergeHeadSlowCase(VariableRef ref);
 
     VariableRef getMergeHead(VariableRef ref)
@@ -621,7 +646,16 @@ struct VariableList {
         return getMergeHeadSlowCase(ref);
     }
 
+    void pushCatchUpdate(Label* handler, size_t variableListSize)
+    {
+        catchUpdates.push_back(CatchUpdate(handler, variables.size(), variableListSize));
+    }
+
+    const uint8_t* getOperandDescriptor(Instruction* instr);
+
+    size_t paramCount;
     std::vector<Variable> variables;
+    std::vector<CatchUpdate> catchUpdates;
 };
 
 class JITCompiler {
@@ -649,6 +683,8 @@ public:
     ExtendedInstruction* appendExtended(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
     Instruction* appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset);
     BrTableInstruction* appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset);
+    InstructionListItem* insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref);
+    void insertStackInitList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize);
 
     void appendLabel(Label* label)
     {
@@ -667,7 +703,9 @@ public:
 
     void dump();
     void buildVariables(uint32_t requiredStackSize);
+    void allocateRegistersSimple();
     void allocateRegisters();
+    void freeVariables();
 
     void compileFunction(JITFunction* jitFunc, bool isExternal);
     void generateCode();
@@ -713,6 +751,8 @@ private:
     size_t m_tryBlockOffset;
     uint32_t m_JITFlags;
     uint32_t m_options;
+    uint8_t m_savedIntegerRegCount;
+    uint8_t m_savedFloatRegCount;
 
     std::vector<TryBlock> m_tryBlocks;
     std::vector<FunctionList> m_functionList;

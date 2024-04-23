@@ -76,8 +76,8 @@ struct ExecutionContext {
     Exception* capturedException;
     Memory::TargetBuffer memory0;
     ErrorCodes error;
-    uint64_t tmp1;
-    uint64_t tmp2;
+    uint64_t tmp1[2];
+    uint64_t tmp2[2];
 };
 
 class JITModule {
