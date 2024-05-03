@@ -141,7 +141,7 @@ jobs:
       with:
         submodules: true
     - name: Build in arm32 container
-      uses: uraimo/run-on-arch-action@v2.5.0
+      uses: uraimo/run-on-arch-action@v2.7.2
       with:
         arch: armv7
         distro: ubuntu_latest
@@ -152,10 +152,7 @@ jobs:
 
         install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12 git
-          #FIXME fix clang version as to 12
-          ln -s /usr/bin/clang-12 /usr/bin/clang
-          ln -s /usr/bin/clang++-12 /usr/bin/clang++
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
         run: |
           CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
           CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
@@ -176,7 +173,7 @@ jobs:
       with:
         submodules: true
     - name: Build in arm64 container
-      uses: uraimo/run-on-arch-action@v2.5.0
+      uses: uraimo/run-on-arch-action@v2.7.2
       with:
         arch: aarch64
         distro: ubuntu_latest
@@ -187,13 +184,10 @@ jobs:
 
         install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12 git
-          #FIXME fix clang version as to 12
-          ln -s /usr/bin/clang-12 /usr/bin/clang
-          ln -s /usr/bin/clang++-12 /usr/bin/clang++
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 gcc g++ git
         run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+          CC=gcc CXX=g++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+          CC=gcc CXX=g++ cmake -H. -Bout/pure -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
           ninja -Cout/release
           ninja -Cout/pure
           python3 ./tools/run-tests.py --engine="./out/release/walrus"
