@@ -13,7 +13,7 @@ jobs:
   check-tidy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
@@ -27,7 +27,7 @@ jobs:
   build-on-macos:
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
@@ -51,7 +51,7 @@ jobs:
   build-by-clang:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
@@ -95,7 +95,7 @@ jobs:
   build-test-on-x86:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
@@ -116,7 +116,7 @@ jobs:
   build-test-on-x64:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
@@ -137,11 +137,11 @@ jobs:
   build-test-on-armv7:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Build in arm32 container
-      uses: uraimo/run-on-arch-action@v2.5.0
+      uses: uraimo/run-on-arch-action@v2.7.2
       with:
         arch: armv7
         distro: ubuntu_latest
@@ -152,10 +152,7 @@ jobs:
 
         install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12 git
-          #FIXME fix clang version as to 12
-          ln -s /usr/bin/clang-12 /usr/bin/clang
-          ln -s /usr/bin/clang++-12 /usr/bin/clang++
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
         run: |
           CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
           CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
@@ -172,14 +169,14 @@ jobs:
   build-test-on-aarch64:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Build in arm64 container
-      uses: uraimo/run-on-arch-action@v2.5.0
+      uses: uraimo/run-on-arch-action@v2.7.2
       with:
         arch: aarch64
-        distro: ubuntu_latest
+        distro: ubuntu22.04
 
         # Install deps into the container. With the token, the container will be cached
         # The image is cached publically like a package
@@ -187,10 +184,7 @@ jobs:
 
         install: |
           apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang-12 git
-          #FIXME fix clang version as to 12
-          ln -s /usr/bin/clang-12 /usr/bin/clang
-          ln -s /usr/bin/clang++-12 /usr/bin/clang++
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
         run: |
           CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
           CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
@@ -211,11 +205,11 @@ jobs:
       run: |
         git config --global core.autocrlf input
         git config --global core.eol lf
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: lukka/get-cmake@latest
-    - uses: GuillaumeFalourd/setup-windows10-sdk-action@v1.11
+    - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
       with:
         sdk-version: 20348
     - uses: actions/setup-python@v4
@@ -244,7 +238,7 @@ jobs:
   build-test-performance:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
@@ -267,7 +261,7 @@ jobs:
   built-test-wasm-c-api:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
@@ -295,7 +289,7 @@ jobs:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Install Packages
