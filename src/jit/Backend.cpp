@@ -545,6 +545,26 @@ static void emitMoveI32(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV32, dst.arg, dst.argw, src.arg, src.argw);
 }
 
+static void emitReinterpretFloat(sljit_compiler* compiler, Instruction* instr)
+{
+    // The register allocation will do this in a more sophisticated way.
+    if (instr->opcode() == ByteCode::I32ReinterpretF32Opcode) {
+        emitMoveI32(compiler, instr);
+    } else {
+        emitMoveI64(compiler, instr);
+    }
+}
+
+static void emitReinterpretInt(sljit_compiler* compiler, Instruction* instr)
+{
+    // The register allocation will do this in a more sophisticated way.
+    if (instr->opcode() == ByteCode::F32ReinterpretI32Opcode) {
+        emitMoveI32(compiler, instr);
+    } else {
+        emitMoveI64(compiler, instr);
+    }
+}
+
 static void emitGlobalGet32(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
@@ -802,15 +822,24 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             case ByteCode::MoveI64Opcode:
                 emitMoveI64(m_compiler, item->asInstruction());
                 break;
+            case ByteCode::MoveF32Opcode:
+            case ByteCode::MoveF64Opcode:
+                emitMoveFloat(m_compiler, item->asInstruction());
+                break;
 #ifdef HAS_SIMD
             case ByteCode::MoveV128Opcode:
                 emitMoveV128(m_compiler, item->asInstruction());
                 break;
 #endif /* HAS_SIMD */
+            case ByteCode::I32ReinterpretF32Opcode:
+            case ByteCode::I64ReinterpretF64Opcode:
+                emitReinterpretFloat(m_compiler, item->asInstruction());
+                break;
             default:
-                ASSERT(item->asInstruction()->opcode() == ByteCode::MoveF32Opcode
-                       || item->asInstruction()->opcode() == ByteCode::MoveF64Opcode);
-                emitMoveFloat(m_compiler, item->asInstruction());
+                ASSERT(item->asInstruction()->opcode() == ByteCode::F32ReinterpretI32Opcode
+                       || item->asInstruction()->opcode() == ByteCode::F64ReinterpretI64Opcode);
+                emitReinterpretInt(m_compiler, item->asInstruction());
+                break;
             }
             break;
         }

@@ -485,6 +485,16 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                                                            \
     }
 
+#define MOVE_OPERATION(name, type)                                                                           \
+    DEFINE_OPCODE(name)                                                                                      \
+        :                                                                                                    \
+    {                                                                                                        \
+        name* code = (name*)programCounter;                                                                  \
+        *reinterpret_cast<type*>(bp + code->dstOffset()) = *reinterpret_cast<type*>(bp + code->srcOffset()); \
+        ADD_PROGRAM_COUNTER(name);                                                                           \
+        NEXT_INSTRUCTION();                                                                                  \
+    }
+
 #define SIMD_BINARY_OPERATION(name, op, paramType, resultType)     \
     DEFINE_OPCODE(name)                                            \
         :                                                          \
@@ -743,41 +753,10 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
-    DEFINE_OPCODE(MoveI32)
-        :
-    {
-        MoveI32* code = (MoveI32*)programCounter;
-        *reinterpret_cast<uint32_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint32_t*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(MoveI32);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(MoveF32)
-        :
-    {
-        MoveF32* code = (MoveF32*)programCounter;
-        *reinterpret_cast<float*>(bp + code->dstOffset()) = *reinterpret_cast<float*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(MoveF32);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(MoveI64)
-        :
-    {
-        MoveI64* code = (MoveI64*)programCounter;
-        *reinterpret_cast<uint64_t*>(bp + code->dstOffset()) = *reinterpret_cast<uint64_t*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(MoveI64);
-        NEXT_INSTRUCTION();
-    }
-
-    DEFINE_OPCODE(MoveF64)
-        :
-    {
-        MoveF64* code = (MoveF64*)programCounter;
-        *reinterpret_cast<double*>(bp + code->dstOffset()) = *reinterpret_cast<double*>(bp + code->srcOffset());
-        ADD_PROGRAM_COUNTER(MoveF64);
-        NEXT_INSTRUCTION();
-    }
+    MOVE_OPERATION(MoveI32, uint32_t)
+    MOVE_OPERATION(MoveF32, float)
+    MOVE_OPERATION(MoveI64, uint64_t)
+    MOVE_OPERATION(MoveF64, double)
 
     DEFINE_OPCODE(MoveV128)
         :
@@ -787,6 +766,11 @@ NextInstruction:
         ADD_PROGRAM_COUNTER(MoveV128);
         NEXT_INSTRUCTION();
     }
+
+    MOVE_OPERATION(I32ReinterpretF32, uint32_t)
+    MOVE_OPERATION(I64ReinterpretF64, uint64_t)
+    MOVE_OPERATION(F32ReinterpretI32, uint32_t)
+    MOVE_OPERATION(F64ReinterpretI64, uint64_t)
 
     DEFINE_OPCODE(Load32)
         :

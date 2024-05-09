@@ -57,6 +57,10 @@ class FunctionType;
     F(MoveI64)                  \
     F(MoveF64)                  \
     F(MoveV128)                 \
+    F(I32ReinterpretF32)        \
+    F(I64ReinterpretF64)        \
+    F(F32ReinterpretI32)        \
+    F(F64ReinterpretI64)        \
     F(Jump)                     \
     F(JumpIfTrue)               \
     F(JumpIfFalse)              \
@@ -747,6 +751,44 @@ FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
+
+class Move : public ByteCode {
+public:
+    Move(Opcode opcode, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : ByteCode(opcode)
+        , m_srcOffset(srcOffset)
+        , m_dstOffset(dstOffset)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+protected:
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
+};
+
+#define DEFINE_MOVE_BYTECODE(name)                                         \
+    class name : public Move {                                             \
+    public:                                                                \
+        name(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : Move(Opcode::name##Opcode, srcOffset, dstOffset)             \
+        {                                                                  \
+        }                                                                  \
+        DEFINE_UNARY_BYTECODE_DUMP(name)                                   \
+    };
+
+DEFINE_MOVE_BYTECODE(MoveI32)
+DEFINE_MOVE_BYTECODE(MoveF32)
+DEFINE_MOVE_BYTECODE(MoveI64)
+DEFINE_MOVE_BYTECODE(MoveF64)
+DEFINE_MOVE_BYTECODE(MoveV128)
+DEFINE_MOVE_BYTECODE(I32ReinterpretF32)
+DEFINE_MOVE_BYTECODE(I64ReinterpretF64)
+DEFINE_MOVE_BYTECODE(F32ReinterpretI32)
+DEFINE_MOVE_BYTECODE(F64ReinterpretI64)
+
 #undef DEFINE_BINARY_BYTECODE_DUMP
 #undef DEFINE_BINARY_BYTECODE
 #undef DEFINE_UNARY_BYTECODE_DUMP
@@ -863,108 +905,6 @@ protected:
     FunctionType* m_functionType;
     uint16_t m_parameterOffsetsSize;
     uint16_t m_resultOffsetsSize;
-};
-
-class Move : public ByteCode {
-public:
-    Move(Opcode opcode, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(opcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
-};
-
-class MoveI32 : public Move {
-public:
-    MoveI32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : Move(Opcode::MoveI32Opcode, srcOffset, dstOffset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("movei32 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-#endif
-};
-
-class MoveF32 : public Move {
-public:
-    MoveF32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : Move(Opcode::MoveF32Opcode, srcOffset, dstOffset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("movef32 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-#endif
-};
-
-class MoveI64 : public Move {
-public:
-    MoveI64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : Move(Opcode::MoveI64Opcode, srcOffset, dstOffset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("movei64 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-#endif
-};
-
-class MoveF64 : public Move {
-public:
-    MoveF64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : Move(Opcode::MoveF64Opcode, srcOffset, dstOffset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("movef64 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-#endif
-};
-
-class MoveV128 : public Move {
-public:
-    MoveV128(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : Move(Opcode::MoveV128Opcode, srcOffset, dstOffset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("movev128 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-    }
-#endif
 };
 
 class Load32 : public ByteCode {
