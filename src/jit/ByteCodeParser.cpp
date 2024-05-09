@@ -160,6 +160,10 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTMoveI64, /* SD */ I64, I64 | S0)                                              \
     OL2(OTMoveF64, /* SD */ F64 | NOTMP, F64 | S0)                                      \
     OL2(OTMoveV128, /* SD */ V128, V128 | S0)                                           \
+    OL2(OTI32ReinterpretF32, /* SD */ I32, F32)                                         \
+    OL2(OTI64ReinterpretF64, /* SD */ I64, F64)                                         \
+    OL2(OTF32ReinterpretI32, /* SD */ F32, I32)                                         \
+    OL2(OTF64ReinterpretI64, /* SD */ F32, I32)                                         \
     OL3(OTCompareI64, /* SSD */ I64, I64, I32 | S0 | S1)                                \
     OL3(OTCompareF32, /* SSD */ F32, F32, I32)                                          \
     OL3(OTCompareF64, /* SSD */ F64, F64, I32)                                          \
@@ -1455,7 +1459,11 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::MoveF32Opcode:
         case ByteCode::MoveI64Opcode:
         case ByteCode::MoveF64Opcode:
-        case ByteCode::MoveV128Opcode: {
+        case ByteCode::MoveV128Opcode:
+        case ByteCode::I32ReinterpretF32Opcode:
+        case ByteCode::I64ReinterpretF64Opcode:
+        case ByteCode::F32ReinterpretI32Opcode:
+        case ByteCode::F64ReinterpretI64Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Move, opcode, 1, 1);
 
             switch (opcode) {
@@ -1471,8 +1479,20 @@ static void compileFunction(JITCompiler* compiler)
             case ByteCode::MoveF64Opcode:
                 requiredInit = OTMoveF64;
                 break;
-            default:
+            case ByteCode::MoveV128Opcode:
                 requiredInit = OTMoveV128;
+                break;
+            case ByteCode::I32ReinterpretF32Opcode:
+                requiredInit = OTI32ReinterpretF32;
+                break;
+            case ByteCode::I64ReinterpretF64Opcode:
+                requiredInit = OTI64ReinterpretF64;
+                break;
+            case ByteCode::F32ReinterpretI32Opcode:
+                requiredInit = OTF32ReinterpretI32;
+                break;
+            default:
+                requiredInit = OTF64ReinterpretI64;
                 break;
             }
 

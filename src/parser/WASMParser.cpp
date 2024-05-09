@@ -1392,17 +1392,7 @@ public:
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
-        case WASMOpcode::I32ReinterpretF32Opcode:
-        case WASMOpcode::I64ReinterpretF64Opcode:
-        case WASMOpcode::F32ReinterpretI32Opcode:
-        case WASMOpcode::F64ReinterpretI64Opcode:
-            generateMoveCodeIfNeeds(src, dst, WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-            break;
-        default:
-            generateUnaryCode(code, src, dst);
-            break;
-        }
+        generateUnaryCode(code, src, dst);
     }
 
     virtual void OnTernaryExpr(uint32_t opcode) override
@@ -2477,6 +2467,18 @@ public:
             FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(GENERATE_UNARY_CODE_CASE)
             FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
 #undef GENERATE_UNARY_CODE_CASE
+        case WASMOpcode::I32ReinterpretF32Opcode:
+            pushByteCode(Walrus::I32ReinterpretF32(src, dst), code);
+            break;
+        case WASMOpcode::I64ReinterpretF64Opcode:
+            pushByteCode(Walrus::I64ReinterpretF64(src, dst), code);
+            break;
+        case WASMOpcode::F32ReinterpretI32Opcode:
+            pushByteCode(Walrus::F32ReinterpretI32(src, dst), code);
+            break;
+        case WASMOpcode::F64ReinterpretI64Opcode:
+            pushByteCode(Walrus::F64ReinterpretI64(src, dst), code);
+            break;
         default:
             ASSERT_NOT_REACHED();
             break;
