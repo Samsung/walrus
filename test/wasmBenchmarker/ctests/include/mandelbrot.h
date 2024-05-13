@@ -34,8 +34,8 @@
 #include <math.h>
 #include <stdint.h>
 
-#define WIDTH 1600
-#define HIGHT 1400
+#define WIDTH 12800
+#define HIGHT 11200
 #define N 20
 #define REAL_AXIS_SHIFT -1.8 // ~ horizontal shift
 #define IMAGINARY_AXIS_SHIFT -1.0 // ~ vertical shift

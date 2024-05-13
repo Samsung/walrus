@@ -17,9 +17,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-uint64_t factorial(uint8_t n) {
-    uint8_t counter = 0;
-    for (uint8_t i = 0; i < n; i++, counter++) {
+uint64_t factorial(uint64_t n) {
+    uint64_t counter = 0;
+    for (uint64_t i = 0; i < n; i++, counter++) {
         factorial(n - 1);
     }
 
@@ -29,8 +29,10 @@ uint64_t factorial(uint8_t n) {
 uint64_t runtime() {
     uint64_t retVal = 0;
 
-    for (uint16_t i = 0; i < 3; i++) {
-        retVal += factorial(10);
+    for (uint64_t i = 0; i < 6000000000; i++) {
+        retVal += factorial(150000000);
+        retVal -= factorial(149999999);
+        retVal += factorial(149999998);
     }
 
     return retVal;

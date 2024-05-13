@@ -228,22 +228,134 @@ int runtime() {
                             "te eum quod blandit. Vim ad legimus intellegebat "
                             "disputationi, an ridens nonumes deterruisset sed. Eos "
                             "dicunt assentior eu, mel ne case postulant, "
-                            "quando feugiat voluptaria eam ne.\n";
+                            "quando feugiat voluptaria eam ne.\n"
+                            "Curabitur vitae erat tortor. Lorem ipsum dolor "
+                            "sit amet, consectetur adipiscing elit. Integer "
+                            "ut ligula nec odio bibendum tempus. Suspendisse"
+                            " id neque nec tortor faucibus congue. Donec vit"
+                            "ae tortor at tellus feugiat dictum eget non sem"
+                            ". Mauris malesuada tellus commodo, congue massa"
+                            " sed, tristique nunc. Duis facilisis risus nec "
+                            "eros rutrum scelerisque ac sit amet nibh. Integ"
+                            "er urna ipsum, vestibulum a dui et, varius vene"
+                            "natis lectus.\n\nInteger purus arcu, fermentum "
+                            "sit amet ultricies in, consequat non urna. Maur"
+                            "is convallis risus ut nulla porta, vitae posuer"
+                            "e sapien commodo. Mauris pulvinar ligula a pulv"
+                            "inar auctor. Fusce at cursus lectus, sit amet s"
+                            "celerisque dolor. Quisque lacinia mauris vestib"
+                            "ulum lacus rutrum vestibulum. Nullam ut ex elem"
+                            "entum, suscipit leo in, egestas purus. Vestibul"
+                            "um ligula velit, rutrum eget dapibus et, tempor"
+                            " ut arcu. Nunc mattis ante ante, ut interdum ma"
+                            "ssa congue at. Proin tortor eros, euismod sit a"
+                            "met justo eu, tincidunt viverra nunc. Morbi sit"
+                            " amet venenatis sapien. In sollicitudin urna en"
+                            "im, eget porttitor diam pulvinar ut. Pellentesq"
+                            "ue placerat euismod mattis. Cras sit amet leo e"
+                            "t purus facilisis dictum eget quis libero.\n\nP"
+                            "raesent ipsum dui, luctus vitae neque vitae, lo"
+                            "bortis egestas nunc. Proin id leo sed urna ulla"
+                            "mcorper vehicula ullamcorper quis purus. Mauris"
+                            " nec cursus nibh, quis posuere ligula. Nullam r"
+                            "honcus lacus non risus dictum luctus. Praesent "
+                            "nulla orci, ultrices commodo tincidunt et, aliq"
+                            "uam ac mauris. In laoreet convallis feugiat. Et"
+                            "iam quis eros vitae enim porttitor cursus in vo"
+                            "lutpat turpis. Quisque tempor turpis leo. Duis "
+                            "at diam ac odio rutrum eleifend.\n\nEtiam id po"
+                            "rta lacus. Sed pellentesque eleifend tellus, tr"
+                            "istique mollis dui congue nec. Phasellus ante e"
+                            "st, mollis semper libero suscipit, vestibulum v"
+                            "ehicula diam. Phasellus pretium ex ut diam aliq"
+                            "uam, quis venenatis sapien maximus. Morbi eget "
+                            "interdum felis, sed aliquam magna. Pellentesque"
+                            " fermentum est sapien, at congue mauris convall"
+                            "is eu. Aliquam mattis aliquet libero id blandit"
+                            ". Maecenas turpis augue, pretium eget finibus i"
+                            "n, cursus quis ligula. Pellentesque habitant mo"
+                            "rbi tristique senectus et netus et malesuada fa"
+                            "mes ac turpis egestas.\n\nVestibulum pharetra t"
+                            "ortor non nibh scelerisque congue. Morbi fermen"
+                            "tum, enim at accumsan luctus, tellus ante moles"
+                            "tie est, ut aliquet ipsum nulla quis sem. Aliqu"
+                            "am eget ligula ut diam accumsan semper ultricie"
+                            "s eget ante. Donec aliquet odio sed nibh euismo"
+                            "d, sed efficitur nulla condimentum. Aliquam ult"
+                            "rices, ipsum vitae pretium vulputate, libero ju"
+                            "sto dictum velit, eu placerat purus leo quis fe"
+                            "lis. Praesent ultrices massa nulla, at porta ma"
+                            "ssa vehicula vel. Morbi vulputate nulla eget ur"
+                            "na ornare, sed posuere est imperdiet. In non mi"
+                            " vel libero pellentesque condimentum id sed mi."
+                            " Praesent id nibh massa. Donec porttitor effici"
+                            "tur enim, eget ultrices mi commodo at. Proin he"
+                            "ndrerit justo eu fermentum ornare. Vivamus pulv"
+                            "inar ex quis nisi fringilla imperdiet. Vivamus "
+                            "efficitur lectus sit amet ipsum scelerisque rut"
+                            "rum.\n\nDuis ac justo tellus. Aliquam erat volu"
+                            "tpat. Duis sed nisl massa. Fusce posuere, magna"
+                            " eget posuere tincidunt, lorem nisi tristique a"
+                            "nte, in egestas enim ipsum ut sem. Phasellus si"
+                            "t amet gravida elit. Nulla aliquam lectus condi"
+                            "mentum ex rhoncus varius. Praesent facilisis du"
+                            "i eget vestibulum placerat. Suspendisse et cons"
+                            "ectetur enim, vitae imperdiet ante. Praesent ne"
+                            "c tortor placerat, aliquet ex iaculis, semper f"
+                            "elis. Duis gravida libero quis neque condimentu"
+                            "m volutpat. Class aptent taciti sociosqu ad lit"
+                            "ora torquent per conubia nostra, per inceptos h"
+                            "imenaeos.\n\nInteger et purus pulvinar, finibus"
+                            " quam at, sodales ipsum. Maecenas eu elementum "
+                            "dui. Sed condimentum ullamcorper nisi, a lacini"
+                            "a ante sagittis sit amet. Aliquam sed tempus au"
+                            "gue. Donec condimentum placerat metus id posuer"
+                            "e. Sed placerat blandit lorem, vitae pulvinar e"
+                            "ros fermentum quis. Nunc sed mi in ipsum suscip"
+                            "it iaculis in at mi. In sed lorem eu purus cong"
+                            "ue maximus. Cras gravida, elit et sagittis phar"
+                            "etra, elit mi volutpat augue, a volutpat leo lo"
+                            "rem luctus eros. Pellentesque maximus lorem eu "
+                            "bibendum suscipit. Nullam ipsum massa, eleifend"
+                            " quis faucibus in, fermentum non lorem. Sed vol"
+                            "utpat facilisis felis, ut laoreet est venenatis"
+                            " mollis.\n\nPhasellus efficitur ante et eros ul"
+                            "trices aliquet. Morbi molestie neque ante, pell"
+                            "entesque vulputate mauris dictum id. Donec eu d"
+                            "apibus enim. Maecenas non lacus orci. Suspendis"
+                            "se potenti. Donec at arcu ac nunc laoreet eleme"
+                            "ntum id et ipsum. Suspendisse sed justo purus. "
+                            "Donec malesuada, nibh ac facilisis congue, mass"
+                            "a risus porttitor nulla, a mattis turpis augue "
+                            "non augue. In varius sem et nunc auctor sollici"
+                            "tudin. Praesent dapibus faucibus vulputate. Qui"
+                            "sque quis ipsum lacus. Pellentesque et sapien d"
+                            "ui. Proin ut lacus dapibus, convallis ligula ul"
+                            "lamcorper, finibus sem. Vestibulum sapien neque"
+                            ", facilisis nec lacus ut, venenatis maximus lig"
+                            "ula.\n\nMorbi sit amet accumsan ante, eu ullamc"
+                            "orper libero. Donec eu cursus tellus. Nunc susc"
+                            "ipit augue odio, nec tincidunt tortor efficitur"
+                            " non. Vivamus eget erat odio. Maecenas tincidun"
+                            "t in nunc interdum pellentesque. Maecenas nec o"
+                            "dio justo. Vivamus ultricies quam nisi, et vulp";
     const int messageLength = sizeof(message) / sizeof(char);
-    const uint64_t prime1 = NthPrimeAfterNumber(350, 0);
-    const uint64_t prime2 = NthPrimeAfterNumber(1, prime1);
-    PublicKey publicKey;
-    PrivateKey privateKey;
-    generateKeys(prime1, prime2, &publicKey, &privateKey);
-    uint64_t encryptedMessage[messageLength];
-    encryptMessage((uint8_t*)message, messageLength, publicKey, encryptedMessage);
-    char decryptedMessage[messageLength];
-    decryptMessage(encryptedMessage, messageLength, privateKey, (uint8_t*)decryptedMessage);
-    if (areEqual(message, decryptedMessage)) {
-        return 0;
-    } else {
-        return 1;
+
+    for(int i = 100; i < 650; i++) {
+        const uint64_t prime1 = NthPrimeAfterNumber(i, 0);
+        const uint64_t prime2 = NthPrimeAfterNumber(1, prime1);
+        PublicKey publicKey;
+        PrivateKey privateKey;
+        generateKeys(prime1, prime2, &publicKey, &privateKey);
+        uint64_t encryptedMessage[messageLength];
+        encryptMessage((uint8_t*)message, messageLength, publicKey, encryptedMessage);
+        char decryptedMessage[messageLength];
+        decryptMessage(encryptedMessage, messageLength, privateKey, (uint8_t*)decryptedMessage);
+        if (!areEqual(message, decryptedMessage)) {
+            return 1;
+        }
     }
+    return 0;
 }
 
 int main() {

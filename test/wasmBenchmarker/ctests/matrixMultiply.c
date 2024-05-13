@@ -18,8 +18,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
-// 4x4 square matrix
-#define MATRIX_SIZE 16
+// 13x13 square matrix
+#define MATRIX_SIZE 169
 
 #define ITERATION 3500000
 

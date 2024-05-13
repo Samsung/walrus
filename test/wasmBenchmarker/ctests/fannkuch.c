@@ -78,7 +78,7 @@ uint64_t fannkuch(uint64_t n) {
 uint64_t runtime() {
     uint64_t retVal = 0;
 
-    for (uint8_t i = 0; i < 4; i++) {
+    for (uint8_t i = 0; i < 12; i++) {
         retVal += fannkuch(9);
     }
 

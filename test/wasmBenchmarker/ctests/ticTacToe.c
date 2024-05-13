@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define ITERATION 50
+#define ITERATION 200
 
 typedef enum {
     X,

@@ -18,6 +18,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define LOOP 2
+
 extern const char *input_3;
 
 typedef struct {
@@ -221,14 +223,26 @@ bool check() {
 }
 
 bool runtime() {
-    frequency(input_3, 1);
-    frequency(input_3, 2);
-    count(input_3, "ggt");
-    count(input_3, "ggta");
-    count(input_3, "ggtatt");
-    count(input_3, "ggtattttaatt");
-    count(input_3, "ggtattttaatttatagt");
-    return check();
+    uint8_t checks = 0;
+    for(uint8_t i = 0; i < LOOP; i++) {
+        for(uint8_t j = 0; j < record_current_size; j++) {
+            for (uint8_t k = 0; k < 50; k++) {
+                records[j].key[k] = 0;
+            }
+            records[j].value=0;
+        }
+        frequency(input_3, 1);
+        frequency(input_3, 2);
+        count(input_3, "ggt");
+        count(input_3, "ggta");
+        count(input_3, "ggtatt");
+        count(input_3, "ggtattttaatt");
+        count(input_3, "ggtattttaatttatagt");
+        if (check()) {
+            checks += 1;
+        }
+    }
+    return checks == LOOP;
 }
 
 const char *input_3 =

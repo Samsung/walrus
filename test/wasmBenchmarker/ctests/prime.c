@@ -21,7 +21,7 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
-#define PRIME_NUMBER 5000
+#define PRIME_NUMBER 7000
 
 
 // return the greatest x, where x^2 <= number

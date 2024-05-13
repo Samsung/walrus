@@ -22,7 +22,7 @@
 
 // TEST PARAMETERS
 #define SIZE 500 // size of array to be ordered
-#define ITERATIONS 6
+#define ITERATIONS 17
 
 /**
  * Order the given array with the quicksort

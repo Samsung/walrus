@@ -20,7 +20,7 @@
 #include <wasm_simd128.h>
 
 // 4x4 square matrix
-#define MATRIX_SIZE 16
+#define MATRIX_SIZE 144
 
 #define ITERATION 3500000
 

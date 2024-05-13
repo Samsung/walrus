@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define RBSIZE 1000
+#define RBSIZE 1669
 
 #define RED 0
 #define BLACK 1
@@ -428,6 +428,7 @@ uint64_t runtime() {
     uint64_t retVal = 0;
 
     for (uint32_t i = 0; i < 1000; i++) {
+        retVal += runRedBlack();
         retVal += runRedBlack();
     }
 

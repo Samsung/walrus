@@ -21,10 +21,12 @@
 // This test generates a solution to the N Queens problem, a variation of 8 Queens problem.
 // Description of problem: https://en.wikipedia.org/wiki/Eight_queens_puzzle
 
-#define N 18
+#define N 25
+#define LOOP 3
 uint8_t board[N][N];
 
-void print_board(uint8_t board[N][N]) {
+void print_board(uint8_t board[N][N])
+{
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             printf("%d", board[i][j]);
@@ -32,7 +34,8 @@ void print_board(uint8_t board[N][N]) {
     }
 }
 
-bool is_safe(uint8_t board[N][N], unsigned row, unsigned col) {
+bool is_safe(uint8_t board[N][N], unsigned row, unsigned col)
+{
     for (int i = 0; i < N; ++i) {
         if (board[row][i] == 1)
             return false;
@@ -66,7 +69,8 @@ bool is_safe(uint8_t board[N][N], unsigned row, unsigned col) {
     return true;
 }
 
-bool nqueens(uint8_t board[N][N], int32_t col) {
+bool nqueens(uint8_t board[N][N], int32_t col)
+{
     if (col >= N) {
         return true;
     }
@@ -84,42 +88,45 @@ bool nqueens(uint8_t board[N][N], int32_t col) {
     return false;
 }
 
-uint8_t runtime() {
+uint8_t runtime()
+{
     uint8_t retVal = 5;
-
-    for (uint8_t c = 0; c < 5; c++) {
-        int32_t start_col = 0;
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
-                board[i][j] = 0;
+    for (uint8_t l = 0; l < LOOP; l++) {
+        for (uint8_t c = 0; c < 5; c++) {
+            int32_t start_col = 0;
+            for (int i = 0; i < N; i++) {
+                for (int j = 0; j < N; j++) {
+                    board[i][j] = 0;
+                }
             }
-        }
 
-        bool wasBreak = false;
+            bool wasBreak = false;
 
-        while (true) {
-            if (nqueens(board, start_col)) {
-                retVal--;
-                wasBreak = true;
-                break;
-            } else if (start_col < N) {
-                start_col++;
-            } else {
+            while (true) {
+                if (nqueens(board, start_col)) {
+                    retVal--;
+                    wasBreak = true;
+                    break;
+                } else if (start_col < N) {
+                    start_col++;
+                } else {
+                    retVal++;
+                    wasBreak = true;
+                    break;
+                }
+            }
+
+            if (!wasBreak) {
                 retVal++;
-                wasBreak = true;
-                break;
             }
-        }
-
-        if (!wasBreak) {
-            retVal++;
         }
     }
 
     return retVal;
 }
 
-int main() {
+int main()
+{
     printf("%u\n", runtime());
     return 0;
 }
