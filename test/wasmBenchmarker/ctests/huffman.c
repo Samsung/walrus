@@ -29,7 +29,7 @@ byte runtime();
 
 // TEST PARAMETER
 
-#define ITERATIONS 3
+#define ITERATIONS 7
 
 char* message = "Lorem ipsum dolor sit amet, et wisi primis duo."
                 "In quo erat tritani fuisset, no ullum vivendo "

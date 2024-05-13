@@ -28,7 +28,7 @@ double gregorySeries(uint64_t n) {
 }
 
 double runtime() {
-    return gregorySeries(75000000);
+    return gregorySeries(300000000);
 }
 
 int main() {

@@ -19,8 +19,10 @@
 #include <limits.h>
 
 #define V 10
+#define LOOP 3
 
-uint8_t next_permutation(int *p, int len) {
+uint8_t next_permutation(int *p, int len)
+{
     int found = 0;
     int i = len - 2;
 
@@ -68,11 +70,13 @@ uint8_t next_permutation(int *p, int len) {
     return 1;
 }
 
-int min(int a, int b) {
+int min(int a, int b)
+{
     return a < b ? a : b;
 }
 
-uint32_t shortest_path_sum(int edges_list[][V], int s) {
+uint32_t shortest_path_sum(int edges_list[][V], int s)
+{
     int nodes[V * V];
     int n = 0;
 
@@ -101,29 +105,30 @@ uint32_t shortest_path_sum(int edges_list[][V], int s) {
     return shortest_path;
 }
 
-uint32_t runtime() {
-
+uint32_t runtime()
+{
     uint32_t retVal = 0;
+    for (uint8_t l = 0; l < LOOP; l++) {
+        for (uint8_t i = 0; i < 7; i++) {
+            int edges_list[V][V] = { { 0, 10, 15, 20, 25, 30, 35, 40, 45, 50 },
+                                     { 10, 0, 35, 25, 20, 15, 20, 10, 5, 35 },
+                                     { 15, 35, 0, 30, 10, 40, 50, 10, 10, 10 },
+                                     { 20, 25, 30, 0, 35, 15, 10, 30, 20, 10 },
+                                     { 25, 20, 10, 35, 0, 30, 15, 20, 25, 30 },
+                                     { 30, 15, 40, 15, 30, 0, 20, 10, 15, 20 },
+                                     { 35, 20, 50, 10, 15, 20, 0, 25, 30, 35 },
+                                     { 40, 10, 10, 30, 20, 10, 25, 0, 35, 40 },
+                                     { 45, 5, 10, 20, 25, 15, 30, 35, 0, 45 },
+                                     { 50, 35, 10, 10, 30, 20, 35, 40, 45, 0 } };
 
-    for (uint8_t i = 0; i < 7; i++) {
-        int edges_list[V][V] =
-                {{0,  10, 15, 20, 25, 30, 35, 40, 45, 50},
-                 {10, 0,  35, 25, 20, 15, 20, 10, 5,  35},
-                 {15, 35, 0,  30, 10, 40, 50, 10, 10, 10},
-                 {20, 25, 30, 0,  35, 15, 10, 30, 20, 10},
-                 {25, 20, 10, 35, 0,  30, 15, 20, 25, 30},
-                 {30, 15, 40, 15, 30, 0,  20, 10, 15, 20},
-                 {35, 20, 50, 10, 15, 20, 0,  25, 30, 35},
-                 {40, 10, 10, 30, 20, 10, 25, 0,  35, 40},
-                 {45, 5,  10, 20, 25, 15, 30, 35, 0,  45},
-                 {50, 35, 10, 10, 30, 20, 35, 40, 45, 0}};
-
-        retVal += shortest_path_sum(edges_list, 0);
+            retVal += shortest_path_sum(edges_list, 0);
+        }
     }
 
     return retVal;
 }
 
-int main() {
+int main()
+{
     printf("%u\n", runtime());
 }

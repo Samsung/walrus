@@ -19,17 +19,15 @@
 
 uint64_t fibonacci(uint64_t n) {
     if (n == 0 || n == 1) {
-        return 1;
+        return n;
     }
 
-    fibonacci(n - 1);
-    fibonacci(n - 2);
 
-    return fibonacci(n - 2);
+    return fibonacci(n - 1) + fibonacci(n - 2);
 }
 
 uint64_t runtime() {
-    return fibonacci(26);
+    return fibonacci(39);
 }
 
 int main() {

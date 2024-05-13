@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#define LOOP 450000
+#define LOOP 3000000
 #define SOLAR_MASS 39.47841760435743f
 #define DAYS_PER_YEAR 365.24f
 #define BODIES_COUNT 5

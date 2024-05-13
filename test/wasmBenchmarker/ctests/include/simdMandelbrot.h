@@ -35,8 +35,8 @@
 
 #include <wasm_simd128.h>
 
-#define WIDTH 1600
-#define HIGHT 1400
+#define WIDTH 6400
+#define HIGHT 5600
 #define N 20
 #define REAL_AXIS_SHIFT -1.8 // ~ horizontal shift
 #define IMAGINARY_AXIS_SHIFT -1.0 // ~ vertical shift

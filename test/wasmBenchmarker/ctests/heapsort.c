@@ -19,7 +19,7 @@
 #include "include/random.h"
 
 #define ARRAY_LENGTH 15000
-#define ITERATIONS 64
+#define ITERATIONS 300
 
 #define NO_CHILD 0
 #define NO_PARENT 65535

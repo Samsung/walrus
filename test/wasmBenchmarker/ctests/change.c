@@ -20,7 +20,7 @@
 uint32_t coins[] = {5, 10, 20, 50, 100, 200};
 
 #define COINT_NUMBER sizeof(coins) / sizeof(uint32_t)
-#define MONEY 85
+#define MONEY 155
 
 /*
  * Return the smallest number of coins

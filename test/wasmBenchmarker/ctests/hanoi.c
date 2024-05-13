@@ -20,19 +20,21 @@
 #define EXIT_SUCCESS 0
 #define EXIT_FAILURE 1
 
-#define DISKS 24
+#define DISKS 26
 
 typedef struct {
     uint64_t disks[DISKS];
     uint64_t size; // current size
 } rod;
 
+uint32_t steps = 0;
 void move_disk(rod *from,
                rod *to) {
     if (from->size == 0) {
         return;
     }
     if (to->size == 0) {
+        steps++;
         to->disks[0] = from->disks[from->size - 1];
         from->size -= 1;
         to->size += 1;
@@ -41,6 +43,7 @@ void move_disk(rod *from,
     if (from->disks[from->size - 1] < to->disks[to->size - 1]) {
         return;
     }
+    steps++;
     to->disks[to->size] = from->disks[from->size - 1];
     from->size -= 1;
     to->size += 1;
@@ -64,6 +67,7 @@ void move_tower(rod *from,
 
 uint64_t hanoi() {
     // init
+    steps = 0;
     rod rods[3];
     for (int i = 0; i < DISKS; i++) {
         rods[0].disks[i] = i;
@@ -86,7 +90,7 @@ uint64_t hanoi() {
             return EXIT_FAILURE;
         }
     }
-    return EXIT_SUCCESS;
+    return steps;
 }
 
 uint64_t runtime() {
