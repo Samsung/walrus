@@ -1040,14 +1040,6 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
                 } else if (strcmp(argv[i], "--jit-no-reg-alloc") == 0) {
                     s_JITFlags |= JITFlagValue::disableRegAlloc;
                     continue;
-                } else if (strcmp(argv[i], "--perf") == 0) {
-#ifdef WALRUS_JITPERF
-                    s_JITFlags |= JITFlagValue::enableJITDump;
-#else
-                    fprintf(stderr, "error: --perf is not supported in this build\n");
-                    exit(1);
-#endif
-                    continue;
                 }
 
                 else if (strcmp(argv[i], "--env") == 0) {

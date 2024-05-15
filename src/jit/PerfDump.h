@@ -18,34 +18,42 @@
 #ifndef __WalrusJITPERF__
 #define __WalrusJITPERF_
 
-#include <sys/time.h>
-#include <ctime>
-#include <cstdint>
-#include <elf.h>
-#include <string>
-#include <unistd.h>
-#include <sys/types.h>
-#include <thread>
-#include <cstdlib>
-#include <utility>
-
+#include "jit/Compiler.h"
 
 namespace Walrus {
 
 class PerfDump {
 public:
     static PerfDump& instance();
+
     PerfDump();
-    void dumpFileHeader();
+    bool perfEnabled() { return m_file != nullptr; }
     void dumpRecordHeader(const uint32_t recordType, const uint32_t entrySize);
     void dumpCodeLoad(const uint64_t vma, const uint64_t codeAddr, const uint64_t codeSize, const std::string& functionName, const uint8_t* nativeCode);
+#if !defined(NDEBUG)
+    size_t dumpDebugInfo(std::vector<JITCompiler::DebugEntry>& debugEntries, size_t debugEntryStart, const uint64_t codeAddr);
+#endif /* !NDEBUG */
     void dumpCodeClose();
     ~PerfDump();
 
+#if !defined(NDEBUG)
+    uint32_t dumpProlog(Module* module, ModuleFunction* function);
+    uint32_t dumpByteCode(InstructionListItem* item);
+    uint32_t dumpEpilog();
+#endif /* !NDEBUG */
+
 private:
+    void dumpFileHeader();
+
     FILE* m_file = nullptr;
     uint32_t m_pid;
     uint64_t m_codeLoadIndex;
+
+#if !defined(NDEBUG)
+    std::string m_sourceFileName;
+    FILE* m_sourceFile = nullptr;
+    uint32_t m_line;
+#endif /* !NDEBUG */
 };
 
 } // namespace Walrus

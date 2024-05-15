@@ -1043,9 +1043,38 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         }
     }
 
+#ifdef WALRUS_JITPERF
+    const bool perfEnabled = PerfDump::instance().perfEnabled();
+#if !defined(NDEBUG)
+    if (perfEnabled) {
+        uint32_t line = PerfDump::instance().dumpProlog(module(), moduleFunction());
+        m_debugEntries.push_back(DebugEntry(sljit_emit_label(m_compiler), line));
+    }
+#endif /* !NDEBUG */
+#endif /* WALRUS_JITPERF */
+
     emitProlog();
 
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+#if defined(WALRUS_JITPERF) && !defined(NDEBUG)
+        if (perfEnabled) {
+            uint32_t line = PerfDump::instance().dumpByteCode(item);
+            if (item->info() & Instruction::kIsMergeCompare) {
+                line = PerfDump::instance().dumpByteCode(item->next());
+            }
+
+            ASSERT(!m_debugEntries.empty());
+            sljit_label* label = sljit_emit_label(m_compiler);
+
+            // Label is the same, if no instructions are emitted.
+            if (m_debugEntries.back().u.label == label) {
+                m_debugEntries.back().line = line;
+            } else {
+                m_debugEntries.push_back(DebugEntry(label, line));
+            }
+        }
+#endif /* WALRUS_JITPERF && !NDEBUG */
+
         if (item->isLabel()) {
             Label* label = item->asLabel();
 
@@ -1281,6 +1310,14 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         }
     }
 
+#if defined(WALRUS_JITPERF) && !defined(NDEBUG)
+    if (perfEnabled) {
+        uint32_t line = PerfDump::instance().dumpEpilog();
+        m_debugEntries.push_back(DebugEntry(sljit_emit_label(m_compiler), line));
+        m_debugEntries.push_back(DebugEntry());
+    }
+#endif /* WALRUS_JITPERF && !NDEBUG */
+
     emitEpilog();
     clear();
 }
@@ -1297,11 +1334,10 @@ void JITCompiler::generateCode()
     void* code = sljit_generate_code(m_compiler, 0, nullptr);
 
 #ifdef WALRUS_JITPERF
-    const bool perfEnabled = JITFlags() & JITFlagValue::enableJITDump;
-    sljit_uw funcStart, funcEnd;
+    const bool perfEnabled = PerfDump::instance().perfEnabled();
     if (perfEnabled) {
-        funcStart = SLJIT_FUNC_UADDR(code);
-        funcEnd = sljit_get_label_addr(m_functionList[0].exportEntryLabel);
+        sljit_uw funcStart = SLJIT_FUNC_UADDR(code);
+        sljit_uw funcEnd = sljit_get_label_addr(m_functionList[0].exportEntryLabel);
         PerfDump::instance().dumpCodeLoad(funcStart, funcStart, (funcEnd - funcStart), "*entrypoint*", (uint8_t*)funcStart);
     }
 #endif
@@ -1344,23 +1380,55 @@ void JITCompiler::generateCode()
 
 #ifdef WALRUS_JITPERF
     if (perfEnabled) {
+#if !defined(NDEBUG)
+        size_t size = m_debugEntries.size();
+
+        for (size_t i = 0; i < size; i++) {
+            if (m_debugEntries[i].line != 0) {
+                m_debugEntries[i].u.address = sljit_get_label_addr(m_debugEntries[i].u.label);
+            } else {
+                m_debugEntries[i].u.address = 0;
+            }
+        }
+
+        size_t debugEntryStart = 0;
+#endif /* !NDEBUG */
+
         for (size_t i = 0; i < m_functionList.size(); i++) {
-            std::string name = "function" + std::to_string(i);
+            size_t size = module()->numberOfFunctions();
+            int functionIndex = 0;
+
+            for (size_t i = 0; i < size; i++) {
+                if (module()->function(i)->jitFunction() == m_functionList[i].jitFunc) {
+                    functionIndex = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            std::string name = "function" + std::to_string(functionIndex);
             for (auto exp : module()->exports()) {
                 if (exp->exportType() != Walrus::ExportType::Function) {
                     continue;
                 }
                 if (module()->function(exp->itemIndex())->jitFunction() == m_functionList[i].jitFunc) {
-                    name += " " + exp->name();
+                    name += "_" + exp->name();
                     break;
                 }
             }
-            funcStart = sljit_get_label_addr(m_functionList[i].exportEntryLabel);
+
+            sljit_uw funcStart = sljit_get_label_addr(m_functionList[i].exportEntryLabel);
+            sljit_uw funcEnd;
+
+#if !defined(NDEBUG)
+            debugEntryStart = PerfDump::instance().dumpDebugInfo(m_debugEntries, debugEntryStart, funcStart);
+#endif /* !NDEBUG */
+
             if (i < m_functionList.size() - 1) {
                 funcEnd = sljit_get_label_addr(m_functionList[i + 1].exportEntryLabel);
             } else {
                 funcEnd = SLJIT_FUNC_UADDR(code) + sljit_get_generated_code_size(m_compiler);
             }
+
             PerfDump::instance().dumpCodeLoad(funcStart, funcStart, (funcEnd - funcStart), name, (uint8_t*)funcStart);
         }
     }
