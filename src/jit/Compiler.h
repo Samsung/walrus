@@ -660,6 +660,28 @@ struct VariableList {
 
 class JITCompiler {
 public:
+#ifdef WALRUS_JITPERF
+    struct DebugEntry {
+        DebugEntry()
+            : line(0)
+        {
+            u.label = nullptr;
+        }
+
+        DebugEntry(sljit_label* label, uint32_t line)
+            : line(line)
+        {
+            u.label = label;
+        }
+
+        union {
+            sljit_label* label;
+            uintptr_t address;
+        } u;
+        uint32_t line;
+    };
+#endif
+
     static const uint32_t kHasCondMov = 1 << 0;
 
     JITCompiler(Module* module, uint32_t JITFlags);
@@ -701,7 +723,6 @@ public:
         m_moduleFunction = moduleFunction;
     }
 
-    void dump();
     void buildVariables(uint32_t requiredStackSize);
     void allocateRegistersSimple();
     void allocateRegisters();
@@ -713,6 +734,14 @@ public:
     std::vector<TryBlock>& tryBlocks() { return m_tryBlocks; }
     void initTryBlockStart() { m_tryBlockStart = m_tryBlocks.size(); }
     size_t tryBlockOffset() { return m_tryBlockOffset; }
+
+#if !defined(NDEBUG)
+    static const char** byteCodeNames()
+    {
+        return m_byteCodeNames;
+    }
+    void dump();
+#endif /* !NDEBUG */
 
 private:
     struct FunctionList {
@@ -736,6 +765,10 @@ private:
     void emitProlog();
     void emitEpilog();
 
+#if !defined(NDEBUG)
+    static const char* m_byteCodeNames[];
+#endif /* !NDEBUG */
+
     InstructionListItem* m_first;
     InstructionListItem* m_last;
 
@@ -756,6 +789,9 @@ private:
 
     std::vector<TryBlock> m_tryBlocks;
     std::vector<FunctionList> m_functionList;
+#if defined(WALRUS_JITPERF) && !defined(NDEBUG)
+    std::vector<DebugEntry> m_debugEntries;
+#endif /* WALRUS_JITPERF && !NDEBUG */
 };
 
 } // namespace Walrus

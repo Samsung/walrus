@@ -1927,9 +1927,11 @@ static void compileFunction(JITCompiler* compiler)
         compiler->allocateRegisters();
     }
 
+#if !defined(NDEBUG)
     if (compiler->JITFlags() & JITFlagValue::JITVerbose) {
         compiler->dump();
     }
+#endif /* !NDEBUG */
 
     compiler->freeVariables();
 

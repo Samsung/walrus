@@ -18,8 +18,12 @@
 
 #if defined WALRUS_JITPERF
 #include "jit/PerfDump.h"
+#include "jit/SljitLir.h"
+
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <thread>
 
 #ifndef DUMP_MAGIC
 #define DUMP_MAGIC 0x4A695444
@@ -66,14 +70,38 @@ PerfDump& PerfDump::instance()
 PerfDump::PerfDump()
     : m_pid((uint32_t)getpid())
     , m_codeLoadIndex(0)
+#if !defined(NDEBUG)
+    , m_line(0)
+#endif /* !NDEBUG */
 {
-    std::string tmpName = "./jit-" + std::to_string(m_pid) + ".dump";
+    const char* path = getenv("WALRUS_PERF_DIR");
+
+    if (path == nullptr || *path == '\0') {
+        return;
+    }
+
+#if !defined(NDEBUG)
+    m_sourceFileName = std::string(path) + "/jit-" + std::to_string(m_pid) + "-codedump.txt";
+    this->m_sourceFile = fopen(m_sourceFileName.c_str(), "w");
+#endif /* !NDEBUG */
+
+    std::string tmpName = std::string(path) + "/jit-" + std::to_string(m_pid) + ".dump";
     this->m_file = fopen(tmpName.c_str(), "w");
     this->dumpFileHeader();
 
+    // Perf keeps track only executable mappings. This mapping allows
+    // the inject operation to find the location of the jitdump file later.
     int fd = open(tmpName.c_str(), O_RDONLY | O_CLOEXEC, 0);
     mmap(NULL, 1, PROT_READ | PROT_EXEC, MAP_SHARED, fd, 0);
     close(fd);
+}
+
+static uint64_t getMonotonicTime()
+{
+    struct timespec time;
+
+    clock_gettime(CLOCK_MONOTONIC, &time);
+    return static_cast<uint64_t>(time.tv_sec) * 1000000000 + static_cast<uint64_t>(time.tv_nsec);
 }
 
 void PerfDump::dumpFileHeader()
@@ -94,7 +122,7 @@ void PerfDump::dumpFileHeader()
         .elfMach = ELFMACH,
         .pad = 0,
         .pid = m_pid,
-        .timestamp = (uint64_t)std::time(0),
+        .timestamp = getMonotonicTime(),
         .flags = 0
     };
 
@@ -110,7 +138,7 @@ void PerfDump::dumpRecordHeader(const uint32_t recordType, const uint32_t entryS
     } recordHeader = {
         .recordType = recordType,
         .size = entrySize + ((uint32_t)sizeof(uint32_t)) * 2 + (uint32_t)sizeof(uint64_t),
-        .timestamp = (uint64_t)std::time(0)
+        .timestamp = getMonotonicTime()
     };
 
     fwrite(&recordHeader, sizeof(recordHeader), 1, m_file);
@@ -125,7 +153,7 @@ void PerfDump::dumpCodeLoad(const uint64_t vma, const uint64_t codeAddr, const u
         const uint64_t codeAddr;
         const uint64_t codeSize;
         const uint64_t codeLoadIndex;
-    } codeLoad1 = {
+    } codeLoad = {
         .pid = m_pid,
         .tid = (uint32_t)std::hash<std::thread::id>{}(std::this_thread::get_id()),
         .vma = vma,
@@ -133,24 +161,210 @@ void PerfDump::dumpCodeLoad(const uint64_t vma, const uint64_t codeAddr, const u
         .codeSize = codeSize,
         .codeLoadIndex = m_codeLoadIndex++
     };
+
     const size_t nameSize = functionName.size() + 1;
-    dumpRecordHeader(JIT_CODE_LOAD, sizeof(codeLoad1) + nameSize + codeSize);
-    fwrite(&codeLoad1, sizeof(codeLoad1), 1, m_file);
+    uint32_t size = sizeof(codeLoad) + nameSize + codeSize;
+    uint32_t alignedSize = (size + 7) & ~(size_t)0x7;
+
+    dumpRecordHeader(JIT_CODE_LOAD, alignedSize);
+    fwrite(&codeLoad, sizeof(codeLoad), 1, m_file);
     fwrite(functionName.c_str(), nameSize, 1, m_file);
+
+    ASSERT(size <= alignedSize && size + 8 > alignedSize);
+
+    if (size < alignedSize) {
+        uint8_t data[8] = { 0 };
+
+        fwrite(data, 1, alignedSize - size, m_file);
+    }
+
     fwrite(nativeCode, codeSize, 1, m_file);
 }
+
+#if !defined(NDEBUG)
+
+struct DebugEntry {
+    uint64_t codeAddress;
+    uint32_t line;
+    uint32_t discrim;
+};
+
+size_t PerfDump::dumpDebugInfo(std::vector<JITCompiler::DebugEntry>& debugEntries, size_t debugEntryStart, const uint64_t codeAddr)
+{
+    ASSERT(debugEntryStart < debugEntries.size());
+
+    size_t end = debugEntryStart;
+
+    do {
+        end++;
+    } while (debugEntries[end].line != 0);
+
+    size_t numberOfEntries = end - debugEntryStart;
+
+    struct {
+        const uint64_t codeAddress;
+        const uint64_t nrEntry;
+    } debugInfo = {
+        .codeAddress = codeAddr,
+        .nrEntry = end - debugEntryStart
+    };
+
+    const size_t nameSize = m_sourceFileName.size() + 1;
+    uint32_t size = sizeof(debugInfo) + (numberOfEntries * (sizeof(DebugEntry) + nameSize));
+    uint32_t alignedSize = (size + 7) & ~(size_t)0x7;
+
+    dumpRecordHeader(JIT_DEBUG_INFO, alignedSize);
+    fwrite(&debugInfo, sizeof(debugInfo), 1, m_file);
+
+    DebugEntry debugEntry;
+    debugEntry.discrim = 0;
+
+    for (size_t i = debugEntryStart; i < end; i++) {
+        debugEntry.codeAddress = debugEntries[i].u.address;
+        debugEntry.line = debugEntries[i].line;
+        fwrite(&debugEntry, sizeof(debugEntry), 1, m_file);
+        fwrite(m_sourceFileName.data(), 1, nameSize, m_file);
+    }
+
+    ASSERT(size <= alignedSize && size + 8 > alignedSize);
+
+    if (size < alignedSize) {
+        uint8_t data[8] = { 0 };
+
+        fwrite(data, 1, alignedSize - size, m_file);
+    }
+
+    return end + 1;
+}
+
+#endif /* !NDEBUG */
 
 void PerfDump::dumpCodeClose()
 {
     dumpRecordHeader(JIT_CODE_CLOSE, 0);
 }
 
+#if !defined(NDEBUG)
+
+uint32_t PerfDump::dumpProlog(Module* module, ModuleFunction* function)
+{
+    if (m_line > 0) {
+        fprintf(m_sourceFile, "\n");
+        m_line++;
+    }
+
+    size_t size = module->numberOfFunctions();
+    int functionIndex = 0;
+    ExportType* exportType = nullptr;
+
+    for (auto exp : module->exports()) {
+        if (module->function(exp->itemIndex()) == function) {
+            exportType = exp;
+            break;
+        }
+    }
+
+    for (size_t i = 0; i < size; i++) {
+        if (module->function(i) == function) {
+            functionIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    if (exportType == nullptr) {
+        fprintf(m_sourceFile, "--- FUNCTION:%d ---\nProlog\n", functionIndex);
+    } else {
+        fprintf(m_sourceFile, "--- FUNCTION:%d [%s] ---\nProlog\n", functionIndex, exportType->name().data());
+    }
+
+    m_line += 2;
+    return m_line;
+}
+
+uint32_t PerfDump::dumpByteCode(InstructionListItem* item)
+{
+    const char** byteCodeNames = JITCompiler::byteCodeNames();
+
+    if (!item->isInstruction()) {
+        fprintf(m_sourceFile, "[%d] Label\n", static_cast<int>(item->id()));
+        return ++m_line;
+    }
+
+    Instruction* instr = item->asInstruction();
+
+    uint32_t paramCount = instr->paramCount();
+    uint32_t size = paramCount + instr->resultCount();
+    Operand* operand = instr->operands();
+    VariableRef ref;
+    bool newline = false;
+
+    fprintf(m_sourceFile, "[%d] %s", static_cast<int>(instr->id()), byteCodeNames[instr->opcode()]);
+
+    for (uint32_t i = 0; i < size; ++i) {
+        char prefix = !newline ? ':' : ',';
+        newline = true;
+
+        if (i < paramCount) {
+            fprintf(m_sourceFile, "%c P%d", prefix, static_cast<int>(i));
+        } else {
+            fprintf(m_sourceFile, "%c R%d", prefix, static_cast<int>(i - paramCount));
+        }
+
+        switch (VARIABLE_TYPE(operand->ref)) {
+        case Operand::Immediate:
+            fprintf(m_sourceFile, "(imm)");
+            break;
+        case Operand::Register:
+            ref = VARIABLE_GET_REF(operand->ref);
+
+            if (SLJIT_IS_REG_PAIR(ref)) {
+                fprintf(m_sourceFile, "(r%d,r%d)", static_cast<int>((ref & 0xff) - 1), static_cast<int>((ref >> 8) - 1));
+            } else {
+                fprintf(m_sourceFile, "(r%d)", static_cast<int>(ref - 1));
+            }
+            break;
+        default:
+            ASSERT(VARIABLE_TYPE(operand->ref) == Operand::Offset);
+            fprintf(m_sourceFile, "(o:%d)", static_cast<int>(VARIABLE_GET_OFFSET(operand->ref)));
+            break;
+        }
+
+        operand++;
+    }
+
+    for (uint32_t i = 0; i < 4; ++i) {
+        uint8_t reg = instr->requiredReg(i);
+
+        if (reg == 0) {
+            continue;
+        }
+
+        fprintf(m_sourceFile, "%c T%d(r%d)", (!newline ? ':' : ','), static_cast<int>(i), static_cast<int>(reg - 1));
+        newline = true;
+    }
+
+    fprintf(m_sourceFile, "\n");
+    return ++m_line;
+}
+
+uint32_t PerfDump::dumpEpilog()
+{
+    fprintf(m_sourceFile, "Epilog\n");
+    return ++m_line;
+}
+
+#endif /* !NDEBUG */
+
 PerfDump::~PerfDump()
 {
     if (this->m_file != nullptr) {
         this->dumpCodeClose();
         fclose(this->m_file);
+#if !defined(NDEBUG)
+        fclose(this->m_sourceFile);
+#endif /* !NDEBUG */
     }
 }
+
 } // namespace Walrus
 #endif

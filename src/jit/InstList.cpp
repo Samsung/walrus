@@ -314,16 +314,20 @@ void JITCompiler::insertStackInitList(InstructionListItem* prev, size_t variable
     }
 }
 
+#if !defined(NDEBUG)
+
+const char* JITCompiler::m_byteCodeNames[] = {
+#define BYTECODE_NAME(name, ...) #name,
+    FOR_EACH_BYTECODE(BYTECODE_NAME)
+#undef DECLARE_BYTECODE
+};
+
 void JITCompiler::dump()
 {
     bool enableColors = (JITFlags() & JITFlagValue::JITVerboseColor);
     int counter = 0;
 
-    static const char* byteCodeName[] = {
-#define BYTECODE_NAME(name, ...) #name,
-        FOR_EACH_BYTECODE(BYTECODE_NAME)
-#undef DECLARE_BYTECODE
-    };
+    const char** byteCodeNames = JITCompiler::byteCodeNames();
 
     const char* defaultText = enableColors ? "\033[0m" : "";
     const char* instrText = enableColors ? "\033[1;35m" : "";
@@ -334,7 +338,7 @@ void JITCompiler::dump()
     for (InstructionListItem* item = first(); item != nullptr; item = item->next()) {
         if (item->isInstruction()) {
             Instruction* instr = item->asInstruction();
-            printf("%d: %s%s%s", static_cast<int>(instr->id()), instrText, byteCodeName[instr->opcode()], defaultText);
+            printf("%d: %s%s%s", static_cast<int>(instr->id()), instrText, byteCodeNames[instr->opcode()], defaultText);
 
             if (enableColors) {
                 printf(" (%p)", item);
@@ -502,6 +506,8 @@ void JITCompiler::dump()
         }
     }
 }
+
+#endif /* !NDEBUG */
 
 void JITCompiler::append(InstructionListItem* item)
 {
