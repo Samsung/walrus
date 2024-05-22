@@ -352,7 +352,7 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
                 i = maxRangeIndexSingle1;
                 maxRangeEnd = maxRangeEndSingle1;
             } else {
-                i = maxRangeEndPair;
+                i = maxRangeIndexPair;
                 maxRangeEnd = maxRangeEndPair;
             }
         } else if (maxRangeEndPair < maxRangeEndSingle1 && maxRangeEndPair < maxRangeEndSingle2) {
@@ -379,7 +379,6 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
         VariableList::Variable* prevVariable = m_registers[i].variable;
         ASSERT(prevVariable != nullptr);
 
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         if (prevVariable->reg2 != prevVariable->reg1) {
             size_t other = (i == prevVariable->reg1) ? prevVariable->reg2 : prevVariable->reg1;
 
@@ -388,7 +387,6 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
             m_registers[other].variable = nullptr;
         }
         prevVariable->reg2 = VariableList::kUnusedReg;
-#endif /* SLJIT_32BIT_ARCHITECTURE */
         prevVariable->reg1 = VariableList::kUnusedReg;
     }
 
@@ -402,9 +400,7 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
 
     if (variable != nullptr) {
         variable->reg1 = freeReg;
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         variable->reg2 = i;
-#endif /* SLJIT_32BIT_ARCHITECTURE */
     }
 
     if (i >= m_usedSavedRegisters) {
@@ -453,7 +449,7 @@ uint8_t RegisterSet::allocateQuadRegister(VariableList::Variable* variable)
                 maxRangeEnd = m_registers[i].rangeEnd;
                 maxRangeIndex = i;
             }
-        } else {
+        } else if (m_registers[i].rangeEnd > kReservedReg && m_registers[i].rangeEnd > kReservedReg) {
             size_t averageEnd = ((m_registers[i].rangeEnd + m_registers[i + 1].rangeEnd) + 1) >> 1;
 
             if (averageEnd > maxRangeEnd) {
@@ -474,17 +470,24 @@ uint8_t RegisterSet::allocateQuadRegister(VariableList::Variable* variable)
 
         // Move variable into memory.
         i = maxRangeIndex;
-        ASSERT(m_registers[i].variable != nullptr);
+        ASSERT(m_registers[i].rangeEnd > kReservedReg
+               && m_registers[i + 1].rangeEnd > kReservedReg
+               && (m_registers[i].variable != nullptr || m_registers[i + 1].variable != nullptr));
 
         VariableList::Variable* prevVariable = m_registers[i].variable;
-        ASSERT(prevVariable->reg2 == prevVariable->reg1 || prevVariable->reg2 == prevVariable->reg1 + 1);
-        prevVariable->reg1 = VariableList::kUnusedReg;
-        prevVariable->reg2 = VariableList::kUnusedReg;
+
+        if (prevVariable != nullptr) {
+            ASSERT(prevVariable->reg2 == prevVariable->reg1 || prevVariable->reg2 == prevVariable->reg1 + 1);
+            prevVariable->reg1 = VariableList::kUnusedReg;
+            prevVariable->reg2 = VariableList::kUnusedReg;
+        }
 
         prevVariable = m_registers[i + 1].variable;
-        ASSERT(prevVariable->reg2 == prevVariable->reg1 || prevVariable->reg2 == prevVariable->reg1 + 1);
-        prevVariable->reg1 = VariableList::kUnusedReg;
-        prevVariable->reg2 = VariableList::kUnusedReg;
+        if (prevVariable != nullptr) {
+            ASSERT(prevVariable->reg2 == prevVariable->reg1 || prevVariable->reg2 == prevVariable->reg1 + 1);
+            prevVariable->reg1 = VariableList::kUnusedReg;
+            prevVariable->reg2 = VariableList::kUnusedReg;
+        }
     }
 
     // Allocated registers are also reserved for the current byte code.
