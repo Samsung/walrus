@@ -1828,44 +1828,62 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
     Operand* operands = instr->operands();
     sljit_s32 tmp1 = instr->requiredReg(2);
     sljit_s32 tmp2 = SLJIT_TMP_DEST_FREG;
+    const sljit_s32 type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
+    I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(instr->byteCode());
     JITArg args[3];
-
-    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, instr->requiredReg(0));
-    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, instr->requiredReg(1));
 
     args[2].set(operands + 2);
     sljit_s32 dst = GET_TARGET_REG(args[2].arg, instr->requiredReg(1));
 
-    I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(instr->byteCode());
-    const sljit_s32 type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
-    sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, tmp1, SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
+    if (operands[0].ref == operands[1].ref) {
+        simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, dst);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, SLJIT_TMP_DEST_FREG, SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
 
-    sljit_emit_simd_replicate(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8, tmp2, SLJIT_IMM, 0xf0);
-    simdEmitSSEOp(compiler, SimdOp::paddb, tmp1, tmp2);
-
-    if (dst != args[1].arg) {
-        if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
-            simdEmitVexOp(compiler, SimdOp::pshufb, dst, args[1].arg, tmp1);
-        } else {
-            sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, dst, args[1].arg, 0);
-            args[1].arg = dst;
+        if (args[0].arg != dst) {
+            if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
+                simdEmitVexOp(compiler, SimdOp::pshufb, dst, args[1].arg, tmp1);
+            } else {
+                sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, dst, args[0].arg, 0);
+                args[1].arg = dst;
+            }
         }
-    }
 
-    if (dst == args[1].arg) {
-        simdEmitSSEOp(compiler, SimdOp::pshufb, dst, tmp1);
-    }
-
-    simdEmitSSEOp(compiler, SimdOp::pxor, tmp1, tmp2);
-
-    if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
-        simdEmitVexOp(compiler, SimdOp::pshufb, tmp2, args[0].arg, tmp1);
+        if (dst == args[0].arg) {
+            simdEmitSSEOp(compiler, SimdOp::pshufb, dst, SLJIT_TMP_DEST_FREG);
+        }
     } else {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, tmp2, args[0].arg, 0);
-        simdEmitSSEOp(compiler, SimdOp::pshufb, tmp2, tmp1);
-    }
+        simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, instr->requiredReg(0));
+        simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, instr->requiredReg(1));
 
-    simdEmitSSEOp(compiler, SimdOp::por, dst, tmp2);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, tmp1, SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
+
+        sljit_emit_simd_replicate(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8, tmp2, SLJIT_IMM, 0xf0);
+        simdEmitSSEOp(compiler, SimdOp::paddb, tmp1, tmp2);
+
+        if (dst != args[1].arg) {
+            if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
+                simdEmitVexOp(compiler, SimdOp::pshufb, dst, args[1].arg, tmp1);
+            } else {
+                sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, dst, args[1].arg, 0);
+                args[1].arg = dst;
+            }
+        }
+
+        if (dst == args[1].arg) {
+            simdEmitSSEOp(compiler, SimdOp::pshufb, dst, tmp1);
+        }
+
+        simdEmitSSEOp(compiler, SimdOp::pxor, tmp1, tmp2);
+
+        if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
+            simdEmitVexOp(compiler, SimdOp::pshufb, tmp2, args[0].arg, tmp1);
+        } else {
+            sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, tmp2, args[0].arg, 0);
+            simdEmitSSEOp(compiler, SimdOp::pshufb, tmp2, tmp1);
+        }
+
+        simdEmitSSEOp(compiler, SimdOp::por, dst, tmp2);
+    }
 
     if (SLJIT_IS_MEM(args[2].arg)) {
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | type, dst, args[2].arg, args[2].argw);
