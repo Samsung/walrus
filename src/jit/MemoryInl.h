@@ -686,9 +686,9 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         }
 #ifdef HAS_SIMD
     } else if (opcode == 0) {
-        VariableRef ref = operands[1].ref;
+        VariableRef ref = operands[1];
 
-        if (VARIABLE_TYPE(ref) != Operand::Immediate) {
+        if (VARIABLE_TYPE(ref) != Instruction::ConstPtr) {
             addr.loadArg.set(operands + 1);
         } else {
             ASSERT(VARIABLE_GET_IMM(ref)->opcode() == ByteCode::Const128Opcode);

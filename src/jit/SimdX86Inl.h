@@ -1835,7 +1835,7 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
     args[2].set(operands + 2);
     sljit_s32 dst = GET_TARGET_REG(args[2].arg, instr->requiredReg(1));
 
-    if (operands[0].ref == operands[1].ref) {
+    if (operands[0] == operands[1]) {
         simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, dst);
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, SLJIT_TMP_DEST_FREG, SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
 

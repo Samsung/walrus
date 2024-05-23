@@ -231,9 +231,7 @@ Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opco
         branch = new ExtendedInstruction(byteCode, Instruction::DirectBranch, ByteCode::JumpOpcode, 0, nullptr);
     } else {
         branch = new SimpleExtendedInstruction<1>(byteCode, Instruction::DirectBranch, opcode, 1);
-
-        Operand* operands = branch->operands();
-        operands[0].ref = offset;
+        *branch->operands() = offset;
     }
 
     branch->value().targetLabel = label;
@@ -245,9 +243,7 @@ Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opco
 BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset)
 {
     BrTableInstruction* branch = new BrTableInstruction(byteCode, numTargets + 1);
-
-    Operand* operands = branch->operands();
-    operands[0].ref = offset;
+    *branch->operands() = offset;
 
     append(branch);
     return branch;
@@ -282,7 +278,7 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
     ExtendedInstruction* instr = new SimpleExtendedInstruction<1>(nullptr, Instruction::StackInit, opcode, 0);
     instr->m_resultCount = 1;
     instr->value().offset = variable.value;
-    instr->operands()->ref = ref;
+    *instr->operands() = ref;
 
     if (m_last == prev) {
         m_last = instr;
@@ -391,8 +387,7 @@ void JITCompiler::dump()
                     printf("  Result[%d]: ", static_cast<int>(i - paramCount));
                 }
 
-                VariableRef ref = operand->ref;
-                VariableList::Variable& variable = m_variableList->variables[ref];
+                VariableList::Variable& variable = m_variableList->variables[*operand];
 
                 if (variable.value != VARIABLE_SET_PTR(nullptr)) {
                     const char* type = "Invalid";
@@ -415,12 +410,12 @@ void JITCompiler::dump()
                         break;
                     }
 
-                    printf("%s%d%s.%s", variableText, static_cast<int>(ref), defaultText, type);
+                    printf("%s%d%s.%s", variableText, static_cast<int>(*operand), defaultText, type);
 
-                    if (VARIABLE_TYPE(variable.value) == Operand::Offset) {
+                    if (VARIABLE_TYPE(variable.value) == Instruction::Offset) {
                         printf(" (O:%d) [%d-%d]", static_cast<int>(VARIABLE_GET_OFFSET(variable.value)),
                                static_cast<int>(variable.u.rangeStart), static_cast<int>(variable.rangeEnd));
-                    } else if (VARIABLE_TYPE(variable.value) == Operand::Register) {
+                    } else if (VARIABLE_TYPE(variable.value) == Instruction::Register) {
                         const char* prefix = "";
                         uint32_t savedStart = SLJIT_R(SLJIT_NUMBER_OF_SCRATCH_REGISTERS);
                         uint32_t savedEnd = SLJIT_S0;

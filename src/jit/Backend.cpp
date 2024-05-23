@@ -72,20 +72,20 @@ struct JITArg {
 
 void JITArg::set(Operand* operand)
 {
-    if (VARIABLE_TYPE(operand->ref) != Operand::Immediate) {
-        if (VARIABLE_TYPE(operand->ref) == Operand::Register) {
-            this->arg = VARIABLE_GET_REF(operand->ref);
+    if (VARIABLE_TYPE(*operand) != Instruction::ConstPtr) {
+        if (VARIABLE_TYPE(*operand) == Instruction::Register) {
+            this->arg = VARIABLE_GET_REF(*operand);
             this->argw = 0;
             return;
         }
         this->arg = SLJIT_MEM1(kFrameReg);
-        this->argw = static_cast<sljit_sw>(VARIABLE_GET_OFFSET(operand->ref));
+        this->argw = static_cast<sljit_sw>(VARIABLE_GET_OFFSET(*operand));
         return;
     }
 
     this->arg = SLJIT_IMM;
 
-    Instruction* instr = VARIABLE_GET_IMM(operand->ref);
+    Instruction* instr = VARIABLE_GET_IMM(*operand);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     ASSERT(instr->opcode() == ByteCode::Const32Opcode);
@@ -392,9 +392,9 @@ constexpr uint8_t getHighRegister(sljit_s32 reg)
 
 static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 type, sljit_s32 srcReg)
 {
-    VariableRef ref = operand->ref;
+    VariableRef ref = *operand;
 
-    if (VARIABLE_TYPE(ref) != Operand::Immediate) {
+    if (VARIABLE_TYPE(ref) != Instruction::ConstPtr) {
         arg.set(operand);
 
         if (SLJIT_IS_MEM(arg.arg)) {
@@ -542,8 +542,8 @@ void SlowCase::emit(sljit_compiler* compiler)
 
 static void emitStoreImmediate(sljit_compiler* compiler, Operand* to, Instruction* instr, bool isFloat)
 {
-    if (VARIABLE_TYPE(to->ref) == Operand::Offset) {
-        sljit_sw offset = VARIABLE_GET_OFFSET(to->ref);
+    if (VARIABLE_TYPE(*to) == Instruction::Offset) {
+        sljit_sw offset = VARIABLE_GET_OFFSET(*to);
 
         switch (instr->opcode()) {
 #ifdef HAS_SIMD
@@ -575,7 +575,7 @@ static void emitStoreImmediate(sljit_compiler* compiler, Operand* to, Instructio
         }
     }
 
-    sljit_s32 reg = static_cast<sljit_s32>(VARIABLE_GET_REF(to->ref));
+    sljit_s32 reg = static_cast<sljit_s32>(VARIABLE_GET_REF(*to));
 
     switch (instr->opcode()) {
 #ifdef HAS_SIMD
@@ -630,7 +630,7 @@ static void emitStoreImmediate(sljit_compiler* compiler, Operand* to, Instructio
 
 static void emitMove(sljit_compiler* compiler, uint32_t type, Operand* from, Operand* to)
 {
-    ASSERT(VARIABLE_TYPE(from->ref) != Operand::Immediate && VARIABLE_TYPE(to->ref) != Operand::Immediate);
+    ASSERT(VARIABLE_TYPE(*from) != Instruction::ConstPtr && VARIABLE_TYPE(*to) != Instruction::ConstPtr);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (type == Instruction::Int64Operand) {
@@ -703,15 +703,14 @@ static void emitEnd(sljit_compiler* compiler, Instruction* instr)
     FunctionType* functionType = context->compiler->moduleFunction()->functionType();
 
     for (auto it : functionType->result()) {
-        Operand dst;
-        dst.ref = VARIABLE_SET(STACK_OFFSET(*stackOffset), Operand::Offset);
+        Operand dst = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
 
-        switch (VARIABLE_TYPE(param->ref)) {
-        case Operand::Immediate:
-            ASSERT(!(VARIABLE_GET_IMM(param->ref)->info() & Instruction::kKeepInstruction));
-            emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(param->ref), false);
+        switch (VARIABLE_TYPE(*param)) {
+        case Instruction::ConstPtr:
+            ASSERT(!(VARIABLE_GET_IMM(*param)->info() & Instruction::kKeepInstruction));
+            emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(*param), false);
             break;
-        case Operand::Register:
+        case Instruction::Register:
             emitMove(compiler, Instruction::valueTypeToOperandType(it), param, &dst);
             break;
         }
@@ -798,14 +797,14 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
 
     bool fromFloat = (instr->opcode() == ByteCode::I32ReinterpretF32Opcode) || (instr->opcode() == ByteCode::I64ReinterpretF64Opcode);
 
-    if (VARIABLE_TYPE(src->ref) == Operand::Immediate) {
-        emitStoreImmediate(compiler, dst, VARIABLE_GET_IMM(src->ref), !fromFloat);
+    if (VARIABLE_TYPE(*src) == Instruction::ConstPtr) {
+        emitStoreImmediate(compiler, dst, VARIABLE_GET_IMM(*src), !fromFloat);
         return;
     }
 
     uint32_t type;
 
-    if (VARIABLE_TYPE(src->ref) != Operand::Register) {
+    if (VARIABLE_TYPE(*src) != Instruction::Register) {
         // Source is memory.
         if (fromFloat) {
             type = instr->opcode() == ByteCode::I32ReinterpretF32Opcode ? Instruction::Int32Operand : Instruction::Int64Operand;
@@ -817,7 +816,7 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
         return;
     }
 
-    if (VARIABLE_TYPE(dst->ref) != Operand::Register) {
+    if (VARIABLE_TYPE(*dst) != Instruction::Register) {
         // Destination is memory.
         if (fromFloat) {
             type = instr->opcode() == ByteCode::I32ReinterpretF32Opcode ? Instruction::Float32Operand : Instruction::Float64Operand;
@@ -832,13 +831,13 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
     sljit_s32 op;
 
     if (fromFloat) {
-        floatReg = VARIABLE_GET_REF(src->ref);
-        intReg = VARIABLE_GET_REF(dst->ref);
+        floatReg = VARIABLE_GET_REF(*src);
+        intReg = VARIABLE_GET_REF(*dst);
 
         op = (instr->opcode() == ByteCode::I32ReinterpretF32Opcode) ? SLJIT_COPY32_FROM_F32 : SLJIT_COPY_FROM_F64;
     } else {
-        floatReg = VARIABLE_GET_REF(dst->ref);
-        intReg = VARIABLE_GET_REF(src->ref);
+        floatReg = VARIABLE_GET_REF(*dst);
+        intReg = VARIABLE_GET_REF(*src);
 
         op = (instr->opcode() == ByteCode::F32ReinterpretI32Opcode) ? SLJIT_COPY32_TO_F32 : SLJIT_COPY_TO_F64;
     }
@@ -939,9 +938,7 @@ static void emitStackInit(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 
-    Operand src;
-    src.ref = instr->asExtended()->value().offset;
-
+    Operand src = instr->asExtended()->value().offset;
     emitMove(compiler, type, &src, instr->operands());
 }
 

@@ -630,7 +630,7 @@ void JITCompiler::allocateRegisters()
             Operand* end = operand + instr->resultCount();
 
             while (operand < end) {
-                VariableList::Variable* resultVariable = m_variableList->variables.data() + operand->ref;
+                VariableList::Variable* resultVariable = m_variableList->variables.data() + *operand;
 
                 if (resultVariable->u.rangeStart == instrId && resultVariable->rangeEnd != instrId) {
                     regs.allocateVariable(resultVariable);
@@ -658,7 +658,7 @@ void JITCompiler::allocateRegisters()
             ASSERT((*list & Instruction::TypeMask) >= Instruction::Int32Operand
                    && (*list & Instruction::TypeMask) <= Instruction::Float64Operand);
 
-            VariableList::Variable* variable = m_variableList->variables.data() + operand->ref;
+            VariableList::Variable* variable = m_variableList->variables.data() + *operand;
 
             if (!(variable->info & VariableList::kIsImmediate)
                 && variable->rangeEnd == instrId
@@ -709,7 +709,7 @@ void JITCompiler::allocateRegisters()
         // Step 2: reuse as many registers as possible. Reusing
         // has limitations, which are described in the operand list.
         if (hasResult) {
-            VariableList::Variable* resultVariable = m_variableList->variables.data() + operand->ref;
+            VariableList::Variable* resultVariable = m_variableList->variables.data() + *operand;
             uint8_t type = (*list & Instruction::TypeMask);
 
             if (resultVariable->u.rangeStart == instrId && resultVariable->rangeEnd != instrId) {
@@ -835,7 +835,7 @@ void JITCompiler::allocateRegisters()
         // 64 bit shifts / rotates requires special handling.
         if ((instr->info() & (Instruction::kIsShift | Instruction::kIs32Bit)) == Instruction::kIsShift) {
             ASSERT(operand == instr->operands() + 2);
-            VariableList::Variable* variable = m_variableList->variables.data() + operand[-1].ref;
+            VariableList::Variable* variable = m_variableList->variables.data() + operand[-1];
             bool isImmediate = (variable->info & VariableList::kIsImmediate) != 0;
 
             if (instr->opcode() == ByteCode::I64RotlOpcode || instr->opcode() == ByteCode::I64RotrOpcode) {
@@ -884,13 +884,13 @@ void JITCompiler::allocateRegisters()
                         reg2 = regs.toCPUIntegerReg(variable.reg2);
                     }
 
-                    variable.value = VARIABLE_SET(SLJIT_REG_PAIR(reg1, reg2), Operand::Register);
+                    variable.value = VARIABLE_SET(SLJIT_REG_PAIR(reg1, reg2), Instruction::Register);
                     continue;
                 }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             }
 
-            variable.value = VARIABLE_SET(reg1, Operand::Register);
+            variable.value = VARIABLE_SET(reg1, Instruction::Register);
         }
     }
 }
@@ -943,7 +943,7 @@ void JITCompiler::allocateRegistersSimple()
 
             if ((*list & Instruction::TypeMask & Instruction::FloatOperandMarker)
                 && !(*list & Instruction::TmpNotAllowed)) {
-                VariableList::Variable& variable = m_variableList->variables[operand->ref];
+                VariableList::Variable& variable = m_variableList->variables[*operand];
 
                 // Source registers are read-only.
                 if ((*list & Instruction::TmpRequired) || (variable.info & VariableList::kIsImmediate)) {
@@ -1000,7 +1000,7 @@ void JITCompiler::allocateRegistersSimple()
         // 64 bit shifts / rotates requires special handling.
         if ((instr->info() & (Instruction::kIsShift | Instruction::kIs32Bit)) == Instruction::kIsShift) {
             ASSERT(operand == instr->operands() + 2);
-            VariableList::Variable* variable = m_variableList->variables.data() + operand[-1].ref;
+            VariableList::Variable* variable = m_variableList->variables.data() + operand[-1];
             bool isImmediate = (variable->info & VariableList::kIsImmediate) != 0;
 
             if (instr->opcode() == ByteCode::I64RotlOpcode || instr->opcode() == ByteCode::I64RotrOpcode) {
@@ -1041,15 +1041,12 @@ void JITCompiler::freeVariables()
         uint16_t info = 0;
 
         while (operand < end) {
-            VariableRef ref = operand->ref;
-
-            VariableList::Variable& variable = m_variableList->variables[ref];
+            VariableList::Variable& variable = m_variableList->variables[*operand];
 
             ASSERT((variable.info & Instruction::TypeMask) > 0);
             info |= variable.info;
 
-            operand->ref = variable.value;
-            operand++;
+            *operand++ = variable.value;
         }
 
         if (info & Instruction::FloatOperandMarker) {
