@@ -203,10 +203,10 @@ enum ExtendType : uint32_t {
 
 void setArgs(Operand* operand, JITArg& arg)
 {
-    if (VARIABLE_TYPE(operand->ref) == Operand::Immediate) {
-        ASSERT(VARIABLE_GET_IMM(operand->ref)->opcode() == ByteCode::Const128Opcode);
+    if (VARIABLE_TYPE(*operand) == Instruction::ConstPtr) {
+        ASSERT(VARIABLE_GET_IMM(*operand)->opcode() == ByteCode::Const128Opcode);
         arg.arg = SLJIT_MEM0();
-        arg.argw = (sljit_sw) reinterpret_cast<Const128*>(VARIABLE_GET_IMM(operand->ref)->asInstruction()->byteCode())->value();
+        arg.argw = (sljit_sw) reinterpret_cast<Const128*>(VARIABLE_GET_IMM(*operand)->asInstruction()->byteCode())->value();
     } else {
         arg.set(operand);
     }

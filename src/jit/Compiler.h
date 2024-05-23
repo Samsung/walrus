@@ -156,6 +156,7 @@ private:
 };
 
 typedef uintptr_t VariableRef;
+typedef VariableRef Operand;
 
 // These macros provide VariableRefs related operations.
 #define VARIABLE_SET(v, type) ((static_cast<VariableRef>(v) << 2) | (type))
@@ -164,18 +165,6 @@ typedef uintptr_t VariableRef;
 #define VARIABLE_GET_REF(v) ((v) >> 2)
 #define VARIABLE_GET_OFFSET(v) ((v) & ~(VariableRef)0x3)
 #define VARIABLE_GET_IMM(v) (reinterpret_cast<InstructionListItem*>(v)->asInstruction())
-
-struct Operand {
-    enum Type : VariableRef {
-        // Immediate type must be 0, because immediates are ByteCode pointers.
-        Immediate = 0,
-        Register = 1,
-        Offset = 2,
-    };
-
-    // Variable / immedate tracking.
-    VariableRef ref;
-};
 
 class Instruction : public InstructionListItem {
     friend class JITCompiler;
@@ -208,6 +197,13 @@ public:
         Src0Allowed = (1 << 4),
         Src1Allowed = (1 << 5),
         Src2Allowed = (1 << 6),
+    };
+
+    enum OperandType : Operand {
+        // ConstPtr type must be 0, because they are ByteCode pointers.
+        ConstPtr = 0,
+        Register = 1,
+        Offset = 2,
     };
 
     static const uint32_t TemporaryTypeShift = 4;

@@ -26,8 +26,8 @@ namespace Walrus {
 struct DependencyGenContext {
     enum Type : VariableRef {
         // Label must be 0, since labels are pointers.
-        Label = Operand::Immediate,
-        Variable = Operand::Register,
+        Label = Instruction::ConstPtr,
+        Variable = Instruction::Register,
     };
 
     // Also uses: VariableList::kConstraints.
@@ -100,7 +100,7 @@ void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excl
         VariableRef ref = variableList->variables.size();
 
         dependencies[dependencyStart + offset].insert(VARIABLE_SET(ref, Variable));
-        variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(offset, Operand::Offset), 0, id));
+        variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(offset, Instruction::Offset), 0, id));
 
         offset += STACK_OFFSET(valueStackAllocatedSize(it));
     }
@@ -328,7 +328,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
     nextTryBlock = m_tryBlockStart;
 
     for (uint32_t i = 0; i < requiredStackSize; i++) {
-        m_variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(i, Operand::Offset), 0, static_cast<size_t>(0)));
+        m_variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(i, Instruction::Offset), 0, static_cast<size_t>(0)));
         dependencyCtx.currentDependencies[i] = VARIABLE_SET(i, DependencyGenContext::Variable);
         dependencyCtx.currentOptions[i] = 0;
     }
@@ -385,20 +385,19 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         Operand* end = operand + instr->paramCount();
 
         while (operand < end) {
-            VariableRef ref = dependencyCtx.currentDependencies[operand->ref];
+            VariableRef ref = dependencyCtx.currentDependencies[*operand];
 
             if (VARIABLE_TYPE(ref) == DependencyGenContext::Label) {
-                size_t offset = VARIABLE_GET_LABEL(ref)->m_dependencyStart + operand->ref;
-                dependencyCtx.options[offset] |= DependencyGenContext::kOptReferenced | (dependencyCtx.currentOptions[operand->ref] & VariableList::kConstraints);
+                size_t offset = VARIABLE_GET_LABEL(ref)->m_dependencyStart + *operand;
+                dependencyCtx.options[offset] |= DependencyGenContext::kOptReferenced | (dependencyCtx.currentOptions[*operand] & VariableList::kConstraints);
 
-                ref = VARIABLE_SET(operand->ref, DependencyGenContext::Label);
+                ref = VARIABLE_SET(*operand, DependencyGenContext::Label);
             } else {
                 ASSERT(VARIABLE_TYPE(ref) == DependencyGenContext::Variable);
                 dependencyCtx.updateWithGetter(m_variableList, VARIABLE_GET_REF(ref), instr);
             }
 
-            operand->ref = ref;
-            operand++;
+            *operand++ = ref;
         }
 
         if (instr->group() == Instruction::DirectBranch) {
@@ -464,11 +463,11 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-            VariableRef value = VARIABLE_SET(operand->ref, Operand::Offset);
+            VariableRef value = VARIABLE_SET(*operand, Instruction::Offset);
             m_variableList->variables.push_back(VariableList::Variable(value, typeInfo, instr));
-            dependencyCtx.assignReference(ref, operand->ref, typeInfo);
+            dependencyCtx.assignReference(ref, *operand, typeInfo);
 
-            operand->ref = ref;
+            *operand = ref;
             continue;
         }
 
@@ -490,10 +489,9 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             VariableRef ref = VARIABLE_SET(m_variableList->variables.size(), DependencyGenContext::Variable);
             uint32_t typeInfo = Instruction::valueTypeToOperandType(it);
 
-            m_variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(operand->ref, Operand::Offset), typeInfo, id));
-            dependencyCtx.assignReference(ref, operand->ref, typeInfo);
-            operand->ref = ref;
-            operand++;
+            m_variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(*operand, Instruction::Offset), typeInfo, id));
+            dependencyCtx.assignReference(ref, *operand, typeInfo);
+            *operand++ = ref;
         }
     }
 
@@ -618,7 +616,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         Operand* end = param + instr->paramCount() + instr->resultCount();
 
         while (param < end) {
-            VariableRef ref = param->ref;
+            VariableRef ref = *param;
 
             if (VARIABLE_TYPE(ref) == DependencyGenContext::Label) {
                 size_t offset = lastDependencyStart + VARIABLE_GET_REF(ref);
@@ -641,10 +639,10 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     }
                 }
 
-                param->ref = ref;
+                *param = ref;
             } else {
                 ASSERT(VARIABLE_TYPE(ref) == DependencyGenContext::Variable);
-                param->ref = m_variableList->getMergeHead(VARIABLE_GET_REF(ref));
+                *param = m_variableList->getMergeHead(VARIABLE_GET_REF(ref));
             }
 
             param++;
@@ -659,9 +657,8 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 end = param + instr->paramCount();
 
                 do {
-                    VariableList::Variable& variable = m_variableList->variables[param->ref];
+                    VariableList::Variable& variable = m_variableList->variables[*param++];
                     variable.info |= (*list & Instruction::TypeMask);
-                    param++;
                     list++;
                 } while (param < end);
             } else {
@@ -692,20 +689,19 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 }
 
                 for (auto it : *types) {
-                    VariableList::Variable& variable = m_variableList->variables[param->ref];
+                    VariableList::Variable& variable = m_variableList->variables[*param++];
                     variable.info |= Instruction::valueTypeToOperandType(it);
-                    param++;
                 }
 
                 if (instr->opcode() == ByteCode::CallIndirectOpcode) {
-                    VariableList::Variable& variable = m_variableList->variables[param->ref];
+                    VariableList::Variable& variable = m_variableList->variables[*param];
                     variable.info |= Instruction::Int32Operand;
                 }
             }
         }
 
         if (instr->group() == Instruction::Immediate) {
-            VariableList::Variable& variable = m_variableList->variables[instr->getResult(0)->ref];
+            VariableList::Variable& variable = m_variableList->variables[*instr->getResult(0)];
 
             if (variable.info & VariableList::kIsImmediate) {
                 ASSERT(!(variable.info & VariableList::kIsMerged) && variable.u.immediate == instr);
@@ -721,7 +717,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
         ASSERT(instr->next() != nullptr);
 
-        VariableRef ref = instr->getResult(0)->ref;
+        VariableRef ref = *instr->getResult(0);
         VariableList::Variable& variable = m_variableList->variables[ref];
 
         if (variable.u.rangeStart == instr->id() && variable.rangeEnd == instr->id() + 1) {
@@ -732,12 +728,12 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             case ByteCode::JumpIfTrueOpcode:
             case ByteCode::JumpIfFalseOpcode:
                 // These instructions has only one argument.
-                ASSERT(nextInstr->getParam(0)->ref == VARIABLE_SET(ref, DependencyGenContext::Variable));
+                ASSERT(*nextInstr->getParam(0) == VARIABLE_SET(ref, DependencyGenContext::Variable));
                 variable.info |= VariableList::kIsImmediate;
                 variable.value = VARIABLE_SET_PTR(nullptr);
                 continue;
             case ByteCode::SelectOpcode:
-                if (nextInstr->getParam(2)->ref == VARIABLE_SET(ref, DependencyGenContext::Variable)) {
+                if (*nextInstr->getParam(2) == VARIABLE_SET(ref, DependencyGenContext::Variable)) {
                     variable.info |= VariableList::kIsImmediate;
                     variable.value = VARIABLE_SET_PTR(nullptr);
                     continue;

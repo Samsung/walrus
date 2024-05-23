@@ -675,7 +675,7 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 argTypes = (flags & SourceIs64Bit) ? SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_F64, 1) : SLJIT_ARG_VALUE(SLJIT_ARG_TYPE_F32, 1);
 
     /* Destination must not be immediate. */
-    ASSERT(VARIABLE_TYPE(operands[1].ref) != Operand::Immediate);
+    ASSERT(VARIABLE_TYPE(operands[1]) != Instruction::ConstPtr);
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     arg.set(operands + 1);

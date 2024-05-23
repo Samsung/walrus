@@ -34,7 +34,7 @@ using f64Function1Param = std::add_pointer<sljit_f64(sljit_f64)>::type;
 
 static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg& arg, sljit_s32 srcReg)
 {
-    if (VARIABLE_TYPE(operand->ref) != Operand::Immediate) {
+    if (VARIABLE_TYPE(*operand) != Instruction::ConstPtr) {
         arg.set(operand);
         return;
     }
@@ -42,7 +42,7 @@ static void floatOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg
     arg.arg = srcReg;
     arg.argw = 0;
 
-    Instruction* instr = VARIABLE_GET_IMM(operand->ref);
+    Instruction* instr = VARIABLE_GET_IMM(*operand);
     ASSERT(srcReg != 0);
 
     if (instr->opcode() == ByteCode::Const32Opcode) {

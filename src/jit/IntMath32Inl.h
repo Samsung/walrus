@@ -42,9 +42,9 @@ struct JITArgPair {
 
 void JITArgPair::set(Operand* operand)
 {
-    if (VARIABLE_TYPE(operand->ref) != Operand::Immediate) {
-        if (VARIABLE_TYPE(operand->ref) == Operand::Register) {
-            sljit_sw regs = VARIABLE_GET_REF(operand->ref);
+    if (VARIABLE_TYPE(*operand) != Instruction::ConstPtr) {
+        if (VARIABLE_TYPE(*operand) == Instruction::Register) {
+            sljit_sw regs = VARIABLE_GET_REF(*operand);
 
             this->arg1 = regs & 0xff;
             this->arg1w = 0;
@@ -53,7 +53,7 @@ void JITArgPair::set(Operand* operand)
             return;
         }
 
-        sljit_sw offset = static_cast<sljit_sw>(VARIABLE_GET_OFFSET(operand->ref));
+        sljit_sw offset = static_cast<sljit_sw>(VARIABLE_GET_OFFSET(*operand));
 
         this->arg1 = SLJIT_MEM1(kFrameReg);
         this->arg1w = offset + WORD_LOW_OFFSET;
@@ -64,7 +64,7 @@ void JITArgPair::set(Operand* operand)
 
     this->arg1 = SLJIT_IMM;
     this->arg2 = SLJIT_IMM;
-    Instruction* instr = VARIABLE_GET_IMM(operand->ref);
+    Instruction* instr = VARIABLE_GET_IMM(*operand);
 
     uint64_t value64 = reinterpret_cast<Const64*>(instr->byteCode())->value();
 
