@@ -812,7 +812,7 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
             type = instr->opcode() == ByteCode::F32ReinterpretI32Opcode ? Instruction::Float32Operand : Instruction::Float64Operand;
         }
 
-        emitMove(compiler, type, dst, src);
+        emitMove(compiler, type, src, dst);
         return;
     }
 
@@ -823,7 +823,7 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
         } else {
             type = instr->opcode() == ByteCode::F32ReinterpretI32Opcode ? Instruction::Int32Operand : Instruction::Int64Operand;
         }
-        emitMove(compiler, type, dst, src);
+        emitMove(compiler, type, src, dst);
     }
 
     sljit_sw floatReg;

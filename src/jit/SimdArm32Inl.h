@@ -89,6 +89,7 @@ constexpr uint32_t unsignedBit = 0b1 << 24;
 
 enum Type : uint32_t {
     mov = 0xe3a00000,
+    // The condition flag is added later.
     mvn = 0x03e00000,
     vabs = 0xf3b10340,
     vadd = 0xf2000840,
@@ -100,11 +101,11 @@ enum Type : uint32_t {
     vcge = 0xf2000350,
     vcgt = 0xf2000340,
     vcmp = 0xeeb40a40,
-    vcvtftf = 0xeb70ac0,
+    vcvtftf = 0xeeb70ac0,
     vcvtftiSIMD = 0xf3b30640,
-    vcvtfti = 0xebc08c0,
+    vcvtfti = 0xeebc08c0,
     vcvtitfSIMD = 0xf3b30640,
-    vcvtitf = 0xeb80840,
+    vcvtitf = 0xeeb80840,
     vdivf = 0xee800a00,
     veor = 0xf3000150,
     vmlal = 0xf2800800,
@@ -130,7 +131,7 @@ enum Type : uint32_t {
     vqsub = 0xf2000250,
     vshlImm = 0xf2800550,
     vshl = 0xf2000440,
-    vsqrt = 0xeb108c0,
+    vsqrt = 0xeeb108c0,
     vshrImm = 0xf2800050,
     vsub = 0xf3000840,
     vsubf = 0xee300a40,
