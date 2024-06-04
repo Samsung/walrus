@@ -6,6 +6,7 @@
 	path = third_party/wasm-c-api
 	url = https://github.com/WebAssembly/wasm-c-api
 	ignore = untracked
-[submodule "third_party/uvwasi"]
-	path = third_party/uvwasi
-	url = https://github.com/nodejs/uvwasi.git
+[submodule "third_party/uvwasi/uvwasi"]
+	path = third_party/uvwasi/uvwasi
+	url = https://github.com/nodejs/uvwasi
+	ignore = untracked
