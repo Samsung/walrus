@@ -967,10 +967,11 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, size, 0);
             Operand* param = instr->params();
             Operand* end = param + size;
-            ByteCodeStackOffset* offsets = throwTag->dataOffsets();
+            ByteCodeStackOffset* stackOffset = throwTag->dataOffsets();
 
+            // Does not use pointer sized offsets.
             while (param < end) {
-                *param++ = STACK_OFFSET(*offsets++);
+                *param++ = STACK_OFFSET(*stackOffset++);
             }
             break;
         }

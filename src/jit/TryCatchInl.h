@@ -222,7 +222,7 @@ static void emitCatch(sljit_compiler* compiler, CompileContext* context)
     context->tryBlockStack.pop_back();
 }
 
-static void throwTag(Throw* throwTag, uint8_t* bp, ExecutionContext* context)
+static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* context)
 {
     Tag* tag = context->instance->tag(throwTag->tagIndex());
     Vector<uint8_t> userExceptionData;
@@ -243,12 +243,18 @@ static void throwTag(Throw* throwTag, uint8_t* bp, ExecutionContext* context)
 
 static void emitThrow(sljit_compiler* compiler, Instruction* instr)
 {
+    CompileContext* context = CompileContext::get(compiler);
+    Throw* throwTag = reinterpret_cast<Throw*>(instr->byteCode());
+    TagType* tagType = context->compiler->module()->tagType(throwTag->tagIndex());
+    const ValueTypeVector& types = context->compiler->module()->functionType(tagType->sigIndex())->param();
+
+    emitStoreOntoStack(compiler, instr->params(), throwTag->dataOffsets(), types, false);
+
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(instr->byteCode()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, kContextReg, 0);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwTag));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwWithArgs));
 
-    CompileContext* context = CompileContext::get(compiler);
     sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_JUMP);
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {

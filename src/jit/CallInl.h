@@ -94,25 +94,12 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     }
 
     Operand* operand = instr->operands();
-    for (auto it : functionType->param()) {
-        Operand dst = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
-
-        switch (VARIABLE_TYPE(*operand)) {
-        case Instruction::ConstPtr:
-            ASSERT(!(VARIABLE_GET_IMM(*operand)->info() & Instruction::kKeepInstruction));
-            emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(*operand), false);
-            break;
-        case Instruction::Register:
-            emitMove(compiler, Instruction::valueTypeToOperandType(it), operand, &dst);
-            break;
-        }
-
-        operand++;
-        stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
-    }
+    stackOffset = emitStoreOntoStack(compiler, operand, stackOffset, functionType->param(), true);
+    operand += instr->paramCount();
 
     if (instr->opcode() == ByteCode::CallIndirectOpcode) {
         CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
+        operand--;
 
         switch (VARIABLE_TYPE(*operand)) {
         case Instruction::ConstPtr: {
