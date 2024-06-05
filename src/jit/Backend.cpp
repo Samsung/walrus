@@ -377,8 +377,8 @@ static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp, Operand* p
 }
 
 static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
-static void emitStoreImmediate(sljit_compiler* compiler, Operand* to, Instruction* instr, bool isFloat);
 static void emitMove(sljit_compiler*, uint32_t type, Operand* from, Operand* to);
+static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const ValueTypeVector& types, bool isWordOffsets);
 
 #if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM) || (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
 #define HAS_SIMD
@@ -693,16 +693,9 @@ static void emitImmediate(sljit_compiler* compiler, Instruction* instr)
     emitStoreImmediate(compiler, result, instr, (instr->info() & Instruction::kHasFloatOperand) != 0);
 }
 
-static void emitEnd(sljit_compiler* compiler, Instruction* instr)
+static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const ValueTypeVector& types, bool isWordOffsets)
 {
-    End* end = reinterpret_cast<End*>(instr->byteCode());
-
-    Operand* param = instr->params();
-    ByteCodeStackOffset* stackOffset = end->resultOffsets();
-    CompileContext* context = CompileContext::get(compiler);
-    FunctionType* functionType = context->compiler->moduleFunction()->functionType();
-
-    for (auto it : functionType->result()) {
+    for (auto it : types) {
         Operand dst = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
 
         switch (VARIABLE_TYPE(*param)) {
@@ -715,14 +708,28 @@ static void emitEnd(sljit_compiler* compiler, Instruction* instr)
             break;
         }
 
-        stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
+        if (isWordOffsets) {
+            stackOffset += ((valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t)) - 1;
+        }
+
+        stackOffset++;
         param++;
     }
 
+    return stackOffset;
+}
+
+static void emitEnd(sljit_compiler* compiler, Instruction* instr)
+{
+    End* end = reinterpret_cast<End*>(instr->byteCode());
+
+    CompileContext* context = CompileContext::get(compiler);
+    FunctionType* functionType = context->compiler->moduleFunction()->functionType();
+
+    emitStoreOntoStack(compiler, instr->params(), end->resultOffsets(), functionType->result(), true);
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(end->resultOffsets()));
 
     if (instr->info() & Instruction::kEarlyReturn) {
-        CompileContext* context = CompileContext::get(compiler);
         context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
     }
 }
