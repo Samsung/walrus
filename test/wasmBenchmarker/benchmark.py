@@ -23,8 +23,10 @@ import time
 
 from pathlib import Path
 from os.path import abspath, dirname, join
-from markdownTable import markdownTable  # pip install py-markdown-table
+from py_markdown_table.markdown_table import markdown_table
+import pandas as pd
 
+engine_map = {}
 
 TEST_DIR = join(dirname(abspath(__file__)), "ctests")
 
@@ -63,7 +65,7 @@ gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide"]
 
 simdTests = ["simdMandelbrotFloat", "simdMandelbrotDouble", "simdNbody", "simdMatrixMultiply"]
 
-
+errorList = []
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -78,12 +80,56 @@ def parse_args():
                         const="10", default=10, type=int)
     parser.add_argument("--compile-anyway", help="compile the tests even if they are compiled", action="store_true")
     parser.add_argument("--mem", help="measure MAX RSS", action="store_true")
-    parser.add_argument("--jit", help="use JIT version of Walrus", action="store_true")
     parser.add_argument("--verbose", help="prints extra informations e.g. paths", action="store_true")
     parser.add_argument("--no-system-emcc", help="Don't use emcc command from the system", action="store_true", default=False)
-    return parser.parse_args()
+    parser.add_argument("--no-time", help="Don't measure time", action="store_true", default=False)
+    parser.add_argument("--results", choices=["i", "j", "n", "j2i", "i2j", "n2j", "j2n", "n2i", "i2n"], nargs="*", default=["i", "j", "n"])
+    parser.add_argument("--engine-path", help="Show engine path: -2 for serial number, -1 for hide, 0 for all, positive numbers for the levels from top.", type=int, default=-2)
+    parser.add_argument("--summary", help="Generate summary", action="store_true", default=False)
+    args = parser.parse_args()
 
 
+    args.orig_results = args.results.copy()
+
+    if ("j2i" in args.results or "i2j" in args.results) and not "i" in args.results:
+        args.results.append("i")
+
+    if ("j2i" in args.results or "i2j" in args.results) and not "j" in args.results:
+        args.results.append("j")
+
+    if ("n2i" in args.results or "i2n" in args.results) and not "i" in args.results:
+        args.results.append("i")
+
+    if ("n2i" in args.results or "i2n" in args.results) and not "n" in args.results:
+        args.results.append("n")
+
+    if ("n2j" in args.results or "j2n" in args.results) and not "j" in args.results:
+        args.results.append("j")
+
+    if ("n2j" in args.results or "j2n" in args.results) in args.results and not "n" in args.results:
+        args.results.append("n")
+
+    if args.no_time and not args.mem:
+        raise Exception("You couldn't use --no-time without --mem")
+
+    return args
+
+engine_path = 0
+def engine_display_name(engine): 
+    if not engine in engine_map:
+        if engine_path == -2:
+            engine_map[engine] = str(len(engine_map))
+        
+        if engine_path == -1:
+            engine_map[engine] = ""
+        
+        if engine_path == 0:
+            engine_map[engine] = engine
+        
+        if engine_path > 0:
+            engine_map[engine] = "/".join(engine.split("/")[0-engine_path:])
+
+    return engine_map[engine]
 def check_programs(engines, verbose):
     if os.system("git --version >/dev/null") != 0:
         raise Exception("Git not found!")
@@ -166,12 +212,13 @@ def compile_tests(emcc_path, path, only_game, only_simd, compile_anyway, run, ve
     return test_names
 
 
-def run_wasm(engine, path, test_name, jit, verbose):
+def run_wasm(engine, path, test_name, jit, jit_no_reg_alloc):
     if not os.path.exists(path):
         raise Exception(f"Invalid path for run: {path}")
 
     tc_path =  f"{path}/wasm/{test_name}.wasm"
-    flags = " --jit" if (jit and "walrus" in engine) else ""
+    flags = " --jit" if ((jit or jit_no_reg_alloc) and "walrus" in engine) else ""
+    flags += " --jit-no-reg-alloc" if jit_no_reg_alloc else ""
 
     result = subprocess.check_output(f"{engine} {flags} {tc_path}", shell=True)
 
@@ -183,20 +230,21 @@ def run_wasm(engine, path, test_name, jit, verbose):
         raise Exception(message)
 
 
-def measure_time(path, name, function, engine, jit, verbose):
+def measure_time(path, name, function, engine, jit, jit_no_reg_alloc):
     start_time = time.perf_counter_ns()
-    function(engine, path, name, jit, verbose)
+    function(engine, path, name, jit, jit_no_reg_alloc)
     end_time = time.perf_counter_ns()
     return (end_time - start_time)
 
 
-def measure_memory(path, name, engine, jit):
+def measure_memory(path, name, engine, jit, jit_no_reg_alloc):
     if not os.path.exists(path):
         raise Exception(f"Invalid path for run: {path}")
 
     mem_tool = "/usr/bin/time -f %M"
     tc_path = f"{path}/wasm/{name}.wasm"
-    flags = " --jit" if (jit and "walrus" in engine) else ""
+    flags = " --jit" if ((jit or jit_no_reg_alloc) and "walrus" in engine) else ""
+    flags += " --jit-no-reg-alloc" if jit_no_reg_alloc else ""
     run_cmd = f"{mem_tool} {engine} {flags} {tc_path}"
 
     outputs = subprocess.check_output(run_cmd, shell=True, stderr=subprocess.STDOUT, universal_newlines=True)
@@ -205,41 +253,122 @@ def measure_memory(path, name, engine, jit):
     return int(results[1])
 
 
-def run_tests(path, test_names, engines, number_of_runs, mem, jit, verbose):
+def run_tests(path, test_names, engines, number_of_runs, mem, no_time, jit, jit_no_reg_alloc, interpreter, verbose):
     ret_time_val = list()
     ret_mem_val = list()
+    _engines = list()
+
+    for engine in engines:
+        if interpreter:
+            _engines.append({
+                "name": f"{engine_display_name(engine)} INTERPRETER",
+                "path": engine,
+                "jit": False,
+                "jit_no_reg_alloc": False
+            })
+
+        if jit:
+            _engines.append({
+                "name": f"{engine_display_name(engine)} JIT",
+                "path": engine,
+                "jit": True,
+                "jit_no_reg_alloc": False
+            })
+
+        if jit_no_reg_alloc:
+            _engines.append({
+                "name": f"{engine_display_name(engine)} JIT_NO_REG_ALLOC",
+                "path": engine,
+                "jit": True,
+                "jit_no_reg_alloc": True
+            })
+
+
     for name in test_names:
         tc_path = f"{path}/wasm/{name}.wasm"
         if (verbose): print(f"running {name} (TC path: {tc_path})")
         time_results = dict()
         mem_results = dict()
-        for engine in engines:
-            time_results[engine] = list()
-            mem_results[engine] = list()
+        for engine in _engines:
+            time_results[engine["name"]] = list()
+            mem_results[engine["name"]] = list()
+
         for i in range(number_of_runs):
             if (verbose): print(f"round {i + 1}")
-            for engine in engines:
-                time_results[engine].append(measure_time(path, name, run_wasm, engine, jit, verbose))
-                if (mem):
-                    mem_results[engine].append(measure_memory(path, name, engine, jit))
+            for engine in _engines:
+                if (verbose): print(f"engine: {engine['name']}")
+                try:
+                    if not no_time:
+                        time_results[engine["name"]].append(measure_time(path, name, run_wasm, engine["path"], engine["jit"], engine["jit_no_reg_alloc"]))
+                    if (mem):
+                        mem_results[engine["name"]].append(measure_memory(path, name, engine["path"], engine["jit"], engine["jit_no_reg_alloc"]))
+                except Exception as e:
+                    errorList.append(f"{name} {engine['name']} {e}")
+                    print(e)
+                    if not no_time:
+                        time_results[engine["name"]].append(-1)
 
-        record = {"test": name}
-        for engine in engines:
-            record[engine] = "{:.3f}".format((sum(time_results[engine]) / len(time_results[engine])) / 1e9)
-        ret_time_val.append(record)
+                    if (mem):
+                        mem_results[engine["name"]].append(-1)
+
+                    continue
+
+        if not no_time:
+            record = {"test": name}
+            for engine in _engines:
+                if sum(time_results[engine["name"]]) < 0:
+                    record[engine["name"]] = -1
+                    continue
+                try: 
+                    value = (sum(time_results[engine["name"]]) / len(time_results[engine["name"]])) / 1e9
+                except ZeroDivisionError:
+                    value = -1
+                record[engine["name"]] = "{:.3f}".format(value)
+            ret_time_val.append(record)
 
         if (mem):
             record = {"test": name}
-            for engine in engines:
-                record[engine] = "{:.1f}".format(sum(mem_results[engine]) / len(mem_results[engine]))
+            for engine in _engines:
+                if sum(mem_results[engine["name"]]) < 0:
+                    record[engine["name"]] = -1
+                    continue
+                try: 
+                    value = (sum(mem_results[engine["name"]]) / len(mem_results[engine["name"]]))
+                except ZeroDivisionError:
+                    value = -1
+                record[engine["name"]] = "{:.1f}".format(value)
             ret_mem_val.append(record)
 
     return {"time" : ret_time_val, "mem" : ret_mem_val}
 
 
-def generate_report(data, file_name=None):
+def generate_report(data, summary, file_name=None):
+    if summary:
+        df = pd.DataFrame.from_records(data)
+        for col in df.columns: 
+            if col == "test":
+                continue
+
+            if "/" in col.split(' ')[-1]:
+                df[col] = df[col].str.split(' ').str[-1].str[1:-2]
+
+            df[col] = df[col].astype(float)
+            
+        df = df.describe().loc[["mean"]].to_dict('records')
+        df[0]["test"] = "MEAN"
+        separator = [{}]
+        for col in data[0].keys():
+            separator[0][col] = "*"
+        data = data + separator + df
+
     if file_name is None:
-        print(markdownTable(data).setParams(row_sep="markdown", quote=False).getMarkdown())
+        print(markdown_table(data).set_params(row_sep="markdown", quote=False).get_markdown())
+
+        if engine_path == -2:
+            print("\n\n# Engines")
+            for engine, serial in engine_map.items():
+                print(f"{serial}: {engine}")
+        
         return
     with open(file_name, "w") as file:
         if file_name.endswith(".csv"):
@@ -259,14 +388,86 @@ def generate_report(data, file_name=None):
 
                 line += "\n"
                 file.write(line)
+            
+            if engine_path == -2:
+                file.write("\n\n# Engines\n")
+                for engine, serial in engine_map.items():
+                    file.write(f"{serial};{engine}\n")
             return
-        file.write(markdownTable(data).setParams(row_sep="markdown", quote=False).getMarkdown())
+        file.write(markdown_table(data).set_params(row_sep="markdown", quote=False).get_markdown())
+        if engine_path == -2:
+            file.write("\n\nEngines:\n")
+            for engine, serial in engine_map.items():
+                file.write(f"{serial}: {engine}\n")
 
+def compare(data, engines, jit_to_interpreter, jit_no_reg_alloc_to_interpreter, jit_no_reg_alloc_to_jit, interpreter_to_jit, interpreter_to_jit_no_reg_alloc, jit_to_jit_no_reg_alloc):
+    if not jit_to_interpreter and not jit_no_reg_alloc_to_interpreter and not jit_no_reg_alloc_to_jit and not interpreter_to_jit and not interpreter_to_jit_no_reg_alloc and not jit_to_jit_no_reg_alloc:
+        return
+    for i in range(len(data)):
+        test = data[i]["test"]
+        for engine in engines:
+            if jit_to_interpreter:
+                jit = data[i][f"{engine_display_name(engine)} JIT"]
+                interpreter = data[i][f"{engine_display_name(engine)} INTERPRETER"]
+                data[i][f"{engine_display_name(engine)} INTERPRETER/JIT"] = f"{jit} ({'{:.2f}'.format(-1 if float(interpreter) < 0 or float(jit) < 0 else float(interpreter) / float(jit))}x)"
 
+            if jit_no_reg_alloc_to_interpreter:
+                jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
+                interpreter = data[i][f"{engine_display_name(engine)} INTERPRETER"]
+                data[i][f"{engine_display_name(engine)} INTERPRETER/JIT_NO_REG_ALLOC"] = f"{jit_no_reg_alloc} ({'{:.2f}'.format(-1 if float(interpreter) < 0 or float(jit_no_reg_alloc) < 0 else float(interpreter) / float(jit_no_reg_alloc))}x)"
+            
+            if jit_no_reg_alloc_to_jit:
+                jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
+                jit = data[i][f"{engine_display_name(engine)} JIT"]
+                data[i][f"{engine_display_name(engine)} JIT/JIT_NO_REG_ALLOC"] = f"{jit_no_reg_alloc} ({'{:.2f}'.format(-1 if float(jit) < 0 or float(jit_no_reg_alloc) < 0 else float(jit) / float(jit_no_reg_alloc))}x)"
+
+            if interpreter_to_jit:
+                interpreter = data[i][f"{engine_display_name(engine)} INTERPRETER"]
+                jit = data[i][f"{engine_display_name(engine)} JIT"]
+                data[i][f"{engine_display_name(engine)} JIT/INTERPRETER"] = f"{interpreter} ({'{:.2f}'.format(-1 if float(jit) < 0 or float(interpreter) < 0 else float(jit) / float(interpreter))}x)"
+
+            if interpreter_to_jit_no_reg_alloc:
+                interpreter = data[i][f"{engine_display_name(engine)} INTERPRETER"]
+                jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
+                data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC/INTERPRETER"] = f"{interpreter} ({'{:.2f}'.format(-1 if float(jit_no_reg_alloc) < 0 or float(interpreter) < 0 else float(jit_no_reg_alloc) / float(interpreter))}x)"
+                
+            if jit_to_jit_no_reg_alloc:
+                jit = data[i][f"{engine_display_name(engine)} JIT"]
+                jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
+                data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC/JIT"] = f"{jit} ({'{:.2f}'.format(-1 if float(jit) < 0 or float(jit_no_reg_alloc) < 0 else float(jit_no_reg_alloc) / float(jit))}x)"
+
+def orderData(data, engines, orig_results):
+    orderedData = list()
+    for test in data:
+        record = {"test": test["test"]}
+        for engine in engines:
+            for result in orig_results:
+                if result == "i":
+                    record[engine_display_name(engine) + " INTERPRETER"] = test[engine_display_name(engine) + " INTERPRETER"]
+                elif result == "j":
+                    record[engine_display_name(engine) + " JIT"] = test[engine_display_name(engine) + " JIT"]
+                elif result == "n":
+                    record[engine_display_name(engine) + " JIT_NO_REG_ALLOC"] = test[engine_display_name(engine) + " JIT_NO_REG_ALLOC"]
+                elif result == "j2i":
+                    record[engine_display_name(engine) + " INTERPRETER/JIT"] = test[engine_display_name(engine) + " INTERPRETER/JIT"]
+                elif result ==  "n2i":
+                    record[engine_display_name(engine) + " INTERPRETER/JIT_NO_REG_ALLOC"] = test[engine_display_name(engine) + " INTERPRETER/JIT_NO_REG_ALLOC"]
+                elif result == "n2j":
+                    record[engine_display_name(engine) + " JIT/JIT_NO_REG_ALLOC"] = test[engine_display_name(engine) + " JIT/JIT_NO_REG_ALLOC"]
+                elif result == "i2j":
+                    record[engine_display_name(engine) + " JIT/INTERPRETER"] = test[engine_display_name(engine) + " JIT/INTERPRETER"]
+                elif result == "i2n":
+                    record[engine_display_name(engine) + " JIT_NO_REG_ALLOC/INTERPRETER"] = test[engine_display_name(engine) + " JIT_NO_REG_ALLOC/INTERPRETER"]
+                else:
+                    record[engine_display_name(engine) + " JIT_NO_REG_ALLOC/JIT"] = test[engine_display_name(engine) + " JIT_NO_REG_ALLOC/JIT"]
+
+        orderedData.append(record)
+    return orderedData
 def main():
     args = parse_args()
     if (args.verbose): print(f"Test dir: {TEST_DIR}")
-
+    global engine_path
+    engine_path = args.engine_path
     if args.engines is None:
         print("You need to specify the engine locations", file=sys.stderr)
         exit(1)
@@ -281,11 +482,23 @@ def main():
     emcc_path = get_emcc(args.verbose, not args.no_system_emcc)
     test_names = compile_tests(emcc_path, args.test_dir, args.only_game, args.only_simd, args.compile_anyway, args.run, args.verbose)
 
-    result_data = run_tests(args.test_dir, test_names, args.engines, args.iterations, args.mem, args.jit, args.verbose)
-    generate_report(result_data["time"], args.report)
+    result_data = run_tests(args.test_dir, test_names, args.engines, args.iterations, args.mem, args.no_time, "j" in args.results, "n" in args.results, "i" in args.results, args.verbose)
+    if not args.no_time:
+        compare(result_data["time"], args.engines, "j2i" in args.results, "n2i" in args.results, "n2j" in args.results, "i2j" in args.results, "i2n" in args.results, "j2n" in args.results)
+        result_data["time"] = orderData(result_data["time"], args.engines, args.orig_results)
+        if args.report == None:
+            print("# Time results\n")
+        generate_report(result_data["time"], args.summary, args.report)
     if (args.mem):
-        generate_report(result_data["mem"], memreport)
+        compare(result_data["mem"], args.engines, "j2i" in args.results, "n2i" in args.results, "n2j" in args.results, "i2j" in args.results, "i2n" in args.results, "j2n" in args.results)
+        result_data["mem"] = orderData(result_data["mem"], args.engines, args.orig_results)
+        if args.report == None:
+            print("# Memory results\n")
+        generate_report(result_data["mem"], args.summary, memreport)
 
-
+    if len(errorList) > 0:
+        print(errorList)
+        exit(1)
+    
 if __name__ == "__main__":
     main()

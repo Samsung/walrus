@@ -282,6 +282,7 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y ninja-build gcc-multilib g++-multilib
+        sudo pip install pandas
         sudo pip install py-markdown-table
         sudo pip install tqdm
     - name: Build x64
@@ -292,8 +293,7 @@ jobs:
         ninja -Cout/linux/x64
     - name: Run Tests
       run: |
-        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --verbose
-        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --jit --verbose
+        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --verbose --summary --results i j2i n2i j n2j
 
   built-test-wasm-c-api:
     runs-on: ubuntu-latest
