@@ -1992,7 +1992,7 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
     I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(instr->byteCode());
-    sljit_s32 type = SLJIT_SIMD_OP2_SHUFFLE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_MEM_ALIGNED_128;
+    sljit_s32 shuffleOp = SLJIT_SIMD_OP2_SHUFFLE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_MEM_ALIGNED_128;
     CompileContext* context = CompileContext::get(compiler);
     JITArg args[3];
 
@@ -2013,7 +2013,7 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
             source++;
         }
 
-        sljit_emit_simd_op2(compiler, type, args[2].arg, args[0].arg, SLJIT_MEM0(), static_cast<sljit_sw>(context->shuffleOffset));
+        sljit_emit_simd_op2(compiler, shuffleOp, dst, args[0].arg, SLJIT_MEM0(), static_cast<sljit_sw>(context->shuffleOffset));
         context->shuffleOffset += 16;
     } else {
         simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, dst);
@@ -2038,13 +2038,13 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_IMM, static_cast<sljit_sw>(context->shuffleOffset));
         context->shuffleOffset += 32;
 
-        sljit_emit_simd_op2(compiler, type, SLJIT_TMP_DEST_FREG, args[1].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 0);
-        sljit_emit_simd_op2(compiler, type, args[2].arg, args[0].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 16);
-        simdEmitSSEOp(compiler, SimdOp::por, args[2].arg, SLJIT_TMP_DEST_FREG);
+        sljit_emit_simd_op2(compiler, shuffleOp, SLJIT_TMP_DEST_FREG, args[1].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 0);
+        sljit_emit_simd_op2(compiler, shuffleOp, dst, args[0].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 16);
+        simdEmitSSEOp(compiler, SimdOp::por, dst, SLJIT_TMP_DEST_FREG);
     }
 
     if (SLJIT_IS_MEM(args[2].arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | type, dst, args[2].arg, args[2].argw);
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8, dst, args[2].arg, args[2].argw);
     }
 }
 
