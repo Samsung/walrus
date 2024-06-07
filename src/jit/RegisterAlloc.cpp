@@ -347,15 +347,10 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
 
         size_t maxRangeEnd;
 
-        if (freeReg != VariableList::kUnusedReg) {
-            if (maxRangeEndSingle1 >= maxRangeEndPair) {
-                i = maxRangeIndexSingle1;
-                maxRangeEnd = maxRangeEndSingle1;
-            } else {
-                i = maxRangeIndexPair;
-                maxRangeEnd = maxRangeEndPair;
-            }
-        } else if (maxRangeEndPair < maxRangeEndSingle1 && maxRangeEndPair < maxRangeEndSingle2) {
+        if (freeReg != VariableList::kUnusedReg && maxRangeEndSingle1 >= maxRangeEndPair) {
+            i = maxRangeIndexSingle1;
+            maxRangeEnd = maxRangeEndSingle1;
+        } else if (freeReg == VariableList::kUnusedReg && maxRangeEndPair < maxRangeEndSingle1 && maxRangeEndPair < maxRangeEndSingle2) {
             i = maxRangeIndexSingle1;
             maxRangeEnd = maxRangeEndSingle2;
             freeReg = maxRangeIndexSingle2;
