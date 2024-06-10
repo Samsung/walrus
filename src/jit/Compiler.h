@@ -18,6 +18,7 @@
 #define __WalrusJITCompiler__
 
 #include "interpreter/ByteCode.h"
+#include "jit/SljitLir.h"
 #include "runtime/Module.h"
 
 // Backend compiler structures.
@@ -548,6 +549,9 @@ struct CompileContext {
 
     JITCompiler* compiler;
     uintptr_t branchTableOffset;
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+    uintptr_t shuffleOffset;
+#endif /* SLJIT_CONFIG_X86 */
     size_t globalsStart;
     size_t tableStart;
     size_t functionsStart;
@@ -690,6 +694,7 @@ public:
 
     Module* module() { return m_module; }
     ModuleFunction* moduleFunction() { return m_moduleFunction; }
+    CompileContext& context() { return m_context; }
     uint32_t JITFlags() { return m_JITFlags; }
     uint32_t options() { return m_options; }
     InstructionListItem* first() { return m_first; }

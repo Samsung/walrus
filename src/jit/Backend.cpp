@@ -24,7 +24,6 @@
 #include "runtime/Table.h"
 #include "runtime/Tag.h"
 #include "jit/Compiler.h"
-#include "jit/SljitLir.h"
 #ifdef WALRUS_JITPERF
 #include "jit/PerfDump.h"
 #endif
@@ -216,6 +215,9 @@ protected:
 
 CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     : compiler(compiler)
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+    , shuffleOffset(0)
+#endif /* SLJIT_CONFIG_X86 */
     , nextTryBlock(0)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
@@ -1369,7 +1371,7 @@ void JITCompiler::generateCode()
             it.jitFunc->m_exportEntry = reinterpret_cast<void*>(sljit_get_label_addr(it.exportEntryLabel));
 
             if (it.branchTableSize > 0) {
-                sljit_up* branchList = reinterpret_cast<sljit_up*>(it.jitFunc->m_branchList);
+                sljit_up* branchList = reinterpret_cast<sljit_up*>(it.jitFunc->m_constData);
                 ASSERT(branchList != nullptr);
 
                 sljit_up* end = branchList + it.branchTableSize;
@@ -1447,6 +1449,9 @@ void JITCompiler::clear()
     m_first = nullptr;
     m_last = nullptr;
     m_branchTableSize = 0;
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+    m_context.shuffleOffset = 0;
+#endif /* SLJIT_CONFIG_X86 */
 
     while (item != nullptr) {
         InstructionListItem* next = item->next();
@@ -1475,7 +1480,12 @@ void JITCompiler::emitProlog()
         func.exportEntryLabel = sljit_emit_label(m_compiler);
     }
 
-    sljit_emit_enter(m_compiler, SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2), SLJIT_ARGS0(P),
+    sljit_s32 options = SLJIT_ENTER_REG_ARG | SLJIT_ENTER_KEEP(2);
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+    options |= SLJIT_ENTER_USE_VEX;
+#endif /* !SLJIT_CONFIG_X86 */
+
+    sljit_emit_enter(m_compiler, options, SLJIT_ARGS0(P),
                      SLJIT_NUMBER_OF_SCRATCH_REGISTERS, m_savedIntegerRegCount + 2,
                      SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, m_savedFloatRegCount, sizeof(ExecutionContext::CallFrame));
 
@@ -1488,12 +1498,21 @@ void JITCompiler::emitProlog()
     sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), offsetof(ExecutionContext::CallFrame, prevFrame), SLJIT_R0, 0);
 
     m_context.branchTableOffset = 0;
+    size_t size = func.branchTableSize * sizeof(sljit_up);
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+    size += m_context.shuffleOffset;
+#endif /* SLJIT_CONFIG_X86 */
 
-    if (func.branchTableSize > 0) {
-        void* branchList = malloc(func.branchTableSize * sizeof(sljit_up));
+    if (size > 0) {
+        void* constData = malloc(size);
 
-        func.jitFunc->m_branchList = branchList;
-        m_context.branchTableOffset = reinterpret_cast<uintptr_t>(branchList);
+        func.jitFunc->m_constData = constData;
+        m_context.branchTableOffset = reinterpret_cast<uintptr_t>(constData);
+
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+        // Requires 16 byte alignment.
+        m_context.shuffleOffset = (reinterpret_cast<uintptr_t>(constData) + size - m_context.shuffleOffset + 0xf) & ~(uintptr_t)0xf;
+#endif /* SLJIT_CONFIG_X86 */
     }
 }
 
@@ -1501,7 +1520,7 @@ void JITCompiler::emitEpilog()
 {
     FunctionList& func = m_functionList.back();
 
-    ASSERT(m_context.branchTableOffset == reinterpret_cast<sljit_uw>(func.jitFunc->m_branchList) + func.branchTableSize * sizeof(sljit_sw));
+    ASSERT(m_context.branchTableOffset == reinterpret_cast<sljit_uw>(func.jitFunc->m_constData) + func.branchTableSize * sizeof(sljit_sw));
     ASSERT(m_context.currentTryBlock == InstanceConstData::globalTryBlock);
 
     if (!m_context.earlyReturns.empty()) {
@@ -1587,7 +1606,7 @@ void JITCompiler::emitEpilog()
     }
 
     if (func.branchTableSize > 0) {
-        sljit_label** branchList = reinterpret_cast<sljit_label**>(func.jitFunc->m_branchList);
+        sljit_label** branchList = reinterpret_cast<sljit_label**>(func.jitFunc->m_constData);
         ASSERT(branchList != nullptr);
 
         sljit_label** end = branchList + func.branchTableSize;

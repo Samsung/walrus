@@ -17,7 +17,6 @@
 #include "Walrus.h"
 
 #include "jit/Compiler.h"
-#include "jit/SljitLir.h"
 #include "runtime/JITExec.h"
 #include "runtime/Module.h"
 
@@ -253,13 +252,13 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
 
-#define OPERAND_TYPE_LIST_SIMD_ARCH                                                \
-    OL3(OTOp2V128, /* SSD */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0)            \
-    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)               \
-    OL4(OTOp2V128Tmp, /* SSDT */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0, V128)  \
-    OL3(OTOp2V128Rev, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)         \
-    OL4(OTShuffleV128, /* SSDT */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1, V128) \
-    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                 \
+#define OPERAND_TYPE_LIST_SIMD_ARCH                                               \
+    OL3(OTOp2V128, /* SSD */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0)           \
+    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)              \
+    OL4(OTOp2V128Tmp, /* SSDT */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0, V128) \
+    OL3(OTOp2V128Rev, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)        \
+    OL3(OTShuffleV128, /* SSDT */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0)    \
+    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                \
     OL4(OTShiftV128Tmp, /* SSDT */ V128 | NOTMP, I32, V128 | TMP | S0, V128)
 
 // List of aliases.
@@ -1860,6 +1859,13 @@ static void compileFunction(JITCompiler* compiler)
             operands[0] = STACK_OFFSET(shuffle->srcOffsets()[0]);
             operands[1] = STACK_OFFSET(shuffle->srcOffsets()[1]);
             operands[2] = STACK_OFFSET(shuffle->dstOffset());
+
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+            if (compiler->context().shuffleOffset == 0) {
+                compiler->context().shuffleOffset = 16 - sizeof(sljit_up);
+            }
+            compiler->context().shuffleOffset += 32;
+#endif /* SLJIT_CONFIG_X86 */
             break;
         }
         default: {
