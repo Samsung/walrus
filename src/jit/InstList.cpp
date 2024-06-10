@@ -17,7 +17,6 @@
 #include "Walrus.h"
 
 #include "jit/Compiler.h"
-#include "jit/SljitLir.h"
 #include "runtime/ObjectType.h"
 
 #include <map>

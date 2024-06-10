@@ -115,15 +115,15 @@ class JITFunction {
 public:
     JITFunction()
         : m_exportEntry(nullptr)
-        , m_branchList(nullptr)
+        , m_constData(nullptr)
         , m_module(nullptr)
     {
     }
 
     ~JITFunction()
     {
-        if (m_branchList != nullptr) {
-            free(m_branchList);
+        if (m_constData != nullptr) {
+            free(m_constData);
         }
     }
 
@@ -132,7 +132,7 @@ public:
 
 private:
     void* m_exportEntry;
-    void* m_branchList;
+    void* m_constData;
     JITModule* m_module;
 };
 

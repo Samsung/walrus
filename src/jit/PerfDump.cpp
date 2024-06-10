@@ -18,7 +18,6 @@
 
 #if defined WALRUS_JITPERF
 #include "jit/PerfDump.h"
-#include "jit/SljitLir.h"
 
 #include <fcntl.h>
 #include <sys/mman.h>

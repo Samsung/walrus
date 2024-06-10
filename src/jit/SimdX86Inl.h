@@ -1826,63 +1826,56 @@ static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
 static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
-    sljit_s32 tmp1 = instr->requiredReg(2);
-    sljit_s32 tmp2 = SLJIT_TMP_DEST_FREG;
-    const sljit_s32 type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
     I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(instr->byteCode());
+    sljit_s32 type = SLJIT_SIMD_OP2_SHUFFLE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_MEM_ALIGNED_128;
+    CompileContext* context = CompileContext::get(compiler);
     JITArg args[3];
 
     args[2].set(operands + 2);
-    sljit_s32 dst = GET_TARGET_REG(args[2].arg, instr->requiredReg(1));
+    sljit_s32 dst = GET_TARGET_REG(args[2].arg, instr->requiredReg(0));
 
     if (operands[0] == operands[1]) {
         simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, dst);
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, SLJIT_TMP_DEST_FREG, SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
 
-        if (args[0].arg != dst) {
-            if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
-                simdEmitVexOp(compiler, SimdOp::pshufb, dst, args[1].arg, tmp1);
-            } else {
-                sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, dst, args[0].arg, 0);
-                args[1].arg = dst;
-            }
+        // Pre compute the offsets into an aligned buffer
+        const uint8_t* source = shuffle->value();
+        uint8_t* destination = reinterpret_cast<uint8_t*>(context->shuffleOffset);
+
+        for (size_t i = 0; i < 16; i++) {
+            *destination++ = (*source >= 16) ? (*source - 16) : (*source);
+            source++;
         }
 
-        if (dst == args[0].arg) {
-            simdEmitSSEOp(compiler, SimdOp::pshufb, dst, SLJIT_TMP_DEST_FREG);
-        }
+        sljit_emit_simd_op2(compiler, type, args[2].arg, args[0].arg, SLJIT_MEM0(), static_cast<sljit_sw>(context->shuffleOffset));
+        context->shuffleOffset += 16;
     } else {
-        simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, instr->requiredReg(0));
-        simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, instr->requiredReg(1));
+        ASSERT(context->shuffleOffset > 0 && (context->shuffleOffset & 0xf) == 0);
 
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, tmp1, SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
+        simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, dst);
+        simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_FREG);
 
-        sljit_emit_simd_replicate(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8, tmp2, SLJIT_IMM, 0xf0);
-        simdEmitSSEOp(compiler, SimdOp::paddb, tmp1, tmp2);
+        // Pre compute the offsets into an aligned buffer
+        const uint8_t* source = shuffle->value();
+        uint8_t* destination = reinterpret_cast<uint8_t*>(context->shuffleOffset);
 
-        if (dst != args[1].arg) {
-            if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
-                simdEmitVexOp(compiler, SimdOp::pshufb, dst, args[1].arg, tmp1);
-            } else {
-                sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, dst, args[1].arg, 0);
-                args[1].arg = dst;
-            }
+        for (size_t i = 0; i < 16; i++) {
+            *destination++ = (*source >= 16) ? (*source - 16) : 128;
+            source++;
         }
 
-        if (dst == args[1].arg) {
-            simdEmitSSEOp(compiler, SimdOp::pshufb, dst, tmp1);
+        source = shuffle->value();
+
+        for (size_t i = 0; i < 16; i++) {
+            *destination++ = (*source < 16) ? *source : 128;
+            source++;
         }
 
-        simdEmitSSEOp(compiler, SimdOp::pxor, tmp1, tmp2);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_IMM, static_cast<sljit_sw>(context->shuffleOffset));
+        context->shuffleOffset += 32;
 
-        if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
-            simdEmitVexOp(compiler, SimdOp::pshufb, tmp2, args[0].arg, tmp1);
-        } else {
-            sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | type, tmp2, args[0].arg, 0);
-            simdEmitSSEOp(compiler, SimdOp::pshufb, tmp2, tmp1);
-        }
-
-        simdEmitSSEOp(compiler, SimdOp::por, dst, tmp2);
+        sljit_emit_simd_op2(compiler, type, SLJIT_TMP_DEST_FREG, args[1].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 0);
+        sljit_emit_simd_op2(compiler, type, args[2].arg, args[0].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 16);
+        simdEmitSSEOp(compiler, SimdOp::por, args[2].arg, SLJIT_TMP_DEST_FREG);
     }
 
     if (SLJIT_IS_MEM(args[2].arg)) {
