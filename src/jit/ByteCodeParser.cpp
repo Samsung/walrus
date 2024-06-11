@@ -1863,6 +1863,7 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         default: {
+            ASSERT_NOT_REACHED();
             break;
         }
         }

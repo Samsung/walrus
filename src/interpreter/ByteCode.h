@@ -288,6 +288,7 @@ class FunctionType;
     F(I8X16MinU, intMin, uint8_t, uint8_t)                        \
     F(I8X16MaxS, intMax, int8_t, int8_t)                          \
     F(I8X16MaxU, intMax, uint8_t, uint8_t)                        \
+    F(I8X16AvgrU, intAvgr, uint8_t, uint8_t)                      \
     F(I16X8Eq, eqMask, uint16_t, uint16_t)                        \
     F(I16X8Ne, neMask, uint16_t, uint16_t)                        \
     F(I16X8LtS, ltMask, int16_t, int16_t)                         \
@@ -302,6 +303,7 @@ class FunctionType;
     F(I16X8MinU, intMin, uint16_t, uint16_t)                      \
     F(I16X8MaxS, intMax, int16_t, int16_t)                        \
     F(I16X8MaxU, intMax, uint16_t, uint16_t)                      \
+    F(I16X8AvgrU, intAvgr, uint16_t, uint16_t)                    \
     F(I32X4Eq, eqMask, uint32_t, uint32_t)                        \
     F(I32X4Ne, neMask, uint32_t, uint32_t)                        \
     F(I32X4LtS, ltMask, int32_t, int32_t)                         \
@@ -385,6 +387,7 @@ class FunctionType;
 #define FOR_EACH_BYTECODE_SIMD_UNARY_OP(F) \
     F(I8X16Neg, intNeg, uint8_t)           \
     F(I8X16Abs, intAbs, uint8_t)           \
+    F(I8X16Popcnt, intPopcnt, uint8_t)     \
     F(I16X8Neg, intNeg, uint16_t)          \
     F(I16X8Abs, intAbs, uint16_t)          \
     F(I32X4Neg, intNeg, uint32_t)          \
