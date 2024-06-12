@@ -309,12 +309,12 @@ uint32_t PerfDump::dumpByteCode(InstructionListItem* item)
             fprintf(m_sourceFile, "%c R%d", prefix, static_cast<int>(i - paramCount));
         }
 
-        switch (VARIABLE_TYPE(operand->ref)) {
-        case Operand::Immediate:
+        switch (VARIABLE_TYPE(*operand)) {
+        case Instruction::ConstPtr:
             fprintf(m_sourceFile, "(imm)");
             break;
-        case Operand::Register:
-            ref = VARIABLE_GET_REF(operand->ref);
+        case Instruction::Register:
+            ref = VARIABLE_GET_REF(*operand);
 
             if (SLJIT_IS_REG_PAIR(ref)) {
                 fprintf(m_sourceFile, "(r%d,r%d)", static_cast<int>((ref & 0xff) - 1), static_cast<int>((ref >> 8) - 1));
@@ -323,8 +323,8 @@ uint32_t PerfDump::dumpByteCode(InstructionListItem* item)
             }
             break;
         default:
-            ASSERT(VARIABLE_TYPE(operand->ref) == Operand::Offset);
-            fprintf(m_sourceFile, "(o:%d)", static_cast<int>(VARIABLE_GET_OFFSET(operand->ref)));
+            ASSERT(VARIABLE_TYPE(*operand) == Instruction::Offset);
+            fprintf(m_sourceFile, "(o:%d)", static_cast<int>(VARIABLE_GET_OFFSET(*operand)));
             break;
         }
 

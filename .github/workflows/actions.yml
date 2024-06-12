@@ -134,6 +134,23 @@ jobs:
          $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
          $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
 
+  build-on-x64-with-perf:
+          runs-on: ubuntu-latest
+          steps:
+          - uses: actions/checkout@v4
+            with:
+              submodules: true
+          - name: Install Packages
+            run: |
+              sudo apt update
+              sudo apt install -y ninja-build gcc-multilib g++-multilib
+          - name: Build x64
+            env:
+              BUILD_OPTIONS: -DWALRUS_JITPERF=1 -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+            run: |
+              cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
+              ninja -Cout/linux/x64
+
   build-test-on-armv7:
     runs-on: ubuntu-latest
     steps:
