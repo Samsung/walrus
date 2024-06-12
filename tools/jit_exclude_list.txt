@@ -1,0 +1,5 @@
+simd_i8x16_arith2.wast
+simd_i16x8_arith2.wast
+simd_i32x4_arith2.wast
+simd_i64x2_arith2.wast
+simd_int_to_int_extend.wast
