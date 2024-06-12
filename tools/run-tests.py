@@ -45,6 +45,7 @@ COLOR_RESET = '\033[0m'
 
 RUNNERS = {}
 DEFAULT_RUNNERS = []
+JIT_EXCLUDE_FILES = []
 jit = False
 
 
@@ -63,6 +64,11 @@ class runner(object):
 def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
+        if jit:
+            filename = os.path.basename(file) 
+            if filename in JIT_EXCLUDE_FILES:
+                continue
+
         proc = Popen([engine, "--mapdirs", "./test/wasi", "/var", file], stdout=PIPE) if not jit else Popen([engine, "--mapdirs", "./test/wasi", "/var", "--jit", file], stdout=PIPE)
         out, _ = proc.communicate()
 
@@ -159,6 +165,12 @@ def main():
     args = parser.parse_args()
     global jit
     jit = args.jit
+    if jit:
+        exclude_list_file = join(PROJECT_SOURCE_DIR, 'tools', 'jit_exclude_list.txt')
+        with open(exclude_list_file) as f:
+            global JIT_EXCLUDE_FILES
+            JIT_EXCLUDE_FILES = f.read().replace('\n', ' ').split()
+
 
     for suite in args.suite:
         if suite not in RUNNERS:
