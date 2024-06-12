@@ -2119,9 +2119,8 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
       Consume();
       TypeVector result;
       if (options_->features.reference_types_enabled() &&
-          MatchLpar(TokenType::Result)) {
-        CHECK_RESULT(ParseValueTypeList(&result, nullptr));
-        EXPECT(Rpar);
+          PeekMatchLpar(TokenType::Result)) {
+        CHECK_RESULT(ParseResultList(&result, nullptr));
       }
       out_expr->reset(new SelectExpr(result, loc));
       break;
@@ -2318,34 +2317,45 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
       break;
     }
 
-    case TokenType::TableGet:
+    case TokenType::TableGet: {
       ErrorUnlessOpcodeEnabled(Consume());
-      CHECK_RESULT(ParsePlainInstrVar<TableGetExpr>(loc, out_expr));
+      Var table_index(0, loc);
+      ParseVarOpt(&table_index, table_index);
+      out_expr->reset(new TableGetExpr(table_index, loc));
       break;
+                              }
 
-    case TokenType::TableSet:
+    case TokenType::TableSet: {
       ErrorUnlessOpcodeEnabled(Consume());
-      // TODO: Table index.
-      CHECK_RESULT(ParsePlainInstrVar<TableSetExpr>(loc, out_expr));
+      Var table_index(0, loc);
+      ParseVarOpt(&table_index, table_index);
+      out_expr->reset(new TableSetExpr(table_index, loc));
       break;
+                              }
 
-    case TokenType::TableGrow:
+    case TokenType::TableGrow: {
       ErrorUnlessOpcodeEnabled(Consume());
-      // TODO: Table index.
-      CHECK_RESULT(ParsePlainInstrVar<TableGrowExpr>(loc, out_expr));
+      Var table_index(0, loc);
+      ParseVarOpt(&table_index, table_index);
+      out_expr->reset(new TableGrowExpr(table_index, loc));
       break;
+                               }
 
-    case TokenType::TableSize:
+    case TokenType::TableSize: {
       ErrorUnlessOpcodeEnabled(Consume());
-      // TODO: Table index.
-      CHECK_RESULT(ParsePlainInstrVar<TableSizeExpr>(loc, out_expr));
+      Var table_index(0, loc);
+      ParseVarOpt(&table_index, table_index);
+      out_expr->reset(new TableSizeExpr(table_index, loc));
       break;
+                               }
 
-    case TokenType::TableFill:
+    case TokenType::TableFill: {
       ErrorUnlessOpcodeEnabled(Consume());
-      // TODO: Table index.
-      CHECK_RESULT(ParsePlainInstrVar<TableFillExpr>(loc, out_expr));
+      Var table_index(0, loc);
+      ParseVarOpt(&table_index, table_index);
+      out_expr->reset(new TableFillExpr(table_index, loc));
       break;
+                               }
 
     case TokenType::RefFunc:
       ErrorUnlessOpcodeEnabled(Consume());
