@@ -1640,6 +1640,11 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I16X8GtUOpcode:
         case ByteCode::I16X8GeSOpcode:
         case ByteCode::I16X8GeUOpcode:
+        case ByteCode::I16X8MinSOpcode:
+        case ByteCode::I16X8MinUOpcode:
+        case ByteCode::I16X8MaxSOpcode:
+        case ByteCode::I16X8MaxUOpcode:
+        case ByteCode::I16X8AvgrUOpcode:
         case ByteCode::I16X8ExtmulLowI8X16SOpcode:
         case ByteCode::I16X8ExtmulHighI8X16SOpcode:
         case ByteCode::I16X8ExtmulLowI8X16UOpcode:
@@ -1660,6 +1665,10 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32X4GtUOpcode:
         case ByteCode::I32X4GeSOpcode:
         case ByteCode::I32X4GeUOpcode:
+        case ByteCode::I32X4MinSOpcode:
+        case ByteCode::I32X4MinUOpcode:
+        case ByteCode::I32X4MaxSOpcode:
+        case ByteCode::I32X4MaxUOpcode:
         case ByteCode::I32X4ExtmulLowI16X8SOpcode:
         case ByteCode::I32X4ExtmulHighI16X8SOpcode:
         case ByteCode::I32X4ExtmulLowI16X8UOpcode:
@@ -1746,6 +1755,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I8X16NegOpcode:
         case ByteCode::I16X8NegOpcode:
+        case ByteCode::I16X8AbsOpcode:
         case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
         case ByteCode::I16X8ExtaddPairwiseI8X16UOpcode:
         case ByteCode::I16X8ExtendLowI8X16SOpcode:
@@ -1753,6 +1763,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I16X8ExtendLowI8X16UOpcode:
         case ByteCode::I16X8ExtendHighI8X16UOpcode:
         case ByteCode::I32X4NegOpcode:
+        case ByteCode::I32X4AbsOpcode:
         case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
         case ByteCode::I32X4ExtaddPairwiseI16X8UOpcode:
         case ByteCode::I32X4ExtendLowI16X8SOpcode:
@@ -1763,6 +1774,10 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32X4TruncSatF64X2SZeroOpcode:
         case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
         case ByteCode::I64X2NegOpcode:
+        case ByteCode::I64X2ExtendLowI32X4SOpcode:
+        case ByteCode::I64X2ExtendHighI32X4SOpcode:
+        case ByteCode::I64X2ExtendLowI32X4UOpcode:
+        case ByteCode::I64X2ExtendHighI32X4UOpcode:
         case ByteCode::F32X4AbsOpcode:
         case ByteCode::F32X4NegOpcode:
         case ByteCode::F32X4SqrtOpcode:
