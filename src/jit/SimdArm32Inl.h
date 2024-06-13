@@ -42,6 +42,8 @@ enum Type : uint32_t {
     vcvtitf = 0xeeb80840,
     vdivf = 0xee800a00,
     veor = 0xff000150,
+    vmax = 0xef000640,
+    vmin = 0xef000650,
     vmlal = 0xef800800,
     vmov = 0xeeb00a40,
     vmovi = 0xef800010,
@@ -59,6 +61,7 @@ enum Type : uint32_t {
     vpmax = 0xef000a00,
     vpmin = 0xef000a10,
     vrev64 = 0xffB00040,
+    vrhadd = 0xef000140,
     vqadd = 0xef000050,
     vqrdmulh = 0xff000b40,
     vqmovn = 0xffb20200,
@@ -108,6 +111,8 @@ enum Type : uint32_t {
     vcvtitf = 0xeeb80840,
     vdivf = 0xee800a00,
     veor = 0xf3000150,
+    vmax = 0xf2000640,
+    vmin = 0xf2000650,
     vmlal = 0xf2800800,
     vmov = 0xeeb00a40,
     vmovi = 0xf2800010,
@@ -125,6 +130,7 @@ enum Type : uint32_t {
     vpmax = 0xf2000A00,
     vpmin = 0xf2000A10,
     vrev64 = 0xf3b00040,
+    vrhadd = 0xf2000140,
     vqadd = 0xf2000050,
     vqrdmulh = 0xf3000b40,
     vqmovn = 0xf3b20200,
@@ -471,12 +477,14 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         dstType = SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I16X8NegOpcode:
+    case ByteCode::I16X8AbsOpcode:
     case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
     case ByteCode::I16X8ExtaddPairwiseI8X16UOpcode:
         srcType = SLJIT_SIMD_ELEM_16;
         dstType = SLJIT_SIMD_ELEM_16;
         break;
     case ByteCode::I32X4NegOpcode:
+    case ByteCode::I32X4AbsOpcode:
     case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
     case ByteCode::I32X4ExtaddPairwiseI16X8UOpcode:
         srcType = SLJIT_SIMD_ELEM_32;
@@ -501,6 +509,13 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I64X2NegOpcode:
         srcType = SLJIT_SIMD_ELEM_64;
+        dstType = SLJIT_SIMD_ELEM_64;
+        break;
+    case ByteCode::I64X2ExtendLowI32X4SOpcode:
+    case ByteCode::I64X2ExtendHighI32X4SOpcode:
+    case ByteCode::I64X2ExtendLowI32X4UOpcode:
+    case ByteCode::I64X2ExtendHighI32X4UOpcode:
+        srcType = SLJIT_SIMD_ELEM_32;
         dstType = SLJIT_SIMD_ELEM_64;
         break;
     case ByteCode::F32X4CeilOpcode:
@@ -609,6 +624,9 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8NegOpcode:
         simdEmitOp(compiler, SimdOp::Type::vneg | SimdOp::S16, dst, 0, args[0].arg);
         break;
+    case ByteCode::I16X8AbsOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vabs | SimdOp::S16, dst, 0, args[0].arg);
+        break;
     case ByteCode::I32X4ExtendLowI16X8SOpcode:
         simdEmitOp(compiler, SimdOp::Type::vmovl | SimdOp::immS16, dst, 0, args[0].arg);
         break;
@@ -630,6 +648,9 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4NegOpcode:
         simdEmitOp(compiler, SimdOp::Type::vneg | SimdOp::S32, dst, 0, args[0].arg);
         break;
+    case ByteCode::I32X4AbsOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vabs | SimdOp::S32, dst, 0, args[0].arg);
+        break;
     case ByteCode::F32X4ConvertI32X4SOpcode:
         simdEmitOp(compiler, SimdOp::Type::vcvtitfSIMD | SimdOp::S32, dst, 0, args[0].arg);
         break;
@@ -644,6 +665,18 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I64X2NegOpcode:
         simdEmitI64x2Neg(compiler, dst, args[0].arg);
+        break;
+    case ByteCode::I64X2ExtendLowI32X4SOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmovl | SimdOp::immS32, dst, 0, args[0].arg);
+        break;
+    case ByteCode::I64X2ExtendHighI32X4SOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmovl | SimdOp::immS32, dst, 0, args[0].arg | highRegister);
+        break;
+    case ByteCode::I64X2ExtendLowI32X4UOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmovl | SimdOp::immS32 | SimdOp::unsignedBit, dst, 0, args[0].arg);
+        break;
+    case ByteCode::I64X2ExtendHighI32X4UOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmovl | SimdOp::immS32 | SimdOp::unsignedBit, dst, 0, args[0].arg | highRegister);
         break;
     case ByteCode::V128NotOpcode:
         simdEmitOp(compiler, SimdOp::Type::vmvn, dst, 0, args[0].arg);
@@ -1088,6 +1121,11 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8GtUOpcode:
     case ByteCode::I16X8GeSOpcode:
     case ByteCode::I16X8GeUOpcode:
+    case ByteCode::I16X8MinSOpcode:
+    case ByteCode::I16X8MinUOpcode:
+    case ByteCode::I16X8MaxSOpcode:
+    case ByteCode::I16X8MaxUOpcode:
+    case ByteCode::I16X8AvgrUOpcode:
     case ByteCode::I16X8Q15mulrSatSOpcode:
         srcType = SLJIT_SIMD_ELEM_16;
         dstType = SLJIT_SIMD_ELEM_16;
@@ -1117,6 +1155,10 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4GtUOpcode:
     case ByteCode::I32X4GeSOpcode:
     case ByteCode::I32X4GeUOpcode:
+    case ByteCode::I32X4MinSOpcode:
+    case ByteCode::I32X4MinUOpcode:
+    case ByteCode::I32X4MaxSOpcode:
+    case ByteCode::I32X4MaxUOpcode:
         srcType = SLJIT_SIMD_ELEM_32;
         dstType = SLJIT_SIMD_ELEM_32;
         break;
@@ -1328,6 +1370,21 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8GeUOpcode:
         simdEmitOp(compiler, SimdOp::Type::vcge | SimdOp::I16 | SimdOp::unsignedBit, dst, args[0].arg, args[1].arg);
         break;
+    case ByteCode::I16X8MinSOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmin | SimdOp::I16, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I16X8MinUOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmin | SimdOp::I16 | SimdOp::unsignedBit, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I16X8MaxSOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmax | SimdOp::I16, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I16X8MaxUOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmax | SimdOp::I16 | SimdOp::unsignedBit, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I16X8AvgrUOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vrhadd | SimdOp::I16 | SimdOp::unsignedBit, dst, args[0].arg, args[1].arg);
+        break;
     case ByteCode::I8X16NarrowI16X8SOpcode:
         simdEmitOp(compiler, SimdOp::Type::vqmovn | SimdOp::S8 | (0x1 << 7), dst, 0, args[0].arg);
         simdEmitOp(compiler, SimdOp::Type::vqmovn | SimdOp::S8 | (0x1 << 7), dst | highRegister, 0, args[1].arg);
@@ -1393,6 +1450,18 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I32X4GeUOpcode:
         simdEmitOp(compiler, SimdOp::Type::vcge | SimdOp::I32 | SimdOp::unsignedBit, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I32X4MinSOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmin | SimdOp::I32, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I32X4MinUOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmin | SimdOp::I32 | SimdOp::unsignedBit, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I32X4MaxSOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmax | SimdOp::I32, dst, args[0].arg, args[1].arg);
+        break;
+    case ByteCode::I32X4MaxUOpcode:
+        simdEmitOp(compiler, SimdOp::Type::vmax | SimdOp::I32 | SimdOp::unsignedBit, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I16X8NarrowI32X4SOpcode:
         simdEmitOp(compiler, SimdOp::Type::vqmovn | SimdOp::S16 | (0x1 << 7), dst, 0, args[0].arg);
