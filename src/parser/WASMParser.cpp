@@ -498,8 +498,8 @@ private:
     Walrus::Vector<uint8_t, std::allocator<uint8_t>> m_memoryInitData;
 
     uint32_t m_elementTableIndex;
-    Walrus::Optional<Walrus::ModuleFunction*> m_elementModuleFunction;
-    Walrus::Vector<uint32_t, std::allocator<uint32_t>> m_elementFunctionIndex;
+    Walrus::Optional<Walrus::ModuleFunction*> m_elementOffsetFunction;
+    Walrus::Vector<Walrus::ModuleFunction*> m_elementExprFunctions;
     Walrus::SegmentMode m_segmentMode;
 
     Walrus::WASMParsingResult m_result;
@@ -833,7 +833,7 @@ public:
     virtual void BeginElemSegment(Index index, Index tableIndex, uint8_t flags) override
     {
         m_elementTableIndex = tableIndex;
-        m_elementModuleFunction = nullptr;
+        m_elementOffsetFunction = nullptr;
         m_segmentMode = toSegmentMode(flags);
     }
 
@@ -844,7 +844,7 @@ public:
 
     virtual void EndElemSegmentInitExpr(Index index) override
     {
-        m_elementModuleFunction = m_currentFunction;
+        m_elementOffsetFunction = m_currentFunction;
         endFunction();
     }
 
@@ -854,29 +854,30 @@ public:
 
     virtual void OnElemSegmentElemExprCount(Index index, Index count) override
     {
-        m_elementFunctionIndex.reserve(count);
+        m_elementExprFunctions.reserve(count);
     }
 
-    virtual void OnElemSegmentElemExpr_RefNull(Index segmentIndex, Type type) override
+    virtual void BeginElemExpr(Index elem_index, Index expr_index) override
     {
-        m_elementFunctionIndex.push_back(std::numeric_limits<uint32_t>::max());
+        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::FuncRef)), true);
     }
 
-    virtual void OnElemSegmentElemExpr_RefFunc(Index segmentIndex, Index funcIndex) override
+    virtual void EndElemExpr(Index elem_index, Index expr_index) override
     {
-        m_elementFunctionIndex.push_back(funcIndex);
+        m_elementExprFunctions.push_back(m_currentFunction);
+        endFunction();
     }
 
     virtual void EndElemSegment(Index index) override
     {
         ASSERT(m_result.m_elements.size() == index);
-        if (m_elementModuleFunction) {
-            m_result.m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, m_elementModuleFunction.value(), std::move(m_elementFunctionIndex)));
+        if (m_elementOffsetFunction) {
+            m_result.m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, m_elementOffsetFunction.value(), std::move(m_elementExprFunctions)));
         } else {
-            m_result.m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, std::move(m_elementFunctionIndex)));
+            m_result.m_elements.push_back(new Walrus::Element(m_segmentMode, m_elementTableIndex, std::move(m_elementExprFunctions)));
         }
 
-        m_elementModuleFunction = nullptr;
+        m_elementOffsetFunction = nullptr;
         m_elementTableIndex = 0;
         m_segmentMode = Walrus::SegmentMode::None;
     }

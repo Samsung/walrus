@@ -28,7 +28,7 @@ static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize
     auto source = (context->instance->elementSegment(*(sljit_u32*)&context->tmp2));
 
     if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)table->size())
-        || UNLIKELY(!source.element() || (srcStart + srcSize) > source.element()->functionIndex().size())) {
+        || UNLIKELY(!source.element() || (srcStart + srcSize) > source.element()->exprFunctions().size())) {
         return ExecutionContext::OutOfBoundsTableAccessError;
     }
 

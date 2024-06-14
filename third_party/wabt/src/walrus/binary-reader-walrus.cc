@@ -1008,7 +1008,8 @@ public:
         return Result::Ok;
     }
     Result OnElemSegmentElemType(Index index, Type elem_type) override {
-        m_validator.OnElemSegmentElemType(elem_type);
+        m_lastInitType = elem_type;
+        CHECK_RESULT(m_validator.OnElemSegmentElemType(GetLocation(), elem_type));
         m_externalDelegate->OnElemSegmentElemType(index, elem_type);
         return Result::Ok;
     }
@@ -1016,25 +1017,21 @@ public:
         m_externalDelegate->OnElemSegmentElemExprCount(index, count);
         return Result::Ok;
     }
-    Result OnElemSegmentElemExpr_RefNull(Index segment_index, Type type) override {
-        CHECK_RESULT(m_validator.OnElemSegmentElemExpr_RefNull(GetLocation(), type));
-        if (m_currentElementTableIndex < m_tableTypes.size() && m_tableTypes[m_currentElementTableIndex] != type) {
-            m_errors.push_back(Error(ErrorLevel::Error, GetLocation(), "elem type mismatch"));
-            return ::wabt::Result::Error;
-        }
-        m_externalDelegate->OnElemSegmentElemExpr_RefNull(segment_index, type);
+    Result BeginElemExpr(Index elem_index, Index expr_index) override {
+        assert(m_lastInitType != Type::___);
+        CHECK_RESULT(m_validator.BeginInitExpr(GetLocation(), m_lastInitType));
+        PushLabel(LabelKind::Try);
+        m_externalDelegate->BeginElemExpr(elem_index, expr_index);
         return Result::Ok;
     }
-    Result OnElemSegmentElemExpr_RefFunc(Index segment_index, Index func_index) override {
-        CHECK_RESULT(m_validator.OnElemSegmentElemExpr_RefFunc(GetLocation(), Var(func_index, GetLocation())));
-        if (m_currentElementTableIndex < m_tableTypes.size() && m_tableTypes[m_currentElementTableIndex] != Type::FuncRef) {
-            m_errors.push_back(Error(ErrorLevel::Error, GetLocation(), "elem type mismatch"));
-            return ::wabt::Result::Error;
-        }
-        m_externalDelegate->OnElemSegmentElemExpr_RefFunc(segment_index, func_index);
+    Result EndElemExpr(Index elem_index, Index expr_index) override {
+        CHECK_RESULT(m_validator.EndInitExpr());
+        PopLabel();
+        m_externalDelegate->EndElemExpr(elem_index, expr_index);
         return Result::Ok;
     }
     Result EndElemSegment(Index index) override {
+        m_lastInitType = Type::___;
         m_externalDelegate->EndElemSegment(index);
         return Result::Ok;
     }

@@ -136,6 +136,7 @@ protected:
 class DefinedFunctionWithTryCatch : public DefinedFunction {
     friend class DefinedFunction;
     friend class Module;
+    friend class Table;
 
 public:
     virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
