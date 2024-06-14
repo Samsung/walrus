@@ -290,26 +290,30 @@ private:
 
 class Element {
 public:
-    Element(SegmentMode mode, uint32_t tableIndex, ModuleFunction* moduleFunction, Vector<uint32_t, std::allocator<uint32_t>>&& functionIndex)
+    Element(SegmentMode mode, uint32_t tableIndex, ModuleFunction* offsetFunction, Vector<ModuleFunction*>&& exprFunctions)
         : m_mode(mode)
         , m_tableIndex(tableIndex)
-        , m_moduleFunction(moduleFunction)
-        , m_functionIndex(std::move(functionIndex))
+        , m_offsetFunction(offsetFunction)
+        , m_exprFunctions(std::move(exprFunctions))
     {
     }
 
-    Element(SegmentMode mode, uint32_t tableIndex, Vector<uint32_t, std::allocator<uint32_t>>&& functionIndex)
+    Element(SegmentMode mode, uint32_t tableIndex, Vector<ModuleFunction*>&& exprFunctions)
         : m_mode(mode)
         , m_tableIndex(tableIndex)
-        , m_moduleFunction(nullptr)
-        , m_functionIndex(std::move(functionIndex))
+        , m_offsetFunction(nullptr)
+        , m_exprFunctions(std::move(exprFunctions))
     {
     }
 
     ~Element()
     {
-        if (m_moduleFunction) {
-            delete m_moduleFunction;
+        if (m_offsetFunction) {
+            delete m_offsetFunction;
+        }
+
+        for (size_t i = 0; i < m_exprFunctions.size(); i++) {
+            delete m_exprFunctions[i];
         }
     }
 
@@ -323,27 +327,27 @@ public:
         return m_tableIndex;
     }
 
-    bool hasModuleFunction() const
+    bool hasOffsetFunction() const
     {
-        return !!m_moduleFunction;
+        return !!m_offsetFunction;
     }
 
-    ModuleFunction* moduleFunction()
+    ModuleFunction* offsetFunction()
     {
-        ASSERT(hasModuleFunction());
-        return m_moduleFunction;
+        ASSERT(hasOffsetFunction());
+        return m_offsetFunction;
     }
 
-    const Vector<uint32_t, std::allocator<uint32_t>>& functionIndex() const
+    const Vector<ModuleFunction*>& exprFunctions() const
     {
-        return m_functionIndex;
+        return m_exprFunctions;
     }
 
 private:
     SegmentMode m_mode;
     uint32_t m_tableIndex;
-    ModuleFunction* m_moduleFunction;
-    Vector<uint32_t, std::allocator<uint32_t>> m_functionIndex;
+    ModuleFunction* m_offsetFunction;
+    Vector<ModuleFunction*> m_exprFunctions;
 };
 
 class Module : public Object {

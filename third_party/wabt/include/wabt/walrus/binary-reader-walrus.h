@@ -75,8 +75,8 @@ public:
     virtual void EndElemSegmentInitExpr(Index index) = 0;
     virtual void OnElemSegmentElemType(Index index, Type elemType) = 0;
     virtual void OnElemSegmentElemExprCount(Index index, Index count) = 0;
-    virtual void OnElemSegmentElemExpr_RefNull(Index segmentIndex, Type type) = 0;
-    virtual void OnElemSegmentElemExpr_RefFunc(Index segmentIndex, Index funcIndex) = 0;
+    virtual void BeginElemExpr(Index elem_index, Index expr_index) = 0;
+    virtual void EndElemExpr(Index elem_index, Index expr_index) = 0;
     virtual void EndElemSegment(Index index) = 0;
 
     virtual void OnFunctionCount(Index count) = 0;

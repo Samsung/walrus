@@ -20,6 +20,7 @@
 #include "runtime/Trap.h"
 #include "runtime/Instance.h"
 #include "runtime/Module.h"
+#include "runtime/Function.h"
 
 namespace Walrus {
 
@@ -44,7 +45,7 @@ void Table::init(ExecutionState& state, Instance* instance, ElementSegment* sour
     if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)m_size)) {
         throwException(state);
     }
-    if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->functionIndex().size())) {
+    if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->exprFunctions().size())) {
         throwException(state);
     }
     if (UNLIKELY(m_type != Value::Type::FuncRef)) {
@@ -79,17 +80,28 @@ void Table::throwException(ExecutionState& state) const
 
 void Table::initTable(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
-    const auto& f = source->element()->functionIndex();
+    const auto& exprs = source->element()->exprFunctions();
     uint32_t end = dstStart + srcSize;
 
     for (uint32_t i = dstStart; i < end; i++) {
-        auto idx = f[srcStart++];
+        ModuleFunction* exprFunc = exprs[srcStart++];
 
-        if (idx != std::numeric_limits<uint32_t>::max()) {
-            m_elements[i] = instance->function(idx);
-        } else {
-            m_elements[i] = reinterpret_cast<void*>(Value::NullBits);
-        }
+        struct RunData {
+            Instance* instance;
+            ModuleFunction* exprFunc;
+            Function* func;
+        } data = { instance, exprFunc, nullptr };
+        Walrus::Trap trap;
+        trap.run([](Walrus::ExecutionState& state, void* d) {
+            RunData* data = reinterpret_cast<RunData*>(d);
+            DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
+            Value func;
+            fakeFunction.call(state, nullptr, &func);
+            data->func = func.asFunction();
+        },
+                 &data);
+
+        m_elements[i] = data.func;
     }
 }
 

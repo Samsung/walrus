@@ -262,36 +262,47 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         instance->m_elementSegments[i] = ElementSegment(elem);
 
         if (elem->mode() == SegmentMode::Active) {
-            uint32_t index = 0;
-            if (elem->hasModuleFunction()) {
+            uint32_t offset = 0;
+            if (elem->hasOffsetFunction()) {
                 struct RunData {
-                    Element* elem;
                     Instance* instance;
-                    uint32_t& index;
-                } data = { elem, instance, index };
+                    ModuleFunction* offsetFunc;
+                    uint32_t& offset;
+                } data = { instance, elem->offsetFunction(), offset };
                 Walrus::Trap trap;
                 trap.run([](Walrus::ExecutionState& state, void* d) {
                     RunData* data = reinterpret_cast<RunData*>(d);
-                    DefinedFunctionWithTryCatch fakeFunction(data->instance, data->elem->moduleFunction());
+                    DefinedFunctionWithTryCatch fakeFunction(data->instance, data->offsetFunc);
                     Value offset;
                     fakeFunction.call(state, nullptr, &offset);
-                    data->index = offset.asI32();
+                    data->offset = offset.asI32();
                 },
                          &data);
             }
 
-            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || index + elem->functionIndex().size() > instance->m_tables[elem->tableIndex()]->size())) {
+            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || offset + elem->exprFunctions().size() > instance->m_tables[elem->tableIndex()]->size())) {
                 Trap::throwException(state, "out of bounds table access");
             }
 
-            const auto& fi = elem->functionIndex();
+            const auto& exprs = elem->exprFunctions();
             Table* table = instance->m_tables[elem->tableIndex()];
-            for (size_t i = 0; i < fi.size(); i++) {
-                if (fi[i] != std::numeric_limits<uint32_t>::max()) {
-                    table->setElement(state, i + index, instance->m_functions[fi[i]]);
-                } else {
-                    table->setElement(state, i + index, reinterpret_cast<void*>(Value::NullBits));
-                }
+            for (size_t i = 0; i < exprs.size(); i++) {
+                struct RunData {
+                    Instance* instance;
+                    ModuleFunction* exprFunc;
+                    Function* func;
+                } data = { instance, exprs[i], nullptr };
+                Walrus::Trap trap;
+                trap.run([](Walrus::ExecutionState& state, void* d) {
+                    RunData* data = reinterpret_cast<RunData*>(d);
+                    DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
+                    Value func;
+                    fakeFunction.call(state, nullptr, &func);
+                    data->func = func.asFunction();
+                },
+                         &data);
+
+                table->setElement(state, i + offset, data.func);
             }
 
             instance->m_elementSegments[i].drop();
