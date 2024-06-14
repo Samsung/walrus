@@ -257,7 +257,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)              \
     OL4(OTOp2V128Tmp, /* SSDT */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0, V128) \
     OL3(OTOp2V128Rev, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)        \
-    OL3(OTShuffleV128, /* SSDT */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0)    \
+    OL3(OTShuffleV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0)     \
+    OL3(OTPopcntV128, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)              \
     OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                \
     OL4(OTShiftV128Tmp, /* SSDT */ V128 | NOTMP, I32, V128 | TMP | S0, V128)
 
@@ -281,6 +282,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTOp2V128Tmp OTOp2V128
 #define OTOp2V128Rev OTOp2V128
 #define OTMinMaxV128 OTOp2V128
+#define OTPopcntV128 OTOp1V128
 #define OTSwizzleV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
 
@@ -299,6 +301,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTOp2V128Tmp OTOp2V128
 #define OTOp2V128Rev OTOp2V128
 #define OTPMinMaxV128 OTOp2V128
+#define OTPopcntV128 OTOp1V128
 #define OTShiftV128Tmp OTShiftV128
 
 #endif /* SLJIT_CONFIG_ARM */
@@ -1621,6 +1624,11 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I8X16GtUOpcode:
         case ByteCode::I8X16GeSOpcode:
         case ByteCode::I8X16GeUOpcode:
+        case ByteCode::I8X16MinSOpcode:
+        case ByteCode::I8X16MinUOpcode:
+        case ByteCode::I8X16MaxSOpcode:
+        case ByteCode::I8X16MaxUOpcode:
+        case ByteCode::I8X16AvgrUOpcode:
         case ByteCode::I8X16NarrowI16X8SOpcode:
         case ByteCode::I8X16NarrowI16X8UOpcode:
         case ByteCode::I16X8AddOpcode:
@@ -1754,6 +1762,7 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::I8X16NegOpcode:
+        case ByteCode::I8X16AbsOpcode:
         case ByteCode::I16X8NegOpcode:
         case ByteCode::I16X8AbsOpcode:
         case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
@@ -1774,6 +1783,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32X4TruncSatF64X2SZeroOpcode:
         case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
         case ByteCode::I64X2NegOpcode:
+        case ByteCode::I64X2AbsOpcode:
         case ByteCode::I64X2ExtendLowI32X4SOpcode:
         case ByteCode::I64X2ExtendHighI32X4SOpcode:
         case ByteCode::I64X2ExtendLowI32X4UOpcode:
@@ -1849,6 +1859,12 @@ static void compileFunction(JITCompiler* compiler)
             group = Instruction::ShiftSIMD;
             paramCount = 2;
             requiredInit = OTShiftV128Tmp;
+            break;
+        }
+        case ByteCode::I8X16PopcntOpcode: {
+            group = Instruction::UnarySIMD;
+            paramCount = 1;
+            requiredInit = OTPopcntV128;
             break;
         }
         case ByteCode::V128BitSelectOpcode: {

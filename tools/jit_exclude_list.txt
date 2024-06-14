@@ -1,2 +1,0 @@
-simd_i8x16_arith2.wast
-simd_i64x2_arith2.wast
