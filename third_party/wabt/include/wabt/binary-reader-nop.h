@@ -273,7 +273,7 @@ class BinaryReaderNop : public BinaryReaderDelegate {
   Result OnLocalSetExpr(Index local_index) override { return Result::Ok; }
   Result OnLocalTeeExpr(Index local_index) override { return Result::Ok; }
   Result OnLoopExpr(Type sig_type) override { return Result::Ok; }
-  Result OnMemoryCopyExpr(Index srcmemidx, Index destmemidx) override {
+  Result OnMemoryCopyExpr(Index destmemidx, Index srcmemidx) override {
     return Result::Ok;
   }
   Result OnDataDropExpr(Index segment_index) override { return Result::Ok; }
@@ -519,6 +519,15 @@ class BinaryReaderNop : public BinaryReaderDelegate {
   }
   Result EndTargetFeaturesSection() override { return Result::Ok; }
 
+  /* Generic custom section */
+  Result BeginGenericCustomSection(Offset size) override { return Result::Ok; }
+  Result OnGenericCustomSection(nonstd::string_view name,
+                                const void* data,
+                                Offset size) override {
+    return Result::Ok;
+  };
+  Result EndGenericCustomSection() override { return Result::Ok; }
+
   /* Linking section */
   Result BeginLinkingSection(Offset size) override { return Result::Ok; }
   Result OnSymbolCount(Index count) override { return Result::Ok; }
@@ -567,7 +576,7 @@ class BinaryReaderNop : public BinaryReaderDelegate {
     return Result::Ok;
   }
   Result OnInitFunctionCount(Index count) override { return Result::Ok; }
-  Result OnInitFunction(uint32_t priority, Index function_index) override {
+  Result OnInitFunction(uint32_t priority, Index symbol_index) override {
     return Result::Ok;
   }
   Result OnComdatCount(Index count) override { return Result::Ok; }

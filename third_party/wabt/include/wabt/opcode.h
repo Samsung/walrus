@@ -69,14 +69,6 @@ struct Opcode {
   Type GetParamType(int n) const { return GetInfo().param_types[n - 1]; }
   Address GetMemorySize() const { return GetInfo().memory_size; }
 
-  // If this is a load/store op, the type depends on the memory used.
-  Type GetMemoryParam(Type param,
-                      const Limits* limits,
-                      bool has_address_operands) {
-    return limits && limits->is_64 && has_address_operands ? Type(Type::I64)
-                                                           : param;
-  }
-
   // Get the byte sequence for this opcode, including prefix.
   std::vector<uint8_t> GetBytes() const;
 
@@ -99,9 +91,9 @@ struct Opcode {
   bool IsInvalid() const { return enum_ >= Invalid; }
 
  private:
-  static const uint32_t kMathPrefix = 0xfc;
-  static const uint32_t kThreadsPrefix = 0xfe;
-  static const uint32_t kSimdPrefix = 0xfd;
+  static constexpr uint32_t kMathPrefix = 0xfc;
+  static constexpr uint32_t kThreadsPrefix = 0xfe;
+  static constexpr uint32_t kSimdPrefix = 0xfd;
 
   struct Info {
     const char* name;
@@ -115,12 +107,11 @@ struct Opcode {
   };
 
   static uint32_t PrefixCode(uint8_t prefix, uint32_t code) {
-    // For now, 8 bits is enough for all codes.
-    if (code >= 0x100) {
-      // Clamp to 0xff, since we know that it is an invalid code.
-      code = 0xff;
+    if (code >= (1 << MAX_OPCODE_BITS)) {
+      // Clamp to (2^bits - 1), since we know that it is an invalid code.
+      code = (1 << MAX_OPCODE_BITS) - 1;
     }
-    return (prefix << 8) | code;
+    return (prefix << MAX_OPCODE_BITS) | code;
   }
 
   // The Opcode struct only stores an enumeration (Opcode::Enum) of all valid
@@ -145,7 +136,7 @@ struct Opcode {
                                   uint8_t* out_prefix,
                                   uint32_t* out_code) {
     uint32_t prefix_code = ~static_cast<uint32_t>(e) + 1;
-    *out_prefix = prefix_code >> 8;
+    *out_prefix = prefix_code >> MAX_OPCODE_BITS;
     *out_code = prefix_code & 0xff;
   }
 

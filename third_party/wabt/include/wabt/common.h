@@ -83,7 +83,6 @@
 #define PRIoffset PRIzx
 
 namespace wabt {
-#if WABT_BIG_ENDIAN
 inline void MemcpyEndianAware(void* dst,
                               const void* src,
                               size_t dsize,
@@ -91,21 +90,14 @@ inline void MemcpyEndianAware(void* dst,
                               size_t doff,
                               size_t soff,
                               size_t len) {
+#if WABT_BIG_ENDIAN
   memcpy(static_cast<char*>(dst) + (dsize) - (len) - (doff),
          static_cast<const char*>(src) + (ssize) - (len) - (soff), (len));
-}
 #else
-inline void MemcpyEndianAware(void* dst,
-                              const void* src,
-                              size_t dsize,
-                              size_t ssize,
-                              size_t doff,
-                              size_t soff,
-                              size_t len) {
   memcpy(static_cast<char*>(dst) + (doff),
          static_cast<const char*>(src) + (soff), (len));
-}
 #endif
+}
 }
 
 struct v128 {
@@ -173,16 +165,11 @@ Dst WABT_VECTORCALL Bitcast(Src&& value) {
   return result;
 }
 
-/*
-This function caused build problems on windows,
-probably because libuv implements a function with the same name.
-
 template <typename T>
 void ZeroMemory(T& v) {
-  WABT_STATIC_ASSERT(std::is_pod<T>::value);
+  WABT_STATIC_ASSERT(std::is_trivial<T>::value);
   memset(&v, 0, sizeof(v));
 }
-*/
 
 // Placement construct
 template <typename T, typename... Args>
@@ -209,7 +196,7 @@ enum class LabelType {
   First = Func,
   Last = Catch,
 };
-static const int kLabelTypeCount = WABT_ENUM_COUNT(LabelType);
+constexpr int kLabelTypeCount = WABT_ENUM_COUNT(LabelType);
 
 struct Location {
   enum class Type {
@@ -296,7 +283,7 @@ enum class RelocType {
   First = FuncIndexLEB,
   Last = MemoryAddressTLSI32,
 };
-static const int kRelocTypeCount = WABT_ENUM_COUNT(RelocType);
+constexpr int kRelocTypeCount = WABT_ENUM_COUNT(RelocType);
 
 struct Reloc {
   Reloc(RelocType, size_t offset, Index index, int32_t addend = 0);
@@ -342,10 +329,12 @@ enum class ComdatType {
 #define WABT_SYMBOL_FLAG_EXPLICIT_NAME 0x40
 #define WABT_SYMBOL_FLAG_NO_STRIP 0x80
 #define WABT_SYMBOL_FLAG_TLS 0x100
-#define WABT_SYMBOL_FLAG_MAX 0x1ff
+#define WABT_SYMBOL_FLAG_ABS 0x200
+#define WABT_SYMBOL_FLAG_MAX 0x3ff
 
 #define WABT_SEGMENT_FLAG_STRINGS 0x1
 #define WABT_SEGMENT_FLAG_TLS 0x2
+#define WASM_SEGMENT_FLAG_RETAIN 0x4
 #define WABT_SEGMENT_FLAG_MAX 0xff
 
 enum class SymbolVisibility {
@@ -370,7 +359,7 @@ enum class ExternalKind {
   First = Func,
   Last = Tag,
 };
-static const int kExternalKindCount = WABT_ENUM_COUNT(ExternalKind);
+constexpr int kExternalKindCount = WABT_ENUM_COUNT(ExternalKind);
 
 struct Limits {
   Limits() = default;
@@ -404,7 +393,7 @@ void InitStdio();
 
 extern const char* g_kind_name[];
 
-static WABT_INLINE const char* GetKindName(ExternalKind kind) {
+static inline const char* GetKindName(ExternalKind kind) {
   return static_cast<size_t>(kind) < kExternalKindCount
              ? g_kind_name[static_cast<size_t>(kind)]
              : "<error_kind>";
@@ -414,7 +403,7 @@ static WABT_INLINE const char* GetKindName(ExternalKind kind) {
 
 extern const char* g_reloc_type_name[];
 
-static WABT_INLINE const char* GetRelocTypeName(RelocType reloc) {
+static inline const char* GetRelocTypeName(RelocType reloc) {
   return static_cast<size_t>(reloc) < kRelocTypeCount
              ? g_reloc_type_name[static_cast<size_t>(reloc)]
              : "<error_reloc_type>";
@@ -422,7 +411,7 @@ static WABT_INLINE const char* GetRelocTypeName(RelocType reloc) {
 
 /* symbol */
 
-static WABT_INLINE const char* GetSymbolTypeName(SymbolType type) {
+static inline const char* GetSymbolTypeName(SymbolType type) {
   switch (type) {
     case SymbolType::Function:
       return "func";

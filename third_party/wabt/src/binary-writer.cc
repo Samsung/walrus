@@ -96,7 +96,7 @@ namespace {
 
 /* TODO(binji): better leb size guess. Some sections we know will only be 1
  byte, but others we can be fairly certain will be larger. */
-static const size_t LEB_SECTION_SIZE_GUESS = 1;
+constexpr size_t LEB_SECTION_SIZE_GUESS = 1;
 
 #define ALLOC_FAILURE \
   fprintf(stderr, "%s:%d: allocation failed\n", __FILE__, __LINE__)
@@ -370,8 +370,8 @@ struct FuncCodeMetadata {
 struct CodeMetadataSection {
   std::vector<FuncCodeMetadata> entries;
 };
-typedef std::unordered_map<nonstd::string_view, CodeMetadataSection>
-    CodeMetadataSections;
+using CodeMetadataSections =
+    std::unordered_map<nonstd::string_view, CodeMetadataSection>;
 
 class BinaryWriter {
   WABT_DISALLOW_COPY_AND_ASSIGN(BinaryWriter);
@@ -455,8 +455,8 @@ class BinaryWriter {
   bool has_data_segment_instruction_ = false;
 
   CodeMetadataSections code_metadata_sections_;
-  Offset cur_func_start_offset_ = 0;
-  Index cur_func_index_ = 0;
+  Offset cur_func_start_offset_;
+  Index cur_func_index_;
 };
 
 static uint8_t log2_u32(uint32_t x) {
@@ -694,7 +694,7 @@ void BinaryWriter::WriteLoadStoreExpr(const Func* func,
   } else {
     stream_->WriteU8(log2_u32(align), "alignment");
   }
-  WriteU32Leb128(stream_, typed_expr->offset, desc);
+  WriteU64Leb128(stream_, typed_expr->offset, desc);
 }
 
 template <typename T>
@@ -893,13 +893,13 @@ void BinaryWriter::WriteExpr(const Func* func, const Expr* expr) {
       WriteOpcode(stream_, Opcode::End);
       break;
     case ExprType::MemoryCopy: {
-      Index srcmemidx =
-          module_->GetMemoryIndex(cast<MemoryCopyExpr>(expr)->srcmemidx);
       Index destmemidx =
           module_->GetMemoryIndex(cast<MemoryCopyExpr>(expr)->destmemidx);
+      Index srcmemidx =
+          module_->GetMemoryIndex(cast<MemoryCopyExpr>(expr)->srcmemidx);
       WriteOpcode(stream_, Opcode::MemoryCopy);
-      WriteU32Leb128(stream_, srcmemidx, "memory.copy srcmemidx");
       WriteU32Leb128(stream_, destmemidx, "memory.copy destmemidx");
+      WriteU32Leb128(stream_, srcmemidx, "memory.copy srcmemidx");
       break;
     }
     case ExprType::DataDrop: {
@@ -1667,6 +1667,23 @@ Result BinaryWriter::WriteModule() {
       WriteHeader("data segment data", i);
       stream_->WriteData(segment->data, "data segment data");
     }
+    EndSection();
+  }
+
+  for (const Custom& custom : module_->customs) {
+    // These custom sections are already specially handled by BinaryWriter, so
+    // we don't want to double-write.
+    if ((custom.name == WABT_BINARY_SECTION_NAME &&
+         options_.write_debug_names) ||
+        (custom.name.rfind(WABT_BINARY_SECTION_RELOC) == 0 &&
+         options_.relocatable) ||
+        (custom.name == WABT_BINARY_SECTION_LINKING && options_.relocatable) ||
+        (custom.name.find(WABT_BINARY_SECTION_CODE_METADATA) == 0 &&
+         options_.features.code_metadata_enabled())) {
+      continue;
+    }
+    BeginCustomSection(custom.name.data());
+    stream_->WriteData(custom.data, "custom data");
     EndSection();
   }
 

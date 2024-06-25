@@ -28,7 +28,7 @@ namespace wabt {
 
 class TypeChecker {
  public:
-  typedef std::function<void(const char* msg)> ErrorCallback;
+  using ErrorCallback = std::function<void(const char* msg)>;
 
   struct Label {
     Label(LabelType,
@@ -99,7 +99,7 @@ class TypeChecker {
   Result OnLocalSet(Type);
   Result OnLocalTee(Type);
   Result OnLoop(const TypeVector& param_types, const TypeVector& result_types);
-  Result OnMemoryCopy(const Limits& limits);
+  Result OnMemoryCopy(const Limits& dstlimits, const Limits& srclimits);
   Result OnDataDrop(Index);
   Result OnMemoryFill(const Limits& limits);
   Result OnMemoryGrow(const Limits& limits);
@@ -113,7 +113,7 @@ class TypeChecker {
   Result OnTableGrow(Type elem_type);
   Result OnTableSize();
   Result OnTableFill(Type elem_type);
-  Result OnRefFuncExpr(Index func_type);
+  Result OnRefFuncExpr(Index func_type, bool force_generic_funcref);
   Result OnRefNullExpr(Type type);
   Result OnRefIsNullExpr();
   Result OnRethrow(Index depth);
@@ -171,9 +171,7 @@ class TypeChecker {
                            Type expected2,
                            Type expected3,
                            const char* desc);
-  Result CheckOpcode1(Opcode opcode,
-                      const Limits* limits = nullptr,
-                      bool has_address_operands = false);
+  Result CheckOpcode1(Opcode opcode, const Limits* limits = nullptr);
   Result CheckOpcode2(Opcode opcode, const Limits* limits = nullptr);
   Result CheckOpcode3(Opcode opcode,
                       const Limits* limits1 = nullptr,

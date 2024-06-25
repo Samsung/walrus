@@ -480,27 +480,27 @@ public:
         return Result::Ok;
     }
     Result OnAtomicLoadExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnAtomicLoad(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnAtomicLoad(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         abort();
         return Result::Ok;
     }
     Result OnAtomicStoreExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnAtomicStore(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnAtomicStore(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         abort();
         return Result::Ok;
     }
     Result OnAtomicRmwExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnAtomicRmw(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnAtomicRmw(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         abort();
         return Result::Ok;
     }
     Result OnAtomicRmwCmpxchgExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnAtomicRmwCmpxchg(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnAtomicRmwCmpxchg(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         abort();
         return Result::Ok;
     }
     Result OnAtomicWaitExpr(Opcode opcode, Index memidx, Address align_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnAtomicWait(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(align_log2)));
+        CHECK_RESULT(m_validator.OnAtomicWait(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(align_log2), offset));
         abort();
         return Result::Ok;
     }
@@ -510,7 +510,7 @@ public:
         return Result::Ok;
     }
     Result OnAtomicNotifyExpr(Opcode opcode, Index memidx, Address align_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnAtomicNotify(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(align_log2)));
+        CHECK_RESULT(m_validator.OnAtomicNotify(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(align_log2), offset));
         abort();
         return Result::Ok;
     }
@@ -696,7 +696,7 @@ public:
         return Result::Ok;
     }
     Result OnLoadExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnLoad(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnLoad(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLoadExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
@@ -888,7 +888,7 @@ public:
         return Result::Ok;
     }
     Result OnStoreExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnStore(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnStore(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnStoreExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
@@ -947,13 +947,13 @@ public:
         return alignment_log2 < 32 ? 1 << alignment_log2 : ~0u;
     }
     Result OnSimdLoadLaneExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override {
-        CHECK_RESULT(m_validator.OnSimdLoadLane(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), value));
+        CHECK_RESULT(m_validator.OnSimdLoadLane(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset, value));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnSimdLoadLaneExpr(opcode, memidx, alignment_log2, offset, value);
         return Result::Ok;
     }
     Result OnSimdStoreLaneExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override {
-        CHECK_RESULT(m_validator.OnSimdStoreLane(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), value));
+        CHECK_RESULT(m_validator.OnSimdStoreLane(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset, value));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnSimdStoreLaneExpr(opcode, memidx, alignment_log2, offset, value);
         return Result::Ok;
@@ -965,13 +965,13 @@ public:
         return Result::Ok;
     }
     Result OnLoadSplatExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnLoadSplat(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnLoadSplat(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLoadSplatExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
     }
     Result OnLoadZeroExpr(Opcode opcode, Index memidx, Address alignment_log2, Address offset) override {
-        CHECK_RESULT(m_validator.OnLoadZero(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2)));
+        CHECK_RESULT(m_validator.OnLoadZero(GetLocation(), opcode, Var(memidx, GetLocation()), GetAlignment(alignment_log2), offset));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnLoadZeroExpr(opcode, memidx, alignment_log2, offset);
         return Result::Ok;
@@ -1261,6 +1261,17 @@ public:
     }
     Result EndTargetFeaturesSection() override {
         abort();
+        return Result::Ok;
+    }
+
+    /* Generic custom section */
+    Result BeginGenericCustomSection(Offset size) override {
+        return Result::Ok;
+    }
+    Result OnGenericCustomSection(nonstd::string_view name, const void* data, Offset size) override {
+        return Result::Ok;
+    }
+    Result EndGenericCustomSection() override {
         return Result::Ok;
     }
 

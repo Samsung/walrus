@@ -42,13 +42,13 @@ public:
 
     T& value()
     {
-        ASSERT(m_hasValue);
+        assert(m_hasValue);
         return m_value;
     }
 
     const T& value() const
     {
-        ASSERT(m_hasValue);
+        assert(m_hasValue);
         return m_value;
     }
 
@@ -124,13 +124,13 @@ public:
 
     T* value()
     {
-        ASSERT(hasValue());
+        assert(hasValue());
         return m_value;
     }
 
     const T* value() const
     {
-        ASSERT(hasValue());
+        assert(hasValue());
         return m_value;
     }
 
@@ -142,13 +142,13 @@ public:
 
     T* operator->()
     {
-        ASSERT(hasValue());
+        assert(hasValue());
         return m_value;
     }
 
     const T* operator->() const
     {
-        ASSERT(hasValue());
+        assert(hasValue());
         return m_value;
     }
 
