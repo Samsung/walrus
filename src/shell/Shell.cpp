@@ -696,13 +696,10 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
 
 static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes)
 {
-    auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size());
-    if (lexer == nullptr) {
-        printf("Error during lexer initialization!\n");
-        RELEASE_ASSERT_NOT_REACHED();
-    }
-
     wabt::Errors errors;
+    auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size(), &errors);
+    ASSERT(lexer);
+
     std::unique_ptr<wabt::Script> script;
     wabt::Features features;
     features.EnableAll();
@@ -748,17 +745,17 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
-                executeInvokeAction(action, fn, assertReturn->expected, nullptr);
+                executeInvokeAction(action, fn, assertReturn->expected->expected, nullptr);
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
                 auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
                 auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(action->name)->value();
-                if (!equals(v, assertReturn->expected[0])) {
+                if (!equals(v, assertReturn->expected->expected[0])) {
                     printf("Assert failed.\n");
                     RELEASE_ASSERT_NOT_REACHED();
                 }
                 printf("get %s", action->name.data());
                 printf(" expect value(");
-                printConstVector(assertReturn->expected);
+                printConstVector(assertReturn->expected->expected);
                 printf(") (line: %d) : OK\n", action->loc.line);
             } else {
                 printf("Not supported action type.\n");

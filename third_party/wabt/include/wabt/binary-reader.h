@@ -17,8 +17,8 @@
 #ifndef WABT_BINARY_READER_H_
 #define WABT_BINARY_READER_H_
 
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 #include "string-view-lite/string_view.h"
 
 #include "wabt/binary.h"
@@ -188,11 +188,13 @@ class BinaryReaderDelegate {
   virtual Result BeginFunctionBody(Index index, Offset size) = 0;
   virtual Result OnLocalDeclCount(Index count) = 0;
   virtual Result OnLocalDecl(Index decl_index, Index count, Type type) = 0;
-  virtual Result OnStartReadInstructions(Offset start, Offset end) { return Result::Ok; }
 
+  /* Preprocess */
+  // FIXME remove preprocess
   virtual bool NeedsPreprocess() { return false; }
   virtual Result OnStartPreprocess() { return Result::Ok; }
   virtual Result OnEndPreprocess() { return Result::Ok; }
+  virtual Result OnStartReadInstructions(Offset start, Offset end) { return Result::Ok; }
 
   /* Function expressions; called between BeginFunctionBody and
    EndFunctionBody */
@@ -274,7 +276,7 @@ class BinaryReaderDelegate {
   virtual Result OnLocalSetExpr(Index local_index) = 0;
   virtual Result OnLocalTeeExpr(Index local_index) = 0;
   virtual Result OnLoopExpr(Type sig_type) = 0;
-  virtual Result OnMemoryCopyExpr(Index srcmemidx, Index destmemidx) = 0;
+  virtual Result OnMemoryCopyExpr(Index destmemidx, Index srcmemidx) = 0;
   virtual Result OnDataDropExpr(Index segment_index) = 0;
   virtual Result OnMemoryFillExpr(Index memidx) = 0;
   virtual Result OnMemoryGrowExpr(Index memidx) = 0;
@@ -429,6 +431,13 @@ class BinaryReaderDelegate {
   virtual Result OnFeature(uint8_t prefix, nonstd::string_view name) = 0;
   virtual Result EndTargetFeaturesSection() = 0;
 
+  /* Generic custom section */
+  virtual Result BeginGenericCustomSection(Offset size) = 0;
+  virtual Result OnGenericCustomSection(nonstd::string_view name,
+                                        const void* data,
+                                        Offset size) = 0;
+  virtual Result EndGenericCustomSection() = 0;
+
   /* Linking section */
   virtual Result BeginLinkingSection(Offset size) = 0;
   virtual Result OnSymbolCount(Index count) = 0;
@@ -463,7 +472,7 @@ class BinaryReaderDelegate {
                                Address alignment_log2,
                                uint32_t flags) = 0;
   virtual Result OnInitFunctionCount(Index count) = 0;
-  virtual Result OnInitFunction(uint32_t priority, Index function_index) = 0;
+  virtual Result OnInitFunction(uint32_t priority, Index symbol_index) = 0;
   virtual Result OnComdatCount(Index count) = 0;
   virtual Result OnComdatBegin(nonstd::string_view name,
                                uint32_t flags,

@@ -200,7 +200,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result OnLocalSetExpr(Index local_index) override;
   Result OnLocalTeeExpr(Index local_index) override;
   Result OnLoopExpr(Type sig_type) override;
-  Result OnMemoryCopyExpr(Index srcmemidx, Index destmemidx) override;
+  Result OnMemoryCopyExpr(Index destmemidx, Index srcmemidx) override;
   Result OnDataDropExpr(Index segment_index) override;
   Result OnMemoryFillExpr(Index memidx) override;
   Result OnMemoryGrowExpr(Index memidx) override;
@@ -346,6 +346,12 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result OnDylinkExport(nonstd::string_view name, uint32_t flags) override;
   Result EndDylinkSection() override;
 
+  Result BeginGenericCustomSection(Offset size) override;
+  Result OnGenericCustomSection(nonstd::string_view name,
+                                const void* data,
+                                Offset size) override;
+  Result EndGenericCustomSection() override;
+
   Result BeginTargetFeaturesSection(Offset size) override;
   Result OnFeatureCount(Index count) override;
   Result OnFeature(uint8_t prefix, nonstd::string_view name) override;
@@ -384,7 +390,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
                        Address alignment,
                        uint32_t flags) override;
   Result OnInitFunctionCount(Index count) override;
-  Result OnInitFunction(uint32_t priority, Index function_index) override;
+  Result OnInitFunction(uint32_t priority, Index symbol_index) override;
   Result OnComdatCount(Index count) override;
   Result OnComdatBegin(nonstd::string_view name,
                        uint32_t flags,

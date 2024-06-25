@@ -651,12 +651,10 @@ void Var::Destroy() {
 uint8_t ElemSegment::GetFlags(const Module* module) const {
   uint8_t flags = 0;
 
-  bool all_ref_func = elem_type == Type::FuncRef;
-
   switch (kind) {
     case SegmentKind::Active: {
       Index table_index = module->GetTableIndex(table_var);
-      if (table_index != 0) {
+      if (elem_type != Type::FuncRef || table_index != 0) {
         flags |= SegExplicitIndex;
       }
       break;
@@ -671,23 +669,15 @@ uint8_t ElemSegment::GetFlags(const Module* module) const {
       break;
   }
 
-  all_ref_func =
-      all_ref_func &&
+  bool all_ref_func =
+      elem_type == Type::FuncRef &&
       std::all_of(elem_exprs.begin(), elem_exprs.end(),
                   [](const ExprList& elem_expr) {
                     return elem_expr.front().type() == ExprType::RefFunc;
                   });
+
   if (!all_ref_func) {
     flags |= SegUseElemExprs;
-    /* WALRUS fix
-    ;; example case
-    (module
-      (table $t 2 externref)
-      (elem (i32.const 0) externref (ref.null extern))
-    ) */
-    if (~flags & SegPassive) {
-        flags |= SegExplicitIndex;
-    }
   }
 
   return flags;

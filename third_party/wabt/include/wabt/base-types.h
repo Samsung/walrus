@@ -17,18 +17,18 @@
 #ifndef WABT_BASE_TYPES_H_
 #define WABT_BASE_TYPES_H_
 
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 
 namespace wabt {
 
-typedef uint32_t Index;    // An index into one of the many index spaces.
-typedef uint64_t Address;  // An address or size in linear memory.
-typedef size_t Offset;     // An offset into a host's file or memory buffer.
+using Index = uint32_t;    // An index into one of the many index spaces.
+using Address = uint64_t;  // An address or size in linear memory.
+using Offset = size_t;     // An offset into a host's file or memory buffer.
 
-static const Address kInvalidAddress = ~0;
-static const Index kInvalidIndex = ~0;
-static const Offset kInvalidOffset = ~0;
+constexpr Address kInvalidAddress = ~0;
+constexpr Index kInvalidIndex = ~0;
+constexpr Offset kInvalidOffset = ~0;
 
 }  // namespace wabt
 

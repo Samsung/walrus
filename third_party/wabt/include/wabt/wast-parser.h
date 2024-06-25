@@ -18,14 +18,17 @@
 #define WABT_WAST_PARSER_H_
 
 #include <array>
+#include <memory>
 #include <unordered_map>
 
-#include "wabt/circular-array.h"
 #include "wabt/error.h"
 #include "wabt/feature.h"
 #include "wabt/intrusive-list.h"
 #include "wabt/ir.h"
 #include "wabt/wast-lexer.h"
+
+// include Walrus's Optional
+#include "../../../../src/util/Optional.h"
 
 namespace wabt {
 
@@ -36,7 +39,7 @@ struct WastParseOptions {
   bool debug_parsing = false;
 };
 
-typedef std::array<TokenType, 2> TokenTypePair;
+using TokenTypePair = std::array<TokenType, 2>;
 
 class WastParser {
  public:
@@ -114,7 +117,7 @@ class WastParser {
   // token (used for printing better error messages).
   void ConsumeIfLpar() { Match(TokenType::Lpar); }
 
-  typedef bool SynchronizeFunc(TokenTypePair pair);
+  using SynchronizeFunc = bool(*)(TokenTypePair pair);
 
   // Attempt to synchronize the token stream by dropping tokens until the
   // SynchronizeFunc returns true, or until a token limit is reached. This
@@ -162,6 +165,9 @@ class WastParser {
   Result ParseStartModuleField(Module*);
   Result ParseTableModuleField(Module*);
 
+  Result ParseCustomSectionAnnotation(Module*);
+  bool PeekIsCustom();
+
   Result ParseExportDesc(Export*);
   Result ParseInlineExports(ModuleFieldList*, ExternalKind);
   Result ParseInlineImport(Import*);
@@ -186,6 +192,8 @@ class WastParser {
   Result ParseF32(Const*, ConstType type);
   Result ParseF64(Const*, ConstType type);
   Result ParseConst(Const*, ConstType type);
+  Result ParseExpectedValues(ExpectationPtr*);
+  Result ParseEither(ConstVector*);
   Result ParseExternref(Const*);
   Result ParseExpectedNan(ExpectedNan* expected);
   Result ParseConstList(ConstVector*, ConstType type);
@@ -249,13 +257,28 @@ class WastParser {
   Result ParseSimdV128Const(Const*, TokenType, ConstType);
 
   void CheckImportOrdering(Module*);
+  bool HasError() const;
 
   WastLexer* lexer_;
   Index last_module_index_ = kInvalidIndex;
   Errors* errors_;
   WastParseOptions* options_;
 
-  CircularArray<Token, 2> tokens_;
+  // two-element queue of upcoming tokens
+  class TokenQueue {
+    std::array<Walrus::Optional<Token>, 2> tokens{};
+    bool i{};
+
+   public:
+    void push_back(Token t);
+    void pop_front();
+    const Token& at(size_t n) const;
+    const Token& front() const;
+    bool empty() const;
+    size_t size() const;
+  };
+
+  TokenQueue tokens_{};
 };
 
 Result ParseWatModule(WastLexer* lexer,

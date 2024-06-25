@@ -317,24 +317,22 @@ Result TypeChecker::PopAndCheck3Types(Type expected1,
   return result;
 }
 
-Result TypeChecker::CheckOpcode1(Opcode opcode,
-                                 const Limits* limits,
-                                 bool has_address_operands) {
-  Result result =
-      PopAndCheck1Type(opcode.GetMemoryParam(
-                           opcode.GetParamType1(), limits,
-                           has_address_operands || opcode.GetMemorySize() != 0),
-                       opcode.GetName());
-  PushType(has_address_operands
-               ? opcode.GetMemoryParam(opcode.GetResultType(), limits, true)
-               : opcode.GetResultType());
+// Some paramater types depend on the memory being used.
+// For example load/store operands, or memory.fill operands.
+static Type GetMemoryParam(Type param, const Limits* limits) {
+  return limits ? limits->IndexType() : param;
+}
+
+Result TypeChecker::CheckOpcode1(Opcode opcode, const Limits* limits) {
+  Result result = PopAndCheck1Type(
+      GetMemoryParam(opcode.GetParamType1(), limits), opcode.GetName());
+  PushType(opcode.GetResultType());
   return result;
 }
 
 Result TypeChecker::CheckOpcode2(Opcode opcode, const Limits* limits) {
   Result result =
-      PopAndCheck2Types(opcode.GetMemoryParam(opcode.GetParamType1(), limits,
-                                              opcode.GetMemorySize() != 0),
+      PopAndCheck2Types(GetMemoryParam(opcode.GetParamType1(), limits),
                         opcode.GetParamType2(), opcode.GetName());
   PushType(opcode.GetResultType());
   return result;
@@ -344,15 +342,10 @@ Result TypeChecker::CheckOpcode3(Opcode opcode,
                                  const Limits* limits1,
                                  const Limits* limits2,
                                  const Limits* limits3) {
-  bool has_address_operands = limits1 || limits2 || limits3;
-  Result result =
-      PopAndCheck3Types(opcode.GetMemoryParam(opcode.GetParamType1(), limits1,
-                                              has_address_operands),
-                        opcode.GetMemoryParam(opcode.GetParamType2(), limits2,
-                                              has_address_operands),
-                        opcode.GetMemoryParam(opcode.GetParamType3(), limits3,
-                                              has_address_operands),
-                        opcode.GetName());
+  Result result = PopAndCheck3Types(
+      GetMemoryParam(opcode.GetParamType1(), limits1),
+      GetMemoryParam(opcode.GetParamType2(), limits2),
+      GetMemoryParam(opcode.GetParamType3(), limits3), opcode.GetName());
   PushType(opcode.GetResultType());
   return result;
 }
@@ -520,12 +513,11 @@ Result TypeChecker::OnCallIndirect(const TypeVector& param_types,
 
 Result TypeChecker::OnIndexedFuncRef(Index* out_index) {
   Type type;
-  Result result = PeekType(0, &type);
+  CHECK_RESULT(PeekType(0, &type));
+  Result result = Result::Ok;
   if (!(type == Type::Any || type.IsReferenceWithIndex())) {
     TypeVector actual;
-    if (Succeeded(result)) {
-      actual.push_back(type);
-    }
+    actual.push_back(type);
     std::string message =
         "type mismatch in call_ref, expected reference but got " +
         TypesToString(actual);
@@ -713,8 +705,16 @@ Result TypeChecker::OnLoop(const TypeVector& param_types,
   return result;
 }
 
-Result TypeChecker::OnMemoryCopy(const Limits& limits) {
-  return CheckOpcode3(Opcode::MemoryCopy, &limits, &limits, &limits);
+Result TypeChecker::OnMemoryCopy(const Limits& dst_limits,
+                                 const Limits& src_limits) {
+  Limits size_limits = src_limits;
+  // The memory64 proposal specifies that the type of the size argument should
+  // be the mimimum of the two memory types.
+  if (src_limits.is_64 && !dst_limits.is_64) {
+    size_limits = dst_limits;
+  }
+  return CheckOpcode3(Opcode::MemoryCopy, &dst_limits, &src_limits,
+                      &size_limits);
 }
 
 Result TypeChecker::OnDataDrop(uint32_t segment) {
@@ -726,7 +726,9 @@ Result TypeChecker::OnMemoryFill(const Limits& limits) {
 }
 
 Result TypeChecker::OnMemoryGrow(const Limits& limits) {
-  return CheckOpcode1(Opcode::MemoryGrow, &limits, true);
+  Result result = PopAndCheck1Type(limits.IndexType(), "memory.grow");
+  PushType(limits.IndexType());
+  return result;
 }
 
 Result TypeChecker::OnMemoryInit(uint32_t segment, const Limits& limits) {
@@ -775,8 +777,14 @@ Result TypeChecker::OnTableFill(Type elem_type) {
   return PopAndCheck3Types(Type::I32, elem_type, Type::I32, "table.fill");
 }
 
-Result TypeChecker::OnRefFuncExpr(Index func_type) {
-  if (features_.function_references_enabled()) {
+Result TypeChecker::OnRefFuncExpr(Index func_type, bool force_generic_funcref) {
+  /*
+   * In a const expression, treat ref.func as producing a generic funcref.
+   * This avoids having to implement funcref subtyping (for now) and matches
+   * the previous behavior where SharedValidator::OnElemSegmentElemExpr_RefFunc
+   * examined only the validity of the function index.
+   */
+  if (features_.function_references_enabled() && !force_generic_funcref) {
     PushType(Type(Type::Reference, func_type));
   } else {
     PushType(Type::FuncRef);

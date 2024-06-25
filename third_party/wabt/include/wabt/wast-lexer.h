@@ -22,6 +22,7 @@
 #include <memory>
 
 #include "wabt/common.h"
+#include "wabt/error.h"
 #include "wabt/lexer-source-line-finder.h"
 #include "wabt/literal.h"
 #include "wabt/make-unique.h"
@@ -32,20 +33,22 @@ namespace wabt {
 
 class ErrorHandler;
 class LexerSource;
-class WastParser;
 
 class WastLexer {
  public:
   WABT_DISALLOW_COPY_AND_ASSIGN(WastLexer);
 
-  WastLexer(std::unique_ptr<LexerSource> source, nonstd::string_view filename);
+  WastLexer(std::unique_ptr<LexerSource> source,
+            nonstd::string_view filename,
+            Errors*);
 
   // Convenience functions.
   static std::unique_ptr<WastLexer> CreateBufferLexer(nonstd::string_view filename,
                                                       const void* data,
-                                                      size_t size);
+                                                      size_t size,
+                                                      Errors*);
 
-  Token GetToken(WastParser* parser);
+  Token GetToken();
 
   // TODO(binji): Move this out of the lexer.
   std::unique_ptr<LexerSourceLineFinder> MakeLineFinder() {
@@ -53,8 +56,8 @@ class WastLexer {
   }
 
  private:
-  static const int kEof = -1;
-  enum class CharClass { Reserved = 1, Keyword = 2, HexDigit = 4, Digit = 8 };
+  static constexpr int kEof = -1;
+  enum class CharClass { IdChar = 1, Keyword = 2, HexDigit = 4, Digit = 8 };
 
   Location GetLocation();
   nonstd::string_view GetText(size_t offset = 0);
@@ -68,7 +71,7 @@ class WastLexer {
   bool MatchChar(char);
   bool MatchString(nonstd::string_view);
   void Newline();
-  bool ReadBlockComment(WastParser*);  // Returns false if EOF.
+  bool ReadBlockComment();             // Returns false if EOF.
   bool ReadLineComment();              // Returns false if EOF.
   void ReadWhitespace();
 
@@ -76,20 +79,24 @@ class WastLexer {
   static bool IsDigit(int c) { return IsCharClass(c, CharClass::Digit); }
   static bool IsHexDigit(int c) { return IsCharClass(c, CharClass::HexDigit); }
   static bool IsKeyword(int c) { return IsCharClass(c, CharClass::Keyword); }
-  static bool IsReserved(int c) { return IsCharClass(c, CharClass::Reserved); }
+  static bool IsIdChar(int c) { return IsCharClass(c, CharClass::IdChar); }
 
   bool ReadNum();
   bool ReadHexNum();
-  int ReadReservedChars();
-  bool NoTrailingReservedChars() { return ReadReservedChars() == 0; }
+
+  enum class ReservedChars { None, Some, Id };
+  ReservedChars ReadReservedChars();
+  bool NoTrailingReservedChars() {
+    return ReadReservedChars() == ReservedChars::None;
+  }
   void ReadSign();
-  Token GetStringToken(WastParser*);
+  Token GetStringToken();
   Token GetNumberToken(TokenType);
   Token GetHexNumberToken(TokenType);
   Token GetInfToken();
   Token GetNanToken();
   Token GetNameEqNumToken(nonstd::string_view name, TokenType);
-  Token GetIdToken();
+  Token GetIdChars();
   Token GetKeywordToken();
   Token GetReservedToken();
 
@@ -101,6 +108,9 @@ class WastLexer {
   const char* line_start_;
   const char* token_start_;
   const char* cursor_;
+
+  Errors* errors_;
+  void WABT_PRINTF_FORMAT(3, 4) Error(Location, const char* format, ...);
 };
 
 }  // namespace wabt

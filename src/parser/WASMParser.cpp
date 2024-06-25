@@ -308,7 +308,6 @@ private:
 
     size_t* m_readerOffsetPointer;
     const uint8_t* m_readerDataPointer;
-    size_t m_codeStartOffset;
     size_t m_codeEndOffset;
 
     struct PreprocessData {
@@ -680,7 +679,6 @@ public:
     WASMBinaryReader()
         : m_readerOffsetPointer(nullptr)
         , m_readerDataPointer(nullptr)
-        , m_codeStartOffset(0)
         , m_codeEndOffset(0)
         , m_inInitExpr(false)
         , m_currentFunction(nullptr)
@@ -1016,10 +1014,10 @@ public:
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
     }
 
+    // FIXME remove preprocess
     virtual void OnStartReadInstructions(Offset start, Offset end) override
     {
         ASSERT(start == *m_readerOffsetPointer);
-        m_codeStartOffset = start;
         m_codeEndOffset = end;
     }
 

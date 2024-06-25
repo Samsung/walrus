@@ -142,7 +142,7 @@ void RemoveEscapes(nonstd::string_view text, OutputIter dest) {
   }
 }
 
-typedef std::vector<nonstd::string_view> TextVector;
+using TextVector = std::vector<nonstd::string_view>;
 
 template <typename OutputIter>
 void RemoveEscapes(const TextVector& texts, OutputIter out) {
@@ -545,7 +545,7 @@ Result ResolveFuncTypes(Module* module, Errors* errors) {
         // local indexes bound to a given name by the number of parameters in
         // the function.
         for (auto& it : func->bindings) {
-            it.second.index += func->GetNumParams();
+          it.second.index += func->GetNumParams();
         }
       }
 
@@ -584,7 +584,7 @@ void WastParser::Error(Location loc, const char* format, ...) {
 
 Token WastParser::GetToken() {
   if (tokens_.empty()) {
-    tokens_.push_back(lexer_->GetToken(this));
+    tokens_.push_back(lexer_->GetToken());
   }
   return tokens_.front();
 }
@@ -594,26 +594,29 @@ Location WastParser::GetLocation() {
 }
 
 TokenType WastParser::Peek(size_t n) {
+  assert(n <= 1);
   while (tokens_.size() <= n) {
-    Token cur = lexer_->GetToken(this);
+    Token cur = lexer_->GetToken();
     if (cur.token_type() != TokenType::LparAnn) {
       tokens_.push_back(cur);
     } else {
       // Custom annotation. For now, discard until matching Rpar, unless it is
-      // a code metadata annotation. In that case, we know how to parse it.
+      // a code metadata annotation or custom section. In those cases, we know
+      // how to parse it.
       if (!options_->features.annotations_enabled()) {
         Error(cur.loc, "annotations not enabled: %s", cur.to_string().c_str());
         tokens_.push_back(Token(cur.loc, TokenType::Invalid));
         continue;
       }
-      if (options_->features.code_metadata_enabled() &&
-          cur.text().find("metadata.code.") == 0) {
+      if ((options_->features.code_metadata_enabled() &&
+           cur.text().find("metadata.code.") == 0) ||
+          cur.text() == "custom") {
         tokens_.push_back(cur);
         continue;
       }
       int indent = 1;
       while (indent > 0) {
-        cur = lexer_->GetToken(this);
+        cur = lexer_->GetToken();
         switch (cur.token_type()) {
           case TokenType::Lpar:
           case TokenType::LparAnn:
@@ -622,6 +625,11 @@ TokenType WastParser::Peek(size_t n) {
 
           case TokenType::Rpar:
             indent--;
+            break;
+
+          case TokenType::Eof:
+            indent = 0;
+            Error(cur.loc, "unterminated annotation");
             break;
 
           default:
@@ -716,6 +724,7 @@ void WastParser::ErrorUnlessOpcodeEnabled(const Token& token) {
 
 Result WastParser::ErrorExpected(const std::vector<std::string>& expected,
                                  const char* example) {
+  GetToken();
   Token token = Consume();
   std::string expected_str;
   if (!expected.empty()) {
@@ -748,7 +757,6 @@ Result WastParser::ErrorExpected(const std::vector<std::string>& expected,
 Result WastParser::ErrorIfLpar(const std::vector<std::string>& expected,
                                const char* example) {
   if (Match(TokenType::Lpar)) {
-    GetToken();
     return ErrorExpected(expected, example);
   }
   return Result::Ok;
@@ -1046,8 +1054,9 @@ bool WastParser::ParseOffsetOpt(Address* out_offset) {
       Error(token.loc, "invalid offset \"" PRIstringview "\"",
             WABT_PRINTF_STRING_VIEW_ARG(sv));
     }
-    // FIXME: make this depend on the current memory.
-    if (offset64 > UINT32_MAX) {
+    // With memory64, offsets > UINT32_MAX for i32 memories are no longer
+    // malformed (just invalid)
+    if ((!options_->features.memory64_enabled()) && (offset64 > UINT32_MAX)) {
       Error(token.loc, "offset must be less than or equal to 0xffffffff");
     }
     *out_offset = offset64;
@@ -1167,16 +1176,18 @@ Result WastParser::ParseModule(std::unique_ptr<Module>* out_module) {
       auto module_command = cast<ScriptModuleCommand>(std::move(command));
       *module = std::move(module_command->module);
     }
-  } else if (IsModuleField(PeekPair())) {
+  } else if (IsModuleField(PeekPair()) || PeekIsCustom()) {
     // Parse an inline module (i.e. one with no surrounding (module)).
     CHECK_RESULT(ParseModuleFieldList(module.get()));
+  } else if (PeekMatch(TokenType::Eof)) {
+    errors_->emplace_back(ErrorLevel::Warning, GetLocation(), "empty module");
   } else {
     ConsumeIfLpar();
     ErrorExpected({"a module field", "a module"});
   }
 
   EXPECT(Eof);
-  if (errors_->size() == 0) {
+  if (!HasError()) {
     *out_module = std::move(module);
     return Result::Ok;
   } else {
@@ -1191,7 +1202,7 @@ Result WastParser::ParseScript(std::unique_ptr<Script>* out_script) {
   // Don't consume the Lpar yet, even though it is required. This way the
   // sub-parser functions (e.g. ParseFuncModuleField) can consume it and keep
   // the parsing structure more regular.
-  if (IsModuleField(PeekPair())) {
+  if (IsModuleField(PeekPair()) || PeekIsCustom()) {
     // Parse an inline module (i.e. one with no surrounding (module)).
     auto command = MakeUnique<ModuleCommand>();
     command->module.loc = GetLocation();
@@ -1199,13 +1210,15 @@ Result WastParser::ParseScript(std::unique_ptr<Script>* out_script) {
     script->commands.emplace_back(std::move(command));
   } else if (IsCommand(PeekPair())) {
     CHECK_RESULT(ParseCommandList(script.get(), &script->commands));
+  } else if (PeekMatch(TokenType::Eof)) {
+    errors_->emplace_back(ErrorLevel::Warning, GetLocation(), "empty script");
   } else {
     ConsumeIfLpar();
     ErrorExpected({"a module field", "a command"});
   }
 
   EXPECT(Eof);
-  if (errors_->size() == 0) {
+  if (!HasError()) {
     *out_script = std::move(script);
     return Result::Ok;
   } else {
@@ -1213,9 +1226,69 @@ Result WastParser::ParseScript(std::unique_ptr<Script>* out_script) {
   }
 }
 
+Result WastParser::ParseCustomSectionAnnotation(Module* module) {
+  WABT_TRACE(ParseCustomSectionAnnotation);
+  Location loc = GetLocation();
+  Token token = Consume();
+  if (token.text() != "custom") {
+    assert(
+        !"ParseCustomSectionAnnotation should only be called if PeekIsCustom() is true");
+    return Result::Error;
+  }
+  std::string section_name;
+  CHECK_RESULT(ParseQuotedText(&section_name));
+  if (Match(TokenType::Lpar)) {
+    if (!PeekMatch(TokenType::After) && !PeekMatch(TokenType::Before)) {
+      return ErrorExpected({"before", "after"});
+    }
+    Consume();
+    switch (Peek()) {
+      case TokenType::Function:
+      case TokenType::Type:
+      case TokenType::Import:
+      case TokenType::Export:
+      case TokenType::Table:
+      case TokenType::Global:
+      case TokenType::Elem:
+      case TokenType::Data:
+      case TokenType::Memory:
+      case TokenType::Code:
+      case TokenType::Start: {
+        Consume();
+        break;
+      }
+      default: {
+        return ErrorExpected({"type", "import", "function", "table", "memory",
+                              "global", "export", "start", "elem", "code",
+                              "data"});
+      }
+    }
+    EXPECT(Rpar);
+  }
+  std::vector<uint8_t> data;
+  CHECK_RESULT(ParseTextList(&data));
+  EXPECT(Rpar);
+
+  Custom custom = Custom(loc, section_name, data);
+  module->customs.push_back(custom);
+
+  return Result::Ok;
+}
+
+bool WastParser::PeekIsCustom() {
+  // If IsLparAnn succeeds, tokens_.front() must have text, as it is an LparAnn
+  // token.
+  return options_->features.annotations_enabled() && IsLparAnn(PeekPair()) &&
+         tokens_.front().text() == "custom";
+}
+
 Result WastParser::ParseModuleFieldList(Module* module) {
   WABT_TRACE(ParseModuleFieldList);
-  while (IsModuleField(PeekPair())) {
+  while (IsModuleField(PeekPair()) || PeekIsCustom()) {
+    if (PeekIsCustom()) {
+      CHECK_RESULT(ParseCustomSectionAnnotation(module));
+      continue;
+    }
     if (Failed(ParseModuleField(module))) {
       CHECK_RESULT(Synchronize(IsModuleField));
     }
@@ -1346,8 +1419,14 @@ Result WastParser::ParseElemModuleField(Module* module) {
 
 Result WastParser::ParseTagModuleField(Module* module) {
   WABT_TRACE(ParseTagModuleField);
+  if (!options_->features.exceptions_enabled()) {
+    Error(Consume().loc, "tag not allowed");
+    return Result::Error;
+  }
   EXPECT(Lpar);
   EXPECT(Tag);
+  Location loc = GetLocation();
+
   std::string name;
   ParseBindVarOpt(&name);
 
@@ -1357,20 +1436,23 @@ Result WastParser::ParseTagModuleField(Module* module) {
   if (PeekMatchLpar(TokenType::Import)) {
     CheckImportOrdering(module);
     auto import = MakeUnique<TagImport>(name);
+    Tag& tag = import->tag;
     CHECK_RESULT(ParseInlineImport(import.get()));
-    CHECK_RESULT(ParseTypeUseOpt(&import->tag.decl));
-    CHECK_RESULT(ParseUnboundFuncSignature(&import->tag.decl.sig));
+    CHECK_RESULT(ParseTypeUseOpt(&tag.decl));
+    CHECK_RESULT(ParseUnboundFuncSignature(&tag.decl.sig));
+    CHECK_RESULT(ErrorIfLpar({"type", "param", "result"}));
     auto field =
         MakeUnique<ImportModuleField>(std::move(import), GetLocation());
     module->AppendField(std::move(field));
   } else {
-    auto field = MakeUnique<TagModuleField>(GetLocation(), name);
+    auto field = MakeUnique<TagModuleField>(loc, name);
     CHECK_RESULT(ParseTypeUseOpt(&field->tag.decl));
     CHECK_RESULT(ParseUnboundFuncSignature(&field->tag.decl.sig));
     module->AppendField(std::move(field));
   }
 
   AppendInlineExportFields(module, &export_fields, module->tags.size() - 1);
+
   EXPECT(Rpar);
   return Result::Ok;
 }
@@ -1948,10 +2030,7 @@ Result WastParser::ParseCodeMetadataAnnotation(ExprList* exprs) {
   CHECK_RESULT(ParseQuotedText(&data_text, false));
   std::vector<uint8_t> data(data_text.begin(), data_text.end());
   exprs->push_back(MakeUnique<CodeMetadataExpr>(name, std::move(data)));
-  TokenType rpar = Peek();
-  WABT_USE(rpar);
-  assert(rpar == TokenType::Rpar);
-  Consume();
+  EXPECT(Rpar);
   return Result::Ok;
 }
 
@@ -2061,11 +2140,11 @@ Result WastParser::ParseMemoryExpr(Location loc,
 template <typename T>
 Result WastParser::ParseMemoryBinaryExpr(Location loc,
                                          std::unique_ptr<Expr>* out_expr) {
-  Var srcmemidx;
   Var destmemidx;
-  CHECK_RESULT(ParseMemidx(loc, &srcmemidx));
+  Var srcmemidx;
   CHECK_RESULT(ParseMemidx(loc, &destmemidx));
-  out_expr->reset(new T(srcmemidx, destmemidx, loc));
+  CHECK_RESULT(ParseMemidx(loc, &srcmemidx));
+  out_expr->reset(new T(destmemidx, srcmemidx, loc));
   return Result::Ok;
 }
 
@@ -2180,9 +2259,9 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
     case TokenType::ReturnCallIndirect: {
       ErrorUnlessOpcodeEnabled(Consume());
       auto expr = MakeUnique<ReturnCallIndirectExpr>(loc);
+      ParseVarOpt(&expr->table, Var(0, loc));
       CHECK_RESULT(ParseTypeUseOpt(&expr->decl));
       CHECK_RESULT(ParseUnboundFuncSignature(&expr->decl.sig));
-      ParseVarOpt(&expr->table, Var(0, loc));
       *out_expr = std::move(expr);
       break;
     }
@@ -2323,7 +2402,7 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
       ParseVarOpt(&table_index, table_index);
       out_expr->reset(new TableGetExpr(table_index, loc));
       break;
-                              }
+    }
 
     case TokenType::TableSet: {
       ErrorUnlessOpcodeEnabled(Consume());
@@ -2331,7 +2410,7 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
       ParseVarOpt(&table_index, table_index);
       out_expr->reset(new TableSetExpr(table_index, loc));
       break;
-                              }
+    }
 
     case TokenType::TableGrow: {
       ErrorUnlessOpcodeEnabled(Consume());
@@ -2339,7 +2418,7 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
       ParseVarOpt(&table_index, table_index);
       out_expr->reset(new TableGrowExpr(table_index, loc));
       break;
-                               }
+    }
 
     case TokenType::TableSize: {
       ErrorUnlessOpcodeEnabled(Consume());
@@ -2347,7 +2426,7 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
       ParseVarOpt(&table_index, table_index);
       out_expr->reset(new TableSizeExpr(table_index, loc));
       break;
-                               }
+    }
 
     case TokenType::TableFill: {
       ErrorUnlessOpcodeEnabled(Consume());
@@ -2355,7 +2434,7 @@ Result WastParser::ParsePlainInstr(std::unique_ptr<Expr>* out_expr) {
       ParseVarOpt(&table_index, table_index);
       out_expr->reset(new TableFillExpr(table_index, loc));
       break;
-                               }
+    }
 
     case TokenType::RefFunc:
       ErrorUnlessOpcodeEnabled(Consume());
@@ -3012,35 +3091,26 @@ Result WastParser::ParseExpr(ExprList* exprs) {
         CHECK_RESULT(ParseLabelOpt(&expr->true_.label));
         CHECK_RESULT(ParseBlockDeclaration(&expr->true_.decl));
 
-        if (PeekMatchExpr()) {
+        while (PeekMatchExpr()) {
           ExprList cond;
           CHECK_RESULT(ParseExpr(&cond));
           exprs->splice(exprs->end(), cond);
         }
 
-        if (MatchLpar(TokenType::Then)) {
-          CHECK_RESULT(ParseTerminatingInstrList(&expr->true_.exprs));
-          expr->true_.end_loc = GetLocation();
-          EXPECT(Rpar);
-
-          if (MatchLpar(TokenType::Else)) {
-            CHECK_RESULT(ParseTerminatingInstrList(&expr->false_));
-            EXPECT(Rpar);
-          } else if (PeekMatchExpr()) {
-            CHECK_RESULT(ParseExpr(&expr->false_));
-          }
-          expr->false_end_loc = GetLocation();
-        } else if (PeekMatchExpr()) {
-          CHECK_RESULT(ParseExpr(&expr->true_.exprs));
-          expr->true_.end_loc = GetLocation();
-          if (PeekMatchExpr()) {
-            CHECK_RESULT(ParseExpr(&expr->false_));
-            expr->false_end_loc = GetLocation();
-          }
-        } else {
-          ConsumeIfLpar();
+        EXPECT(Lpar);
+        if (!Match(TokenType::Then)) {
           return ErrorExpected({"then block"}, "(then ...)");
         }
+
+        CHECK_RESULT(ParseTerminatingInstrList(&expr->true_.exprs));
+        expr->true_.end_loc = GetLocation();
+        EXPECT(Rpar);
+
+        if (MatchLpar(TokenType::Else)) {
+          CHECK_RESULT(ParseTerminatingInstrList(&expr->false_));
+          EXPECT(Rpar);
+        }
+        expr->false_end_loc = GetLocation();
 
         exprs->push_back(std::move(expr));
         break;
@@ -3261,7 +3331,7 @@ Result WastParser::ParseAssertReturnCommand(CommandPtr* out_command) {
   EXPECT(AssertReturn);
   auto command = MakeUnique<AssertReturnCommand>();
   CHECK_RESULT(ParseAction(&command->action));
-  CHECK_RESULT(ParseConstList(&command->expected, ConstType::Expectation));
+  CHECK_RESULT(ParseExpectedValues(&command->expected));
   EXPECT(Rpar);
   *out_command = std::move(command);
   return Result::Ok;
@@ -3333,7 +3403,6 @@ Result WastParser::ParseModuleCommand(Script* script, CommandPtr* out_command) {
       module->name = bsm->name;
       module->loc = bsm->loc;
       for (const auto& error : errors) {
-        assert(error.error_level == ErrorLevel::Error);
         if (error.loc.offset == kInvalidOffset) {
           Error(bsm->loc, "error in binary module: %s", error.message.c_str());
         } else {
@@ -3348,7 +3417,26 @@ Result WastParser::ParseModuleCommand(Script* script, CommandPtr* out_command) {
     }
 
     case ScriptModuleType::Quoted:
-      return ErrorExpected({"a binary module", "a text module"});
+      auto command = MakeUnique<ModuleCommand>();
+      module = &command->module;
+      auto* qsm = cast<QuotedScriptModule>(script_module.get());
+      Errors errors;
+      const char* filename = "<text>";
+      std::unique_ptr<Module> m;
+      std::unique_ptr<WastLexer> lexer = WastLexer::CreateBufferLexer(
+          filename, qsm->data.data(), qsm->data.size(), &errors);
+      ParseWatModule(lexer.get(), &m, &errors, options_);
+      for (const auto& error : errors) {
+        if (error.loc.offset == kInvalidOffset) {
+          Error(qsm->loc, "error in quoted module: %s", error.message.c_str());
+        } else {
+          Error(qsm->loc, "error in quoted module: @0x%08" PRIzx ": %s",
+                error.loc.offset, error.message.c_str());
+        }
+      }
+      *module = std::move(*m.get());
+      *out_command = std::move(command);
+      break;
   }
 
   // script is nullptr when ParseModuleCommand is called from ParseModule.
@@ -3446,6 +3534,29 @@ Result WastParser::ParseAction(ActionPtr* out_action) {
   return Result::Ok;
 }
 
+Result WastParser::ParseExpectedValues(ExpectationPtr* expectation) {
+  WABT_TRACE(ParseExpectedValues);
+  Location loc = GetLocation();
+  if (PeekMatchLpar(TokenType::Either)) {
+    auto either = MakeUnique<EitherExpectation>(loc);
+    CHECK_RESULT(ParseEither(&either->expected));
+    *expectation = std::move(either);
+  } else {
+    auto values = MakeUnique<ValueExpectation>(loc);
+    CHECK_RESULT(ParseConstList(&values->expected, ConstType::Expectation));
+    *expectation = std::move(values);
+  }
+  return Result::Ok;
+}
+
+Result WastParser::ParseEither(ConstVector* alternatives) {
+  WABT_TRACE(ParseEither);
+  MatchLpar(TokenType::Either);
+  CHECK_RESULT(ParseConstList(alternatives, ConstType::Expectation));
+  EXPECT(Rpar);
+  return Result::Ok;
+}
+
 Result WastParser::ParseScriptModule(
     std::unique_ptr<ScriptModule>* out_module) {
   WABT_TRACE(ParseScriptModule);
@@ -3490,7 +3601,7 @@ Result WastParser::ParseScriptModule(
       auto tsm = MakeUnique<TextScriptModule>();
       tsm->module.name = name;
       tsm->module.loc = loc;
-      if (IsModuleField(PeekPair())) {
+      if (IsModuleField(PeekPair()) || PeekIsCustom()) {
         CHECK_RESULT(ParseModuleFieldList(&tsm->module));
       } else if (!PeekMatch(TokenType::Rpar)) {
         ConsumeIfLpar();
@@ -3555,6 +3666,43 @@ void WastParser::CheckImportOrdering(Module* module) {
     Error(GetLocation(),
           "imports must occur before all non-import definitions");
   }
+}
+
+bool WastParser::HasError() const {
+  return std::any_of(errors_->begin(), errors_->end(), [](const class Error& x) {
+    return x.error_level == ErrorLevel::Error;
+  });
+}
+
+void WastParser::TokenQueue::push_back(Token t) {
+  assert(!tokens[!i]);
+  tokens[!i] = t;
+  if (empty()) {
+    i = !i;
+  }
+}
+
+void WastParser::TokenQueue::pop_front() {
+  assert(tokens[i]);
+  tokens[i].reset();
+  i = !i;
+}
+
+const Token& WastParser::TokenQueue::at(size_t n) const {
+  assert(n <= 1);
+  return tokens[i ^ static_cast<bool>(n)].value();
+}
+
+const Token& WastParser::TokenQueue::front() const {
+  return at(0);
+}
+
+bool WastParser::TokenQueue::empty() const {
+  return !tokens[i];
+}
+
+size_t WastParser::TokenQueue::size() const {
+  return empty() ? 0 : 1 + tokens[!i].hasValue();
 }
 
 Result ParseWatModule(WastLexer* lexer,
