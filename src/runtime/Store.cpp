@@ -97,4 +97,19 @@ FunctionType* Store::getDefaultFunctionType(Value::Type type)
     return g_defaultFunctionTypes[type];
 }
 
+#if defined(ENABLE_EXTENDED_FEATURES)
+Waiter* Store::getWaiter(void* address)
+{
+    std::lock_guard<std::mutex> guard(m_waiterListLock);
+    for (size_t i = 0; i < m_waiterList.size(); i++) {
+        if (m_waiterList[i]->m_address == address) {
+            return m_waiterList[i];
+        }
+    }
+
+    Waiter* waiter = new Waiter(address);
+    m_waiterList.push_back(waiter);
+    return waiter;
+}
+#endif
 } // namespace Walrus

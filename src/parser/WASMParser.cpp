@@ -779,11 +779,11 @@ public:
             moduleName, fieldName, m_result.m_tableTypes[tableIndex]));
     }
 
-    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize) override
+    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool is_shared) override
     {
         ASSERT(memoryIndex == m_result.m_memoryTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
-        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize));
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, is_shared));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Memory,
             moduleName, fieldName, m_result.m_memoryTypes[memoryIndex]));
@@ -886,10 +886,10 @@ public:
         m_result.m_memoryTypes.reserve(count);
     }
 
-    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize) override
+    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool is_shared) override
     {
         ASSERT(index == m_result.m_memoryTypes.size());
-        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize));
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, is_shared));
     }
 
     virtual void OnDataSegmentCount(Index count) override
@@ -2248,6 +2248,47 @@ public:
             ASSERT_NOT_REACHED();
         }
     }
+
+    virtual void OnAtomicWaitExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[2]) == peekVMStackValueType());
+        auto src2 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
+        auto src1 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        switch (code) {
+        case WASMOpcode::MemoryAtomicWait32Opcode: {
+            pushByteCode(Walrus::MemoryAtomicWait32(offset, src0, src1, src2, dst), code);
+            break;
+        }
+        case WASMOpcode::MemoryAtomicWait64Opcode: {
+            pushByteCode(Walrus::MemoryAtomicWait64(offset, src0, src1, src2, dst), code);
+            break;
+        }
+        default:
+            ASSERT_NOT_REACHED();
+        }
+    }
+
+    virtual void OnAtomicFenceExpr(uint32_t consistency_model) override
+    {
+        // FIXME do nothing
+    }
+
+    virtual void OnAtomicNotifyExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        auto code = static_cast<WASMOpcode>(opcode);
+        ASSERT(code == WASMOpcode::MemoryAtomicNotifyOpcode);
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
+        auto src1 = popVMStack();
+        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
+        pushByteCode(Walrus::MemoryAtomicNotify(offset, src0, src1, dst), code);
+    }
 #else // Extended Features
     virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
@@ -2265,6 +2306,18 @@ public:
     }
 
     virtual void OnAtomicCmpxchgExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        ASSERT_NOT_REACHED();
+    }
+    virtual void OnAtomicWaitExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
+    {
+        ASSERT_NOT_REACHED();
+    }
+    virtual void OnAtomicFenceExpr(uint32_t consistency_model) override
+    {
+        ASSERT_NOT_REACHED();
+    }
+    virtual void OnAtomicNotifyExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         ASSERT_NOT_REACHED();
     }

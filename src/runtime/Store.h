@@ -19,6 +19,10 @@
 
 #include "util/Vector.h"
 #include "runtime/Value.h"
+#if defined(ENABLE_EXTENDED_FEATURES)
+#include <mutex>
+#include <condition_variable>
+#endif
 
 namespace Walrus {
 
@@ -27,6 +31,29 @@ class Module;
 class Instance;
 class Extern;
 class FunctionType;
+
+#if defined(ENABLE_EXTENDED_FEATURES)
+struct Waiter {
+    struct WaiterItem {
+        WaiterItem(Waiter* waiter)
+            : m_waiter(waiter)
+        {
+        }
+
+        Waiter* m_waiter;
+    };
+
+    Waiter(void* addr)
+        : m_address(addr)
+    {
+    }
+
+    void* m_address;
+    std::mutex m_mutex;
+    std::condition_variable m_condition;
+    std::vector<WaiterItem*> m_waiterItemList;
+};
+#endif
 
 class Store {
 public:
@@ -61,6 +88,10 @@ public:
         return m_instances.back();
     }
 
+#if defined(ENABLE_EXTENDED_FEATURES)
+    Waiter* getWaiter(void* address);
+#endif
+
 private:
     Engine* m_engine;
 
@@ -70,6 +101,10 @@ private:
 
     // default FunctionTypes used for initialization of Data, Element and Global
     static FunctionType* g_defaultFunctionTypes[Value::Type::NUM];
+#if defined(ENABLE_EXTENDED_FEATURES)
+    std::mutex m_waiterListLock;
+    std::vector<Waiter*> m_waiterList;
+#endif
 };
 
 } // namespace Walrus

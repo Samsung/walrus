@@ -21,6 +21,7 @@
 #include "runtime/ExecutionState.h"
 #include "runtime/Object.h"
 #if defined(ENABLE_EXTENDED_FEATURES)
+#include "runtime/Store.h"
 #include <atomic>
 #endif
 
@@ -40,7 +41,7 @@ public:
         uint8_t* buffer;
     };
 
-    static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte);
+    static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared);
 
     ~Memory();
 
@@ -77,6 +78,11 @@ public:
     uint64_t maximumSizeInPageSize() const
     {
         return m_maximumSizeInByte / s_memoryPageSize;
+    }
+
+    bool isShared() const
+    {
+        return m_isShared;
     }
 
     bool grow(uint64_t growSizeInByte);
@@ -196,6 +202,76 @@ public:
         shared->compare_exchange_weak(expect, replace);
         *out = expect;
     }
+
+    template <typename T>
+    void atomicWait(ExecutionState& state, Store* store, uint32_t offset, uint32_t addend, const T& expect, int64_t timeOut, uint32_t* out) const
+    {
+        checkAtomicAccess(state, offset, sizeof(T), addend);
+        if (UNLIKELY(!m_isShared)) {
+            throwUnsharedMemoryException(state);
+        }
+
+        T read;
+        atomicLoad(state, offset, addend, &read);
+        if (read != expect) {
+            // "not-equal", the loaded value did not match the expected value
+            *out = 1;
+        } else {
+            // wait process
+            bool notified = false;
+            Waiter* waiter = store->getWaiter(static_cast<void*>(m_buffer + (offset + addend)));
+
+            // lock waiter
+            std::unique_lock<std::mutex> lock(waiter->m_mutex);
+
+            Waiter::WaiterItem* item = new Waiter::WaiterItem(waiter);
+            waiter->m_waiterItemList.push_back(item);
+
+            // wait
+            notified = (waiter->m_condition.wait_for(lock, std::chrono::nanoseconds(timeOut)) == std::cv_status::no_timeout);
+
+            ASSERT(std::find(waiter->m_waiterItemList.begin(), waiter->m_waiterItemList.end(), item) != waiter->m_waiterItemList.end());
+            auto iter = waiter->m_waiterItemList.begin();
+            while (iter != waiter->m_waiterItemList.end()) {
+                if (*iter == item) {
+                    waiter->m_waiterItemList.erase(iter);
+                    break;
+                }
+                iter++;
+            }
+            delete item;
+
+            if (notified) {
+                // "ok", woken by another agent in the cluster
+                *out = 0;
+            } else {
+                // "timed-out", not woken before timeout expired
+                *out = 2;
+            }
+        }
+    }
+
+    void atomicNotify(ExecutionState& state, Store* store, uint32_t offset, uint32_t addend, const uint32_t& count, uint32_t* out) const
+    {
+        checkAtomicAccess(state, offset, 4, addend);
+        if (UNLIKELY(!m_isShared)) {
+            *out = 0;
+            return;
+        }
+
+        Waiter* waiter = store->getWaiter(static_cast<void*>(m_buffer + (offset + addend)));
+
+        waiter->m_mutex.lock();
+        uint32_t realCount = std::min(waiter->m_waiterItemList.size(), (size_t)count);
+
+
+        for (uint32_t i = 0; i < realCount; i++) {
+            waiter->m_waiterItemList[i]->m_waiter->m_condition.notify_one();
+        }
+
+        waiter->m_mutex.unlock();
+        *out = realCount;
+    }
 #endif
 
 #ifdef CPU_ARM32
@@ -241,19 +317,20 @@ public:
     void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
 private:
-    Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte);
+    Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared);
 
-    void throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
+    void throwRangeException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
 
     inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
         if (!this->checkAccess(offset, size, addend)) {
-            throwException(state, offset, addend, size);
+            throwRangeException(state, offset, addend, size);
         }
     }
 
 #if defined(ENABLE_EXTENDED_FEATURES)
     void checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const;
+    void throwUnsharedMemoryException(ExecutionState& state) const;
 #endif
 
     uint64_t m_sizeInByte;
@@ -261,6 +338,7 @@ private:
     uint64_t m_maximumSizeInByte;
     uint8_t* m_buffer;
     TargetBuffer* m_targetBuffers;
+    bool m_isShared;
 };
 
 } // namespace Walrus

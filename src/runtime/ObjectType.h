@@ -131,20 +131,23 @@ private:
 
 class MemoryType : public ObjectType {
 public:
-    MemoryType(uint64_t initSize, uint64_t maxSize)
+    MemoryType(uint64_t initSize, uint64_t maxSize, bool isShared)
         : ObjectType(ObjectType::MemoryKind)
         , m_initialSize(initSize)
         , m_maximumSize(maxSize)
+        , m_isShared(isShared)
     {
     }
 
     uint64_t initialSize() const { return m_initialSize; }
     uint64_t maximumSize() const { return m_maximumSize; }
+    bool isShared() const { return m_isShared; }
 
 private:
     // size should be uint64_t type
     uint64_t m_initialSize;
     uint64_t m_maximumSize;
+    bool m_isShared;
 };
 
 class TagType : public ObjectType {

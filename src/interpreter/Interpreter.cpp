@@ -1036,6 +1036,49 @@ NextInstruction:
     FOR_EACH_BYTECODE_ATOMIC_RMW_OP(ATOMIC_MEMORY_RMW_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION)
 
+#if defined(ENABLE_EXTENDED_FEATURES)
+    DEFINE_OPCODE(MemoryAtomicWait32)
+        :
+    {
+        MemoryAtomicWait32* code = (MemoryAtomicWait32*)programCounter;
+        int64_t timeOut = readValue<int64_t>(bp, code->src2Offset());
+        uint32_t expect = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t result;
+        memories[0]->atomicWait(state, instance->module()->store(), offset, code->offset(), expect, timeOut, &result);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(MemoryAtomicWait32);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryAtomicWait64)
+        :
+    {
+        MemoryAtomicWait64* code = (MemoryAtomicWait64*)programCounter;
+        int64_t timeOut = readValue<int64_t>(bp, code->src2Offset());
+        uint64_t expect = readValue<uint64_t>(bp, code->src1Offset());
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t result;
+        memories[0]->atomicWait(state, instance->module()->store(), offset, code->offset(), expect, timeOut, &result);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(MemoryAtomicWait64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryAtomicNotify)
+        :
+    {
+        MemoryAtomicNotify* code = (MemoryAtomicNotify*)programCounter;
+        uint32_t count = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t result;
+        memories[0]->atomicNotify(state, instance->module()->store(), offset, code->offset(), count, &result);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(MemoryAtomicNotify);
+        NEXT_INSTRUCTION();
+    }
+#endif
+
     // FOR_EACH_BYTECODE_SIMD_ETC_OP
     DEFINE_OPCODE(V128BitSelect)
         :

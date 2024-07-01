@@ -28,19 +28,20 @@
 
 namespace Walrus {
 
-Memory* Memory::createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte)
+Memory* Memory::createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared)
 {
-    Memory* mem = new Memory(initialSizeInByte, maximumSizeInByte);
+    Memory* mem = new Memory(initialSizeInByte, maximumSizeInByte, isShared);
     store->appendExtern(mem);
     return mem;
 }
 
-Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte)
+Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared)
     : m_sizeInByte(initialSizeInByte)
     , m_reservedSizeInByte(0)
     , m_maximumSizeInByte(maximumSizeInByte)
     , m_buffer(nullptr)
     , m_targetBuffers(nullptr)
+    , m_isShared(isShared)
 {
     ASSERT(initialSizeInByte <= std::numeric_limits<size_t>::max());
 #if defined(WALRUS_USE_MMAP)
@@ -131,7 +132,7 @@ bool Memory::grow(uint64_t growSizeInByte)
     return false;
 }
 
-void Memory::throwException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const
+void Memory::throwRangeException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const
 {
     std::string str = "out of bounds memory access: access at ";
     str += std::to_string(offset + addend);
@@ -173,7 +174,7 @@ void Memory::init(ExecutionState& state, DataSegment* source, uint32_t dstStart,
     checkAccess(state, dstStart, srcSize);
 
     if (srcStart >= source->sizeInByte() || srcStart + srcSize > source->sizeInByte()) {
-        throwException(state, srcStart, srcStart + srcSize, srcSize);
+        throwRangeException(state, srcStart, srcStart + srcSize, srcSize);
     }
 
     this->initMemory(source, dstStart, srcStart, srcSize);
@@ -239,6 +240,11 @@ void Memory::checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t 
     if (UNLIKELY((offset + addend) % size != 0)) {
         Trap::throwException(state, "unaligned atomic");
     }
+}
+
+void Memory::throwUnsharedMemoryException(ExecutionState& state) const
+{
+    Trap::throwException(state, "expected shared memory");
 }
 #endif
 
