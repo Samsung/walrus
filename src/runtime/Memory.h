@@ -264,7 +264,6 @@ public:
         waiter->m_mutex.lock();
         uint32_t realCount = std::min(waiter->m_waiterItemList.size(), (size_t)count);
 
-
         for (uint32_t i = 0; i < realCount; i++) {
             waiter->m_waiterItemList[i]->m_waiter->m_condition.notify_one();
         }
