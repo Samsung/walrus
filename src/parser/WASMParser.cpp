@@ -28,7 +28,7 @@ enum class WASMOpcode : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
                     text, decomp)                                            \
     name##Opcode,
-#include "parser/opcode.def"
+#include "wabt/opcode.def"
 #undef WABT_OPCODE
     OpcodeKindEnd,
 };
@@ -103,7 +103,7 @@ WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
       WASMCodeInfo::rtype,                                                   \
       { WASMCodeInfo::type1, WASMCodeInfo::type2, WASMCodeInfo::type3 },     \
       text },
-#include "parser/opcode.def"
+#include "wabt/opcode.def"
 #undef WABT_OPCODE
 };
 
@@ -779,11 +779,11 @@ public:
             moduleName, fieldName, m_result.m_tableTypes[tableIndex]));
     }
 
-    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool is_shared) override
+    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool isShared) override
     {
         ASSERT(memoryIndex == m_result.m_memoryTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
-        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, is_shared));
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, isShared));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Memory,
             moduleName, fieldName, m_result.m_memoryTypes[memoryIndex]));
@@ -886,10 +886,10 @@ public:
         m_result.m_memoryTypes.reserve(count);
     }
 
-    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool is_shared) override
+    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool isShared) override
     {
         ASSERT(index == m_result.m_memoryTypes.size());
-        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, is_shared));
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, isShared));
     }
 
     virtual void OnDataSegmentCount(Index count) override
