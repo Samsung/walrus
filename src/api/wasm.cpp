@@ -1031,7 +1031,7 @@ own wasm_trap_t* wasm_func_call(
 own wasm_global_t* wasm_global_new(
     wasm_store_t* store, const wasm_globaltype_t* gt, const wasm_val_t* val)
 {
-    Global* glob = Global::createGlobal(store->get(), ToWalrusValue(*val));
+    Global* glob = Global::createGlobal(store->get(), ToWalrusValue(*val), gt->mut);
     return new wasm_global_t(glob, gt->clone());
 }
 
@@ -1107,14 +1107,24 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
 // Memory Instances
 own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
-    // FIXME Add Shared Memory
     Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, false);
+    return new wasm_memory_t(mem, mt->clone());
+}
+
+own wasm_memory_t* wasm_shared_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
+{
+    Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, true);
     return new wasm_memory_t(mem, mt->clone());
 }
 
 own wasm_memorytype_t* wasm_memory_type(const wasm_memory_t* mem)
 {
     return mem->type()->clone();
+}
+
+bool wasm_memory_is_shared(const wasm_memory_t* mem)
+{
+    return mem->get()->isShared();
 }
 
 byte_t* wasm_memory_data(wasm_memory_t* mem)
@@ -1130,6 +1140,11 @@ size_t wasm_memory_data_size(const wasm_memory_t* mem)
 wasm_memory_pages_t wasm_memory_size(const wasm_memory_t* mem)
 {
     return mem->get()->sizeInPageSize();
+}
+
+wasm_memory_pages_t wasm_memory_max_size(const wasm_memory_t* mem)
+{
+    return mem->get()->maximumSizeInPageSize();
 }
 
 bool wasm_memory_grow(wasm_memory_t* mem, wasm_memory_pages_t delta)
