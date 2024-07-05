@@ -146,12 +146,11 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
         switch (type) {
         case ImportType::Function: {
-            if (imports[i]->kind() != Object::FunctionKind) {
+            if (UNLIKELY(imports[i]->kind() != Object::FunctionKind
+                         || !imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType()))) {
                 Trap::throwException(state, "incompatible import type");
             }
-            if (!imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType())) {
-                Trap::throwException(state, "imported function type mismatch");
-            }
+
             instance->m_functions[funcIndex] = imports[i]->asFunction();
             if (imports[i]->asFunction()->isWasiFunction()) {
                 instance->m_functions[funcIndex]->asWasiFunction()->setRunningInstance(instance);
@@ -160,39 +159,38 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             break;
         }
         case ImportType::Global: {
-            if (imports[i]->kind() != Object::GlobalKind) {
+            if (UNLIKELY(imports[i]->kind() != Object::GlobalKind
+                         || m_imports[i]->globalType()->type() != imports[i]->asGlobal()->value().type()
+                         || m_imports[i]->globalType()->isMutable() != imports[i]->asGlobal()->isMutable())) {
                 Trap::throwException(state, "incompatible import type");
             }
+
             instance->m_globals[globIndex++] = imports[i]->asGlobal();
             break;
         }
         case ImportType::Table: {
-            if (imports[i]->kind() != Object::TableKind
-                || m_imports[i]->tableType()->type() != imports[i]->asTable()->type()
-                || m_imports[i]->tableType()->initialSize() > imports[i]->asTable()->size()) {
+            if (UNLIKELY(imports[i]->kind() != Object::TableKind
+                         || m_imports[i]->tableType()->type() != imports[i]->asTable()->type()
+                         || m_imports[i]->tableType()->initialSize() > imports[i]->asTable()->size()
+                         || m_imports[i]->tableType()->maximumSize() < imports[i]->asTable()->maximumSize())) {
                 Trap::throwException(state, "incompatible import type");
             }
 
-            if (imports[i]->asTable()->maximumSize() > m_imports[i]->tableType()->maximumSize()) {
-                Trap::throwException(state, "incompatible import type");
-            }
             instance->m_tables[tableIndex++] = imports[i]->asTable();
             break;
         }
         case ImportType::Memory: {
-            if (imports[i]->kind() != Object::MemoryKind
-                || m_imports[i]->memoryType()->initialSize() > imports[i]->asMemory()->sizeInPageSize()) {
+            if (UNLIKELY(imports[i]->kind() != Object::MemoryKind
+                         || m_imports[i]->memoryType()->initialSize() > imports[i]->asMemory()->sizeInPageSize()
+                         || m_imports[i]->memoryType()->maximumSize() < imports[i]->asMemory()->maximumSizeInPageSize())) {
                 Trap::throwException(state, "incompatible import type");
             }
 
-            if (imports[i]->asMemory()->maximumSizeInPageSize() > m_imports[i]->memoryType()->maximumSize()) {
-                Trap::throwException(state, "incompatible import type");
-            }
             instance->m_memories[memIndex++] = imports[i]->asMemory();
             break;
         }
         case ImportType::Tag: {
-            if (imports[i]->kind() != Object::TagKind) {
+            if (UNLIKELY(imports[i]->kind() != Object::TagKind)) {
                 Trap::throwException(state, "incompatible import type");
             }
             instance->m_tags[tagIndex++] = imports[i]->asTag();
@@ -232,7 +230,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     // init global
     while (globIndex < m_globalTypes.size()) {
         GlobalType* globalType = m_globalTypes[globIndex];
-        instance->m_globals[globIndex] = Global::createGlobal(m_store, Value(globalType->type()));
+        instance->m_globals[globIndex] = Global::createGlobal(m_store, Value(globalType->type()), globalType->isMutable());
 
         if (globalType->function()) {
             struct RunData {
