@@ -473,13 +473,16 @@ typedef uint32_t wasm_memory_pages_t;
 static const size_t MEMORY_PAGE_SIZE = 0x10000;
 
 WASM_API_EXTERN own wasm_memory_t* wasm_memory_new(wasm_store_t*, const wasm_memorytype_t*);
+WASM_API_EXTERN own wasm_memory_t* wasm_shared_memory_new(wasm_store_t*, const wasm_memorytype_t*);
 
 WASM_API_EXTERN own wasm_memorytype_t* wasm_memory_type(const wasm_memory_t*);
+WASM_API_EXTERN bool wasm_memory_is_shared(const wasm_memory_t*);
 
 WASM_API_EXTERN byte_t* wasm_memory_data(wasm_memory_t*);
 WASM_API_EXTERN size_t wasm_memory_data_size(const wasm_memory_t*);
 
 WASM_API_EXTERN wasm_memory_pages_t wasm_memory_size(const wasm_memory_t*);
+WASM_API_EXTERN wasm_memory_pages_t wasm_memory_max_size(const wasm_memory_t*);
 WASM_API_EXTERN bool wasm_memory_grow(wasm_memory_t*, wasm_memory_pages_t delta);
 
 
