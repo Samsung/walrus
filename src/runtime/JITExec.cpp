@@ -79,6 +79,11 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::UnreachableError:
             Trap::throwException(state, "unreachable executed");
             return resultOffsets;
+#if defined(ENABLE_EXTENDED_FEATURES)
+        case ExecutionContext::UnalignedAtomicError:
+            Trap::throwException(state, "unaligned atomic");
+            return resultOffsets;
+#endif /* ENABLE_EXTENDED_FEATURES */
         default:
             Trap::throwException(state, "unknown exception");
             return resultOffsets;

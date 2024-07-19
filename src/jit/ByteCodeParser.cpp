@@ -1899,6 +1899,62 @@ static void compileFunction(JITCompiler* compiler)
 #endif /* SLJIT_CONFIG_X86 */
             break;
         }
+#if defined(ENABLE_EXTENDED_FEATURES)
+        case ByteCode::I32AtomicLoadOpcode:
+        case ByteCode::I32AtomicLoad8UOpcode:
+        case ByteCode::I32AtomicLoad16UOpcode: {
+            info = Instruction::kIs32Bit;
+            requiredInit = OTLoadI32;
+            FALLTHROUGH;
+        }
+        case ByteCode::I64AtomicLoadOpcode:
+        case ByteCode::I64AtomicLoad8UOpcode:
+        case ByteCode::I64AtomicLoad16UOpcode:
+        case ByteCode::I64AtomicLoad32UOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            if (opcode == ByteCode::I64AtomicLoadOpcode) {
+                info = Instruction::kIsCallback;
+            }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTLoadI64);
+
+            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0] = STACK_OFFSET(loadOperation->srcOffset());
+            operands[1] = STACK_OFFSET(loadOperation->dstOffset());
+            break;
+        }
+        case ByteCode::I32AtomicStoreOpcode:
+        case ByteCode::I32AtomicStore8Opcode:
+        case ByteCode::I32AtomicStore16Opcode: {
+            info = Instruction::kIs32Bit;
+            requiredInit = OTStoreI32;
+            FALLTHROUGH;
+        }
+        case ByteCode::I64AtomicStoreOpcode:
+        case ByteCode::I64AtomicStore8Opcode:
+        case ByteCode::I64AtomicStore16Opcode:
+        case ByteCode::I64AtomicStore32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            if (opcode == ByteCode::I64AtomicStoreOpcode) {
+                info = Instruction::kIsCallback;
+            }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTStoreI64);
+
+            MemoryStore* atomicStore = reinterpret_cast<MemoryStore*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0] = STACK_OFFSET(atomicStore->src0Offset());
+            operands[1] = STACK_OFFSET(atomicStore->src1Offset());
+            break;
+        }
+#endif /* ENABLE_EXTENDED_FEATURES */
         default: {
             ASSERT_NOT_REACHED();
             break;
