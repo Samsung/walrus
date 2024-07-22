@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.14)
 project (
     uvwasi
     DESCRIPTION "WASI syscall API built atop libuv"
@@ -30,6 +30,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
   if (UVWASI_BUILD_X86)
     # set x86 build flag
     add_compile_options( -m32 )
+    add_link_options( -m32 )
   endif()
 endif()
 
@@ -53,8 +54,8 @@ endif()
           GIT_TAG ${LIBUV_VERSION})
 
   FetchContent_GetProperties(libuv)
+  FetchContent_MakeAvailable(libuv)
   if(NOT libuv_POPULATED)
-      FetchContent_Populate(libuv)
       include_directories("${libuv_SOURCE_DIR}/include")
       add_subdirectory(${libuv_SOURCE_DIR} ${libuv_BINARY_DIR} EXCLUDE_FROM_ALL)
   endif()
