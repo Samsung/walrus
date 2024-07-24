@@ -24,20 +24,20 @@
 
 namespace Walrus {
 
-Table* Table::createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize)
+Table* Table::createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
 {
-    Table* tbl = new Table(type, initialSize, maximumSize);
+    Table* tbl = new Table(type, initialSize, maximumSize, init ? init : reinterpret_cast<void*>(Value::NullBits));
     store->appendExtern(tbl);
 
     return tbl;
 }
 
-Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize)
+Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
     : m_type(type)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
 {
-    m_elements.resize(initialSize, reinterpret_cast<void*>(Value::NullBits));
+    m_elements.resize(initialSize, init);
 }
 
 void Table::init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
