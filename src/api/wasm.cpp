@@ -1051,10 +1051,20 @@ void wasm_global_set(wasm_global_t* glob, const wasm_val_t* val)
 }
 
 // Table Instances
+
+// used to mark special ref address passed from external modules
+static const size_t OTHER_EXTERN_REF_TAG = 1;
+
 own wasm_table_t* wasm_table_new(
     wasm_store_t* store, const wasm_tabletype_t* tt, wasm_ref_t* init)
 {
-    Table* table = Table::createTable(store->get(), tt->valtype.type, tt->limits.min, tt->limits.max);
+    Table* table = nullptr;
+    if (UNLIKELY((size_t)init & OTHER_EXTERN_REF_TAG)) {
+        table = Table::createTable(store->get(), tt->valtype.type, tt->limits.min, tt->limits.max, reinterpret_cast<Object*>(init));
+    } else {
+        table = Table::createTable(store->get(), tt->valtype.type, tt->limits.min, tt->limits.max, init ? const_cast<Object*>(init->get()) : nullptr);
+    }
+
     return new wasm_table_t(table, tt->clone());
 }
 
@@ -1069,8 +1079,12 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
         return nullptr;
     }
 
-    Value val(table->get()->uncheckedGetElement(index));
+    wasm_ref_t* ref = static_cast<wasm_ref_t*>(table->get()->uncheckedGetElement(index));
+    if (UNLIKELY((size_t)ref & OTHER_EXTERN_REF_TAG)) {
+        return ref;
+    }
 
+    Value val(ref);
     if (val.isNull()) {
         return nullptr;
     }
@@ -1085,7 +1099,11 @@ bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* re
         return false;
     }
 
-    table->get()->uncheckedSetElement(index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
+    if (UNLIKELY((size_t)ref & OTHER_EXTERN_REF_TAG)) {
+        table->get()->uncheckedSetElement(index, reinterpret_cast<Object*>(ref));
+    } else {
+        table->get()->uncheckedSetElement(index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
+    }
     return true;
 }
 
@@ -1100,7 +1118,11 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
         return false;
     }
 
-    table->get()->grow(delta + table->get()->size(), init ? const_cast<Object*>(init->get()) : reinterpret_cast<void*>(Value::NullBits));
+    if (UNLIKELY((size_t)init & OTHER_EXTERN_REF_TAG)) {
+        table->get()->grow(delta + table->get()->size(), reinterpret_cast<Object*>(init));
+    } else {
+        table->get()->grow(delta + table->get()->size(), init ? const_cast<Object*>(init->get()) : reinterpret_cast<void*>(Value::NullBits));
+    }
     return true;
 }
 

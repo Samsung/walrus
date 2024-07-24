@@ -30,7 +30,7 @@ class Table : public Extern {
     friend class JITFieldAccessor;
 
 public:
-    static Table* createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize);
+    static Table* createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init = nullptr);
 
     virtual Object::Kind kind() const override
     {
@@ -101,7 +101,7 @@ public:
     void fillTable(uint32_t n, void* value, uint32_t index);
 
 private:
-    Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize);
+    Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init);
 
     void throwException(ExecutionState& state) const;
 
