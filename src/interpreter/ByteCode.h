@@ -660,6 +660,41 @@ protected:
     };
 };
 
+class ByteCodeOffset2 : public ByteCode {
+public:
+    ByteCodeOffset2(Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2)
+        : ByteCode(opcode)
+        , m_stackOffset1(stackOffset1)
+        , m_stackOffset2(stackOffset2)
+    {
+    }
+
+    ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
+    ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
+
+protected:
+    ByteCodeStackOffset m_stackOffset1;
+    ByteCodeStackOffset m_stackOffset2;
+};
+
+class ByteCodeOffsetValue : public ByteCode {
+public:
+    ByteCodeOffsetValue(Opcode opcode, ByteCodeStackOffset stackOffset, uint32_t value)
+        : ByteCode(opcode)
+        , m_stackOffset(stackOffset)
+        , m_value(value)
+    {
+    }
+
+    ByteCodeStackOffset stackOffset() const { return m_stackOffset; }
+    uint32_t uint32Value() const { return m_value; }
+    int32_t int32Value() const { return static_cast<int32_t>(m_value); }
+
+protected:
+    ByteCodeStackOffset m_stackOffset;
+    uint32_t m_value;
+};
+
 class ByteCodeTable {
 public:
     ByteCodeTable();
@@ -799,32 +834,28 @@ protected:
     };
 
 // dummy ByteCode for unary operation
-class UnaryOperation : public ByteCode {
+class UnaryOperation : public ByteCodeOffset2 {
 public:
     UnaryOperation(Opcode code, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(code)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffset2(code, srcOffset, dstOffset)
     {
     }
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_UNARY_BYTECODE_DUMP(name)                                                               \
-    void dump(size_t pos)                                                                              \
-    {                                                                                                  \
-        printf(#name " src: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset); \
+#define DEFINE_UNARY_BYTECODE_DUMP(name)                                                                     \
+    void dump(size_t pos)                                                                                    \
+    {                                                                                                        \
+        printf(#name " src: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2); \
     }
 #else
 #define DEFINE_UNARY_BYTECODE_DUMP(name)
@@ -850,30 +881,15 @@ FOR_EACH_BYTECODE_SIMD_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
 
-class Move : public ByteCode {
-public:
-    Move(Opcode opcode, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(opcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
-};
-
 #define DEFINE_MOVE_BYTECODE(name)                                         \
-    class name : public Move {                                             \
+    class name : public ByteCodeOffset2 {                                  \
     public:                                                                \
         name(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
-            : Move(Opcode::name##Opcode, srcOffset, dstOffset)             \
+            : ByteCodeOffset2(Opcode::name##Opcode, srcOffset, dstOffset)  \
         {                                                                  \
         }                                                                  \
+        ByteCodeStackOffset srcOffset() const { return stackOffset1(); }   \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }   \
         DEFINE_UNARY_BYTECODE_DUMP(name)                                   \
     };
 
@@ -1005,108 +1021,84 @@ protected:
     uint16_t m_resultOffsetsSize;
 };
 
-class Load32 : public ByteCode {
+class Load32 : public ByteCodeOffset2 {
 public:
     Load32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(Load32Opcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffset2(Load32Opcode, srcOffset, dstOffset)
     {
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("load32 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
-class Load64 : public ByteCode {
+class Load64 : public ByteCodeOffset2 {
 public:
     Load64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(Load64Opcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffset2(Load64Opcode, srcOffset, dstOffset)
     {
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("load64 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
-class Store32 : public ByteCode {
+class Store32 : public ByteCodeOffset2 {
 public:
-    Store32(ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCode(Store32Opcode)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
+    Store32(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset)
+        : ByteCodeOffset2(Store32Opcode, src0Offset, src1Offset)
     {
     }
 
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
+    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("store32 ");
-        DUMP_BYTECODE_OFFSET(src0Offset);
-        DUMP_BYTECODE_OFFSET(src1Offset);
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
 };
 
-class Store64 : public ByteCode {
+class Store64 : public ByteCodeOffset2 {
 public:
-    Store64(ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCode(Store64Opcode)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
+    Store64(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset)
+        : ByteCodeOffset2(Store64Opcode, src0Offset, src1Offset)
     {
     }
 
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
+    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("store64 ");
-        DUMP_BYTECODE_OFFSET(src0Offset);
-        DUMP_BYTECODE_OFFSET(src1Offset);
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
 };
 
 class Jump : public ByteCode {
@@ -1134,64 +1126,52 @@ protected:
     uint32_t m_offset;
 };
 
-class JumpIfTrue : public ByteCode {
+class JumpIfTrue : public ByteCodeOffsetValue {
 public:
     JumpIfTrue(ByteCodeStackOffset srcOffset, int32_t offset = 0)
-        : ByteCode(Opcode::JumpIfTrueOpcode)
-        , m_srcOffset(srcOffset)
-        , m_offset(offset)
+        : ByteCodeOffsetValue(Opcode::JumpIfTrueOpcode, srcOffset, static_cast<uint32_t>(offset))
     {
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    int32_t offset() const { return m_offset; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    int32_t offset() const { return int32Value(); }
     void setOffset(int32_t offset)
     {
-        m_offset = offset;
+        m_value = static_cast<uint32_t>(offset);
     }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("jump_if_true ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        printf("dst: %" PRId32, (int32_t)pos + m_offset);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("dst: %" PRId32, (int32_t)pos + offset());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    int32_t m_offset;
 };
 
-class JumpIfFalse : public ByteCode {
+class JumpIfFalse : public ByteCodeOffsetValue {
 public:
     JumpIfFalse(ByteCodeStackOffset srcOffset, int32_t offset = 0)
-        : ByteCode(Opcode::JumpIfFalseOpcode)
-        , m_srcOffset(srcOffset)
-        , m_offset(offset)
+        : ByteCodeOffsetValue(Opcode::JumpIfFalseOpcode, srcOffset, static_cast<uint32_t>(offset))
     {
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    int32_t offset() const { return m_offset; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    int32_t offset() const { return int32Value(); }
     void setOffset(int32_t offset)
     {
-        m_offset = offset;
+        m_value = static_cast<uint32_t>(offset);
     }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("jump_if_false ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        printf("dst: %" PRId32, (int32_t)pos + m_offset);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("dst: %" PRId32, (int32_t)pos + offset());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    int32_t m_offset;
 };
 
 class Select : public ByteCode {
@@ -2119,30 +2099,24 @@ protected:
     ByteCodeStackOffset m_dstOffset;
 };
 
-class TableSize : public ByteCode {
+class TableSize : public ByteCodeOffsetValue {
 public:
     TableSize(uint32_t index, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::TableSizeOpcode)
-        , m_tableIndex(index)
-        , m_dstOffset(dst)
+        : ByteCodeOffsetValue(Opcode::TableSizeOpcode, dst, index)
     {
     }
 
-    uint32_t tableIndex() const { return m_tableIndex; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint32_t tableIndex() const { return uint32Value(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("table.size ");
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("tableIndex: %" PRIu32, m_tableIndex);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("tableIndex: %" PRIu32, tableIndex());
     }
 #endif
-
-protected:
-    uint32_t m_tableIndex;
-    ByteCodeStackOffset m_dstOffset;
 };
 
 class TableCopy : public ByteCode {
@@ -2266,186 +2240,142 @@ protected:
     uint32_t m_segmentIndex;
 };
 
-class RefFunc : public ByteCode {
+class RefFunc : public ByteCodeOffsetValue {
 public:
     RefFunc(uint32_t funcIndex, ByteCodeStackOffset dstOffset)
-        : ByteCode(Opcode::RefFuncOpcode)
-        , m_funcIndex(funcIndex)
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffsetValue(Opcode::RefFuncOpcode, dstOffset, funcIndex)
     {
     }
 
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint32_t funcIndex() const { return m_funcIndex; }
+    ByteCodeStackOffset dstOffset() const { return stackOffset(); }
+    uint32_t funcIndex() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("ref.func ");
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("funcIndex: %" PRIu32, m_funcIndex);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("funcIndex: %" PRIu32, funcIndex());
     }
 #endif
-
-private:
-    uint32_t m_funcIndex;
-    ByteCodeStackOffset m_dstOffset;
 };
 
-class GlobalGet32 : public ByteCode {
+class GlobalGet32 : public ByteCodeOffsetValue {
 public:
     GlobalGet32(ByteCodeStackOffset dstOffset, uint32_t index)
-        : ByteCode(Opcode::GlobalGet32Opcode)
-        , m_dstOffset(dstOffset)
-        , m_index(index)
+        : ByteCodeOffsetValue(Opcode::GlobalGet32Opcode, dstOffset, index)
     {
     }
 
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint32_t index() const { return m_index; }
+    ByteCodeStackOffset dstOffset() const { return stackOffset(); }
+    uint32_t index() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("global.get32 ");
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("index: %" PRId32,
-               m_index);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("index: %" PRId32, uint32Value());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_dstOffset;
-    uint32_t m_index;
 };
 
-class GlobalGet64 : public ByteCode {
+class GlobalGet64 : public ByteCodeOffsetValue {
 public:
     GlobalGet64(ByteCodeStackOffset dstOffset, uint32_t index)
-        : ByteCode(Opcode::GlobalGet64Opcode)
-        , m_dstOffset(dstOffset)
-        , m_index(index)
+        : ByteCodeOffsetValue(Opcode::GlobalGet64Opcode, dstOffset, index)
     {
     }
 
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint32_t index() const { return m_index; }
+    ByteCodeStackOffset dstOffset() const { return stackOffset(); }
+    uint32_t index() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("global.get64 ");
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("index: %" PRId32,
-               m_index);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("index: %" PRId32, uint32Value());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_dstOffset;
-    uint32_t m_index;
 };
 
-class GlobalGet128 : public ByteCode {
+class GlobalGet128 : public ByteCodeOffsetValue {
 public:
     GlobalGet128(ByteCodeStackOffset dstOffset, uint32_t index)
-        : ByteCode(Opcode::GlobalGet128Opcode)
-        , m_dstOffset(dstOffset)
-        , m_index(index)
+        : ByteCodeOffsetValue(Opcode::GlobalGet128Opcode, dstOffset, index)
     {
     }
 
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint32_t index() const { return m_index; }
+    ByteCodeStackOffset dstOffset() const { return stackOffset(); }
+    uint32_t index() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("global.get128 ");
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("index: %" PRId32,
-               m_index);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("index: %" PRId32, uint32Value());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_dstOffset;
-    uint32_t m_index;
 };
 
-class GlobalSet32 : public ByteCode {
+class GlobalSet32 : public ByteCodeOffsetValue {
 public:
     GlobalSet32(ByteCodeStackOffset srcOffset, uint32_t index)
-        : ByteCode(Opcode::GlobalSet32Opcode)
-        , m_srcOffset(srcOffset)
-        , m_index(index)
+        : ByteCodeOffsetValue(Opcode::GlobalSet32Opcode, srcOffset, index)
     {
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    uint32_t index() const { return m_index; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    uint32_t index() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("global.set32 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        printf("index: %" PRId32,
-               m_index);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("index: %" PRId32, uint32Value());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    uint32_t m_index;
 };
 
-class GlobalSet64 : public ByteCode {
+class GlobalSet64 : public ByteCodeOffsetValue {
 public:
     GlobalSet64(ByteCodeStackOffset srcOffset, uint32_t index)
-        : ByteCode(Opcode::GlobalSet64Opcode)
-        , m_srcOffset(srcOffset)
-        , m_index(index)
+        : ByteCodeOffsetValue(Opcode::GlobalSet64Opcode, srcOffset, index)
     {
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    uint32_t index() const { return m_index; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    uint32_t index() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("global.set64 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        printf("index: %" PRId32,
-               m_index);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("index: %" PRId32, uint32Value());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    uint32_t m_index;
 };
 
-class GlobalSet128 : public ByteCode {
+class GlobalSet128 : public ByteCodeOffsetValue {
 public:
     GlobalSet128(ByteCodeStackOffset srcOffset, uint32_t index)
-        : ByteCode(Opcode::GlobalSet128Opcode)
-        , m_srcOffset(srcOffset)
-        , m_index(index)
+        : ByteCodeOffsetValue(Opcode::GlobalSet128Opcode, srcOffset, index)
     {
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    uint32_t index() const { return m_index; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    uint32_t index() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("global.set128 ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        printf("index: %" PRId32,
-               m_index);
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("index: %" PRId32, uint32Value());
     }
 #endif
 
