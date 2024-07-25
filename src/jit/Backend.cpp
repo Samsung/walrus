@@ -1038,7 +1038,7 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             // Follows the declaration of FunctionDescriptor::ExternalDecl().
             // Context stored in SLJIT_S0 (kContextReg)
             // Frame stored in SLJIT_S1 (kFrameReg)
-            sljit_emit_enter(m_compiler, 0, SLJIT_ARGS3(P, P, P, P_R), 3, 2, 0, 0, 0);
+            sljit_emit_enter(m_compiler, 0, SLJIT_ARGS3(P, P, P, P_R), 3, 2, 0);
             sljit_emit_icall(m_compiler, SLJIT_CALL_REG_ARG, SLJIT_ARGS0(P), SLJIT_R2, 0);
             sljit_label* returnToLabel = sljit_emit_label(m_compiler);
             sljit_emit_return(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0);
@@ -1486,8 +1486,9 @@ void JITCompiler::emitProlog()
 #endif /* !SLJIT_CONFIG_X86 */
 
     sljit_emit_enter(m_compiler, options, SLJIT_ARGS0(P),
-                     SLJIT_NUMBER_OF_SCRATCH_REGISTERS, m_savedIntegerRegCount + 2,
-                     SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, m_savedFloatRegCount, sizeof(ExecutionContext::CallFrame));
+                     SLJIT_NUMBER_OF_SCRATCH_REGISTERS | SLJIT_ENTER_FLOAT(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS),
+                     (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount),
+                    sizeof(ExecutionContext::CallFrame));
 
     // Setup new frame.
     sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(lastFrame));
