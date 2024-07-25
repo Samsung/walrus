@@ -360,6 +360,15 @@ enum OperandTypes : uint32_t {
 #undef OL4
 #undef OL5
 
+enum ParamTypes {
+    NoParam,
+    ParamSrc,
+    ParamDst,
+    ParamSrcDst,
+    ParamSrc2,
+    ParamSrc2Dst,
+};
+
 static void compileFunction(JITCompiler* compiler)
 {
     size_t idx = 0;
@@ -384,14 +393,10 @@ static void compileFunction(JITCompiler* compiler)
             labels[COMPUTE_OFFSET(idx, jump->offset())] = nullptr;
             break;
         }
-        case ByteCode::JumpIfTrueOpcode: {
-            JumpIfTrue* jumpIfTrue = reinterpret_cast<JumpIfTrue*>(byteCode);
-            labels[COMPUTE_OFFSET(idx, jumpIfTrue->offset())] = nullptr;
-            break;
-        }
+        case ByteCode::JumpIfTrueOpcode:
         case ByteCode::JumpIfFalseOpcode: {
-            JumpIfFalse* jumpIfFalse = reinterpret_cast<JumpIfFalse*>(byteCode);
-            labels[COMPUTE_OFFSET(idx, jumpIfFalse->offset())] = nullptr;
+            ByteCodeOffsetValue* offsetValue = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
+            labels[COMPUTE_OFFSET(idx, offsetValue->int32Value())] = nullptr;
             break;
         }
         case ByteCode::BrTableOpcode: {
@@ -453,7 +458,7 @@ static void compileFunction(JITCompiler* compiler)
         ByteCode* byteCode = function->peekByteCode<ByteCode>(idx);
         ByteCode::Opcode opcode = byteCode->opcode();
         Instruction::Group group = Instruction::Any;
-        uint8_t paramCount = 0;
+        uint8_t paramType = ParamTypes::NoParam;
         uint32_t requiredInit = OTNone;
         uint16_t info = 0;
 
@@ -468,7 +473,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32OrOpcode:
         case ByteCode::I32XorOpcode: {
             group = Instruction::Binary;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIs32Bit;
             requiredInit = OTOp2I32;
             break;
@@ -477,7 +482,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32ShrSOpcode:
         case ByteCode::I32ShrUOpcode: {
             group = Instruction::Binary;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIs32Bit | Instruction::kIsShift;
             requiredInit = OTOp2I32;
             break;
@@ -487,7 +492,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32RemSOpcode:
         case ByteCode::I32RemUOpcode: {
             group = Instruction::Binary;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIs32Bit | Instruction::kDestroysR0R1;
             requiredInit = OTOp2I32;
             break;
@@ -498,13 +503,13 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64OrOpcode:
         case ByteCode::I64XorOpcode: {
             group = Instruction::Binary;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTOp2I64;
             break;
         }
         case ByteCode::I64MulOpcode: {
             group = Instruction::Binary;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kDestroysR0R1;
             requiredInit = OTMulI64;
@@ -518,7 +523,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64RemSOpcode:
         case ByteCode::I64RemUOpcode: {
             group = Instruction::Binary;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTDivRemI64;
@@ -534,7 +539,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64ShrSOpcode:
         case ByteCode::I64ShrUOpcode: {
             group = Instruction::Binary;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIsShift;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             requiredInit = OTShiftI64;
@@ -554,7 +559,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32GeSOpcode:
         case ByteCode::I32GeUOpcode: {
             group = Instruction::Compare;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIs32Bit | Instruction::kIsMergeCompare;
             requiredInit = OTOp2I32;
             break;
@@ -570,7 +575,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64GeSOpcode:
         case ByteCode::I64GeUOpcode: {
             group = Instruction::Compare;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIsMergeCompare | Instruction::kFreeUnusedEarly;
             requiredInit = OTCompareI64;
             break;
@@ -586,7 +591,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64MulOpcode:
         case ByteCode::F64DivOpcode: {
             group = Instruction::BinaryFloat;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             if (requiredInit == OTNone)
                 requiredInit = OTOp2F64;
             break;
@@ -598,7 +603,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64MaxOpcode:
         case ByteCode::F64MinOpcode: {
             group = Instruction::BinaryFloat;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIsCallback;
             if (requiredInit == OTNone)
                 requiredInit = OTOp2F64;
@@ -607,7 +612,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32CopysignOpcode:
         case ByteCode::F64CopysignOpcode: {
             group = Instruction::BinaryFloat;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = opcode == ByteCode::F32CopysignOpcode ? OTCopySignF32 : OTCopySignF64;
             break;
         }
@@ -626,7 +631,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64GtOpcode:
         case ByteCode::F64GeOpcode: {
             group = Instruction::CompareFloat;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIsMergeCompare;
             if (requiredInit == OTNone)
                 requiredInit = OTCompareF64;
@@ -634,7 +639,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I32PopcntOpcode: {
             group = Instruction::Unary;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIs32Bit | Instruction::kIsCallback;
             requiredInit = OTOp1I32;
             break;
@@ -642,7 +647,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32Extend8SOpcode:
         case ByteCode::I32Extend16SOpcode: {
             group = Instruction::Unary;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIs32Bit;
             requiredInit = OTOp1I32;
             break;
@@ -650,7 +655,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32ClzOpcode:
         case ByteCode::I32CtzOpcode: {
             group = Instruction::Unary;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIs32Bit;
             requiredInit = OTOp1I32;
             break;
@@ -658,7 +663,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64ClzOpcode:
         case ByteCode::I64CtzOpcode: {
             group = Instruction::Unary;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             requiredInit = OTCountZeroesI64;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
@@ -668,7 +673,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I64PopcntOpcode: {
             group = Instruction::Unary;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsCallback;
             requiredInit = OTOp1I64;
             break;
@@ -677,7 +682,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64Extend16SOpcode:
         case ByteCode::I64Extend32SOpcode: {
             group = Instruction::Unary;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTOp1I64;
             break;
         }
@@ -694,7 +699,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64NearestOpcode:
         case ByteCode::F64SqrtOpcode: {
             group = Instruction::UnaryFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsCallback;
             if (requiredInit == OTNone)
                 requiredInit = OTOp1F64;
@@ -707,7 +712,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64AbsOpcode:
         case ByteCode::F64NegOpcode: {
             group = Instruction::UnaryFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             if (requiredInit == OTNone)
                 requiredInit = OTOp1F64;
             break;
@@ -715,27 +720,27 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32DemoteF64Opcode:
         case ByteCode::F64PromoteF32Opcode: {
             group = Instruction::UnaryFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = opcode == ByteCode::F32DemoteF64Opcode ? OTDemoteF64 : OTPromoteF32;
             break;
         }
         case ByteCode::I32EqzOpcode: {
             group = Instruction::Compare;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIs32Bit | Instruction::kIsMergeCompare;
             requiredInit = OTOp1I32;
             break;
         }
         case ByteCode::I64EqzOpcode: {
             group = Instruction::Compare;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsMergeCompare | Instruction::kFreeUnusedEarly;
             requiredInit = OTEqzI64;
             break;
         }
         case ByteCode::I32WrapI64Opcode: {
             group = Instruction::Convert;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kFreeUnusedEarly;
             requiredInit = OTConvertInt32FromInt64;
             break;
@@ -743,7 +748,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64ExtendI32SOpcode:
         case ByteCode::I64ExtendI32UOpcode: {
             group = Instruction::Convert;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kFreeUnusedEarly;
             requiredInit = OTConvertInt64FromInt32;
             break;
@@ -751,13 +756,13 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32TruncF32SOpcode:
         case ByteCode::I32TruncSatF32SOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTConvertInt32FromFloat32;
             break;
         }
         case ByteCode::I32TruncF32UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat32Callback;
@@ -769,13 +774,13 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32TruncF64SOpcode:
         case ByteCode::I32TruncSatF64SOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTConvertInt32FromFloat64;
             break;
         }
         case ByteCode::I32TruncF64UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat64Callback;
@@ -786,7 +791,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I64TruncF32SOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat32Callback;
@@ -798,14 +803,14 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64TruncF32UOpcode:
         case ByteCode::I64TruncSatF32UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat32Callback;
             break;
         }
         case ByteCode::I64TruncF64SOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat64Callback;
@@ -817,14 +822,14 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64TruncF64UOpcode:
         case ByteCode::I64TruncSatF64UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat64Callback;
             break;
         }
         case ByteCode::I32TruncSatF32UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat32Callback;
@@ -835,7 +840,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I32TruncSatF64UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat64Callback;
@@ -846,7 +851,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I64TruncSatF32SOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat32Callback;
@@ -857,7 +862,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I64TruncSatF64SOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat64Callback;
@@ -869,14 +874,14 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32ConvertI32SOpcode:
         case ByteCode::F32ConvertI32UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTConvertFloat32FromInt32;
             break;
         }
         case ByteCode::F32ConvertI64SOpcode:
         case ByteCode::F32ConvertI64UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -886,14 +891,14 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64ConvertI32SOpcode:
         case ByteCode::F64ConvertI32UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTConvertFloat64FromInt32;
             break;
         }
         case ByteCode::F64ConvertI64SOpcode:
         case ByteCode::F64ConvertI64UOpcode: {
             group = Instruction::ConvertFloat;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -978,23 +983,15 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::Load32Opcode: {
-            Load32* load32 = reinterpret_cast<Load32*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(OTLoadI32);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(load32->srcOffset());
-            operands[1] = STACK_OFFSET(load32->dstOffset());
+            group = Instruction::Load;
+            paramType = ParamTypes::ParamSrcDst;
+            requiredInit = OTLoadI32;
             break;
         }
         case ByteCode::Load64Opcode: {
-            Load64* load64 = reinterpret_cast<Load64*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(OTLoadI64);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(load64->srcOffset());
-            operands[1] = STACK_OFFSET(load64->dstOffset());
+            group = Instruction::Load;
+            paramType = ParamTypes::ParamSrcDst;
+            requiredInit = OTLoadI64;
             break;
         }
         case ByteCode::I32LoadOpcode:
@@ -1067,23 +1064,15 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::Store32Opcode: {
-            Store32* store32 = reinterpret_cast<Store32*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setRequiredRegsDescriptor(OTStoreI32);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(store32->src0Offset());
-            operands[1] = STACK_OFFSET(store32->src1Offset());
+            group = Instruction::Store;
+            paramType = ParamTypes::ParamSrc2;
+            requiredInit = OTStoreI32;
             break;
         }
         case ByteCode::Store64Opcode: {
-            Store64* store64 = reinterpret_cast<Store64*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setRequiredRegsDescriptor(OTStoreI64);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(store64->src0Offset());
-            operands[1] = STACK_OFFSET(store64->src1Offset());
+            group = Instruction::Store;
+            paramType = ParamTypes::ParamSrc2;
+            requiredInit = OTStoreI64;
             break;
         }
         case ByteCode::I32StoreOpcode:
@@ -1199,26 +1188,26 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I16X8SplatOpcode:
         case ByteCode::I32X4SplatOpcode: {
             group = Instruction::SplatSIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTSplatI32;
             break;
         }
         case ByteCode::I64X2SplatOpcode: {
             group = Instruction::SplatSIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTSplatI64;
             break;
         }
         case ByteCode::F32X4SplatOpcode: {
             group = Instruction::SplatSIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kFreeUnusedEarly;
             requiredInit = OTSplatF32;
             break;
         }
         case ByteCode::F64X2SplatOpcode: {
             group = Instruction::SplatSIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kFreeUnusedEarly;
             requiredInit = OTSplatF64;
             break;
@@ -1228,7 +1217,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32X4BitmaskOpcode:
         case ByteCode::I64X2BitmaskOpcode: {
             group = Instruction::BitMaskSIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTV128ToI32;
             break;
         }
@@ -1246,12 +1235,9 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::TableSizeOpcode: {
-            auto tableSize = reinterpret_cast<TableSize*>(byteCode);
-
-            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTPutI32);
-
-            *instr->operands() = STACK_OFFSET(tableSize->dstOffset());
+            group = Instruction::Table;
+            paramType = ParamTypes::ParamDst;
+            requiredInit = OTPutI32;
             break;
         }
         case ByteCode::TableCopyOpcode: {
@@ -1394,15 +1380,10 @@ static void compileFunction(JITCompiler* compiler)
             compiler->appendBranch(jump, opcode, labels[COMPUTE_OFFSET(idx, jump->offset())], 0);
             break;
         }
-        case ByteCode::JumpIfTrueOpcode: {
-            JumpIfTrue* jumpIfTrue = reinterpret_cast<JumpIfTrue*>(byteCode);
-            Instruction* instr = compiler->appendBranch(jumpIfTrue, opcode, labels[COMPUTE_OFFSET(idx, jumpIfTrue->offset())], STACK_OFFSET(jumpIfTrue->srcOffset()));
-            instr->setRequiredRegsDescriptor(OTGetI32);
-            break;
-        }
+        case ByteCode::JumpIfTrueOpcode:
         case ByteCode::JumpIfFalseOpcode: {
-            JumpIfFalse* jumpIfFalse = reinterpret_cast<JumpIfFalse*>(byteCode);
-            Instruction* instr = compiler->appendBranch(jumpIfFalse, opcode, labels[COMPUTE_OFFSET(idx, jumpIfFalse->offset())], STACK_OFFSET(jumpIfFalse->srcOffset()));
+            ByteCodeOffsetValue* offsetValue = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
+            Instruction* instr = compiler->appendBranch(byteCode, opcode, labels[COMPUTE_OFFSET(idx, offsetValue->int32Value())], STACK_OFFSET(offsetValue->stackOffset()));
             instr->setRequiredRegsDescriptor(OTGetI32);
             break;
         }
@@ -1462,7 +1443,8 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64ReinterpretF64Opcode:
         case ByteCode::F32ReinterpretI32Opcode:
         case ByteCode::F64ReinterpretI64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Move, opcode, 1, 1);
+            group = Instruction::Move;
+            paramType = ParamTypes::ParamSrcDst;
 
             switch (opcode) {
             case ByteCode::MoveI32Opcode:
@@ -1493,90 +1475,52 @@ static void compileFunction(JITCompiler* compiler)
                 requiredInit = OTF64ReinterpretI64;
                 break;
             }
-
-            instr->setRequiredRegsDescriptor(requiredInit);
-
-            Move* move = reinterpret_cast<Move*>(byteCode);
-            Operand* operands = instr->operands();
-
-            operands[0] = STACK_OFFSET(move->srcOffset());
-            operands[1] = STACK_OFFSET(move->dstOffset());
             break;
         }
         case ByteCode::GlobalGet32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet32Opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTPutI32);
-
             GlobalGet32* globalGet32 = reinterpret_cast<GlobalGet32*>(byteCode);
-
-            if (isFloatGlobal(globalGet32->index(), compiler->module())) {
-                instr->setRequiredRegsDescriptor(OTGlobalGetF32);
-            }
-
-            *instr->operands() = STACK_OFFSET(globalGet32->dstOffset());
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamDst;
+            requiredInit = isFloatGlobal(globalGet32->index(), compiler->module()) ? OTGlobalGetF32 : OTGetI32;
             break;
         }
         case ByteCode::GlobalGet64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet64Opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTGlobalGetI64);
-
             GlobalGet64* globalGet64 = reinterpret_cast<GlobalGet64*>(byteCode);
-
-            if (isFloatGlobal(globalGet64->index(), compiler->module())) {
-                instr->setRequiredRegsDescriptor(OTGlobalGetF64);
-            }
-
-            *instr->operands() = STACK_OFFSET(globalGet64->dstOffset());
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamDst;
+            requiredInit = isFloatGlobal(globalGet64->index(), compiler->module()) ? OTGlobalGetF64 : OTGlobalGetI64;
             break;
         }
         case ByteCode::GlobalGet128Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalGet128Opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTGlobalGetV128);
-
-            GlobalGet128* globalGet128 = reinterpret_cast<GlobalGet128*>(byteCode);
-            *instr->operands() = STACK_OFFSET(globalGet128->dstOffset());
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamDst;
+            requiredInit = OTGlobalGetV128;
             break;
         }
         case ByteCode::GlobalSet32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet32Opcode, 1, 0);
-            instr->setRequiredRegsDescriptor(OTGlobalSetI32);
-
             GlobalSet32* globalSet32 = reinterpret_cast<GlobalSet32*>(byteCode);
-
-            if (isFloatGlobal(globalSet32->index(), compiler->module())) {
-                instr->setRequiredRegsDescriptor(OTGlobalSetF32);
-            }
-
-            *instr->operands() = STACK_OFFSET(globalSet32->srcOffset());
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamSrc;
+            requiredInit = isFloatGlobal(globalSet32->index(), compiler->module()) ? OTGlobalSetF32 : OTGlobalSetI32;
             break;
         }
         case ByteCode::GlobalSet64Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet64Opcode, 1, 0);
-            instr->setRequiredRegsDescriptor(OTGlobalSetI64);
-
             GlobalSet64* globalSet64 = reinterpret_cast<GlobalSet64*>(byteCode);
-
-            if (isFloatGlobal(globalSet64->index(), compiler->module())) {
-                instr->setRequiredRegsDescriptor(OTGlobalSetF64);
-            }
-
-            *instr->operands() = STACK_OFFSET(globalSet64->srcOffset());
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamSrc;
+            requiredInit = isFloatGlobal(globalSet64->index(), compiler->module()) ? OTGlobalSetF64 : OTGlobalSetI64;
             break;
         }
         case ByteCode::GlobalSet128Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::GlobalSet128Opcode, 1, 0);
-            instr->setRequiredRegsDescriptor(OTGlobalSetV128);
-
-            GlobalSet128* globalSet128 = reinterpret_cast<GlobalSet128*>(byteCode);
-            *instr->operands() = STACK_OFFSET(globalSet128->srcOffset());
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamSrc;
+            requiredInit = OTGlobalSetV128;
             break;
         }
         case ByteCode::RefFuncOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, ByteCode::RefFuncOpcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTPutPTR);
-
-            RefFunc* refFunc = reinterpret_cast<RefFunc*>(byteCode);
-            *instr->operands() = STACK_OFFSET(refFunc->dstOffset());
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamDst;
+            requiredInit = OTPutPTR;
             break;
         }
         case ByteCode::EndOpcode: {
@@ -1710,13 +1654,13 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::V128OrOpcode:
         case ByteCode::V128XorOpcode: {
             group = Instruction::BinarySIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTOp2V128;
             break;
         }
         case ByteCode::I8X16SwizzleOpcode: {
             group = Instruction::BinarySIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTSwizzleV128;
             break;
         }
@@ -1726,7 +1670,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64X2GtSOpcode:
         case ByteCode::I64X2GeSOpcode: {
             group = Instruction::BinarySIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTOp2V128Tmp;
             break;
         }
@@ -1735,7 +1679,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64X2MaxOpcode:
         case ByteCode::F64X2MinOpcode: {
             group = Instruction::BinarySIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
             info = Instruction::kIsCallback;
 #endif /* SLJIT_CONFIG_ARM_32 */
@@ -1747,7 +1691,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64X2PMaxOpcode:
         case ByteCode::F64X2PMinOpcode: {
             group = Instruction::BinarySIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTPMinMaxV128;
             break;
         }
@@ -1757,7 +1701,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64X2GeOpcode:
         case ByteCode::V128AndnotOpcode: {
             group = Instruction::BinarySIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTOp2V128Rev;
             break;
         }
@@ -1800,7 +1744,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64X2ConvertLowI32X4SOpcode:
         case ByteCode::V128NotOpcode: {
             group = Instruction::UnarySIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTOp1V128;
             break;
         }
@@ -1813,7 +1757,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64X2TruncOpcode:
         case ByteCode::F64X2NearestOpcode: {
             group = Instruction::UnarySIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
             info = Instruction::kIsCallback;
 #endif /* SLJIT_CONFIG_ARM_32 */
@@ -1824,7 +1768,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32X4ConvertI32X4UOpcode:
         case ByteCode::F64X2ConvertLowI32X4UOpcode: {
             group = Instruction::UnarySIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTOp1V128Tmp;
             break;
         }
@@ -1834,7 +1778,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64X2AllTrueOpcode:
         case ByteCode::V128AnyTrueOpcode: {
             group = Instruction::UnaryCondSIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsMergeCompare;
             requiredInit = OTOpCondV128;
             break;
@@ -1848,7 +1792,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64X2ShlOpcode:
         case ByteCode::I64X2ShrUOpcode: {
             group = Instruction::ShiftSIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTShiftV128;
             break;
         }
@@ -1857,13 +1801,13 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I8X16ShrUOpcode:
         case ByteCode::I64X2ShrSOpcode: {
             group = Instruction::ShiftSIMD;
-            paramCount = 2;
+            paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTShiftV128Tmp;
             break;
         }
         case ByteCode::I8X16PopcntOpcode: {
             group = Instruction::UnarySIMD;
-            paramCount = 1;
+            paramType = ParamTypes::ParamSrcDst;
             requiredInit = OTPopcntV128;
             break;
         }
@@ -1961,7 +1905,36 @@ static void compileFunction(JITCompiler* compiler)
         }
         }
 
-        if (paramCount == 2) {
+        switch (paramType) {
+        case ParamSrc:
+        case ParamDst: {
+            uint32_t resultCount = (paramType == ParamTypes::ParamDst) ? 1 : 0;
+            Instruction* instr = compiler->append(byteCode, group, opcode, 1 - resultCount, resultCount);
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit);
+
+            ByteCodeOffsetValue* offsetValueOperation = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
+
+            *instr->operands() = STACK_OFFSET(offsetValueOperation->stackOffset());
+            break;
+        }
+        case ParamTypes::ParamSrcDst:
+        case ParamTypes::ParamSrc2: {
+            ASSERT(group != Instruction::Any);
+
+            uint32_t resultCount = (paramType == ParamTypes::ParamSrcDst) ? 1 : 0;
+            Instruction* instr = compiler->append(byteCode, group, opcode, 2 - resultCount, resultCount);
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit);
+
+            ByteCodeOffset2* offset2Operation = reinterpret_cast<ByteCodeOffset2*>(byteCode);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(offset2Operation->stackOffset1());
+            operands[1] = STACK_OFFSET(offset2Operation->stackOffset2());
+            break;
+        }
+        case ParamTypes::ParamSrc2Dst: {
             ASSERT(group != Instruction::Any);
 
             Instruction* instr = compiler->append(byteCode, group, opcode, 2, 1);
@@ -1974,18 +1947,12 @@ static void compileFunction(JITCompiler* compiler)
             operands[0] = STACK_OFFSET(binaryOperation->srcOffset()[0]);
             operands[1] = STACK_OFFSET(binaryOperation->srcOffset()[1]);
             operands[2] = STACK_OFFSET(binaryOperation->dstOffset());
-        } else if (paramCount == 1) {
-            ASSERT(group != Instruction::Any);
-
-            Instruction* instr = compiler->append(byteCode, group, opcode, 1, 1);
-            instr->addInfo(info);
-            instr->setRequiredRegsDescriptor(requiredInit);
-
-            UnaryOperation* unaryOperation = reinterpret_cast<UnaryOperation*>(byteCode);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(unaryOperation->srcOffset());
-            operands[1] = STACK_OFFSET(unaryOperation->dstOffset());
+            break;
+        }
+        default: {
+            ASSERT(paramType == ParamTypes::NoParam);
+            break;
+        }
         }
 
         idx += byteCode->getSize();
