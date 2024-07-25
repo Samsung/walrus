@@ -832,6 +832,9 @@ private:
     uint32_t m_options;
     uint8_t m_savedIntegerRegCount;
     uint8_t m_savedFloatRegCount;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    uint8_t m_savedVectorRegCount;
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
     uint8_t m_stackTmpSize;
 
     std::vector<TryBlock> m_tryBlocks;

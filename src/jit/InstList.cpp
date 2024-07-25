@@ -422,11 +422,28 @@ void JITCompiler::dump()
                         uint32_t savedEnd = SLJIT_S0;
 
                         if (variable.info & Instruction::FloatOperandMarker) {
-                            prefix = "F";
-                            savedStart = SLJIT_FR(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS);
-                            savedEnd = SLJIT_FS0;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+#define PREFIX "V"
+#define SAVED_START SLJIT_VR(SLJIT_NUMBER_OF_SCRATCH_VECTOR_REGISTERS)
+#define SAVED_END SLJIT_VS1
+#else /* !SLJIT_SEPARATE_VECTOR_REGISTERS */
+#define PREFIX "F"
+#define SAVED_START SLJIT_FR(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS)
+#define SAVED_END SLJIT_FS0
+#endif /* !SLJIT_SEPARATE_VECTOR_REGISTERS */
+                            if ((variable.info & Instruction::TypeMask) == Instruction::V128Operand) {
+                                prefix = PREFIX;
+                                savedStart = SAVED_START;
+                                savedEnd = SAVED_END;
+                            } else {
+                                prefix = "F";
+                                savedStart = SLJIT_FR(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS);
+                                savedEnd = SLJIT_FS0;
+                            }
                         }
-
+#undef PREFIX
+#undef SAVED_START
+#undef SAVED_END
                         uint32_t reg1 = static_cast<uint32_t>(VARIABLE_GET_REF(variable.value));
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
