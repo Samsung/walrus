@@ -850,7 +850,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
     if (instr->opcode() != ByteCode::Store32Opcode && instr->opcode() != ByteCode::Store64Opcode) {
 #ifdef HAS_SIMD
-        if (opcode != 0) {
+        if (opcode != 0 || size == 16) {
 #endif /* HAS_SIMD */
             MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(instr->byteCode());
             offset = storeOperation->offset();
