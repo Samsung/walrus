@@ -376,7 +376,10 @@ enum ParamTypes {
     ParamDst,
     ParamSrcDst,
     ParamSrc2,
+    ParamSrcDstValue,
+    ParamSrc2Value,
     ParamSrc2Dst,
+    ParamSrc3,
 };
 
 static void compileFunction(JITCompiler* compiler)
@@ -1018,13 +1021,11 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64Load16UOpcode:
         case ByteCode::I64Load32SOpcode:
         case ByteCode::I64Load32UOpcode: {
-            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTLoadI64);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(loadOperation->srcOffset());
-            operands[1] = STACK_OFFSET(loadOperation->dstOffset());
+            group = Instruction::Load;
+            paramType = ParamTypes::ParamSrcDstValue;
+            if (requiredInit == OTNone) {
+                requiredInit = OTLoadI64;
+            }
             break;
         }
         case ByteCode::F32LoadOpcode:
@@ -1042,8 +1043,8 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::V128Load32X2UOpcode:
         case ByteCode::V128Load32ZeroOpcode:
         case ByteCode::V128Load64ZeroOpcode: {
-            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            group = Instruction::Load;
+            paramType = ParamTypes::ParamSrcDstValue;
 
             if (opcode == ByteCode::F32LoadOpcode)
                 requiredInit = OTLoadF32;
@@ -1051,12 +1052,6 @@ static void compileFunction(JITCompiler* compiler)
                 requiredInit = OTLoadF64;
             else
                 requiredInit = OTLoadV128;
-
-            instr->setRequiredRegsDescriptor(requiredInit);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(loadOperation->srcOffset());
-            operands[1] = STACK_OFFSET(loadOperation->dstOffset());
             break;
         }
         case ByteCode::V128Load8LaneOpcode:
@@ -1099,20 +1094,18 @@ static void compileFunction(JITCompiler* compiler)
             FALLTHROUGH;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
         case ByteCode::I64StoreOpcode: {
-            MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTStoreI64);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(storeOperation->src0Offset());
-            operands[1] = STACK_OFFSET(storeOperation->src1Offset());
+            group = Instruction::Store;
+            paramType = ParamTypes::ParamSrc2Value;
+            if (requiredInit == OTNone) {
+                requiredInit = OTStoreI64;
+            }
             break;
         }
         case ByteCode::F32StoreOpcode:
         case ByteCode::F64StoreOpcode:
         case ByteCode::V128StoreOpcode: {
-            MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(byteCode);
-            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            group = Instruction::Store;
+            paramType = ParamTypes::ParamSrc2Value;
 
             if (opcode == ByteCode::F32StoreOpcode)
                 requiredInit = OTStoreF32;
@@ -1120,12 +1113,6 @@ static void compileFunction(JITCompiler* compiler)
                 requiredInit = OTStoreF64;
             else
                 requiredInit = OTStoreV128;
-
-            instr->setRequiredRegsDescriptor(requiredInit);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(storeOperation->src0Offset());
-            operands[1] = STACK_OFFSET(storeOperation->src1Offset());
             break;
         }
         case ByteCode::V128Store8LaneOpcode:
@@ -1290,25 +1277,15 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::TableSetOpcode: {
-            auto tableSet = reinterpret_cast<TableSet*>(byteCode);
-
-            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 0);
-            instr->setRequiredRegsDescriptor(OTTableSet);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(tableSet->src0Offset());
-            operands[1] = STACK_OFFSET(tableSet->src1Offset());
+            group = Instruction::Table;
+            paramType = ParamTypes::ParamSrc2Value;
+            requiredInit = OTTableSet;
             break;
         }
         case ByteCode::TableGetOpcode: {
-            auto tableGet = reinterpret_cast<TableGet*>(byteCode);
-
-            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(OTTableGet);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(tableGet->srcOffset());
-            operands[1] = STACK_OFFSET(tableGet->dstOffset());
+            group = Instruction::Table;
+            paramType = ParamTypes::ParamSrcDstValue;
+            requiredInit = OTTableGet;
             break;
         }
         case ByteCode::MemorySizeOpcode: {
@@ -1333,42 +1310,19 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(memoryInit->srcOffsets()[2]);
             break;
         }
-        case ByteCode::MemoryCopyOpcode: {
-            MemoryCopy* memoryCopy = reinterpret_cast<MemoryCopy*>(byteCode);
-
-            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
-            instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTCallback3Arg);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(memoryCopy->srcOffsets()[0]);
-            operands[1] = STACK_OFFSET(memoryCopy->srcOffsets()[1]);
-            operands[2] = STACK_OFFSET(memoryCopy->srcOffsets()[2]);
-            break;
-        }
+        case ByteCode::MemoryCopyOpcode:
         case ByteCode::MemoryFillOpcode: {
-            MemoryFill* memoryFill = reinterpret_cast<MemoryFill*>(byteCode);
-
-            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
-            instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTCallback3Arg);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(memoryFill->srcOffsets()[0]);
-            operands[1] = STACK_OFFSET(memoryFill->srcOffsets()[1]);
-            operands[2] = STACK_OFFSET(memoryFill->srcOffsets()[2]);
+            group = Instruction::Memory;
+            paramType = ParamTypes::ParamSrc3;
+            info = Instruction::kIsCallback;
+            requiredInit = OTCallback3Arg;
             break;
         }
         case ByteCode::MemoryGrowOpcode: {
-            MemoryGrow* memoryGrow = reinterpret_cast<MemoryGrow*>(byteCode);
-
-            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 1, 1);
-            instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTOp1I32);
-
-            Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(memoryGrow->srcOffset());
-            operands[1] = STACK_OFFSET(memoryGrow->dstOffset());
+            group = Instruction::Memory;
+            paramType = ParamTypes::ParamSrcDst;
+            info = Instruction::kIsCallback;
+            requiredInit = OTOp1I32;
             break;
         }
         case ByteCode::DataDropOpcode: {
@@ -1865,20 +1819,16 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64AtomicLoad8UOpcode:
         case ByteCode::I64AtomicLoad16UOpcode:
         case ByteCode::I64AtomicLoad32UOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            group = Instruction::Load;
+            paramType = ParamTypes::ParamSrcDstValue;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (opcode == ByteCode::I64AtomicLoadOpcode) {
                 info = Instruction::kIsCallback;
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-            instr->addInfo(info);
-            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTLoadI64);
-
-            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(byteCode);
-            Operand* operands = instr->operands();
-
-            operands[0] = STACK_OFFSET(loadOperation->srcOffset());
-            operands[1] = STACK_OFFSET(loadOperation->dstOffset());
+            if (requiredInit == OTNone) {
+                requiredInit = OTLoadI64;
+            }
             break;
         }
         case ByteCode::I32AtomicStoreOpcode:
@@ -1892,20 +1842,16 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64AtomicStore8Opcode:
         case ByteCode::I64AtomicStore16Opcode:
         case ByteCode::I64AtomicStore32Opcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            group = Instruction::Store;
+            paramType = ParamTypes::ParamSrc2Value;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (opcode == ByteCode::I64AtomicStoreOpcode) {
                 info = Instruction::kIsCallback;
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-            instr->addInfo(info);
-            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTStoreI64);
-
-            MemoryStore* atomicStore = reinterpret_cast<MemoryStore*>(byteCode);
-            Operand* operands = instr->operands();
-
-            operands[0] = STACK_OFFSET(atomicStore->src0Offset());
-            operands[1] = STACK_OFFSET(atomicStore->src1Offset());
+            if (requiredInit == OTNone) {
+                requiredInit = OTStoreI64;
+            }
             break;
         }
         case ByteCode::I32AtomicRmwAddOpcode:
@@ -2009,19 +1955,37 @@ static void compileFunction(JITCompiler* compiler)
             operands[1] = STACK_OFFSET(offset2Operation->stackOffset2());
             break;
         }
-        case ParamTypes::ParamSrc2Dst: {
+        case ParamTypes::ParamSrcDstValue:
+        case ParamTypes::ParamSrc2Value: {
             ASSERT(group != Instruction::Any);
 
-            Instruction* instr = compiler->append(byteCode, group, opcode, 2, 1);
+            uint32_t resultCount = (paramType == ParamTypes::ParamSrcDstValue) ? 1 : 0;
+            Instruction* instr = compiler->append(byteCode, group, opcode, 2 - resultCount, resultCount);
             instr->addInfo(info);
             instr->setRequiredRegsDescriptor(requiredInit);
 
-            BinaryOperation* binaryOperation = reinterpret_cast<BinaryOperation*>(byteCode);
+            ByteCodeOffset2Value* offset2Operation = reinterpret_cast<ByteCodeOffset2Value*>(byteCode);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(offset2Operation->stackOffset1());
+            operands[1] = STACK_OFFSET(offset2Operation->stackOffset2());
+            break;
+        }
+        case ParamTypes::ParamSrc2Dst:
+        case ParamTypes::ParamSrc3: {
+            ASSERT(group != Instruction::Any);
+
+            uint32_t resultCount = (paramType == ParamTypes::ParamSrc2Dst) ? 1 : 0;
+            Instruction* instr = compiler->append(byteCode, group, opcode, 3 - resultCount, resultCount);
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit);
+
+            ByteCodeOffset3* offset3Operation = reinterpret_cast<ByteCodeOffset3*>(byteCode);
             Operand* operands = instr->operands();
 
-            operands[0] = STACK_OFFSET(binaryOperation->srcOffset()[0]);
-            operands[1] = STACK_OFFSET(binaryOperation->srcOffset()[1]);
-            operands[2] = STACK_OFFSET(binaryOperation->dstOffset());
+            operands[0] = STACK_OFFSET(offset3Operation->stackOffset1());
+            operands[1] = STACK_OFFSET(offset3Operation->stackOffset2());
+            operands[2] = STACK_OFFSET(offset3Operation->stackOffset3());
             break;
         }
         default: {

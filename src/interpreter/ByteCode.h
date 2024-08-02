@@ -677,6 +677,23 @@ protected:
     ByteCodeStackOffset m_stackOffset2;
 };
 
+class ByteCodeOffset3 : public ByteCode {
+public:
+    ByteCodeOffset3(Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, ByteCodeStackOffset stackOffset3)
+        : ByteCode(opcode)
+        , m_stackOffsets{ stackOffset1, stackOffset2, stackOffset3 }
+    {
+    }
+
+    const ByteCodeStackOffset* stackOffsets() const { return m_stackOffsets; }
+    ByteCodeStackOffset stackOffset1() const { return m_stackOffsets[0]; }
+    ByteCodeStackOffset stackOffset2() const { return m_stackOffsets[1]; }
+    ByteCodeStackOffset stackOffset3() const { return m_stackOffsets[2]; }
+
+protected:
+    ByteCodeStackOffset m_stackOffsets[3];
+};
+
 class ByteCodeOffsetValue : public ByteCode {
 public:
     ByteCodeOffsetValue(Opcode opcode, ByteCodeStackOffset stackOffset, uint32_t value)
@@ -692,6 +709,27 @@ public:
 
 protected:
     ByteCodeStackOffset m_stackOffset;
+    uint32_t m_value;
+};
+
+class ByteCodeOffset2Value : public ByteCode {
+public:
+    ByteCodeOffset2Value(Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, uint32_t value)
+        : ByteCode(opcode)
+        , m_stackOffset1(stackOffset1)
+        , m_stackOffset2(stackOffset2)
+        , m_value(value)
+    {
+    }
+
+    ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
+    ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
+    uint32_t uint32Value() const { return m_value; }
+    int32_t int32Value() const { return static_cast<int32_t>(m_value); }
+
+protected:
+    ByteCodeStackOffset m_stackOffset1;
+    ByteCodeStackOffset m_stackOffset2;
     uint32_t m_value;
 };
 
@@ -790,34 +828,28 @@ protected:
 };
 
 // dummy ByteCode for binary operation
-class BinaryOperation : public ByteCode {
+class BinaryOperation : public ByteCodeOffset3 {
 public:
     BinaryOperation(Opcode code, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset dstOffset)
-        : ByteCode(code)
-        , m_srcOffset{ src0Offset, src1Offset }
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffset3(code, src0Offset, src1Offset, dstOffset)
     {
     }
 
-    const ByteCodeStackOffset* srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
+    const ByteCodeStackOffset* srcOffset() const { return stackOffsets(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset3(); }
+    void setDstOffset(ByteCodeStackOffset o) { m_stackOffsets[2] = o; }
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset[2];
-    ByteCodeStackOffset m_dstOffset;
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_BINARY_BYTECODE_DUMP(name)                                                                                                              \
-    void dump(size_t pos)                                                                                                                              \
-    {                                                                                                                                                  \
-        printf(#name " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffset[0], (uint32_t)m_srcOffset[1], (uint32_t)m_dstOffset); \
+#define DEFINE_BINARY_BYTECODE_DUMP(name)                                                                                                                          \
+    void dump(size_t pos)                                                                                                                                          \
+    {                                                                                                                                                              \
+        printf(#name " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_stackOffsets[0], (uint32_t)m_stackOffsets[1], (uint32_t)m_stackOffsets[2]); \
     }
 #else
 #define DEFINE_BINARY_BYTECODE_DUMP(name)
@@ -1312,11 +1344,10 @@ protected:
     ByteCodeStackOffset m_srcOffsets[3];
 };
 
-class MemoryCopy : public ByteCode {
+class MemoryCopy : public ByteCodeOffset3 {
 public:
     MemoryCopy(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCode(Opcode::MemoryCopyOpcode)
-        , m_srcOffsets{ src0, src1, src2 }
+        : ByteCodeOffset3(Opcode::MemoryCopyOpcode, src0, src1, src2)
     {
         ASSERT(srcIndex == 0);
         ASSERT(dstIndex == 0);
@@ -1324,47 +1355,42 @@ public:
 
     const ByteCodeStackOffset* srcOffsets() const
     {
-        return m_srcOffsets;
+        return stackOffsets();
     }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("memory.copy ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        DUMP_BYTECODE_OFFSET(stackOffsets[0]);
+        DUMP_BYTECODE_OFFSET(stackOffsets[1]);
+        DUMP_BYTECODE_OFFSET(stackOffsets[2]);
     }
 #endif
-protected:
-    ByteCodeStackOffset m_srcOffsets[3];
 };
 
-class MemoryFill : public ByteCode {
+class MemoryFill : public ByteCodeOffset3 {
 public:
     MemoryFill(uint32_t memIdx, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCode(Opcode::MemoryFillOpcode)
-        , m_srcOffsets{ src0, src1, src2 }
+        : ByteCodeOffset3(Opcode::MemoryFillOpcode, src0, src1, src2)
     {
         ASSERT(memIdx == 0);
     }
 
     const ByteCodeStackOffset* srcOffsets() const
     {
-        return m_srcOffsets;
+        return stackOffsets();
     }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("memory.fill ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        DUMP_BYTECODE_OFFSET(stackOffsets[0]);
+        DUMP_BYTECODE_OFFSET(stackOffsets[1]);
+        DUMP_BYTECODE_OFFSET(stackOffsets[2]);
     }
 #endif
-protected:
-    ByteCodeStackOffset m_srcOffsets[3];
 };
 
 class DataDrop : public ByteCode {
@@ -1392,57 +1418,44 @@ protected:
     uint32_t m_segmentIndex;
 };
 
-class MemoryGrow : public ByteCode {
+class MemoryGrow : public ByteCodeOffset2 {
 public:
     MemoryGrow(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(Opcode::MemoryGrowOpcode)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffset2(Opcode::MemoryGrowOpcode, srcOffset, dstOffset)
     {
         ASSERT(index == 0);
     }
 
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("memory.grow ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
 // dummy ByteCode for memory load operation
-class MemoryLoad : public ByteCode {
+class MemoryLoad : public ByteCodeOffset2Value {
 public:
     MemoryLoad(Opcode code, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(code)
-        , m_offset(offset)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffset2Value(code, srcOffset, dstOffset, offset)
     {
     }
 
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint32_t offset() const { return uint32Value(); }
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
     }
 #endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
 // dummy ByteCode for simd memory load operation
@@ -1478,10 +1491,10 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                                        \
-    void dump(size_t pos)                                                                                                                      \
-    {                                                                                                                                          \
-        printf(#name " src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+#define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                              \
+    void dump(size_t pos)                                                                                                            \
+    {                                                                                                                                \
+        printf(#name " src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset()); \
     }
 #else
 #define DEFINE_LOAD_BYTECODE_DUMP(name)
@@ -1518,29 +1531,22 @@ protected:
     };
 
 // dummy ByteCode for memory store operation
-class MemoryStore : public ByteCode {
+class MemoryStore : public ByteCodeOffset2Value {
 public:
     MemoryStore(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
+        : ByteCodeOffset2Value(opcode, src0, src1, offset)
     {
     }
 
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    uint32_t offset() const { return uint32Value(); }
+    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
+    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
     }
 #endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
 };
 
 // dummy ByteCode for simd memory store operation
@@ -1625,10 +1631,10 @@ protected:
 };
 
 #if !defined(NDEBUG)
-#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                           \
-    void dump(size_t pos)                                                                                                                          \
-    {                                                                                                                                              \
-        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset); \
+#define DEFINE_STORE_BYTECODE_DUMP(name)                                                                                                 \
+    void dump(size_t pos)                                                                                                                \
+    {                                                                                                                                    \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " offset: %" PRIu32, (uint32_t)src0Offset(), (uint32_t)src1Offset(), offset()); \
     }
 #else
 #define DEFINE_STORE_BYTECODE_DUMP(name)
@@ -1958,7 +1964,7 @@ public:
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("V128Load32Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
+        printf("V128Load32Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset());
     }
 #endif
 };
@@ -1973,7 +1979,7 @@ public:
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("V128Load64Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_srcOffset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
+        printf("V128Load64Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset());
     }
 #endif
 };
@@ -2005,64 +2011,48 @@ protected:
     uint8_t m_value[16];
 };
 
-class TableGet : public ByteCode {
+class TableGet : public ByteCodeOffset2Value {
 public:
     TableGet(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCode(Opcode::TableGetOpcode)
-        , m_tableIndex(index)
-        , m_srcOffset(srcOffset)
-        , m_dstOffset(dstOffset)
+        : ByteCodeOffset2Value(Opcode::TableGetOpcode, srcOffset, dstOffset, index)
     {
     }
 
-    uint32_t tableIndex() const { return m_tableIndex; }
-    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+    uint32_t tableIndex() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("table.get ");
-        DUMP_BYTECODE_OFFSET(srcOffset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("tableIndex: %" PRIu32, m_tableIndex);
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
+        printf("tableIndex: %" PRIu32, tableIndex());
     }
 #endif
-
-protected:
-    uint32_t m_tableIndex;
-    ByteCodeStackOffset m_srcOffset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
-class TableSet : public ByteCode {
+class TableSet : public ByteCodeOffset2Value {
 public:
     TableSet(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCode(Opcode::TableSetOpcode)
-        , m_tableIndex(index)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
+        : ByteCodeOffset2Value(Opcode::TableSetOpcode, src0, src1, index)
     {
     }
 
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    uint32_t tableIndex() const { return m_tableIndex; }
+    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
+    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
+    uint32_t tableIndex() const { return uint32Value(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("table.set ");
-        DUMP_BYTECODE_OFFSET(src0Offset);
-        DUMP_BYTECODE_OFFSET(src1Offset);
-        printf("tableIndex: %" PRIu32, m_tableIndex);
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
+        printf("tableIndex: %" PRIu32, tableIndex());
     }
 #endif
-
-protected:
-    uint32_t m_tableIndex;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
 };
 
 class TableGrow : public ByteCode {
@@ -2378,10 +2368,6 @@ public:
         printf("index: %" PRId32, uint32Value());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffset;
-    uint32_t m_index;
 };
 
 class Throw : public ByteCode {
