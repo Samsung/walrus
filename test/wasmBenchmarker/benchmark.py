@@ -115,17 +115,17 @@ def parse_args():
     return args
 
 engine_path = 0
-def engine_display_name(engine): 
+def engine_display_name(engine):
     if not engine in engine_map:
         if engine_path == -2:
             engine_map[engine] = str(len(engine_map))
-        
+
         if engine_path == -1:
             engine_map[engine] = ""
-        
+
         if engine_path == 0:
             engine_map[engine] = engine
-        
+
         if engine_path > 0:
             engine_map[engine] = "/".join(engine.split("/")[0-engine_path:])
 
@@ -143,7 +143,7 @@ def check_programs(engines, verbose):
 
 
 def get_emcc(verbose, system_emcc=True):
-    emcc_path = None 
+    emcc_path = None
 
     if system_emcc and os.system("emcc --version >/dev/null") == 0:
         if (verbose): print("Emscripten already installed on system")
@@ -319,7 +319,7 @@ def run_tests(path, test_names, engines, number_of_runs, mem, no_time, jit, jit_
                 if sum(time_results[engine["name"]]) < 0:
                     record[engine["name"]] = -1
                     continue
-                try: 
+                try:
                     value = (sum(time_results[engine["name"]]) / len(time_results[engine["name"]])) / 1e9
                 except ZeroDivisionError:
                     value = -1
@@ -332,7 +332,7 @@ def run_tests(path, test_names, engines, number_of_runs, mem, no_time, jit, jit_
                 if sum(mem_results[engine["name"]]) < 0:
                     record[engine["name"]] = -1
                     continue
-                try: 
+                try:
                     value = (sum(mem_results[engine["name"]]) / len(mem_results[engine["name"]]))
                 except ZeroDivisionError:
                     value = -1
@@ -345,7 +345,7 @@ def run_tests(path, test_names, engines, number_of_runs, mem, no_time, jit, jit_
 def generate_report(data, summary, file_name=None):
     if summary:
         df = pd.DataFrame.from_records(data)
-        for col in df.columns: 
+        for col in df.columns:
             if col == "test":
                 continue
 
@@ -353,7 +353,7 @@ def generate_report(data, summary, file_name=None):
                 df[col] = df[col].str.split(' ').str[-1].str[1:-2]
 
             df[col] = df[col].astype(float)
-            
+
         df = df.describe().loc[["mean"]].to_dict('records')
         df[0]["test"] = "MEAN"
         separator = [{}]
@@ -368,7 +368,7 @@ def generate_report(data, summary, file_name=None):
             print("\n\n# Engines")
             for engine, serial in engine_map.items():
                 print(f"{serial}: {engine}")
-        
+
         return
     with open(file_name, "w") as file:
         if file_name.endswith(".csv"):
@@ -388,7 +388,7 @@ def generate_report(data, summary, file_name=None):
 
                 line += "\n"
                 file.write(line)
-            
+
             if engine_path == -2:
                 file.write("\n\n# Engines\n")
                 for engine, serial in engine_map.items():
@@ -415,7 +415,7 @@ def compare(data, engines, jit_to_interpreter, jit_no_reg_alloc_to_interpreter, 
                 jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
                 interpreter = data[i][f"{engine_display_name(engine)} INTERPRETER"]
                 data[i][f"{engine_display_name(engine)} INTERPRETER/JIT_NO_REG_ALLOC"] = f"{jit_no_reg_alloc} ({'{:.2f}'.format(-1 if float(interpreter) < 0 or float(jit_no_reg_alloc) < 0 else float(interpreter) / float(jit_no_reg_alloc))}x)"
-            
+
             if jit_no_reg_alloc_to_jit:
                 jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
                 jit = data[i][f"{engine_display_name(engine)} JIT"]
@@ -430,7 +430,7 @@ def compare(data, engines, jit_to_interpreter, jit_no_reg_alloc_to_interpreter, 
                 interpreter = data[i][f"{engine_display_name(engine)} INTERPRETER"]
                 jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
                 data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC/INTERPRETER"] = f"{interpreter} ({'{:.2f}'.format(-1 if float(jit_no_reg_alloc) < 0 or float(interpreter) < 0 else float(jit_no_reg_alloc) / float(interpreter))}x)"
-                
+
             if jit_to_jit_no_reg_alloc:
                 jit = data[i][f"{engine_display_name(engine)} JIT"]
                 jit_no_reg_alloc = data[i][f"{engine_display_name(engine)} JIT_NO_REG_ALLOC"]
@@ -499,6 +499,6 @@ def main():
     if len(errorList) > 0:
         print(errorList)
         exit(1)
-    
+
 if __name__ == "__main__":
     main()

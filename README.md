@@ -38,7 +38,7 @@ You'll need [Perf](https://perf.wiki.kernel.org/index.php/Main_Page).
 0. To compile with perf support, use `-DWALRUS_JITPERF=1`
 
 1. Set the path where temporary files are created with `WALRUS_PERF_DIR` environment variable.
-   Run Walrus with: `sudo perf record -k 1 walrus --jit --perf WALRUS_PARAMETERS`
+   Run Walrus with: `sudo perf record -k 1 walrus --jit WALRUS_PARAMETERS`
    The `-k 1` option sets the monotonic clock, `-k mono` is also correct.
 
     Three files are generated:
