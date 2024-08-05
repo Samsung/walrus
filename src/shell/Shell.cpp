@@ -1100,9 +1100,6 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                     fprintf(stdout, "\t--jit\n\t\tEnable just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose\n\t\tEnable verbose output for just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose-color\n\t\tEnable colored verbose output for just-in-time interpretation.\n\n");
-#ifdef WALRUS_JITPERF
-                    fprintf(stdout, "\t--perf\n\t\tEnable JITDump for Perf tool.\n\n");
-#endif
                     fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
                     fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
                     fprintf(stdout, "\t--args <MODULE_FILE_NAME> [<ARG1> <ARG2> ... <ARGN>]\n\t\tRun Webassembly module with arguments: must be followed by the name of the Webassembly module file, then optionally following arguments which are passed on to the module\n\t\tExample: ./walrus --args test.wasm 'hello' 'world' 42\n\n");

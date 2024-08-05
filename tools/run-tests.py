@@ -28,7 +28,7 @@ from difflib import unified_diff
 from glob import glob
 from os.path import abspath, basename, dirname, join, relpath
 from shutil import copy
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, run, CalledProcessError
 
 
 PROJECT_SOURCE_DIR = dirname(dirname(abspath(__file__)))
@@ -47,6 +47,7 @@ RUNNERS = {}
 DEFAULT_RUNNERS = []
 JIT_EXCLUDE_FILES = []
 jit = False
+jit_no_reg_alloc = False
 
 
 class runner(object):
@@ -64,24 +65,34 @@ class runner(object):
 def _run_wast_tests(engine, files, is_fail, args=None):
     fails = 0
     for file in files:
-        if jit:
+        if jit or jit_no_reg_alloc:
             filename = os.path.basename(file)
             if filename in JIT_EXCLUDE_FILES:
                 continue
-
-        subprocess_args = [engine, "--mapdirs", "./test/wasi", "/var"]
-        if jit: subprocess_args.append("--jit")
+        subprocess_args =  qemu + [engine, "--mapdirs", "./test/wasi", "/var"]
+        if jit or jit_no_reg_alloc: subprocess_args.append("--jit")
+        if jit_no_reg_alloc: subprocess_args.append("--jit-no-reg-alloc")
         if args: subprocess_args.append("--args")
         subprocess_args.append(file)
         if args: subprocess_args.extend(args)
 
-        proc = Popen(subprocess_args, stdout=PIPE)
-        out, _ = proc.communicate()
+        if len(qemu) == 0:
+            proc = Popen(subprocess_args, stdout=PIPE, stderr=PIPE)
+            out, _ = proc.communicate()
+            returncode = proc.returncode
+        else:
+            try:
+                run(subprocess_args, check=True, stdout=PIPE, stderr=PIPE)
+                returncode = 0
+                out = ""
+            except CalledProcessError as e:
+                returncode = e.returncode
+                out = e.stdout.decode('utf-8') + e.stderr.decode('utf-8')
 
-        if is_fail and proc.returncode or not is_fail and not proc.returncode:
+        if is_fail and returncode or not is_fail and not returncode:
             print('%sOK: %s%s' % (COLOR_GREEN, file, COLOR_RESET))
         else:
-            print('%sFAIL(%d): %s%s' % (COLOR_RED, proc.returncode, file, COLOR_RESET))
+            print('%sFAIL(%d): %s%s' % (COLOR_RED, returncode, file, COLOR_RESET))
             print(out)
             fails += 1
 
@@ -185,13 +196,25 @@ def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
                         help='path to the engine to be tested (default: %(default)s)')
+    parser.add_argument('--qemu', metavar='PATH', default=None, help='path to qemu')
     parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
     parser.add_argument('--jit', action='store_true', help='test with JIT')
+    parser.add_argument('--jit-no-reg-alloc', action='store_true', help='test with JIT without register allocation')
     args = parser.parse_args()
     global jit
     jit = args.jit
-    if jit:
+
+    global jit_no_reg_alloc
+    jit_no_reg_alloc = args.jit_no_reg_alloc
+
+    global qemu
+    qemu = [args.qemu] if args.qemu else []
+
+    if jit and jit_no_reg_alloc:
+        parser.error('jit and jit-no-reg-alloc cannot be used together')
+
+    if jit or jit_no_reg_alloc:
         exclude_list_file = join(PROJECT_SOURCE_DIR, 'tools', 'jit_exclude_list.txt')
         with open(exclude_list_file) as f:
             global JIT_EXCLUDE_FILES
@@ -205,7 +228,12 @@ def main():
     success, fail = [], []
 
     for suite in args.suite:
-        print(COLOR_PURPLE + f'running test suite{ " with jit" if jit else ""}: ' + suite + COLOR_RESET)
+        text = ""
+        if jit:
+            text = " with jit"
+        elif jit_no_reg_alloc:
+            text = " with jit without register allocation"
+        print(COLOR_PURPLE + f'running test suite{text}: ' + suite + COLOR_RESET)
         try:
             RUNNERS[suite](args.engine)
             success += [suite]
