@@ -47,6 +47,7 @@ RUNNERS = {}
 DEFAULT_RUNNERS = []
 JIT_EXCLUDE_FILES = []
 jit = False
+jit_no_reg_alloc = False
 
 
 class runner(object):
@@ -64,12 +65,18 @@ class runner(object):
 def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
-        if jit:
-            filename = os.path.basename(file) 
+        if jit or jit_no_reg_alloc:
+            filename = os.path.basename(file)
             if filename in JIT_EXCLUDE_FILES:
                 continue
 
-        proc = Popen([engine, "--mapdirs", "./test/wasi", "/var", file], stdout=PIPE) if not jit else Popen([engine, "--mapdirs", "./test/wasi", "/var", "--jit", file], stdout=PIPE)
+        openParams = [engine, "--mapdirs", "./test/wasi", "/var", file]
+        if jit:
+            openParams = [engine, "--mapdirs", "./test/wasi", "/var", "--jit", file]
+        elif jit_no_reg_alloc:
+            openParams = [engine, "--mapdirs", "./test/wasi", "/var", "--jit", "--jit-no-reg-alloc", file]
+
+        proc = Popen(openParams, stdout=PIPE)
         out, _ = proc.communicate()
 
         if is_fail and proc.returncode or not is_fail and not proc.returncode:
@@ -178,10 +185,18 @@ def main():
     parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
     parser.add_argument('--jit', action='store_true', help='test with JIT')
+    parser.add_argument('--no-reg-alloc', action='store_true', help='test with JIT without register allocation')
     args = parser.parse_args()
     global jit
     jit = args.jit
-    if jit:
+
+    global jit_no_reg_alloc
+    jit_no_reg_alloc = args.no_reg_alloc
+
+    if jit and jit_no_reg_alloc:
+        parser.error('jit and no-reg-alloc cannot be used together')
+
+    if jit or jit_no_reg_alloc:
         exclude_list_file = join(PROJECT_SOURCE_DIR, 'tools', 'jit_exclude_list.txt')
         with open(exclude_list_file) as f:
             global JIT_EXCLUDE_FILES
@@ -195,7 +210,12 @@ def main():
     success, fail = [], []
 
     for suite in args.suite:
-        print(COLOR_PURPLE + f'running test suite{ " with jit" if jit else ""}: ' + suite + COLOR_RESET)
+        text = ""
+        if jit:
+            text = " with jit"
+        elif jit_no_reg_alloc:
+            text = " with jit without register allocation"
+        print(COLOR_PURPLE + f'running test suite{text}: ' + suite + COLOR_RESET)
         try:
             RUNNERS[suite](args.engine)
             success += [suite]
