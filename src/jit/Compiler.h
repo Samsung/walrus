@@ -106,6 +106,10 @@ public:
         ShiftSIMD,
         // Special type for initializing values from the stack
         StackInit,
+#if defined(ENABLE_EXTENDED_FEATURES)
+        // Atomic memory operations (e.g. I32AtomicRmwAdd, I64AtomicRmw16OrU)
+        Atomic,
+#endif /* ENABLE_EXTENDED_FEATURES */
     };
 
     virtual ~InstructionListItem() {}

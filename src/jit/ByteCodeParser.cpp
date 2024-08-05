@@ -230,6 +230,14 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
+#if defined(ENABLE_EXTENDED_FEATURES)
+#define OPERAND_TYPE_LIST_EXTENDED                                      \
+    OL5(OTAtomicRmwI32, /* SSDTT */ I32, I32, I32 | TMP, PTR, I32 | S1) \
+    OL5(OTAtomicRmwI64, /* SSDTT */ I32, I64, I64 | TMP, PTR, I64 | S1)
+#else /* !ENABLE_EXTENDED_FEATURES */
+#define OPERAND_TYPE_LIST_EXTENDED
+#endif /* ENABLE_EXTENDED_FEATURES */
+
 #define OPERAND_TYPE_LIST_SIMD                                                             \
     OL2(OTOp1V128, /* SD */ V128 | NOTMP, V128 | TMP | S0)                                 \
     OL2(OTOpCondV128, /* SD */ V128 | TMP, I32)                                            \
@@ -324,6 +332,7 @@ const uint8_t Instruction::m_operandDescriptors[] = {
     0,
     OPERAND_TYPE_LIST OPERAND_TYPE_LIST_MATH
         OPERAND_TYPE_LIST_SIMD OPERAND_TYPE_LIST_SIMD_ARCH
+            OPERAND_TYPE_LIST_EXTENDED
 };
 
 #undef OL1
@@ -352,6 +361,7 @@ enum OperandTypes : uint32_t {
         OPERAND_TYPE_LIST_MATH
             OPERAND_TYPE_LIST_SIMD
                 OPERAND_TYPE_LIST_SIMD_ARCH
+                    OPERAND_TYPE_LIST_EXTENDED
 };
 
 #undef OL1
@@ -1896,6 +1906,71 @@ static void compileFunction(JITCompiler* compiler)
 
             operands[0] = STACK_OFFSET(atomicStore->src0Offset());
             operands[1] = STACK_OFFSET(atomicStore->src1Offset());
+            break;
+        }
+        case ByteCode::I32AtomicRmwAddOpcode:
+        case ByteCode::I32AtomicRmw8AddUOpcode:
+        case ByteCode::I32AtomicRmw16AddUOpcode:
+        case ByteCode::I32AtomicRmwSubOpcode:
+        case ByteCode::I32AtomicRmw8SubUOpcode:
+        case ByteCode::I32AtomicRmw16SubUOpcode:
+        case ByteCode::I32AtomicRmwAndOpcode:
+        case ByteCode::I32AtomicRmw8AndUOpcode:
+        case ByteCode::I32AtomicRmw16AndUOpcode:
+        case ByteCode::I32AtomicRmwOrOpcode:
+        case ByteCode::I32AtomicRmw8OrUOpcode:
+        case ByteCode::I32AtomicRmw16OrUOpcode:
+        case ByteCode::I32AtomicRmwXorOpcode:
+        case ByteCode::I32AtomicRmw8XorUOpcode:
+        case ByteCode::I32AtomicRmw16XorUOpcode:
+        case ByteCode::I32AtomicRmwXchgOpcode:
+        case ByteCode::I32AtomicRmw8XchgUOpcode:
+        case ByteCode::I32AtomicRmw16XchgUOpcode: {
+            info = Instruction::kIs32Bit;
+            requiredInit = OTAtomicRmwI32;
+            FALLTHROUGH;
+        }
+        case ByteCode::I64AtomicRmwAddOpcode:
+        case ByteCode::I64AtomicRmwSubOpcode:
+        case ByteCode::I64AtomicRmwAndOpcode:
+        case ByteCode::I64AtomicRmwOrOpcode:
+        case ByteCode::I64AtomicRmwXorOpcode:
+        case ByteCode::I64AtomicRmwXchgOpcode: {
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            if (info == 0) {
+                info = Instruction::kIsCallback;
+            }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            FALLTHROUGH;
+        }
+        case ByteCode::I64AtomicRmw8AddUOpcode:
+        case ByteCode::I64AtomicRmw16AddUOpcode:
+        case ByteCode::I64AtomicRmw32AddUOpcode:
+        case ByteCode::I64AtomicRmw8SubUOpcode:
+        case ByteCode::I64AtomicRmw16SubUOpcode:
+        case ByteCode::I64AtomicRmw32SubUOpcode:
+        case ByteCode::I64AtomicRmw8AndUOpcode:
+        case ByteCode::I64AtomicRmw16AndUOpcode:
+        case ByteCode::I64AtomicRmw32AndUOpcode:
+        case ByteCode::I64AtomicRmw8OrUOpcode:
+        case ByteCode::I64AtomicRmw16OrUOpcode:
+        case ByteCode::I64AtomicRmw32OrUOpcode:
+        case ByteCode::I64AtomicRmw8XorUOpcode:
+        case ByteCode::I64AtomicRmw16XorUOpcode:
+        case ByteCode::I64AtomicRmw32XorUOpcode:
+        case ByteCode::I64AtomicRmw8XchgUOpcode:
+        case ByteCode::I64AtomicRmw16XchgUOpcode:
+        case ByteCode::I64AtomicRmw32XchgUOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Atomic, opcode, 2, 1);
+            instr->addInfo(info);
+
+            AtomicRmw* atomicRmw = reinterpret_cast<AtomicRmw*>(byteCode);
+            Operand* operands = instr->operands();
+            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicRmwI64);
+
+            operands[0] = STACK_OFFSET(atomicRmw->src0Offset());
+            operands[1] = STACK_OFFSET(atomicRmw->src1Offset());
+            operands[2] = STACK_OFFSET(atomicRmw->dstOffset());
             break;
         }
 #endif /* ENABLE_EXTENDED_FEATURES */

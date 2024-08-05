@@ -1238,6 +1238,12 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             emitStackInit(m_compiler, item->asInstruction());
             break;
         }
+#if defined(ENABLE_EXTENDED_FEATURES)
+        case Instruction::Atomic: {
+            emitAtomic(m_compiler, item->asInstruction());
+            break;
+        }
+#endif /* ENABLE_EXTENDED_FEATURES */
         default: {
             switch (item->asInstruction()->opcode()) {
             case ByteCode::SelectOpcode: {
