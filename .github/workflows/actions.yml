@@ -89,10 +89,21 @@ jobs:
         rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
         $RUNNER --engine="$GITHUB_WORKSPACE/out/clang/x86/walrus"
         $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
-        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/pure/x86/walrus" basic-tests wasm-test-core jit
+        $RUNNER --no-reg-alloc --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
         $RUNNER --engine="$GITHUB_WORKSPACE/out/pure/x64/walrus" basic-tests wasm-test-core jit
+        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/pure/x86/walrus" basic-tests wasm-test-core jit
+        $RUNNER --no-reg-alloc --engine="$GITHUB_WORKSPACE/out/pure/x86/walrus" basic-tests wasm-test-core jit
 
-  build-test-on-x86:
+  build-test-on-x86_x64:
+    strategy:
+      matrix:
+        arch:
+          - x86
+          - x64
+        switch:
+          - --jit
+          - --no-reg-alloc
+          - ""
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -102,37 +113,15 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Build x86
+    - name: Build ${{ matrix.arch }}
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
-        cmake -H. -Bout/linux/x86 $BUILD_OPTIONS
-        ninja -Cout/linux/x86
+        cmake -H. -Bout/linux/${{ matrix.arch }} $BUILD_OPTIONS
+        ninja -Cout/linux/${{ matrix.arch }}
     - name: Run Tests
       run: |
-          $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
-          $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
-
-  build-test-on-x64:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
-        ninja -Cout/linux/x64
-    - name: Run Tests
-      run: |
-         $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
-         $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
+          $RUNNER ${{ matrix.switch }} --engine="$GITHUB_WORKSPACE/out/linux/${{ matrix.arch }}/walrus"
 
   build-on-x64-with-perf:
           runs-on: ubuntu-latest
@@ -151,17 +140,30 @@ jobs:
               cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
               ninja -Cout/linux/x64
 
-  build-test-on-armv7:
+  build-test-on-armv7_aarch64:
+    strategy:
+      matrix:
+        arch:
+          - run_on_arch: armv7
+            walrus: arm
+            distro: ubuntu_latest
+          - run_on_arch: aarch64
+            walrus: aarch64
+            distro: ubuntu22.04
+        switch:
+          - --jit
+          - --no-reg-alloc
+          - ""
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - name: Build in arm32 container
+    - name: Build in container
       uses: uraimo/run-on-arch-action@v2.7.2
       with:
-        arch: armv7
-        distro: ubuntu_latest
+        arch: ${{ matrix.arch.run_on_arch }}
+        distro: ${{ matrix.arch.distro }}
 
         # Install deps into the container. With the token, the container will be cached
         # The image is cached publically like a package
@@ -171,46 +173,15 @@ jobs:
           apt-get update
           apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
         run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_ARCH=${{ matrix.arch.walrus }} -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=${{ matrix.arch.walrus }} -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
           ninja -Cout/debug
           ninja -Cout/pure
           # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
           rm ./test/wasm-spec/core/call.wast
           rm ./test/wasm-spec/core/call_indirect.wast
-          python3 ./tools/run-tests.py --engine="./out/debug/walrus"
-          python3 ./tools/run-tests.py --jit --engine="./out/debug/walrus"
-          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
-          python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
-
-  build-test-on-aarch64:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Build in arm64 container
-      uses: uraimo/run-on-arch-action@v2.7.2
-      with:
-        arch: aarch64
-        distro: ubuntu22.04
-
-        # Install deps into the container. With the token, the container will be cached
-        # The image is cached publically like a package
-        githubToken: ${{ github.token }}
-
-        install: |
-          apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
-        run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
-          ninja -Cout/release
-          ninja -Cout/pure
-          python3 ./tools/run-tests.py --engine="./out/release/walrus"
-          python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
-          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
-          python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+          python3 ./tools/run-tests.py ${{ matrix.switch }} --engine="./out/debug/walrus"
+          python3 ./tools/run-tests.py ${{ matrix.switch }} --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
   test-on-windows-x86-x64:
     runs-on: windows-2022
@@ -272,7 +243,12 @@ jobs:
       run: |
         $RUNNER --engine="$GITHUB_WORKSPACE/out/extended/walrus" wasm-test-extended
 
-  build-test-performance:
+  build-test-performance-x64_x86:
+    strategy:
+      matrix:
+        arch:
+          - x64
+          - x86
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -285,15 +261,15 @@ jobs:
         sudo pip install pandas
         sudo pip install py-markdown-table
         sudo pip install tqdm
-    - name: Build x64
+    - name: Build ${{ matrix.arch }}
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
       run: |
-        cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
-        ninja -Cout/linux/x64
+        cmake -H. -Bout/linux/${{ matrix.arch }} $BUILD_OPTIONS
+        ninja -Cout/linux/${{ matrix.arch }}
     - name: Run Tests
       run: |
-        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --verbose --summary --results i j2i n2i j n2j
+        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/${{ matrix.arch }}/walrus --iterations 2 --verbose --summary --results i j2i n2i j n2j
 
   built-test-wasm-c-api:
     runs-on: ubuntu-latest
