@@ -182,6 +182,14 @@ public:
         uint32_t m_tagIndex;
     };
 
+#if !defined(NDEBUG)
+    struct LocalDebugInfo {
+        size_t stackPosition;
+        std::vector<size_t> starts;
+        std::vector<size_t> ends;
+    };
+#endif
+
     ModuleFunction(FunctionType* functionType);
     ~ModuleFunction();
 
@@ -251,7 +259,8 @@ private:
     ValueTypeVector m_local;
     Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
 #if !defined(NDEBUG)
-    Vector<size_t, std::allocator<size_t>> m_localDebugData;
+    Vector<std::pair<uint32_t, uint32_t>> m_variabeRange;
+    std::vector<LocalDebugInfo> m_localDebugData;
     Vector<std::pair<Value, size_t>, std::allocator<std::pair<Value, size_t>>> m_constantDebugData;
 #endif
     Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
