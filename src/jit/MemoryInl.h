@@ -1051,6 +1051,12 @@ static void atomicRmwXchg64(uint64_t* shared_p, uint64_t* value, uint64_t* resul
     *result = shared->exchange(*value);
 }
 
+static void atomicRmwCmpxchg64(uint64_t* shared_p, uint64_t* expectedValue, uint64_t* value)
+{
+    std::atomic<uint64_t>* shared = reinterpret_cast<std::atomic<uint64_t>*>(shared_p);
+    shared->compare_exchange_weak(*expectedValue, *value);
+}
+
 static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
 {
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
@@ -1129,9 +1135,73 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_HIGH_OFFSET);
     }
 }
+
+static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
+{
+    uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
+    uint32_t size = 8;
+    sljit_u32 offset;
+
+    Operand* operands = instr->operands();
+    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+    AtomicRmwCmpxchg* rmwCmpxchgOperation = reinterpret_cast<AtomicRmwCmpxchg*>(instr->byteCode());
+    offset = rmwCmpxchgOperation->offset();
+
+    addr.check(compiler, operands, offset, size);
+
+    if (addr.memArg.arg == 0) {
+        return;
+    }
+
+    JITArgPair srcExpectedArgPair(operands + 1);
+    JITArgPair srcValueArgPair(operands + 2);
+    JITArgPair dstArgPair(operands + 3);
+    sljit_s32 type = SLJIT_ARGS3V(P, P, P);
+    sljit_s32 faddr GET_FUNC_ADDR(sljit_sw, atomicRmwCmpxchg64);
+
+    if (srcExpectedArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
+        if (dstArgPair.arg1 != srcExpectedArgPair.arg1 || dstArgPair.arg1w != srcExpectedArgPair.arg1w) {
+            sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, srcExpectedArgPair.arg1, srcExpectedArgPair.arg1w);
+            sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, srcExpectedArgPair.arg2, srcExpectedArgPair.arg2w);
+        }
+    } else {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET, srcExpectedArgPair.arg1, srcExpectedArgPair.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET, srcExpectedArgPair.arg2, srcExpectedArgPair.arg2w);
+    }
+
+    if (srcValueArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_LOW_OFFSET, srcValueArgPair.arg1, srcValueArgPair.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_HIGH_OFFSET, srcValueArgPair.arg2, srcValueArgPair.arg2w);
+    }
+
+    if (addr.memArg.arg != SLJIT_R0) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
+    }
+
+    if (srcExpectedArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
+        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, SLJIT_EXTRACT_REG(dstArgPair.arg1), 0, SLJIT_IMM, dstArgPair.arg1w);
+    } else {
+        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+    }
+
+    if (srcValueArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
+        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp2));
+    } else {
+        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kFrameReg, 0, SLJIT_IMM, srcValueArgPair.arg1w - WORD_LOW_OFFSET);
+    }
+
+    sljit_emit_icall(compiler, SLJIT_CALL, type, SLJIT_IMM, faddr);
+
+    if (srcExpectedArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET);
+    }
+}
+
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
 #define OP_XCHG (SLJIT_OP2_BASE + 16)
+#define OP_CMPXCHG (SLJIT_OP2_BASE + 17)
 
 static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 {
@@ -1142,6 +1212,12 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
 
     switch (instr->opcode()) {
+    case ByteCode::I64AtomicRmwCmpxchgOpcode: {
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        emitAtomicRmwCmpxchg64(compiler, instr);
+        return;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+    }
     case ByteCode::I64AtomicRmwAddOpcode:
     case ByteCode::I64AtomicRmwSubOpcode:
     case ByteCode::I64AtomicRmwAndOpcode:
@@ -1162,7 +1238,8 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32AtomicRmwAndOpcode:
     case ByteCode::I32AtomicRmwOrOpcode:
     case ByteCode::I32AtomicRmwXorOpcode:
-    case ByteCode::I32AtomicRmwXchgOpcode: {
+    case ByteCode::I32AtomicRmwXchgOpcode:
+    case ByteCode::I32AtomicRmwCmpxchgOpcode: {
         operationSize = SLJIT_MOV32;
         size = 4;
         break;
@@ -1172,7 +1249,8 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64AtomicRmw32AndUOpcode:
     case ByteCode::I64AtomicRmw32OrUOpcode:
     case ByteCode::I64AtomicRmw32XorUOpcode:
-    case ByteCode::I64AtomicRmw32XchgUOpcode: {
+    case ByteCode::I64AtomicRmw32XchgUOpcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUOpcode: {
         operationSize = SLJIT_MOV_U32;
         size = 4;
         break;
@@ -1182,7 +1260,8 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32AtomicRmw8AndUOpcode:
     case ByteCode::I32AtomicRmw8OrUOpcode:
     case ByteCode::I32AtomicRmw8XorUOpcode:
-    case ByteCode::I32AtomicRmw8XchgUOpcode: {
+    case ByteCode::I32AtomicRmw8XchgUOpcode:
+    case ByteCode::I32AtomicRmw8CmpxchgUOpcode: {
         operationSize = SLJIT_MOV32_U8;
         size = 1;
         options &= ~MemAddress::CheckNaturalAlignment;
@@ -1193,7 +1272,8 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64AtomicRmw8SubUOpcode:
     case ByteCode::I64AtomicRmw8AndUOpcode:
     case ByteCode::I64AtomicRmw8XorUOpcode:
-    case ByteCode::I64AtomicRmw8XchgUOpcode: {
+    case ByteCode::I64AtomicRmw8XchgUOpcode:
+    case ByteCode::I64AtomicRmw8CmpxchgUOpcode: {
         operationSize = SLJIT_MOV_U8;
         size = 1;
         options &= ~MemAddress::CheckNaturalAlignment;
@@ -1204,7 +1284,8 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32AtomicRmw16AndUOpcode:
     case ByteCode::I32AtomicRmw16OrUOpcode:
     case ByteCode::I32AtomicRmw16XorUOpcode:
-    case ByteCode::I32AtomicRmw16XchgUOpcode: {
+    case ByteCode::I32AtomicRmw16XchgUOpcode:
+    case ByteCode::I32AtomicRmw16CmpxchgUOpcode: {
         operationSize = SLJIT_MOV32_U16;
         size = 2;
         break;
@@ -1214,7 +1295,8 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64AtomicRmw16AndUOpcode:
     case ByteCode::I64AtomicRmw16OrUOpcode:
     case ByteCode::I64AtomicRmw16XorUOpcode:
-    case ByteCode::I64AtomicRmw16XchgUOpcode: {
+    case ByteCode::I64AtomicRmw16XchgUOpcode:
+    case ByteCode::I64AtomicRmw16CmpxchgUOpcode: {
         operationSize = SLJIT_MOV_U16;
         size = 2;
         break;
@@ -1286,13 +1368,94 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
         operation = OP_XCHG;
         break;
     }
+    case ByteCode::I32AtomicRmwCmpxchgOpcode:
+    case ByteCode::I32AtomicRmw8CmpxchgUOpcode:
+    case ByteCode::I32AtomicRmw16CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmwCmpxchgOpcode:
+    case ByteCode::I64AtomicRmw8CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmw16CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUOpcode: {
+        operation = OP_CMPXCHG;
+        break;
+    }
     default:
         RELEASE_ASSERT_NOT_REACHED();
         break;
     }
 
-    AtomicRmw* rmwOperation = reinterpret_cast<AtomicRmw*>(instr->byteCode());
-    offset = rmwOperation->offset();
+    if (operation != OP_CMPXCHG) {
+        AtomicRmw* rmwOperation = reinterpret_cast<AtomicRmw*>(instr->byteCode());
+        offset = rmwOperation->offset();
+
+        Operand* operands = instr->operands();
+        MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        JITArgPair valueArgPair;
+        if ((operationSize & SLJIT_32) || operationSize == SLJIT_MOV32) {
+            addr.loadArg.set(operands + 1);
+
+            if (SLJIT_IS_MEM(addr.loadArg.arg)) {
+                addr.options |= MemAddress::LoadInteger;
+            }
+        } else {
+            valueArgPair.set(operands + 1);
+
+            addr.loadArg.arg = valueArgPair.arg1;
+            addr.loadArg.argw = valueArgPair.arg1w;
+
+            if (SLJIT_IS_MEM(valueArgPair.arg1)) {
+                addr.options |= MemAddress::LoadInteger;
+            }
+        }
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+        addr.loadArg.set(operands + 1);
+
+        if (SLJIT_IS_MEM(addr.loadArg.arg)) {
+            addr.options |= MemAddress::LoadInteger;
+
+            if (operationSize == SLJIT_MOV32 || (operationSize & SLJIT_32)) {
+                addr.options |= MemAddress::Load32;
+            }
+        }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+        addr.check(compiler, operands, offset, size);
+
+        JITArg dst;
+        sljit_s32 srcReg;
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        if ((operationSize & SLJIT_32) || operationSize == SLJIT_MOV32) {
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+            JITArg src(operands + 1);
+            dst = JITArg(operands + 2);
+            srcReg = GET_SOURCE_REG(src.arg, instr->requiredReg(2));
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        } else {
+            JITArgPair srcPair(operands + 1);
+            JITArgPair dstPair(operands + 2);
+            srcReg = GET_TARGET_REG(srcPair.arg1, instr->requiredReg(2));
+
+            dst.arg = dstPair.arg1;
+            dst.argw = dstPair.arg1w;
+            sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
+        }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+        struct sljit_label* restartOnFailure = sljit_emit_label(compiler);
+        sljit_emit_atomic_load(compiler, operationSize, SLJIT_TMP_DEST_REG, SLJIT_EXTRACT_REG(addr.memArg.arg));
+        if (operation != OP_XCHG) {
+            sljit_emit_op2(compiler, operation, srcReg, 0, SLJIT_TMP_DEST_REG, 0, srcReg, 0);
+        }
+        sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, srcReg, SLJIT_EXTRACT_REG(addr.memArg.arg), SLJIT_TMP_DEST_REG);
+        sljit_set_label(sljit_emit_jump(compiler, SLJIT_ATOMIC_NOT_STORED), restartOnFailure);
+        sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
+        return;
+    }
+
+    AtomicRmwCmpxchg* rmwCmpxchgOperation = reinterpret_cast<AtomicRmwCmpxchg*>(instr->byteCode());
+    offset = rmwCmpxchgOperation->offset();
 
     Operand* operands = instr->operands();
     MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
@@ -1329,37 +1492,84 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 
     addr.check(compiler, operands, offset, size);
 
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    JITArg srcValue;
     JITArg dst;
-    sljit_s32 srcReg;
+    JITArgPair srcExpectedPair;
+    sljit_s32 tmpReg;
+    sljit_s32 srcExpectedReg;
 
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if ((operationSize & SLJIT_32) || operationSize == SLJIT_MOV32) {
-#endif /* SLJIT_32BIT_ARCHITECTURE */
-        JITArg src(operands + 1);
-        dst = JITArg(operands + 2);
-        srcReg = GET_SOURCE_REG(src.arg, instr->requiredReg(2));
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        JITArg tmp(operands + 0);
+        JITArg srcExpected(operands + 1);
+        srcValue = JITArg(operands + 2);
+        dst = JITArg(operands + 3);
+        tmpReg = GET_SOURCE_REG(tmp.arg, instr->requiredReg(1));
+        srcExpectedReg = GET_SOURCE_REG(srcExpected.arg, instr->requiredReg(2));
     } else {
-        JITArgPair srcPair(operands + 1);
-        JITArgPair dstPair(operands + 2);
-        srcReg = GET_TARGET_REG(srcPair.arg1, instr->requiredReg(2));
+        JITArgPair tmpPair(operands + 0);
+        srcExpectedPair = JITArgPair(operands + 1);
+        JITArgPair srcValuePair(operands + 2);
+        JITArgPair dstPair(operands + 3);
+        tmpReg = GET_TARGET_REG(tmpPair.arg1, instr->requiredReg(1));
+        srcExpectedReg = GET_TARGET_REG(srcExpectedPair.arg1, instr->requiredReg(2));
 
+        srcValue.arg = srcValuePair.arg1;
+        srcValue.argw = srcValuePair.arg1w;
         dst.arg = dstPair.arg1;
         dst.argw = dstPair.arg1w;
         sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
     }
-#endif /* SLJIT_32BIT_ARCHITECTURE */
 
+    struct sljit_jump* compareFalse;
+    struct sljit_jump* compareTopFalse;
+    struct sljit_jump* storeSuccess;
     struct sljit_label* restartOnFailure = sljit_emit_label(compiler);
-    sljit_emit_atomic_load(compiler, operationSize, SLJIT_TMP_DEST_REG, SLJIT_EXTRACT_REG(addr.memArg.arg));
-    if (operation != OP_XCHG) {
-        sljit_emit_op2(compiler, operation, srcReg, 0, SLJIT_TMP_DEST_REG, 0, srcReg, 0);
+
+    if (!(operationSize & SLJIT_32) && operationSize != SLJIT_MOV32) {
+        compareTopFalse = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_IMM, 0, srcExpectedPair.arg2, srcExpectedPair.arg2w);
     }
-    sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, srcReg, SLJIT_EXTRACT_REG(addr.memArg.arg), SLJIT_TMP_DEST_REG);
+    sljit_emit_op1(compiler, SLJIT_MOV, tmpReg, 0, srcValue.arg, srcValue.argw);
+
+    sljit_emit_atomic_load(compiler, operationSize, SLJIT_TMP_DEST_REG, SLJIT_EXTRACT_REG(addr.memArg.arg));
+    compareFalse = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_TMP_DEST_REG, 0, srcExpectedReg, 0);
+    sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, tmpReg, SLJIT_EXTRACT_REG(addr.memArg.arg), SLJIT_TMP_DEST_REG);
     sljit_set_label(sljit_emit_jump(compiler, SLJIT_ATOMIC_NOT_STORED), restartOnFailure);
+    storeSuccess = sljit_emit_jump(compiler, SLJIT_ATOMIC_STORED);
+
+    if (!(operationSize & SLJIT_32) && operationSize != SLJIT_MOV32) {
+        sljit_set_label(compareTopFalse, sljit_emit_label(compiler));
+        sljit_emit_op1(compiler, operationSize, SLJIT_TMP_DEST_REG, 0, addr.memArg.arg, addr.memArg.argw);
+    }
+    sljit_set_label(compareFalse, sljit_emit_label(compiler));
+    sljit_set_label(storeSuccess, sljit_emit_label(compiler));
+
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+    sljit_s32 tmpReg;
+    sljit_s32 srcExpectedReg;
+    JITArg tmp(operands + 0);
+    JITArg srcExpected(operands + 1);
+    JITArg srcValue(operands + 2);
+    JITArg dst(operands + 3);
+    tmpReg = GET_SOURCE_REG(tmp.arg, instr->requiredReg(1));
+    srcExpectedReg = GET_SOURCE_REG(srcExpected.arg, instr->requiredReg(2));
+
+    struct sljit_jump* compareFalse;
+    struct sljit_label* restartOnFailure = sljit_emit_label(compiler);
+
+    sljit_emit_op1(compiler, SLJIT_MOV, tmpReg, 0, srcValue.arg, srcValue.argw);
+    sljit_emit_atomic_load(compiler, operationSize, SLJIT_TMP_DEST_REG, SLJIT_EXTRACT_REG(addr.memArg.arg));
+    compareFalse = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_TMP_DEST_REG, 0, srcExpectedReg, 0);
+    sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, tmpReg, SLJIT_EXTRACT_REG(addr.memArg.arg), SLJIT_TMP_DEST_REG);
+    sljit_set_label(sljit_emit_jump(compiler, SLJIT_ATOMIC_NOT_STORED), restartOnFailure);
+
+    sljit_set_label(compareFalse, sljit_emit_label(compiler));
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
+#endif /* SLJIT_32BIT_ARCHITECTURE */
 }
 
 #undef OP_XCHG
+#undef OP_CMPXCHG
 
 #endif /* ENABLE_EXTENDED_FEATURES */
