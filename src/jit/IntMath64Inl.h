@@ -16,6 +16,8 @@
 
 /* Only included by jit-backend.cc */
 
+#define WORD_LOW_OFFSET 0
+
 enum DivRemOptions : sljit_s32 {
     DivRem32 = 1 << 1,
     DivRemSigned = 1 << 0,

@@ -502,6 +502,7 @@ static void emitDivRem64(sljit_compiler* compiler, sljit_s32 opcode, JITArgPair*
     sljit_sw addr;
     bool isImm = SLJIT_IS_IMM(args[1].arg1);
     CompileContext* context = CompileContext::get(compiler);
+    sljit_sw stackTmpStart = context->stackTmpStart;
 
     if (isImm) {
         if ((args[1].arg1w | args[1].arg2w) == 0) {
@@ -516,34 +517,34 @@ static void emitDivRem64(sljit_compiler* compiler, sljit_s32 opcode, JITArgPair*
     }
 
     if (args[0].arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET, args[0].arg1, args[0].arg1w);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET, args[0].arg2, args[0].arg2w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET, args[0].arg1, args[0].arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET, args[0].arg2, args[0].arg2w);
     }
 
     if (args[1].arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_LOW_OFFSET, args[1].arg1, args[1].arg1w);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_HIGH_OFFSET, args[1].arg2, args[1].arg2w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_LOW_OFFSET, args[1].arg1, args[1].arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_HIGH_OFFSET, args[1].arg2, args[1].arg2w);
     }
 
     if (args[0].arg1 == SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kFrameReg, 0, SLJIT_IMM, args[0].arg1w - WORD_LOW_OFFSET);
     } else {
         ASSERT(SLJIT_IS_REG(args[0].arg1) || SLJIT_IS_IMM(args[0].arg1));
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R0, 0, stackTmpStart);
     }
 
     if (args[1].arg1 == SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, args[1].arg1w - WORD_LOW_OFFSET);
     } else {
         ASSERT(SLJIT_IS_REG(args[1].arg1) || SLJIT_IS_IMM(args[1].arg1));
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp2));
+        sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart + 8);
     }
 
     if (args[2].arg1 == SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kFrameReg, 0, SLJIT_IMM, args[2].arg1w - WORD_LOW_OFFSET);
     } else {
         ASSERT(SLJIT_IS_REG(args[2].arg1));
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R2, 0, stackTmpStart);
     }
 
     switch (opcode) {
@@ -575,8 +576,8 @@ static void emitDivRem64(sljit_compiler* compiler, sljit_s32 opcode, JITArgPair*
     }
 
     if (args[2].arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, args[2].arg1, args[2].arg1w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET);
-        sljit_emit_op1(compiler, SLJIT_MOV, args[2].arg2, args[2].arg2w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, args[2].arg1, args[2].arg1w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, args[2].arg2, args[2].arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET);
     }
 }
 

@@ -16,10 +16,11 @@
 
 /* Only included by jit-backend.cc */
 
-static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, ExecutionContext* context)
+static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, MemoryInitArguments* args)
 {
+    ExecutionContext* context = args->context;
     Memory* memory = context->instance->memory(0);
-    DataSegment& sg = context->instance->dataSegment(*(sljit_u32*)&context->tmp1);
+    DataSegment& sg = context->instance->dataSegment(args->segmentIndex);
 
     if (!memory->checkAccess(dstStart, srcSize)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
@@ -91,22 +92,26 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
         ASSERT(instr->info() & Instruction::kIsCallback);
 
         emitInitR0R1R2(compiler, SLJIT_MOV32, params);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
 
         sljit_sw addr;
 
         if (opcode == ByteCode::MemoryInitOpcode) {
             MemoryInit* memoryInit = reinterpret_cast<MemoryInit*>(instr->byteCode());
 
-            sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), SLJIT_IMM, memoryInit->segmentIndex());
+            sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
+            sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, context), kContextReg, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, segmentIndex), SLJIT_IMM, memoryInit->segmentIndex());
             addr = GET_FUNC_ADDR(sljit_sw, initMemory);
         } else if (opcode == ByteCode::MemoryCopyOpcode) {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
             addr = GET_FUNC_ADDR(sljit_sw, copyMemory);
         } else {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
             addr = GET_FUNC_ADDR(sljit_sw, fillMemory);
         }
 
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, 32, 32, 32, W), SLJIT_IMM, addr);
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, 32, 32, 32, P), SLJIT_IMM, addr);
 
         sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
         context->appendTrapJump(ExecutionContext::GenericTrap, cmp);

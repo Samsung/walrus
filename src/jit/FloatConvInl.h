@@ -708,10 +708,12 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
     }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
 
+    sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
+
     if (arg.arg == SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kFrameReg, 0, SLJIT_IMM, arg.argw);
     } else {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R0, 0, stackTmpStart);
     }
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -737,14 +739,14 @@ static void emitConvertFloat(sljit_compiler* compiler, Instruction* instr)
 
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     sljit_s32 movOp = (flags & DestinationIs64Bit) ? SLJIT_MOV : SLJIT_MOV32;
-    sljit_emit_op1(compiler, movOp, arg.arg, arg.argw, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1));
+    sljit_emit_op1(compiler, movOp, arg.arg, arg.argw, SLJIT_MEM1(SLJIT_SP), stackTmpStart);
 #else /* !SLJIT_64BIT_ARCHITECTURE */
     if (!(flags & DestinationIs64Bit)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, arg.arg, arg.argw, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1));
+        sljit_emit_op1(compiler, SLJIT_MOV, arg.arg, arg.argw, SLJIT_MEM1(SLJIT_SP), stackTmpStart);
         return;
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, argPair.arg1, argPair.arg1w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET);
-    sljit_emit_op1(compiler, SLJIT_MOV, argPair.arg2, argPair.arg2w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET);
+    sljit_emit_op1(compiler, SLJIT_MOV, argPair.arg1, argPair.arg1w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
+    sljit_emit_op1(compiler, SLJIT_MOV, argPair.arg2, argPair.arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 }

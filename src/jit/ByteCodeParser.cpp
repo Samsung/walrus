@@ -549,6 +549,7 @@ static void compileFunction(JITCompiler* compiler)
             group = Instruction::Binary;
             paramType = ParamTypes::ParamSrc2Dst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+            compiler->increaseStackTmpSize(16);
             info = Instruction::kIsCallback;
             requiredInit = OTDivRemI64;
 #else /* !SLJIT_32BIT_ARCHITECTURE */
@@ -790,6 +791,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat32Callback;
+            compiler->increaseStackTmpSize(4);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt32FromFloat32;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -808,6 +810,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat64Callback;
+            compiler->increaseStackTmpSize(8);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt32FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -819,6 +822,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat32Callback;
+            compiler->increaseStackTmpSize(8);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt64FromFloat32;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -830,6 +834,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat32Callback;
+            compiler->increaseStackTmpSize(8);
             break;
         }
         case ByteCode::I64TruncF64SOpcode: {
@@ -838,6 +843,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat64Callback;
+            compiler->increaseStackTmpSize(8);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt64FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -849,6 +855,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat64Callback;
+            compiler->increaseStackTmpSize(8);
             break;
         }
         case ByteCode::I32TruncSatF32UOpcode: {
@@ -857,6 +864,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat32Callback;
+            compiler->increaseStackTmpSize(4);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt32FromFloat32;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -868,6 +876,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt32FromFloat64Callback;
+            compiler->increaseStackTmpSize(8);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt32FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -879,6 +888,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat32Callback;
+            compiler->increaseStackTmpSize(8);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt64FromFloat32;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -890,6 +900,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
             requiredInit = OTConvertInt64FromFloat64Callback;
+            compiler->increaseStackTmpSize(8);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertInt64FromFloat64;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -908,6 +919,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
+            compiler->increaseStackTmpSize(8);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertFloat32FromInt64;
             break;
@@ -925,6 +937,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             info = Instruction::kIsCallback;
+            compiler->increaseStackTmpSize(8);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             requiredInit = OTConvertFloat64FromInt64;
             break;
@@ -1235,6 +1248,7 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            compiler->increaseStackTmpSize(sizeof(InitTableArguments));
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(tableInit->srcOffsets()[0]);
@@ -1254,6 +1268,7 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            compiler->increaseStackTmpSize(sizeof(TableCopyArguments));
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(tableCopy->srcOffsets()[0]);
@@ -1267,6 +1282,7 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            compiler->increaseStackTmpSize(sizeof(TableFillArguments));
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(tableFill->srcOffsets()[0]);
@@ -1314,6 +1330,7 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            compiler->increaseStackTmpSize(sizeof(MemoryInitArguments));
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(memoryInit->srcOffsets()[0]);
@@ -1663,6 +1680,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrc2Dst;
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
             info = Instruction::kIsCallback;
+            compiler->increaseStackTmpSize(32);
 #endif /* SLJIT_CONFIG_ARM_32 */
             requiredInit = OTMinMaxV128;
             break;
@@ -1741,6 +1759,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrcDst;
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
             info = Instruction::kIsCallback;
+            compiler->increaseStackTmpSize(16);
 #endif /* SLJIT_CONFIG_ARM_32 */
             requiredInit = OTOp1V128CB;
             break;
@@ -1841,6 +1860,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (opcode == ByteCode::I64AtomicLoadOpcode) {
                 info = Instruction::kIsCallback;
+                compiler->increaseStackTmpSize(8);
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             if (requiredInit == OTNone) {
@@ -1864,6 +1884,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (opcode == ByteCode::I64AtomicStoreOpcode) {
                 info = Instruction::kIsCallback;
+                compiler->increaseStackTmpSize(8);
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             if (requiredInit == OTNone) {
@@ -1902,6 +1923,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (info == 0) {
                 info = Instruction::kIsCallback;
+                compiler->increaseStackTmpSize(16);
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             FALLTHROUGH;
@@ -1947,6 +1969,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (info == 0) {
                 info = Instruction::kIsCallback;
+                compiler->increaseStackTmpSize(16);
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             FALLTHROUGH;
@@ -1978,6 +2001,7 @@ static void compileFunction(JITCompiler* compiler)
             ByteCodeOffset4Value* memoryAtomicWait = reinterpret_cast<ByteCodeOffset4Value*>(byteCode);
             Operand* operands = instr->operands();
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicWaitI32);
+            compiler->increaseStackTmpSize(16);
 
             operands[0] = STACK_OFFSET(memoryAtomicWait->src0Offset());
             operands[1] = STACK_OFFSET(memoryAtomicWait->src1Offset());

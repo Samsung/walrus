@@ -37,6 +37,7 @@ class BrTableInstruction;
 class Label;
 class JITModule;
 struct CompileContext;
+struct ExecutionContext;
 
 // Defined in ObjectType.h.
 class FunctionType;
@@ -548,6 +549,28 @@ struct TrapJump {
     sljit_jump* jump;
 };
 
+struct MemoryInitArguments {
+    ExecutionContext* context;
+    uint32_t segmentIndex;
+};
+
+struct InitTableArguments {
+    ExecutionContext* context;
+    uint32_t tableIndex;
+    uint32_t segmentIndex;
+};
+
+struct TableCopyArguments {
+    ExecutionContext* context;
+    uint32_t srcIndex;
+    uint32_t dstIndex;
+};
+
+struct TableFillArguments {
+    ExecutionContext* context;
+    uint32_t tableIndex;
+};
+
 struct CompileContext {
     CompileContext(Module* module, JITCompiler* compiler);
 
@@ -565,6 +588,7 @@ struct CompileContext {
     size_t globalsStart;
     size_t tableStart;
     size_t functionsStart;
+    sljit_sw stackTmpStart;
     size_t nextTryBlock;
     size_t currentTryBlock;
     size_t trapBlocksStart;
@@ -729,6 +753,13 @@ public:
         m_branchTableSize += value;
     }
 
+    void increaseStackTmpSize(uint8_t value)
+    {
+        if (m_stackTmpSize < value) {
+            m_stackTmpSize = value;
+        }
+    }
+
     void setModuleFunction(ModuleFunction* moduleFunction)
     {
         m_moduleFunction = moduleFunction;
@@ -797,6 +828,7 @@ private:
     uint32_t m_options;
     uint8_t m_savedIntegerRegCount;
     uint8_t m_savedFloatRegCount;
+    uint8_t m_stackTmpSize;
 
     std::vector<TryBlock> m_tryBlocks;
     std::vector<FunctionList> m_functionList;

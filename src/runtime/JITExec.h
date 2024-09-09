@@ -28,16 +28,6 @@ class Memory;
 class InstanceConstData;
 
 struct ExecutionContext {
-    // Describes a function in the call frame
-    // chain (stored on the machine stack).
-    struct CallFrame {
-        // Previous call frame.
-        CallFrame* prevFrame;
-        // Start address of the data used by
-        // the function (also stored in kFrameReg).
-        void* frameStart;
-    };
-
     enum ErrorCodes : uint32_t {
         NoError,
         CapturedException,
@@ -64,8 +54,7 @@ struct ExecutionContext {
     };
 
     ExecutionContext(InstanceConstData* currentInstanceConstData, ExecutionState& state, Instance* instance)
-        : lastFrame(nullptr)
-        , currentInstanceConstData(currentInstanceConstData)
+        : currentInstanceConstData(currentInstanceConstData)
         , state(state)
         , instance(instance)
         , capturedException(nullptr)
@@ -73,15 +62,12 @@ struct ExecutionContext {
     {
     }
 
-    CallFrame* lastFrame;
     InstanceConstData* currentInstanceConstData;
     ExecutionState& state;
     Instance* instance;
     Exception* capturedException;
     Memory::TargetBuffer memory0;
     ErrorCodes error;
-    uint64_t tmp1[2];
-    uint64_t tmp2[2];
 };
 
 class JITModule {
