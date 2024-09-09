@@ -44,6 +44,9 @@ extern "C" {
 #define OffsetOfContextField(field) \
     (static_cast<sljit_sw>(offsetof(ExecutionContext, field)))
 
+#define OffsetOfStackTmp(type, field) \
+    (stackTmpStart + static_cast<sljit_sw>(offsetof(type, field)))
+
 #if !(defined SLJIT_INDIRECT_CALL && SLJIT_INDIRECT_CALL)
 #define GET_FUNC_ADDR(type, func) (reinterpret_cast<type>(func))
 #else
@@ -219,6 +222,7 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     , shuffleOffset(0)
 #endif /* SLJIT_CONFIG_X86 */
+    , stackTmpStart(0)
     , nextTryBlock(0)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
@@ -1016,6 +1020,7 @@ JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     , m_options(0)
     , m_savedIntegerRegCount(0)
     , m_savedFloatRegCount(0)
+    , m_stackTmpSize(0)
 {
     if (module->m_jitModule != nullptr) {
         ASSERT(module->m_jitModule->m_instanceConstData != nullptr);
@@ -1471,6 +1476,7 @@ void JITCompiler::clear()
     m_first = nullptr;
     m_last = nullptr;
     m_branchTableSize = 0;
+    m_stackTmpSize = 0;
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     m_context.shuffleOffset = 0;
 #endif /* SLJIT_CONFIG_X86 */
@@ -1507,17 +1513,15 @@ void JITCompiler::emitProlog()
     options |= SLJIT_ENTER_USE_VEX;
 #endif /* !SLJIT_CONFIG_X86 */
 
+#if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
+    ASSERT(m_stackTmpSize <= 32);
+#else /* !SLJIT_CONFIG_ARM_32 */
+    ASSERT(m_stackTmpSize <= 16);
+#endif /* SLJIT_CONFIG_ARM_32 */
+
     sljit_emit_enter(m_compiler, options, SLJIT_ARGS0(P),
                      SLJIT_NUMBER_OF_SCRATCH_REGISTERS | SLJIT_ENTER_FLOAT(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS),
-                     (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount), sizeof(ExecutionContext::CallFrame));
-
-    // Setup new frame.
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(lastFrame));
-
-    sljit_get_local_base(m_compiler, SLJIT_R1, 0, 0);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(kContextReg), OffsetOfContextField(lastFrame), SLJIT_R1, 0);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), offsetof(ExecutionContext::CallFrame, frameStart), kFrameReg, 0);
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), offsetof(ExecutionContext::CallFrame, prevFrame), SLJIT_R0, 0);
+                     (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount), m_stackTmpSize);
 
     m_context.branchTableOffset = 0;
     size_t size = func.branchTableSize * sizeof(sljit_up);
@@ -1554,10 +1558,6 @@ void JITCompiler::emitEpilog()
 
         m_context.earlyReturns.clear();
     }
-
-    // Restore previous frame.
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_SP), offsetof(ExecutionContext::CallFrame, prevFrame));
-    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(kContextReg), OffsetOfContextField(lastFrame), SLJIT_R1, 0);
 
     sljit_emit_return(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0);
 

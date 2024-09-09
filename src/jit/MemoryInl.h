@@ -312,8 +312,10 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
     }
 
     JITArgPair valueArgPair(operands + 1);
+    sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
     sljit_s32 type = SLJIT_ARGS2V(P, P);
     sljit_s32 faddr;
+
     if (instr->opcode() == ByteCode::I64AtomicLoadOpcode) {
         faddr = GET_FUNC_ADDR(sljit_sw, atomicRmwLoad64);
     } else {
@@ -321,8 +323,8 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
         faddr = GET_FUNC_ADDR(sljit_sw, atomicRmwStore64);
 
         if (valueArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET, valueArgPair.arg1, valueArgPair.arg1w);
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET, valueArgPair.arg2, valueArgPair.arg2w);
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET, valueArgPair.arg1, valueArgPair.arg1w);
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET, valueArgPair.arg2, valueArgPair.arg2w);
         }
     }
 
@@ -330,15 +332,15 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, valueArgPair.arg1w - WORD_LOW_OFFSET);
     } else {
         ASSERT(SLJIT_IS_REG(valueArgPair.arg1) || SLJIT_IS_IMM(valueArgPair.arg1));
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart);
     }
 
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, GET_SOURCE_REG(addr.memArg.arg, instr->requiredReg(0)), 0);
     sljit_emit_icall(compiler, SLJIT_CALL, type, SLJIT_IMM, faddr);
 
     if ((instr->opcode() == ByteCode::I64AtomicLoadOpcode) && (valueArgPair.arg1 != SLJIT_MEM1(kFrameReg))) {
-        sljit_emit_op1(compiler, SLJIT_MOV, valueArgPair.arg1, valueArgPair.arg1w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET);
-        sljit_emit_op1(compiler, SLJIT_MOV, valueArgPair.arg2, valueArgPair.arg2w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, valueArgPair.arg1, valueArgPair.arg1w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, valueArgPair.arg2, valueArgPair.arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET);
     }
 }
 #endif /* ENABLE_EXTENDED_FEATURES && SLJIT_32BIT_ARCHITECTURE  */
@@ -1076,6 +1078,7 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
 
     JITArgPair srcArgPair(operands + 1);
     JITArgPair dstArgPair(operands + 2);
+    sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
     sljit_s32 functionAddr;
 
     switch (instr->opcode()) {
@@ -1110,8 +1113,8 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (srcArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET, srcArgPair.arg1, srcArgPair.arg1w);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET, srcArgPair.arg2, srcArgPair.arg2w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET, srcArgPair.arg1, srcArgPair.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET, srcArgPair.arg2, srcArgPair.arg2w);
     }
 
     if (addr.memArg.arg != SLJIT_R0) {
@@ -1119,13 +1122,13 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
     }
 
     if (srcArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart);
     } else {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, srcArgPair.arg1w - WORD_LOW_OFFSET);
     }
 
     if (dstArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp2));
+        sljit_get_local_base(compiler, SLJIT_R2, 0, stackTmpStart + 8);
     } else {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kFrameReg, 0, SLJIT_IMM, dstArgPair.arg1w - WORD_LOW_OFFSET);
     }
@@ -1133,8 +1136,8 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(P, P, P), SLJIT_IMM, functionAddr);
 
     if (dstArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_LOW_OFFSET);
-        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_HIGH_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_LOW_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_HIGH_OFFSET);
     }
 }
 
@@ -1158,6 +1161,7 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
     JITArgPair srcExpectedArgPair(operands + 1);
     JITArgPair srcValueArgPair(operands + 2);
     JITArgPair dstArgPair(operands + 3);
+    sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
     sljit_s32 type = SLJIT_ARGS3V(P, P, P);
     sljit_s32 functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwCmpxchg64);
 
@@ -1167,13 +1171,13 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
             sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, srcExpectedArgPair.arg2, srcExpectedArgPair.arg2w);
         }
     } else {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET, srcExpectedArgPair.arg1, srcExpectedArgPair.arg1w);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET, srcExpectedArgPair.arg2, srcExpectedArgPair.arg2w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET, srcExpectedArgPair.arg1, srcExpectedArgPair.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET, srcExpectedArgPair.arg2, srcExpectedArgPair.arg2w);
     }
 
     if (srcValueArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_LOW_OFFSET, srcValueArgPair.arg1, srcValueArgPair.arg1w);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_HIGH_OFFSET, srcValueArgPair.arg2, srcValueArgPair.arg2w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_LOW_OFFSET, srcValueArgPair.arg1, srcValueArgPair.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_HIGH_OFFSET, srcValueArgPair.arg2, srcValueArgPair.arg2w);
     }
 
     if (addr.memArg.arg != SLJIT_R0) {
@@ -1183,20 +1187,20 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
     if (srcExpectedArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, SLJIT_EXTRACT_REG(dstArgPair.arg1), 0, SLJIT_IMM, dstArgPair.arg1w);
     } else {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart);
     }
 
-    if (srcValueArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp2));
-    } else {
+    if (srcValueArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kFrameReg, 0, SLJIT_IMM, srcValueArgPair.arg1w - WORD_LOW_OFFSET);
+    } else {
+        sljit_get_local_base(compiler, SLJIT_R2, 0, stackTmpStart + 8);
     }
 
     sljit_emit_icall(compiler, SLJIT_CALL, type, SLJIT_IMM, functionAddr);
 
     if (srcExpectedArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET);
-        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(kContextReg), stackTmpStart + WORD_LOW_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(kContextReg), stackTmpStart + WORD_HIGH_OFFSET);
     }
 }
 
@@ -1543,7 +1547,7 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #undef OP_XCHG
 #undef OP_CMPXCHG
 
-static sljit_s32 atomicWaitCallback(ExecutionContext* context, uint8_t* address, sljit_s32 size)
+static sljit_s32 atomicWaitCallback(ExecutionContext* context, uint8_t* address, int64_t* args, sljit_s32 size)
 {
     Instance* instance = context->instance;
 
@@ -1552,8 +1556,8 @@ static sljit_s32 atomicWaitCallback(ExecutionContext* context, uint8_t* address,
     }
 
     uint32_t result = 0;
-    int64_t timeout = context->tmp2[0];
-    int64_t expect = context->tmp1[0];
+    int64_t expect = args[0];
+    int64_t timeout = args[1];
 
     if (size == 8) {
         instance->memory(0)->atomicWait(context->state, instance->module()->store(), address, expect, timeout, &result);
@@ -1561,13 +1565,14 @@ static sljit_s32 atomicWaitCallback(ExecutionContext* context, uint8_t* address,
         instance->memory(0)->atomicWait(context->state, instance->module()->store(), address, (int32_t)expect, timeout, &result);
     }
 
-    context->tmp2[0] = result;
+    args[0] = result;
     return ExecutionContext::NoError;
 }
 
 static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
+    sljit_sw stackTmpStart = context->stackTmpStart;
     sljit_s32 size = (instr->opcode() == ByteCode::MemoryAtomicWait64Opcode ? 8 : 4);
 
     ByteCodeOffset4Value* atomicWaitOperation = reinterpret_cast<ByteCodeOffset4Value*>(instr->byteCode());
@@ -1599,40 +1604,40 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     if (instr->opcode() == ByteCode::MemoryAtomicWait64Opcode) {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET, expectedPair.arg1, expectedPair.arg1w);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET, expectedPair.arg2, expectedPair.arg2w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET, expectedPair.arg1, expectedPair.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET, expectedPair.arg2, expectedPair.arg2w);
     } else {
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), expected.arg, expected.argw);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart, expected.arg, expected.argw);
     }
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), expected.arg, expected.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart, expected.arg, expected.argw);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_LOW_OFFSET, timeout.arg1, timeout.arg1w);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_HIGH_OFFSET, timeout.arg2, timeout.arg2w);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_LOW_OFFSET, timeout.arg1, timeout.arg1w);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8 + WORD_HIGH_OFFSET, timeout.arg2, timeout.arg2w);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2), timeout.arg, timeout.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 8, timeout.arg, timeout.argw);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, size);
+    sljit_get_local_base(compiler, SLJIT_R2, 0, stackTmpStart);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, SLJIT_IMM, size);
 
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, P, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicWaitCallback));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicWaitCallback));
 
     memoryShared = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_IMM, ExecutionContext::NoError, SLJIT_R0, 0);
     context->appendTrapJump(ExecutionContext::ExpectedSharedMemError, sljit_emit_jump(compiler, SLJIT_JUMP));
     sljit_set_label(memoryShared, sljit_emit_label(compiler));
 
-    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2));
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
 }
 
-static sljit_s32 atomicNotifyCallback(ExecutionContext* context, uint8_t* address)
+static sljit_s32 atomicNotifyCallback(ExecutionContext* context, uint8_t* address, int32_t count)
 {
     Instance* instance = context->instance;
     uint32_t result = 0;
-    int32_t count = context->tmp1[0];
     instance->memory(0)->atomicNotify(instance->module()->store(), address, count, &result);
     return result;
 }
@@ -1649,14 +1654,24 @@ static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
     JITArg count(operands + 1);
     JITArg dst(operands + 2);
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), count.arg, count.argw);
+    if (count.arg == SLJIT_R1) {
+        if (SLJIT_EXTRACT_REG(addr.memArg.arg) != SLJIT_R2) {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, count.arg, count.argw);
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
+        } else {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_R1, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_R2, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_TMP_DEST_REG, 0);
+        }
+    } else {
+        MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R1, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
+        MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R2, count.arg, count.argw);
+    }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, P, W, 32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicNotifyCallback));
 
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(W, P, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicNotifyCallback));
-
-    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_R0, 0);
+    MOVE_FROM_REG(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_R0);
 }
 
 #endif /* ENABLE_EXTENDED_FEATURES */

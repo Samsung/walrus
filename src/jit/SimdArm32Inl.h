@@ -442,19 +442,21 @@ static void simdEmitF64x2Logical(sljit_compiler* compiler, uint32_t op, sljit_s3
 
 static void simdEmitFloatUnaryOpWithCB(sljit_compiler* compiler, JITArg src, JITArg dst, sljit_sw funcAddr)
 {
+    sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
+
     if (src.arg == SLJIT_MEM1(kFrameReg)) {
         ASSERT((src.argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kFrameReg, 0, SLJIT_IMM, src.argw);
     } else if (SLJIT_IS_REG(src.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src.arg, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1));
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src.arg, SLJIT_MEM1(SLJIT_SP), stackTmpStart);
+        sljit_get_local_base(compiler, SLJIT_R0, 0, stackTmpStart);
     } else {
         ASSERT(src.arg == SLJIT_MEM0() && (src.argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, src.argw);
     }
 
     if (SLJIT_IS_REG(dst.arg)) {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart);
     } else {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, dst.argw);
     }
@@ -462,7 +464,7 @@ static void simdEmitFloatUnaryOpWithCB(sljit_compiler* compiler, JITArg src, JIT
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(P, P), SLJIT_IMM, funcAddr);
 
     if (SLJIT_IS_REG(dst.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst.arg, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1));
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst.arg, SLJIT_MEM1(SLJIT_SP), stackTmpStart);
     }
 }
 
@@ -995,12 +997,14 @@ static void F32x4Max(float* src0, float* src1, float* dst)
 
 static void simdEmitFloatBinaryOpWithCB(sljit_compiler* compiler, JITArg src[2], JITArg dst, sljit_sw funcAddr)
 {
+    sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
+
     if (src[0].arg == SLJIT_MEM1(kFrameReg)) {
         ASSERT((src[0].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kFrameReg, 0, SLJIT_IMM, src[0].argw);
     } else if (SLJIT_IS_REG(src[0].arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src[0].arg, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1));
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R0, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src[0].arg, SLJIT_MEM1(SLJIT_SP), stackTmpStart);
+        sljit_get_local_base(compiler, SLJIT_R0, 0, stackTmpStart);
     } else {
         ASSERT(src[0].arg == SLJIT_MEM0() && (src[0].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, src[0].argw);
@@ -1010,15 +1014,15 @@ static void simdEmitFloatBinaryOpWithCB(sljit_compiler* compiler, JITArg src[2],
         ASSERT((src[1].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, src[1].argw);
     } else if (SLJIT_IS_REG(src[1].arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src[1].arg, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2));
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp2));
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, src[1].arg, SLJIT_MEM1(SLJIT_SP), stackTmpStart + 16);
+        sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart + 16);
     } else {
         ASSERT(src[1].arg == SLJIT_MEM0() && (src[1].argw & (sizeof(void*) - 1)) == 0);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_IMM, src[1].argw);
     }
 
     if (SLJIT_IS_REG(dst.arg)) {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kContextReg, 0, SLJIT_IMM, OffsetOfContextField(tmp1));
+        sljit_get_local_base(compiler, SLJIT_R2, 0, stackTmpStart);
     } else {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R2, 0, kFrameReg, 0, SLJIT_IMM, dst.argw);
     }
@@ -1026,7 +1030,7 @@ static void simdEmitFloatBinaryOpWithCB(sljit_compiler* compiler, JITArg src[2],
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(P, P, P), SLJIT_IMM, funcAddr);
 
     if (SLJIT_IS_REG(dst.arg)) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst.arg, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1));
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst.arg, SLJIT_MEM1(SLJIT_SP), stackTmpStart);
     }
 }
 
