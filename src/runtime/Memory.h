@@ -36,6 +36,13 @@ public:
 
     // Caching memory target for fast access.
     struct TargetBuffer {
+        TargetBuffer()
+            : prev(nullptr)
+            , sizeInByte(0)
+            , buffer(nullptr)
+        {
+        }
+
         TargetBuffer* prev;
         uint64_t sizeInByte;
         uint8_t* buffer;

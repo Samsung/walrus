@@ -342,6 +342,7 @@ protected:
         : Instruction(byteCode, group, opcode, paramCount, operands)
     {
         ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackInit);
+        m_value.targetLabel = nullptr;
     }
 
 private:
@@ -489,6 +490,7 @@ struct TryBlock {
     TryBlock(Label* start, size_t size)
         : start(start)
         , parent(0)
+        , findHandlerLabel(nullptr)
         , returnToLabel(nullptr)
     {
         catchBlocks.reserve(size);

@@ -215,6 +215,7 @@ protected:
 
 CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     : compiler(compiler)
+    , branchTableOffset(0)
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     , shuffleOffset(0)
 #endif /* SLJIT_CONFIG_X86 */
@@ -1013,6 +1014,8 @@ JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     , m_tryBlockOffset(0)
     , m_JITFlags(JITFlags)
     , m_options(0)
+    , m_savedIntegerRegCount(0)
+    , m_savedFloatRegCount(0)
 {
     if (module->m_jitModule != nullptr) {
         ASSERT(module->m_jitModule->m_instanceConstData != nullptr);

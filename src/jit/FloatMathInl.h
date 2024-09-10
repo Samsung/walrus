@@ -308,7 +308,7 @@ static void emitFloatUnary(sljit_compiler* compiler, Instruction* instr)
         f32Func = floatNearest;
         break;
     case ByteCode::F32SqrtOpcode:
-        f32Func = sqrt;
+        f32Func = sqrtf;
         break;
     case ByteCode::F32NegOpcode:
         opcode = SLJIT_NEG_F32;
