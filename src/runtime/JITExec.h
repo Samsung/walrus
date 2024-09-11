@@ -66,7 +66,6 @@ struct ExecutionContext {
     ExecutionState& state;
     Instance* instance;
     Exception* capturedException;
-    Memory::TargetBuffer memory0;
     ErrorCodes error;
 };
 

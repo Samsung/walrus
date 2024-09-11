@@ -589,6 +589,7 @@ struct CompileContext {
     size_t tableStart;
     size_t functionsStart;
     sljit_sw stackTmpStart;
+    sljit_sw stackMemoryStart;
     size_t nextTryBlock;
     size_t currentTryBlock;
     size_t trapBlocksStart;
@@ -760,6 +761,16 @@ public:
         }
     }
 
+    void useMemory0()
+    {
+        m_useMemory0 = true;
+    }
+
+    bool hasMemory0()
+    {
+        return m_useMemory0;
+    }
+
     void setModuleFunction(ModuleFunction* moduleFunction)
     {
         m_moduleFunction = moduleFunction;
@@ -806,6 +817,7 @@ private:
     // Backend operations.
     void emitProlog();
     void emitEpilog();
+    void emitRestoreMemories();
 
 #if !defined(NDEBUG)
     static const char* m_byteCodeNames[];
@@ -829,6 +841,7 @@ private:
     uint8_t m_savedIntegerRegCount;
     uint8_t m_savedFloatRegCount;
     uint8_t m_stackTmpSize;
+    bool m_useMemory0;
 
     std::vector<TryBlock> m_tryBlocks;
     std::vector<FunctionList> m_functionList;
