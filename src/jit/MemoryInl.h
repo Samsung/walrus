@@ -57,7 +57,9 @@ struct MemAddress {
 void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_uw offset, sljit_u32 size)
 {
     CompileContext* context = CompileContext::get(compiler);
+    sljit_sw stackMemoryStart = context->stackMemoryStart;
 
+    ASSERT(context->compiler->hasMemory0());
     ASSERT(!(options & LoadInteger) || baseReg != sourceReg);
     ASSERT(!(options & LoadInteger) || offsetReg != sourceReg);
 #if defined(ENABLE_EXTENDED_FEATURES)
@@ -105,8 +107,8 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
         if (offset + size <= context->initialMemorySize) {
             ASSERT(baseReg != 0);
-            sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg),
-                           OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, buffer));
+            sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(SLJIT_SP),
+                           stackMemoryStart + offsetof(Memory::TargetBuffer, buffer));
             memArg.arg = SLJIT_MEM1(baseReg);
             memArg.argw = offset;
             load(compiler);
@@ -121,18 +123,13 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
         }
 
         ASSERT(baseReg != 0 && offsetReg != 0);
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kContextReg),
-                       OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte));
-#else /* !SLJIT_64BIT_ARCHITECTURE */
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kContextReg),
-                       OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
-#endif /* SLJIT_64BIT_ARCHITECTURE */
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_SP),
+                       stackMemoryStart + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
 
         sljit_emit_op1(compiler, SLJIT_MOV, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset + size));
-        sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg),
-                       OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, buffer));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(SLJIT_SP),
+                       stackMemoryStart + offsetof(Memory::TargetBuffer, buffer));
 
         load(compiler);
 
@@ -164,19 +161,14 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
     sljit_emit_op1(compiler, SLJIT_MOV_U32, offsetReg, 0, offsetArg.arg, offsetArg.argw);
 
     if (context->initialMemorySize != context->maximumMemorySize) {
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kContextReg),
-                       OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte));
-#else /* !SLJIT_64BIT_ARCHITECTURE */
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kContextReg),
-                       OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
-#endif /* SLJIT_64BIT_ARCHITECTURE */
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_SP),
+                       stackMemoryStart + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
         offset += size;
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg),
-                   OffsetOfContextField(memory0) + offsetof(Memory::TargetBuffer, buffer));
+    sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(SLJIT_SP),
+                   stackMemoryStart + offsetof(Memory::TargetBuffer, buffer));
 
     load(compiler);
 
@@ -1579,7 +1571,7 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 offset = atomicWaitOperation->offset();
 
     Operand* operands = instr->operands();
-    MemAddress addr(MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+    MemAddress addr(MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress, instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, size);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -1648,7 +1640,7 @@ static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 offset = atomicNotifyOperation->offset();
 
     Operand* operands = instr->operands();
-    MemAddress addr(MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+    MemAddress addr(MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress, instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, 4);
 
     JITArg count(operands + 1);

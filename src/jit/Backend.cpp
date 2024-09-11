@@ -223,6 +223,7 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     , shuffleOffset(0)
 #endif /* SLJIT_CONFIG_X86 */
     , stackTmpStart(0)
+    , stackMemoryStart(0)
     , nextTryBlock(0)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
@@ -1021,6 +1022,7 @@ JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     , m_savedIntegerRegCount(0)
     , m_savedFloatRegCount(0)
     , m_stackTmpSize(0)
+    , m_useMemory0(false)
 {
     if (module->m_jitModule != nullptr) {
         ASSERT(module->m_jitModule->m_instanceConstData != nullptr);
@@ -1037,6 +1039,10 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
     ASSERT(m_first != nullptr && m_last != nullptr);
 
     m_functionList.push_back(FunctionList(jitFunc, isExternal, m_branchTableSize));
+
+    sljit_uw stackTmpStart = m_useMemory0 ? sizeof(Memory::TargetBuffer) : 0;
+    // Align data.
+    m_context.stackTmpStart = static_cast<sljit_sw>((stackTmpStart + sizeof(sljit_sw) - 1) & ~(sizeof(sljit_sw) - 1));
 
     if (m_compiler == nullptr) {
         // First compiled function.
@@ -1477,6 +1483,7 @@ void JITCompiler::clear()
     m_last = nullptr;
     m_branchTableSize = 0;
     m_stackTmpSize = 0;
+    m_useMemory0 = false;
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     m_context.shuffleOffset = 0;
 #endif /* SLJIT_CONFIG_X86 */
@@ -1521,7 +1528,27 @@ void JITCompiler::emitProlog()
 
     sljit_emit_enter(m_compiler, options, SLJIT_ARGS0(P),
                      SLJIT_NUMBER_OF_SCRATCH_REGISTERS | SLJIT_ENTER_FLOAT(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS),
-                     (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount), m_stackTmpSize);
+                     (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount), m_context.stackTmpStart + m_stackTmpSize);
+
+    if (hasMemory0()) {
+        sljit_sw stackMemoryStart = m_context.stackMemoryStart;
+        ASSERT(m_context.stackTmpStart >= stackMemoryStart + static_cast<sljit_sw>(sizeof(Memory::TargetBuffer)));
+
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), Instance::alignedSize());
+
+        sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R0), offsetof(Memory, m_targetBuffers));
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_R0), offsetof(Memory, m_sizeInByte) + WORD_LOW_OFFSET);
+        sljit_get_local_base(m_compiler, SLJIT_MEM1(SLJIT_R0), offsetof(Memory, m_targetBuffers), stackMemoryStart);
+        sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_R0), offsetof(Memory, m_buffer));
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackMemoryStart + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_HIGH_OFFSET, SLJIT_IMM, 0);
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+        sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), stackMemoryStart + offsetof(Memory::TargetBuffer, prev), SLJIT_R1, 0);
+        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackMemoryStart + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET, SLJIT_R2, 0);
+        sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), stackMemoryStart + offsetof(Memory::TargetBuffer, buffer), SLJIT_R0, 0);
+    }
 
     m_context.branchTableOffset = 0;
     size_t size = func.branchTableSize * sizeof(sljit_up);
@@ -1542,6 +1569,20 @@ void JITCompiler::emitProlog()
     }
 }
 
+void JITCompiler::emitRestoreMemories()
+{
+    if (!hasMemory0()) {
+        return;
+    }
+
+    sljit_sw stackMemoryStart = m_context.stackMemoryStart;
+
+    sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_SP), stackMemoryStart + offsetof(Memory::TargetBuffer, prev));
+    sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_R1), Instance::alignedSize());
+    sljit_emit_op1(m_compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_R1), offsetof(Memory, m_targetBuffers), SLJIT_R2, 0);
+}
+
 void JITCompiler::emitEpilog()
 {
     FunctionList& func = m_functionList.back();
@@ -1559,6 +1600,7 @@ void JITCompiler::emitEpilog()
         m_context.earlyReturns.clear();
     }
 
+    emitRestoreMemories();
     sljit_emit_return(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0);
 
     m_context.emitSlowCases(m_compiler);
@@ -1619,6 +1661,8 @@ void JITCompiler::emitEpilog()
         sljit_emit_op_dst(m_compiler, SLJIT_GET_RETURN_ADDRESS, SLJIT_R1, 0);
         sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
         sljit_emit_icall(m_compiler, SLJIT_CALL, SLJIT_ARGS2(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, getTrapHandler));
+
+        emitRestoreMemories();
         sljit_emit_return_to(m_compiler, SLJIT_R0, 0);
 
         while (trapJumpIndex < trapJumps.size()) {

@@ -31,6 +31,8 @@ class Store;
 class DataSegment;
 
 class Memory : public Extern {
+    friend class JITCompiler;
+
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
 
@@ -38,14 +40,14 @@ public:
     struct TargetBuffer {
         TargetBuffer()
             : prev(nullptr)
-            , sizeInByte(0)
             , buffer(nullptr)
+            , sizeInByte(0)
         {
         }
 
         TargetBuffer* prev;
-        uint64_t sizeInByte;
         uint8_t* buffer;
+        uint64_t sizeInByte;
     };
 
     static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared);
@@ -310,19 +312,6 @@ public:
     void init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
     void copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size);
     void fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size);
-
-    inline void push(TargetBuffer* targetBuffer)
-    {
-        targetBuffer->prev = m_targetBuffers;
-        targetBuffer->sizeInByte = sizeInByte();
-        targetBuffer->buffer = buffer();
-        m_targetBuffers = targetBuffer;
-    }
-
-    inline void pop(TargetBuffer* targetBuffer)
-    {
-        m_targetBuffers = targetBuffer->prev;
-    }
 
     inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
