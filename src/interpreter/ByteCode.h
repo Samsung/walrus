@@ -586,7 +586,8 @@ class FunctionType;
 #define FOR_EACH_BYTECODE_ATOMIC_OTHER(F) \
     F(MemoryAtomicNotify)                 \
     F(MemoryAtomicWait32)                 \
-    F(MemoryAtomicWait64)
+    F(MemoryAtomicWait64)                 \
+    F(AtomicFence)
 #else // Extended Features
 #define FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F)
 #define FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F)
@@ -732,6 +733,33 @@ protected:
     ByteCodeStackOffset m_stackOffset2;
     uint32_t m_value;
 };
+
+class ByteCodeOffset4Value : public ByteCode {
+public:
+    ByteCodeOffset4Value(Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, uint32_t value)
+        : ByteCode(opcode)
+        , m_stackOffset1(src0Offset)
+        , m_stackOffset2(src1Offset)
+        , m_stackOffset3(src2Offset)
+        , m_stackOffset4(dstOffset)
+        , m_value(value)
+    {
+    }
+
+    ByteCodeStackOffset src0Offset() const { return m_stackOffset1; }
+    ByteCodeStackOffset src1Offset() const { return m_stackOffset2; }
+    ByteCodeStackOffset src2Offset() const { return m_stackOffset3; }
+    ByteCodeStackOffset dstOffset() const { return m_stackOffset4; }
+    uint32_t offset() const { return m_value; }
+
+protected:
+    ByteCodeStackOffset m_stackOffset1;
+    ByteCodeStackOffset m_stackOffset2;
+    ByteCodeStackOffset m_stackOffset3;
+    ByteCodeStackOffset m_stackOffset4;
+    uint32_t m_value;
+};
+
 
 class ByteCodeTable {
 public:
@@ -1741,99 +1769,48 @@ protected:
     ByteCodeStackOffset m_dstOffset;
 };
 
-class AtomicRmwCmpxchg : public ByteCode {
+class AtomicRmwCmpxchg : public ByteCodeOffset4Value {
 public:
     AtomicRmwCmpxchg(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_src2Offset(src2)
-        , m_dstOffset(dst)
+        : ByteCodeOffset4Value(opcode, src0, src1, src2, dst, offset)
+
     {
     }
-
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
     }
 #endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_src2Offset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
-class MemoryAtomicWait32 : public ByteCode {
+class MemoryAtomicWait32 : public ByteCodeOffset4Value {
 public:
     MemoryAtomicWait32(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::MemoryAtomicWait32Opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_src2Offset(src2)
-        , m_dstOffset(dst)
+        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait32Opcode, src0, src1, src2, dst, offset)
     {
     }
-
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("MemoryAtomicWait32 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_src2Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
+        printf("MemoryAtomicWait32 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value);
     }
 #endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_src2Offset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
-class MemoryAtomicWait64 : public ByteCode {
+class MemoryAtomicWait64 : public ByteCodeOffset4Value {
 public:
     MemoryAtomicWait64(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::MemoryAtomicWait64Opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_src2Offset(src2)
-        , m_dstOffset(dst)
+        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait64Opcode, src0, src1, src2, dst, offset)
     {
     }
-
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("MemoryAtomicWait64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_src2Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
+        printf("MemoryAtomicWait64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value);
     }
 #endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_src2Offset;
-    ByteCodeStackOffset m_dstOffset;
 };
 
 class MemoryAtomicNotify : public ByteCode {
@@ -1864,6 +1841,22 @@ protected:
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_dstOffset;
 };
+
+class AtomicFence : public ByteCode {
+public:
+    AtomicFence()
+        : ByteCode(Opcode::AtomicFenceOpcode)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    uint32_t m_offset;
+};
 #endif
 
 #if !defined(NDEBUG)
@@ -1887,10 +1880,10 @@ protected:
     };
 
 #if !defined(NDEBUG)
-#define DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)                                                                                                                                                                                       \
-    void dump(size_t pos)                                                                                                                                                                                                            \
-    {                                                                                                                                                                                                                                \
-        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_src2Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset); \
+#define DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)                                                                                                                                                                                               \
+    void dump(size_t pos)                                                                                                                                                                                                                    \
+    {                                                                                                                                                                                                                                        \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value); \
     }
 #else
 #define DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)

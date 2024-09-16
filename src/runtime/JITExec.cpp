@@ -83,6 +83,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::UnalignedAtomicError:
             Trap::throwException(state, "unaligned atomic");
             return resultOffsets;
+        case ExecutionContext::ExpectedSharedMemError:
+            Trap::throwException(state, "expected shared memory");
+            return resultOffsets;
 #endif /* ENABLE_EXTENDED_FEATURES */
         default:
             Trap::throwException(state, "unknown exception");

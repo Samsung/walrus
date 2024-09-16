@@ -235,7 +235,10 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL5(OTAtomicRmwI32, /* SSDTT */ I32, I32, I32 | TMP, PTR, I32 | S1)              \
     OL5(OTAtomicRmwI64, /* SSDTT */ I32, I64, I64 | TMP, PTR, I64 | S1)              \
     OL6(OTAtomicRmwCmpxchgI32, /* SSSDTT */ I32, I32, I32, I32 | TMP, PTR, I32 | S1) \
-    OL6(OTAtomicRmwCmpxchgI64, /* SSSDTT */ I32, I64, I64, I64 | TMP, PTR, I64 | S1)
+    OL6(OTAtomicRmwCmpxchgI64, /* SSSDTT */ I32, I64, I64, I64 | TMP, PTR, I64 | S1) \
+    OL6(OTAtomicWaitI32, /* SSSDTT */ I32, I32, I64, I32 | TMP, PTR, I32 | S0)       \
+    OL6(OTAtomicWaitI64, /* SSSDTT */ I32, I64, I64, I32 | TMP, PTR, I64 | S0)       \
+    OL5(OTAtomicNotify, /* SSDTT */ I32, I32, I32 | TMP, PTR, I32 | S0)
 #else /* !ENABLE_EXTENDED_FEATURES */
 #define OPERAND_TYPE_LIST_EXTENDED
 #endif /* ENABLE_EXTENDED_FEATURES */
@@ -1343,6 +1346,12 @@ static void compileFunction(JITCompiler* compiler)
             instr->addInfo(Instruction::kIsCallback);
             break;
         }
+#if defined(ENABLE_EXTENDED_FEATURES)
+        case ByteCode::AtomicFenceOpcode: {
+            group = Instruction::AtomicFence;
+            FALLTHROUGH;
+        }
+#endif /* ENABLE_EXTENDED_FEATURES */
         case ByteCode::UnreachableOpcode: {
             compiler->append(byteCode, group, opcode, 0, 0);
             break;
@@ -1956,6 +1965,37 @@ static void compileFunction(JITCompiler* compiler)
             operands[1] = STACK_OFFSET(atomicRmwCmpxchg->src1Offset());
             operands[2] = STACK_OFFSET(atomicRmwCmpxchg->src2Offset());
             operands[3] = STACK_OFFSET(atomicRmwCmpxchg->dstOffset());
+            break;
+        }
+        case ByteCode::MemoryAtomicWait64Opcode: {
+            requiredInit = OTAtomicWaitI64;
+            FALLTHROUGH;
+        }
+        case ByteCode::MemoryAtomicWait32Opcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::AtomicWait, opcode, 3, 1);
+            instr->addInfo(Instruction::kIsCallback);
+
+            ByteCodeOffset4Value* memoryAtomicWait = reinterpret_cast<ByteCodeOffset4Value*>(byteCode);
+            Operand* operands = instr->operands();
+            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicWaitI32);
+
+            operands[0] = STACK_OFFSET(memoryAtomicWait->src0Offset());
+            operands[1] = STACK_OFFSET(memoryAtomicWait->src1Offset());
+            operands[2] = STACK_OFFSET(memoryAtomicWait->src2Offset());
+            operands[3] = STACK_OFFSET(memoryAtomicWait->dstOffset());
+            break;
+        }
+        case ByteCode::MemoryAtomicNotifyOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::AtomicNotify, opcode, 2, 1);
+            instr->addInfo(Instruction::kIsCallback);
+
+            MemoryAtomicNotify* memoryAtomicNotify = reinterpret_cast<MemoryAtomicNotify*>(byteCode);
+            Operand* operands = instr->operands();
+            instr->setRequiredRegsDescriptor(OTAtomicNotify);
+
+            operands[0] = STACK_OFFSET(memoryAtomicNotify->src0Offset());
+            operands[1] = STACK_OFFSET(memoryAtomicNotify->src1Offset());
+            operands[2] = STACK_OFFSET(memoryAtomicNotify->dstOffset());
             break;
         }
 #endif /* ENABLE_EXTENDED_FEATURES */

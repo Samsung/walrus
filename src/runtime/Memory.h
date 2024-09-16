@@ -218,15 +218,21 @@ public:
             throwUnsharedMemoryException(state);
         }
 
+        atomicWait(state, store, m_buffer + (offset + addend), expect, timeOut, out);
+    }
+
+    template <typename T>
+    void atomicWait(ExecutionState& state, Store* store, uint8_t* absoluteAddress, const T& expect, int64_t timeOut, uint32_t* out) const
+    {
         T read;
-        atomicLoad(state, offset, addend, &read);
+        atomicLoad(state, absoluteAddress - m_buffer, 0, &read);
         if (read != expect) {
             // "not-equal", the loaded value did not match the expected value
             *out = 1;
         } else {
             // wait process
             bool notified = false;
-            Waiter* waiter = store->getWaiter(static_cast<void*>(m_buffer + (offset + addend)));
+            Waiter* waiter = store->getWaiter(static_cast<void*>(absoluteAddress));
 
             // lock waiter
             std::unique_lock<std::mutex> lock(waiter->m_mutex);
@@ -266,7 +272,12 @@ public:
             return;
         }
 
-        Waiter* waiter = store->getWaiter(static_cast<void*>(m_buffer + (offset + addend)));
+        atomicNotify(store, m_buffer + (offset + addend), count, out);
+    }
+
+    void atomicNotify(Store* store, uint8_t* absoluteAddress, const uint32_t& count, uint32_t* out) const
+    {
+        Waiter* waiter = store->getWaiter(static_cast<void*>(absoluteAddress));
 
         waiter->m_mutex.lock();
         uint32_t realCount = std::min(waiter->m_waiterItemList.size(), (size_t)count);

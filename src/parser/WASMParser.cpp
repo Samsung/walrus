@@ -2275,7 +2275,7 @@ public:
 
     virtual void OnAtomicFenceExpr(uint32_t consistency_model) override
     {
-        // FIXME do nothing
+        pushByteCode(Walrus::AtomicFence(), WASMOpcode::AtomicFenceOpcode);
     }
 
     virtual void OnAtomicNotifyExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override

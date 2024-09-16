@@ -1543,4 +1543,120 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #undef OP_XCHG
 #undef OP_CMPXCHG
 
+static sljit_s32 atomicWaitCallback(ExecutionContext* context, uint8_t* address, sljit_s32 size)
+{
+    Instance* instance = context->instance;
+
+    if (!instance->memory(0)->isShared()) {
+        return ExecutionContext::ExpectedSharedMemError;
+    }
+
+    uint32_t result = 0;
+    int64_t timeout = context->tmp2[0];
+    int64_t expect = context->tmp1[0];
+
+    if (size == 8) {
+        instance->memory(0)->atomicWait(context->state, instance->module()->store(), address, expect, timeout, &result);
+    } else {
+        instance->memory(0)->atomicWait(context->state, instance->module()->store(), address, (int32_t)expect, timeout, &result);
+    }
+
+    context->tmp2[0] = result;
+    return ExecutionContext::NoError;
+}
+
+static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    sljit_s32 size = (instr->opcode() == ByteCode::MemoryAtomicWait64Opcode ? 8 : 4);
+
+    ByteCodeOffset4Value* atomicWaitOperation = reinterpret_cast<ByteCodeOffset4Value*>(instr->byteCode());
+    sljit_s32 offset = atomicWaitOperation->offset();
+
+    Operand* operands = instr->operands();
+    MemAddress addr(MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+    addr.check(compiler, operands, offset, size);
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    JITArgPair expectedPair;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+    JITArg expected;
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    if (instr->opcode() == ByteCode::MemoryAtomicWait64Opcode) {
+        expectedPair = JITArgPair(operands + 1);
+    } else {
+        expected = JITArg(operands + 1);
+    }
+    JITArgPair timeout(operands + 2);
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+    expected = JITArg(operands + 1);
+    JITArg timeout(operands + 2);
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+    JITArg dst(operands + 3);
+
+    struct sljit_jump* memoryShared;
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    if (instr->opcode() == ByteCode::MemoryAtomicWait64Opcode) {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_LOW_OFFSET, expectedPair.arg1, expectedPair.arg1w);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1) + WORD_HIGH_OFFSET, expectedPair.arg2, expectedPair.arg2w);
+    } else {
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), expected.arg, expected.argw);
+    }
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), expected.arg, expected.argw);
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_LOW_OFFSET, timeout.arg1, timeout.arg1w);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2) + WORD_HIGH_OFFSET, timeout.arg2, timeout.arg2w);
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2), timeout.arg, timeout.argw);
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, size);
+
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, P, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicWaitCallback));
+
+    memoryShared = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_IMM, ExecutionContext::NoError, SLJIT_R0, 0);
+    context->appendTrapJump(ExecutionContext::ExpectedSharedMemError, sljit_emit_jump(compiler, SLJIT_JUMP));
+    sljit_set_label(memoryShared, sljit_emit_label(compiler));
+
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp2));
+}
+
+static sljit_s32 atomicNotifyCallback(ExecutionContext* context, uint8_t* address)
+{
+    Instance* instance = context->instance;
+    uint32_t result = 0;
+    int32_t count = context->tmp1[0];
+    instance->memory(0)->atomicNotify(instance->module()->store(), address, count, &result);
+    return result;
+}
+
+static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
+{
+    MemoryAtomicNotify* atomicNotifyOperation = reinterpret_cast<MemoryAtomicNotify*>(instr->byteCode());
+    sljit_s32 offset = atomicNotifyOperation->offset();
+
+    Operand* operands = instr->operands();
+    MemAddress addr(MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+    addr.check(compiler, operands, offset, 4);
+
+    JITArg count(operands + 1);
+    JITArg dst(operands + 2);
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(kContextReg), OffsetOfContextField(tmp1), count.arg, count.argw);
+
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
+
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(W, P, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicNotifyCallback));
+
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_R0, 0);
+}
+
 #endif /* ENABLE_EXTENDED_FEATURES */

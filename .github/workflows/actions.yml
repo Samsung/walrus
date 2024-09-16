@@ -271,6 +271,7 @@ jobs:
     - name: Run Tests
       run: |
         $RUNNER --engine="$GITHUB_WORKSPACE/out/extended/walrus" wasm-test-extended
+        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/extended/walrus" wasm-test-extended
 
   build-test-performance:
     runs-on: ubuntu-latest

@@ -109,6 +109,10 @@ public:
 #if defined(ENABLE_EXTENDED_FEATURES)
         // Atomic memory operations (e.g. I32AtomicRmwAdd, I64AtomicRmw16OrU)
         Atomic,
+        // Special types for thread synchronization operations
+        AtomicFence,
+        AtomicWait,
+        AtomicNotify,
 #endif /* ENABLE_EXTENDED_FEATURES */
     };
 
