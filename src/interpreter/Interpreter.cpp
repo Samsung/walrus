@@ -1077,6 +1077,13 @@ NextInstruction:
         ADD_PROGRAM_COUNTER(MemoryAtomicNotify);
         NEXT_INSTRUCTION();
     }
+    DEFINE_OPCODE(AtomicFence)
+        :
+    {
+        // FIXME do nothing
+        ADD_PROGRAM_COUNTER(AtomicFence);
+        NEXT_INSTRUCTION();
+    }
 #endif
 
     // FOR_EACH_BYTECODE_SIMD_ETC_OP

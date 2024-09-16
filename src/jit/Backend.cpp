@@ -1246,6 +1246,18 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             emitAtomic(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::AtomicFence: {
+            emitAtomicFence(m_compiler);
+            break;
+        }
+        case Instruction::AtomicWait: {
+            emitAtomicWait(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::AtomicNotify: {
+            emitAtomicNotify(m_compiler, item->asInstruction());
+            break;
+        }
 #endif /* ENABLE_EXTENDED_FEATURES */
         default: {
             switch (item->asInstruction()->opcode()) {
