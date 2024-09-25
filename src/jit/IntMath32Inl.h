@@ -1196,8 +1196,7 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
     sljit_s32 baseReg = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_TMP_MEM_REG : instr->requiredReg(0);
 
-    sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
-    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(baseReg), context->globalsStart + globalGet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalGet->index() * sizeof(void*));
 
     if (instr->info() & Instruction::kHasFloatOperand) {
         JITArg dstArg(instr->operands());
@@ -1231,7 +1230,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
         floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
         sljit_s32 baseReg = SLJIT_TMP_MEM_REG;
 
-        sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+        sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalSet->index() * sizeof(void*));
 
         if (SLJIT_IS_MEM(src.arg)) {
             sljit_emit_fop1(compiler, SLJIT_MOV_F64, SLJIT_TMP_DEST_FREG, 0, src.arg, src.argw);
@@ -1239,7 +1238,6 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
             src.argw = 0;
         }
 
-        sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(baseReg), context->globalsStart + globalSet->index() * sizeof(void*));
         sljit_emit_fop1(compiler, SLJIT_MOV_F64, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset(), src.arg, src.argw);
         return;
     }
@@ -1247,7 +1245,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
     JITArgPair src(instr->operands());
     sljit_s32 baseReg = instr->requiredReg(0);
 
-    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kContextReg), OffsetOfContextField(instance));
+    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalSet->index() * sizeof(void*));
 
     if (SLJIT_IS_MEM(src.arg1)) {
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, src.arg1, src.arg1w);
@@ -1255,7 +1253,6 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
         src.arg1w = 0;
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(baseReg), context->globalsStart + globalSet->index() * sizeof(void*));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset() + WORD_LOW_OFFSET, src.arg1, src.arg1w);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(baseReg), JITFieldAccessor::globalValueOffset() + WORD_HIGH_OFFSET, src.arg2, src.arg2w);
 }

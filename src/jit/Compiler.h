@@ -550,24 +550,24 @@ struct TrapJump {
 };
 
 struct MemoryInitArguments {
-    ExecutionContext* context;
+    Instance* instance;
     uint32_t segmentIndex;
 };
 
 struct InitTableArguments {
-    ExecutionContext* context;
+    Instance* instance;
     uint32_t tableIndex;
     uint32_t segmentIndex;
 };
 
 struct TableCopyArguments {
-    ExecutionContext* context;
+    Instance* instance;
     uint32_t srcIndex;
     uint32_t dstIndex;
 };
 
 struct TableFillArguments {
-    ExecutionContext* context;
+    Instance* instance;
     uint32_t tableIndex;
 };
 

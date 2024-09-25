@@ -18,9 +18,9 @@
 
 static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, MemoryInitArguments* args)
 {
-    ExecutionContext* context = args->context;
-    Memory* memory = context->instance->memory(0);
-    DataSegment& sg = context->instance->dataSegment(args->segmentIndex);
+    Instance* instance = args->instance;
+    Memory* memory = instance->memory(0);
+    DataSegment& sg = instance->dataSegment(args->segmentIndex);
 
     if (!memory->checkAccess(dstStart, srcSize)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
@@ -34,9 +34,9 @@ static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSiz
     return ExecutionContext::NoError;
 }
 
-static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, ExecutionContext* context)
+static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, Instance* instance)
 {
-    Memory* memory = context->instance->memory(0);
+    Memory* memory = instance->memory(0);
 
     if (!memory->checkAccess(srcStart, size) || !memory->checkAccess(dstStart, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
@@ -46,9 +46,9 @@ static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, 
     return ExecutionContext::NoError;
 }
 
-static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, ExecutionContext* context)
+static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, Instance* instance)
 {
-    Memory* memory = context->instance->memory(0);
+    Memory* memory = instance->memory(0);
 
     if (!memory->checkAccess(start, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
@@ -58,9 +58,9 @@ static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, Execut
     return ExecutionContext::NoError;
 }
 
-static sljit_s32 growMemory(uint32_t newSize, ExecutionContext* context)
+static sljit_s32 growMemory(uint32_t newSize, Instance* instance)
 {
-    Memory* memory = context->instance->memory(0);
+    Memory* memory = instance->memory(0);
     uint32_t oldSize = memory->sizeInPageSize();
 
     if (memory->grow(static_cast<uint64_t>(newSize) * Memory::s_memoryPageSize)) {
@@ -102,14 +102,14 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
             sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
             sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
-            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, context), kContextReg, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, instance), kInstanceReg, 0);
             sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, segmentIndex), SLJIT_IMM, memoryInit->segmentIndex());
             addr = GET_FUNC_ADDR(sljit_sw, initMemory);
         } else if (opcode == ByteCode::MemoryCopyOpcode) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kInstanceReg, 0);
             addr = GET_FUNC_ADDR(sljit_sw, copyMemory);
         } else {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kContextReg, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kInstanceReg, 0);
             addr = GET_FUNC_ADDR(sljit_sw, fillMemory);
         }
 
@@ -124,7 +124,7 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
         JITArg arg(params);
 
         MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R0, arg.arg, arg.argw);
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kContextReg, 0);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kInstanceReg, 0);
 
         sljit_sw addr = GET_FUNC_ADDR(sljit_sw, growMemory);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(32, 32, W), SLJIT_IMM, addr);
@@ -136,9 +136,9 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
-static void dropData(uint32_t segmentIndex, ExecutionContext* context)
+static void dropData(uint32_t segmentIndex, Instance* instance)
 {
-    DataSegment& sg = context->instance->dataSegment(segmentIndex);
+    DataSegment& sg = instance->dataSegment(segmentIndex);
     sg.drop();
 }
 
@@ -149,7 +149,7 @@ static void emitDataDrop(sljit_compiler* compiler, Instruction* instr)
     ASSERT(instr->info() & Instruction::kIsCallback);
 
     sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(dataDrop->segmentIndex()));
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kContextReg, 0);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kInstanceReg, 0);
 
     sljit_sw addr = GET_FUNC_ADDR(sljit_sw, dropData);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(32, W), SLJIT_IMM, addr);
