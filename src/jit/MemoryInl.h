@@ -1191,8 +1191,8 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_icall(compiler, SLJIT_CALL, type, SLJIT_IMM, functionAddr);
 
     if (srcExpectedArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(kContextReg), stackTmpStart + WORD_LOW_OFFSET);
-        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(kContextReg), stackTmpStart + WORD_HIGH_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
+        sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET);
     }
 }
 
@@ -1613,7 +1613,7 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
     sljit_get_local_base(compiler, SLJIT_R2, 0, stackTmpStart);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, SLJIT_IMM, size);
 
@@ -1626,9 +1626,8 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
 }
 
-static sljit_s32 atomicNotifyCallback(ExecutionContext* context, uint8_t* address, int32_t count)
+static sljit_s32 atomicNotifyCallback(Instance* instance, uint8_t* address, int32_t count)
 {
-    Instance* instance = context->instance;
     uint32_t result = 0;
     instance->memory(0)->atomicNotify(instance->module()->store(), address, count, &result);
     return result;
@@ -1660,7 +1659,7 @@ static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
         MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R2, count.arg, count.argw);
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kContextReg, 0);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kInstanceReg, 0);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, P, W, 32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicNotifyCallback));
 
     MOVE_FROM_REG(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_R0);

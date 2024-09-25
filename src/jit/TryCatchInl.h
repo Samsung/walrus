@@ -212,9 +212,9 @@ static void emitCatch(sljit_compiler* compiler, CompileContext* context)
 
     tryBlock.throwJumps.clear();
 
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(context->compiler->tryBlockOffset() + context->currentTryBlock));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, kContextReg, 0);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, findCatch));
     sljit_emit_ijump(compiler, SLJIT_JUMP, SLJIT_R0, 0);
 
@@ -250,9 +250,9 @@ static void emitThrow(sljit_compiler* compiler, Instruction* instr)
 
     emitStoreOntoStack(compiler, instr->params(), throwTag->dataOffsets(), types, false);
 
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(instr->byteCode()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, kContextReg, 0);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwWithArgs));
 
     sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_JUMP);
