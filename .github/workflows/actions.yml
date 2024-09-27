@@ -252,27 +252,6 @@ jobs:
       uses: mxschmitt/action-tmate@v3
       timeout-minutes: 15
 
-  build-test-extended-feature:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_EXTENDED_FEATURES=ON -GNinja
-      run: |
-        cmake -H. -Bout/extended $BUILD_OPTIONS
-        ninja -Cout/extended
-    - name: Run Tests
-      run: |
-        $RUNNER --engine="$GITHUB_WORKSPACE/out/extended/walrus" wasm-test-extended
-        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/extended/walrus" wasm-test-extended
-
   build-test-performance:
     runs-on: ubuntu-latest
     steps:

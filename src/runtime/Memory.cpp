@@ -268,7 +268,6 @@ void Memory::TargetBuffer::deque(Memory* memory)
     }
 }
 
-#if defined(ENABLE_EXTENDED_FEATURES)
 void Memory::checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend) const
 {
     checkAccess(state, offset, size, addend);
@@ -281,6 +280,4 @@ void Memory::throwUnsharedMemoryException(ExecutionState& state) const
 {
     Trap::throwException(state, "expected shared memory");
 }
-#endif
-
 } // namespace Walrus

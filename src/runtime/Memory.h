@@ -20,10 +20,8 @@
 #include "util/BitOperation.h"
 #include "runtime/ExecutionState.h"
 #include "runtime/Object.h"
-#if defined(ENABLE_EXTENDED_FEATURES)
 #include "runtime/Store.h"
 #include <atomic>
-#endif
 
 namespace Walrus {
 
@@ -161,8 +159,7 @@ public:
 #endif
     }
 
-#if defined(ENABLE_EXTENDED_FEATURES)
-    enum AtomicRmwOp{
+    enum AtomicRmwOp {
         Add,
         Sub,
         And,
@@ -302,7 +299,6 @@ public:
         waiter->m_mutex.unlock();
         *out = realCount;
     }
-#endif
 
 #ifdef CPU_ARM32
 
@@ -345,10 +341,8 @@ private:
         }
     }
 
-#if defined(ENABLE_EXTENDED_FEATURES)
     void checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const;
     void throwUnsharedMemoryException(ExecutionState& state) const;
-#endif
 
     uint64_t m_sizeInByte;
     uint64_t m_reservedSizeInByte;

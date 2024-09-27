@@ -154,11 +154,7 @@ static void emitDataDrop(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(32, W), SLJIT_IMM, addr);
 }
 
-#if defined(ENABLE_EXTENDED_FEATURES)
-
 static void emitAtomicFence(sljit_compiler* compiler)
 {
     sljit_emit_op0(compiler, SLJIT_MEMORY_BARRIER);
 }
-
-#endif /* ENABLE_EXTENDED_FEATURES */
