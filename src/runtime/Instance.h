@@ -100,6 +100,11 @@ public:
         return (sizeof(Instance) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);
     }
 
+    void** alignedEnd()
+    {
+        return reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(this) + Instance::alignedSize());
+    }
+
     Module* module() const { return m_module; }
 
     Function* function(uint32_t index) const { return m_functions[index]; }
@@ -128,7 +133,7 @@ public:
 
 private:
     Instance(Module* module);
-    ~Instance() {}
+    ~Instance();
 
     Module* m_module;
 
