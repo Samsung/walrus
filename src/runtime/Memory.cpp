@@ -123,7 +123,7 @@ bool Memory::grow(uint64_t growSizeInByte)
         while (targetBuffer != nullptr) {
             targetBuffer->sizeInByte = sizeInByte();
             targetBuffer->buffer = buffer();
-            targetBuffer = targetBuffer->prev;
+            targetBuffer = targetBuffer->next;
         }
         return true;
     } else if (newSizeInByte == m_sizeInByte) {
@@ -231,6 +231,41 @@ void Memory::fillMemory(uint32_t start, uint8_t value, uint32_t size)
 #else
     std::fill(m_buffer + start, m_buffer + start + size, value);
 #endif
+}
+
+void Memory::TargetBuffer::enque(Memory* memory)
+{
+    next = memory->m_targetBuffers;
+    buffer = memory->buffer();
+    sizeInByte = memory->sizeInByte();
+
+    memory->m_targetBuffers = this;
+}
+
+void Memory::TargetBuffer::deque(Memory* memory)
+{
+    // Cache is not initialized.
+    if (sizeInByte == ~(uint64_t)0) {
+        return;
+    }
+
+    TargetBuffer* current = memory->m_targetBuffers;
+
+    if (current == this) {
+        memory->m_targetBuffers = next;
+        return;
+    }
+
+    while (true) {
+        ASSERT(current != nullptr && current->next != nullptr);
+
+        if (current->next == this) {
+            current->next = next;
+            return;
+        }
+
+        current = current->next;
+    }
 }
 
 #if defined(ENABLE_EXTENDED_FEATURES)
