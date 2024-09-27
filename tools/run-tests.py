@@ -154,7 +154,7 @@ def run_jit_tests(engine):
     if fail_total > 0:
         raise Exception("basic wasm-test-core failed")
 
-@runner('wasm-test-extended', default=False)
+@runner('wasm-test-extended', default=True)
 def run_extended_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'extended')
 
