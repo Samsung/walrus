@@ -230,7 +230,6 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-#if defined(ENABLE_EXTENDED_FEATURES)
 #define OPERAND_TYPE_LIST_EXTENDED                                                   \
     OL5(OTAtomicRmwI32, /* SSDTT */ I32, I32, I32 | TMP, PTR, I32 | S1)              \
     OL5(OTAtomicRmwI64, /* SSDTT */ I32, I64, I64 | TMP, PTR, I64 | S1)              \
@@ -239,9 +238,6 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL6(OTAtomicWaitI32, /* SSSDTT */ I32, I32, I64, I32, PTR, I32 | S0)             \
     OL6(OTAtomicWaitI64, /* SSSDTT */ I32, I64, I64, I32, PTR, I64 | S0)             \
     OL5(OTAtomicNotify, /* SSDTT */ I32, I32, I32, PTR, I32 | S0)
-#else /* !ENABLE_EXTENDED_FEATURES */
-#define OPERAND_TYPE_LIST_EXTENDED
-#endif /* ENABLE_EXTENDED_FEATURES */
 
 #define OPERAND_TYPE_LIST_SIMD                                                             \
     OL2(OTOp1V128, /* SD */ V128 | NOTMP, V128 | TMP | S0)                                 \
@@ -1363,12 +1359,10 @@ static void compileFunction(JITCompiler* compiler)
             instr->addInfo(Instruction::kIsCallback);
             break;
         }
-#if defined(ENABLE_EXTENDED_FEATURES)
         case ByteCode::AtomicFenceOpcode: {
             group = Instruction::AtomicFence;
             FALLTHROUGH;
         }
-#endif /* ENABLE_EXTENDED_FEATURES */
         case ByteCode::UnreachableOpcode: {
             compiler->append(byteCode, group, opcode, 0, 0);
             break;
@@ -1843,7 +1837,6 @@ static void compileFunction(JITCompiler* compiler)
 #endif /* SLJIT_CONFIG_X86 */
             break;
         }
-#if defined(ENABLE_EXTENDED_FEATURES)
         case ByteCode::I32AtomicLoadOpcode:
         case ByteCode::I32AtomicLoad8UOpcode:
         case ByteCode::I32AtomicLoad16UOpcode: {
@@ -2022,7 +2015,6 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(memoryAtomicNotify->dstOffset());
             break;
         }
-#endif /* ENABLE_EXTENDED_FEATURES */
         default: {
             ASSERT_NOT_REACHED();
             break;

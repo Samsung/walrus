@@ -27,11 +27,9 @@ struct MemAddress {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         DontUseOffsetReg = 1 << 4,
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-#if defined(ENABLE_EXTENDED_FEATURES)
         CheckNaturalAlignment = 1 << 5,
         // Limits the resulting addressing mode to a base register with no offset.
         AbsoluteAddress = 1 << 6,
-#endif /* ENABLE_EXTENDED_FEATURES */
     };
 
     MemAddress(uint32_t options, uint8_t baseReg, uint8_t offsetReg, uint8_t sourceReg)
@@ -61,9 +59,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
     ASSERT(!(options & LoadInteger) || baseReg != sourceReg);
     ASSERT(!(options & LoadInteger) || offsetReg != sourceReg);
-#if defined(ENABLE_EXTENDED_FEATURES)
     ASSERT(!(options & CheckNaturalAlignment) || size != 1);
-#endif /* ENABLE_EXTENDED_FEATURES */
 
     if (UNLIKELY(context->maximumMemorySize < size)) {
         // This memory load is never successful.
@@ -97,12 +93,10 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
             return;
         }
 
-#if defined(ENABLE_EXTENDED_FEATURES)
         if ((options & CheckNaturalAlignment) && (offset & (size - 1)) != 0) {
             context->appendTrapJump(ExecutionContext::UnalignedAtomicError, sljit_emit_jump(compiler, SLJIT_NOT_ZERO));
             return;
         }
-#endif /* ENABLE_EXTENDED_FEATURES */
 
         if (offset + size <= context->initialMemorySize) {
             ASSERT(baseReg != 0);
@@ -112,12 +106,10 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
             memArg.argw = offset;
             load(compiler);
 
-#if defined(ENABLE_EXTENDED_FEATURES)
             if (options & AbsoluteAddress) {
                 sljit_emit_op2(compiler, SLJIT_ADD, baseReg, 0, baseReg, 0, SLJIT_IMM, offset);
                 memArg.argw = 0;
             }
-#endif /* ENABLE_EXTENDED_FEATURES */
             return;
         }
 
@@ -140,12 +132,10 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
         memArg.arg = SLJIT_MEM1(baseReg);
         memArg.argw = -static_cast<sljit_sw>(size);
 
-#if defined(ENABLE_EXTENDED_FEATURES)
         if (options & AbsoluteAddress) {
             sljit_emit_op2(compiler, SLJIT_SUB, baseReg, 0, baseReg, 0, SLJIT_IMM, static_cast<sljit_sw>(size));
             memArg.argw = 0;
         }
-#endif /* ENABLE_EXTENDED_FEATURES */
         return;
     }
 
@@ -187,28 +177,22 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
         memArg.arg = SLJIT_MEM2(baseReg, offsetReg);
         memArg.argw = 0;
 
-#if defined(ENABLE_EXTENDED_FEATURES)
         if (options & CheckNaturalAlignment) {
             sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, offsetReg, 0, SLJIT_IMM, size - 1);
             context->appendTrapJump(ExecutionContext::UnalignedAtomicError, sljit_emit_jump(compiler, SLJIT_NOT_ZERO));
         }
-#endif /* ENABLE_EXTENDED_FEATURES */
 
         uint32_t checkedOptions = 0;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         checkedOptions |= DontUseOffsetReg;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-#if defined(ENABLE_EXTENDED_FEATURES)
         checkedOptions |= AbsoluteAddress;
-#endif /* ENABLE_EXTENDED_FEATURES */
 
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE) || (defined(ENABLE_EXTENDED_FEATURES))
         if (options & checkedOptions) {
             sljit_emit_op2(compiler, SLJIT_ADD, baseReg, 0, baseReg, 0, offsetReg, 0);
             memArg.arg = SLJIT_MEM1(baseReg);
         }
-#endif /* SLJIT_32BIT_ARCHITECTURE || ENABLE_EXTENDED_FEATURES */
         return;
     }
 
@@ -217,22 +201,18 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
     sljit_emit_op2(compiler, SLJIT_ADD, baseReg, 0, baseReg, 0, offsetReg, 0);
 
-#if defined(ENABLE_EXTENDED_FEATURES)
     if (options & CheckNaturalAlignment) {
         sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, offsetReg, 0, SLJIT_IMM, size - 1);
         context->appendTrapJump(ExecutionContext::UnalignedAtomicError, sljit_emit_jump(compiler, SLJIT_NOT_ZERO));
     }
-#endif /* ENABLE_EXTENDED_FEATURES */
 
     memArg.arg = SLJIT_MEM1(baseReg);
     memArg.argw = -static_cast<sljit_sw>(size);
 
-#if defined(ENABLE_EXTENDED_FEATURES)
     if (options & AbsoluteAddress) {
         sljit_emit_op2(compiler, SLJIT_SUB, baseReg, 0, baseReg, 0, SLJIT_IMM, static_cast<sljit_sw>(size));
         memArg.argw = 0;
     }
-#endif /* ENABLE_EXTENDED_FEATURES */
 }
 
 void MemAddress::load(sljit_compiler* compiler)
@@ -265,7 +245,7 @@ void MemAddress::load(sljit_compiler* compiler)
 #endif /* HAS_SIMD */
 }
 
-#if defined(ENABLE_EXTENDED_FEATURES) && (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 static void atomicRmwLoad64(int64_t* shared_p, uint64_t* result)
 {
     std::atomic<uint64_t>* shared = reinterpret_cast<std::atomic<uint64_t>*>(shared_p);
@@ -334,7 +314,7 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV, valueArgPair.arg2, valueArgPair.arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET);
     }
 }
-#endif /* ENABLE_EXTENDED_FEATURES && SLJIT_32BIT_ARCHITECTURE  */
+#endif /* SLJIT_32BIT_ARCHITECTURE  */
 
 static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 {
@@ -355,11 +335,9 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I32AtomicLoadOpcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I32LoadOpcode:
         opcode = SLJIT_MOV32;
         size = 4;
@@ -368,10 +346,8 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_MOV32_S8;
         size = 1;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I32AtomicLoad8UOpcode:
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I32Load8UOpcode:
         opcode = SLJIT_MOV32_U8;
         size = 1;
@@ -380,16 +356,13 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_MOV32_S16;
         size = 2;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I32AtomicLoad16UOpcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I32Load16UOpcode:
         opcode = SLJIT_MOV32_U16;
         size = 2;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicLoadOpcode:
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         emitAtomicLoadStore64(compiler, instr);
@@ -397,7 +370,6 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64LoadOpcode:
         opcode = SLJIT_MOV;
         size = 8;
@@ -406,10 +378,8 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_MOV_S8;
         size = 1;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicLoad8UOpcode:
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64Load8UOpcode:
         opcode = SLJIT_MOV_U8;
         size = 1;
@@ -418,11 +388,9 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_MOV_S16;
         size = 2;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicLoad16UOpcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64Load16UOpcode:
         opcode = SLJIT_MOV_U16;
         size = 2;
@@ -431,11 +399,9 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_MOV_S32;
         size = 4;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicLoad32UOpcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64Load32UOpcode:
         opcode = SLJIT_MOV_U32;
         size = 4;
@@ -735,33 +701,26 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I32AtomicStoreOpcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I32StoreOpcode:
         opcode = SLJIT_MOV32;
         size = 4;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I32AtomicStore8Opcode:
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I32Store8Opcode:
         opcode = SLJIT_MOV32_U8;
         size = 1;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I32AtomicStore16Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I32Store16Opcode:
         opcode = SLJIT_MOV32_U16;
         size = 2;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicStoreOpcode:
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         emitAtomicLoadStore64(compiler, instr);
@@ -769,33 +728,26 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64StoreOpcode:
         opcode = SLJIT_MOV;
         size = 8;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicStore8Opcode:
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64Store8Opcode:
         opcode = SLJIT_MOV_U8;
         size = 1;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicStore16Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64Store16Opcode:
         opcode = SLJIT_MOV_U16;
         size = 2;
         break;
-#if defined(ENABLE_EXTENDED_FEATURES)
     case ByteCode::I64AtomicStore32Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
-#endif /* ENABLE_EXTENDED_FEATURES */
     case ByteCode::I64Store32Opcode:
         opcode = SLJIT_MOV_U32;
         size = 4;
@@ -1005,7 +957,6 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, opcode, addr.memArg.arg, addr.memArg.argw, addr.loadArg.arg, addr.loadArg.argw);
 }
 
-#if defined(ENABLE_EXTENDED_FEATURES)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 static void atomicRmwAdd64(uint64_t* shared_p, uint64_t* value, uint64_t* result)
@@ -1674,5 +1625,3 @@ static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
 
     MOVE_FROM_REG(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_R0);
 }
-
-#endif /* ENABLE_EXTENDED_FEATURES */

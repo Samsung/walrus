@@ -36,10 +36,6 @@ IF (${WALRUS_OUTPUT} STREQUAL "shared_lib" AND ${WALRUS_HOST} STREQUAL "android"
     SET (WALRUS_LDFLAGS ${WALRUS_LDFLAGS} -shared)
 ENDIF()
 
-IF (WALRUS_EXTENDED_FEATURES)
-    SET (WALRUS_DEFINITIONS ${WALRUS_DEFINITIONS} -DENABLE_EXTENDED_FEATURES)
-ENDIF()
-
 #######################################################
 # FLAGS FOR ADDITIONAL FUNCTION
 #######################################################
