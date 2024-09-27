@@ -39,13 +39,24 @@ public:
     // Caching memory target for fast access.
     struct TargetBuffer {
         TargetBuffer()
-            : prev(nullptr)
-            , buffer(nullptr)
-            , sizeInByte(0)
         {
+            setUninitialized();
         }
 
-        TargetBuffer* prev;
+        static size_t sizeInPointers(size_t memoryCount)
+        {
+            return ((memoryCount * sizeof(Memory::TargetBuffer)) + (sizeof(void*) - 1)) / sizeof(void*);
+        }
+
+        void setUninitialized()
+        {
+            sizeInByte = ~(uint64_t)0;
+        }
+
+        void enque(Memory* memory);
+        void deque(Memory* memory);
+
+        TargetBuffer* next;
         uint8_t* buffer;
         uint64_t sizeInByte;
     };

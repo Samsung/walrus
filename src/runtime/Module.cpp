@@ -118,11 +118,13 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 {
     Instance* instance = Instance::newInstance(this);
 
-    void** references = reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+    void** references = instance->alignedEnd();
 
     // Must follow the order in Instance::newInstance.
     instance->m_memories = reinterpret_cast<Memory**>(references);
     references += numberOfMemoryTypes();
+    Memory::TargetBuffer* targetBuffers = reinterpret_cast<Memory::TargetBuffer*>(references);
+    references += Memory::TargetBuffer::sizeInPointers(numberOfMemoryTypes());
     instance->m_globals = reinterpret_cast<Global**>(references);
     references += numberOfGlobalTypes();
     instance->m_tables = reinterpret_cast<Table**>(references);
@@ -136,6 +138,10 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     size_t tableIndex = 0;
     size_t memIndex = 0;
     size_t tagIndex = 0;
+
+    for (size_t i = 0; i < numberOfMemoryTypes(); i++) {
+        targetBuffers[i].setUninitialized();
+    }
 
     if (imports.size() < m_imports.size()) {
         Trap::throwException(state, "Insufficient import");
@@ -225,6 +231,11 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     while (tagIndex < m_tagTypes.size()) {
         instance->m_tags[tagIndex] = Tag::createTag(m_store, m_functionTypes[m_tagTypes[tagIndex]->sigIndex()]);
         tagIndex++;
+    }
+
+    // All memories are resolved, enque them.
+    for (size_t i = 0; i < numberOfMemoryTypes(); i++) {
+        targetBuffers[i].enque(instance->m_memories[i]);
     }
 
     // init global

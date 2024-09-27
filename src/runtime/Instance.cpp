@@ -30,8 +30,11 @@ namespace Walrus {
 Instance* Instance::newInstance(Module* module)
 {
     // Must follow the order in Module::instantiate.
-    size_t numberOfRefs = module->numberOfMemoryTypes() + module->numberOfGlobalTypes()
-        + module->numberOfTableTypes() + module->numberOfFunctions() + module->numberOfTagTypes();
+
+    size_t numberOfRefs = module->numberOfMemoryTypes()
+        + Memory::TargetBuffer::sizeInPointers(module->numberOfMemoryTypes())
+        + module->numberOfGlobalTypes() + module->numberOfTableTypes()
+        + module->numberOfFunctions() + module->numberOfTagTypes();
 
     void* result = malloc(alignedSize() + numberOfRefs * sizeof(void*));
 
@@ -58,6 +61,16 @@ Instance::Instance(Module* module)
     , m_tags(nullptr)
 {
     module->store()->appendInstance(this);
+}
+
+Instance::~Instance()
+{
+    size_t size = m_module->numberOfMemoryTypes();
+    Memory::TargetBuffer* targetBuffers = reinterpret_cast<Memory::TargetBuffer*>(alignedEnd() + size);
+
+    for (size_t i = 0; i < size; i++) {
+        targetBuffers[i].deque(m_memories[i]);
+    }
 }
 
 Optional<ExportType*> Instance::resolveExportType(std::string& name)
