@@ -84,6 +84,8 @@ static Features getFeatures() {
     features.enable_exceptions();
     // TODO: should use command line flag for this (--enable-threads)
     features.enable_threads();
+    // TODO: should use command line flag for this (--enable-relaxed-simd)
+    features.enable_relaxed_simd();
     return features;
 }
 
