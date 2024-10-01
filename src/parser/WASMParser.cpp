@@ -1398,15 +1398,23 @@ public:
     {
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[2]) == peekVMStackValueType());
-        auto c = popVMStack();
+        auto src2 = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
-        auto rhs = popVMStack();
+        auto src1 = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
-        auto lhs = popVMStack();
+        auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
+#define GENERATE_TERNARY_CODE_CASE(name, ...)                    \
+    case WASMOpcode::name##Opcode: {                             \
+        pushByteCode(Walrus::name(src0, src1, src2, dst), code); \
+        break;                                                   \
+    }
+            FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OP(GENERATE_TERNARY_CODE_CASE)
+            FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OTHER(GENERATE_TERNARY_CODE_CASE)
+#undef GENERATE_TERNARY_CODE_CASE
         case WASMOpcode::V128BitSelectOpcode:
-            pushByteCode(Walrus::V128BitSelect(lhs, rhs, c, dst), code);
+            pushByteCode(Walrus::V128BitSelect(src0, src1, src2, dst), code);
             break;
         default:
             ASSERT_NOT_REACHED();
@@ -2574,6 +2582,8 @@ public:
             FOR_EACH_BYTECODE_SIMD_BINARY_OP(GENERATE_BINARY_CODE_CASE)
             FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(GENERATE_BINARY_CODE_CASE)
             FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(GENERATE_BINARY_CODE_CASE)
+            FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OP(GENERATE_BINARY_CODE_CASE)
+            FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OTHER(GENERATE_BINARY_CODE_CASE)
 #undef GENERATE_BINARY_CODE_CASE
         default:
             ASSERT_NOT_REACHED();
@@ -2594,6 +2604,7 @@ public:
             FOR_EACH_BYTECODE_SIMD_UNARY_OP(GENERATE_UNARY_CODE_CASE)
             FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(GENERATE_UNARY_CODE_CASE)
             FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
+            FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
 #undef GENERATE_UNARY_CODE_CASE
         case WASMOpcode::I32ReinterpretF32Opcode:
             pushByteCode(Walrus::I32ReinterpretF32(src, dst), code);

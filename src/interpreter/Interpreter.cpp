@@ -270,6 +270,19 @@ inline static void simdSwizzleOperation(ExecutionState& state, BinaryOperation* 
     writeValue<Type>(bp, code->dstOffset(), result);
 }
 
+inline static void simdBitSelectOperation(ExecutionState& state, ByteCodeOffset4* code, uint8_t* bp)
+{
+    using Type = typename SIMDType<uint64_t>::Type;
+    auto src0 = readValue<Type>(bp, code->src0Offset());
+    auto src1 = readValue<Type>(bp, code->src1Offset());
+    auto src2 = readValue<Type>(bp, code->src2Offset());
+    Type result;
+    for (uint8_t i = 0; i < Type::Lanes; i++) {
+        result[i] = (src0[i] & src2[i]) | (src1[i] & ~src2[i]);
+    }
+    writeValue<Type>(bp, code->dstOffset(), result);
+}
+
 // FIXME optimize this function
 template <typename P, typename R, bool Low>
 inline static void simdExtmulOperation(ExecutionState& state, BinaryOperation* code, uint8_t* bp)
@@ -286,10 +299,11 @@ inline static void simdExtmulOperation(ExecutionState& state, BinaryOperation* c
     writeValue<ResultType>(bp, code->dstOffset(), result);
 }
 
+template <typename P, typename R>
 inline static void simdDotOperation(ExecutionState& state, BinaryOperation* code, uint8_t* bp)
 {
-    using ParamType = typename SIMDType<int16_t>::Type;
-    using ResultType = typename SIMDType<uint32_t>::Type;
+    using ParamType = typename SIMDType<P>::Type;
+    using ResultType = typename SIMDType<R>::Type;
     auto lhs = readValue<ParamType>(bp, code->srcOffset()[0]);
     auto rhs = readValue<ParamType>(bp, code->srcOffset()[1]);
     ResultType result;
@@ -298,6 +312,26 @@ inline static void simdDotOperation(ExecutionState& state, BinaryOperation* code
         uint32_t lo = static_cast<uint32_t>(lhs[laneIdx]) * static_cast<uint32_t>(rhs[laneIdx]);
         uint32_t hi = static_cast<uint32_t>(lhs[laneIdx + 1]) * static_cast<uint32_t>(rhs[laneIdx + 1]);
         result[i] = add(state, lo, hi);
+    }
+    writeValue<ResultType>(bp, code->dstOffset(), result);
+}
+
+inline static void simdDotAddOperation(ExecutionState& state, TernaryOperation* code, uint8_t* bp)
+{
+    using ParamType = typename SIMDType<int8_t>::Type;
+    using ResultType = typename SIMDType<int32_t>::Type;
+    auto src0 = readValue<ParamType>(bp, code->src0Offset());
+    auto src1 = readValue<ParamType>(bp, code->src1Offset());
+    auto src2 = readValue<ResultType>(bp, code->src2Offset());
+    ResultType result;
+    for (uint8_t i = 0; i < ResultType::Lanes; i++) {
+        uint8_t laneIdx = i * 4;
+        int16_t lo0 = static_cast<int16_t>(src0[laneIdx]) * static_cast<int16_t>(src1[laneIdx]);
+        int16_t hi0 = static_cast<int16_t>(src0[laneIdx + 1]) * static_cast<int16_t>(src1[laneIdx + 1]);
+        int16_t lo1 = static_cast<int16_t>(src0[laneIdx + 2]) * static_cast<int16_t>(src1[laneIdx + 2]);
+        int16_t hi1 = static_cast<int16_t>(src0[laneIdx + 3]) * static_cast<int16_t>(src1[laneIdx + 3]);
+        int32_t tmp = static_cast<int16_t>(lo0 + hi0) + static_cast<int16_t>(lo1 + hi1);
+        result[i] = add(state, tmp, src2[i]);
     }
     writeValue<ResultType>(bp, code->dstOffset(), result);
 }
@@ -580,6 +614,35 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         op(state, (UnaryOperation*)programCounter, bp); \
         ADD_PROGRAM_COUNTER(UnaryOperation);            \
         NEXT_INSTRUCTION();                             \
+    }
+
+#define SIMD_TERNARY_OPERATION(name, op, paramType, resultType)    \
+    DEFINE_OPCODE(name)                                            \
+        :                                                          \
+    {                                                              \
+        using ParamType = typename SIMDType<paramType>::Type;      \
+        using ResultType = typename SIMDType<resultType>::Type;    \
+        COMPILE_ASSERT(ParamType::Lanes == ResultType::Lanes, ""); \
+        name* code = (name*)programCounter;                        \
+        auto src0 = readValue<ParamType>(bp, code->src0Offset());  \
+        auto src1 = readValue<ParamType>(bp, code->src1Offset());  \
+        auto src2 = readValue<ParamType>(bp, code->src2Offset());  \
+        ResultType result;                                         \
+        for (uint8_t i = 0; i < ParamType::Lanes; i++) {           \
+            result[i] = op(state, src0[i], src1[i], src2[i]);      \
+        }                                                          \
+        writeValue<ResultType>(bp, code->dstOffset(), result);     \
+        ADD_PROGRAM_COUNTER(name);                                 \
+        NEXT_INSTRUCTION();                                        \
+    }
+
+#define SIMD_TERNARY_OTHER_OPERATION(name, op)            \
+    DEFINE_OPCODE(name)                                   \
+        :                                                 \
+    {                                                     \
+        op(state, (TernaryOperation*)programCounter, bp); \
+        ADD_PROGRAM_COUNTER(BinaryOperation);             \
+        NEXT_INSTRUCTION();                               \
     }
 
 #define MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)        \
@@ -880,9 +943,14 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
     FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(SIMD_BINARY_SHIFT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(SIMD_BINARY_OTHER_OPERATION)
+    FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OP(SIMD_BINARY_OPERATION)
+    FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OTHER(SIMD_BINARY_OTHER_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OP(SIMD_UNARY_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(SIMD_UNARY_CONVERT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(SIMD_UNARY_OTHER_OPERATION)
+    FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(SIMD_UNARY_OTHER_OPERATION)
+    FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OP(SIMD_TERNARY_OPERATION)
+    FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OTHER(SIMD_TERNARY_OTHER_OPERATION)
 
     DEFINE_OPCODE(Jump)
         :
@@ -1088,16 +1156,7 @@ NextInstruction:
     DEFINE_OPCODE(V128BitSelect)
         :
     {
-        using Type = typename SIMDType<uint64_t>::Type;
-        V128BitSelect* code = (V128BitSelect*)programCounter;
-        auto lhs = readValue<Type>(bp, code->srcOffsets()[0]);
-        auto rhs = readValue<Type>(bp, code->srcOffsets()[1]);
-        auto c = readValue<Type>(bp, code->srcOffsets()[2]);
-        Type result;
-        for (uint8_t i = 0; i < Type::Lanes; i++) {
-            result[i] = (lhs[i] & c[i]) | (rhs[i] & ~c[i]);
-        }
-        writeValue<Type>(bp, code->dstOffset(), result);
+        simdBitSelectOperation(state, (ByteCodeOffset4*)programCounter, bp);
         ADD_PROGRAM_COUNTER(V128BitSelect);
         NEXT_INSTRUCTION();
     }
