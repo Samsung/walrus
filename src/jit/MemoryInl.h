@@ -1157,7 +1157,7 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 type = SLJIT_ARGS3V(P, P, P);
     sljit_s32 functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwCmpxchg64);
 
-    if (srcExpectedArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
+    if (dstArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
         if (dstArgPair.arg1 != srcExpectedArgPair.arg1 || dstArgPair.arg1w != srcExpectedArgPair.arg1w) {
             sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, srcExpectedArgPair.arg1, srcExpectedArgPair.arg1w);
             sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, srcExpectedArgPair.arg2, srcExpectedArgPair.arg2w);
@@ -1176,8 +1176,8 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
     }
 
-    if (srcExpectedArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
-        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, SLJIT_EXTRACT_REG(dstArgPair.arg1), 0, SLJIT_IMM, dstArgPair.arg1w);
+    if (dstArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
+        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, dstArgPair.arg1w - WORD_LOW_OFFSET);
     } else {
         sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart);
     }
@@ -1190,7 +1190,7 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_icall(compiler, SLJIT_CALL, type, SLJIT_IMM, functionAddr);
 
-    if (srcExpectedArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
+    if (dstArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg1, dstArgPair.arg1w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
         sljit_emit_op1(compiler, SLJIT_MOV, dstArgPair.arg2, dstArgPair.arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET);
     }
@@ -1416,8 +1416,10 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 
         JITArg dst;
         sljit_s32 srcReg;
-
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        JITArgPair dstPair;
+        dstPair.arg2 = 0;
+
         if ((operationSize & SLJIT_32) || operationSize == SLJIT_MOV32) {
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             JITArg src(operands + 1);
@@ -1426,12 +1428,11 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         } else {
             JITArgPair srcPair(operands + 1);
-            JITArgPair dstPair(operands + 2);
+            dstPair.set(operands + 2);
             srcReg = GET_TARGET_REG(srcPair.arg1, instr->requiredReg(2));
 
             dst.arg = dstPair.arg1;
             dst.argw = dstPair.arg1w;
-            sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
         }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
@@ -1448,6 +1449,11 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 
         sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, tmpReg, baseReg, SLJIT_TMP_DEST_REG);
         sljit_set_label(sljit_emit_jump(compiler, SLJIT_ATOMIC_NOT_STORED), restartOnFailure);
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        if (dstPair.arg2 != 0) {
+            sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
+        }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
         sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
         return;
     }
@@ -1458,9 +1464,11 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     JITArg srcValue;
     JITArg dst;
-    JITArgPair srcExpectedPair;
+    JITArgPair dstPair, srcExpectedPair;
     sljit_s32 tmpReg;
     sljit_s32 srcExpectedReg;
+
+    dstPair.arg2 = 0;
 
     if ((operationSize & SLJIT_32) || operationSize == SLJIT_MOV32) {
         JITArg tmp(operands + 0);
@@ -1473,7 +1481,7 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     } else {
         JITArgPair tmpPair(operands + 0);
         JITArgPair srcValuePair(operands + 2);
-        JITArgPair dstPair(operands + 3);
+        dstPair.set(operands + 3);
 
         srcExpectedPair = JITArgPair(operands + 1);
         tmpReg = GET_TARGET_REG(tmpPair.arg1, instr->requiredReg(1));
@@ -1510,6 +1518,9 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     sljit_set_label(compareFalse, sljit_emit_label(compiler));
     sljit_set_label(storeSuccess, sljit_emit_label(compiler));
 
+    if (dstPair.arg2 != 0) {
+        sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
+    }
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
     sljit_s32 tmpReg;
