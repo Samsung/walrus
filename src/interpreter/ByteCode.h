@@ -378,7 +378,7 @@ class FunctionType;
     F(I64X2ExtmulHighI32X4S, (simdExtmulOperation<int32_t, int64_t, false>))   \
     F(I64X2ExtmulLowI32X4U, (simdExtmulOperation<uint32_t, uint64_t, true>))   \
     F(I64X2ExtmulHighI32X4U, (simdExtmulOperation<uint32_t, uint64_t, false>)) \
-    F(I32X4DotI16X8S, (simdDotOperation))                                      \
+    F(I32X4DotI16X8S, (simdDotOperation<int16_t, uint32_t>))                   \
     F(I8X16NarrowI16X8S, (simdNarrowOperation<int16_t, int8_t>))               \
     F(I8X16NarrowI16X8U, (simdNarrowOperation<int16_t, uint8_t>))              \
     F(I16X8NarrowI32X4S, (simdNarrowOperation<int32_t, int16_t>))              \
@@ -588,30 +588,65 @@ class FunctionType;
     F(MemoryAtomicWait64)                 \
     F(AtomicFence)
 
-#define FOR_EACH_BYTECODE(F)                   \
-    FOR_EACH_BYTECODE_OP(F)                    \
-    FOR_EACH_BYTECODE_BINARY_OP(F)             \
-    FOR_EACH_BYTECODE_UNARY_OP(F)              \
-    FOR_EACH_BYTECODE_UNARY_OP_2(F)            \
-    FOR_EACH_BYTECODE_LOAD_OP(F)               \
-    FOR_EACH_BYTECODE_STORE_OP(F)              \
-    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)        \
-    FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(F)  \
-    FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)     \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)         \
-    FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(F) \
-    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)      \
-    FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F)    \
-    FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F)   \
-    FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)     \
-    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)    \
-    FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(F)  \
-    FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(F)  \
-    FOR_EACH_BYTECODE_SIMD_ETC_OP(F)           \
-    FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F)        \
-    FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F)       \
-    FOR_EACH_BYTECODE_ATOMIC_RMW_OP(F)         \
-    FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(F) \
+#define FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(F)                            \
+    F(I32X4RelaxedTruncF32X4S, (simdTruncSatOperation<float, int32_t>))          \
+    F(I32X4RelaxedTruncF32X4U, (simdTruncSatOperation<float, uint32_t>))         \
+    F(I32X4RelaxedTruncF64X2SZero, (simdTruncSatZeroOperation<double, int32_t>)) \
+    F(I32X4RelaxedTruncF64X2UZero, (simdTruncSatZeroOperation<double, uint32_t>))
+
+#define FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OP(F) \
+    F(F32X4RelaxedMin, floatMin, float, float)      \
+    F(F32X4RelaxedMax, floatMax, float, float)      \
+    F(F64X2RelaxedMin, floatMin, double, double)    \
+    F(F64X2RelaxedMax, floatMax, double, double)    \
+    F(I16X8RelaxedQ15mulrS, saturatingRoundingQMul, int16_t, int16_t)
+
+#define FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OTHER(F)      \
+    F(I8X16RelaxedSwizzle, (simdSwizzleOperation<uint8_t>)) \
+    F(I16X8DotI8X16I7X16S, (simdDotOperation<int8_t, uint16_t>))
+
+#define FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OP(F)   \
+    F(F32X4RelaxedMadd, floatMulAdd, float, float)     \
+    F(F32X4RelaxedNmadd, floatNegMulAdd, float, float) \
+    F(F64X2RelaxedMadd, floatMulAdd, double, double)   \
+    F(F64X2RelaxedNmadd, floatNegMulAdd, double, double)
+
+#define FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OTHER(F) \
+    F(I32X4DotI8X16I7X16AddS, (simdDotAddOperation))    \
+    F(I8X16RelaxedLaneSelect, (simdBitSelectOperation)) \
+    F(I16X8RelaxedLaneSelect, (simdBitSelectOperation)) \
+    F(I32X4RelaxedLaneSelect, (simdBitSelectOperation)) \
+    F(I64X2RelaxedLaneSelect, (simdBitSelectOperation))
+
+#define FOR_EACH_BYTECODE(F)                        \
+    FOR_EACH_BYTECODE_OP(F)                         \
+    FOR_EACH_BYTECODE_BINARY_OP(F)                  \
+    FOR_EACH_BYTECODE_UNARY_OP(F)                   \
+    FOR_EACH_BYTECODE_UNARY_OP_2(F)                 \
+    FOR_EACH_BYTECODE_LOAD_OP(F)                    \
+    FOR_EACH_BYTECODE_STORE_OP(F)                   \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)             \
+    FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(F)       \
+    FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(F)          \
+    FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OP(F)     \
+    FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OTHER(F)  \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OP(F)              \
+    FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(F)      \
+    FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(F)   \
+    FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OP(F)    \
+    FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OTHER(F) \
+    FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(F)           \
+    FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(F)         \
+    FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F)        \
+    FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F)          \
+    FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F)         \
+    FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(F)       \
+    FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(F)       \
+    FOR_EACH_BYTECODE_SIMD_ETC_OP(F)                \
+    FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F)             \
+    FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F)            \
+    FOR_EACH_BYTECODE_ATOMIC_RMW_OP(F)              \
+    FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(F)      \
     FOR_EACH_BYTECODE_ATOMIC_OTHER(F)
 
 class ByteCode {
@@ -724,6 +759,24 @@ protected:
     ByteCodeStackOffset m_stackOffset1;
     ByteCodeStackOffset m_stackOffset2;
     uint32_t m_value;
+};
+
+class ByteCodeOffset4 : public ByteCode {
+public:
+    ByteCodeOffset4(Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset)
+        : ByteCode(opcode)
+        , m_stackOffsets{ src0Offset, src1Offset, src2Offset, dstOffset }
+    {
+    }
+
+    const ByteCodeStackOffset* srcOffsets() const { return m_stackOffsets; }
+    ByteCodeStackOffset src0Offset() const { return m_stackOffsets[0]; }
+    ByteCodeStackOffset src1Offset() const { return m_stackOffsets[1]; }
+    ByteCodeStackOffset src2Offset() const { return m_stackOffsets[2]; }
+    ByteCodeStackOffset dstOffset() const { return m_stackOffsets[3]; }
+
+protected:
+    ByteCodeStackOffset m_stackOffsets[4];
 };
 
 class ByteCodeOffset4Value : public ByteCode {
@@ -923,15 +976,56 @@ public:
         DEFINE_UNARY_BYTECODE_DUMP(name)                                   \
     };
 
+// dummy ByteCode for ternary operation
+class TernaryOperation : public ByteCodeOffset4 {
+public:
+    TernaryOperation(Opcode code, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset)
+        : ByteCodeOffset4(code, src0Offset, src1Offset, src2Offset, dstOffset)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+};
+
+#if !defined(NDEBUG)
+#define DEFINE_TERNARY_BYTECODE_DUMP(name)                                                                                                                                                                        \
+    void dump(size_t pos)                                                                                                                                                                                         \
+    {                                                                                                                                                                                                             \
+        printf(#name " src1: %" PRIu32 " src2: %" PRIu32 " src3: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_stackOffsets[0], (uint32_t)m_stackOffsets[1], (uint32_t)m_stackOffsets[2], (uint32_t)m_stackOffsets[3]); \
+    }
+#else
+#define DEFINE_TERNARY_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_TERNARY_BYTECODE(name, ...)                                                                                                  \
+    class name : public TernaryOperation {                                                                                                  \
+    public:                                                                                                                                 \
+        name(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset) \
+            : TernaryOperation(Opcode::name##Opcode, src0Offset, src1Offset, src2Offset, dstOffset)                                         \
+        {                                                                                                                                   \
+        }                                                                                                                                   \
+        DEFINE_TERNARY_BYTECODE_DUMP(name)                                                                                                  \
+    };
+
+
 FOR_EACH_BYTECODE_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(DEFINE_BINARY_BYTECODE)
+FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OP(DEFINE_BINARY_BYTECODE)
+FOR_EACH_BYTECODE_RELAXED_SIMD_BINARY_OTHER(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_CONVERT_OP(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
+FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
+FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OP(DEFINE_TERNARY_BYTECODE)
+FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OTHER(DEFINE_TERNARY_BYTECODE)
 
 #define DEFINE_MOVE_BYTECODE(name)                                         \
     class name : public ByteCodeOffset2 {                                  \
@@ -1910,31 +2004,19 @@ FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(DEFINE_RMW_CMPXCHG_BYTECODE)
 #undef DEFINE_RMW_BYTECODE
 
 // FOR_EACH_BYTECODE_SIMD_ETC_OP
-class V128BitSelect : public ByteCode {
+class V128BitSelect : public ByteCodeOffset4 {
 public:
     V128BitSelect(ByteCodeStackOffset lhs, ByteCodeStackOffset rhs, ByteCodeStackOffset c, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::V128BitSelectOpcode)
-        , m_srcOffsets{ lhs, rhs, c }
-        , m_dstOffset(dst)
+        : ByteCodeOffset4(Opcode::V128BitSelectOpcode, lhs, rhs, c, dst)
     {
     }
-
-    const ByteCodeStackOffset* srcOffsets() const
-    {
-        return m_srcOffsets;
-    }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("v128.bitselect lhs: %" PRIu32 " rhs: %" PRIu32 " c: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_srcOffsets[0], (uint32_t)m_srcOffsets[1], (uint32_t)m_srcOffsets[2], (uint32_t)m_dstOffset);
+        printf("v128.bitselect lhs: %" PRIu32 " rhs: %" PRIu32 " c: %" PRIu32 " dst: %" PRIu32, (uint32_t)m_stackOffsets[0], (uint32_t)m_stackOffsets[1], (uint32_t)m_stackOffsets[2], (uint32_t)m_stackOffsets[3]);
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_srcOffsets[3];
-    ByteCodeStackOffset m_dstOffset;
 };
 
 class V128Load32Zero : public MemoryLoad {
