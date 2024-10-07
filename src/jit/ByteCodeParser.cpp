@@ -1022,14 +1022,12 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::Load32Opcode: {
             group = Instruction::Load;
             paramType = ParamTypes::ParamSrcDst;
-            compiler->useMemory0();
             requiredInit = OTLoadI32;
             break;
         }
         case ByteCode::Load64Opcode: {
             group = Instruction::Load;
             paramType = ParamTypes::ParamSrcDst;
-            compiler->useMemory0();
             requiredInit = OTLoadI64;
             break;
         }
@@ -1049,7 +1047,6 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64Load32UOpcode: {
             group = Instruction::Load;
             paramType = ParamTypes::ParamSrcDstValue;
-            compiler->useMemory0();
             if (requiredInit == OTNone) {
                 requiredInit = OTLoadI64;
             }
@@ -1072,7 +1069,6 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::V128Load64ZeroOpcode: {
             group = Instruction::Load;
             paramType = ParamTypes::ParamSrcDstValue;
-            compiler->useMemory0();
 
             if (opcode == ByteCode::F32LoadOpcode)
                 requiredInit = OTLoadF32;
@@ -1089,7 +1085,6 @@ static void compileFunction(JITCompiler* compiler)
             SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::LoadLaneSIMD, opcode, 2, 1);
             instr->setRequiredRegsDescriptor(OTLoadLaneV128);
-            compiler->useMemory0();
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(loadOperation->src0Offset());
@@ -1100,14 +1095,12 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::Store32Opcode: {
             group = Instruction::Store;
             paramType = ParamTypes::ParamSrc2;
-            compiler->useMemory0();
             requiredInit = OTStoreI32;
             break;
         }
         case ByteCode::Store64Opcode: {
             group = Instruction::Store;
             paramType = ParamTypes::ParamSrc2;
-            compiler->useMemory0();
             requiredInit = OTStoreI64;
             break;
         }
@@ -1127,7 +1120,6 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64StoreOpcode: {
             group = Instruction::Store;
             paramType = ParamTypes::ParamSrc2Value;
-            compiler->useMemory0();
             if (requiredInit == OTNone) {
                 requiredInit = OTStoreI64;
             }
@@ -1138,7 +1130,6 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::V128StoreOpcode: {
             group = Instruction::Store;
             paramType = ParamTypes::ParamSrc2Value;
-            compiler->useMemory0();
 
             if (opcode == ByteCode::F32StoreOpcode)
                 requiredInit = OTStoreF32;
@@ -1155,7 +1146,6 @@ static void compileFunction(JITCompiler* compiler)
             SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
             instr->setRequiredRegsDescriptor(OTStoreV128);
-            compiler->useMemory0();
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(storeOperation->src0Offset());
@@ -1330,7 +1320,6 @@ static void compileFunction(JITCompiler* compiler)
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 0, 1);
             instr->setRequiredRegsDescriptor(OTPutI32);
-            compiler->useMemory0();
 
             *instr->operands() = STACK_OFFSET(memorySize->dstOffset());
             break;
@@ -1874,7 +1863,6 @@ static void compileFunction(JITCompiler* compiler)
                 compiler->increaseStackTmpSize(8);
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-            compiler->useMemory0();
             if (requiredInit == OTNone) {
                 requiredInit = OTLoadI64;
             }
@@ -1899,7 +1887,6 @@ static void compileFunction(JITCompiler* compiler)
                 compiler->increaseStackTmpSize(8);
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-            compiler->useMemory0();
             if (requiredInit == OTNone) {
                 requiredInit = OTStoreI64;
             }
@@ -1965,7 +1952,6 @@ static void compileFunction(JITCompiler* compiler)
             AtomicRmw* atomicRmw = reinterpret_cast<AtomicRmw*>(byteCode);
             Operand* operands = instr->operands();
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicRmwI64);
-            compiler->useMemory0();
 
             operands[0] = STACK_OFFSET(atomicRmw->src0Offset());
             operands[1] = STACK_OFFSET(atomicRmw->src1Offset());
@@ -1997,7 +1983,6 @@ static void compileFunction(JITCompiler* compiler)
             AtomicRmwCmpxchg* atomicRmwCmpxchg = reinterpret_cast<AtomicRmwCmpxchg*>(byteCode);
             Operand* operands = instr->operands();
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicRmwCmpxchgI64);
-            compiler->useMemory0();
 
             operands[0] = STACK_OFFSET(atomicRmwCmpxchg->src0Offset());
             operands[1] = STACK_OFFSET(atomicRmwCmpxchg->src1Offset());
@@ -2017,7 +2002,6 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operands = instr->operands();
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicWaitI32);
             compiler->increaseStackTmpSize(16);
-            compiler->useMemory0();
 
             operands[0] = STACK_OFFSET(memoryAtomicWait->src0Offset());
             operands[1] = STACK_OFFSET(memoryAtomicWait->src1Offset());
@@ -2032,7 +2016,6 @@ static void compileFunction(JITCompiler* compiler)
             MemoryAtomicNotify* memoryAtomicNotify = reinterpret_cast<MemoryAtomicNotify*>(byteCode);
             Operand* operands = instr->operands();
             instr->setRequiredRegsDescriptor(OTAtomicNotify);
-            compiler->useMemory0();
 
             operands[0] = STACK_OFFSET(memoryAtomicNotify->src0Offset());
             operands[1] = STACK_OFFSET(memoryAtomicNotify->src1Offset());

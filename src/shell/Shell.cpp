@@ -592,7 +592,7 @@ static void printConstVector(wabt::ConstVector& v)
 }
 
 static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn, wabt::ConstVector expectedResult,
-                                const char* expectedException, bool expectUserException = false)
+                                const char* expectedException, bool expectUserException = false, bool either = false)
 {
     if (fn->functionType()->param().size() != action->args.size()) {
         printf("Error: expected %zu parameter(s) but got %zu.\n", fn->functionType()->param().size(), action->args.size());
@@ -608,7 +608,8 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         wabt::ConstVector& expectedResult;
         Walrus::ValueVector& args;
         wabt::InvokeAction* action;
-    } data = { fn, expectedResult, args, action };
+        bool either;
+    } data = { fn, expectedResult, args, action, either };
     Walrus::Trap trap;
     auto trapResult = trap.run([](Walrus::ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
@@ -616,22 +617,48 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         result.resize(data->fn->functionType()->result().size());
         data->fn->call(state, data->args.data(), result.data());
         if (data->expectedResult.size()) {
-            if (data->fn->functionType()->result().size() != data->expectedResult.size()) {
-                printf("Error: %s returned with %zu parameter(s) but expected %zu", data->action->name.data(), data->fn->functionType()->result().size(), data->expectedResult.size());
-                RELEASE_ASSERT_NOT_REACHED();
-            }
-            // compare result
-            for (size_t i = 0; i < result.size(); i++) {
-                if (!equals(result[i], data->expectedResult[i])) {
-                    printf("Assertion failed at %d: ", data->action->loc.line);
-                    printf("%s(", data->action->name.data());
-                    printConstVector(data->action->args);
-                    printf(") expected ");
-                    printConstVector(data->expectedResult);
-                    printf(", but got %s\n", ((std::string)result[i]).c_str());
+            int errorIndex = -1;
+
+            if (data->either) {
+                if (data->fn->functionType()->result().size() != 1) {
+                    printf("Error: %s returned with %zu parameter(s) but expected 1", data->action->name.data(), data->fn->functionType()->result().size());
                     RELEASE_ASSERT_NOT_REACHED();
                 }
+
+                // compare result
+                for (size_t i = 0; i < data->expectedResult.size(); i++) {
+                    if (equals(result[0], data->expectedResult[i])) {
+                        return;
+                    }
+                }
+
+                errorIndex = 0;
+            } else {
+                if (data->fn->functionType()->result().size() != data->expectedResult.size()) {
+                    printf("Error: %s returned with %zu parameter(s) but expected %zu", data->action->name.data(), data->fn->functionType()->result().size(), data->expectedResult.size());
+                    RELEASE_ASSERT_NOT_REACHED();
+                }
+
+                // compare result
+                for (size_t i = 0; i < result.size(); i++) {
+                    if (!equals(result[i], data->expectedResult[i])) {
+                        errorIndex = i;
+                        break;
+                    }
+                }
+
+                if (errorIndex == -1) {
+                    return;
+                }
             }
+
+            printf("Assertion failed at %d: ", data->action->loc.line);
+            printf("%s(", data->action->name.data());
+            printConstVector(data->action->args);
+            printf(") %sexpected ", data->either ? "any " : "");
+            printConstVector(data->expectedResult);
+            printf(", but got %s\n", ((std::string)result[errorIndex]).c_str());
+            RELEASE_ASSERT_NOT_REACHED();
         }
     },
                                &data);
@@ -667,7 +694,7 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
     } else if (expectedResult.size()) {
         printf("invoke %s(", action->name.data());
         printConstVector(action->args);
-        printf(") expect value(");
+        printf(") expect %svalue(", either ? "either " : "");
         printConstVector(expectedResult);
         printf(") (line: %d) : OK\n", action->loc.line);
     }
@@ -745,7 +772,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             if (assertReturn->action->type() == wabt::ActionType::Invoke) {
                 auto action = static_cast<wabt::InvokeAction*>(assertReturn->action.get());
                 auto fn = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportFunction(action->name);
-                executeInvokeAction(action, fn, assertReturn->expected->expected, nullptr);
+                executeInvokeAction(action, fn, assertReturn->expected->expected, nullptr, false, assertReturn->expected->type() == wabt::ExpectationType::Either);
             } else if (assertReturn->action->type() == wabt::ActionType::Get) {
                 auto action = static_cast<wabt::GetAction*>(assertReturn->action.get());
                 auto v = fetchInstance(action->module_var, instanceMap, registeredInstanceMap)->resolveExportGlobal(action->name)->value();

@@ -79,13 +79,12 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
     switch (opcode) {
     case ByteCode::MemorySizeOpcode: {
         ASSERT(!(instr->info() & Instruction::kIsCallback));
-        ASSERT(context->compiler->hasMemory0());
 
         JITArg dstArg(params);
 
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
-        sljit_emit_op2(compiler, SLJIT_LSHR, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_SP),
-                       context->stackMemoryStart + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET, SLJIT_IMM, 16);
+        sljit_emit_op2(compiler, SLJIT_LSHR, dstArg.arg, dstArg.argw, SLJIT_MEM1(kInstanceReg),
+                       context->targetBuffersStart + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET, SLJIT_IMM, 16);
         return;
     }
     case ByteCode::MemoryInitOpcode:
