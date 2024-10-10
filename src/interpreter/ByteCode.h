@@ -506,7 +506,6 @@ class FunctionType;
     F(I8X16Shuffle)
 
 // Extended Features
-#if defined(ENABLE_EXTENDED_FEATURES)
 #define FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F) \
     F(I32AtomicLoad, uint32_t, uint32_t)    \
     F(I64AtomicLoad, uint64_t, uint64_t)    \
@@ -588,13 +587,6 @@ class FunctionType;
     F(MemoryAtomicWait32)                 \
     F(MemoryAtomicWait64)                 \
     F(AtomicFence)
-#else // Extended Features
-#define FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F)
-#define FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F)
-#define FOR_EACH_BYTECODE_ATOMIC_RMW_OP(F)
-#define FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(F)
-#define FOR_EACH_BYTECODE_ATOMIC_OTHER(F)
-#endif // Extended Features
 
 #define FOR_EACH_BYTECODE(F)                   \
     FOR_EACH_BYTECODE_OP(F)                    \
@@ -1740,7 +1732,6 @@ protected:
     };
 
 
-#if defined(ENABLE_EXTENDED_FEATURES)
 class AtomicRmw : public ByteCode {
 public:
     AtomicRmw(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
@@ -1857,7 +1848,6 @@ public:
 protected:
     uint32_t m_offset;
 };
-#endif
 
 #if !defined(NDEBUG)
 #define DEFINE_RMW_BYTECODE_DUMP(name)                                                                                                                                                     \

@@ -2161,7 +2161,6 @@ public:
     }
 
     // Extended Features
-#if defined(ENABLE_EXTENDED_FEATURES)
     virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
@@ -2289,39 +2288,6 @@ public:
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         pushByteCode(Walrus::MemoryAtomicNotify(offset, src0, src1, dst), code);
     }
-#else // Extended Features
-    virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
-    {
-        ASSERT_NOT_REACHED();
-    }
-
-    virtual void OnAtomicStoreExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
-    {
-        ASSERT_NOT_REACHED();
-    }
-
-    virtual void OnAtomicRmwExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
-    {
-        ASSERT_NOT_REACHED();
-    }
-
-    virtual void OnAtomicCmpxchgExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
-    {
-        ASSERT_NOT_REACHED();
-    }
-    virtual void OnAtomicWaitExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
-    {
-        ASSERT_NOT_REACHED();
-    }
-    virtual void OnAtomicFenceExpr(uint32_t consistency_model) override
-    {
-        ASSERT_NOT_REACHED();
-    }
-    virtual void OnAtomicNotifyExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
-    {
-        ASSERT_NOT_REACHED();
-    }
-#endif // Extended Features
 
     virtual void OnRefFuncExpr(Index func_index) override
     {

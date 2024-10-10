@@ -42,10 +42,8 @@ struct ExecutionContext {
         IndirectCallTypeMismatchError,
         InvalidConversionToIntegerError,
         UnreachableError,
-#if defined(ENABLE_EXTENDED_FEATURES)
         UnalignedAtomicError,
         ExpectedSharedMemError,
-#endif /* ENABLE_EXTENDED_FEATURES */
 
         // These three in this order must be the last items of the list.
         GenericTrap, // Error code received in SLJIT_R0.
