@@ -1242,6 +1242,10 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             emitShiftSIMD(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::TernarySIMD: {
+            emitTernarySIMD(m_compiler, item->asInstruction());
+            break;
+        }
 #endif /* HAS_SIMD */
         case Instruction::StackInit: {
             emitStackInit(m_compiler, item->asInstruction());
@@ -1270,10 +1274,6 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
                 break;
             }
 #ifdef HAS_SIMD
-            case ByteCode::V128BitSelectOpcode: {
-                emitSelectSIMD(m_compiler, item->asInstruction());
-                break;
-            }
             case ByteCode::I8X16ShuffleOpcode: {
                 emitShuffleSIMD(m_compiler, item->asInstruction());
                 break;

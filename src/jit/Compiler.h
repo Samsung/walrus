@@ -105,6 +105,8 @@ public:
         BitMaskSIMD,
         // Shift SIMD opcodes (e.g. I8X16SHL)
         ShiftSIMD,
+        // Ternary SIMD opcodes (e.g. V128BitSelect)
+        TernarySIMD,
         // Special type for initializing values from the stack
         StackInit,
         // Atomic memory operations (e.g. I32AtomicRmwAdd, I64AtomicRmw16OrU)
