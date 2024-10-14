@@ -239,36 +239,37 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL6(OTAtomicWaitI64, /* SSSDTT */ I32, I64, I64, I32, PTR, I64 | S0)             \
     OL5(OTAtomicNotify, /* SSDTT */ I32, I32, I32, PTR, I32 | S0)
 
-#define OPERAND_TYPE_LIST_SIMD                                                             \
-    OL2(OTOp1V128, /* SD */ V128 | NOTMP, V128 | TMP | S0)                                 \
-    OL2(OTOpCondV128, /* SD */ V128 | TMP, I32)                                            \
-    OL1(OTGlobalGetV128, /* D */ V128)                                                     \
-    OL1(OTGlobalSetV128, /* S */ V128 | NOTMP)                                             \
-    OL2(OTSplatI32, /* SD */ I32, V128 | TMP)                                              \
-    OL2(OTSplatI64, /* SD */ I64, V128 | TMP)                                              \
-    OL2(OTSplatF32, /* SD */ F32 | NOTMP, V128 | TMP)                                      \
-    OL2(OTSplatF64, /* SD */ F64 | NOTMP, V128 | TMP)                                      \
-    OL2(OTV128ToI32, /* SD */ V128 | TMP, I32)                                             \
-    OL4(OTBitSelectV128, /* SSSD */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2) \
-    OL2(OTExtractLaneI64, /* SD */ V128 | TMP, I64)                                        \
-    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32 | S0)                                   \
-    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64 | S0)                                   \
-    OL3(OTReplaceLaneI32, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                    \
-    OL3(OTReplaceLaneI64, /* SSD */ V128 | NOTMP, I64, V128 | TMP | S0)                    \
-    OL3(OTReplaceLaneF32, /* SSD */ V128 | NOTMP, F32 | NOTMP, V128 | TMP | S0)            \
-    OL3(OTReplaceLaneF64, /* SSD */ V128 | NOTMP, F64 | NOTMP, V128 | TMP | S0)            \
+#define OPERAND_TYPE_LIST_SIMD                                                       \
+    OL2(OTOp1V128, /* SD */ V128 | NOTMP, V128 | TMP | S0)                           \
+    OL2(OTOpCondV128, /* SD */ V128 | TMP, I32)                                      \
+    OL1(OTGlobalGetV128, /* D */ V128)                                               \
+    OL1(OTGlobalSetV128, /* S */ V128 | NOTMP)                                       \
+    OL2(OTSplatI32, /* SD */ I32, V128 | TMP)                                        \
+    OL2(OTSplatI64, /* SD */ I64, V128 | TMP)                                        \
+    OL2(OTSplatF32, /* SD */ F32 | NOTMP, V128 | TMP)                                \
+    OL2(OTSplatF64, /* SD */ F64 | NOTMP, V128 | TMP)                                \
+    OL2(OTV128ToI32, /* SD */ V128 | TMP, I32)                                       \
+    OL4(OTOp3V128, /* SSSD */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2) \
+    OL2(OTExtractLaneI64, /* SD */ V128 | TMP, I64)                                  \
+    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32 | S0)                             \
+    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64 | S0)                             \
+    OL3(OTReplaceLaneI32, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)              \
+    OL3(OTReplaceLaneI64, /* SSD */ V128 | NOTMP, I64, V128 | TMP | S0)              \
+    OL3(OTReplaceLaneF32, /* SSD */ V128 | NOTMP, F32 | NOTMP, V128 | TMP | S0)      \
+    OL3(OTReplaceLaneF64, /* SSD */ V128 | NOTMP, F64 | NOTMP, V128 | TMP | S0)      \
     OL4(OTSelectV128, /* SSSD */ V128, V128, I32, V128 | S0 | S1)
 
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
 
-#define OPERAND_TYPE_LIST_SIMD_ARCH                                               \
-    OL3(OTOp2V128, /* SSD */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0)           \
-    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)              \
-    OL4(OTOp2V128Tmp, /* SSDT */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0, V128) \
-    OL3(OTOp2V128Rev, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)        \
-    OL3(OTShuffleV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0)     \
-    OL3(OTPopcntV128, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)              \
-    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                \
+#define OPERAND_TYPE_LIST_SIMD_ARCH                                                               \
+    OL3(OTOp2V128, /* SSD */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0)                           \
+    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)                              \
+    OL4(OTOp2V128Tmp, /* SSDT */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0, V128)                 \
+    OL3(OTOp2V128Rev, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)                        \
+    OL5(OTOp3DotAddV128, /* SSSDT */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2, V128) \
+    OL3(OTShuffleV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0)                     \
+    OL3(OTPopcntV128, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)                              \
+    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                                \
     OL4(OTShiftV128Tmp, /* SSDT */ V128 | NOTMP, I32, V128 | TMP | S0, V128)
 
 // List of aliases.
@@ -294,6 +295,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTPopcntV128 OTOp1V128
 #define OTSwizzleV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
+#define OTOp3DotAddV128 OTOp2V128
 
 #elif (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
 
@@ -312,6 +314,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTPMinMaxV128 OTOp2V128
 #define OTPopcntV128 OTOp1V128
 #define OTShiftV128Tmp OTShiftV128
+#define OTOp3DotAddV128 OTOp2V128
 
 #endif /* SLJIT_CONFIG_ARM */
 
@@ -387,6 +390,7 @@ enum ParamTypes {
     ParamSrc2Value,
     ParamSrc2Dst,
     ParamSrc3,
+    ParamSrc3Dst,
 };
 
 static void compileFunction(JITCompiler* compiler)
@@ -1596,6 +1600,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I16X8NarrowI32X4SOpcode:
         case ByteCode::I16X8NarrowI32X4UOpcode:
         case ByteCode::I16X8Q15mulrSatSOpcode:
+        case ByteCode::I16X8RelaxedQ15mulrSOpcode:
         case ByteCode::I32X4AddOpcode:
         case ByteCode::I32X4SubOpcode:
         case ByteCode::I32X4MulOpcode:
@@ -1644,7 +1649,8 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64X2LeOpcode:
         case ByteCode::V128AndOpcode:
         case ByteCode::V128OrOpcode:
-        case ByteCode::V128XorOpcode: {
+        case ByteCode::V128XorOpcode:
+        case ByteCode::I8X16RelaxedSwizzleOpcode: {
             group = Instruction::BinarySIMD;
             paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTOp2V128;
@@ -1669,7 +1675,11 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32X4MaxOpcode:
         case ByteCode::F32X4MinOpcode:
         case ByteCode::F64X2MaxOpcode:
-        case ByteCode::F64X2MinOpcode: {
+        case ByteCode::F64X2MinOpcode:
+        case ByteCode::F32X4RelaxedMaxOpcode:
+        case ByteCode::F32X4RelaxedMinOpcode:
+        case ByteCode::F64X2RelaxedMaxOpcode:
+        case ByteCode::F64X2RelaxedMinOpcode: {
             group = Instruction::BinarySIMD;
             paramType = ParamTypes::ParamSrc2Dst;
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
@@ -1692,7 +1702,8 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32X4GeOpcode:
         case ByteCode::F64X2GtOpcode:
         case ByteCode::F64X2GeOpcode:
-        case ByteCode::V128AndnotOpcode: {
+        case ByteCode::V128AndnotOpcode:
+        case ByteCode::I16X8DotI8X16I7X16SOpcode: {
             group = Instruction::BinarySIMD;
             paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTOp2V128Rev;
@@ -1717,8 +1728,11 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32X4ExtendLowI16X8UOpcode:
         case ByteCode::I32X4ExtendHighI16X8UOpcode:
         case ByteCode::I32X4TruncSatF32X4SOpcode:
+        case ByteCode::I32X4RelaxedTruncF32X4SOpcode:
         case ByteCode::I32X4TruncSatF64X2SZeroOpcode:
         case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
+        case ByteCode::I32X4RelaxedTruncF64X2SZeroOpcode:
+        case ByteCode::I32X4RelaxedTruncF64X2UZeroOpcode:
         case ByteCode::I64X2NegOpcode:
         case ByteCode::I64X2AbsOpcode:
         case ByteCode::I64X2ExtendLowI32X4SOpcode:
@@ -1759,6 +1773,7 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::I32X4TruncSatF32X4UOpcode:
+        case ByteCode::I32X4RelaxedTruncF32X4UOpcode:
         case ByteCode::F32X4ConvertI32X4UOpcode:
         case ByteCode::F64X2ConvertLowI32X4UOpcode: {
             group = Instruction::UnarySIMD;
@@ -1805,17 +1820,24 @@ static void compileFunction(JITCompiler* compiler)
             requiredInit = OTPopcntV128;
             break;
         }
-        case ByteCode::V128BitSelectOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, 3, 1);
-            instr->setRequiredRegsDescriptor(OTBitSelectV128);
-
-            V128BitSelect* bitSelect = reinterpret_cast<V128BitSelect*>(byteCode);
-            Operand* operands = instr->operands();
-
-            operands[0] = STACK_OFFSET(bitSelect->srcOffsets()[0]);
-            operands[1] = STACK_OFFSET(bitSelect->srcOffsets()[1]);
-            operands[2] = STACK_OFFSET(bitSelect->srcOffsets()[2]);
-            operands[3] = STACK_OFFSET(bitSelect->dstOffset());
+        case ByteCode::V128BitSelectOpcode:
+        case ByteCode::I8X16RelaxedLaneSelectOpcode:
+        case ByteCode::I16X8RelaxedLaneSelectOpcode:
+        case ByteCode::I32X4RelaxedLaneSelectOpcode:
+        case ByteCode::I64X2RelaxedLaneSelectOpcode:
+        case ByteCode::F32X4RelaxedMaddOpcode:
+        case ByteCode::F32X4RelaxedNmaddOpcode:
+        case ByteCode::F64X2RelaxedMaddOpcode:
+        case ByteCode::F64X2RelaxedNmaddOpcode: {
+            group = Instruction::TernarySIMD;
+            paramType = ParamTypes::ParamSrc3Dst;
+            requiredInit = OTOp3V128;
+            break;
+        }
+        case ByteCode::I32X4DotI8X16I7X16AddSOpcode: {
+            group = Instruction::TernarySIMD;
+            paramType = ParamTypes::ParamSrc3Dst;
+            requiredInit = OTOp3DotAddV128;
             break;
         }
         case ByteCode::I8X16ShuffleOpcode: {
@@ -2081,6 +2103,22 @@ static void compileFunction(JITCompiler* compiler)
             operands[0] = STACK_OFFSET(offset3Operation->stackOffset1());
             operands[1] = STACK_OFFSET(offset3Operation->stackOffset2());
             operands[2] = STACK_OFFSET(offset3Operation->stackOffset3());
+            break;
+        }
+        case ParamSrc3Dst: {
+            ASSERT(group != Instruction::Any);
+
+            Instruction* instr = compiler->append(byteCode, group, opcode, 3, 1);
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit);
+
+            ByteCodeOffset4* offset4Operation = reinterpret_cast<ByteCodeOffset4*>(byteCode);
+            Operand* operands = instr->operands();
+
+            operands[0] = STACK_OFFSET(offset4Operation->src0Offset());
+            operands[1] = STACK_OFFSET(offset4Operation->src1Offset());
+            operands[2] = STACK_OFFSET(offset4Operation->src2Offset());
+            operands[3] = STACK_OFFSET(offset4Operation->dstOffset());
             break;
         }
         default: {

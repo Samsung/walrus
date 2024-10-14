@@ -1672,7 +1672,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
-static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
+static void emitTernarySIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
     JITArg args[3];
