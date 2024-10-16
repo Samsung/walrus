@@ -177,8 +177,11 @@ ELSEIF (${WALRUS_HOST} STREQUAL "android")
         # bdwgc android amd64 cannot support keeping back ptrs
         SET (WALRUS_THIRDPARTY_CFLAGS ${WALRUS_THIRDPARTY_CFLAGS} -UKEEP_BACK_PTRS -USAVE_CALL_COUNT -UDBG_HDRS_ALL)
     ENDIF()
-ELSEIF (${WALRUS_HOST} STREQUAL "darwin" AND ${WALRUS_ARCH} STREQUAL "x64")
+ELSEIF (${WALRUS_HOST} STREQUAL "darwin")
     FIND_PACKAGE (PkgConfig REQUIRED)
+    IF ((NOT ${WALRUS_ARCH} STREQUAL "x64") AND (NOT ${WALRUS_ARCH} STREQUAL "aarch64"))
+        MESSAGE (FATAL_ERROR ${WALRUS_ARCH} " is unsupported")
+    ENDIF()
     SET (WALRUS_LDFLAGS -lpthread -Wl,-dead_strip)
     # bdwgc mac cannot support pthread_getattr_np
     SET (WALRUS_THIRDPARTY_CFLAGS ${WALRUS_THIRDPARTY_CFLAGS} -UHAVE_PTHREAD_GETATTR_NP)
