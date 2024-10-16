@@ -25,7 +25,7 @@ jobs:
       run: tools/check_tidy.py
 
   build-on-macos:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
     - uses: actions/checkout@v4
       with:
@@ -36,17 +36,41 @@ jobs:
         brew install cmake ninja pkg-config
     - name: Build x64
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=darwin -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
-        cmake -H. -Bout/mac/x64 $BUILD_OPTIONS
-        ninja -Cout/mac/x64
-      #- name: Run Tests
-      #run: |
+        cmake -H. -Bout/mac $BUILD_OPTIONS
+        ninja -Cout/mac
+    - name: Run Tests
+      run: |
         #FIXME try-catch is unstable in macos build
         #remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by apple-clang
-        #rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
-        #rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
-        #$RUNNER --engine="$GITHUB_WORKSPACE/out/mac/x64/walrus"
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
+        $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
+
+  build-on-macos-arm64:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Install Packages
+      run: |
+        brew update
+        brew install cmake ninja pkg-config
+    - name: Build arm64
+      env:
+        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+      run: |
+        cmake -H. -Bout/mac $BUILD_OPTIONS
+        ninja -Cout/mac
+    - name: Run Tests
+      run: |
+        #FIXME try-catch is unstable in macos build
+        #remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by apple-clang
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
+        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
+        $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
 
   build-by-clang:
     runs-on: ubuntu-latest
@@ -60,25 +84,25 @@ jobs:
         sudo apt install -y ninja-build gcc-multilib g++-multilib
     - name: Build x86
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
         CC=clang CXX=clang++ cmake -H. -Bout/clang/x86 $BUILD_OPTIONS
         ninja -Cout/clang/x86
     - name: Build x64
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
         CC=clang CXX=clang++ cmake -H. -Bout/clang/x64 $BUILD_OPTIONS
         ninja -Cout/clang/x64
     - name: Pure Build x86
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
       run: |
         CC=clang CXX=clang++ cmake -H. -Bout/pure/x86 $BUILD_OPTIONS
         ninja -Cout/pure/x86
     - name: Pure Build x64
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
       run: |
         CC=clang CXX=clang++ cmake -H. -Bout/pure/x64 $BUILD_OPTIONS
         ninja -Cout/pure/x64
@@ -104,7 +128,7 @@ jobs:
         sudo apt install -y ninja-build gcc-multilib g++-multilib
     - name: Build x86
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
         cmake -H. -Bout/linux/x86 $BUILD_OPTIONS
         ninja -Cout/linux/x86
@@ -125,7 +149,7 @@ jobs:
         sudo apt install -y ninja-build gcc-multilib g++-multilib
     - name: Build x64
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
       run: |
         cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
         ninja -Cout/linux/x64
@@ -146,7 +170,7 @@ jobs:
               sudo apt install -y ninja-build gcc-multilib g++-multilib
           - name: Build x64
             env:
-              BUILD_OPTIONS: -DWALRUS_JITPERF=1 -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+              BUILD_OPTIONS: -DWALRUS_JITPERF=1 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
             run: |
               cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
               ninja -Cout/linux/x64
@@ -171,8 +195,8 @@ jobs:
           apt-get update
           apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
         run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=arm -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
           ninja -Cout/debug
           ninja -Cout/pure
           # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
@@ -183,7 +207,7 @@ jobs:
           python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
           python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
-  build-test-on-aarch64:
+  build-test-on-arm64:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -203,8 +227,8 @@ jobs:
           apt-get update
           apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
         run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
           ninja -Cout/release
           ninja -Cout/pure
           python3 ./tools/run-tests.py --engine="./out/release/walrus"
@@ -267,7 +291,7 @@ jobs:
         sudo pip install tqdm
     - name: Build x64
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
       run: |
         cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
         ninja -Cout/linux/x64
@@ -287,7 +311,7 @@ jobs:
         sudo apt install -y ninja-build gcc-multilib g++-multilib
     - name: Build x64
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=api_test -GNinja
+        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=api_test -GNinja
       run: |
         cmake -H. -Bout/api_test/x64 $BUILD_OPTIONS
         ninja -Cout/api_test/x64
@@ -322,7 +346,7 @@ jobs:
         tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
     - name: Build
       env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+        BUILD_OPTIONS: -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
       run: |
         export PATH=$GITHUB_WORKSPACE/cov-analysis-linux64/bin:$PATH
         cmake -H. -Bout/coverity_scan $BUILD_OPTIONS
