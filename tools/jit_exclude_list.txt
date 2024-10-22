@@ -1,7 +1,0 @@
-i16x8_relaxed_q15mulr_s.wast
-i32x4_relaxed_trunc.wast
-i8x16_relaxed_swizzle.wast
-relaxed_dot_product.wast
-relaxed_laneselect.wast
-relaxed_madd_nmadd.wast
-relaxed_min_max.wast

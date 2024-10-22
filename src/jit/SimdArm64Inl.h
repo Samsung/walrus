@@ -1192,11 +1192,11 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
 
 static void simdEmitDotAdd(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, sljit_s32 ro)
 {
-    sljit_s32 tmpReg1 = SLJIT_TMP_FR0;
+    sljit_s32 tmpReg = SLJIT_TMP_DEST_FREG;
 
-    simdEmitDot(compiler, SimdOp::H8, tmpReg1, rn, rm);
-    simdEmitOp(compiler, SimdOp::saddlp | SimdOp::H8, tmpReg1, tmpReg1, 0);
-    simdEmitOp(compiler, SimdOp::add | SimdOp::S4, rd, ro, tmpReg1);
+    simdEmitDot(compiler, SimdOp::H8, tmpReg, rn, rm);
+    simdEmitOp(compiler, SimdOp::saddlp | SimdOp::H8, tmpReg, tmpReg, 0);
+    simdEmitOp(compiler, SimdOp::add | SimdOp::S4, rd, ro, tmpReg);
 }
 
 static void emitTernarySIMD(sljit_compiler* compiler, Instruction* instr)
