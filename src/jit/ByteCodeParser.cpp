@@ -1649,14 +1649,14 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F64X2LeOpcode:
         case ByteCode::V128AndOpcode:
         case ByteCode::V128OrOpcode:
-        case ByteCode::V128XorOpcode:
-        case ByteCode::I8X16RelaxedSwizzleOpcode: {
+        case ByteCode::V128XorOpcode: {
             group = Instruction::BinarySIMD;
             paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTOp2V128;
             break;
         }
-        case ByteCode::I8X16SwizzleOpcode: {
+        case ByteCode::I8X16SwizzleOpcode:
+        case ByteCode::I8X16RelaxedSwizzleOpcode: {
             group = Instruction::BinarySIMD;
             paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTSwizzleV128;
