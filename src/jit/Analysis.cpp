@@ -96,10 +96,13 @@ void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excl
            && maxDistance[dependencyStart / size] <= id);
 
     for (auto it : param) {
-        VariableRef ref = variableList->variables.size();
+        if (variableList != nullptr) {
+            // Construct new variables.
+            VariableRef ref = variableList->variables.size();
 
-        dependencies[dependencyStart + offset].insert(VARIABLE_SET(ref, Variable));
-        variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(offset, Instruction::Offset), 0, id));
+            dependencies[dependencyStart + offset].insert(VARIABLE_SET(ref, Variable));
+            variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(offset, Instruction::Offset), 0, id));
+        }
 
         offset += STACK_OFFSET(valueStackAllocatedSize(it));
     }
@@ -287,6 +290,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
     size_t nextId = 0;
     size_t nextTryBlock = m_tryBlockStart;
 
+    // Create variables for each result or external values.
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         item->m_id = ++nextId;
 
@@ -322,6 +326,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
     DependencyGenContext dependencyCtx(dependencySize, requiredStackSize);
     bool updateDeps = true;
+    std::vector<size_t> activeTryBlocks;
 
     m_variableList = new VariableList(variableCount, requiredStackSize);
     nextTryBlock = m_tryBlockStart;
@@ -365,9 +370,14 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                         }
                     }
 
+                    activeTryBlocks.push_back(nextTryBlock);
                     nextTryBlock++;
                 } while (nextTryBlock < tryBlocks().size()
                          && tryBlocks()[nextTryBlock].start == label);
+            }
+
+            if (label->info() & Label::kHasCatchInfo) {
+                activeTryBlocks.pop_back();
             }
 
             for (size_t i = 0; i < requiredStackSize; ++i) {
@@ -424,7 +434,28 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             continue;
         }
 
-        if (instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::UnreachableOpcode) {
+        if (activeTryBlocks.size() > 0 && (instr->group() == Instruction::Call || instr->opcode() == ByteCode::ThrowOpcode)) {
+            // Every call or throw may jump to any active catch block. Future
+            // optimizations could reduce these (e.g. a throw can be converted
+            // to a jump if its target catch block is in the same function).
+            for (auto blockIt : activeTryBlocks) {
+                for (auto it : tryBlocks()[blockIt].catchBlocks) {
+                    if (it.tagIndex == std::numeric_limits<uint32_t>::max()) {
+                        dependencyCtx.update(it.u.handler->m_dependencyStart, instr->id());
+                    } else {
+                        TagType* tagType = module()->tagType(it.tagIndex);
+                        const ValueTypeVector& param = module()->functionType(tagType->sigIndex())->param();
+                        Label* catchLabel = it.u.handler;
+
+                        dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
+                                             STACK_OFFSET(it.stackSizeToBe), param, nullptr);
+                    }
+                }
+            }
+        }
+
+        if (instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::UnreachableOpcode
+            || instr->opcode() == ByteCode::EndOpcode) {
             updateDeps = false;
             continue;
         }
@@ -495,6 +526,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
     }
 
     ASSERT(variableCount == m_variableList->variables.size());
+    ASSERT(activeTryBlocks.size() == 0);
 
     // Phase 2: the indirect instruction
     // references are computed for labels.
