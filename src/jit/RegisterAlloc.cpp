@@ -298,13 +298,15 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
     size_t freeReg = VariableList::kUnusedReg;
     uint16_t constraints = variable != nullptr ? variable->info : 0;
     size_t size = m_registers.size();
-    size_t i = 0;
+    size_t minIndex = 0;
 
     if (constraints & VariableList::kIsCallback) {
-        i = m_savedStartIndex;
+        minIndex = m_savedStartIndex;
     } else if ((constraints & VariableList::kDestroysR0R1) && (m_regStatus & kIsInteger)) {
-        i = 2;
+        minIndex = 2;
     }
+
+    size_t i = minIndex;
 
     while (i < size) {
         if (m_registers[i].rangeEnd == kUnassignedReg) {
@@ -317,7 +319,8 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
             VariableList::Variable* targetVariable = m_registers[i].variable;
 
             if (targetVariable->reg1 != targetVariable->reg2) {
-                if (targetVariable->rangeEnd > maxRangeEndPair) {
+                if (targetVariable->reg1 >= minIndex && targetVariable->reg2 >= minIndex
+                    && targetVariable->rangeEnd > maxRangeEndPair) {
                     maxRangeEndPair = targetVariable->rangeEnd;
                     maxRangeIndexPair = i;
                 }
