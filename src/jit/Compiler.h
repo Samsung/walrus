@@ -718,6 +718,7 @@ public:
 #endif
 
     static const uint32_t kHasCondMov = 1 << 0;
+    static const uint32_t kHasShortAtomic = 1 << 1;
 
     JITCompiler(Module* module, uint32_t JITFlags);
 

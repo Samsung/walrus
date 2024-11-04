@@ -1057,6 +1057,10 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             ASSERT(m_context.trapBlocksStart == 0);
             m_context.trapBlocksStart = 1;
         }
+
+        if (sljit_emit_atomic_load(m_compiler, SLJIT_MOV_U16 | SLJIT_ATOMIC_TEST, SLJIT_R0, SLJIT_R1) != SLJIT_ERR_UNSUPPORTED) {
+            m_options |= JITCompiler::kHasShortAtomic;
+        }
     }
 
 #ifdef WALRUS_JITPERF
