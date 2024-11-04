@@ -230,13 +230,17 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
-#define OPERAND_TYPE_LIST_EXTENDED                                                   \
-    OL5(OTAtomicRmwI32, /* SSDTT */ I32, I32, I32 | TMP, PTR, I32 | S1)              \
-    OL5(OTAtomicRmwI64, /* SSDTT */ I32, I64, I64 | TMP, PTR, I64 | S1)              \
-    OL6(OTAtomicRmwCmpxchgI32, /* SSSDTT */ I32, I32, I32, I32 | TMP, PTR, I32 | S1) \
-    OL6(OTAtomicRmwCmpxchgI64, /* SSSDTT */ I32, I64, I64, I64 | TMP, PTR, I64 | S1) \
-    OL6(OTAtomicWaitI32, /* SSSDTT */ I32, I32, I64, I32, PTR, I32 | S0)             \
-    OL6(OTAtomicWaitI64, /* SSSDTT */ I32, I64, I64, I32, PTR, I64 | S0)             \
+#define OPERAND_TYPE_LIST_EXTENDED                                                        \
+    OL5(OTAtomicRmwI32, /* SSDTT */ I32, I32, I32 | TMP, PTR, I32 | S1)                   \
+    OL6(OTAtomicRmwShort32, /* SSDTTT */ I32, I32, I32 | TMP, PTR, I32, I32)              \
+    OL5(OTAtomicRmwI64, /* SSDTT */ I32, I64, I64 | TMP, PTR, I64)                        \
+    OL6(OTAtomicRmwShort64, /* SSDTTT */ I32, I64, I64 | TMP, PTR, I64, I64)              \
+    OL6(OTAtomicRmwCmpxchgI32, /* SSSDTT */ I32, I32, I32, I32 | TMP, PTR, I32 | S1)      \
+    OL7(OTAtomicRmwCmpxchgShort32, /* SSSDTTT */ I32, I32, I32, I32 | TMP, PTR, I32, I32) \
+    OL6(OTAtomicRmwCmpxchgI64, /* SSSDTT */ I32, I64, I64, I64 | TMP, PTR, I64 | S1)      \
+    OL7(OTAtomicRmwCmpxchgShort64, /* SSSDTTT */ I32, I64, I64, I64 | TMP, PTR, I64, I64) \
+    OL6(OTAtomicWaitI32, /* SSSDTT */ I32, I32, I64, I32, PTR, I32 | S0)                  \
+    OL6(OTAtomicWaitI64, /* SSSDTT */ I32, I64, I64, I32, PTR, I64 | S0)                  \
     OL5(OTAtomicNotify, /* SSDTT */ I32, I32, I32, PTR, I32 | S0)
 
 #define OPERAND_TYPE_LIST_SIMD                                                       \
@@ -333,6 +337,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     o1, o2, o3, o4, o5, 0,
 #define OL6(name, o1, o2, o3, o4, o5, o6) \
     o1, o2, o3, o4, o5, o6, 0,
+#define OL7(name, o1, o2, o3, o4, o5, o6, o7) \
+    o1, o2, o3, o4, o5, o6, o7, 0,
 
 const uint8_t Instruction::m_operandDescriptors[] = {
     0,
@@ -347,6 +353,7 @@ const uint8_t Instruction::m_operandDescriptors[] = {
 #undef OL4
 #undef OL5
 #undef OL6
+#undef OL7
 
 // Besides the list names, these macros define enum
 // types with ByteN suffix. These are unused.
@@ -363,6 +370,8 @@ const uint8_t Instruction::m_operandDescriptors[] = {
     name, name##Byte1, name##Byte2, name##Byte3, name##Byte4, name##Byte5,
 #define OL6(name, o1, o2, o3, o4, o5, o6) \
     name, name##Byte1, name##Byte2, name##Byte3, name##Byte4, name##Byte5, name##Byte6,
+#define OL7(name, o1, o2, o3, o4, o5, o6, o7) \
+    name, name##Byte1, name##Byte2, name##Byte3, name##Byte4, name##Byte5, name##Byte6, name##Byte7,
 
 enum OperandTypes : uint32_t {
     OTNone,
@@ -379,6 +388,7 @@ enum OperandTypes : uint32_t {
 #undef OL4
 #undef OL5
 #undef OL6
+#undef OL7
 
 enum ParamTypes {
     NoParam,
@@ -1907,26 +1917,33 @@ static void compileFunction(JITCompiler* compiler)
             }
             break;
         }
-        case ByteCode::I32AtomicRmwAddOpcode:
         case ByteCode::I32AtomicRmw8AddUOpcode:
         case ByteCode::I32AtomicRmw16AddUOpcode:
-        case ByteCode::I32AtomicRmwSubOpcode:
         case ByteCode::I32AtomicRmw8SubUOpcode:
         case ByteCode::I32AtomicRmw16SubUOpcode:
-        case ByteCode::I32AtomicRmwAndOpcode:
         case ByteCode::I32AtomicRmw8AndUOpcode:
         case ByteCode::I32AtomicRmw16AndUOpcode:
-        case ByteCode::I32AtomicRmwOrOpcode:
         case ByteCode::I32AtomicRmw8OrUOpcode:
         case ByteCode::I32AtomicRmw16OrUOpcode:
-        case ByteCode::I32AtomicRmwXorOpcode:
         case ByteCode::I32AtomicRmw8XorUOpcode:
         case ByteCode::I32AtomicRmw16XorUOpcode:
-        case ByteCode::I32AtomicRmwXchgOpcode:
         case ByteCode::I32AtomicRmw8XchgUOpcode:
         case ByteCode::I32AtomicRmw16XchgUOpcode: {
+            if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
+                requiredInit = OTAtomicRmwShort32;
+            }
+            FALLTHROUGH;
+        }
+        case ByteCode::I32AtomicRmwAddOpcode:
+        case ByteCode::I32AtomicRmwSubOpcode:
+        case ByteCode::I32AtomicRmwAndOpcode:
+        case ByteCode::I32AtomicRmwOrOpcode:
+        case ByteCode::I32AtomicRmwXorOpcode:
+        case ByteCode::I32AtomicRmwXchgOpcode: {
             info = Instruction::kIs32Bit;
-            requiredInit = OTAtomicRmwI32;
+            if (requiredInit == OTNone) {
+                requiredInit = OTAtomicRmwI32;
+            }
             FALLTHROUGH;
         }
         case ByteCode::I64AtomicRmwAddOpcode:
@@ -1945,21 +1962,28 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I64AtomicRmw8AddUOpcode:
         case ByteCode::I64AtomicRmw16AddUOpcode:
-        case ByteCode::I64AtomicRmw32AddUOpcode:
         case ByteCode::I64AtomicRmw8SubUOpcode:
         case ByteCode::I64AtomicRmw16SubUOpcode:
-        case ByteCode::I64AtomicRmw32SubUOpcode:
         case ByteCode::I64AtomicRmw8AndUOpcode:
         case ByteCode::I64AtomicRmw16AndUOpcode:
-        case ByteCode::I64AtomicRmw32AndUOpcode:
         case ByteCode::I64AtomicRmw8OrUOpcode:
         case ByteCode::I64AtomicRmw16OrUOpcode:
-        case ByteCode::I64AtomicRmw32OrUOpcode:
         case ByteCode::I64AtomicRmw8XorUOpcode:
         case ByteCode::I64AtomicRmw16XorUOpcode:
-        case ByteCode::I64AtomicRmw32XorUOpcode:
         case ByteCode::I64AtomicRmw8XchgUOpcode:
-        case ByteCode::I64AtomicRmw16XchgUOpcode:
+        case ByteCode::I64AtomicRmw16XchgUOpcode: {
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+            if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
+                requiredInit = OTAtomicRmwShort64;
+            }
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+            FALLTHROUGH;
+        }
+        case ByteCode::I64AtomicRmw32AddUOpcode:
+        case ByteCode::I64AtomicRmw32SubUOpcode:
+        case ByteCode::I64AtomicRmw32AndUOpcode:
+        case ByteCode::I64AtomicRmw32OrUOpcode:
+        case ByteCode::I64AtomicRmw32XorUOpcode:
         case ByteCode::I64AtomicRmw32XchgUOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Atomic, opcode, 2, 1);
             instr->addInfo(info);
@@ -1973,11 +1997,18 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(atomicRmw->dstOffset());
             break;
         }
-        case ByteCode::I32AtomicRmwCmpxchgOpcode:
         case ByteCode::I32AtomicRmw8CmpxchgUOpcode:
         case ByteCode::I32AtomicRmw16CmpxchgUOpcode: {
+            if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
+                requiredInit = OTAtomicRmwCmpxchgShort32;
+            }
+            FALLTHROUGH;
+        }
+        case ByteCode::I32AtomicRmwCmpxchgOpcode: {
             info = Instruction::kIs32Bit;
-            requiredInit = OTAtomicRmwCmpxchgI32;
+            if (requiredInit == OTNone) {
+                requiredInit = OTAtomicRmwCmpxchgI32;
+            }
             FALLTHROUGH;
         }
         case ByteCode::I64AtomicRmwCmpxchgOpcode: {
@@ -1990,7 +2021,14 @@ static void compileFunction(JITCompiler* compiler)
             FALLTHROUGH;
         }
         case ByteCode::I64AtomicRmw8CmpxchgUOpcode:
-        case ByteCode::I64AtomicRmw16CmpxchgUOpcode:
+        case ByteCode::I64AtomicRmw16CmpxchgUOpcode: {
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+            if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
+                requiredInit = OTAtomicRmwCmpxchgShort64;
+            }
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+            FALLTHROUGH;
+        }
         case ByteCode::I64AtomicRmw32CmpxchgUOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Atomic, opcode, 3, 1);
             instr->addInfo(info);
