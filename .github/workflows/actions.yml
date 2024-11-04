@@ -236,6 +236,36 @@ jobs:
           python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
           python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
+  build-test-on-riscv64:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Build in riscv64 container
+      uses: uraimo/run-on-arch-action@v2.8.1
+      with:
+        arch: riscv64
+        distro: ubuntu22.04
+
+        # Install deps into the container. With the token, the container will be cached
+        # The image is cached publically like a package
+        githubToken: ${{ github.token }}
+
+        install: |
+          apt-get update
+          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
+        run: |
+          # TODO enable JIT for RISC-V
+          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_JIT=OFF -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_JIT=OFF -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+          ninja -Cout/release
+          ninja -Cout/pure
+          python3 ./tools/run-tests.py --engine="./out/release/walrus"
+          #python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
+          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+          #python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+
   test-on-windows-x86-x64:
     runs-on: windows-2022
     strategy:
