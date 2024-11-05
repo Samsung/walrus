@@ -56,9 +56,13 @@ private:
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
         ByteCodeStackOffset* resultOffsets;
 
+#if defined(WALRUS_ENABLE_JIT)
         if (moduleFunction->jitFunction() != nullptr) {
             resultOffsets = moduleFunction->jitFunction()->call(newState, function->instance(), functionStackBase);
         } else if (considerException) {
+#else
+        if (considerException) {
+#endif
             while (true) {
                 try {
                     resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());

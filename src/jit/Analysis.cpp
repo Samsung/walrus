@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#if defined(WALRUS_ENABLE_JIT)
+
 #include "Walrus.h"
-
 #include "jit/Compiler.h"
-
 #include <set>
 
 namespace Walrus {
@@ -780,3 +780,5 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 }
 
 } // namespace Walrus
+
+#endif // WALRUS_ENABLE_JIT

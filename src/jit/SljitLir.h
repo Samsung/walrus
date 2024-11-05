@@ -17,6 +17,8 @@
 #ifndef __WalrusSljitLir__
 #define __WalrusSljitLir__
 
+#if defined(WALRUS_ENABLE_JIT)
+
 // Setup the configuration
 #define SLJIT_CONFIG_AUTO 1
 #define SLJIT_CONFIG_STATIC 1
@@ -32,4 +34,5 @@ extern "C" {
 #include "../../third_party/sljit/sljit_src/sljitLir.h"
 }
 
+#endif // WALRUS_ENABLE_JIT
 #endif // __WalrusSljitLir__

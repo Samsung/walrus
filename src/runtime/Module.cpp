@@ -36,7 +36,9 @@ ModuleFunction::ModuleFunction(FunctionType* functionType)
     : m_hasTryCatch(false)
     , m_requiredStackSize(std::max(functionType->paramStackSize(), functionType->resultStackSize()))
     , m_functionType(functionType)
+#if defined(WALRUS_ENABLE_JIT)
     , m_jitFunction(nullptr)
+#endif
 {
 }
 
@@ -55,16 +57,20 @@ Module::Module(Store* store, WASMParsingResult& result)
     , m_tableTypes(std::move(result.m_tableTypes))
     , m_memoryTypes(std::move(result.m_memoryTypes))
     , m_tagTypes(std::move(result.m_tagTypes))
+#if defined(WALRUS_ENABLE_JIT)
     , m_jitModule(nullptr)
+#endif
 {
     store->appendModule(this);
 }
 
 ModuleFunction::~ModuleFunction()
 {
+#if defined(WALRUS_ENABLE_JIT)
     if (m_jitFunction != nullptr) {
         delete m_jitFunction;
     }
+#endif
 }
 
 Module::~Module()
@@ -109,9 +115,11 @@ Module::~Module()
         delete m_tagTypes[i];
     }
 
+#if defined(WALRUS_ENABLE_JIT)
     if (m_jitModule != nullptr) {
         delete m_jitModule;
     }
+#endif
 }
 
 Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports)
