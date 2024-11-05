@@ -448,13 +448,22 @@ void ModuleFunction::dumpByteCode()
     printf("required stack size: %u bytes\n", m_requiredStackSize);
     printf("stack: [");
     size_t pos = 0;
-    for (size_t i = 0; i < m_functionType->param().size(); i++) {
+    size_t i = 0;
+    for (; i < m_functionType->param().size(); i++) {
         printf("(parameter %zu, %s, pos %zu) ", i, typeName(m_functionType->param()[i]), pos);
         pos += valueStackAllocatedSize(m_functionType->param()[i]);
     }
-    for (size_t i = 0; i < m_local.size(); i++) {
-        printf("(local %zu, %s, pos %zu) ", i, typeName(m_local[i]), m_localDebugData[i]);
+    for (; i < m_local.size(); i++) {
+        printf("\n(local %zu, %s, pos %zu ", i, typeName(m_local[i]), m_localDebugData[i].stackPosition);
+        printf("range");
+        if (m_localDebugData[i].start != SIZE_MAX) {
+            printf(" start %zu, end %zu", m_localDebugData[i].start, m_localDebugData[i].end);
+        } else {
+            printf(" unused");
+        }
+        printf(")");
     }
+    printf("\n");
     for (size_t i = 0; i < m_constantDebugData.size(); i++) {
         printf("(constant ");
         dumpValue(m_constantDebugData[i].first);
@@ -463,6 +472,7 @@ void ModuleFunction::dumpByteCode()
     printf("....]\n");
 
     printf("bytecode size: %zu bytes\n", m_byteCode.size());
+
     printf("\n");
 
     size_t idx = 0;
