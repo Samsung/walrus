@@ -36,11 +36,19 @@ IF (${WALRUS_OUTPUT} STREQUAL "shared_lib" AND ${WALRUS_HOST} STREQUAL "android"
     SET (WALRUS_LDFLAGS ${WALRUS_LDFLAGS} -shared)
 ENDIF()
 
+IF (NOT DEFINED WALRUS_JIT)
+    SET (WALRUS_JIT ON)
+ENDIF()
+
 #######################################################
 # FLAGS FOR ADDITIONAL FUNCTION
 #######################################################
 SET (WALRUS_LIBRARIES)
 SET (WALRUS_INCDIRS)
+
+IF (WALRUS_JIT)
+    SET (WALRUS_DEFINITIONS ${WALRUS_DEFINITIONS} -DWALRUS_ENABLE_JIT)
+ENDIF()
 
 #######################################################
 # FLAGS FOR TEST

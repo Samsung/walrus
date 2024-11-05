@@ -233,6 +233,7 @@ public:
         return m_catchInfo;
     }
 
+#if defined(WALRUS_ENABLE_JIT)
     void setJITFunction(JITFunction* jitFunction)
     {
         ASSERT(m_jitFunction == nullptr);
@@ -243,6 +244,7 @@ public:
     {
         return m_jitFunction;
     }
+#endif
 
 private:
     bool m_hasTryCatch;
@@ -255,7 +257,9 @@ private:
     Vector<std::pair<Value, size_t>, std::allocator<std::pair<Value, size_t>>> m_constantDebugData;
 #endif
     Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
+#if defined(WALRUS_ENABLE_JIT)
     JITFunction* m_jitFunction;
+#endif
 };
 
 class Data {
@@ -449,8 +453,10 @@ public:
 
     Instance* instantiate(ExecutionState& state, const ExternVector& imports);
 
+#if defined(WALRUS_ENABLE_JIT)
     /* Passing 0 as functionsLength compiles all functions. */
     void jitCompile(ModuleFunction** functions, size_t functionsLength, uint32_t JITFlags);
+#endif
 
 private:
     Store* m_store;
@@ -471,7 +477,9 @@ private:
     TableTypeVector m_tableTypes;
     MemoryTypeVector m_memoryTypes;
     TagTypeVector m_tagTypes;
+#if defined(WALRUS_ENABLE_JIT)
     JITModule* m_jitModule;
+#endif
 };
 
 } // namespace Walrus

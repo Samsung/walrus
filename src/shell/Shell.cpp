@@ -1052,6 +1052,7 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
                     ++i;
                     options.exportToRun = argv[i];
                     continue;
+#if defined(WALRUS_ENABLE_JIT)
                 } else if (strcmp(argv[i], "--jit") == 0) {
                     s_JITFlags |= JITFlagValue::useJIT;
                     continue;
@@ -1064,9 +1065,8 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
                 } else if (strcmp(argv[i], "--jit-no-reg-alloc") == 0) {
                     s_JITFlags |= JITFlagValue::disableRegAlloc;
                     continue;
-                }
-
-                else if (strcmp(argv[i], "--env") == 0) {
+#endif
+                } else if (strcmp(argv[i], "--env") == 0) {
                     if (i + 1 == argc || argv[i + 1][0] == '-') {
                         fprintf(stderr, "error: --env requires an argument\n");
                         exit(1);

@@ -17,6 +17,8 @@
 #ifndef __WalrusJITCompiler__
 #define __WalrusJITCompiler__
 
+#if defined(WALRUS_ENABLE_JIT)
+
 #include "interpreter/ByteCode.h"
 #include "jit/SljitLir.h"
 #include "runtime/Module.h"
@@ -841,4 +843,5 @@ private:
 
 } // namespace Walrus
 
+#endif // WALRUS_ENABLE_JIT
 #endif // __WalrusJITCompiler__

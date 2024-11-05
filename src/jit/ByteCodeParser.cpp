@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#if defined(WALRUS_ENABLE_JIT)
+
 #include "Walrus.h"
 
 #include "jit/Compiler.h"
@@ -2259,3 +2261,5 @@ void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, uint
 }
 
 } // namespace Walrus
+
+#endif // WALRUS_ENABLE_JIT

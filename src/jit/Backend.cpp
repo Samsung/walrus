@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#if defined(WALRUS_ENABLE_JIT)
+
 #include "Walrus.h"
 
 #include "runtime/Global.h"
@@ -1682,3 +1684,5 @@ void JITCompiler::emitEpilog()
 }
 
 } // namespace Walrus
+
+#endif // WALRUS_ENABLE_JIT

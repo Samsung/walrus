@@ -2737,9 +2737,11 @@ std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, 
     }
 
     Module* module = new Module(store, delegate.parsingResult());
+#if defined(WALRUS_ENABLE_JIT)
     if (JITFlags & JITFlagValue::useJIT) {
         module->jitCompile(nullptr, 0, JITFlags);
     }
+#endif
 
     return std::make_pair(module, std::string());
 }
