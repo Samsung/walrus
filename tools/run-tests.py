@@ -19,6 +19,7 @@ from __future__ import print_function
 import os
 import traceback
 import sys
+import json
 import time
 import re
 import fnmatch
@@ -171,11 +172,54 @@ def run_extended_tests(engine):
     if fail_total > 0:
         raise Exception("wasm-test-extended failed")
 
+@runner('wamr', default=False)
+def run_extended_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr')
+
+
+    wamr_test_run_config = json.load(open(join(TEST_DIR, 'regression/running_config.json')))
+
+    test_list_pass = []
+    test_list_fail = []
+
+    for test_case in wamr_test_run_config['test cases']:
+        if test_case['deprecated']:
+            continue
+
+        test_paths = sum(
+            [glob(join(TEST_DIR, 'regression', f'issue-{id}', '*.wasm'), recursive=False) for id in test_case['ids']],
+            [])
+
+        if not test_paths:
+            test_paths = sum(
+                [glob(join(TEST_DIR, 'regression', f'issue-{id}', f"{test_case['file']}"), recursive=False) for id in
+                 test_case['ids']],
+                [])
+
+        if ('expected return' not in test_case and test_case['compile_options']['expected return']['ret code'] == 0) \
+                or test_case['expected return']['ret code'] == 0:
+            test_list_pass.extend(test_paths)
+        else:
+            test_list_fail.extend(test_paths)
+
+    print('Running wamr tests:')
+    result = _run_wast_tests(engine, test_list_pass, False)
+    result += _run_wast_tests(engine, test_list_fail, True)
+
+    tests_total = len(test_list_pass) + len(test_list_fail)
+    fail_total = result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wasm-test-extended failed")
+
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
                         help='path to the engine to be tested (default: %(default)s)')
-    parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
+    parser.add_argument('--suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
     parser.add_argument('--jit', action='store_true', help='test with JIT')
     args = parser.parse_args()
