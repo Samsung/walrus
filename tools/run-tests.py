@@ -83,6 +83,29 @@ def _run_wast_tests(engine, files, is_fail):
 
     return fails
 
+def _run_malformed_tests(engine, files):
+    fails = 0
+    for file in files:
+        if jit:
+            filename = os.path.basename(file) 
+            if filename in JIT_EXCLUDE_FILES:
+                continue
+
+        proc = Popen([engine, "--mapdirs", "./test/wasi", "/var", file], stdout=PIPE, stderr=PIPE) if not jit else Popen([engine, "--mapdirs", "./test/wasi", "/var", "--jit", file], stdout=PIPE, stderr=PIPE)
+        out, err = proc.communicate()
+
+        # These tests need to fail. Walrus returns 255 and wabt returns SIGABRT.
+        if proc.returncode in [255, -6]:
+            print('%sOK: %s%s' % (COLOR_GREEN, file, COLOR_RESET))
+        else:
+            print('%sFAIL(%d): %s%s' % (COLOR_RED, proc.returncode, file, COLOR_RESET))
+            print(out)
+            print(err)
+
+            fails += 1
+
+    return fails
+
 
 @runner('basic-tests', default=True)
 def run_basic_tests(engine):
@@ -242,11 +265,63 @@ def run_wamr_unit_tests(engine):
     if fail_total > 0:
         raise Exception("wamr unit failed")
 
+@runner("wamr-malformed", default=True)
+def run_malformed_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr', 'malformed')
+
+    print('Running wamr-malformed tests:')
+    xpass = glob(join(TEST_DIR, '**/*.wasm'))
+    xpass_result = _run_malformed_tests(engine, xpass)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wamr malformed tests failed")
+
+@runner('wamr-proposal', default=True)
+def run_extended_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr', 'proposal_features')
+
+    print('Running wamr proposal_features tests:')
+    xpass = glob(join(TEST_DIR, '**/*.wast'), recursive=True)
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wamr proposal_features failed")
+
+@runner('wamr-standalone', default=True)
+def run_extended_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr', 'standalone')
+
+    print('Running wamr standalone tests:')
+    xpass = glob(join(TEST_DIR, '**/*.wasm'), recursive=True)
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wamr standalone tests failed")
+
+
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
                         help='path to the engine to be tested (default: %(default)s)')
-    parser.add_argument('--suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
+    parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
     parser.add_argument('--jit', action='store_true', help='test with JIT')
     args = parser.parse_args()
