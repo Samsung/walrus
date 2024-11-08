@@ -172,11 +172,18 @@ def run_extended_tests(engine):
     if fail_total > 0:
         raise Exception("wasm-test-extended failed")
 
-@runner('wamr-regression', default=True)
+@runner('wamr-regression', default=True)$
 def run_wamr_regression_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr', 'regression')
 
     wamr_test_run_config = json.load(open(join(TEST_DIR, 'running_config.json')))
+=======
+@runner('wamr', default=False)
+def run_extended_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr')
+
+
+    wamr_test_run_config = json.load(open(join(TEST_DIR, 'regression/running_config.json')))
 
     test_list_pass = []
     test_list_fail = []
@@ -186,12 +193,12 @@ def run_wamr_regression_tests(engine):
             continue
 
         test_paths = sum(
-            [glob(join(TEST_DIR, f'issue-{id}', '*.wasm'), recursive=False) for id in test_case['ids']],
+            [glob(join(TEST_DIR, 'regression', f'issue-{id}', '*.wasm'), recursive=False) for id in test_case['ids']],
             [])
 
         if not test_paths:
             test_paths = sum(
-                [glob(join(TEST_DIR, f'issue-{id}', f"{test_case['file']}"), recursive=False) for id in
+                [glob(join(TEST_DIR, 'regression', f'issue-{id}', f"{test_case['file']}"), recursive=False) for id in
                  test_case['ids']],
                 [])
 
