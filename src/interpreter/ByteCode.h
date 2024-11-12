@@ -1147,13 +1147,13 @@ public:
         size_t c = 0;
         auto arr = stackOffsets();
         printf("paramOffsets: ");
-        for (size_t i = 0; i < m_functionType->param().size(); i++) {
+        for (size_t i = 0; i < m_parameterOffsetsSize; i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
         printf(" ");
 
         printf("resultOffsets: ");
-        for (size_t i = 0; i < m_functionType->result().size(); i++) {
+        for (size_t i = 0; i < m_resultOffsetsSize; i++) {
             printf("%" PRIu32 " ", (uint32_t)arr[c++]);
         }
     }
