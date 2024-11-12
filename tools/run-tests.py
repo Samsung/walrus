@@ -19,6 +19,7 @@ from __future__ import print_function
 import os
 import traceback
 import sys
+import json
 import time
 import re
 import fnmatch
@@ -29,7 +30,7 @@ from glob import glob
 from os.path import abspath, basename, dirname, join, relpath
 from shutil import copy
 from subprocess import PIPE, Popen
-
+from unittest import TextTestRunner
 
 PROJECT_SOURCE_DIR = dirname(dirname(abspath(__file__)))
 DEFAULT_WALRUS = join(PROJECT_SOURCE_DIR, 'walrus')
@@ -171,11 +172,74 @@ def run_extended_tests(engine):
     if fail_total > 0:
         raise Exception("wasm-test-extended failed")
 
+@runner('wamr-regression', default=True)
+def run_wamr_regression_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr', 'regression')
+
+    wamr_test_run_config = json.load(open(join(TEST_DIR, 'running_config.json')))
+
+    test_list_pass = []
+    test_list_fail = []
+
+    for test_case in wamr_test_run_config['test cases']:
+        if test_case['deprecated']:
+            continue
+
+        test_paths = sum(
+            [glob(join(TEST_DIR, f'issue-{id}', '*.wasm'), recursive=False) for id in test_case['ids']],
+            [])
+
+        if not test_paths:
+            test_paths = sum(
+                [glob(join(TEST_DIR, f'issue-{id}', f"{test_case['file']}"), recursive=False) for id in
+                 test_case['ids']],
+                [])
+
+        if ('expected return' not in test_case and test_case['compile_options']['expected return']['ret code'] == 0) \
+                or test_case['expected return']['ret code'] == 0:
+            test_list_pass.extend(test_paths)
+        else:
+            test_list_fail.extend(test_paths)
+
+    print('Running wamr regression tests:')
+    result = _run_wast_tests(engine, test_list_pass, False)
+    result += _run_wast_tests(engine, test_list_fail, True)
+
+    tests_total = len(test_list_pass) + len(test_list_fail)
+    fail_total = result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wamr regression failed")
+
+@runner('wamr-unit', default=True)
+def run_wamr_unit_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr', 'unit')
+
+    print('Running wamr-unit tests:')
+    xfail = [filename for filename in glob(join(TEST_DIR, 'linear-memory-wasm/*.wast'), recursive=False) if
+             ";; Should report an error." in open(filename).read()]
+    xfail.extend([filename for filename in glob(join(TEST_DIR, 'memory64/*exceed*.wat'), recursive=False)])
+    xpass = [filename for filename in glob(join(TEST_DIR, '**/*.wa*t'), recursive=True) if filename not in xfail]
+    xpass_result = _run_wast_tests(engine, xpass, False)
+    xpass_result += _run_wast_tests(engine, xfail, True)
+
+    tests_total = len(xpass) + len(xfail)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wamr unit failed")
+
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
                         help='path to the engine to be tested (default: %(default)s)')
-    parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
+    parser.add_argument('--suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
     parser.add_argument('--jit', action='store_true', help='test with JIT')
     args = parser.parse_args()
