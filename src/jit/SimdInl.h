@@ -215,6 +215,11 @@ static void emitSplatSIMD(sljit_compiler* compiler, Instruction* instr)
     default:
         ASSERT(instr->opcode() == ByteCode::F64X2SplatOpcode);
         type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        if (JITArg::isImm(operands)) {
+            type = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
+        }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
         break;
     }
 
@@ -241,6 +246,11 @@ static void emitSplatSIMD(sljit_compiler* compiler, Instruction* instr)
     } else {
 #endif /* SLJIT_32BIT_ARCHITECTURE */
         args[0].set(operands);
+
+        if (SLJIT_IS_IMM(args[0].arg)) {
+            type &= ~SLJIT_SIMD_FLOAT;
+        }
+
         sljit_emit_simd_replicate(compiler, type, dstReg, args[0].arg, args[0].argw);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     }

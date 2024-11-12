@@ -71,6 +71,11 @@ struct JITArg {
 
     void set(Operand* operand);
 
+    static bool isImm(Operand* operand)
+    {
+        return VARIABLE_TYPE(*operand) == Instruction::ConstPtr;
+    }
+
     sljit_s32 arg;
     sljit_sw argw;
 };
