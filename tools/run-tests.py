@@ -195,12 +195,12 @@ def run_extended_tests(engine):
     if fail_total > 0:
         raise Exception("wasm-test-extended failed")
 
-@runner('wamr-regression', default=True)$
+@runner('wamr-regression', default=True)
 def run_wamr_regression_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr', 'regression')
 
     wamr_test_run_config = json.load(open(join(TEST_DIR, 'running_config.json')))
-=======
+
 @runner('wamr', default=False)
 def run_extended_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wamr')
