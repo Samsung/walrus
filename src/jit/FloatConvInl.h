@@ -311,6 +311,7 @@ static void emitConvertUnsigned32FromFloat(sljit_compiler* compiler, Instruction
     sljit_s32 sourceReg = GET_SOURCE_REG(srcArg.arg, instr->requiredReg(0));
     sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(1));
 
+    floatOperandToArg(compiler, operands, srcArg, sourceReg);
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
 
@@ -420,6 +421,7 @@ static void emitSaturatedConvertUnsigned32FromFloat(sljit_compiler* compiler, In
     sljit_s32 resultReg = GET_TARGET_REG(dstArg.arg, instr->requiredReg(1));
     sljit_s32 tmpFReg = SLJIT_TMP_DEST_FREG;
 
+    floatOperandToArg(compiler, operands, srcArg, sourceReg);
     MOVE_TO_FREG(compiler, SLJIT_MOV_F64 | (opcode & SLJIT_32), sourceReg, srcArg.arg, srcArg.argw);
     sljit_emit_fop1(compiler, opcode, resultReg, 0, sourceReg, 0);
 
