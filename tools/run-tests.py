@@ -65,7 +65,7 @@ def _run_wast_tests(engine, files, is_fail):
     fails = 0
     for file in files:
         if jit:
-            filename = os.path.basename(file) 
+            filename = os.path.basename(file)
             if filename in JIT_EXCLUDE_FILES:
                 continue
 
@@ -185,18 +185,18 @@ def run_extended_tests(engine):
             continue
 
         test_paths = sum(
-            [glob(join(TEST_DIR, 'regression', f'issue-{id}', '*.wasm'), recursive=False) for id in test_case['ids']],
-            [])
+                [glob(join(TEST_DIR, 'regression', f'issue-{id}', '*.wasm'), recursive=False) for id in test_case['ids']],
+                [])
 
         if not test_paths:
             test_paths = sum(
-                [glob(join(TEST_DIR, 'regression', f'issue-{id}', f"{test_case['file']}"), recursive=False) for id in
-                 test_case['ids']],
-                [])
+                    [glob(join(TEST_DIR, 'regression', f'issue-{id}', f"{test_case['file']}"), recursive=False) for id in
+                     test_case['ids']],
+                    [])
 
         if ('expected return' not in test_case and test_case['compile_options']['expected return']['ret code'] == 0) \
                 or test_case['expected return']['ret code'] == 0:
-            test_list_pass.extend(test_paths)
+                    test_list_pass.extend(test_paths)
         else:
             test_list_fail.extend(test_paths)
 
@@ -268,12 +268,12 @@ def run_wamr_compiler_tests(engine):
     if fail_total > 0:
         raise Exception("other wamr-compiler tests failed")
 
-@runner('dhrystone', default=True)
-def run_dhrystone_tests(engine):
-    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'programs', 'dhrystone')
+@runner('programs', default=True)
+def run_program_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'programs', 'executables')
 
-    print('Running dhrystone tests:')
-    xpass = glob(join(TEST_DIR, '**/*.wasm'), recursive=True)
+    print('Running program tests:')
+    xpass = glob(join(TEST_DIR, '*.wasm'), recursive=True)
     xpass_result = _run_wast_tests(engine, xpass, False)
 
     tests_total = len(xpass)
@@ -283,7 +283,7 @@ def run_dhrystone_tests(engine):
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
 
     if fail_total > 0:
-        raise Exception("dhrystone tests failed")
+        raise Exception("program tests failed")
 
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
