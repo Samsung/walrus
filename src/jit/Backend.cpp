@@ -844,6 +844,7 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
             type = instr->opcode() == ByteCode::F32ReinterpretI32Opcode ? Instruction::Int32Operand : Instruction::Int64Operand;
         }
         emitMove(compiler, type, src, dst);
+        return;
     }
 
     sljit_sw floatReg;
