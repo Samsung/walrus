@@ -43,7 +43,7 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isSh
     , m_targetBuffers(nullptr)
     , m_isShared(isShared)
 {
-    ASSERT(initialSizeInByte <= std::numeric_limits<size_t>::max());
+    RELEASE_ASSERT(initialSizeInByte <= std::numeric_limits<size_t>::max());
 #if defined(WALRUS_USE_MMAP)
     if (m_maximumSizeInByte) {
 #ifndef WALRUS_32_MEMORY_INITIAL_MMAP_RESERVED_ADDRESS_SIZE
@@ -58,7 +58,7 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isSh
 #else
             WALRUS_64_MEMORY_INITIAL_MMAP_RESERVED_ADDRESS_SIZE;
 #endif
-        m_reservedSizeInByte = std::min(initialReservedSize, m_maximumSizeInByte);
+        m_reservedSizeInByte = std::min(std::max(initialReservedSize, initialSizeInByte), m_maximumSizeInByte);
         m_buffer = reinterpret_cast<uint8_t*>(mmap(NULL, m_reservedSizeInByte, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
         RELEASE_ASSERT(MAP_FAILED != m_buffer);
         mprotect(m_buffer, initialSizeInByte, (PROT_READ | PROT_WRITE));
