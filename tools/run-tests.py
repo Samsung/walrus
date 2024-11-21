@@ -251,11 +251,45 @@ def run_extended_tests(engine):
     if fail_total > 0:
         raise Exception("other standalone tests failed")
 
+@runner('wamr-compiler', default=True)
+def run_wamr_compiler_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'other', 'wamr-compiler')
+
+    print('Running wamr-compiler tests:')
+    xpass = glob(join(TEST_DIR, '**/*.wat'), recursive=True)
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("other wamr-compiler tests failed")
+
+@runner('dhrystone', default=True)
+def run_dhrystone_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'programs', 'dhrystone')
+
+    print('Running dhrystone tests:')
+    xpass = glob(join(TEST_DIR, '**/*.wasm'), recursive=True)
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("dhrystone tests failed")
+
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
                         help='path to the engine to be tested (default: %(default)s)')
-    parser.add_argument('suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
+    parser.add_argument('--suite', metavar='SUITE', nargs='*', default=sorted(DEFAULT_RUNNERS),
                         help='test suite to run (%s; default: %s)' % (', '.join(sorted(RUNNERS.keys())), ' '.join(sorted(DEFAULT_RUNNERS))))
     parser.add_argument('--jit', action='store_true', help='test with JIT')
     args = parser.parse_args()
