@@ -57,7 +57,7 @@ jobs:
     - name: Install Packages
       run: |
         brew update
-        brew install cmake ninja pkg-config
+        brew install cmake ninja
     - name: Build arm64
       env:
         BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
