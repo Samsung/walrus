@@ -43,6 +43,10 @@ public:
     virtual void BeginModule(uint32_t version) = 0;
     virtual void EndModule() = 0;
 
+    virtual void OnFeatureCount(Index count) = 0;
+    // Returns false, if the feature is not supported.
+    virtual bool OnFeature(uint8_t prefix, std::string name) = 0;
+
     virtual void OnTypeCount(Index count) = 0;
     virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes) = 0;
 
