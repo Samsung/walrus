@@ -1259,19 +1259,16 @@ public:
 
     /* target_features section */
     Result BeginTargetFeaturesSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnFeatureCount(Index count) override {
-        abort();
+        m_externalDelegate->OnFeatureCount(count);
         return Result::Ok;
     }
     Result OnFeature(uint8_t prefix, nonstd::string_view name) override {
-        abort();
-        return Result::Ok;
+        return m_externalDelegate->OnFeature(prefix, std::string(name)) ? Result::Ok : Result::Error;
     }
     Result EndTargetFeaturesSection() override {
-        abort();
         return Result::Ok;
     }
 

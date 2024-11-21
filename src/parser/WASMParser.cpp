@@ -712,6 +712,13 @@ public:
 
     virtual void EndModule() override {}
 
+    virtual void OnFeatureCount(Index count) override {}
+
+    virtual bool OnFeature(uint8_t prefix, std::string name) override
+    {
+        return true;
+    }
+
     virtual void OnTypeCount(Index count) override
     {
         // TODO reserve vector if possible
