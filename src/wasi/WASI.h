@@ -38,6 +38,8 @@ public:
 #define FOR_EACH_WASI_FUNC(F)                      \
     F(proc_exit, I32R)                             \
     F(proc_raise, I32_RI32)                        \
+    F(clock_res_get, I32I32_RI32)                  \
+    F(clock_time_get, I32I64I32_RI32)              \
     F(random_get, I32I32_RI32)                     \
     F(fd_write, I32I32I32I32_RI32)                 \
     F(fd_read, I32I32I32I32_RI32)                  \
@@ -52,7 +54,7 @@ public:
     ERR(toobig, "argument list too long")                             \
     ERR(acces, "permission denied")                                   \
     ERR(addrinuse, "addres in use")                                   \
-    ERR(addrnotavauil, "addres not abailable")                        \
+    ERR(addrnotavauil, "addres not available")                        \
     ERR(afnosupport, "address family not supported")                  \
     ERR(again, "resource unavailable, or operation would block")      \
     ERR(already, "connection already in progress")                    \
@@ -152,6 +154,8 @@ private:
     // wasi functions
     static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void clock_res_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void clock_time_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_read(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_close(ExecutionState& state, Value* argv, Value* result, Instance* instance);
