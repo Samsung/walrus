@@ -44,6 +44,7 @@ public:
     F(fd_write, I32I32I32I32_RI32)                 \
     F(fd_read, I32I32I32I32_RI32)                  \
     F(fd_close, I32_RI32)                          \
+    F(fd_fdstat_get, I32I32_RI32)                  \
     F(fd_seek, I32I64I32I32_RI32)                  \
     F(path_open, I32I32I32I32I32I64I64I32I32_RI32) \
     F(environ_get, I32I32_RI32)                    \
@@ -159,6 +160,7 @@ private:
     static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_read(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_close(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void fd_fdstat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void path_open(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void environ_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
