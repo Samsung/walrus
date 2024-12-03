@@ -422,9 +422,19 @@ void JITCompiler::dump()
                         uint32_t savedEnd = SLJIT_S0;
 
                         if (variable.info & Instruction::FloatOperandMarker) {
-                            prefix = "F";
-                            savedStart = SLJIT_FR(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS);
-                            savedEnd = SLJIT_FS0;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+                            if ((variable.info & Instruction::TypeMask) == Instruction::V128Operand) {
+                                prefix = "V";
+                                savedStart = SLJIT_VR(SLJIT_NUMBER_OF_SCRATCH_VECTOR_REGISTERS);
+                                savedEnd = SLJIT_VS1;
+                            } else {
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
+                                prefix = "F";
+                                savedStart = SLJIT_FR(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS);
+                                savedEnd = SLJIT_FS0;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+                            }
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
                         }
 
                         uint32_t reg1 = static_cast<uint32_t>(VARIABLE_GET_REF(variable.value));
