@@ -10,3 +10,6 @@
 	path = third_party/uvwasi/uvwasi
 	url = https://github.com/nodejs/uvwasi
 	ignore = untracked
+[submodule "test/programs/coremark"]
+	path = test/programs/coremark
+	url = https://github.com/eembc/coremark.git
