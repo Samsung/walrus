@@ -42,6 +42,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND uvwasi_defines _GNU_SOURCE _POSIX_C_SOURCE=200112)
 endif()
 
+if (WALRUS_MODE STREQUAL "debug")
+    list(APPEND uvwasi_cflags -O0 -g)
+
+    if (UVWASI_DEBUG_LOG)
+        list(APPEND uvwasi_defines UVWASI_DEBUG_LOG)
+    endif ()
+endif ()
+
 #find_package(LIBUV QUIET)
 #if(LIBUV_FOUND)
 #  include_directories(${LIBUV_INCLUDE_DIR})
