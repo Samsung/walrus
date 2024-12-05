@@ -36,6 +36,8 @@ public:
     // https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md
 
 #define FOR_EACH_WASI_FUNC(F)                      \
+    F(args_get, I32I32_RI32)                       \
+    F(args_sizes_get, I32I32_RI32)                 \
     F(proc_exit, I32R)                             \
     F(proc_raise, I32_RI32)                        \
     F(clock_res_get, I32I32_RI32)                  \
@@ -44,6 +46,7 @@ public:
     F(fd_write, I32I32I32I32_RI32)                 \
     F(fd_read, I32I32I32I32_RI32)                  \
     F(fd_close, I32_RI32)                          \
+    F(fd_fdstat_get, I32I32_RI32)                  \
     F(fd_seek, I32I64I32I32_RI32)                  \
     F(path_open, I32I32I32I32I32I64I64I32I32_RI32) \
     F(environ_get, I32I32_RI32)                    \
@@ -152,6 +155,8 @@ public:
 
 private:
     // wasi functions
+    static void args_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void args_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void clock_res_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
@@ -159,6 +164,7 @@ private:
     static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_read(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_close(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void fd_fdstat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void path_open(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void environ_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
