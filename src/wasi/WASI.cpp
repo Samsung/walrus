@@ -102,6 +102,43 @@ WASI::WasiFuncInfo* WASI::find(const std::string& funcName)
     return nullptr;
 }
 
+void WASI::args_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uvwasi_size_t argc;
+    uvwasi_size_t bufSize;
+    uvwasi_args_sizes_get(WASI::g_uvwasi, &argc, &bufSize);
+
+    uint32_t* uvArgv = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[0], argc * sizeof(uint32_t)));
+    char* uvArgBuf = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], bufSize));
+
+    if (uvArgv == nullptr || uvArgBuf == nullptr) {
+        result[0] = Value(WasiErrNo::inval);
+        return;
+    }
+
+    TemporaryData<void*, 8> pointers(argc);
+
+    if (pointers.data() == nullptr) {
+        result[0] = Value(WasiErrNo::inval);
+        return;
+    }
+
+    char** data = reinterpret_cast<char**>(pointers.data());
+    result[0] = Value(static_cast<uint16_t>(uvwasi_args_get(WASI::g_uvwasi, data, uvArgBuf)));
+
+    for (uvwasi_size_t i = 0; i < argc; i++) {
+        uvArgv[i] = data[i] - uvArgBuf;
+    }
+}
+
+void WASI::args_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uvwasi_size_t* uvArgc = reinterpret_cast<uvwasi_size_t*>(get_memory_pointer(instance, argv[0], sizeof(uint32_t)));
+    uvwasi_size_t* uvArgvBufSize = reinterpret_cast<uvwasi_size_t*>(get_memory_pointer(instance, argv[1], sizeof(uint32_t)));
+
+    result[0] = Value(static_cast<int16_t>(uvwasi_args_sizes_get(WASI::g_uvwasi, uvArgc, uvArgvBufSize)));
+}
+
 void WASI::proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     ASSERT(argv[0].type() == Value::I32);

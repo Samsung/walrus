@@ -36,6 +36,8 @@ public:
     // https://github.com/WebAssembly/WASI/blob/main/legacy/preview1/docs.md
 
 #define FOR_EACH_WASI_FUNC(F)                      \
+    F(args_get, I32I32_RI32)                       \
+    F(args_sizes_get, I32I32_RI32)                 \
     F(proc_exit, I32R)                             \
     F(proc_raise, I32_RI32)                        \
     F(clock_res_get, I32I32_RI32)                  \
@@ -153,6 +155,8 @@ public:
 
 private:
     // wasi functions
+    static void args_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    static void args_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance);
     static void clock_res_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
