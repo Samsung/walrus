@@ -175,7 +175,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTLoadF32, /* SDTT */ I32, F32, PTR, I32 | S0)                                  \
     OL4(OTLoadF64, /* SDTT */ I32, F64, PTR, I32 | S0)                                  \
     OL4(OTLoadV128, /* SDTT */ I32, V128 | TMP, PTR, I32 | S0)                          \
-    OL5(OTLoadLaneV128, /* SSDTTT */ I32, V128 | NOTMP, V128 | TMP | S1, PTR, I32 | S0) \
+    OL5(OTLoadLaneV128, /* SSDTT */ I32, V128 | NOTMP, V128 | TMP | S1, PTR, I32 | S0)  \
     OL5(OTStoreI32, /* SSTTT */ I32, I32, PTR, I32 | S0, I32 | S1)                      \
     OL4(OTStoreF32, /* SSTT */ I32, F32 | NOTMP, PTR, I32 | S0)                         \
     OL5(OTStoreI64, /* SSTTT */ I32, I64, PTR, I32 | S0, PTR | S1)                      \
@@ -319,6 +319,24 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTOp2V128Rev OTOp2V128
 #define OTPMinMaxV128 OTOp2V128
 #define OTPopcntV128 OTOp1V128
+#define OTShiftV128Tmp OTShiftV128
+#define OTOp3DotAddV128 OTOp3V128
+
+#elif (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV)
+#define OPERAND_TYPE_LIST_SIMD_ARCH                                         \
+    OL2(OTOp1V128CB, /* SD */ V128 | NOTMP, V128 | NOTMP)                   \
+    OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)  \
+    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)        \
+    OL3(OTSwizzleV128, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1) \
+    OL3(OTShuffleV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)        \
+    OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
+
+// List of aliases.
+#define OTOp2V128Rev OTOp2V128
+#define OTOp2V128Tmp OTOp2V128
+#define OTMinMaxV128 OTOp2V128
+#define OTPMinMaxV128 OTOp2V128
+#define OTPopcntV128 OTOp1V128Tmp
 #define OTShiftV128Tmp OTShiftV128
 #define OTOp3DotAddV128 OTOp3V128
 
