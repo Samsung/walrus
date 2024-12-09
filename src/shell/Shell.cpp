@@ -43,6 +43,7 @@ struct ParseOptions {
     // WASI options
     std::vector<std::string> wasi_envs;
     std::vector<std::pair<std::string, std::string>> wasi_dirs;
+    int argsIndex = -1;
 };
 
 static uint32_t s_JITFlags = 0;
@@ -1039,7 +1040,7 @@ static void runExports(Store* store, const std::string& filename, const std::vec
              &data);
 }
 
-static void parseArguments(int argc, char* argv[], ParseOptions& options)
+static void parseArguments(int argc, const char* argv[], ParseOptions& options)
 {
     for (int i = 1; i < argc; i++) {
         if (strlen(argv[i]) >= 2 && argv[i][0] == '-') { // parse command line option
@@ -1083,6 +1084,15 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
                     options.wasi_dirs.push_back(std::make_pair(argv[i + 2], argv[i + 1]));
                     i += 2;
                     continue;
+                } else if (strcmp(argv[i], "--args") == 0) {
+                    if (i + 1 == argc || argv[i + 1][0] == '-') {
+                        fprintf(stderr, "error: --args requires one or more arguments\n");
+                        exit(1);
+                    }
+                    ++i;
+                    options.fileNames.emplace_back(argv[i]);
+                    options.argsIndex = i;
+                    break;
                 } else if (strcmp(argv[i], "--help") == 0) {
                     fprintf(stdout, "Usage: walrus [OPTIONS] <INPUT>\n\n");
                     fprintf(stdout, "OPTIONS:\n");
@@ -1095,6 +1105,7 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
 #endif
                     fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
                     fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
+                    fprintf(stdout, "\t--args <MODULE_FILE_NAME> [<ARG1> <ARG2> ... <ARGN>]\n\t\tRun Webassembly module with arguments: must be followed by the name of the Webassembly module file, then optionally following arguments which are passed on to the module\n\t\tExample: ./walrus --args test.wasm 'hello' 'world' 42\n\n");
                     exit(0);
                 }
             }
@@ -1117,7 +1128,7 @@ static void parseArguments(int argc, char* argv[], ParseOptions& options)
     }
 }
 
-int main(int argc, char* argv[])
+int main(int argc, const char* argv[])
 {
 #ifndef NDEBUG
     setbuf(stdout, NULL);
@@ -1164,8 +1175,8 @@ int main(int argc, char* argv[])
     init_options.out = 1;
     init_options.err = 2;
     init_options.fd_table_size = 3;
-    init_options.argc = 0;
-    init_options.argv = nullptr;
+    init_options.argc = (options.argsIndex == -1 ? 0 : argc - options.argsIndex);
+    init_options.argv = (options.argsIndex == -1 ? nullptr : argv + options.argsIndex);
     init_options.envp = envp.data();
     init_options.preopenc = dirs.size();
     init_options.preopens = dirs.data();

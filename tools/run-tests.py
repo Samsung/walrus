@@ -61,7 +61,7 @@ class runner(object):
             DEFAULT_RUNNERS.append(self.suite)
         return fn
 
-def _run_wast_tests(engine, files, is_fail):
+def _run_wast_tests(engine, files, is_fail, args=None):
     fails = 0
     for file in files:
         if jit:
@@ -69,7 +69,13 @@ def _run_wast_tests(engine, files, is_fail):
             if filename in JIT_EXCLUDE_FILES:
                 continue
 
-        proc = Popen([engine, "--mapdirs", "./test/wasi", "/var", file], stdout=PIPE) if not jit else Popen([engine, "--mapdirs", "./test/wasi", "/var", "--jit", file], stdout=PIPE)
+        subprocess_args = [engine, "--mapdirs", "./test/wasi", "/var"]
+        if jit: subprocess_args.append("--jit")
+        if args: subprocess_args.append("--args")
+        subprocess_args.append(file)
+        if args: subprocess_args.extend(args)
+
+        proc = Popen(subprocess_args, stdout=PIPE)
         out, _ = proc.communicate()
 
         if is_fail and proc.returncode or not is_fail and not proc.returncode:
@@ -77,7 +83,6 @@ def _run_wast_tests(engine, files, is_fail):
         else:
             print('%sFAIL(%d): %s%s' % (COLOR_RED, proc.returncode, file, COLOR_RESET))
             print(out)
-
             fails += 1
 
     return fails
@@ -125,9 +130,15 @@ def run_wasi_tests(engine):
 
     print('Running wasi tests:')
     xpass = glob(join(TEST_DIR, '*.wast'))
-    xpass_result = _run_wast_tests(engine, xpass, False)
+    args_tests = glob(join(TEST_DIR, 'args.wast'))
+    for item in args_tests:
+        xpass.remove(item)
 
-    tests_total = len(xpass)
+    xpass_result = _run_wast_tests(engine, xpass, False)
+    xpass_result += _run_wast_tests(engine, args_tests, False,
+                                    args=["Hello", "World!", "Lorem ipsum dolor sit amet, consectetur adipiscing elit"])
+
+    tests_total = len(xpass) + len(args_tests)
     fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
     print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
@@ -135,7 +146,6 @@ def run_wasi_tests(engine):
 
     if fail_total > 0:
         raise Exception("basic wasi tests failed")
-
 
 @runner('jit', default=True)
 def run_jit_tests(engine):
