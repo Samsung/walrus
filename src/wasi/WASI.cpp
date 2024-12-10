@@ -118,17 +118,17 @@ void WASI::args_get(ExecutionState& state, Value* argv, Value* result, Instance*
 
     TemporaryData<void*, 8> pointers(argc);
 
-    if (pointers.data() == nullptr) {
-        result[0] = Value(WasiErrNo::inval);
-        return;
-    }
-
     char** data = reinterpret_cast<char**>(pointers.data());
-    result[0] = Value(static_cast<uint16_t>(uvwasi_args_get(WASI::g_uvwasi, data, uvArgBuf)));
+    uvwasi_errno_t error = uvwasi_args_get(WASI::g_uvwasi, data, uvArgBuf);
 
-    for (uvwasi_size_t i = 0; i < argc; i++) {
-        uvArgv[i] = data[i] - uvArgBuf;
+    if (error == WasiErrNo::success) {
+        char* buffer = reinterpret_cast<char*>(instance->memory(0)->buffer());
+        for (uvwasi_size_t i = 0; i < argc; i++) {
+            uvArgv[i] = data[i] - buffer;
+        }
     }
+
+    result[0] = Value(error);
 }
 
 void WASI::args_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
@@ -293,18 +293,17 @@ void WASI::environ_get(ExecutionState& state, Value* argv, Value* result, Instan
 
     TemporaryData<void*, 8> pointers(count);
 
-    if (pointers.data() == nullptr) {
-        result[0] = Value(WasiErrNo::inval);
-        return;
-    }
-
     char** data = reinterpret_cast<char**>(pointers.data());
-    result[0] = Value(static_cast<uint16_t>(uvwasi_environ_get(WASI::g_uvwasi, data, uvEnvironBuf)));
+    uvwasi_errno_t error = uvwasi_environ_get(WASI::g_uvwasi, data, uvEnvironBuf);
 
-    char* buffer = reinterpret_cast<char*>(instance->memory(0)->buffer());
-    for (uvwasi_size_t i = 0; i < count; i++) {
-        uvEnviron[i] = data[i] - buffer;
+    if (error == WasiErrNo::success) {
+        char* buffer = reinterpret_cast<char*>(instance->memory(0)->buffer());
+        for (uvwasi_size_t i = 0; i < count; i++) {
+            uvEnviron[i] = data[i] - buffer;
+        }
     }
+
+    result[0] = Value(error);
 }
 
 void WASI::random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)

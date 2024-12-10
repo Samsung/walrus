@@ -8,7 +8,6 @@
   (func (export "check_args")(result i32)
   (local $i i32)
   (local $mismatched_char_count i32)
-  (local $argc i32)
   (local $argv i32)
   (local $argv_buf i32)
   (local $argv_buf_size i32)
@@ -22,7 +21,6 @@
 
     ;; Memory[0] = args count
     i32.const 0
-    local.tee $argc
     ;; Memory[4] = args size in characters
     i32.const 4
     local.tee $argv_buf_size
@@ -35,6 +33,19 @@
         return
       )
     )
+
+    ;; Memory[0] = args count
+    i32.const 0
+    i32.load
+    i32.const 4
+    i32.ne
+    (if
+      (then
+        i32.const -2
+        return
+      )
+    )
+
     ;; Memory[128] = argv[] (list of pointers to the strings)
     i32.const 128
     local.tee $argv
@@ -46,7 +57,7 @@
     i32.ne
     (if
       (then
-        i32.const -2
+        i32.const -3
         return
       )
     )
@@ -56,10 +67,22 @@
     i32.const 4
     i32.add
     i32.load ;; &argv[1]
-    local.tee $i ;; start $i with the offset of the first char of argv[1]
-    local.get $argv_buf
-    i32.add ;; pointer to fist char in the buffer
-    local.set $value_addr
+    local.tee $value_addr
+    ;; Memory[192] = argv_buf and 69 sizeof expected input, 192 - 69 = 123
+    i32.const 123
+    i32.sub
+    local.get $argv_buf_size
+    i32.load
+    i32.ne
+    (if
+      (then
+        i32.const -4
+        return
+      )
+    )
+
+    i32.const 69
+    local.set $i
 
     (loop $for_each_char
       ;; *($expected_addr) != *($value_addr)
@@ -90,13 +113,10 @@
 
       local.get $i
       i32.const 1
-      i32.add
+      i32.sub
       local.tee $i
 
-      ;; $i < $argv_buf_size
-      local.get $argv_buf_size
-      i32.load
-      i32.lt_u
+      ;; $i > 0
       br_if $for_each_char
     )
     local.get $mismatched_char_count
