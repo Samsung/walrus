@@ -243,6 +243,23 @@ void WASI::fd_fdstat_get(ExecutionState& state, Value* argv, Value* result, Inst
     result[0] = Value(uvwasi_fd_fdstat_get(WASI::g_uvwasi, fd, fdstat));
 }
 
+void WASI::fd_prestat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uvwasi_prestat_t* buf = reinterpret_cast<uvwasi_prestat_t*>(get_memory_pointer(instance, argv[1], sizeof(uvwasi_prestat_t)));
+
+    result[0] = Value(uvwasi_fd_prestat_get(WASI::g_uvwasi, fd, buf));
+}
+
+void WASI::fd_prestat_dir_name(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t length = argv[2].asI32();
+    char* path = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], length));
+
+    result[0] = Value(uvwasi_fd_prestat_dir_name(WASI::g_uvwasi, fd, path, length));
+}
+
 void WASI::fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
@@ -251,6 +268,16 @@ void WASI::fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* 
     uvwasi_filesize_t* file_size = reinterpret_cast<uvwasi_filesize_t*>(get_memory_pointer(instance, argv[3], sizeof(uvwasi_filesize_t)));
 
     result[0] = Value(uvwasi_fd_seek(WASI::g_uvwasi, fd, fileDelta, whence, file_size));
+}
+
+void WASI::fd_advise(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint64_t offset = argv[1].asI64();
+    uint64_t len = argv[2].asI64();
+    uint32_t advise = argv[3].asI32();
+
+    result[0] = Value(uvwasi_fd_advise(WASI::g_uvwasi, fd, offset, len, advise));
 }
 
 void WASI::path_open(ExecutionState& state, Value* argv, Value* result, Instance* instance)

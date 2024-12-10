@@ -47,7 +47,10 @@ public:
     F(fd_read, I32I32I32I32_RI32)                  \
     F(fd_close, I32_RI32)                          \
     F(fd_fdstat_get, I32I32_RI32)                  \
+    F(fd_prestat_dir_name, I32I32I32_RI32)         \
+    F(fd_prestat_get, I32I32_RI32)                 \
     F(fd_seek, I32I64I32I32_RI32)                  \
+    F(fd_advise, I32I64I64I32_RI32)                \
     F(path_open, I32I32I32I32I32I64I64I32I32_RI32) \
     F(environ_get, I32I32_RI32)                    \
     F(environ_sizes_get, I32I32_RI32)
@@ -155,21 +158,9 @@ public:
 
 private:
     // wasi functions
-    static void args_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void args_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void proc_exit(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void proc_raise(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void clock_res_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void clock_time_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void fd_read(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void fd_close(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void fd_fdstat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void path_open(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void environ_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void environ_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
-    static void random_get(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+#define DECLARE_FUNCTION(NAME, FUNCTYPE) static void NAME(ExecutionState& state, Value* argv, Value* result, Instance* instance);
+    FOR_EACH_WASI_FUNC(DECLARE_FUNCTION)
+#undef DECLARE_FUNCTION
 
     static uvwasi_t* g_uvwasi;
     static WasiFuncInfo g_wasiFunctions[FuncEnd];
