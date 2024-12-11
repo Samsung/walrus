@@ -13,3 +13,6 @@
 [submodule "test/programs/coremark"]
 	path = test/programs/coremark
 	url = https://github.com/eembc/coremark.git
+[submodule "test/programs/c-ray"]
+	path = test/programs/c-ray
+	url = https://github.com/jtsiomb/c-ray.git
