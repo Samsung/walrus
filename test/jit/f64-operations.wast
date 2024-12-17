@@ -155,6 +155,16 @@
     f64.const -nan
     f64.floor
 )
+
+(func (export "test28") (param f64 f64) (result f64)
+    local.get 1
+    f64.const 10.0
+    f64.add
+    local.get 0
+    f64.min
+    local.get 1
+    f64.add
+)
 )
 
 (assert_return (invoke "test11") (f64.const 4.4))
@@ -174,3 +184,4 @@
 (assert_return (invoke "test25") (i32.const 0) (i32.const 1) (i32.const 0))
 (assert_return (invoke "test26") (i32.const 1) (i32.const 1) (i32.const 0) (i32.const 1))
 (assert_return (invoke "test27") (f64.const nan:canonical))
+(assert_return (invoke "test28" (f64.const 100.0) (f64.const 20.0)) (f64.const 50.0))

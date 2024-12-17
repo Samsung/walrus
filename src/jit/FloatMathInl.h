@@ -83,6 +83,26 @@ static void emitMoveFloat(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
+static void emitInitFR0FR1(sljit_compiler* compiler, sljit_s32 movOp, JITArg* params)
+{
+    if (params[1].arg != SLJIT_FR0) {
+        MOVE_TO_FREG(compiler, movOp, SLJIT_FR0, params[0].arg, params[0].argw);
+        MOVE_TO_FREG(compiler, movOp, SLJIT_FR1, params[1].arg, params[1].argw);
+        return;
+    }
+
+    if (params[0].arg != SLJIT_FR1) {
+        sljit_emit_fop1(compiler, movOp, SLJIT_FR1, 0, SLJIT_FR0, 0);
+        MOVE_TO_FREG(compiler, movOp, SLJIT_FR0, params[0].arg, params[0].argw);
+        return;
+    }
+
+    // Swap arguments.
+    sljit_emit_fop1(compiler, movOp, SLJIT_TMP_DEST_FREG, 0, SLJIT_FR0, 0);
+    sljit_emit_fop1(compiler, movOp, SLJIT_FR0, 0, SLJIT_FR1, 0);
+    sljit_emit_fop1(compiler, movOp, SLJIT_FR1, 0, SLJIT_TMP_DEST_FREG, 0);
+}
+
 // Float operations.
 // TODO Canonical NaN
 static sljit_f32 floatFloor(sljit_f32 operand)
@@ -267,15 +287,13 @@ static void emitFloatBinary(sljit_compiler* compiler, Instruction* instr)
     ASSERT(instr->info() & Instruction::kIsCallback);
 
     if (f32Func) {
-        MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR0, args[0].arg, args[0].argw);
-        MOVE_TO_FREG(compiler, SLJIT_MOV_F32, SLJIT_FR1, args[1].arg, args[1].argw);
+        emitInitFR0FR1(compiler, SLJIT_MOV_F32, args);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F32, F32, F32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f32Func));
         MOVE_FROM_FREG(compiler, SLJIT_MOV_F32, args[2].arg, args[2].argw, SLJIT_FR0);
         return;
     }
 
-    MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR0, args[0].arg, args[0].argw);
-    MOVE_TO_FREG(compiler, SLJIT_MOV_F64, SLJIT_FR1, args[1].arg, args[1].argw);
+    emitInitFR0FR1(compiler, SLJIT_MOV_F64, args);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(F64, F64, F64), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, f64Func));
     MOVE_FROM_FREG(compiler, SLJIT_MOV_F64, args[2].arg, args[2].argw, SLJIT_FR0);
 }
