@@ -1742,6 +1742,7 @@ public:
         if (m_blockInfo.size() == depth) {
             // this case acts like return
             generateFunctionReturnCode(true);
+            stopToGenerateByteCodeWhileBlockEnd();
             return;
         }
         auto& blockInfo = findBlockInfoInBr(depth);
