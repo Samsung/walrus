@@ -397,7 +397,7 @@ static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
 static void emitMove(sljit_compiler*, uint32_t type, Operand* from, Operand* to);
 static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const ValueTypeVector& types, bool isWordOffsets);
 
-#if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM) || (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+#if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM) || (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86) || (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV && defined __riscv_vector)
 #define HAS_SIMD
 
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
@@ -433,7 +433,7 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
     arg.argw = 0;
 }
 
-#endif /* SLJIT_CONFIG_ARM */
+#endif /* SLJIT_CONFIG_ARM || SLJIT_CONFIG_X86 || SLJIT_CONFIG_RISCV */
 
 #include "FloatMathInl.h"
 
@@ -456,6 +456,8 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
 #include "SimdArm64Inl.h"
 #elif (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
 #include "SimdArm32Inl.h"
+#elif (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV && defined __riscv_vector)
+#include "SimdRiscvInl.h"
 #endif /* SLJIT_CONFIG_ARM */
 
 #ifdef HAS_SIMD
@@ -1028,6 +1030,9 @@ JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     , m_options(0)
     , m_savedIntegerRegCount(0)
     , m_savedFloatRegCount(0)
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    , m_savedVectorRegCount(0)
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
     , m_stackTmpSize(0)
 {
     if (module->m_jitModule != nullptr) {
@@ -1530,9 +1535,13 @@ void JITCompiler::emitProlog()
     ASSERT(m_stackTmpSize <= 16);
 #endif /* SLJIT_CONFIG_ARM_32 */
 
-    sljit_emit_enter(m_compiler, options, SLJIT_ARGS1(P, P_R),
-                     SLJIT_NUMBER_OF_SCRATCH_REGISTERS | SLJIT_ENTER_FLOAT(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS),
-                     (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount), m_context.stackTmpStart + m_stackTmpSize);
+    sljit_s32 scratches = SLJIT_NUMBER_OF_SCRATCH_REGISTERS | SLJIT_ENTER_FLOAT(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS) | SLJIT_ENTER_VECTOR(SLJIT_NUMBER_OF_SCRATCH_VECTOR_REGISTERS);
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    sljit_s32 saveds = (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount) | SLJIT_ENTER_VECTOR(m_savedVectorRegCount);
+#else /* !SLJIT_SEPARATE_VECTOR_REGISTERS */
+    sljit_s32 saveds = (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount) | SLJIT_ENTER_VECTOR(m_savedFloatRegCount);
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
+    sljit_emit_enter(m_compiler, options, SLJIT_ARGS1(P, P_R), scratches, saveds, m_context.stackTmpStart + m_stackTmpSize);
 
     sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), kContextOffset, SLJIT_R0, 0);
 

@@ -20,6 +20,25 @@
 #include "jit/Compiler.h"
 #include <set>
 
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+#define VECTOR_SELECT(COND, VECTOR, FLOAT) \
+    if (COND) {                            \
+        VECTOR;                            \
+    } else {                               \
+        FLOAT;                             \
+    }
+#else /* !SLJIT_SEPARATE_VECTOR_REGISTERS */
+#define VECTOR_SELECT(COND, VECTOR, FLOAT) FLOAT;
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
+
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+#if (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV)
+#define FIRST_VECTOR_REG SLJIT_VR1
+#else /* !SLJIT_CONFIG_RISCV */
+#define FIRST_VECTOR_REG SLJIT_VR0
+#endif /* SLJIT_CONFIG_RISCV */
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
+
 namespace Walrus {
 
 class RegisterSet {
@@ -36,8 +55,8 @@ public:
 
     uint8_t getSavedRegCount() { return static_cast<uint8_t>(m_usedSavedRegisters - m_savedStartIndex); }
 
-    uint8_t toCPUReg(uint8_t reg);
-    bool check(int8_t reg, uint16_t constraints);
+    uint8_t toCPUReg(uint8_t reg, uint8_t scratchBase, uint8_t savedBase);
+    bool check(uint8_t reg, uint16_t constraints);
     void freeUnusedRegisters(size_t id);
     uint8_t allocateRegister(VariableList::Variable* variable);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -87,25 +106,52 @@ private:
 
 class RegisterFile {
 public:
-    RegisterFile(uint32_t numberOfIntegerScratchRegs, uint32_t numberOfIntegerSavedRegs,
-                 uint32_t numberOfFloatScratchRegs, uint32_t numberOfFloatSavedRegs)
+    RegisterFile(uint32_t numberOfIntegerScratchRegs, uint32_t numberOfIntegerSavedRegs)
         : m_integerSet(numberOfIntegerScratchRegs, numberOfIntegerSavedRegs, true)
-        , m_floatSet(numberOfFloatScratchRegs, numberOfFloatSavedRegs, false)
+        , m_floatSet(SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, SLJIT_NUMBER_OF_SAVED_FLOAT_REGISTERS, false)
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+#if (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV)
+        , m_vectorSet(SLJIT_NUMBER_OF_SCRATCH_VECTOR_REGISTERS - 1, SLJIT_NUMBER_OF_SAVED_VECTOR_REGISTERS, false)
+#else /* !SLJIT_CONFIG_RISCV */
+        , m_vectorSet(SLJIT_NUMBER_OF_SCRATCH_VECTOR_REGISTERS, SLJIT_NUMBER_OF_SAVED_VECTOR_REGISTERS, false)
+#endif /* SLJIT_CONFIG_RISCV */
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
     {
     }
 
-    RegisterSet& integerSet() { return m_integerSet; }
-    RegisterSet& floatSet() { return m_floatSet; }
+    RegisterSet& integerSet()
+    {
+        return m_integerSet;
+    }
 
+    RegisterSet& floatSet()
+    {
+        return m_floatSet;
+    }
+
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    RegisterSet& vectorSet()
+    {
+        return m_vectorSet;
+    }
+
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
     uint8_t toCPUIntegerReg(uint8_t reg)
     {
-        return m_integerSet.toCPUReg(reg);
+        return m_integerSet.toCPUReg(reg, SLJIT_R0, SLJIT_S2);
     }
 
     uint8_t toCPUFloatReg(uint8_t reg)
     {
-        return m_floatSet.toCPUReg(reg);
+        return m_floatSet.toCPUReg(reg, SLJIT_FR0, SLJIT_FS0);
     }
+
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    uint8_t toCPUVectorReg(uint8_t reg)
+    {
+        return m_vectorSet.toCPUReg(reg, FIRST_VECTOR_REG, SLJIT_VS0);
+    }
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
 
     void integerReserve(uint8_t reg)
     {
@@ -117,6 +163,13 @@ public:
         m_floatSet.reserve(reg);
     }
 
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    void vectorReserve(uint8_t reg)
+    {
+        m_vectorSet.reserve(reg);
+    }
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
+
     void allocateVariable(VariableList::Variable* variable)
     {
         uint8_t type = variable->info & Instruction::TypeMask;
@@ -124,11 +177,17 @@ public:
 
         if (type & Instruction::FloatOperandMarker) {
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
-            if ((variable->info & Instruction::TypeMask) == Instruction::V128Operand) {
+            if (type == Instruction::V128Operand) {
                 m_floatSet.allocateQuadRegister(variable);
                 return;
             }
 #endif /* SLJIT_CONFIG_ARM_32 */
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+            if (type == Instruction::V128Operand) {
+                m_vectorSet.allocateRegister(variable);
+                return;
+            }
+#endif
             m_floatSet.allocateRegister(variable);
             return;
         }
@@ -147,6 +206,9 @@ public:
     {
         m_integerSet.freeUnusedRegisters(id);
         m_floatSet.freeUnusedRegisters(id);
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+        m_vectorSet.freeUnusedRegisters(id);
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
     }
 
     bool reuseResult(uint8_t type, VariableList::Variable** reusableRegs, VariableList::Variable* resultVariable);
@@ -154,6 +216,9 @@ public:
 private:
     RegisterSet m_integerSet;
     RegisterSet m_floatSet;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    RegisterSet m_vectorSet;
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
 };
 
 RegisterSet::RegisterSet(uint32_t numberOfScratchRegs, uint32_t numberOfSavedRegs, bool isInteger)
@@ -164,17 +229,16 @@ RegisterSet::RegisterSet(uint32_t numberOfScratchRegs, uint32_t numberOfSavedReg
     m_registers.resize(numberOfScratchRegs + numberOfSavedRegs);
 }
 
-uint8_t RegisterSet::toCPUReg(uint8_t reg)
+uint8_t RegisterSet::toCPUReg(uint8_t reg, uint8_t scratchBase, uint8_t savedBase)
 {
     if (reg < m_savedStartIndex) {
-        return SLJIT_R0 + reg;
+        return scratchBase + reg;
     }
 
-    uint8_t base = (m_regStatus & kIsInteger) ? SLJIT_S2 : SLJIT_FS0;
-    return base - (reg - m_savedStartIndex);
+    return savedBase - (reg - m_savedStartIndex);
 }
 
-bool RegisterSet::check(int8_t reg, uint16_t constraints)
+bool RegisterSet::check(uint8_t reg, uint16_t constraints)
 {
     if (constraints & VariableList::kIsCallback) {
         return reg >= m_savedStartIndex;
@@ -528,16 +592,21 @@ bool RegisterFile::reuseResult(uint8_t type, VariableList::Variable** reusableRe
     }
 
     uint16_t constraints = resultVariable->info;
-    RegisterSet& registers = (type & Instruction::FloatOperandMarker) ? m_floatSet : m_integerSet;
+    RegisterSet* registers = (type & Instruction::FloatOperandMarker) ? &m_floatSet : &m_integerSet;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    if ((type & Instruction::TypeMask) == Instruction::V128Operand) {
+        registers = &m_vectorSet;
+    }
+#endif
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     bool isInt64 = (type & Instruction::TypeMask) == Instruction::Int64Operand;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
     for (uint32_t i = 0; i < 3; i++) {
         VariableList::Variable* variable = reusableRegs[i];
-        if ((type & (Instruction::Src0Allowed << i)) && variable != nullptr && registers.check(variable->reg1, constraints)) {
+        if ((type & (Instruction::Src0Allowed << i)) && variable != nullptr && registers->check(variable->reg1, constraints)) {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-            if (isInt64 && !registers.check(variable->reg2, constraints)) {
+            if (isInt64 && !registers->check(variable->reg2, constraints)) {
                 continue;
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -545,11 +614,11 @@ bool RegisterFile::reuseResult(uint8_t type, VariableList::Variable** reusableRe
             reusableRegs[i] = nullptr;
 
             resultVariable->reg1 = variable->reg1;
-            registers.updateVariable(resultVariable->reg1, resultVariable);
+            registers->updateVariable(resultVariable->reg1, resultVariable);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             resultVariable->reg2 = variable->reg2;
-            registers.updateVariable(resultVariable->reg2, resultVariable);
+            registers->updateVariable(resultVariable->reg2, resultVariable);
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             return true;
         }
@@ -563,6 +632,9 @@ void JITCompiler::allocateRegisters()
     if (m_variableList == nullptr) {
         m_savedIntegerRegCount = 0;
         m_savedFloatRegCount = 0;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+        m_savedVectorRegCount = 0;
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
         return;
     }
 
@@ -574,8 +646,7 @@ void JITCompiler::allocateRegisters()
     const uint32_t numberOfsavedRegs = SLJIT_NUMBER_OF_SAVED_REGISTERS - 2;
 #endif /* SLJIT_CONFIG_X86_32 */
 
-    RegisterFile regs(numberOfscratchRegs, numberOfsavedRegs,
-                      SLJIT_NUMBER_OF_SCRATCH_FLOAT_REGISTERS, SLJIT_NUMBER_OF_SAVED_FLOAT_REGISTERS);
+    RegisterFile regs(numberOfscratchRegs, numberOfsavedRegs);
 
     size_t variableListParamCount = m_variableList->paramCount;
     for (size_t i = 0; i < variableListParamCount; i++) {
@@ -672,7 +743,9 @@ void JITCompiler::allocateRegisters()
 
                     if (reg != VariableList::kUnusedReg) {
                         ASSERT(!(variable->info & VariableList::kIsImmediate));
-                        regs.floatReserve(reg);
+                        VECTOR_SELECT((*list & Instruction::TypeMask) == Instruction::V128Operand,
+                                      regs.vectorReserve(reg),
+                                      regs.floatReserve(reg))
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
                         if ((*list & Instruction::TypeMask) != Instruction::V128Operand) {
                             regs.floatReserve(reg + 1);
@@ -684,12 +757,16 @@ void JITCompiler::allocateRegisters()
                             reg = regs.floatSet().allocateQuadRegister(nullptr);
                         } else {
 #endif /* SLJIT_CONFIG_ARM_32 */
-                            reg = regs.floatSet().allocateRegister(nullptr);
+                            VECTOR_SELECT((*list & Instruction::TypeMask) == Instruction::V128Operand,
+                                          reg = regs.vectorSet().allocateRegister(nullptr),
+                                          reg = regs.floatSet().allocateRegister(nullptr))
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
                         }
 #endif /* SLJIT_CONFIG_ARM_32 */
                     }
-                    instr->setRequiredReg(tmpIndex, regs.toCPUFloatReg(reg));
+                    VECTOR_SELECT((*list & Instruction::TypeMask) == Instruction::V128Operand,
+                                  instr->setRequiredReg(tmpIndex, regs.toCPUVectorReg(reg)),
+                                  instr->setRequiredReg(tmpIndex, regs.toCPUFloatReg(reg)))
                 }
                 tmpIndex++;
             }
@@ -717,7 +794,9 @@ void JITCompiler::allocateRegisters()
 
             if (type & Instruction::FloatOperandMarker) {
                 if (resultVariable->reg1 != VariableList::kUnusedReg) {
-                    regs.floatReserve(resultVariable->reg1);
+                    VECTOR_SELECT(type == Instruction::V128Operand,
+                                  regs.vectorReserve(resultVariable->reg1),
+                                  regs.floatReserve(resultVariable->reg1))
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
                     regs.floatReserve(resultVariable->reg2);
 #endif /* SLJIT_CONFIG_ARM_32 */
@@ -739,11 +818,15 @@ void JITCompiler::allocateRegisters()
                             resultReg = regs.floatSet().allocateQuadRegister(nullptr);
                         } else {
 #endif /* SLJIT_CONFIG_ARM_32 */
-                            resultReg = regs.floatSet().allocateRegister(nullptr);
+                            VECTOR_SELECT(type == Instruction::V128Operand,
+                                          resultReg = regs.vectorSet().allocateRegister(nullptr),
+                                          resultReg = regs.floatSet().allocateRegister(nullptr))
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
                         }
 #endif /* SLJIT_CONFIG_ARM_32 */
-                        resultReg = regs.toCPUFloatReg(resultReg);
+                        VECTOR_SELECT(type == Instruction::V128Operand,
+                                      resultReg = regs.toCPUVectorReg(resultReg),
+                                      resultReg = regs.toCPUFloatReg(resultReg))
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
                     } else if (type == Instruction::Int64Operand) {
                         uint8_t otherReg;
@@ -761,8 +844,9 @@ void JITCompiler::allocateRegisters()
                         regs.floatReserve(resultReg + 1);
                     }
 #endif /* SLJIT_CONFIG_ARM_32 */
-                    regs.floatReserve(resultReg);
-                    resultReg = regs.toCPUFloatReg(resultReg);
+                    VECTOR_SELECT(type == Instruction::V128Operand,
+                                  (regs.vectorReserve(resultReg), resultReg = regs.toCPUVectorReg(resultReg)),
+                                  (regs.floatReserve(resultReg), resultReg = regs.toCPUFloatReg(resultReg)))
                 } else {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
                     if (type == Instruction::Int64Operand) {
@@ -799,9 +883,9 @@ void JITCompiler::allocateRegisters()
                         regs.floatReserve(reg + 1);
                     }
 #endif /* SLJIT_CONFIG_ARM_32 */
-
-                    regs.floatReserve(reg);
-                    instr->setRequiredReg(reuseTmpIndex, regs.toCPUFloatReg(reg));
+                    VECTOR_SELECT((*nextType & Instruction::TypeMask) == Instruction::V128Operand,
+                                  (regs.vectorReserve(reg), instr->setRequiredReg(reuseTmpIndex, regs.toCPUVectorReg(reg))),
+                                  (regs.floatReserve(reg), instr->setRequiredReg(reuseTmpIndex, regs.toCPUFloatReg(reg))))
                 } else {
                     regs.integerReserve(reg);
                     instr->setRequiredReg(reuseTmpIndex, regs.toCPUIntegerReg(reg));
@@ -819,7 +903,9 @@ void JITCompiler::allocateRegisters()
 
             if (instr->requiredReg(tmpIndex) == 0) {
                 if (*list & Instruction::FloatOperandMarker) {
-                    instr->setRequiredReg(tmpIndex, regs.toCPUFloatReg(regs.floatSet().allocateRegister(nullptr)));
+                    VECTOR_SELECT((*list & Instruction::TypeMask) == Instruction::V128Operand,
+                                  instr->setRequiredReg(tmpIndex, regs.toCPUVectorReg(regs.vectorSet().allocateRegister(nullptr))),
+                                  instr->setRequiredReg(tmpIndex, regs.toCPUFloatReg(regs.floatSet().allocateRegister(nullptr))))
                 } else {
                     instr->setRequiredReg(tmpIndex, regs.toCPUIntegerReg(regs.integerSet().allocateRegister(nullptr)));
                 }
@@ -850,6 +936,9 @@ void JITCompiler::allocateRegisters()
 
     m_savedIntegerRegCount = regs.integerSet().getSavedRegCount();
     m_savedFloatRegCount = regs.floatSet().getSavedRegCount();
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    m_savedVectorRegCount = regs.vectorSet().getSavedRegCount();
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
 
     // Insert stack inits before the offsets are destroyed.
     insertStackInitList(nullptr, 0, variableListParamCount);
@@ -867,7 +956,9 @@ void JITCompiler::allocateRegisters()
             uint8_t reg1;
 
             if (variable.info & Instruction::FloatOperandMarker) {
-                reg1 = regs.toCPUFloatReg(variable.reg1);
+                VECTOR_SELECT(variable.info == Instruction::V128Operand,
+                              reg1 = regs.toCPUVectorReg(variable.reg1),
+                              reg1 = regs.toCPUFloatReg(variable.reg1))
             } else {
                 reg1 = regs.toCPUIntegerReg(variable.reg1);
 
@@ -896,6 +987,9 @@ void JITCompiler::allocateRegistersSimple()
 {
     m_savedIntegerRegCount = 0;
     m_savedFloatRegCount = 0;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+    m_savedVectorRegCount = 0;
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
 
     if (m_variableList == nullptr) {
         return;
@@ -916,6 +1010,9 @@ void JITCompiler::allocateRegistersSimple()
         uint32_t tmpIndex = 0;
         uint32_t nextIntIndex = SLJIT_R0;
         uint32_t nextFloatIndex = SLJIT_FR0;
+#if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
+        uint32_t nextVectorIndex = FIRST_VECTOR_REG;
+#endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
 
         instr->setRequiredRegsDescriptor(0);
 
@@ -944,7 +1041,9 @@ void JITCompiler::allocateRegistersSimple()
 
                 // Source registers are read-only.
                 if ((*list & Instruction::TmpRequired) || (variable.info & VariableList::kIsImmediate)) {
-                    instr->setRequiredReg(tmpIndex, nextFloatIndex++);
+                    VECTOR_SELECT((*list & Instruction::TypeMask) == Instruction::V128Operand,
+                                  instr->setRequiredReg(tmpIndex, nextVectorIndex++),
+                                  instr->setRequiredReg(tmpIndex, nextFloatIndex++))
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
                     if ((*list & Instruction::TypeMask) == Instruction::V128Operand) {
                         // Quad registers are register pairs.
@@ -980,7 +1079,9 @@ void JITCompiler::allocateRegistersSimple()
             }
 
             if (*list & Instruction::FloatOperandMarker) {
-                instr->setRequiredReg(tmpIndex, nextFloatIndex++);
+                VECTOR_SELECT((*list & Instruction::TypeMask) == Instruction::V128Operand,
+                              instr->setRequiredReg(tmpIndex, nextVectorIndex++),
+                              instr->setRequiredReg(tmpIndex, nextFloatIndex++))
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
                 if ((*list & Instruction::TypeMask) == Instruction::V128Operand) {
                     // Quad registers are register pairs.
@@ -1057,4 +1158,5 @@ void JITCompiler::freeVariables()
 
 } // namespace Walrus
 
+#undef VECTOR_SELECT
 #endif // WALRUS_ENABLE_JIT

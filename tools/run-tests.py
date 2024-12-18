@@ -65,7 +65,7 @@ def _run_wast_tests(engine, files, is_fail, args=None):
     fails = 0
     for file in files:
         if jit:
-            filename = os.path.basename(file) 
+            filename = os.path.basename(file)
             if filename in JIT_EXCLUDE_FILES:
                 continue
 
