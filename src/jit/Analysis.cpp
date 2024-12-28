@@ -751,31 +751,36 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         VariableRef ref = *instr->getResult(0);
         VariableList::Variable& variable = m_variableList->variables[ref];
 
-        if (variable.u.rangeStart == instr->id() && variable.rangeEnd == instr->id() + 1) {
-            ASSERT(instr->next()->isInstruction());
-            Instruction* nextInstr = instr->next()->asInstruction();
-
-            switch (nextInstr->opcode()) {
-            case ByteCode::JumpIfTrueOpcode:
-            case ByteCode::JumpIfFalseOpcode:
-                // These instructions has only one argument.
-                ASSERT(*nextInstr->getParam(0) == VARIABLE_SET(ref, DependencyGenContext::Variable));
-                variable.info |= VariableList::kIsImmediate;
-                variable.value = VARIABLE_SET_PTR(nullptr);
-                continue;
-            case ByteCode::SelectOpcode:
-                if (*nextInstr->getParam(2) == VARIABLE_SET(ref, DependencyGenContext::Variable)) {
-                    variable.info |= VariableList::kIsImmediate;
-                    variable.value = VARIABLE_SET_PTR(nullptr);
-                    continue;
-                }
-                break;
-            default:
-                break;
-            }
+        if (variable.u.rangeStart != instr->id() || variable.rangeEnd != instr->id() + 1) {
+            instr->clearInfo(Instruction::kIsMergeCompare);
+            continue;
         }
 
-        instr->clearInfo(Instruction::kIsMergeCompare);
+        ASSERT(instr->next()->isInstruction());
+        Instruction* nextInstr = instr->next()->asInstruction();
+
+        switch (nextInstr->opcode()) {
+        case ByteCode::JumpIfTrueOpcode:
+        case ByteCode::JumpIfFalseOpcode:
+            // These instructions has only one argument.
+            ASSERT(*nextInstr->getParam(0) == VARIABLE_SET(ref, DependencyGenContext::Variable));
+            break;
+        case ByteCode::SelectOpcode:
+            if (*nextInstr->getParam(2) == VARIABLE_SET(ref, DependencyGenContext::Variable)) {
+                break;
+            }
+            FALLTHROUGH;
+        default:
+            instr->clearInfo(Instruction::kIsMergeCompare);
+            continue;
+        }
+
+        variable.info |= VariableList::kIsImmediate;
+        variable.value = VARIABLE_SET_PTR(nullptr);
+
+        if (instr->group() == Instruction::Binary) {
+            instr->convertBinaryToCompare();
+        }
     }
 }
 

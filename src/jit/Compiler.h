@@ -147,6 +147,12 @@ public:
         return reinterpret_cast<Label*>(this);
     }
 
+    void convertBinaryToCompare()
+    {
+        ASSERT(m_group == Binary);
+        m_group = Compare;
+    }
+
 protected:
     explicit InstructionListItem(Group group)
         : m_next(nullptr)
