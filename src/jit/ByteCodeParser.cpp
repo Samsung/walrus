@@ -529,6 +529,9 @@ static void compileFunction(JITCompiler* compiler)
             group = Instruction::Binary;
             paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIs32Bit;
+            if (opcode == ByteCode::I32AndOpcode) {
+                info |= Instruction::kIsMergeCompare;
+            }
             requiredInit = OTOp2I32;
             break;
         }
