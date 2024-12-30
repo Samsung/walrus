@@ -436,6 +436,10 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         opcode = SLJIT_SUB | SLJIT_SET_GREATER_EQUAL;
         type = SLJIT_GREATER_EQUAL;
         break;
+    case ByteCode::I32AndOpcode:
+        opcode = SLJIT_AND | SLJIT_SET_Z;
+        type = SLJIT_NOT_ZERO;
+        break;
     default:
         RELEASE_ASSERT_NOT_REACHED();
         break;
@@ -455,11 +459,23 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
                 type ^= 0x1;
             }
 
-            if (instr->info() & Instruction::kIs32Bit) {
-                type |= SLJIT_32;
-            }
 
-            sljit_jump* jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+            sljit_jump* jump;
+
+            if (instr->opcode() != ByteCode::I32AndOpcode) {
+                if (instr->info() & Instruction::kIs32Bit) {
+                    type |= SLJIT_32;
+                }
+
+                jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+            } else {
+                if (instr->info() & Instruction::kIs32Bit) {
+                    opcode |= SLJIT_32;
+                }
+
+                sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+                jump = sljit_emit_jump(compiler, type);
+            }
             nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
             return true;
         }
