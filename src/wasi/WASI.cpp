@@ -263,7 +263,7 @@ void WASI::fd_prestat_dir_name(ExecutionState& state, Value* argv, Value* result
 void WASI::fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
-    uint64_t fileDelta = argv[1].asI32();
+    uint64_t fileDelta = argv[1].asI64();
     uint32_t whence = argv[2].asI32();
     uvwasi_filesize_t* file_size = reinterpret_cast<uvwasi_filesize_t*>(get_memory_pointer(instance, argv[3], sizeof(uvwasi_filesize_t)));
 
