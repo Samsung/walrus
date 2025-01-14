@@ -75,6 +75,7 @@ enum TypeOpcode : uint32_t {
     vmfne_vv = InstructionType::opfvv | OPCODE(0x1c),
     vmin_vv = InstructionType::opivv | OPCODE(0x5),
     vminu_vv = InstructionType::opivv | OPCODE(0x4),
+    vmseq_vi = InstructionType::opivi | OPCODE(0x18),
     vmseq_vv = InstructionType::opivv | OPCODE(0x18),
     vmsle_vv = InstructionType::opivv | OPCODE(0x1d),
     vmsleu_vv = InstructionType::opivv | OPCODE(0x1c),
@@ -218,26 +219,16 @@ static void simdEmitPairwiseAdd(sljit_compiler* compiler, sljit_s32 type, bool i
     simdEmitOp(compiler, SimdOp::vadd_vv, rd, rd, tmp);
 }
 
-static void simdEmitAllTrue(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn)
+static void simdEmitAllAnyTrue(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn, bool allTrue = false)
 {
     sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
-    simdEmitTypedOp(compiler, type, SimdOp::vmv_vi, tmp, 0, (0x1F), SimdOp::rmIsImm);
-    simdEmitOp(compiler, SimdOp::vredminu_vs, tmp, rn, tmp);
-    simdEmitOp(compiler, SimdOp::vmv_xs, rd, 0, tmp, SimdOp::rnIsImm | SimdOp::rdIsGpr);
-    struct sljit_jump* notAllTrue = sljit_emit_cmp(compiler, SLJIT_EQUAL, rd, 0, SLJIT_IMM, 0);
-    sljit_emit_op1(compiler, SLJIT_MOV, rd, 0, SLJIT_IMM, 1);
-    sljit_set_label(notAllTrue, sljit_emit_label(compiler));
-}
 
-static void simdEmitAnyTrue(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn)
-{
-    sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
-    simdEmitTypedOp(compiler, type, SimdOp::vmv_sx, tmp, 0, TMP_ZERO, SimdOp::rmIsGpr);
-    simdEmitOp(compiler, SimdOp::vredmaxu_vs, tmp, rn, tmp);
-    simdEmitOp(compiler, SimdOp::vmv_xs, rd, 0, tmp, SimdOp::rnIsImm | SimdOp::rdIsGpr);
-    struct sljit_jump* notAnyTrue = sljit_emit_cmp(compiler, SLJIT_EQUAL, rd, 0, SLJIT_IMM, 0);
-    sljit_emit_op1(compiler, SLJIT_MOV, rd, 0, SLJIT_IMM, 1);
-    sljit_set_label(notAnyTrue, sljit_emit_label(compiler));
+    simdEmitTypedOp(compiler, type, allTrue ? SimdOp::vmseq_vi : SimdOp::vmsne_vi, tmp, rn, 0, SimdOp::rmIsImm);
+
+    simdEmitTypedOp(compiler, type == SLJIT_SIMD_ELEM_8 ? SLJIT_SIMD_ELEM_16 : SLJIT_SIMD_ELEM_8, SimdOp::vmv_xs, rd, tmp, 0, SimdOp::rmIsImm | SimdOp::rdIsGpr);
+    if (type == SLJIT_SIMD_ELEM_32 || type == SLJIT_SIMD_ELEM_64) {
+        sljit_emit_op2(compiler, SLJIT_AND, rd, 0, rd, 0, SLJIT_IMM, type == SLJIT_SIMD_ELEM_32 ? 0xf : 0x3);
+    }
 }
 
 static void simdEmitAvgr(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
@@ -669,7 +660,7 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
     JITArg args[2];
 
     sljit_s32 srcType = SLJIT_SIMD_ELEM_128;
-    sljit_s32 type = SLJIT_NOT_EQUAL;
+    sljit_s32 type = SLJIT_EQUAL;
 
     switch (instr->opcode()) {
     case ByteCode::I8X16AllTrueOpcode:
@@ -683,11 +674,11 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     case ByteCode::I64X2AllTrueOpcode:
         srcType = SLJIT_SIMD_ELEM_64;
-        type = SLJIT_ORDERED_EQUAL;
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::V128AnyTrueOpcode);
-        srcType = SLJIT_SIMD_ELEM_8;
+        srcType = SLJIT_SIMD_ELEM_16;
+        type = SLJIT_NOT_EQUAL;
         break;
     }
 
@@ -705,20 +696,41 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8AllTrueOpcode:
     case ByteCode::I32X4AllTrueOpcode:
     case ByteCode::I64X2AllTrueOpcode:
-        simdEmitAllTrue(compiler, srcType, dst, args[0].arg);
+        simdEmitAllAnyTrue(compiler, srcType, dst, args[0].arg, true);
         break;
     default:
         ASSERT(instr->opcode() == ByteCode::V128AnyTrueOpcode);
-        simdEmitAnyTrue(compiler, srcType, dst, args[0].arg);
+        simdEmitAllAnyTrue(compiler, srcType, dst, args[0].arg);
         break;
     }
 
     ASSERT(instr->next() != nullptr);
 
     if (instr->info() & Instruction::kIsMergeCompare) {
+        Instruction* nextInstr = instr->next()->asInstruction();
+
+        if (nextInstr->opcode() == ByteCode::SelectOpcode) {
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, dst, 0, SLJIT_IMM, 0);
+            emitSelect(compiler, nextInstr, type);
+            return true;
+        }
+
+        ASSERT(nextInstr->opcode() == ByteCode::JumpIfTrueOpcode || nextInstr->opcode() == ByteCode::JumpIfFalseOpcode);
+
+        if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
+            type ^= 0x1;
+        }
+
+        nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_cmp(compiler, type, dst, 0, SLJIT_IMM, 0));
         return true;
     }
 
+    sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, dst, 0, SLJIT_IMM, 0);
+    sljit_emit_op_flags(compiler, SLJIT_MOV32, dst, 0, type);
+
+    if (SLJIT_IS_MEM(args[1].arg)) {
+        sljit_emit_op1(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, dst, 0);
+    }
     return false;
 }
 
