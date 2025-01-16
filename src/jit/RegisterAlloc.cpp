@@ -20,6 +20,12 @@
 #include "jit/Compiler.h"
 #include <set>
 
+#if defined(NDEBUG)
+#define NOP_CHECK false
+#else /* !NDEBUG */
+#define NOP_CHECK instr->opcode() == ByteCode::NopOpcode
+#endif /* NDEBUG */
+
 #if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
 #define VECTOR_SELECT(COND, VECTOR, FLOAT) \
     if (COND) {                            \
@@ -688,7 +694,7 @@ void JITCompiler::allocateRegisters()
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
-                   || instr->opcode() == ByteCode::JumpOpcode || instr->opcode() == ByteCode::UnreachableOpcode);
+                   || instr->opcode() == ByteCode::JumpOpcode || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
 
             if (!hasResult) {
                 continue;
@@ -1021,7 +1027,7 @@ void JITCompiler::allocateRegistersSimple()
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
-                   || instr->opcode() == ByteCode::JumpOpcode || instr->opcode() == ByteCode::UnreachableOpcode);
+                   || instr->opcode() == ByteCode::JumpOpcode || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
             continue;
         }
 

@@ -1404,6 +1404,12 @@ static void compileFunction(JITCompiler* compiler)
             compiler->append(byteCode, group, opcode, 0, 0);
             break;
         }
+#if !defined(NDEBUG)
+        case ByteCode::NopOpcode: {
+            compiler->append(byteCode, group, opcode, 0, 0);
+            break;
+        }
+#endif /* !NDEBUG */
         case ByteCode::JumpOpcode: {
             Jump* jump = reinterpret_cast<Jump*>(byteCode);
             compiler->appendBranch(jump, opcode, labels[COMPUTE_OFFSET(idx, jump->offset())], 0);

@@ -1345,6 +1345,12 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
                 m_context.appendTrapJump(ExecutionContext::GenericTrap, sljit_emit_jump(m_compiler, SLJIT_JUMP));
                 break;
             }
+#if !defined(NDEBUG)
+            case ByteCode::NopOpcode: {
+                sljit_emit_op0(m_compiler, SLJIT_NOP);
+                break;
+            }
+#endif /* !NDEBUG */
             case ByteCode::EndOpcode: {
                 emitEnd(m_compiler, item->asInstruction());
                 break;

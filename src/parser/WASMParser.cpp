@@ -2334,6 +2334,9 @@ public:
 
     virtual void OnNopExpr() override
     {
+#if !defined(NDEBUG)
+        pushByteCode(Walrus::Nop(), WASMOpcode::NopOpcode);
+#endif /* !NDEBUG */
     }
 
     virtual void OnReturnExpr() override
