@@ -844,6 +844,9 @@ public:
     }
     Result OnNopExpr() override {
         CHECK_RESULT(m_validator.OnNop(GetLocation()));
+#if !defined(NDEBUG)
+        m_externalDelegate->OnNopExpr();
+#endif /* !NDEBUG */
         return Result::Ok;
     }
     Result OnRethrowExpr(Index depth) override {
