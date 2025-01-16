@@ -1447,6 +1447,15 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+#if !defined(NDEBUG)
+    DEFINE_OPCODE(Nop)
+        :
+    {
+        ADD_PROGRAM_COUNTER(Nop);
+        NEXT_INSTRUCTION();
+    }
+#endif /* !NDEBUG */
+
     DEFINE_OPCODE(End)
         :
     {
