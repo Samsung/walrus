@@ -373,6 +373,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I8X16NegOpcode:
     case ByteCode::I8X16AbsOpcode:
     case ByteCode::I8X16PopcntOpcode:
+    case ByteCode::V128NotOpcode:
         srcType = SLJIT_SIMD_ELEM_8;
         dstType = SLJIT_SIMD_ELEM_8;
         break;
@@ -464,10 +465,6 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_32;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         break;
-    case ByteCode::V128NotOpcode:
-        srcType = SLJIT_SIMD_ELEM_128;
-        dstType = SLJIT_SIMD_ELEM_128;
-        break;
     default:
         ASSERT_NOT_REACHED();
         break;
@@ -490,7 +487,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F64X2ConvertLowI32X4UOpcode:
         break;
     case ByteCode::V128NotOpcode:
-        simdEmitTypedOp(compiler, srcType, SimdOp::vxor_vv, dst, args[0].arg, (0x1F), SimdOp::rmIsImm);
+        simdEmitTypedOp(compiler, srcType, SimdOp::vxor_vi, dst, args[0].arg, (0x1F), SimdOp::rmIsImm);
         break;
     case ByteCode::I8X16NegOpcode:
     case ByteCode::I16X8NegOpcode:
@@ -671,6 +668,10 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I8X16MaxUOpcode:
     case ByteCode::I8X16AvgrUOpcode:
     case ByteCode::I8X16SwizzleOpcode:
+    case ByteCode::V128AndOpcode:
+    case ByteCode::V128OrOpcode:
+    case ByteCode::V128XorOpcode:
+    case ByteCode::V128AndnotOpcode:
         srcType = SLJIT_SIMD_ELEM_8;
         dstType = SLJIT_SIMD_ELEM_8;
         break;
@@ -798,13 +799,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::F64X2MinOpcode:
         srcType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
         dstType = SLJIT_SIMD_FLOAT | SLJIT_SIMD_ELEM_64;
-        break;
-    case ByteCode::V128AndOpcode:
-    case ByteCode::V128OrOpcode:
-    case ByteCode::V128XorOpcode:
-    case ByteCode::V128AndnotOpcode:
-        srcType = SLJIT_SIMD_ELEM_128;
-        dstType = SLJIT_SIMD_ELEM_128;
         break;
     default:
         ASSERT_NOT_REACHED();
@@ -1034,6 +1028,8 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitTypedOp(compiler, srcType, SimdOp::vxor_vv, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::V128AndnotOpcode:
+        simdEmitTypedOp(compiler, srcType, SimdOp::vxor_vi, SLJIT_TMP_DEST_VREG, args[1].arg, (0x1F), SimdOp::rmIsImm);
+        simdEmitOp(compiler, SimdOp::vand_vv, dst, args[0].arg, SLJIT_TMP_DEST_VREG);
         break;
     case ByteCode::I8X16SwizzleOpcode:
         simdEmitSwizzle(compiler, srcType, dst, args[0].arg, args[1].arg);
@@ -1046,6 +1042,17 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     if (SLJIT_IS_MEM(args[2].arg)) {
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | dstType, dst, args[2].arg, args[2].argw);
     }
+}
+
+static void simdEmitBitSelect(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, sljit_s32 ro)
+{
+    sljit_s32 tmp = SLJIT_TMP_DEST_FREG;
+
+    simdEmitVsetivli(compiler, SLJIT_SIMD_ELEM_8, 0);
+    simdEmitOp(compiler, SimdOp::vxor_vi, SLJIT_TMP_DEST_VREG, ro, (0x1F), SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vand_vv, SLJIT_TMP_DEST_VREG, SLJIT_TMP_DEST_VREG, rm);
+    simdEmitOp(compiler, SimdOp::vand_vv, rd, rn, ro);
+    simdEmitOp(compiler, SimdOp::vor_vv, rd, rd, SLJIT_TMP_DEST_VREG);
 }
 
 static void emitTernarySIMD(sljit_compiler* compiler, Instruction* instr)
@@ -1105,6 +1112,7 @@ static void emitTernarySIMD(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::V128BitSelectOpcode:
+        simdEmitBitSelect(compiler, dst, args[0].arg, args[1].arg, args[2].arg);
         break;
     case ByteCode::I8X16RelaxedLaneSelectOpcode:
         break;
