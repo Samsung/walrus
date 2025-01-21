@@ -45,13 +45,21 @@ public:
     F(random_get, I32I32_RI32)                     \
     F(fd_write, I32I32I32I32_RI32)                 \
     F(fd_read, I32I32I32I32_RI32)                  \
+    F(fd_readdir, I32I32I32I64I32_RI32)            \
     F(fd_close, I32_RI32)                          \
     F(fd_fdstat_get, I32I32_RI32)                  \
-    F(fd_prestat_dir_name, I32I32I32_RI32)         \
+    F(fd_fdstat_set_flags, I32I32_RI32)            \
     F(fd_prestat_get, I32I32_RI32)                 \
+    F(fd_prestat_dir_name, I32I32I32_RI32)         \
     F(fd_seek, I32I64I32I32_RI32)                  \
     F(fd_advise, I32I64I64I32_RI32)                \
     F(path_open, I32I32I32I32I32I64I64I32I32_RI32) \
+    F(path_create_directory, I32I32I32_RI32)       \
+    F(path_remove_directory, I32I32I32_RI32)       \
+    F(path_filestat_get, I32I32I32I32I32_RI32)     \
+    F(path_rename, I32I32I32I32I32I32_RI32)        \
+    F(path_unlink_file, I32I32I32_RI32)            \
+    F(poll_oneoff, I32I32I32I32_RI32)              \
     F(environ_get, I32I32_RI32)                    \
     F(environ_sizes_get, I32I32_RI32)
 

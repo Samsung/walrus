@@ -638,7 +638,7 @@ private:
          *
          * m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos
          * checks if the output of I32Eqz is the input of JumpIfTrue/JumpIfFalse
-        */
+         */
         return (m_lastI32EqzPos + sizeof(Walrus::I32Eqz) == m_currentFunction->currentByteCodeSize())
             && (m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos);
     }
