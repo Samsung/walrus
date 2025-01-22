@@ -46,6 +46,9 @@ enum TypeOpcode : uint32_t {
     vfcvt_f_x_v = InstructionType::opfvv | OPCODE(0x12) | (0x3 << 15),
     vfcvt_x_f_v = InstructionType::opfvv | OPCODE(0x12) | (0x1 << 15),
     vfcvt_rtz_x_f_v = InstructionType::opfvv | OPCODE(0x12) | (0x7 << 15),
+    vfcvt_rtz_xu_f_v = InstructionType::opfvv | OPCODE(0x12) | (0x6 << 15),
+    vfncvt_rtz_x_f_w = InstructionType::opfvv | OPCODE(0x12) | (0x17 << 15),
+    vfncvt_rtz_xu_f_w = InstructionType::opfvv | OPCODE(0x12) | (0x16 << 15),
     vfdiv_vv = InstructionType::opfvv | OPCODE(0x20),
     vfirst_m = InstructionType::opmvv | OPCODE(0x10) | (0x11 << 15),
     vfmax_vv = InstructionType::opfvv | OPCODE(0x6),
@@ -126,23 +129,24 @@ static void simdEmitVsetivli(struct sljit_compiler* compiler, sljit_s32 type, sl
 static void simdEmitOp(sljit_compiler* compiler, uint32_t opcode, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, uint32_t optype = 0)
 {
     rd = sljit_get_register_index((optype & SimdOp::rdIsGpr) ? SLJIT_GP_REGISTER : SLJIT_SIMD_REG_128, rd);
+
     if (!(optype & SimdOp::rnIsImm) && !(optype & SimdOp::rnIsGpr)) {
         ASSERT(rn >= SLJIT_VR0);
         rn = sljit_get_register_index(SLJIT_SIMD_REG_128, rn);
-    }
-    if (optype & SimdOp::rnIsGpr) {
+    } else if (optype & SimdOp::rnIsGpr) {
         ASSERT(rn >= SLJIT_R0);
         rn = sljit_get_register_index(SLJIT_GP_REGISTER, rn);
     }
+
     if (!(optype & SimdOp::rmIsImm) && !(optype & SimdOp::rmIsGpr)) {
         ASSERT(rm >= SLJIT_VR0);
         rm = sljit_get_register_index(SLJIT_SIMD_REG_128, rm);
-    }
-    if (optype & SimdOp::rmIsGpr) {
+    } else if (optype & SimdOp::rmIsGpr) {
         ASSERT(rm >= SLJIT_R0);
         rm = sljit_get_register_index(SLJIT_GP_REGISTER, rm);
     }
 
+    /* Mapping: rd -> vd, rm -> vs1, rn -> vs2. */
     opcode |= ((uint32_t)rd << 7) | ((uint32_t)rm << 15) | ((uint32_t)rn << 20);
     sljit_emit_op_custom(compiler, &opcode, sizeof(uint32_t));
 }
@@ -304,6 +308,7 @@ static void simdEmitFMinMax(sljit_compiler* compiler, sljit_s32 type, sljit_s32 
     sljit_s32 mask = SLJIT_VR0;
     sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
     sljit_s32 gptmp = SLJIT_TMP_DEST_REG;
+
     simdEmitTypedOp(compiler, type, SimdOp::vmfeq_vv, mask, rn, rn);
     simdEmitOp(compiler, SimdOp::vmfeq_vv, tmp, rm, rm);
     simdEmitOp(compiler, SimdOp::vand_vv, mask, mask, tmp);
@@ -313,16 +318,36 @@ static void simdEmitFMinMax(sljit_compiler* compiler, sljit_s32 type, sljit_s32 
     simdEmitOp(compiler, SimdOp::vmv_vv, rd, 0, tmp, SimdOp::rnIsImm);
 }
 
+static void simdEmitTruncSat(sljit_compiler* compiler, sljit_s32 type, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
+{
+    sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
+
+    simdEmitTypedOp(compiler, type, SimdOp::vmfne_vv, SLJIT_VR0, rn, rn);
+    simdEmitOp(compiler, SimdOp::vmerge_vi, tmp, rn, 0, SimdOp::rmIsImm);
+
+    if (opcode == SimdOp::vfncvt_rtz_x_f_w || opcode == SimdOp::vfncvt_rtz_xu_f_w) {
+        simdEmitOp(compiler, SimdOp::vmv_vi, rd, 0, 0, SimdOp::rmIsImm | SimdOp::rnIsImm);
+
+        /* 8 byte result. */
+        uint32_t opcode = VSETIVLI | (6 << 7) | (2 << 23) | (2 << 15);
+        sljit_emit_op_custom(compiler, &opcode, sizeof(uint32_t));
+    }
+
+    simdEmitOp(compiler, opcode, rd, tmp, 0, SimdOp::rmIsImm);
+}
+
 static void SimdEmitFTrunc(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn)
 {
     sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
+
     simdEmitTypedOp(compiler, type, SimdOp::vfcvt_x_f_v, tmp, rn, 0, SimdOp::rmIsImm);
-    simdEmitTypedOp(compiler, type, SimdOp::vfcvt_f_x_v, rd, tmp, 0, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vfcvt_f_x_v, rd, tmp, 0, SimdOp::rmIsImm);
 }
 
 static void simdEmitPMinMax(sljit_compiler* compiler, sljit_s32 type, bool min, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
     sljit_s32 mask = SLJIT_VR0;
+
     simdEmitTypedOp(compiler, type, SimdOp::vmflt_vv, mask, min ? rm : rn, min ? rn : rm);
     simdEmitOp(compiler, SimdOp::vmerge_vv, rd, rn, rm);
 }
@@ -533,12 +558,16 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4ExtaddPairwiseI16X8UOpcode:
         break;
     case ByteCode::I32X4TruncSatF32X4SOpcode:
+        simdEmitTruncSat(compiler, srcType, SimdOp::vfcvt_rtz_x_f_v, dst, args[0].arg);
         break;
     case ByteCode::I32X4TruncSatF32X4UOpcode:
+        simdEmitTruncSat(compiler, srcType, SimdOp::vfcvt_rtz_xu_f_v, dst, args[0].arg);
         break;
     case ByteCode::I32X4TruncSatF64X2SZeroOpcode:
+        simdEmitTruncSat(compiler, srcType, SimdOp::vfncvt_rtz_x_f_w, dst, args[0].arg);
         break;
     case ByteCode::I32X4TruncSatF64X2UZeroOpcode:
+        simdEmitTruncSat(compiler, srcType, SimdOp::vfncvt_rtz_xu_f_w, dst, args[0].arg);
         break;
     case ByteCode::F32X4AbsOpcode:
     case ByteCode::F64X2AbsOpcode:
