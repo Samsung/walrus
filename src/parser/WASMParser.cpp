@@ -996,6 +996,7 @@ public:
 
     virtual void BeginFunctionBody(Index index, Offset size) override
     {
+        ASSERT(resumeGenerateByteCodeAfterNBlockEnd() == 0);
         ASSERT(m_currentFunction == nullptr);
         beginFunction(m_result.m_functions[index], false);
     }
@@ -1039,6 +1040,7 @@ public:
         m_preprocessData.m_inPreprocess = false;
         m_skipValidationUntil = *m_readerOffsetPointer - 1;
         m_shouldContinueToGenerateByteCode = true;
+        setResumeGenerateByteCodeAfterNBlockEnd(0);
 
         m_currentFunction->m_byteCode.clear();
         m_currentFunction->m_catchInfo.clear();
