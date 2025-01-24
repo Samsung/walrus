@@ -323,6 +323,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTOp3DotAddV128 OTOp3V128
 
 #elif (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV)
+
 #define OPERAND_TYPE_LIST_SIMD_ARCH                                         \
     OL2(OTOp1V128CB, /* SD */ V128 | NOTMP, V128 | NOTMP)                   \
     OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)  \
