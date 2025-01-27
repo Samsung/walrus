@@ -29,7 +29,14 @@ namespace Walrus {
 
 class FunctionType;
 
+#if defined(NDEBUG)
+#define F_NOP(F)
+#else /* !NDEBUG */
+#define F_NOP(F) F(Nop)
+#endif /* NDEBUG */
+
 #define FOR_EACH_BYTECODE_OP(F) \
+    F_NOP(F)                    \
     F(Unreachable)              \
     F(Throw)                    \
     F(End)                      \
@@ -2475,6 +2482,24 @@ protected:
     uint32_t m_tagIndex;
     uint32_t m_offsetsSize;
 };
+
+#if !defined(NDEBUG)
+class Nop : public ByteCode {
+public:
+    Nop()
+        : ByteCode(Opcode::NopOpcode)
+    {
+    }
+
+
+    void dump(size_t pos)
+    {
+        printf("nop");
+    }
+
+protected:
+};
+#endif /* !NDEBUG*/
 
 class Unreachable : public ByteCode {
 public:
