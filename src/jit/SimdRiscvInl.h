@@ -44,6 +44,7 @@ enum TypeOpcode : uint32_t {
     vfadd_vf = InstructionType::opfvf | OPCODE(0x0),
     vfadd_vv = InstructionType::opfvv | OPCODE(0x0),
     vfcvt_f_x_v = InstructionType::opfvv | OPCODE(0x12) | (0x3 << 15),
+    vfcvt_f_xu_v = InstructionType::opfvv | OPCODE(0x12) | (0x2 << 15),
     vfcvt_x_f_v = InstructionType::opfvv | OPCODE(0x12) | (0x1 << 15),
     vfcvt_rtz_x_f_v = InstructionType::opfvv | OPCODE(0x12) | (0x7 << 15),
     vfcvt_rtz_xu_f_v = InstructionType::opfvv | OPCODE(0x12) | (0x6 << 15),
@@ -51,6 +52,7 @@ enum TypeOpcode : uint32_t {
     vfncvt_rtz_xu_f_w = InstructionType::opfvv | OPCODE(0x12) | (0x16 << 15),
     vfdiv_vv = InstructionType::opfvv | OPCODE(0x20),
     vfirst_m = InstructionType::opmvv | OPCODE(0x10) | (0x11 << 15),
+    vfncvt_f_f_w = InstructionType::opfvv | OPCODE(0x12) | (0x14 << 15),
     vfmax_vv = InstructionType::opfvv | OPCODE(0x6),
     vfmin_vv = InstructionType::opfvv | OPCODE(0x4),
     vfmul_vv = InstructionType::opfvv | OPCODE(0x24),
@@ -59,7 +61,11 @@ enum TypeOpcode : uint32_t {
     vfsgnjx_vv = InstructionType::opfvv | OPCODE(0xa),
     vfsqrt_v = InstructionType::opfvv | OPCODE(0x13),
     vfsub_vv = InstructionType::opfvv | OPCODE(0x2),
+    vfwcvt_f_f_v = InstructionType::opfvv | OPCODE(0x12) | (0xc << 15),
+    vfwcvt_f_x_v = InstructionType::opfvv | OPCODE(0x12) | (0xb << 15),
+    vfwcvt_f_xu_v = InstructionType::opfvv | OPCODE(0x12) | (0xa << 15),
     vmax_vv = InstructionType::opivv | OPCODE(0x7),
+    vmax_vx = InstructionType::opivx | OPCODE(0x7),
     vmaxu_vv = InstructionType::opivv | OPCODE(0x6),
     vmerge_vi = (InstructionType::opivi ^ InstructionType::vm) | OPCODE(0x17),
     vmerge_vv = (InstructionType::opivv ^ InstructionType::vm) | OPCODE(0x17),
@@ -83,6 +89,8 @@ enum TypeOpcode : uint32_t {
     vmv_vv = InstructionType::opivv | OPCODE(0x17),
     vmv_vx = InstructionType::opivx | OPCODE(0x17),
     vmv_xs = InstructionType::opmvv | OPCODE(0x10),
+    vnclip_wi = InstructionType::opivi | OPCODE(0x2f),
+    vnclipu_wi = InstructionType::opivi | OPCODE(0x2e),
     vor_vv = InstructionType::opivv | OPCODE(0xa),
     vredmaxu_vs = InstructionType::opmvv | OPCODE(0x6),
     vredminu_vs = InstructionType::opmvv | OPCODE(0x4),
@@ -93,6 +101,7 @@ enum TypeOpcode : uint32_t {
     vsaddu_vv = InstructionType::opivv | OPCODE(0x20),
     vsext_vf2 = InstructionType::opmvv | OPCODE(0x12) | (0x7 << 15),
     vslidedown_vi = InstructionType::opivi | OPCODE(0xf),
+    vslideup_vi = InstructionType::opivi | OPCODE(0xe),
     vsll_vi = InstructionType::opivi | OPCODE(0x25),
     vsll_vx = InstructionType::opivx | OPCODE(0x25),
     vsra_vi = InstructionType::opivi | OPCODE(0x29),
@@ -248,31 +257,49 @@ static void simdEmitCompare(sljit_compiler* compiler, sljit_s32 type, uint32_t o
     simdEmitOp(compiler, SimdOp::vmerge_vi, rd, tmp, reverseMask ? 0 : (0x1F), SimdOp::rmIsImm);
 }
 
-static void simdEmitExtend(sljit_compiler* compiler, sljit_s32 type, bool low, bool isSigned, sljit_s32 rd, sljit_s32 rn)
+static void simdEmitExtendLow(sljit_compiler* compiler, sljit_s32 type, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
 {
     sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
 
-    if (low) {
-        simdEmitTypedOp(compiler, type, SimdOp::vmv_vv, tmp, 0, rn);
-    } else {
-        sljit_s32 t = SLJIT_SIMD_ELEM_8;
-        uint32_t imm = 8;
-        switch (type) {
-        case SLJIT_SIMD_ELEM_32:
-            t = SLJIT_SIMD_ELEM_16;
-            imm = 4;
-            break;
-        case SLJIT_SIMD_ELEM_64:
-            t = SLJIT_SIMD_ELEM_32;
-            imm = 2;
-            break;
-        }
-        simdEmitTypedOp(compiler, t, SimdOp::vslidedown_vi, tmp, rn, imm, SimdOp::rmIsImm);
+    simdEmitTypedOp(compiler, type, opcode, rd == rn ? tmp : rd, rn, 0, SimdOp::rmIsImm);
+
+    if (rd == rn) {
+        simdEmitTypedOp(compiler, type, SimdOp::vmv_vv, rd, 0, tmp, SimdOp::rnIsImm);
     }
-    uint32_t opcode = isSigned ? SimdOp::vsext_vf2 : SimdOp::vzext_vf2;
-    opcode |= (sljit_get_register_index(SLJIT_SIMD_REG_128, rd) << 7) | (sljit_get_register_index(SLJIT_SIMD_REG_128, tmp) << 20);
-    simdEmitVsetivli(compiler, type, 7);
-    sljit_emit_op_custom(compiler, &opcode, sizeof(uint32_t));
+}
+
+static void simdEmitExtendHigh(sljit_compiler* compiler, sljit_s32 type, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
+{
+    sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
+
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_8, SimdOp::vslidedown_vi, tmp, rn, 8, SimdOp::rmIsImm);
+    simdEmitTypedOp(compiler, type, opcode, rd, tmp, 0, SimdOp::rmIsImm);
+}
+
+static void simdEmitExtendLowF2(sljit_compiler* compiler, sljit_s32 type, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
+{
+    sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
+
+    simdEmitTypedOp(compiler, type, opcode, rd == rn ? tmp : rd, rn, 0, SimdOp::rmIsImm, SimdOp::vlMulF2);
+
+    if (rd == rn) {
+        simdEmitTypedOp(compiler, type, SimdOp::vmv_vv, rd, 0, tmp, SimdOp::rnIsImm);
+    }
+}
+
+static void simdEmitNarrowZero(sljit_compiler* compiler, sljit_s32 type, uint32_t opcode, sljit_s32 rd, sljit_s32 rn)
+{
+    sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
+
+    simdEmitVsetivli(compiler, type, 0);
+
+    if (rd == rn) {
+        simdEmitOp(compiler, SimdOp::vmv_vv, tmp, 0, rd, SimdOp::rnIsImm);
+        rn = tmp;
+    }
+
+    simdEmitOp(compiler, SimdOp::vmv_vi, rd, 0, 0, SimdOp::rmIsImm | SimdOp::rnIsImm);
+    simdEmitTypedOp(compiler, type, opcode, rd, rn, 0, SimdOp::rmIsImm, SimdOp::vlMulF2);
 }
 
 static void simdEmitI32x4DotI16x8(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
@@ -525,14 +552,19 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::F32X4DemoteF64X2ZeroOpcode:
+        simdEmitNarrowZero(compiler, srcType, SimdOp::vfncvt_f_f_w, dst, args[0].arg);
         break;
     case ByteCode::F32X4ConvertI32X4SOpcode:
+        simdEmitTypedOp(compiler, srcType, SimdOp::vfcvt_f_x_v, dst, args[0].arg, 0, SimdOp::rmIsImm);
         break;
     case ByteCode::F32X4ConvertI32X4UOpcode:
+        simdEmitTypedOp(compiler, srcType, SimdOp::vfcvt_f_xu_v, dst, args[0].arg, 0, SimdOp::rmIsImm);
         break;
     case ByteCode::F64X2ConvertLowI32X4SOpcode:
+        simdEmitExtendLowF2(compiler, srcType, SimdOp::vfwcvt_f_x_v, dst, args[0].arg);
         break;
     case ByteCode::F64X2ConvertLowI32X4UOpcode:
+        simdEmitExtendLowF2(compiler, srcType, SimdOp::vfwcvt_f_xu_v, dst, args[0].arg);
         break;
     case ByteCode::V128NotOpcode:
         simdEmitTypedOp(compiler, srcType, SimdOp::vxor_vi, dst, args[0].arg, (0x1F), SimdOp::rmIsImm);
@@ -563,22 +595,22 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8ExtendLowI8X16SOpcode:
     case ByteCode::I32X4ExtendLowI16X8SOpcode:
     case ByteCode::I64X2ExtendLowI32X4SOpcode:
-        simdEmitExtend(compiler, srcType, true, true, dst, args[0].arg);
+        simdEmitExtendLow(compiler, dstType, SimdOp::vsext_vf2, dst, args[0].arg);
         break;
     case ByteCode::I16X8ExtendHighI8X16SOpcode:
     case ByteCode::I32X4ExtendHighI16X8SOpcode:
     case ByteCode::I64X2ExtendHighI32X4SOpcode:
-        simdEmitExtend(compiler, srcType, false, true, dst, args[0].arg);
+        simdEmitExtendHigh(compiler, dstType, SimdOp::vsext_vf2, dst, args[0].arg);
         break;
     case ByteCode::I16X8ExtendLowI8X16UOpcode:
     case ByteCode::I32X4ExtendLowI16X8UOpcode:
     case ByteCode::I64X2ExtendLowI32X4UOpcode:
-        simdEmitExtend(compiler, srcType, true, false, dst, args[0].arg);
+        simdEmitExtendLow(compiler, dstType, SimdOp::vzext_vf2, dst, args[0].arg);
         break;
     case ByteCode::I16X8ExtendHighI8X16UOpcode:
     case ByteCode::I32X4ExtendHighI16X8UOpcode:
     case ByteCode::I64X2ExtendHighI32X4UOpcode:
-        simdEmitExtend(compiler, srcType, false, false, dst, args[0].arg);
+        simdEmitExtendHigh(compiler, dstType, SimdOp::vzext_vf2, dst, args[0].arg);
         break;
     case ByteCode::I32X4TruncSatF32X4SOpcode:
         simdEmitTruncSat(compiler, srcType, SimdOp::vfcvt_rtz_x_f_v, dst, args[0].arg);
@@ -619,6 +651,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         SimdEmitFTrunc(compiler, srcType, dst, args[0].arg);
         break;
     case ByteCode::F64X2PromoteLowF32X4Opcode:
+        simdEmitExtendLowF2(compiler, srcType, SimdOp::vfwcvt_f_f_v, dst, args[0].arg);
         break;
     default:
         ASSERT_NOT_REACHED();
@@ -710,6 +743,41 @@ static void simdEmitExtmulHigh(sljit_compiler* compiler, sljit_s32 type, uint32_
     simdEmitOp(compiler, SimdOp::vslidedown_vi, tmp2, rm, 8, SimdOp::rmIsImm);
 
     simdEmitTypedOp(compiler, type, opcode, rd, tmp1, tmp2, 0, SimdOp::vlMulF2);
+}
+
+static void simdEmitNarrowSigned(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
+{
+    sljit_s32 tmp1 = SLJIT_TMP_DEST_VREG;
+    sljit_s32 tmp2 = SLJIT_VR0;
+
+    ASSERT(type == SLJIT_SIMD_ELEM_8 || type == SLJIT_SIMD_ELEM_16);
+
+    simdEmitTypedOp(compiler, type, SimdOp::vnclip_wi, tmp2, rm, 0, SimdOp::rmIsImm, SimdOp::vlMulF2);
+    simdEmitOp(compiler, SimdOp::vnclip_wi, rd == rn ? tmp1 : rd, rn, 0, SimdOp::rmIsImm);
+
+    simdEmitVsetivli(compiler, SLJIT_SIMD_ELEM_8, 0);
+
+    if (rd == rn) {
+        simdEmitOp(compiler, SimdOp::vmv_vv, rd, 0, tmp1, SimdOp::rnIsImm);
+    }
+
+    simdEmitOp(compiler, SimdOp::vslideup_vi, rd, tmp2, 8, SimdOp::rmIsImm);
+}
+
+static void simdEmitNarrowUnsigned(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
+{
+    sljit_s32 tmp1 = SLJIT_TMP_DEST_VREG;
+    sljit_s32 tmp2 = SLJIT_VR0;
+    sljit_s32 srcType = (type == SLJIT_SIMD_ELEM_8) ? SLJIT_SIMD_ELEM_16 : SLJIT_SIMD_ELEM_32;
+
+    ASSERT(type == SLJIT_SIMD_ELEM_8 || type == SLJIT_SIMD_ELEM_16);
+    simdEmitTypedOp(compiler, srcType, SimdOp::vmax_vx, tmp1, rn, 0, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vmax_vx, rd, rm, 0, SimdOp::rmIsImm);
+
+    simdEmitTypedOp(compiler, type, SimdOp::vnclipu_wi, tmp2, rd, 0, SimdOp::rmIsImm, SimdOp::vlMulF2);
+    simdEmitOp(compiler, SimdOp::vnclipu_wi, rd, tmp1, 0, SimdOp::rmIsImm);
+
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_8, SimdOp::vslideup_vi, rd, tmp2, 8, SimdOp::rmIsImm);
 }
 
 static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
@@ -996,8 +1064,12 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitAvgr(compiler, srcType, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I8X16NarrowI16X8SOpcode:
+    case ByteCode::I16X8NarrowI32X4SOpcode:
+        simdEmitNarrowSigned(compiler, dstType, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I8X16NarrowI16X8UOpcode:
+    case ByteCode::I16X8NarrowI32X4UOpcode:
+        simdEmitNarrowUnsigned(compiler, dstType, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I16X8MulOpcode:
     case ByteCode::I32X4MulOpcode:
@@ -1023,10 +1095,6 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I32X4ExtmulHighI16X8UOpcode:
     case ByteCode::I64X2ExtmulHighI32X4UOpcode:
         simdEmitExtmulHigh(compiler, srcType, SimdOp::vwmulu_vv, dst, args[0].arg, args[1].arg);
-        break;
-    case ByteCode::I16X8NarrowI32X4SOpcode:
-        break;
-    case ByteCode::I16X8NarrowI32X4UOpcode:
         break;
     case ByteCode::I16X8Q15mulrSatSOpcode:
         break;
