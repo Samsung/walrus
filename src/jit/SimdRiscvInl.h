@@ -77,6 +77,7 @@ enum TypeOpcode : uint32_t {
     vminu_vv = InstructionType::opivv | OPCODE(0x4),
     vmseq_vi = InstructionType::opivi | OPCODE(0x18),
     vmseq_vv = InstructionType::opivv | OPCODE(0x18),
+    vmsgt_vi = InstructionType::opivi | OPCODE(0x1f),
     vmsle_vv = InstructionType::opivv | OPCODE(0x1d),
     vmsleu_vv = InstructionType::opivv | OPCODE(0x1c),
     vmslt_vv = InstructionType::opivv | OPCODE(0x1b),
@@ -112,6 +113,7 @@ enum TypeOpcode : uint32_t {
     vssub_vv = InstructionType::opivv | OPCODE(0x23),
     vssubu_vv = InstructionType::opivv | OPCODE(0x22),
     vsub_vv = InstructionType::opivv | OPCODE(0x2),
+    vsub_vx = InstructionType::opivx | OPCODE(0x2),
     vwmul_vv = InstructionType::opmvv | OPCODE(0x3b),
     vwmulu_vv = InstructionType::opmvv | OPCODE(0x38),
     vxor_vi = InstructionType::opivi | OPCODE(0xb),
@@ -418,13 +420,12 @@ static void simdEmitPopcnt(sljit_compiler* compiler, sljit_s32 type, sljit_s32 r
 
 static void simdEmitSwizzle(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
-    sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
-    if (rd == rn) {
-        simdEmitTypedOp(compiler, type, SimdOp::vrgather_vv, tmp, rn, rm);
-        simdEmitOp(compiler, SimdOp::vmv_vv, rd, 0, tmp);
-    } else {
-        simdEmitTypedOp(compiler, type, SimdOp::vrgather_vv, rd, rn, rm);
-    }
+    sljit_s32 tmp1 = SLJIT_TMP_DEST_VREG;
+    sljit_s32 tmp2 = SLJIT_VR0;
+
+    simdEmitTypedOp(compiler, type, SimdOp::vrgather_vv, tmp1, rn, rm);
+    simdEmitOp(compiler, SimdOp::vmsgt_vi, tmp2, rm, 0xf, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vmerge_vi, rd, tmp1, 0, SimdOp::rmIsImm);
 }
 
 static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
@@ -1309,6 +1310,32 @@ static void emitSelectSIMD(sljit_compiler* compiler, Instruction* instr)
 
 static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
 {
+    Operand* operands = instr->operands();
+    JITArg args[3];
+
+    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR0);
+    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, SLJIT_TMP_FR1);
+    args[2].set(operands + 2);
+    sljit_s32 dst = GET_TARGET_REG(args[2].arg, instr->requiredReg(0));
+
+    I8X16Shuffle* shuffle = reinterpret_cast<I8X16Shuffle*>(instr->byteCode());
+    sljit_s32 tmp1 = SLJIT_TMP_DEST_VREG;
+    sljit_s32 tmp2 = SLJIT_VR0;
+
+    sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8, tmp2,
+                        SLJIT_MEM0(), reinterpret_cast<sljit_sw>(shuffle->value()));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 16);
+
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_8, SimdOp::vrgather_vv, tmp1, args[0].arg, tmp2);
+    simdEmitOp(compiler, SimdOp::vsub_vx, tmp2, tmp2, SLJIT_TMP_DEST_REG, SimdOp::rmIsGpr);
+    simdEmitOp(compiler, SimdOp::vrgather_vv, dst, args[1].arg, tmp2);
+
+    simdEmitOp(compiler, SimdOp::vmsgt_vi, tmp2, tmp2, 0x1f, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vmerge_vv, dst, tmp1, dst);
+
+    if (args[2].arg != dst) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, dst, args[2].arg, args[2].argw);
+    }
 }
 
 static void emitShiftSIMD(sljit_compiler* compiler, Instruction* instr)

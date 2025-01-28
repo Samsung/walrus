@@ -257,8 +257,6 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTV128ToI32, /* SD */ V128 | TMP, I32)                                       \
     OL4(OTOp3V128, /* SSSD */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2) \
     OL2(OTExtractLaneI64, /* SD */ V128 | TMP, I64)                                  \
-    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32 | S0)                             \
-    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64 | S0)                             \
     OL3(OTReplaceLaneI32, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)              \
     OL3(OTReplaceLaneI64, /* SSD */ V128 | NOTMP, I64, V128 | TMP | S0)              \
     OL3(OTReplaceLaneF32, /* SSD */ V128 | NOTMP, F32 | NOTMP, V128 | TMP | S0)      \
@@ -273,6 +271,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTOp2V128Tmp, /* SSDT */ V128 | NOTMP, V128 | TMP, V128 | TMP | S0, V128)                 \
     OL3(OTOp2V128Rev, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)                        \
     OL5(OTOp3DotAddV128, /* SSSDT */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2, V128) \
+    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32 | S0)                                          \
+    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64 | S0)                                          \
     OL3(OTShuffleV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0)                     \
     OL3(OTPopcntV128, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)                              \
     OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)                                \
@@ -289,6 +289,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OPERAND_TYPE_LIST_SIMD_ARCH                                                \
     OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)         \
     OL3(OTPMinMaxV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)               \
+    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32 | S0)                           \
+    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64 | S0)                           \
     OL3(OTShuffleV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | TMP | S0 | S1) \
     OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
 
@@ -309,6 +311,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTOp1V128CB, /* SD */ V128 | NOTMP, V128 | NOTMP)                   \
     OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)  \
     OL3(OTMinMaxV128, /* SSD */ V128 | NOTMP, V128 | NOTMP, V128 | NOTMP)   \
+    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32 | S0)                    \
+    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64 | S0)                    \
     OL3(OTSwizzleV128, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1) \
     OL3(OTShuffleV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)        \
     OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
@@ -328,6 +332,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTOp1V128CB, /* SD */ V128 | NOTMP, V128 | NOTMP)                   \
     OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)  \
     OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)        \
+    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32)                         \
+    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64)                         \
     OL3(OTSwizzleV128, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1) \
     OL3(OTShuffleV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)        \
     OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
