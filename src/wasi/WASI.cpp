@@ -251,6 +251,15 @@ void WASI::fd_prestat_get(ExecutionState& state, Value* argv, Value* result, Ins
     result[0] = Value(uvwasi_fd_prestat_get(WASI::g_uvwasi, fd, buf));
 }
 
+
+void WASI::fd_fdstat_set_flags(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t flags = argv[1].asI32();
+
+    result[0] = Value(uvwasi_fd_fdstat_set_flags(WASI::g_uvwasi, fd, flags));
+}
+
 void WASI::fd_prestat_dir_name(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
