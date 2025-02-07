@@ -328,14 +328,15 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 #elif (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV)
 
-#define OPERAND_TYPE_LIST_SIMD_ARCH                                         \
-    OL2(OTOp1V128CB, /* SD */ V128 | NOTMP, V128 | NOTMP)                   \
-    OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)  \
-    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)        \
-    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32)                         \
-    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64)                         \
-    OL3(OTSwizzleV128, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1) \
-    OL3(OTShuffleV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)        \
+#define OPERAND_TYPE_LIST_SIMD_ARCH                                                               \
+    OL2(OTOp1V128CB, /* SD */ V128 | NOTMP, V128 | NOTMP)                                         \
+    OL3(OTOp2V128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1)                        \
+    OL3(OTOp1V128Tmp, /* SDT */ V128 | NOTMP, V128 | TMP | S0, V128)                              \
+    OL5(OTOp3DotAddV128, /* SSSDT */ V128 | TMP, V128 | TMP, V128 | NOTMP, V128 | TMP | S2, V128) \
+    OL2(OTExtractLaneF32, /* SD */ V128 | TMP, F32)                                               \
+    OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64)                                               \
+    OL3(OTSwizzleV128, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)                       \
+    OL3(OTShuffleV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)                              \
     OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
 
 // List of aliases.
@@ -345,7 +346,6 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTPMinMaxV128 OTOp2V128
 #define OTPopcntV128 OTOp1V128Tmp
 #define OTShiftV128Tmp OTShiftV128
-#define OTOp3DotAddV128 OTOp3V128
 
 #endif /* SLJIT_CONFIG_ARM */
 
