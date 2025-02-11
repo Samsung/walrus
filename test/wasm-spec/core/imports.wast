@@ -14,8 +14,7 @@
   (table (export "table-10-inf") 10 funcref)
   (table (export "table-10-20") 10 20 funcref)
   (memory (export "memory-2-inf") 2)
-  ;; Multiple memories are not yet supported
-  ;; (memory (export "memory-2-4") 2 4)
+  (memory (export "memory-2-4") 2 4)
 )
 
 (register "test")
