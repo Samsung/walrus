@@ -1286,7 +1286,7 @@ public:
 
     size_t computeExprResultPosition(Walrus::Value::Type type)
     {
-        if (!m_preprocessData.m_inPreprocess) {
+        if (!m_preprocessData.m_inPreprocess && !m_localInfo.empty()) {
             // if there is local.set code ahead,
             // we can use local variable position as expr target position
             auto localSetInfo = readAheadLocalGetIfExists();
