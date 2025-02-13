@@ -283,6 +283,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTMinMaxV128 OTOp2V128
 #define OTPMinMaxV128 OTOp2V128
 #define OTSwizzleV128 OTOp2V128
+#define OTMulRoundSatV128 OTOp2V128
 
 #elif (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
 
@@ -302,6 +303,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTMinMaxV128 OTOp2V128
 #define OTPopcntV128 OTOp1V128
 #define OTSwizzleV128 OTOp2V128
+#define OTMulRoundSatV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
 #define OTOp3DotAddV128 OTOp3V128
 
@@ -323,6 +325,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTOp2V128Rev OTOp2V128
 #define OTPMinMaxV128 OTOp2V128
 #define OTPopcntV128 OTOp1V128
+#define OTMulRoundSatV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
 #define OTOp3DotAddV128 OTOp3V128
 
@@ -337,6 +340,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTExtractLaneF64, /* SD */ V128 | TMP, F64)                                               \
     OL3(OTSwizzleV128, /* SSD */ V128 | TMP, V128 | NOTMP, V128 | TMP | S1)                       \
     OL3(OTShuffleV128, /* SSD */ V128 | TMP, V128 | TMP, V128 | TMP)                              \
+    OL4(OTMulRoundSatV128, /* SSDT */ V128 | TMP, V128 | TMP, V128 | TMP | S0 | S1, V128)         \
     OL3(OTShiftV128, /* SSD */ V128 | NOTMP, I32, V128 | TMP | S0)
 
 // List of aliases.
@@ -1645,8 +1649,6 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I16X8ExtmulHighI8X16UOpcode:
         case ByteCode::I16X8NarrowI32X4SOpcode:
         case ByteCode::I16X8NarrowI32X4UOpcode:
-        case ByteCode::I16X8Q15mulrSatSOpcode:
-        case ByteCode::I16X8RelaxedQ15mulrSOpcode:
         case ByteCode::I32X4AddOpcode:
         case ByteCode::I32X4SubOpcode:
         case ByteCode::I32X4MulOpcode:
@@ -1706,6 +1708,13 @@ static void compileFunction(JITCompiler* compiler)
             group = Instruction::BinarySIMD;
             paramType = ParamTypes::ParamSrc2Dst;
             requiredInit = OTSwizzleV128;
+            break;
+        }
+        case ByteCode::I16X8Q15mulrSatSOpcode:
+        case ByteCode::I16X8RelaxedQ15mulrSOpcode: {
+            group = Instruction::BinarySIMD;
+            paramType = ParamTypes::ParamSrc2Dst;
+            requiredInit = OTMulRoundSatV128;
             break;
         }
         case ByteCode::I64X2MulOpcode:
