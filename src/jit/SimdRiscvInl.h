@@ -36,6 +36,7 @@ enum TypeOpcode : uint32_t {
     vaaddu_vv = InstructionType::opmvv | OPCODE(0x8),
     vadd_vi = InstructionType::opivi | OPCODE(0x0),
     vadd_vv = InstructionType::opivv | OPCODE(0x0),
+    vadd_vx = InstructionType::opivx | OPCODE(0x0),
     vand_vv = InstructionType::opivv | OPCODE(0x9),
     vcompress_vm = InstructionType::opmvv | OPCODE(0x17),
 #if defined(__riscv_zvbb)
@@ -818,6 +819,23 @@ static void simdEmitNarrowUnsigned(sljit_compiler* compiler, sljit_s32 type, slj
     simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_8, SimdOp::vslideup_vi, rd, tmp2, 8, SimdOp::rmIsImm);
 }
 
+static void simdEmitQ15Mul(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, sljit_s32 tmp3)
+{
+    sljit_s32 tmp1 = SLJIT_TMP_DEST_VREG;
+    sljit_s32 tmp2 = SLJIT_VR0;
+
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vslidedown_vi, tmp2, rn, 4, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vslidedown_vi, tmp3, rm, 4, SimdOp::rmIsImm);
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vwmul_vv, tmp1, tmp2, tmp3, 0, SimdOp::vlMulF2);
+    simdEmitOp(compiler, SimdOp::vwmul_vv, tmp2, rn, rm);
+
+    /* The vxrm register is expected to be zero (default). */
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vnclip_wi, rd, tmp2, 15, SimdOp::rmIsImm, SimdOp::vlMulF2);
+    simdEmitOp(compiler, SimdOp::vnclip_wi, tmp2, tmp1, 15, SimdOp::rmIsImm);
+
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vslideup_vi, rd, tmp2, 4, SimdOp::rmIsImm);
+}
+
 static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
@@ -885,6 +903,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8MaxUOpcode:
     case ByteCode::I16X8AvgrUOpcode:
     case ByteCode::I16X8Q15mulrSatSOpcode:
+    case ByteCode::I16X8RelaxedQ15mulrSOpcode:
         srcType = SLJIT_SIMD_ELEM_16;
         dstType = SLJIT_SIMD_ELEM_16;
         break;
@@ -1141,6 +1160,8 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitExtmulHigh(compiler, srcType, SimdOp::vwmulu_vv, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I16X8Q15mulrSatSOpcode:
+    case ByteCode::I16X8RelaxedQ15mulrSOpcode:
+        simdEmitQ15Mul(compiler, dst, args[0].arg, args[1].arg, instr->requiredReg(3));
         break;
     case ByteCode::I32X4DotI16X8SOpcode:
     case ByteCode::I16X8DotI8X16I7X16SOpcode:
