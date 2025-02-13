@@ -228,6 +228,17 @@ void WASI::fd_read(ExecutionState& state, Value* argv, Value* result, Instance* 
     result[0] = Value(uvwasi_fd_read(WASI::g_uvwasi, fd, iovs, iovsLen, nread));
 }
 
+void WASI::fd_readdir(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t* buf = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[1], argv[2].asI32()));
+    uint32_t bufLen = argv[2].asI32();
+    uint64_t cookie = argv[3].asI64();
+    uint32_t* bufUsed = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[4], sizeof(uint32_t)));
+
+    result[0] = Value(uvwasi_fd_readdir(WASI::g_uvwasi, fd, buf, bufLen, cookie, bufUsed));
+}
+
 void WASI::fd_close(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
@@ -241,6 +252,14 @@ void WASI::fd_fdstat_get(ExecutionState& state, Value* argv, Value* result, Inst
     uvwasi_fdstat_t* fdstat = reinterpret_cast<uvwasi_fdstat_t*>(get_memory_pointer(instance, argv[1], sizeof(uvwasi_fdstat_t)));
 
     result[0] = Value(uvwasi_fd_fdstat_get(WASI::g_uvwasi, fd, fdstat));
+}
+
+void WASI::fd_fdstat_set_flags(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t fdflags = argv[1].asI32();
+
+    result[0] = Value(uvwasi_fd_fdstat_set_flags(WASI::g_uvwasi, fd, fdflags));
 }
 
 void WASI::fd_prestat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
@@ -294,6 +313,66 @@ void WASI::path_open(ExecutionState& state, Value* argv, Value* result, Instance
 
     result[0] = Value(uvwasi_path_open(WASI::g_uvwasi, fd, dirflags, path, length,
                                        oflags, rights, right_inheriting, fdflags, ret_fd));
+}
+
+void WASI::path_create_directory(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t length = argv[2].asI32();
+    const char* path = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], length));
+
+    result[0] = Value(uvwasi_path_create_directory(WASI::g_uvwasi, fd, path, length));
+}
+
+void WASI::path_remove_directory(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t length = argv[2].asI32();
+    const char* path = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], length));
+
+    result[0] = Value(uvwasi_path_remove_directory(WASI::g_uvwasi, fd, path, length));
+}
+
+void WASI::path_filestat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t flags = argv[1].asI32();
+    uint32_t length = argv[3].asI32();
+    const char* path = reinterpret_cast<char*>(get_memory_pointer(instance, argv[2], length));
+    uvwasi_filestat_t* buf = reinterpret_cast<uvwasi_filestat_t*>(get_memory_pointer(instance, argv[4], sizeof(uvwasi_filestat_t)));
+
+    result[0] = Value(uvwasi_path_filestat_get(WASI::g_uvwasi, fd, flags, path, length, buf));
+}
+
+void WASI::path_rename(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t oldFd = argv[0].asI32();
+    uint32_t oldLength = argv[2].asI32();
+    const char* oldPath = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], oldLength));
+    uint32_t newFd = argv[3].asI32();
+    uint32_t newLength = argv[5].asI32();
+    const char* newPath = reinterpret_cast<char*>(get_memory_pointer(instance, argv[4], oldLength));
+
+    result[0] = Value(uvwasi_path_rename(WASI::g_uvwasi, oldFd, oldPath, oldLength, newFd, newPath, newLength));
+}
+
+void WASI::path_unlink_file(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t length = argv[2].asI32();
+    const char* path = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], length));
+
+    result[0] = Value(uvwasi_path_unlink_file(WASI::g_uvwasi, fd, path, length));
+}
+
+void WASI::poll_oneoff(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uvwasi_subscription_t* in = reinterpret_cast<uvwasi_subscription_t*>(get_memory_pointer(instance, argv[0], sizeof(uvwasi_subscription_t)));
+    uvwasi_event_t* out = reinterpret_cast<uvwasi_event_t*>(get_memory_pointer(instance, argv[1], sizeof(uvwasi_event_t)));
+    uint32_t nsubscriptions = argv[2].asI32();
+    uint32_t* nevents = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[3], sizeof(uint32_t)));
+
+    result[0] = Value(uvwasi_poll_oneoff(WASI::g_uvwasi, in, out, nsubscriptions, nevents));
 }
 
 void WASI::environ_sizes_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
