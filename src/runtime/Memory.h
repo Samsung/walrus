@@ -317,16 +317,21 @@ public:
 #endif
 
     void init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
-    void copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size);
+    void copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size, Memory* dstMem = nullptr);
     void fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size);
 
-    inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0) const
+    inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0, Memory* dstMem = nullptr) const
     {
-        return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
+        if (dstMem == nullptr) {
+            return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
+        } else {
+            return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= dstMem->m_sizeInByte));
+        }
     }
 
     void initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
     void copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size);
+    void copyMemoryMulti(Memory* dstMemory, uint32_t dstStart, uint32_t srcStart, uint32_t size);
     void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
 private:
@@ -334,9 +339,9 @@ private:
 
     void throwRangeException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
 
-    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const
+    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0, Memory* dstMem = nullptr) const
     {
-        if (!this->checkAccess(offset, size, addend)) {
+        if (!this->checkAccess(offset, size, addend, dstMem)) {
             throwRangeException(state, offset, addend, size);
         }
     }

@@ -917,6 +917,8 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 printf("Expected exception:%s\n", assertUnlinkable->text.data());
                 RELEASE_ASSERT_NOT_REACHED();
             }
+            std::string& actual = trapResult.exception->message();
+            printf("assertUnlinkable (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertUnlinkable->text.data(), actual.data(), assertUnlinkable->module->location().line);
             break;
         }
         case wabt::CommandType::AssertExhaustion: {

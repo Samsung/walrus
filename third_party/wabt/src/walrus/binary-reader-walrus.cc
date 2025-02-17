@@ -86,6 +86,8 @@ static Features getFeatures() {
     features.enable_threads();
     // TODO: should use command line flag for this (--enable-relaxed-simd)
     features.enable_relaxed_simd();
+    // TODO: should use command line flag for this (--enable-multi-memory)
+    features.enable_multi_memory();
     return features;
 }
 
