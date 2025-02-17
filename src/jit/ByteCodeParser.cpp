@@ -348,7 +348,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTOp2V128Tmp OTOp2V128
 #define OTMinMaxV128 OTOp2V128
 #define OTPMinMaxV128 OTOp2V128
-#define OTPopcntV128 OTOp1V128Tmp
+#define OTPopcntV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
 
 #endif /* SLJIT_CONFIG_ARM */
