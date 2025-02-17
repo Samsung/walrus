@@ -36,7 +36,10 @@ enum TypeOpcode : uint32_t {
     vaaddu_vv = InstructionType::opmvv | OPCODE(0x8),
     vadd_vi = InstructionType::opivi | OPCODE(0x0),
     vadd_vv = InstructionType::opivv | OPCODE(0x0),
+    vadd_vx = InstructionType::opivx | OPCODE(0x0),
+    vand_vi = InstructionType::opivi | OPCODE(0x9),
     vand_vv = InstructionType::opivv | OPCODE(0x9),
+    vand_vx = InstructionType::opivx | OPCODE(0x9),
     vcompress_vm = InstructionType::opmvv | OPCODE(0x17),
 #if defined(__riscv_zvbb)
     vcpop_v = InstructionType::opmvv | OPCODE(0x12) | (0xe << 15),
@@ -412,26 +415,31 @@ static void simdEmitPMinMax(sljit_compiler* compiler, sljit_s32 type, bool min, 
     simdEmitOp(compiler, SimdOp::vmerge_vv, rd, rn, rm);
 }
 
-static void simdEmitPopcnt(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn, sljit_s32 rt)
+static void simdEmitPopcnt(sljit_compiler* compiler, sljit_s32 type, sljit_s32 rd, sljit_s32 rn)
 {
 #if defined(__riscv_zvbb)
     simdEmitTypedOp(compiler, type, SimdOp::vcpop_v, rd, rn, 0, SimdOp::rmIsImm);
 #else
-    sljit_s32 mask = SLJIT_VR0;
     sljit_s32 tmp = SLJIT_TMP_DEST_VREG;
-    sljit_s32 tmpgp = SLJIT_TMP_DEST_REG;
-    simdEmitTypedOp(compiler, type, SimdOp::vmv_vv, tmp, 0, rn);
-    simdEmitOp(compiler, SimdOp::vmv_vi, rd, 0, 0, SimdOp::rmIsImm);
-    struct sljit_label* label = sljit_emit_label(compiler);
-    simdEmitOp(compiler, SimdOp::vmsne_vi, mask, tmp, 0);
-    simdEmitOp(compiler, SimdOp::vadd_vi ^ SimdOp::vm, rd, rd, 1, SimdOp::rmIsImm);
-    simdEmitOp(compiler, SimdOp::vadd_vi ^ SimdOp::vm, rt, tmp, (0x1F), SimdOp::rmIsImm);
-    simdEmitOp(compiler, SimdOp::vand_vv, tmp, tmp, rt);
-    uint32_t opcode = SimdOp::vfirst_m | sljit_get_register_index(SLJIT_GP_REGISTER, tmpgp) << 7 | sljit_get_register_index(SLJIT_SIMD_REG_128, tmp) << 20;
-    sljit_emit_op_custom(compiler, &opcode, sizeof(uint32_t));
-    struct sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_SIG_LESS, tmpgp, 0, SLJIT_IMM, 0);
-    sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), label);
-    sljit_set_label(jump, sljit_emit_label(compiler));
+
+    /* Count ones for every two bits. */
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0x55);
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_8, SimdOp::vsrl_vi, tmp, rn, 1, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vand_vx, rd, rn, SLJIT_TMP_DEST_REG, SimdOp::rmIsGpr);
+    simdEmitOp(compiler, SimdOp::vand_vx, tmp, tmp, SLJIT_TMP_DEST_REG, SimdOp::rmIsGpr);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0x33);
+    simdEmitOp(compiler, SimdOp::vadd_vv, rd, rd, tmp);
+
+    /* Count ones for every four bits. */
+    simdEmitOp(compiler, SimdOp::vsrl_vi, tmp, rd, 2, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vand_vx, rd, rd, SLJIT_TMP_DEST_REG, SimdOp::rmIsGpr);
+    simdEmitOp(compiler, SimdOp::vand_vx, tmp, tmp, SLJIT_TMP_DEST_REG, SimdOp::rmIsGpr);
+    simdEmitOp(compiler, SimdOp::vadd_vv, rd, rd, tmp);
+
+    /* Count ones for every eight bits. */
+    simdEmitOp(compiler, SimdOp::vsrl_vi, tmp, rd, 4, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vand_vi, rd, rd, 0xf, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vadd_vv, rd, rd, tmp);
 #endif
 }
 
@@ -595,7 +603,7 @@ static void emitUnarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitAbs(compiler, srcType, dst, args[0].arg);
         break;
     case ByteCode::I8X16PopcntOpcode:
-        simdEmitPopcnt(compiler, srcType, dst, args[0].arg, instr->requiredReg(1));
+        simdEmitPopcnt(compiler, srcType, dst, args[0].arg);
         break;
     case ByteCode::I16X8ExtaddPairwiseI8X16SOpcode:
     case ByteCode::I32X4ExtaddPairwiseI16X8SOpcode:
@@ -818,6 +826,23 @@ static void simdEmitNarrowUnsigned(sljit_compiler* compiler, sljit_s32 type, slj
     simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_8, SimdOp::vslideup_vi, rd, tmp2, 8, SimdOp::rmIsImm);
 }
 
+static void simdEmitQ15Mul(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm, sljit_s32 tmp3)
+{
+    sljit_s32 tmp1 = SLJIT_TMP_DEST_VREG;
+    sljit_s32 tmp2 = SLJIT_VR0;
+
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vslidedown_vi, tmp2, rn, 4, SimdOp::rmIsImm);
+    simdEmitOp(compiler, SimdOp::vslidedown_vi, tmp3, rm, 4, SimdOp::rmIsImm);
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vwmul_vv, tmp1, tmp2, tmp3, 0, SimdOp::vlMulF2);
+    simdEmitOp(compiler, SimdOp::vwmul_vv, tmp2, rn, rm);
+
+    /* The vxrm register is expected to be zero (default). */
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vnclip_wi, rd, tmp2, 15, SimdOp::rmIsImm, SimdOp::vlMulF2);
+    simdEmitOp(compiler, SimdOp::vnclip_wi, tmp2, tmp1, 15, SimdOp::rmIsImm);
+
+    simdEmitTypedOp(compiler, SLJIT_SIMD_ELEM_16, SimdOp::vslideup_vi, rd, tmp2, 4, SimdOp::rmIsImm);
+}
+
 static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operands = instr->operands();
@@ -885,6 +910,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I16X8MaxUOpcode:
     case ByteCode::I16X8AvgrUOpcode:
     case ByteCode::I16X8Q15mulrSatSOpcode:
+    case ByteCode::I16X8RelaxedQ15mulrSOpcode:
         srcType = SLJIT_SIMD_ELEM_16;
         dstType = SLJIT_SIMD_ELEM_16;
         break;
@@ -1141,6 +1167,8 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitExtmulHigh(compiler, srcType, SimdOp::vwmulu_vv, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I16X8Q15mulrSatSOpcode:
+    case ByteCode::I16X8RelaxedQ15mulrSOpcode:
+        simdEmitQ15Mul(compiler, dst, args[0].arg, args[1].arg, instr->requiredReg(3));
         break;
     case ByteCode::I32X4DotI16X8SOpcode:
     case ByteCode::I16X8DotI8X16I7X16SOpcode:
