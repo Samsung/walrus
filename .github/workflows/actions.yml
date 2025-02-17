@@ -2,9 +2,9 @@ name: Actions
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   RUNNER: tools/run-tests.py
@@ -13,258 +13,258 @@ jobs:
   check-tidy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo add-apt-repository "deb http://mirrors.kernel.org/ubuntu/ focal main universe"
-        sudo apt update
-        sudo apt install -y clang-format-10
-    - name: Test
-      run: tools/check_tidy.py
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo add-apt-repository "deb http://mirrors.kernel.org/ubuntu/ focal main universe"
+          sudo apt update
+          sudo apt install -y clang-format-10
+      - name: Test
+        run: tools/check_tidy.py
 
   build-on-macos:
     runs-on: macos-13
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        brew update
-        brew install cmake ninja pkg-config
-    - name: Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        cmake -H. -Bout/mac $BUILD_OPTIONS
-        ninja -Cout/mac
-    - name: Run Tests
-      run: |
-        #FIXME try-catch is unstable in macos build
-        #remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by apple-clang
-        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
-        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
-        $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          brew update
+          brew install cmake ninja pkg-config
+      - name: Build x64
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -H. -Bout/mac $BUILD_OPTIONS
+          ninja -Cout/mac
+      - name: Run Tests
+        run: |
+          #FIXME try-catch is unstable in macos build
+          #remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by apple-clang
+          rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
+          rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
 
   build-on-macos-arm64:
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        brew update
-        brew install cmake ninja
-    - name: Build arm64
-      env:
-        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        cmake -H. -Bout/mac $BUILD_OPTIONS
-        ninja -Cout/mac
-    - name: Run Tests
-      run: |
-        #FIXME try-catch is unstable in macos build
-        #remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by apple-clang
-        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
-        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
-        $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          brew update
+          brew install cmake ninja
+      - name: Build arm64
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -H. -Bout/mac $BUILD_OPTIONS
+          ninja -Cout/mac
+      - name: Run Tests
+        run: |
+          #FIXME try-catch is unstable in macos build
+          #remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by apple-clang
+          rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
+          rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
 
   build-by-clang:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Build x86
-      env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        CC=clang CXX=clang++ cmake -H. -Bout/clang/x86 $BUILD_OPTIONS
-        ninja -Cout/clang/x86
-    - name: Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        CC=clang CXX=clang++ cmake -H. -Bout/clang/x64 $BUILD_OPTIONS
-        ninja -Cout/clang/x64
-    - name: Pure Build x86
-      env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
-      run: |
-        CC=clang CXX=clang++ cmake -H. -Bout/pure/x86 $BUILD_OPTIONS
-        ninja -Cout/pure/x86
-    - name: Pure Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
-      run: |
-        CC=clang CXX=clang++ cmake -H. -Bout/pure/x64 $BUILD_OPTIONS
-        ninja -Cout/pure/x64
-    - name: Run Tests
-      run: |
-        # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
-        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
-        rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
-        $RUNNER --engine="$GITHUB_WORKSPACE/out/clang/x86/walrus"
-        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
-        $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/pure/x86/walrus" basic-tests wasm-test-core jit
-        $RUNNER --engine="$GITHUB_WORKSPACE/out/pure/x64/walrus" basic-tests wasm-test-core jit
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+      - name: Build x86
+        env:
+          BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          CC=clang CXX=clang++ cmake -H. -Bout/clang/x86 $BUILD_OPTIONS
+          ninja -Cout/clang/x86
+      - name: Build x64
+        env:
+          BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          CC=clang CXX=clang++ cmake -H. -Bout/clang/x64 $BUILD_OPTIONS
+          ninja -Cout/clang/x64
+      - name: Pure Build x86
+        env:
+          BUILD_OPTIONS: -DWALRUS_ARCH=x86 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+        run: |
+          CC=clang CXX=clang++ cmake -H. -Bout/pure/x86 $BUILD_OPTIONS
+          ninja -Cout/pure/x86
+      - name: Pure Build x64
+        env:
+          BUILD_OPTIONS: -DWALRUS_ARCH=x64 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+        run: |
+          CC=clang CXX=clang++ cmake -H. -Bout/pure/x64 $BUILD_OPTIONS
+          ninja -Cout/pure/x64
+      - name: Run Tests
+        run: |
+          # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
+          rm $GITHUB_WORKSPACE/test/wasm-spec/core/call.wast
+          rm $GITHUB_WORKSPACE/test/wasm-spec/core/call_indirect.wast
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/clang/x86/walrus"
+          $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/clang/x64/walrus"
+          $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/pure/x86/walrus" basic-tests wasm-test-core jit
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/pure/x64/walrus" basic-tests wasm-test-core jit
 
   build-test-on-x86:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Build x86
-      env:
-        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        cmake -H. -Bout/linux/x86 $BUILD_OPTIONS
-        ninja -Cout/linux/x86
-    - name: Run Tests
-      run: |
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+      - name: Build x86
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -H. -Bout/linux/x86 $BUILD_OPTIONS
+          ninja -Cout/linux/x86
+      - name: Run Tests
+        run: |
           $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
           $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x86/walrus"
 
   build-test-on-x64:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
-        ninja -Cout/linux/x64
-    - name: Run Tests
-      run: |
-         $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
-         $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+      - name: Build x64
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
+          ninja -Cout/linux/x64
+      - name: Run Tests
+        run: |
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
+          $RUNNER --jit --engine="$GITHUB_WORKSPACE/out/linux/x64/walrus"
 
   build-on-x64-with-perf:
-          runs-on: ubuntu-latest
-          steps:
-          - uses: actions/checkout@v4
-            with:
-              submodules: true
-          - name: Install Packages
-            run: |
-              sudo apt update
-              sudo apt install -y ninja-build gcc-multilib g++-multilib
-          - name: Build x64
-            env:
-              BUILD_OPTIONS: -DWALRUS_JITPERF=1 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-            run: |
-              cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
-              ninja -Cout/linux/x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+      - name: Build x64
+        env:
+          BUILD_OPTIONS: -DWALRUS_JITPERF=1 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
+          ninja -Cout/linux/x64
 
   build-test-on-armv7:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Build in arm32 container
-      uses: uraimo/run-on-arch-action@v2.8.1
-      with:
-        arch: armv7
-        distro: ubuntu_latest
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build in arm32 container
+        uses: uraimo/run-on-arch-action@v2.8.1
+        with:
+          arch: armv7
+          distro: ubuntu_latest
 
-        # Install deps into the container. With the token, the container will be cached
-        # The image is cached publically like a package
-        githubToken: ${{ github.token }}
+          # Install deps into the container. With the token, the container will be cached
+          # The image is cached publically like a package
+          githubToken: ${{ github.token }}
 
-        install: |
-          apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
-        run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
-          ninja -Cout/debug
-          ninja -Cout/pure
-          # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
-          rm ./test/wasm-spec/core/call.wast
-          rm ./test/wasm-spec/core/call_indirect.wast
-          python3 ./tools/run-tests.py --engine="./out/debug/walrus"
-          python3 ./tools/run-tests.py --jit --engine="./out/debug/walrus"
-          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
-          python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+          install: |
+            apt-get update
+            apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
+          run: |
+            CC=clang CXX=clang++ cmake -H. -Bout/debug -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
+            CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+            ninja -Cout/debug
+            ninja -Cout/pure
+            # remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang
+            rm ./test/wasm-spec/core/call.wast
+            rm ./test/wasm-spec/core/call_indirect.wast
+            python3 ./tools/run-tests.py --engine="./out/debug/walrus"
+            python3 ./tools/run-tests.py --jit --engine="./out/debug/walrus"
+            python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+            python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
   build-test-on-arm64:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Build in arm64 container
-      uses: uraimo/run-on-arch-action@v2.8.1
-      with:
-        arch: aarch64
-        distro: ubuntu22.04
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build in arm64 container
+        uses: uraimo/run-on-arch-action@v2.8.1
+        with:
+          arch: aarch64
+          distro: ubuntu22.04
 
-        # Install deps into the container. With the token, the container will be cached
-        # The image is cached publically like a package
-        githubToken: ${{ github.token }}
+          # Install deps into the container. With the token, the container will be cached
+          # The image is cached publically like a package
+          githubToken: ${{ github.token }}
 
-        install: |
-          apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
-        run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
-          ninja -Cout/release
-          ninja -Cout/pure
-          python3 ./tools/run-tests.py --engine="./out/release/walrus"
-          python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
-          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
-          python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+          install: |
+            apt-get update
+            apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
+          run: |
+            CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+            CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+            ninja -Cout/release
+            ninja -Cout/pure
+            python3 ./tools/run-tests.py --engine="./out/release/walrus"
+            python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
+            python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+            python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
   build-test-on-riscv64:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Build in riscv64 container
-      uses: uraimo/run-on-arch-action@v2.8.1
-      with:
-        arch: riscv64
-        distro: ubuntu22.04
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build in riscv64 container
+        uses: uraimo/run-on-arch-action@v2.8.1
+        with:
+          arch: riscv64
+          distro: ubuntu22.04
 
-        # Install deps into the container. With the token, the container will be cached
-        # The image is cached publically like a package
-        githubToken: ${{ github.token }}
+          # Install deps into the container. With the token, the container will be cached
+          # The image is cached publically like a package
+          githubToken: ${{ github.token }}
 
-        install: |
-          apt-get update
-          apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
-        run: |
-          # TODO enable JIT for RISC-V
-          CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_JIT=OFF -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-          CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_JIT=OFF -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
-          ninja -Cout/release
-          ninja -Cout/pure
-          python3 ./tools/run-tests.py --engine="./out/release/walrus"
-          #python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
-          python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
-          #python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+          install: |
+            apt-get update
+            apt-get install -y cmake build-essential ninja-build pkg-config python3 clang git
+          run: |
+            # TODO enable JIT for RISC-V
+            CFLAGS="-march=rv64gv" CXXFLAGS="-march=rv64gv" CC=clang CXX=clang++ cmake -H. -Bout/release -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+            CFLAGS="-march=rv64gv" CXXFLAGS="-march=rv64gv" CC=clang CXX=clang++ cmake -H. -Bout/pure -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -DWALRUS_WASI=OFF -GNinja
+            ninja -Cout/release
+            ninja -Cout/pure
+            python3 ./tools/run-tests.py --engine="./out/release/walrus"
+            python3 ./tools/run-tests.py --jit --engine="./out/release/walrus"
+            python3 ./tools/run-tests.py --engine="./out/pure/walrus" basic-tests wasm-test-core jit
+            python3 ./tools/run-tests.py --jit --engine="./out/pure/walrus" basic-tests wasm-test-core jit
 
   test-on-windows-x86-x64:
     runs-on: windows-2022
@@ -272,125 +272,125 @@ jobs:
       matrix:
         arch: [x86, x64]
     steps:
-    - name: Set git cllf config
-      run: |
-        git config --global core.autocrlf input
-        git config --global core.eol lf
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - uses: lukka/get-cmake@latest
-    - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
-      with:
-        sdk-version: 20348
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    - name: Install msvc redist package
-      run: |
-        (new-object System.Net.WebClient).DownloadFile('https://github.com/abbodi1406/vcredist/releases/download/v0.73.0/VisualCppRedist_AIO_x86_x64.exe','VisualCppRedist_AIO_x86_x64.exe')
-        .\VisualCppRedist_AIO_x86_x64.exe /y
-    - uses: ilammy/msvc-dev-cmd@v1.13.0
-      with:
-        arch: ${{ matrix.arch }}
-        sdk: "10.0.20348.0"
-    - name: Build ${{ matrix.arch }} Release
-      run: |
-        CMake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
-        CMake --build out/ --config Release
-    - name: Run tests
-      run: |
-        python tools\run-tests.py --engine=%cd%\out\walrus.exe
-      shell: cmd
-    - if: ${{ failure() }}
-      uses: mxschmitt/action-tmate@v3
-      timeout-minutes: 15
+      - name: Set git cllf config
+        run: |
+          git config --global core.autocrlf input
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: lukka/get-cmake@latest
+      - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
+        with:
+          sdk-version: 20348
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install msvc redist package
+        run: |
+          (new-object System.Net.WebClient).DownloadFile('https://github.com/abbodi1406/vcredist/releases/download/v0.73.0/VisualCppRedist_AIO_x86_x64.exe','VisualCppRedist_AIO_x86_x64.exe')
+          .\VisualCppRedist_AIO_x86_x64.exe /y
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: ${{ matrix.arch }}
+          sdk: "10.0.20348.0"
+      - name: Build ${{ matrix.arch }} Release
+        run: |
+          CMake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
+          CMake --build out/ --config Release
+      - name: Run tests
+        run: |
+          python tools\run-tests.py --engine=%cd%\out\walrus.exe
+        shell: cmd
+      - if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 15
 
   build-test-performance:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-        sudo pip install pandas
-        sudo pip install py-markdown-table
-        sudo pip install tqdm
-    - name: Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
-        ninja -Cout/linux/x64
-    - name: Run Tests
-      run: |
-        test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --verbose --summary --results i j2i n2i j n2j
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+          sudo pip install pandas
+          sudo pip install py-markdown-table
+          sudo pip install tqdm
+      - name: Build x64
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
+          ninja -Cout/linux/x64
+      - name: Run Tests
+        run: |
+          test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/x64/walrus --iterations 2 --verbose --summary --results i j2i n2i j n2j
 
   built-test-wasm-c-api:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Build x64
-      env:
-        BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=api_test -GNinja
-      run: |
-        cmake -H. -Bout/api_test/x64 $BUILD_OPTIONS
-        ninja -Cout/api_test/x64
-        cp third_party/wasm-c-api/example/*.wasm out/api_test/x64/.
-    - name: Run Tests
-      working-directory: ./out/api_test/x64
-      run: |
-        ./wasm-c-api-callback
-        ./wasm-c-api-global
-        ./wasm-c-api-hello
-        ./wasm-c-api-memory
-        ./wasm-c-api-multi
-        ./wasm-c-api-table
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+      - name: Build x64
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=debug -DWALRUS_OUTPUT=api_test -GNinja
+        run: |
+          cmake -H. -Bout/api_test/x64 $BUILD_OPTIONS
+          ninja -Cout/api_test/x64
+          cp third_party/wasm-c-api/example/*.wasm out/api_test/x64/.
+      - name: Run Tests
+        working-directory: ./out/api_test/x64
+        run: |
+          ./wasm-c-api-callback
+          ./wasm-c-api-global
+          ./wasm-c-api-hello
+          ./wasm-c-api-memory
+          ./wasm-c-api-multi
+          ./wasm-c-api-table
 
   coverity-scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - name: Install Packages
-      run: |
-        sudo apt update
-        sudo apt install -y ninja-build gcc-multilib g++-multilib
-    - name: Download Coverity Tool
-      env:
-        TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
-      run: |
-        wget -q https://scan.coverity.com/download/cxx/linux64 --post-data "token=$TOKEN&project=Samsung-walrus" -O cov-analysis-linux64.tar.gz
-        mkdir cov-analysis-linux64
-        tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
-    - name: Build
-      env:
-        BUILD_OPTIONS: -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-      run: |
-        export PATH=$GITHUB_WORKSPACE/cov-analysis-linux64/bin:$PATH
-        cmake -H. -Bout/coverity_scan $BUILD_OPTIONS
-        cov-build --dir cov-int ninja -Cout/coverity_scan
-    - name: Submit
-      env:
-        TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
-        NOTI_MAIL: ${{ secrets.COVERITY_SCAN_MAIL }}
-      run: |
-        tar czvf walrus.tgz cov-int
-        curl \
-          --form token=$TOKEN \
-          --form email=$NOTI_MAIL \
-          --form file=@walrus.tgz \
-          --form version="0.0.1" \
-          --form description="walrus coverity scan" \
-          https://scan.coverity.com/builds?project=Samsung-walrus
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+      - name: Download Coverity Tool
+        env:
+          TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+        run: |
+          wget -q https://scan.coverity.com/download/cxx/linux64 --post-data "token=$TOKEN&project=Samsung-walrus" -O cov-analysis-linux64.tar.gz
+          mkdir cov-analysis-linux64
+          tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
+      - name: Build
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          export PATH=$GITHUB_WORKSPACE/cov-analysis-linux64/bin:$PATH
+          cmake -H. -Bout/coverity_scan $BUILD_OPTIONS
+          cov-build --dir cov-int ninja -Cout/coverity_scan
+      - name: Submit
+        env:
+          TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+          NOTI_MAIL: ${{ secrets.COVERITY_SCAN_MAIL }}
+        run: |
+          tar czvf walrus.tgz cov-int
+          curl \
+            --form token=$TOKEN \
+            --form email=$NOTI_MAIL \
+            --form file=@walrus.tgz \
+            --form version="0.0.1" \
+            --form description="walrus coverity scan" \
+            https://scan.coverity.com/builds?project=Samsung-walrus
