@@ -27,8 +27,117 @@ namespace wabt {
 enum class WASMOpcode : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
                     text, decomp)                                            \
-    name##Opcode,
+    name## Opcode,
 #include "wabt/opcode.def"
+
+WABT_OPCODE(I32,  I32,  ___,  ___,  4,  0,    0x28, I32LoadMulti, "i32.load", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  8,  0,    0x29, I64LoadMulti, "i64.load", "")
+WABT_OPCODE(F32,  I32,  ___,  ___,  4,  0,    0x2a, F32LoadMulti, "f32.load", "")
+WABT_OPCODE(F64,  I32,  ___,  ___,  8,  0,    0x2b, F64LoadMulti, "f64.load", "")
+WABT_OPCODE(I32,  I32,  ___,  ___,  1,  0,    0x2c, I32Load8SMulti, "i32.load8_s", "")
+WABT_OPCODE(I32,  I32,  ___,  ___,  1,  0,    0x2d, I32Load8UMulti, "i32.load8_u", "")
+WABT_OPCODE(I32,  I32,  ___,  ___,  2,  0,    0x2e, I32Load16SMulti, "i32.load16_s", "")
+WABT_OPCODE(I32,  I32,  ___,  ___,  2,  0,    0x2f, I32Load16UMulti, "i32.load16_u", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  1,  0,    0x30, I64Load8SMulti, "i64.load8_s", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  1,  0,    0x31, I64Load8UMulti, "i64.load8_u", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  2,  0,    0x33, I64Load16UMulti, "i64.load16_u", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  2,  0,    0x32, I64Load16SMulti, "i64.load16_s", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  4,  0,    0x34, I64Load32SMulti, "i64.load32_s", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  4,  0,    0x35, I64Load32UMulti, "i64.load32_u", "")
+
+WABT_OPCODE(V128, I32,  ___,  ___,  16, 0xfd, 0x00, V128LoadMulti, "v128.load", "")
+WABT_OPCODE(V128, I32,   ___, ___,  8,  0xfd, 0x01, V128Load8X8SMulti, "v128.load8x8_s", "")
+WABT_OPCODE(V128, I32,   ___, ___,  8,  0xfd, 0x02, V128Load8X8UMulti, "v128.load8x8_u", "")
+WABT_OPCODE(V128, I32,   ___, ___,  8,  0xfd, 0x03, V128Load16X4SMulti, "v128.load16x4_s", "")
+WABT_OPCODE(V128, I32,   ___, ___,  8,  0xfd, 0x04, V128Load16X4UMulti, "v128.load16x4_u", "")
+WABT_OPCODE(V128, I32,   ___, ___,  8,  0xfd, 0x05, V128Load32X2SMulti, "v128.load32x2_s", "")
+WABT_OPCODE(V128, I32,   ___, ___,  8,  0xfd, 0x06, V128Load32X2UMulti, "v128.load32x2_u", "")
+
+WABT_OPCODE(V128, I32,   ___, ___,  4,  0xfd, 0x5c, V128Load32ZeroMulti, "v128.load32_zero", "")
+WABT_OPCODE(V128, I32,   ___, ___,  8,  0xfd, 0x5d, V128Load64ZeroMulti, "v128.load64_zero", "")
+
+WABT_OPCODE(___,  I32,  I32,  ___,  4,  0,    0x36, I32StoreMulti, "i32.store", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  8,  0,    0x37, I64StoreMulti, "i64.store", "")
+WABT_OPCODE(___,  I32,  F32,  ___,  4,  0,    0x38, F32StoreMulti, "f32.store", "")
+WABT_OPCODE(___,  I32,  F64,  ___,  8,  0,    0x39, F64StoreMulti, "f64.store", "")
+WABT_OPCODE(___,  I32,  I32,  ___,  1,  0,    0x3a, I32Store8Multi, "i32.store8", "")
+WABT_OPCODE(___,  I32,  I32,  ___,  2,  0,    0x3b, I32Store16Multi, "i32.store16", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  1,  0,    0x3c, I64Store8Multi, "i64.store8", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  2,  0,    0x3d, I64Store16Multi, "i64.store16", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  4,  0,    0x3e, I64Store32Multi, "i64.store32", "")
+
+WABT_OPCODE(___,  I32,  V128, ___,  16, 0xfd, 0x0b, V128StoreMulti, "v128.store", "")
+
+WABT_OPCODE(I32,  I32,  I32,  ___,  4,  0xfe, 0x00, MemoryAtomicNotifyMulti, "memory.atomic.notify", "")
+WABT_OPCODE(I32,  I32,  I32,  I64,  4,  0xfe, 0x01, MemoryAtomicWait32Multi, "memory.atomic.wait32", "")
+WABT_OPCODE(I32,  I32,  I64,  I64,  8,  0xfe, 0x02, MemoryAtomicWait64Multi, "memory.atomic.wait64", "")
+
+WABT_OPCODE(I32,  I32,  ___,  ___,  4,  0xfe, 0x10, I32AtomicLoadMulti, "i32.atomic.load", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  8,  0xfe, 0x11, I64AtomicLoadMulti, "i64.atomic.load", "")
+WABT_OPCODE(I32,  I32,  ___,  ___,  1,  0xfe, 0x12, I32AtomicLoad8UMulti, "i32.atomic.load8_u", "")
+WABT_OPCODE(I32,  I32,  ___,  ___,  2,  0xfe, 0x13, I32AtomicLoad16UMulti, "i32.atomic.load16_u", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  1,  0xfe, 0x14, I64AtomicLoad8UMulti, "i64.atomic.load8_u", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  2,  0xfe, 0x15, I64AtomicLoad16UMulti, "i64.atomic.load16_u", "")
+WABT_OPCODE(I64,  I32,  ___,  ___,  4,  0xfe, 0x16, I64AtomicLoad32UMulti, "i64.atomic.load32_u", "")
+
+WABT_OPCODE(___,  I32,  I32,  ___,  4,  0xfe, 0x17, I32AtomicStoreMulti, "i32.atomic.store", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  8,  0xfe, 0x18, I64AtomicStoreMulti, "i64.atomic.store", "")
+WABT_OPCODE(___,  I32,  I32,  ___,  1,  0xfe, 0x19, I32AtomicStore8Multi, "i32.atomic.store8", "")
+WABT_OPCODE(___,  I32,  I32,  ___,  2,  0xfe, 0x1a, I32AtomicStore16Multi, "i32.atomic.store16", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  1,  0xfe, 0x1b, I64AtomicStore8Multi, "i64.atomic.store8", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  2,  0xfe, 0x1c, I64AtomicStore16Multi, "i64.atomic.store16", "")
+WABT_OPCODE(___,  I32,  I64,  ___,  4,  0xfe, 0x1d, I64AtomicStore32Multi, "i64.atomic.store32", "")
+
+WABT_OPCODE(I32,  I32,  I32,  ___,  4,  0xfe, 0x1e, I32AtomicRmwAddMulti, "i32.atomic.rmw.add", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  8,  0xfe, 0x1f, I64AtomicRmwAddMulti, "i64.atomic.rmw.add", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  1,  0xfe, 0x20, I32AtomicRmw8AddUMulti, "i32.atomic.rmw8.add_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  2,  0xfe, 0x21, I32AtomicRmw16AddUMulti, "i32.atomic.rmw16.add_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  1,  0xfe, 0x22, I64AtomicRmw8AddUMulti, "i64.atomic.rmw8.add_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  2,  0xfe, 0x23, I64AtomicRmw16AddUMulti, "i64.atomic.rmw16.add_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  4,  0xfe, 0x24, I64AtomicRmw32AddUMulti, "i64.atomic.rmw32.add_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  4,  0xfe, 0x25, I32AtomicRmwSubMulti, "i32.atomic.rmw.sub", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  8,  0xfe, 0x26, I64AtomicRmwSubMulti, "i64.atomic.rmw.sub", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  1,  0xfe, 0x27, I32AtomicRmw8SubUMulti, "i32.atomic.rmw8.sub_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  2,  0xfe, 0x28, I32AtomicRmw16SubUMulti, "i32.atomic.rmw16.sub_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  1,  0xfe, 0x29, I64AtomicRmw8SubUMulti, "i64.atomic.rmw8.sub_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  2,  0xfe, 0x2a, I64AtomicRmw16SubUMulti, "i64.atomic.rmw16.sub_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  4,  0xfe, 0x2b, I64AtomicRmw32SubUMulti, "i64.atomic.rmw32.sub_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  4,  0xfe, 0x2c, I32AtomicRmwAndMulti, "i32.atomic.rmw.and", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  8,  0xfe, 0x2d, I64AtomicRmwAndMulti, "i64.atomic.rmw.and", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  1,  0xfe, 0x2e, I32AtomicRmw8AndUMulti, "i32.atomic.rmw8.and_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  2,  0xfe, 0x2f, I32AtomicRmw16AndUMulti, "i32.atomic.rmw16.and_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  1,  0xfe, 0x30, I64AtomicRmw8AndUMulti, "i64.atomic.rmw8.and_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  2,  0xfe, 0x31, I64AtomicRmw16AndUMulti, "i64.atomic.rmw16.and_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  4,  0xfe, 0x32, I64AtomicRmw32AndUMulti, "i64.atomic.rmw32.and_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  4,  0xfe, 0x33, I32AtomicRmwOrMulti, "i32.atomic.rmw.or", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  8,  0xfe, 0x34, I64AtomicRmwOrMulti, "i64.atomic.rmw.or", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  1,  0xfe, 0x35, I32AtomicRmw8OrUMulti, "i32.atomic.rmw8.or_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  2,  0xfe, 0x36, I32AtomicRmw16OrUMulti, "i32.atomic.rmw16.or_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  1,  0xfe, 0x37, I64AtomicRmw8OrUMulti, "i64.atomic.rmw8.or_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  2,  0xfe, 0x38, I64AtomicRmw16OrUMulti, "i64.atomic.rmw16.or_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  4,  0xfe, 0x39, I64AtomicRmw32OrUMulti, "i64.atomic.rmw32.or_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  4,  0xfe, 0x3a, I32AtomicRmwXorMulti, "i32.atomic.rmw.xor", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  8,  0xfe, 0x3b, I64AtomicRmwXorMulti, "i64.atomic.rmw.xor", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  1,  0xfe, 0x3c, I32AtomicRmw8XorUMulti, "i32.atomic.rmw8.xor_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  2,  0xfe, 0x3d, I32AtomicRmw16XorUMulti, "i32.atomic.rmw16.xor_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  1,  0xfe, 0x3e, I64AtomicRmw8XorUMulti, "i64.atomic.rmw8.xor_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  2,  0xfe, 0x3f, I64AtomicRmw16XorUMulti, "i64.atomic.rmw16.xor_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  4,  0xfe, 0x40, I64AtomicRmw32XorUMulti, "i64.atomic.rmw32.xor_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  4,  0xfe, 0x41, I32AtomicRmwXchgMulti, "i32.atomic.rmw.xchg", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  8,  0xfe, 0x42, I64AtomicRmwXchgMulti, "i64.atomic.rmw.xchg", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  1,  0xfe, 0x43, I32AtomicRmw8XchgUMulti, "i32.atomic.rmw8.xchg_u", "")
+WABT_OPCODE(I32,  I32,  I32,  ___,  2,  0xfe, 0x44, I32AtomicRmw16XchgUMulti, "i32.atomic.rmw16.xchg_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  1,  0xfe, 0x45, I64AtomicRmw8XchgUMulti, "i64.atomic.rmw8.xchg_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  2,  0xfe, 0x46, I64AtomicRmw16XchgUMulti, "i64.atomic.rmw16.xchg_u", "")
+WABT_OPCODE(I64,  I32,  I64,  ___,  4,  0xfe, 0x47, I64AtomicRmw32XchgUMulti, "i64.atomic.rmw32.xchg_u", "")
+WABT_OPCODE(I32,  I32,  I32,  I32,  4,  0xfe, 0x48, I32AtomicRmwCmpxchgMulti, "i32.atomic.rmw.cmpxchg", "")
+WABT_OPCODE(I64,  I32,  I64,  I64,  8,  0xfe, 0x49, I64AtomicRmwCmpxchgMulti, "i64.atomic.rmw.cmpxchg", "")
+WABT_OPCODE(I32,  I32,  I32,  I32,  1,  0xfe, 0x4a, I32AtomicRmw8CmpxchgUMulti, "i32.atomic.rmw8.cmpxchg_u", "")
+WABT_OPCODE(I32,  I32,  I32,  I32,  2,  0xfe, 0x4b, I32AtomicRmw16CmpxchgUMulti, "i32.atomic.rmw16.cmpxchg_u", "")
+WABT_OPCODE(I64,  I32,  I64,  I64,  1,  0xfe, 0x4c, I64AtomicRmw8CmpxchgUMulti, "i64.atomic.rmw8.cmpxchg_u", "")
+WABT_OPCODE(I64,  I32,  I64,  I64,  2,  0xfe, 0x4d, I64AtomicRmw16CmpxchgUMulti, "i64.atomic.rmw16.cmpxchg_u", "")
+WABT_OPCODE(I64,  I32,  I64,  I64,  4,  0xfe, 0x4e, I64AtomicRmw32CmpxchgUMulti, "i64.atomic.rmw32.cmpxchg_u", "")
+
 #undef WABT_OPCODE
     OpcodeKindEnd,
 };
@@ -104,6 +213,7 @@ WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
       { WASMCodeInfo::type1, WASMCodeInfo::type2, WASMCodeInfo::type3 },     \
       text },
 #include "wabt/opcode.def"
+
 #undef WABT_OPCODE
 };
 
@@ -495,6 +605,7 @@ private:
     std::vector<LocalInfo> m_localInfo;
 
     Walrus::Vector<uint8_t, std::allocator<uint8_t>> m_memoryInitData;
+    size_t m_dataSegmentMemIndex = -1;
 
     uint32_t m_elementTableIndex;
     Walrus::Optional<Walrus::ModuleFunction*> m_elementOffsetFunction;
@@ -907,6 +1018,8 @@ public:
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
         ASSERT(index == m_result.m_datas.size());
+        ASSERT(m_dataSegmentMemIndex == static_cast<size_t>(-1));
+        m_dataSegmentMemIndex = memoryIndex;
         beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)), true);
     }
 
@@ -927,7 +1040,8 @@ public:
     virtual void EndDataSegment(Index index) override
     {
         ASSERT(index == m_result.m_datas.size());
-        m_result.m_datas.push_back(new Walrus::Data(m_currentFunction, std::move(m_memoryInitData)));
+        m_result.m_datas.push_back(new Walrus::Data(m_dataSegmentMemIndex, m_currentFunction, std::move(m_memoryInitData)));
+        m_dataSegmentMemIndex = -1;
         endFunction();
     }
 
@@ -2153,12 +2267,13 @@ public:
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        if ((opcode == (int)WASMOpcode::I32LoadOpcode || opcode == (int)WASMOpcode::F32LoadOpcode) && offset == 0) {
+        if ((opcode == (int)WASMOpcode::I32LoadOpcode || opcode == (int)WASMOpcode::F32LoadOpcode) && offset == 0 && memidx == 0) {
             pushByteCode(Walrus::Load32(src, dst), code);
-        } else if ((opcode == (int)WASMOpcode::I64LoadOpcode || opcode == (int)WASMOpcode::F64LoadOpcode) && offset == 0) {
+        } else if ((opcode == (int)WASMOpcode::I64LoadOpcode || opcode == (int)WASMOpcode::F64LoadOpcode) && offset == 0 && memidx == 0) {
             pushByteCode(Walrus::Load64(src, dst), code);
+
         } else {
-            generateMemoryLoadCode(code, offset, src, dst);
+            generateMemoryLoadCode(code, memidx, alignmentLog2, offset, src, dst);
         }
     }
 
@@ -2169,12 +2284,12 @@ public:
         auto src1 = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src0 = popVMStack();
-        if ((opcode == (int)WASMOpcode::I32StoreOpcode || opcode == (int)WASMOpcode::F32StoreOpcode) && offset == 0) {
+        if ((opcode == (int)WASMOpcode::I32StoreOpcode || opcode == (int)WASMOpcode::F32StoreOpcode) && offset == 0 && memidx == 0) {
             pushByteCode(Walrus::Store32(src0, src1), code);
-        } else if ((opcode == (int)WASMOpcode::I64StoreOpcode || opcode == (int)WASMOpcode::F64StoreOpcode) && offset == 0) {
+        } else if ((opcode == (int)WASMOpcode::I64StoreOpcode || opcode == (int)WASMOpcode::F64StoreOpcode) && offset == 0 && memidx == 0) {
             pushByteCode(Walrus::Store64(src0, src1), code);
         } else {
-            generateMemoryStoreCode(code, offset, src0, src1);
+            generateMemoryStoreCode(code, memidx, alignmentLog2, offset, src0, src1);
         }
     }
 
@@ -2186,10 +2301,14 @@ public:
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
-#define GENERATE_LOAD_CODE_CASE(name, ...)                  \
-    case WASMOpcode::name##Opcode: {                        \
-        pushByteCode(Walrus::name(offset, src, dst), code); \
-        break;                                              \
+#define GENERATE_LOAD_CODE_CASE(name, ...)                                                                             \
+    case WASMOpcode::name##Opcode: {                                                                                   \
+        if (memidx == 0) {                                                                                             \
+            pushByteCode(Walrus::name(offset, src, dst), code);                                                        \
+        } else {                                                                                                       \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src, dst), WASMOpcode::name##MultiOpcode); \
+        }                                                                                                              \
+        break;                                                                                                         \
     }
 
             FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(GENERATE_LOAD_CODE_CASE)
@@ -2207,10 +2326,14 @@ public:
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src0 = popVMStack();
         switch (code) {
-#define GENERATE_STORE_CODE_CASE(name, ...)                   \
-    case WASMOpcode::name##Opcode: {                          \
-        pushByteCode(Walrus::name(offset, src0, src1), code); \
-        break;                                                \
+#define GENERATE_STORE_CODE_CASE(name, readType, writeType)                                                              \
+    case WASMOpcode::name##Opcode: {                                                                                     \
+        if (memidx == 0) {                                                                                               \
+            pushByteCode(Walrus::name(offset, src0, src1), code);                                                        \
+        } else {                                                                                                         \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src0, src1), WASMOpcode::name##MultiOpcode); \
+        }                                                                                                                \
+        break;                                                                                                           \
     }
 
             FOR_EACH_BYTECODE_ATOMIC_STORE_OP(GENERATE_STORE_CODE_CASE)
@@ -2229,10 +2352,14 @@ public:
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
-#define GENERATE_RMW_CODE_CASE(name, ...)                          \
-    case WASMOpcode::name##Opcode: {                               \
-        pushByteCode(Walrus::name(offset, src0, src1, dst), code); \
-        break;                                                     \
+#define GENERATE_RMW_CODE_CASE(name, ...)                                                                                     \
+    case WASMOpcode::name##Opcode: {                                                                                          \
+        if (memidx == 0) {                                                                                                    \
+            pushByteCode(Walrus::name(offset, src0, src1, dst), code);                                                        \
+        } else {                                                                                                              \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src0, src1, dst), WASMOpcode::name##MultiOpcode); \
+        }                                                                                                                     \
+        break;                                                                                                                \
     }
 
             FOR_EACH_BYTECODE_ATOMIC_RMW_OP(GENERATE_RMW_CODE_CASE)
@@ -2253,10 +2380,14 @@ public:
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
-#define GENERATE_RMW_CMPXCHG_CODE_CASE(name, ...)                        \
-    case WASMOpcode::name##Opcode: {                                     \
-        pushByteCode(Walrus::name(offset, src0, src1, src2, dst), code); \
-        break;                                                           \
+#define GENERATE_RMW_CMPXCHG_CODE_CASE(name, ...)                                                                                   \
+    case WASMOpcode::name##Opcode: {                                                                                                \
+        if (memidx == 0) {                                                                                                          \
+            pushByteCode(Walrus::name(offset, src0, src1, src2, dst), code);                                                        \
+        } else {                                                                                                                    \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src0, src1, src2, dst), WASMOpcode::name##MultiOpcode); \
+        }                                                                                                                           \
+        break;                                                                                                                      \
     }
 
             FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(GENERATE_RMW_CMPXCHG_CODE_CASE)
@@ -2278,11 +2409,19 @@ public:
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
         case WASMOpcode::MemoryAtomicWait32Opcode: {
-            pushByteCode(Walrus::MemoryAtomicWait32(offset, src0, src1, src2, dst), code);
+            if (memidx == 0) {
+                pushByteCode(Walrus::MemoryAtomicWait32(offset, src0, src1, src2, dst), code);
+            } else {
+                pushByteCode(Walrus::MemoryAtomicWait32Multi(memidx, alignmentLog2, offset, src0, src1, src2, dst),  WASMOpcode::MemoryAtomicWait32MultiOpcode);
+            }
             break;
         }
         case WASMOpcode::MemoryAtomicWait64Opcode: {
-            pushByteCode(Walrus::MemoryAtomicWait64(offset, src0, src1, src2, dst), code);
+            if (memidx == 0) {
+                pushByteCode(Walrus::MemoryAtomicWait64(offset, src0, src1, src2, dst), code);
+            } else {
+                pushByteCode(Walrus::MemoryAtomicWait64Multi(memidx, alignmentLog2, offset, src0, src1, src2, dst),  WASMOpcode::MemoryAtomicWait64MultiOpcode);
+            }
             break;
         }
         default:
@@ -2304,7 +2443,11 @@ public:
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        pushByteCode(Walrus::MemoryAtomicNotify(offset, src0, src1, dst), code);
+        if (memidx == 0) {
+            pushByteCode(Walrus::MemoryAtomicNotify(offset, src0, src1, dst), code);
+        } else {
+            pushByteCode(Walrus::MemoryAtomicNotifyMulti(memidx, alignmentLog2, offset, src0, src1, dst), WASMOpcode::MemoryAtomicNotifyMultiOpcode);
+        }
     }
 
     virtual void OnRefFuncExpr(Index func_index) override
@@ -2456,17 +2599,21 @@ public:
     }
 
     // SIMD Instructions
-    virtual void OnLoadSplatExpr(int opcode, Index memidx, Address alignment_log2, Address offset) override
+    virtual void OnLoadSplatExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
-#define GENERATE_LOAD_CODE_CASE(name, ...)                  \
-    case WASMOpcode::name##Opcode: {                        \
-        pushByteCode(Walrus::name(offset, src, dst), code); \
-        break;                                              \
+#define GENERATE_LOAD_CODE_CASE(name, ...)                                                    \
+    case WASMOpcode::name##Opcode: {                                                          \
+        if (memidx == 0) {                                                                    \
+            pushByteCode(Walrus::name(offset, src, dst), code);                               \
+        } else {                                                                              \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src, dst), code); \
+        }                                                                                     \
+        break;                                                                                \
     }
 
             FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_LOAD_CODE_CASE)
@@ -2476,7 +2623,7 @@ public:
         }
     }
 
-    virtual void OnLoadZeroExpr(int opcode, Index memidx, Address alignment_log2, Address offset) override
+    virtual void OnLoadZeroExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
@@ -2484,11 +2631,19 @@ public:
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
         case WASMOpcode::V128Load32ZeroOpcode: {
-            pushByteCode(Walrus::V128Load32Zero(offset, src, dst), code);
+            if (memidx == 0) {
+                pushByteCode(Walrus::V128Load32Zero(offset, src, dst), code);
+            } else {
+                pushByteCode(Walrus::V128Load32ZeroMulti(memidx, alignmentLog2, offset, src, dst), code);
+            }
             break;
         }
         case WASMOpcode::V128Load64ZeroOpcode: {
-            pushByteCode(Walrus::V128Load64Zero(offset, src, dst), code);
+            if (memidx == 0) {
+                pushByteCode(Walrus::V128Load64Zero(offset, src, dst), code);
+            } else {
+                pushByteCode(Walrus::V128Load64ZeroMulti(memidx, alignmentLog2, offset, src, dst), code);
+            }
             break;
         }
         default:
@@ -2531,7 +2686,7 @@ public:
         }
     }
 
-    virtual void OnSimdLoadLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override
+    virtual void OnSimdLoadLaneExpr(int opcode, Index memidx, Address alignmentLog2, Address offset, uint64_t value) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::V128);
@@ -2540,10 +2695,14 @@ public:
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
         switch (code) {
-#define GENERATE_LOAD_CODE_CASE(name, opType)                                                                       \
-    case WASMOpcode::name##Opcode: {                                                                                \
-        pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value), dst), code); \
-        break;                                                                                                      \
+#define GENERATE_LOAD_CODE_CASE(name, opType)                                                                                                         \
+    case WASMOpcode::name##Opcode: {                                                                                                                  \
+        if (memidx == 0) {                                                                                                                            \
+            pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value), dst), code);                               \
+        } else {                                                                                                                                      \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value), dst), code); \
+        }                                                                                                                                             \
+        break;                                                                                                                                        \
     }
             FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(GENERATE_LOAD_CODE_CASE)
 #undef GENERATE_LOAD_CODE_CASE
@@ -2552,7 +2711,7 @@ public:
         }
     }
 
-    virtual void OnSimdStoreLaneExpr(int opcode, Index memidx, Address alignment_log2, Address offset, uint64_t value) override
+    virtual void OnSimdStoreLaneExpr(int opcode, Index memidx, Address alignmentLog2, Address offset, uint64_t value) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::V128);
@@ -2560,10 +2719,14 @@ public:
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src0 = popVMStack();
         switch (code) {
-#define GENERATE_STORE_CODE_CASE(name, opType)                                                                 \
-    case WASMOpcode::name##Opcode: {                                                                           \
-        pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value)), code); \
-        break;                                                                                                 \
+#define GENERATE_STORE_CODE_CASE(name, opType)                                                                                                   \
+    case WASMOpcode::name##Opcode: {                                                                                                             \
+        if (memidx == 0) {                                                                                                                       \
+            pushByteCode(Walrus::name(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value)), code);                               \
+        } else {                                                                                                                                 \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value)), code); \
+        }                                                                                                                                        \
+        break;                                                                                                                                   \
     }
             FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_STORE_CODE_CASE)
 #undef GENERATE_STORE_CODE_CASE
@@ -2637,13 +2800,17 @@ public:
         }
     }
 
-    void generateMemoryLoadCode(WASMOpcode code, size_t offset, size_t src, size_t dst)
+    void generateMemoryLoadCode(WASMOpcode code, Index memidx, Address alignmentLog2, size_t offset, size_t src, size_t dst)
     {
         switch (code) {
-#define GENERATE_LOAD_CODE_CASE(name, readType, writeType)  \
-    case WASMOpcode::name##Opcode: {                        \
-        pushByteCode(Walrus::name(offset, src, dst), code); \
-        break;                                              \
+#define GENERATE_LOAD_CODE_CASE(name, readType, writeType)                                                             \
+    case WASMOpcode::name##Opcode: {                                                                                   \
+        if (memidx == 0) {                                                                                             \
+            pushByteCode(Walrus::name(offset, src, dst), code);                                                        \
+        } else {                                                                                                       \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src, dst), WASMOpcode::name##MultiOpcode); \
+        }                                                                                                              \
+        break;                                                                                                         \
     }
             FOR_EACH_BYTECODE_LOAD_OP(GENERATE_LOAD_CODE_CASE)
             FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(GENERATE_LOAD_CODE_CASE)
@@ -2654,13 +2821,17 @@ public:
         }
     }
 
-    void generateMemoryStoreCode(WASMOpcode code, size_t offset, size_t src0, size_t src1)
+    void generateMemoryStoreCode(WASMOpcode code, Index memidx, Address alignmentLog2, size_t offset, size_t src0, size_t src1)
     {
         switch (code) {
-#define GENERATE_STORE_CODE_CASE(name, readType, writeType)   \
-    case WASMOpcode::name##Opcode: {                          \
-        pushByteCode(Walrus::name(offset, src0, src1), code); \
-        break;                                                \
+#define GENERATE_STORE_CODE_CASE(name, readType, writeType)                                                              \
+    case WASMOpcode::name##Opcode: {                                                                                     \
+        if (memidx == 0) {                                                                                               \
+            pushByteCode(Walrus::name(offset, src0, src1), code);                                                        \
+        } else {                                                                                                         \
+            pushByteCode(Walrus::name##Multi(memidx, alignmentLog2, offset, src0, src1), WASMOpcode::name##MultiOpcode); \
+        }                                                                                                                \
+        break;                                                                                                           \
     }
             FOR_EACH_BYTECODE_STORE_OP(GENERATE_STORE_CODE_CASE)
 #undef GENERATE_STORE_CODE_CASE

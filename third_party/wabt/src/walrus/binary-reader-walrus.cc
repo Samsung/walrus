@@ -86,6 +86,8 @@ static Features getFeatures() {
     features.enable_threads();
     // TODO: should use command line flag for this (--enable-relaxed-simd)
     features.enable_relaxed_simd();
+    // TODO: should use command line flag for this (--enable-multi-memory)
+    features.enable_multi_memory();
     return features;
 }
 
@@ -740,7 +742,7 @@ public:
         m_externalDelegate->OnLoopExpr(sig_type);
         return Result::Ok;
     }
-    Result OnMemoryCopyExpr(Index srcmemidx, Index destmemidx) override {
+    Result OnMemoryCopyExpr(Index destmemidx, Index srcmemidx) override {
         CHECK_RESULT(m_validator.OnMemoryCopy(GetLocation(), Var(srcmemidx, GetLocation()), Var(destmemidx, GetLocation())));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnMemoryCopyExpr(srcmemidx, destmemidx);
