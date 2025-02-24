@@ -14,8 +14,7 @@
   (table (export "table-10-inf") 10 funcref)
   (table (export "table-10-20") 10 20 funcref)
   (memory (export "memory-2-inf") 2)
-  ;; Multiple memories are not yet supported
-  ;; (memory (export "memory-2-4") 2 4)
+  (memory (export "memory-2-4") 2 4)
 )
 
 (register "test")
@@ -479,18 +478,19 @@
 (assert_return (invoke "load" (i32.const 8)) (i32.const 0x100000))
 (assert_trap (invoke "load" (i32.const 1000000)) "out of bounds memory access")
 
-(assert_invalid
-  (module (import "" "" (memory 1)) (import "" "" (memory 1)))
-  "multiple memories"
-)
-(assert_invalid
-  (module (import "" "" (memory 1)) (memory 0))
-  "multiple memories"
-)
-(assert_invalid
-  (module (memory 0) (memory 0))
-  "multiple memories"
-)
+;; we now support multiple memories
+;;(assert_invalid
+;;  (module (import "" "" (memory 1)) (import "" "" (memory 1)))
+;;  "multiple memories"
+;;)
+;;(assert_invalid
+;;  (module (import "" "" (memory 1)) (memory 0))
+;;  "multiple memories"
+;;)
+;;(assert_invalid
+;;  (module (memory 0) (memory 0))
+;;  "multiple memories"
+;;)
 
 (module (import "test" "memory-2-inf" (memory 2)))
 (module (import "test" "memory-2-inf" (memory 1)))

@@ -658,6 +658,19 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                           \
     }
 
+#define MULTI_MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)             \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        MemoryLoadMulti* code = (MemoryLoadMulti*)programCounter;                \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());            \
+        readType value;                                                          \
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value); \
+        writeValue<writeType>(bp, code->dstOffset(), value);                     \
+        ADD_PROGRAM_COUNTER(MemoryLoadMulti);                                    \
+        NEXT_INSTRUCTION();                                                      \
+    }
+
 #define MEMORY_STORE_OPERATION(opcodeName, readType, writeType)        \
     DEFINE_OPCODE(opcodeName)                                          \
         :                                                              \
@@ -668,6 +681,18 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         memories[0]->store(state, offset, code->offset(), value);      \
         ADD_PROGRAM_COUNTER(MemoryStore);                              \
         NEXT_INSTRUCTION();                                            \
+    }
+
+#define MULTI_MEMORY_STORE_OPERATION(opcodeName, readType, writeType)            \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        MemoryStoreMulti* code = (MemoryStoreMulti*)programCounter;              \
+        writeType value = readValue<readType>(bp, code->src1Offset());           \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());           \
+        memories[code->memIndex()]->store(state, offset, code->offset(), value); \
+        ADD_PROGRAM_COUNTER(MemoryStoreMulti);                                   \
+        NEXT_INSTRUCTION();                                                      \
     }
 
 #define SIMD_MEMORY_LOAD_SPLAT_OPERATION(opcodeName, opType)          \
@@ -684,6 +709,22 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         writeValue<Type>(bp, code->dstOffset(), result);              \
         ADD_PROGRAM_COUNTER(MemoryLoad);                              \
         NEXT_INSTRUCTION();                                           \
+    }
+
+#define SIMD_MULTI_MEMORY_LOAD_SPLAT_OPERATION(opcodeName, opType)               \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        using Type = typename SIMDType<opType>::Type;                            \
+        MemoryLoadMulti* code = (MemoryLoadMulti*)programCounter;                \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());            \
+        opType value;                                                            \
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value); \
+        Type result;                                                             \
+        std::fill(std::begin(result.v), std::end(result.v), value);              \
+        writeValue<Type>(bp, code->dstOffset(), result);                         \
+        ADD_PROGRAM_COUNTER(MemoryLoadMulti);                                    \
+        NEXT_INSTRUCTION();                                                      \
     }
 
 #define SIMD_MEMORY_LOAD_EXTEND_OPERATION(opcodeName, readType, writeType) \
@@ -704,6 +745,24 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                \
     }
 
+#define SIMD_MULTI_MEMORY_LOAD_EXTEND_OPERATION(opcodeName, readType, writeType) \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        using WriteType = typename SIMDType<writeType>::Type;                    \
+        MemoryLoadMulti* code = (MemoryLoadMulti*)programCounter;                \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());            \
+        readType value;                                                          \
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value); \
+        WriteType result;                                                        \
+        for (uint8_t i = 0; i < WriteType::Lanes; i++) {                         \
+            result[i] = value[i];                                                \
+        }                                                                        \
+        writeValue<WriteType>(bp, code->dstOffset(), result);                    \
+        ADD_PROGRAM_COUNTER(MemoryLoadMulti);                                    \
+        NEXT_INSTRUCTION();                                                      \
+    }
+
 #define SIMD_MEMORY_LOAD_LANE_OPERATION(opcodeName, opType)            \
     DEFINE_OPCODE(opcodeName)                                          \
         :                                                              \
@@ -720,6 +779,22 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                            \
     }
 
+#define SIMD_MULTI_MEMORY_LOAD_LANE_OPERATION(opcodeName, opType)                \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        using Type = typename SIMDType<opType>::Type;                            \
+        SIMDMemoryLoadMulti* code = (SIMDMemoryLoadMulti*)programCounter;        \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());           \
+        Type result = readValue<Type>(bp, code->src1Offset());                   \
+        opType value;                                                            \
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value); \
+        result[code->index()] = value;                                           \
+        writeValue<Type>(bp, code->dstOffset(), result);                         \
+        ADD_PROGRAM_COUNTER(SIMDMemoryLoadMulti);                                \
+        NEXT_INSTRUCTION();                                                      \
+    }
+
 #define SIMD_MEMORY_STORE_LANE_OPERATION(opcodeName, opType)           \
     DEFINE_OPCODE(opcodeName)                                          \
         :                                                              \
@@ -732,6 +807,20 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         memories[0]->store(state, offset, code->offset(), value);      \
         ADD_PROGRAM_COUNTER(SIMDMemoryStore);                          \
         NEXT_INSTRUCTION();                                            \
+    }
+
+#define SIMD_MULTI_MEMORY_STORE_LANE_OPERATION(opcodeName, opType)               \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        using Type = typename SIMDType<opType>::Type;                            \
+        SIMDMemoryStoreMulti* code = (SIMDMemoryStoreMulti*)programCounter;      \
+        Type result = readValue<Type>(bp, code->src1Offset());                   \
+        opType value = result[code->index()];                                    \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());           \
+        memories[code->memIndex()]->store(state, offset, code->offset(), value); \
+        ADD_PROGRAM_COUNTER(SIMDMemoryStoreMulti);                               \
+        NEXT_INSTRUCTION();                                                      \
     }
 
 #define SIMD_EXTRACT_LANE_OPERATION(opcodeName, readType, writeType)         \
@@ -773,6 +862,19 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                             \
     }
 
+#define ATOMIC_MULTI_MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)            \
+    DEFINE_OPCODE(opcodeName)                                                          \
+        :                                                                              \
+    {                                                                                  \
+        MemoryLoadMulti* code = (MemoryLoadMulti*)programCounter;                      \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());                  \
+        readType value;                                                                \
+        memories[code->memIndex()]->atomicLoad(state, offset, code->offset(), &value); \
+        writeValue<writeType>(bp, code->dstOffset(), value);                           \
+        ADD_PROGRAM_COUNTER(MemoryLoadMulti);                                          \
+        NEXT_INSTRUCTION();                                                            \
+    }
+
 #define ATOMIC_MEMORY_STORE_OPERATION(opcodeName, readType, writeType)  \
     DEFINE_OPCODE(opcodeName)                                           \
         :                                                               \
@@ -783,6 +885,18 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         memories[0]->atomicStore(state, offset, code->offset(), value); \
         ADD_PROGRAM_COUNTER(MemoryStore);                               \
         NEXT_INSTRUCTION();                                             \
+    }
+
+#define ATOMIC_MULTI_MEMORY_STORE_OPERATION(opcodeName, readType, writeType)           \
+    DEFINE_OPCODE(opcodeName)                                                          \
+        :                                                                              \
+    {                                                                                  \
+        MemoryStoreMulti* code = (MemoryStoreMulti*)programCounter;                    \
+        writeType value = readValue<readType>(bp, code->src1Offset());                 \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                 \
+        memories[code->memIndex()]->atomicStore(state, offset, code->offset(), value); \
+        ADD_PROGRAM_COUNTER(MemoryStoreMulti);                                         \
+        NEXT_INSTRUCTION();                                                            \
     }
 
 #define ATOMIC_MEMORY_RMW_OPERATION(opcodeName, R, T, operationName)                       \
@@ -797,6 +911,20 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         writeValue<R>(bp, code->dstOffset(), static_cast<R>(old));                         \
         ADD_PROGRAM_COUNTER(AtomicRmw);                                                    \
         NEXT_INSTRUCTION();                                                                \
+    }
+
+#define ATOMIC_MULTI_MEMORY_RMW_OPERATION(opcodeName, R, T, operationName)                                \
+    DEFINE_OPCODE(opcodeName)                                                                             \
+        :                                                                                                 \
+    {                                                                                                     \
+        AtomicRmwMulti* code = (AtomicRmwMulti*)programCounter;                                           \
+        T value = static_cast<T>(readValue<R>(bp, code->src1Offset()));                                   \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                                    \
+        T old;                                                                                            \
+        memories[code->memIndex()]->atomicRmw(state, offset, code->offset(), value, &old, operationName); \
+        writeValue<R>(bp, code->dstOffset(), static_cast<R>(old));                                        \
+        ADD_PROGRAM_COUNTER(AtomicRmwMulti);                                                              \
+        NEXT_INSTRUCTION();                                                                               \
     }
 
 #define ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION(opcodeName, T, V)                                    \
@@ -817,6 +945,26 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         writeValue<T>(bp, code->dstOffset(), static_cast<T>(old));                               \
         ADD_PROGRAM_COUNTER(AtomicRmwCmpxchg);                                                   \
         NEXT_INSTRUCTION();                                                                      \
+    }
+
+#define ATOMIC_MULTI_MEMORY_RMW_CMPXCHG_OPERATION(opcodeName, T, V)                                             \
+    DEFINE_OPCODE(opcodeName)                                                                                   \
+        :                                                                                                       \
+    {                                                                                                           \
+        AtomicRmwCmpxchgMulti* code = (AtomicRmwCmpxchgMulti*)programCounter;                                   \
+        V replace = static_cast<V>(readValue<T>(bp, code->src2Offset()));                                       \
+        T expectValue = readValue<T>(bp, code->src1Offset());                                                   \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                                          \
+        V old;                                                                                                  \
+        if (expectValue > std::numeric_limits<V>::max()) {                                                      \
+            memories[code->memIndex()]->atomicLoad(state, offset, code->offset(), &old);                        \
+        } else {                                                                                                \
+            V expect = static_cast<V>(expectValue);                                                             \
+            memories[code->memIndex()]->atomicRmwCmpxchg(state, offset, code->offset(), expect, replace, &old); \
+        }                                                                                                       \
+        writeValue<T>(bp, code->dstOffset(), static_cast<T>(old));                                              \
+        ADD_PROGRAM_COUNTER(AtomicRmwCmpxchgMulti);                                                             \
+        NEXT_INSTRUCTION();                                                                                     \
     }
 
 
@@ -1092,17 +1240,27 @@ NextInstruction:
     }
 
     FOR_EACH_BYTECODE_LOAD_OP(MEMORY_LOAD_OPERATION)
+    FOR_EACH_BYTECODE_LOAD_MULTI_OP(MULTI_MEMORY_LOAD_OPERATION)
     FOR_EACH_BYTECODE_STORE_OP(MEMORY_STORE_OPERATION)
+    FOR_EACH_BYTECODE_STORE_MULTI_OP(MULTI_MEMORY_STORE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(SIMD_MEMORY_LOAD_SPLAT_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_MULTI_OP(SIMD_MULTI_MEMORY_LOAD_SPLAT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(SIMD_MEMORY_LOAD_EXTEND_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_MULTI_OP(SIMD_MULTI_MEMORY_LOAD_EXTEND_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(SIMD_MEMORY_LOAD_LANE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_LOAD_LANE_MULTI_OP(SIMD_MULTI_MEMORY_LOAD_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(SIMD_MEMORY_STORE_LANE_OPERATION)
+    FOR_EACH_BYTECODE_SIMD_STORE_LANE_MULTI_OP(SIMD_MULTI_MEMORY_STORE_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(SIMD_EXTRACT_LANE_OPERATION)
     FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(SIMD_REPLACE_LANE_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(ATOMIC_MEMORY_LOAD_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_LOAD_MULTI_OP(ATOMIC_MULTI_MEMORY_LOAD_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_STORE_OP(ATOMIC_MEMORY_STORE_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_STORE_MULTI_OP(ATOMIC_MULTI_MEMORY_STORE_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_RMW_OP(ATOMIC_MEMORY_RMW_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_RMW_MULTI_OP(ATOMIC_MULTI_MEMORY_RMW_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_MULTI_OP(ATOMIC_MULTI_MEMORY_RMW_CMPXCHG_OPERATION)
 
     DEFINE_OPCODE(MemoryAtomicWait32)
         :
@@ -1115,6 +1273,20 @@ NextInstruction:
         memories[0]->atomicWait(state, instance->module()->store(), offset, code->offset(), expect, timeOut, &result);
         writeValue<uint32_t>(bp, code->dstOffset(), result);
         ADD_PROGRAM_COUNTER(MemoryAtomicWait32);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryAtomicWait32Multi)
+        :
+    {
+        MemoryAtomicWait32Multi* code = (MemoryAtomicWait32Multi*)programCounter;
+        int64_t timeOut = readValue<int64_t>(bp, code->src2Offset());
+        uint32_t expect = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t result;
+        memories[code->memIndex()]->atomicWait(state, instance->module()->store(), offset, code->offset(), expect, timeOut, &result);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(MemoryAtomicWait32Multi);
         NEXT_INSTRUCTION();
     }
 
@@ -1132,6 +1304,20 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(MemoryAtomicWait64Multi)
+        :
+    {
+        MemoryAtomicWait64Multi* code = (MemoryAtomicWait64Multi*)programCounter;
+        int64_t timeOut = readValue<int64_t>(bp, code->src2Offset());
+        uint64_t expect = readValue<uint64_t>(bp, code->src1Offset());
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t result;
+        memories[code->memIndex()]->atomicWait(state, instance->module()->store(), offset, code->offset(), expect, timeOut, &result);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(MemoryAtomicWait64Multi);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(MemoryAtomicNotify)
         :
     {
@@ -1144,6 +1330,20 @@ NextInstruction:
         ADD_PROGRAM_COUNTER(MemoryAtomicNotify);
         NEXT_INSTRUCTION();
     }
+
+    DEFINE_OPCODE(MemoryAtomicNotifyMulti)
+        :
+    {
+        MemoryAtomicNotifyMulti* code = (MemoryAtomicNotifyMulti*)programCounter;
+        uint32_t count = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t result;
+        memories[code->memIndex()]->atomicNotify(state, instance->module()->store(), offset, code->offset(), count, &result);
+        writeValue<uint32_t>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(MemoryAtomicNotifyMulti);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(AtomicFence)
         :
     {
@@ -1177,6 +1377,22 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(V128Load32ZeroMulti)
+        :
+    {
+        using Type = typename SIMDType<uint32_t>::Type;
+        V128Load32ZeroMulti* code = (V128Load32ZeroMulti*)programCounter;
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
+        uint32_t value;
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value);
+        Type result;
+        std::fill(std::begin(result.v), std::end(result.v), 0);
+        result[0] = value;
+        writeValue<Type>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(V128Load32ZeroMulti);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(V128Load64Zero)
         :
     {
@@ -1190,6 +1406,22 @@ NextInstruction:
         result[0] = value;
         writeValue<Type>(bp, code->dstOffset(), result);
         ADD_PROGRAM_COUNTER(V128Load64Zero);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(V128Load64ZeroMulti)
+        :
+    {
+        using Type = typename SIMDType<uint64_t>::Type;
+        V128Load64ZeroMulti* code = (V128Load64ZeroMulti*)programCounter;
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());
+        uint64_t value;
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value);
+        Type result;
+        std::fill(std::begin(result.v), std::end(result.v), 0);
+        result[0] = value;
+        writeValue<Type>(bp, code->dstOffset(), result);
+        ADD_PROGRAM_COUNTER(V128Load64ZeroMulti);
         NEXT_INSTRUCTION();
     }
 
@@ -1215,7 +1447,7 @@ NextInstruction:
         :
     {
         MemorySize* code = (MemorySize*)programCounter;
-        writeValue<int32_t>(bp, code->dstOffset(), memories[0]->sizeInPageSize());
+        writeValue<int32_t>(bp, code->dstOffset(), memories[code->memIndex()]->sizeInPageSize());
         ADD_PROGRAM_COUNTER(MemorySize);
         NEXT_INSTRUCTION();
     }
@@ -1224,7 +1456,7 @@ NextInstruction:
         :
     {
         MemoryGrow* code = (MemoryGrow*)programCounter;
-        Memory* m = memories[0];
+        Memory* m = memories[code->memIndex()];
         auto oldSize = m->sizeInPageSize();
         if (m->grow(readValue<int32_t>(bp, code->srcOffset()) * (uint64_t)Memory::s_memoryPageSize)) {
             writeValue<int32_t>(bp, code->dstOffset(), oldSize);
@@ -1239,7 +1471,7 @@ NextInstruction:
         :
     {
         MemoryInit* code = (MemoryInit*)programCounter;
-        Memory* m = memories[0];
+        Memory* m = memories[code->memIndex()];
         DataSegment& sg = instance->dataSegment(code->segmentIndex());
         auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         auto srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
@@ -1253,11 +1485,12 @@ NextInstruction:
         :
     {
         MemoryCopy* code = (MemoryCopy*)programCounter;
-        Memory* m = memories[0];
+        Memory* srcMem = memories[code->srcMemIndex()];
+        Memory* dstMem = memories[code->dstMemIndex()];
         auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         auto srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
         auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
-        m->copy(state, dstStart, srcStart, size);
+        srcMem->copy(state, dstStart, srcStart, size, dstMem);
         ADD_PROGRAM_COUNTER(MemoryCopy);
         NEXT_INSTRUCTION();
     }
@@ -1266,7 +1499,7 @@ NextInstruction:
         :
     {
         MemoryFill* code = (MemoryFill*)programCounter;
-        Memory* m = memories[0];
+        Memory* m = memories[code->memIndex()];
         auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         auto value = readValue<int32_t>(bp, code->srcOffsets()[1]);
         auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
