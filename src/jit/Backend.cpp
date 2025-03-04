@@ -776,27 +776,42 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
 static void emitBrTable(sljit_compiler* compiler, BrTableInstruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    size_t targetLabelCount = instr->targetLabelCount() - 1;
+    size_t targetLabelCount = instr->targetLabelCount();
     Label** label = instr->targetLabels();
     Label** end = label + targetLabelCount;
+    sljit_s32 tmp = SLJIT_TMP_DEST_REG;
     JITArg src(instr->operands());
 
-    sljit_s32 offsetReg = GET_SOURCE_REG(src.arg, SLJIT_TMP_DEST_REG);
-    MOVE_TO_REG(compiler, SLJIT_MOV32, offsetReg, src.arg, src.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV_U32, tmp, 0, src.arg, src.argw);
 
     if (sljit_has_cpu_feature(SLJIT_HAS_CMOV)) {
-        sljit_emit_op2u(compiler, SLJIT_SUB32 | SLJIT_SET_GREATER_EQUAL, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(targetLabelCount));
-        sljit_emit_select(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, SLJIT_TMP_DEST_REG, SLJIT_IMM, static_cast<sljit_sw>(targetLabelCount), offsetReg);
-
-        offsetReg = SLJIT_TMP_DEST_REG;
-        end++;
+        sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_GREATER_EQUAL, tmp, 0, SLJIT_IMM, static_cast<sljit_sw>(targetLabelCount - 1));
+        sljit_emit_select(compiler, SLJIT_GREATER_EQUAL, tmp, SLJIT_IMM, static_cast<sljit_sw>(targetLabelCount - 1), tmp);
     } else {
-        sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL | SLJIT_32, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(targetLabelCount));
-        (*end)->jumpFrom(jump);
+        targetLabelCount--;
+        end--;
+        (*end)->jumpFrom(sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL, tmp, 0, SLJIT_IMM, static_cast<sljit_sw>(targetLabelCount)));
     }
 
-    sljit_emit_op2(compiler, SLJIT_SHL, SLJIT_TMP_MEM_REG, 0, offsetReg, 0, SLJIT_IMM, SLJIT_WORD_SHIFT);
-    sljit_emit_ijump(compiler, SLJIT_JUMP, SLJIT_MEM1(SLJIT_TMP_MEM_REG), static_cast<sljit_sw>(context->branchTableOffset));
+    sljit_emit_op2(compiler, SLJIT_SHL, tmp, 0, tmp, 0, SLJIT_IMM, SLJIT_WORD_SHIFT);
+
+    if (targetLabelCount <= JITCompiler::kMaxInlinedBranchTable) {
+        CompileContext* context = CompileContext::get(compiler);
+        JITCompiler::BranchTableLabels* brTableLabels = new JITCompiler::BranchTableLabels(context->compiler, targetLabelCount);
+
+        brTableLabels->header.size = targetLabelCount * sizeof(sljit_sw);
+
+        brTableLabels->jump = sljit_emit_op_addr(compiler, SLJIT_ADD_ABS_ADDR, tmp, 0);
+        sljit_emit_ijump(compiler, SLJIT_JUMP, SLJIT_MEM1(tmp), 0);
+
+        while (label < end) {
+            brTableLabels->labels.push_back(JITCompiler::BranchTableLabels::Item(*label));
+            label++;
+        }
+        return;
+    }
+
+    sljit_emit_ijump(compiler, SLJIT_JUMP, SLJIT_MEM1(tmp), static_cast<sljit_sw>(context->branchTableOffset));
 
     sljit_uw* target = reinterpret_cast<sljit_uw*>(context->branchTableOffset);
 
@@ -1023,6 +1038,8 @@ JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     , m_module(module)
     , m_moduleFunction(nullptr)
     , m_variableList(nullptr)
+    , m_brTableLabels(nullptr)
+    , m_lastBrTableLabels(nullptr)
     , m_branchTableSize(0)
     , m_tryBlockStart(0)
     , m_tryBlockOffset(0)
@@ -1386,6 +1403,30 @@ void JITCompiler::generateCode()
         return;
     }
 
+    if (m_brTableLabels != nullptr) {
+        /* Reverse the chain. */
+        sljit_read_only_buffer* prev = nullptr;
+        sljit_read_only_buffer* current = &m_brTableLabels->header;
+
+        do {
+            sljit_read_only_buffer* next = current->next;
+
+            current->next = prev;
+            prev = current;
+            current = next;
+        } while (current != nullptr);
+
+        sljit_emit_aligned_label(m_compiler, SLJIT_LABEL_ALIGN_W, prev);
+
+        BranchTableLabels* brTable = reinterpret_cast<BranchTableLabels*>(prev);
+        m_brTableLabels = brTable;
+
+        do {
+            sljit_set_label(brTable->jump, brTable->header.u.label);
+            brTable = reinterpret_cast<BranchTableLabels*>(brTable->header.next);
+        } while (brTable != nullptr);
+    }
+
     void* code = sljit_generate_code(m_compiler, 0, nullptr);
 
 #ifdef WALRUS_JITPERF
@@ -1398,6 +1439,26 @@ void JITCompiler::generateCode()
 #endif
 
     if (code != nullptr) {
+        if (m_brTableLabels != nullptr) {
+            BranchTableLabels* brTable = m_brTableLabels;
+            sljit_sw executable_offset = sljit_get_executable_offset(m_compiler);
+
+            do {
+                sljit_uw addr = sljit_get_label_abs_addr(brTable->header.u.label);
+                sljit_uw size = brTable->header.size;
+
+                ASSERT(brTable->labels.size() * sizeof(sljit_sw) == size);
+                sljit_uw* values = reinterpret_cast<sljit_uw*>(sljit_read_only_buffer_start_writing(addr, size, executable_offset));
+
+                for (auto it : brTable->labels) {
+                    *values++ = sljit_get_label_addr(it.jitLabel);
+                }
+
+                sljit_read_only_buffer_end_writing(addr, size, executable_offset);
+                brTable = reinterpret_cast<BranchTableLabels*>(brTable->header.next);
+            } while (brTable != nullptr);
+        }
+
         JITModule* moduleDescriptor = module()->m_jitModule;
 
         if (moduleDescriptor == nullptr) {
@@ -1568,6 +1629,8 @@ void JITCompiler::emitProlog()
         m_context.shuffleOffset = (reinterpret_cast<uintptr_t>(constData) + size - m_context.shuffleOffset + 0xf) & ~(uintptr_t)0xf;
 #endif /* SLJIT_CONFIG_X86 */
     }
+
+    ASSERT(m_lastBrTableLabels == nullptr);
 }
 
 void JITCompiler::emitEpilog()
@@ -1655,6 +1718,26 @@ void JITCompiler::emitEpilog()
             ASSERT(trapJumps[trapJumpIndex].jumpType == ExecutionContext::ReturnToLabel);
             sljit_set_label(trapJumps[trapJumpIndex++].jump, lastLabel);
         }
+    }
+
+    if (m_lastBrTableLabels != nullptr) {
+        BranchTableLabels* brTable = m_brTableLabels;
+
+        while (true) {
+            size_t size = brTable->labels.size();
+
+            for (size_t i = 0; i < size; i++) {
+                brTable->labels[i].jitLabel = brTable->labels[i].label->label();
+            }
+
+            if (brTable == m_lastBrTableLabels) {
+                break;
+            }
+
+            brTable = reinterpret_cast<BranchTableLabels*>(brTable->header.next);
+        }
+
+        m_lastBrTableLabels = nullptr;
     }
 
     if (func.branchTableSize > 0) {

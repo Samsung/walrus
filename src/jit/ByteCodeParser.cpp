@@ -1461,7 +1461,9 @@ static void compileFunction(JITCompiler* compiler)
                 tableSize++;
             }
 
-            compiler->increaseBranchTableSize(tableSize);
+            if (tableSize > JITCompiler::kMaxInlinedBranchTable) {
+                compiler->increaseBranchTableSize(tableSize);
+            }
             break;
         }
         case ByteCode::Const32Opcode: {
