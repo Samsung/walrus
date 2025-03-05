@@ -344,6 +344,19 @@ void WASI::path_filestat_get(ExecutionState& state, Value* argv, Value* result, 
     result[0] = Value(uvwasi_path_filestat_get(WASI::g_uvwasi, fd, flags, path, length, buf));
 }
 
+void WASI::path_filestat_set_times(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t flags = argv[1].asI32();
+    uint32_t length = argv[3].asI32();
+    const char* path = reinterpret_cast<char*>(get_memory_pointer(instance, argv[2], length));
+    uint64_t st_atim = argv[4].asI64();
+    uint64_t st_mtim = argv[5].asI64();
+    uint32_t fst_flags = argv[6].asI32();
+
+    result[0] = Value(uvwasi_path_filestat_set_times(WASI::g_uvwasi, fd, flags, path, length, st_atim, st_mtim, fst_flags));
+}
+
 void WASI::path_rename(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t oldFd = argv[0].asI32();
