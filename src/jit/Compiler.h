@@ -725,8 +725,39 @@ public:
     };
 #endif
 
+    struct BranchTableLabels {
+        BranchTableLabels(JITCompiler* compiler, size_t labelCount)
+            : jump(nullptr)
+        {
+            labels.reserve(labelCount);
+
+            this->header.next = reinterpret_cast<sljit_read_only_buffer*>(compiler->m_brTableLabels);
+            compiler->m_brTableLabels = this;
+
+            if (compiler->m_lastBrTableLabels == nullptr) {
+                compiler->m_lastBrTableLabels = this;
+            }
+        }
+
+        union Item {
+            Item(Label* value)
+            {
+                label = value;
+            }
+
+            Label* label;
+            sljit_label* jitLabel;
+        };
+
+        sljit_read_only_buffer header;
+        sljit_jump* jump;
+        std::vector<Item> labels;
+    };
+
     static const uint32_t kHasCondMov = 1 << 0;
     static const uint32_t kHasShortAtomic = 1 << 1;
+
+    static const uint32_t kMaxInlinedBranchTable = 1024;
 
     JITCompiler(Module* module, uint32_t JITFlags);
 
@@ -829,6 +860,8 @@ private:
     Module* m_module;
     ModuleFunction* m_moduleFunction;
     VariableList* m_variableList;
+    BranchTableLabels* m_brTableLabels;
+    BranchTableLabels* m_lastBrTableLabels;
     size_t m_branchTableSize;
     // Start inside the m_tryBlocks vector.
     size_t m_tryBlockStart;
