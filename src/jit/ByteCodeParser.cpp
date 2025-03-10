@@ -284,6 +284,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTPMinMaxV128 OTOp2V128
 #define OTSwizzleV128 OTOp2V128
 #define OTMulRoundSatV128 OTOp2V128
+#define OTRMinMaxV128 OTMinMaxV128
 
 #elif (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
 
@@ -306,6 +307,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTMulRoundSatV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
 #define OTOp3DotAddV128 OTOp3V128
+#define OTRMinMaxV128 OTMinMaxV128
 
 #elif (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
 
@@ -328,6 +330,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTMulRoundSatV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
 #define OTOp3DotAddV128 OTOp3V128
+#define OTRMinMaxV128 OTPMinMaxV128
 
 #elif (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV)
 
@@ -350,6 +353,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 #define OTPMinMaxV128 OTOp2V128
 #define OTPopcntV128 OTOp2V128
 #define OTShiftV128Tmp OTShiftV128
+#define OTRMinMaxV128 OTMinMaxV128
 
 #endif /* SLJIT_CONFIG_ARM */
 
@@ -1731,10 +1735,6 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::F32X4MinOpcode:
         case ByteCode::F64X2MaxOpcode:
         case ByteCode::F64X2MinOpcode:
-        case ByteCode::F32X4RelaxedMaxOpcode:
-        case ByteCode::F32X4RelaxedMinOpcode:
-        case ByteCode::F64X2RelaxedMaxOpcode:
-        case ByteCode::F64X2RelaxedMinOpcode: {
             group = Instruction::BinarySIMD;
             paramType = ParamTypes::ParamSrc2Dst;
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
@@ -1742,6 +1742,14 @@ static void compileFunction(JITCompiler* compiler)
             compiler->increaseStackTmpSize(32);
 #endif /* SLJIT_CONFIG_ARM_32 */
             requiredInit = OTMinMaxV128;
+            break;
+        case ByteCode::F32X4RelaxedMaxOpcode:
+        case ByteCode::F32X4RelaxedMinOpcode:
+        case ByteCode::F64X2RelaxedMaxOpcode:
+        case ByteCode::F64X2RelaxedMinOpcode: {
+            group = Instruction::BinarySIMD;
+            paramType = ParamTypes::ParamSrc2Dst;
+            requiredInit = OTRMinMaxV128;
             break;
         }
         case ByteCode::F32X4PMaxOpcode:
