@@ -1460,12 +1460,12 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
             sljit_emit_op2(compiler, SLJIT_AND32, SLJIT_TMP_DEST_REG, 0, tmpReg, 0, SLJIT_IMM, (0xffffffff) >> ((4 - size) * 8));
         }
 
+        sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         if (dstPair.arg2 != 0) {
             sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
         }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-        sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
         return;
     }
 
@@ -1583,10 +1583,10 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op2(compiler, SLJIT_AND32, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, (0xffffffff) >> ((4 - size) * 8));
     }
 
+    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
     if (dstPair.arg2 != 0) {
         sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
     }
-    sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
 #else /* !SLJIT_32BIT_ARCHITECTURE */
     sljit_s32 tmpReg = 0;
     sljit_s32 srcExpectedReg = 0;
