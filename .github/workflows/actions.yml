@@ -83,7 +83,7 @@ jobs:
       - name: Run Tests
         run: |
           #FIXME try-catch is unstable in macos build
-          $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus" ${{ matrix.switch }}
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
 
   build-by-clang:
     strategy:
@@ -196,6 +196,18 @@ jobs:
           - debug
           - release
         arch:
+          - name: armt2
+            toolchain:
+              url: https://toolchains.bootlin.com/downloads/releases/toolchains/armv7-eabihf/tarballs/armv7-eabihf--glibc--stable-2024.05-1.tar.xz
+              name: armv7-eabihf--glibc--stable-2024.05-1.tar.xz
+              CC: arm-buildroot-linux-gnueabihf-gcc-13.3.0.br_real
+              CXX: arm-buildroot-linux-gnueabihf-g++.br_real
+              CFFLAGS: -mthumb
+              CFLAGS: -mthumb
+            qemu:
+              target: arm-linux-user
+              name: qemu-arm
+            walrus: arm
           - name: armv7
             toolchain:
               url: https://toolchains.bootlin.com/downloads/releases/toolchains/armv7-eabihf/tarballs/armv7-eabihf--glibc--stable-2024.05-1.tar.xz
@@ -300,7 +312,7 @@ jobs:
           CMake --build out/ --config Release
       - name: Run tests
         run: |
-          python tools\run-tests.py --engine=%cd%\out\walrus.exe ${{ matrix.switch }}
+          python tools\run-tests.py --engine=%cd%\out\walrus.exe
         shell: cmd
       - if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
