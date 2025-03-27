@@ -264,9 +264,10 @@ private:
 
 class Data {
 public:
-    Data(ModuleFunction* moduleFunction, Vector<uint8_t, std::allocator<uint8_t>>&& initData)
+    Data(uint32_t index, ModuleFunction* moduleFunction, Vector<uint8_t, std::allocator<uint8_t>>&& initData)
         : m_moduleFunction(moduleFunction)
         , m_initData(std::move(initData))
+        , m_memIndex(index)
     {
     }
 
@@ -282,6 +283,8 @@ public:
         return m_moduleFunction;
     }
 
+    uint16_t memIndex() { return m_memIndex; }
+
     const Vector<uint8_t, std::allocator<uint8_t>>& initData() const
     {
         return m_initData;
@@ -290,6 +293,7 @@ public:
 private:
     ModuleFunction* m_moduleFunction;
     Vector<uint8_t, std::allocator<uint8_t>> m_initData;
+    uint16_t m_memIndex;
 };
 
 class Element {

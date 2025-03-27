@@ -560,6 +560,18 @@ struct TrapJump {
 struct MemoryInitArguments {
     Instance* instance;
     uint32_t segmentIndex;
+    uint16_t memIndex;
+};
+
+struct MemoryCopyArguments {
+    Instance* instance;
+    uint16_t srcMemIndex;
+    uint16_t dstMemIndex;
+};
+
+struct MemoryFillArguments {
+    Instance* instance;
+    uint16_t memIndex;
 };
 
 struct InitTableArguments {
@@ -577,6 +589,11 @@ struct TableCopyArguments {
 struct TableFillArguments {
     Instance* instance;
     uint32_t tableIndex;
+};
+
+struct MemInfo {
+    uint64_t initialMemorySize;
+    uint64_t maximumMemorySize;
 };
 
 struct CompileContext {
@@ -601,8 +618,7 @@ struct CompileContext {
     size_t nextTryBlock;
     size_t currentTryBlock;
     size_t trapBlocksStart;
-    uint64_t initialMemorySize;
-    uint64_t maximumMemorySize;
+    MemInfo* memInfo;
     std::vector<TrapBlock> trapBlocks;
     std::vector<size_t> tryBlockStack;
     std::vector<SlowCase*> slowCases;

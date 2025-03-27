@@ -234,8 +234,6 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     , nextTryBlock(0)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
-    , initialMemorySize(0)
-    , maximumMemorySize(0)
 {
     // Compiler is not initialized yet.
     size_t offset = Instance::alignedSize();
@@ -245,17 +243,19 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     tableStart = globalsStart + module->numberOfGlobalTypes() * sizeof(void*);
     functionsStart = tableStart + module->numberOfTableTypes() * sizeof(void*);
 
-    if (module->numberOfMemoryTypes() > 0) {
-        MemoryType* memoryType = module->memoryType(0);
-        initialMemorySize = memoryType->initialSize() * Memory::s_memoryPageSize;
-        maximumMemorySize = memoryType->maximumSize() * Memory::s_memoryPageSize;
+    if (numberOfMemoryTypes > 0) {
+        memInfo = new MemInfo[numberOfMemoryTypes];
+        for (size_t i = 0; i < numberOfMemoryTypes; ++i) {
+            MemoryType* memoryType = module->memoryType(i);
+            memInfo[i] = { memoryType->initialSize() * Memory::s_memoryPageSize, memoryType->maximumSize() * Memory::s_memoryPageSize };
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-        /* Four GB memory cannot be allocated on 32 bit systems. */
-        if (maximumMemorySize >= ((uint64_t)1 << 32)) {
-            maximumMemorySize = ((uint64_t)1 << 32) - Memory::s_memoryPageSize;
-        }
+            /* Four GB memory cannot be allocated on 32 bit systems. */
+            if (memInfo[i].maximumMemorySize >= ((uint64_t)1 << 32)) {
+                memInfo[i].maximumMemorySize = ((uint64_t)1 << 32) - Memory::s_memoryPageSize;
+            }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
+        }
     }
 }
 
