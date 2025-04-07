@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.1.0)
+cmake_minimum_required(VERSION 3.5.0)
 project(WABT LANGUAGES C CXX VERSION 1.0.30)
 include(GNUInstallDirs)
 

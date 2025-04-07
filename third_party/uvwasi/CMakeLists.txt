@@ -12,7 +12,7 @@ set(UVWASI_DIR ${PROJECT_SOURCE_DIR}/uvwasi)
 list(APPEND CMAKE_MODULE_PATH "${UVWASI_DIR}/cmake")
 
 # This can be a commit hash or tag
-set(LIBUV_VERSION v1.44.2)
+set(LIBUV_VERSION v1.47.0)
 
 include(CMakeDependentOption)
 cmake_dependent_option(UVWASI_BUILD_TESTS
