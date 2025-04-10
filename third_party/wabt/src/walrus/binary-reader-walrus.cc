@@ -79,20 +79,23 @@ struct Label {
     LabelKind kind;
 };
 
-static Features getFeatures() {
+static Features getFeatures(const uint32_t featureFlags) {
     Features features;
     features.enable_exceptions();
     // TODO: should use command line flag for this (--enable-threads)
     features.enable_threads();
     // TODO: should use command line flag for this (--enable-relaxed-simd)
     features.enable_relaxed_simd();
+    if (featureFlags & FeatureFlagValue::enableMultiMemory) {
+        features.enable_multi_memory();
+    }
     return features;
 }
 
 class BinaryReaderDelegateWalrus: public BinaryReaderDelegate {
 public:
-    BinaryReaderDelegateWalrus(WASMBinaryReaderDelegate *delegate, const std::string &filename) :
-        m_externalDelegate(delegate), m_filename(filename), m_validator(&m_errors, ValidateOptions(getFeatures())), m_lastInitType(Type::___), m_currentElementTableIndex(0) {
+    BinaryReaderDelegateWalrus(WASMBinaryReaderDelegate *delegate, const std::string &filename, const uint32_t featureFlags) :
+        m_externalDelegate(delegate), m_filename(filename), m_validator(&m_errors, ValidateOptions(getFeatures(featureFlags))), m_lastInitType(Type::___), m_currentElementTableIndex(0) {
 
     }
 
@@ -740,7 +743,7 @@ public:
         m_externalDelegate->OnLoopExpr(sig_type);
         return Result::Ok;
     }
-    Result OnMemoryCopyExpr(Index srcmemidx, Index destmemidx) override {
+    Result OnMemoryCopyExpr(Index destmemidx, Index srcmemidx) override {
         CHECK_RESULT(m_validator.OnMemoryCopy(GetLocation(), Var(srcmemidx, GetLocation()), Var(destmemidx, GetLocation())));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnMemoryCopyExpr(srcmemidx, destmemidx);
@@ -1363,12 +1366,12 @@ public:
     Index m_currentElementTableIndex;
 };
 
-std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate *delegate) {
+std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate *delegate, const uint32_t featureFlags) {
     const bool kReadDebugNames = false;
     const bool kStopOnFirstError = true;
     const bool kFailOnCustomSectionError = true;
-    ReadBinaryOptions options(getFeatures(), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
-    BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename);
+    ReadBinaryOptions options(getFeatures(featureFlags), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
+    BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename, featureFlags);
     Result result = ReadBinary(data, size, &binaryReaderDelegateWalrus, options);
 
     if (WABT_UNLIKELY(binaryReaderDelegateWalrus.m_errors.size())) {
