@@ -208,7 +208,11 @@ protected:
     size_t m_skipValidationUntil;
 };
 
-std::string ReadWasmBinary(const std::string& filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate);
+enum FeatureFlagValue : uint32_t {
+    enableMultiMemory = 1 << 0,
+};
+
+std::string ReadWasmBinary(const std::string& filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate, const uint32_t featureFlags);
 
 }  // namespace wabt
 
