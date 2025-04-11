@@ -1984,8 +1984,9 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32AtomicRmw16XorUOpcode:
         case ByteCode::I32AtomicRmw8XchgUOpcode:
         case ByteCode::I32AtomicRmw16XchgUOpcode: {
-            if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
+            if (!(compiler->options() & JITCompiler::kHasShortAtomic)) {
                 requiredInit = OTAtomicRmwShort32;
+                compiler->increaseStackTmpSize(4);
             }
             FALLTHROUGH;
         }
@@ -2030,6 +2031,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
             if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
                 requiredInit = OTAtomicRmwShort64;
+                compiler->increaseStackTmpSize(4);
             }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
             FALLTHROUGH;
@@ -2054,8 +2056,9 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I32AtomicRmw8CmpxchgUOpcode:
         case ByteCode::I32AtomicRmw16CmpxchgUOpcode: {
-            if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
+            if (!(compiler->options() & JITCompiler::kHasShortAtomic)) {
                 requiredInit = OTAtomicRmwCmpxchgShort32;
+                compiler->increaseStackTmpSize(4);
             }
             FALLTHROUGH;
         }
@@ -2080,6 +2083,7 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
             if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
                 requiredInit = OTAtomicRmwCmpxchgShort64;
+                compiler->increaseStackTmpSize(4);
             }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
             FALLTHROUGH;
