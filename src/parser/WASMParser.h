@@ -54,7 +54,7 @@ struct WASMParsingResult {
 class WASMParser {
 public:
     // returns <result, error>
-    static std::pair<Optional<Module*>, std::string> parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len, const uint32_t JITFlags = 0);
+    static std::pair<Optional<Module*>, std::string> parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len, const uint32_t JITFlags = 0, const uint32_t featureFlags = 0);
 };
 
 } // namespace Walrus

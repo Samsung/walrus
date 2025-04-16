@@ -17,6 +17,7 @@
 #ifndef __WalrusInstance__
 #define __WalrusInstance__
 
+#include "Module.h"
 #include "runtime/Object.h"
 
 namespace Walrus {
@@ -110,8 +111,7 @@ public:
     Function* function(uint32_t index) const { return m_functions[index]; }
     Memory* memory(uint32_t index) const
     {
-        // now only one memory is allowed for each Instance/Module
-        ASSERT(index == 0);
+        ASSERT(index < module()->numberOfMemoryTypes());
         return m_memories[index];
     }
     Table* table(uint32_t index) const { return m_tables[index]; }

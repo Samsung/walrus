@@ -25,6 +25,7 @@
 #include "wabt/wast-lexer.h"
 #include "wabt/wast-parser.h"
 #include "wabt/binary-writer.h"
+#include "wabt/walrus//binary-reader-walrus.h"
 #include "string-view-lite/string_view.h"
 
 #ifdef ENABLE_WASI
@@ -47,6 +48,7 @@ struct ParseOptions {
 };
 
 static uint32_t s_JITFlags = 0;
+static uint32_t s_FeatureFlags = 0;
 
 using namespace Walrus;
 
@@ -121,7 +123,7 @@ static void printF64(double v)
 static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags);
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags, s_FeatureFlags);
     if (!parseResult.second.empty()) {
         Trap::TrapResult tr;
         tr.exception = Exception::create(parseResult.second);
@@ -917,6 +919,8 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 printf("Expected exception:%s\n", assertUnlinkable->text.data());
                 RELEASE_ASSERT_NOT_REACHED();
             }
+            std::string& actual = trapResult.exception->message();
+            printf("assertUnlinkable (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertUnlinkable->text.data(), actual.data(), assertUnlinkable->module->location().line);
             break;
         }
         case wabt::CommandType::AssertExhaustion: {
@@ -1066,6 +1070,9 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                 } else if (strcmp(argv[i], "--jit-no-reg-alloc") == 0) {
                     s_JITFlags |= JITFlagValue::disableRegAlloc;
                     continue;
+                } else if (strcmp(argv[i], "--enable-multi-memory") == 0) {
+                    s_FeatureFlags |= wabt::FeatureFlagValue::enableMultiMemory;
+                    continue;
 #endif
                 } else if (strcmp(argv[i], "--env") == 0) {
                     if (i + 1 == argc || argv[i + 1][0] == '-') {
@@ -1100,6 +1107,7 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                     fprintf(stdout, "\t--jit\n\t\tEnable just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose\n\t\tEnable verbose output for just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose-color\n\t\tEnable colored verbose output for just-in-time interpretation.\n\n");
+                    fprintf(stdout, "\t--enable-multi-memory\n\t\tEnable support for multiple memories in a webassembly module.\n\n");
                     fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
                     fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
                     fprintf(stdout, "\t--args <MODULE_FILE_NAME> [<ARG1> <ARG2> ... <ARGN>]\n\t\tRun Webassembly module with arguments: must be followed by the name of the Webassembly module file, then optionally following arguments which are passed on to the module\n\t\tExample: ./walrus --args test.wasm 'hello' 'world' 42\n\n");

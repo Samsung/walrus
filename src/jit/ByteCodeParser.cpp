@@ -432,11 +432,33 @@ enum ParamTypes {
     ParamSrcDst,
     ParamSrc2,
     ParamSrcDstValue,
+    ParamSrcDstValueMemIdx,
     ParamSrc2Value,
+    ParamSrc2ValueMemIdx,
     ParamSrc2Dst,
     ParamSrc3,
     ParamSrc3Dst,
 };
+
+static bool isAtomicMemIdxOp(ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+#define GENERATE_CODE_CASE(name, ...) \
+    case ByteCode::name##Opcode:
+
+        FOR_EACH_BYTECODE_ATOMIC_LOAD_MEMIDX_OP(GENERATE_CODE_CASE)
+        FOR_EACH_BYTECODE_ATOMIC_STORE_MEMIDX_OP(GENERATE_CODE_CASE)
+        FOR_EACH_BYTECODE_ATOMIC_RMW_MEMIDX_OP(GENERATE_CODE_CASE)
+        FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_MEMIDX_OP(GENERATE_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+        {
+            return true;
+        }
+    default: {
+        return false;
+    }
+    }
+}
 
 static void compileFunction(JITCompiler* compiler)
 {
@@ -1079,6 +1101,14 @@ static void compileFunction(JITCompiler* compiler)
             requiredInit = OTLoadI64;
             break;
         }
+        case ByteCode::I32LoadMemIdxOpcode:
+        case ByteCode::I32Load8SMemIdxOpcode:
+        case ByteCode::I32Load8UMemIdxOpcode:
+        case ByteCode::I32Load16SMemIdxOpcode:
+        case ByteCode::I32Load16UMemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
+        }
         case ByteCode::I32LoadOpcode:
         case ByteCode::I32Load8SOpcode:
         case ByteCode::I32Load8UOpcode:
@@ -1086,6 +1116,18 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32Load16UOpcode:
             requiredInit = OTLoadI32;
             FALLTHROUGH;
+        case ByteCode::I64LoadMemIdxOpcode:
+        case ByteCode::I64Load8SMemIdxOpcode:
+        case ByteCode::I64Load8UMemIdxOpcode:
+        case ByteCode::I64Load16SMemIdxOpcode:
+        case ByteCode::I64Load16UMemIdxOpcode:
+        case ByteCode::I64Load32SMemIdxOpcode:
+        case ByteCode::I64Load32UMemIdxOpcode: {
+            if (requiredInit == OTNone) {
+                info |= Instruction::kMultiMemory;
+            }
+            FALLTHROUGH;
+        }
         case ByteCode::I64LoadOpcode:
         case ByteCode::I64Load8SOpcode:
         case ByteCode::I64Load8UOpcode:
@@ -1094,11 +1136,29 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64Load32SOpcode:
         case ByteCode::I64Load32UOpcode: {
             group = Instruction::Load;
-            paramType = ParamTypes::ParamSrcDstValue;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrcDstValueMemIdx : ParamTypes::ParamSrcDstValue);
             if (requiredInit == OTNone) {
                 requiredInit = OTLoadI64;
             }
             break;
+        }
+        case ByteCode::F32LoadMemIdxOpcode:
+        case ByteCode::F64LoadMemIdxOpcode:
+        case ByteCode::V128LoadMemIdxOpcode:
+        case ByteCode::V128Load8SplatMemIdxOpcode:
+        case ByteCode::V128Load16SplatMemIdxOpcode:
+        case ByteCode::V128Load32SplatMemIdxOpcode:
+        case ByteCode::V128Load64SplatMemIdxOpcode:
+        case ByteCode::V128Load8X8SMemIdxOpcode:
+        case ByteCode::V128Load8X8UMemIdxOpcode:
+        case ByteCode::V128Load16X4SMemIdxOpcode:
+        case ByteCode::V128Load16X4UMemIdxOpcode:
+        case ByteCode::V128Load32X2SMemIdxOpcode:
+        case ByteCode::V128Load32X2UMemIdxOpcode:
+        case ByteCode::V128Load32ZeroMemIdxOpcode:
+        case ByteCode::V128Load64ZeroMemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
         }
         case ByteCode::F32LoadOpcode:
         case ByteCode::F64LoadOpcode:
@@ -1116,28 +1176,43 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::V128Load32ZeroOpcode:
         case ByteCode::V128Load64ZeroOpcode: {
             group = Instruction::Load;
-            paramType = ParamTypes::ParamSrcDstValue;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrcDstValueMemIdx : ParamTypes::ParamSrcDstValue);
 
-            if (opcode == ByteCode::F32LoadOpcode)
+            if (opcode == ByteCode::F32LoadOpcode || opcode == ByteCode::F32LoadMemIdxOpcode)
                 requiredInit = OTLoadF32;
-            else if (opcode == ByteCode::F64LoadOpcode)
+            else if (opcode == ByteCode::F64LoadOpcode || opcode == ByteCode::F64LoadMemIdxOpcode)
                 requiredInit = OTLoadF64;
             else
                 requiredInit = OTLoadV128;
             break;
         }
+        case ByteCode::V128Load8LaneMemIdxOpcode:
+        case ByteCode::V128Load16LaneMemIdxOpcode:
+        case ByteCode::V128Load32LaneMemIdxOpcode:
+        case ByteCode::V128Load64LaneMemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
+        }
         case ByteCode::V128Load8LaneOpcode:
         case ByteCode::V128Load16LaneOpcode:
         case ByteCode::V128Load32LaneOpcode:
         case ByteCode::V128Load64LaneOpcode: {
-            SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::LoadLaneSIMD, opcode, 2, 1);
+            instr->addInfo(info);
             instr->setRequiredRegsDescriptor(OTLoadLaneV128);
-
             Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(loadOperation->src0Offset());
-            operands[1] = STACK_OFFSET(loadOperation->src1Offset());
-            operands[2] = STACK_OFFSET(loadOperation->dstOffset());
+
+            if (info & Instruction::kMultiMemory) {
+                SIMDMemoryLoadMemIdx* loadOperationMemIdx = reinterpret_cast<SIMDMemoryLoadMemIdx*>(byteCode);
+                operands[0] = STACK_OFFSET(loadOperationMemIdx->src0Offset());
+                operands[1] = STACK_OFFSET(loadOperationMemIdx->src1Offset());
+                operands[2] = STACK_OFFSET(loadOperationMemIdx->dstOffset());
+            } else {
+                SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(byteCode);
+                operands[0] = STACK_OFFSET(loadOperation->src0Offset());
+                operands[1] = STACK_OFFSET(loadOperation->src1Offset());
+                operands[2] = STACK_OFFSET(loadOperation->dstOffset());
+            }
             break;
         }
         case ByteCode::Store32Opcode: {
@@ -1152,11 +1227,26 @@ static void compileFunction(JITCompiler* compiler)
             requiredInit = OTStoreI64;
             break;
         }
+        case ByteCode::I32StoreMemIdxOpcode:
+        case ByteCode::I32Store8MemIdxOpcode:
+        case ByteCode::I32Store16MemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
+        }
         case ByteCode::I32StoreOpcode:
         case ByteCode::I32Store8Opcode:
         case ByteCode::I32Store16Opcode:
             requiredInit = OTStoreI32;
             FALLTHROUGH;
+        case ByteCode::I64Store8MemIdxOpcode:
+        case ByteCode::I64Store16MemIdxOpcode:
+        case ByteCode::I64Store32MemIdxOpcode:
+        case ByteCode::I64StoreMemIdxOpcode: {
+            if (requiredInit == OTNone) {
+                info |= Instruction::kMultiMemory;
+            }
+            FALLTHROUGH;
+        }
         case ByteCode::I64Store8Opcode:
         case ByteCode::I64Store16Opcode:
         case ByteCode::I64Store32Opcode:
@@ -1167,37 +1257,57 @@ static void compileFunction(JITCompiler* compiler)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
         case ByteCode::I64StoreOpcode: {
             group = Instruction::Store;
-            paramType = ParamTypes::ParamSrc2Value;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
             if (requiredInit == OTNone) {
                 requiredInit = OTStoreI64;
             }
             break;
         }
+        case ByteCode::F32StoreMemIdxOpcode:
+        case ByteCode::F64StoreMemIdxOpcode:
+        case ByteCode::V128StoreMemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
+        }
         case ByteCode::F32StoreOpcode:
         case ByteCode::F64StoreOpcode:
         case ByteCode::V128StoreOpcode: {
             group = Instruction::Store;
-            paramType = ParamTypes::ParamSrc2Value;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
 
-            if (opcode == ByteCode::F32StoreOpcode)
+            if (opcode == ByteCode::F32StoreOpcode || opcode == ByteCode::F32StoreMemIdxOpcode)
                 requiredInit = OTStoreF32;
-            else if (opcode == ByteCode::F64StoreOpcode)
+            else if (opcode == ByteCode::F64StoreOpcode || opcode == ByteCode::F64StoreMemIdxOpcode)
                 requiredInit = OTStoreF64;
             else
                 requiredInit = OTStoreV128;
             break;
         }
+        case ByteCode::V128Store8LaneMemIdxOpcode:
+        case ByteCode::V128Store16LaneMemIdxOpcode:
+        case ByteCode::V128Store32LaneMemIdxOpcode:
+        case ByteCode::V128Store64LaneMemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
+        }
         case ByteCode::V128Store8LaneOpcode:
         case ByteCode::V128Store16LaneOpcode:
         case ByteCode::V128Store32LaneOpcode:
         case ByteCode::V128Store64LaneOpcode: {
-            SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(byteCode);
             Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->addInfo(info);
             instr->setRequiredRegsDescriptor(OTStoreV128);
-
             Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(storeOperation->src0Offset());
-            operands[1] = STACK_OFFSET(storeOperation->src1Offset());
+
+            if (info & Instruction::kMultiMemory) {
+                SIMDMemoryStoreMemIdx* storeOperationMemIdx = reinterpret_cast<SIMDMemoryStoreMemIdx*>(byteCode);
+                operands[0] = STACK_OFFSET(storeOperationMemIdx->src0Offset());
+                operands[1] = STACK_OFFSET(storeOperationMemIdx->src1Offset());
+            } else {
+                SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(byteCode);
+                operands[0] = STACK_OFFSET(storeOperation->src0Offset());
+                operands[1] = STACK_OFFSET(storeOperation->src1Offset());
+            }
             break;
         }
         case ByteCode::I8X16ExtractLaneSOpcode:
@@ -1392,6 +1502,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrc3;
             info = Instruction::kIsCallback;
             requiredInit = OTCallback3Arg;
+            compiler->increaseStackTmpSize((opcode == ByteCode::MemoryFillOpcode ? sizeof(MemoryFillArguments) : sizeof(MemoryCopyArguments)));
             break;
         }
         case ByteCode::MemoryGrowOpcode: {
@@ -1924,6 +2035,12 @@ static void compileFunction(JITCompiler* compiler)
 #endif /* SLJIT_CONFIG_X86 */
             break;
         }
+        case ByteCode::I32AtomicLoadMemIdxOpcode:
+        case ByteCode::I32AtomicLoad8UMemIdxOpcode:
+        case ByteCode::I32AtomicLoad16UMemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
+        }
         case ByteCode::I32AtomicLoadOpcode:
         case ByteCode::I32AtomicLoad8UOpcode:
         case ByteCode::I32AtomicLoad16UOpcode: {
@@ -1931,14 +2048,23 @@ static void compileFunction(JITCompiler* compiler)
             requiredInit = OTLoadI32;
             FALLTHROUGH;
         }
+        case ByteCode::I64AtomicLoadMemIdxOpcode:
+        case ByteCode::I64AtomicLoad8UMemIdxOpcode:
+        case ByteCode::I64AtomicLoad16UMemIdxOpcode:
+        case ByteCode::I64AtomicLoad32UMemIdxOpcode: {
+            if (requiredInit == OTNone) {
+                info |= Instruction::kMultiMemory;
+            }
+            FALLTHROUGH;
+        }
         case ByteCode::I64AtomicLoadOpcode:
         case ByteCode::I64AtomicLoad8UOpcode:
         case ByteCode::I64AtomicLoad16UOpcode:
         case ByteCode::I64AtomicLoad32UOpcode: {
             group = Instruction::Load;
-            paramType = ParamTypes::ParamSrcDstValue;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrcDstValueMemIdx : ParamTypes::ParamSrcDstValue);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-            if (opcode == ByteCode::I64AtomicLoadOpcode) {
+            if (opcode == ByteCode::I64AtomicLoadOpcode || opcode == ByteCode::I64AtomicLoadMemIdxOpcode) {
                 info = Instruction::kIsCallback;
                 compiler->increaseStackTmpSize(8);
             }
@@ -1948,6 +2074,12 @@ static void compileFunction(JITCompiler* compiler)
             }
             break;
         }
+        case ByteCode::I32AtomicStoreMemIdxOpcode:
+        case ByteCode::I32AtomicStore8MemIdxOpcode:
+        case ByteCode::I32AtomicStore16MemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
+        }
         case ByteCode::I32AtomicStoreOpcode:
         case ByteCode::I32AtomicStore8Opcode:
         case ByteCode::I32AtomicStore16Opcode: {
@@ -1955,14 +2087,23 @@ static void compileFunction(JITCompiler* compiler)
             requiredInit = OTStoreI32;
             FALLTHROUGH;
         }
+        case ByteCode::I64AtomicStoreMemIdxOpcode:
+        case ByteCode::I64AtomicStore8MemIdxOpcode:
+        case ByteCode::I64AtomicStore16MemIdxOpcode:
+        case ByteCode::I64AtomicStore32MemIdxOpcode: {
+            if (requiredInit == OTNone) {
+                info |= Instruction::kMultiMemory;
+            }
+            FALLTHROUGH;
+        }
         case ByteCode::I64AtomicStoreOpcode:
         case ByteCode::I64AtomicStore8Opcode:
         case ByteCode::I64AtomicStore16Opcode:
         case ByteCode::I64AtomicStore32Opcode: {
             group = Instruction::Store;
-            paramType = ParamTypes::ParamSrc2Value;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-            if (opcode == ByteCode::I64AtomicStoreOpcode) {
+            if (opcode == ByteCode::I64AtomicStoreOpcode || opcode == ByteCode::I64AtomicStoreMemIdxOpcode) {
                 info = Instruction::kIsCallback;
                 compiler->increaseStackTmpSize(8);
             }
@@ -1972,6 +2113,18 @@ static void compileFunction(JITCompiler* compiler)
             }
             break;
         }
+        case ByteCode::I32AtomicRmw8AddUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw16AddUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw8SubUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw16SubUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw8AndUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw16AndUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw8OrUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw16OrUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw8XorUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw16XorUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw8XchgUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw16XchgUMemIdxOpcode:
         case ByteCode::I32AtomicRmw8AddUOpcode:
         case ByteCode::I32AtomicRmw16AddUOpcode:
         case ByteCode::I32AtomicRmw8SubUOpcode:
@@ -1990,6 +2143,12 @@ static void compileFunction(JITCompiler* compiler)
             }
             FALLTHROUGH;
         }
+        case ByteCode::I32AtomicRmwAddMemIdxOpcode:
+        case ByteCode::I32AtomicRmwSubMemIdxOpcode:
+        case ByteCode::I32AtomicRmwAndMemIdxOpcode:
+        case ByteCode::I32AtomicRmwOrMemIdxOpcode:
+        case ByteCode::I32AtomicRmwXorMemIdxOpcode:
+        case ByteCode::I32AtomicRmwXchgMemIdxOpcode:
         case ByteCode::I32AtomicRmwAddOpcode:
         case ByteCode::I32AtomicRmwSubOpcode:
         case ByteCode::I32AtomicRmwAndOpcode:
@@ -2002,6 +2161,12 @@ static void compileFunction(JITCompiler* compiler)
             }
             FALLTHROUGH;
         }
+        case ByteCode::I64AtomicRmwAddMemIdxOpcode:
+        case ByteCode::I64AtomicRmwSubMemIdxOpcode:
+        case ByteCode::I64AtomicRmwAndMemIdxOpcode:
+        case ByteCode::I64AtomicRmwOrMemIdxOpcode:
+        case ByteCode::I64AtomicRmwXorMemIdxOpcode:
+        case ByteCode::I64AtomicRmwXchgMemIdxOpcode:
         case ByteCode::I64AtomicRmwAddOpcode:
         case ByteCode::I64AtomicRmwSubOpcode:
         case ByteCode::I64AtomicRmwAndOpcode:
@@ -2013,9 +2178,21 @@ static void compileFunction(JITCompiler* compiler)
                 info = Instruction::kIsCallback;
                 compiler->increaseStackTmpSize(16);
             }
-#endif /* SLJIT_32BIT_ARCHITECTURE */
             FALLTHROUGH;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
         }
+        case ByteCode::I64AtomicRmw8AddUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw16AddUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw8SubUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw16SubUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw8AndUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw16AndUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw8OrUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw16OrUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw8XorUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw16XorUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw8XchgUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw16XchgUMemIdxOpcode:
         case ByteCode::I64AtomicRmw8AddUOpcode:
         case ByteCode::I64AtomicRmw16AddUOpcode:
         case ByteCode::I64AtomicRmw8SubUOpcode:
@@ -2036,6 +2213,12 @@ static void compileFunction(JITCompiler* compiler)
 #endif /* SLJIT_64BIT_ARCHITECTURE */
             FALLTHROUGH;
         }
+        case ByteCode::I64AtomicRmw32AddUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw32SubUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw32AndUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw32OrUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw32XorUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw32XchgUMemIdxOpcode:
         case ByteCode::I64AtomicRmw32AddUOpcode:
         case ByteCode::I64AtomicRmw32SubUOpcode:
         case ByteCode::I64AtomicRmw32AndUOpcode:
@@ -2043,17 +2226,28 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64AtomicRmw32XorUOpcode:
         case ByteCode::I64AtomicRmw32XchgUOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Atomic, opcode, 2, 1);
+            if (isAtomicMemIdxOp(opcode)) {
+                info |= Instruction::kMultiMemory;
+            }
             instr->addInfo(info);
-
-            AtomicRmw* atomicRmw = reinterpret_cast<AtomicRmw*>(byteCode);
-            Operand* operands = instr->operands();
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicRmwI64);
+            Operand* operands = instr->operands();
 
-            operands[0] = STACK_OFFSET(atomicRmw->src0Offset());
-            operands[1] = STACK_OFFSET(atomicRmw->src1Offset());
-            operands[2] = STACK_OFFSET(atomicRmw->dstOffset());
+            if (info & Instruction::kMultiMemory) {
+                AtomicRmwMemIdx* atomicRmwMemIdx = reinterpret_cast<AtomicRmwMemIdx*>(byteCode);
+                operands[0] = STACK_OFFSET(atomicRmwMemIdx->src0Offset());
+                operands[1] = STACK_OFFSET(atomicRmwMemIdx->src1Offset());
+                operands[2] = STACK_OFFSET(atomicRmwMemIdx->dstOffset());
+            } else {
+                AtomicRmw* atomicRmw = reinterpret_cast<AtomicRmw*>(byteCode);
+                operands[0] = STACK_OFFSET(atomicRmw->src0Offset());
+                operands[1] = STACK_OFFSET(atomicRmw->src1Offset());
+                operands[2] = STACK_OFFSET(atomicRmw->dstOffset());
+            }
             break;
         }
+        case ByteCode::I32AtomicRmw8CmpxchgUMemIdxOpcode:
+        case ByteCode::I32AtomicRmw16CmpxchgUMemIdxOpcode:
         case ByteCode::I32AtomicRmw8CmpxchgUOpcode:
         case ByteCode::I32AtomicRmw16CmpxchgUOpcode: {
             if (!(compiler->options() & JITCompiler::kHasShortAtomic)) {
@@ -2062,6 +2256,7 @@ static void compileFunction(JITCompiler* compiler)
             }
             FALLTHROUGH;
         }
+        case ByteCode::I32AtomicRmwCmpxchgMemIdxOpcode:
         case ByteCode::I32AtomicRmwCmpxchgOpcode: {
             info = Instruction::kIs32Bit;
             if (requiredInit == OTNone) {
@@ -2069,6 +2264,7 @@ static void compileFunction(JITCompiler* compiler)
             }
             FALLTHROUGH;
         }
+        case ByteCode::I64AtomicRmwCmpxchgMemIdxOpcode:
         case ByteCode::I64AtomicRmwCmpxchgOpcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (info == 0) {
@@ -2078,6 +2274,8 @@ static void compileFunction(JITCompiler* compiler)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             FALLTHROUGH;
         }
+        case ByteCode::I64AtomicRmw8CmpxchgUMemIdxOpcode:
+        case ByteCode::I64AtomicRmw16CmpxchgUMemIdxOpcode:
         case ByteCode::I64AtomicRmw8CmpxchgUOpcode:
         case ByteCode::I64AtomicRmw16CmpxchgUOpcode: {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
@@ -2088,50 +2286,88 @@ static void compileFunction(JITCompiler* compiler)
 #endif /* SLJIT_64BIT_ARCHITECTURE */
             FALLTHROUGH;
         }
+        case ByteCode::I64AtomicRmw32CmpxchgUMemIdxOpcode:
         case ByteCode::I64AtomicRmw32CmpxchgUOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::Atomic, opcode, 3, 1);
+            if (isAtomicMemIdxOp(opcode)) {
+                info |= Instruction::kMultiMemory;
+            }
             instr->addInfo(info);
-
-            AtomicRmwCmpxchg* atomicRmwCmpxchg = reinterpret_cast<AtomicRmwCmpxchg*>(byteCode);
-            Operand* operands = instr->operands();
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicRmwCmpxchgI64);
+            Operand* operands = instr->operands();
 
-            operands[0] = STACK_OFFSET(atomicRmwCmpxchg->src0Offset());
-            operands[1] = STACK_OFFSET(atomicRmwCmpxchg->src1Offset());
-            operands[2] = STACK_OFFSET(atomicRmwCmpxchg->src2Offset());
-            operands[3] = STACK_OFFSET(atomicRmwCmpxchg->dstOffset());
+            if (info & Instruction::kMultiMemory) {
+                AtomicRmwCmpxchgMemIdx* atomicRmwCmpxchgMemIdx = reinterpret_cast<AtomicRmwCmpxchgMemIdx*>(byteCode);
+                operands[0] = STACK_OFFSET(atomicRmwCmpxchgMemIdx->src0Offset());
+                operands[1] = STACK_OFFSET(atomicRmwCmpxchgMemIdx->src1Offset());
+                operands[2] = STACK_OFFSET(atomicRmwCmpxchgMemIdx->src2Offset());
+                operands[3] = STACK_OFFSET(atomicRmwCmpxchgMemIdx->dstOffset());
+            } else {
+                AtomicRmwCmpxchg* atomicRmwCmpxchg = reinterpret_cast<AtomicRmwCmpxchg*>(byteCode);
+                operands[0] = STACK_OFFSET(atomicRmwCmpxchg->src0Offset());
+                operands[1] = STACK_OFFSET(atomicRmwCmpxchg->src1Offset());
+                operands[2] = STACK_OFFSET(atomicRmwCmpxchg->src2Offset());
+                operands[3] = STACK_OFFSET(atomicRmwCmpxchg->dstOffset());
+            }
             break;
+        }
+        case ByteCode::MemoryAtomicWait64MemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
         }
         case ByteCode::MemoryAtomicWait64Opcode: {
             requiredInit = OTAtomicWaitI64;
             FALLTHROUGH;
         }
+        case ByteCode::MemoryAtomicWait32MemIdxOpcode: {
+            if (requiredInit == OTNone) {
+                info |= Instruction::kMultiMemory;
+            }
+            FALLTHROUGH;
+        }
         case ByteCode::MemoryAtomicWait32Opcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::AtomicWait, opcode, 3, 1);
-            instr->addInfo(Instruction::kIsCallback);
-
-            ByteCodeOffset4Value* memoryAtomicWait = reinterpret_cast<ByteCodeOffset4Value*>(byteCode);
-            Operand* operands = instr->operands();
+            instr->addInfo(info | Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTAtomicWaitI32);
+            Operand* operands = instr->operands();
             compiler->increaseStackTmpSize(16);
 
-            operands[0] = STACK_OFFSET(memoryAtomicWait->src0Offset());
-            operands[1] = STACK_OFFSET(memoryAtomicWait->src1Offset());
-            operands[2] = STACK_OFFSET(memoryAtomicWait->src2Offset());
-            operands[3] = STACK_OFFSET(memoryAtomicWait->dstOffset());
+            if (info & Instruction::kMultiMemory) {
+                ByteCodeOffset4ValueMemIdx* memoryAtomicWaitMemIdx = reinterpret_cast<ByteCodeOffset4ValueMemIdx*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryAtomicWaitMemIdx->src0Offset());
+                operands[1] = STACK_OFFSET(memoryAtomicWaitMemIdx->src1Offset());
+                operands[2] = STACK_OFFSET(memoryAtomicWaitMemIdx->src2Offset());
+                operands[3] = STACK_OFFSET(memoryAtomicWaitMemIdx->dstOffset());
+            } else {
+                ByteCodeOffset4Value* memoryAtomicWait = reinterpret_cast<ByteCodeOffset4Value*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryAtomicWait->src0Offset());
+                operands[1] = STACK_OFFSET(memoryAtomicWait->src1Offset());
+                operands[2] = STACK_OFFSET(memoryAtomicWait->src2Offset());
+                operands[3] = STACK_OFFSET(memoryAtomicWait->dstOffset());
+            }
             break;
+        }
+        case ByteCode::MemoryAtomicNotifyMemIdxOpcode: {
+            info |= Instruction::kMultiMemory;
+            FALLTHROUGH;
         }
         case ByteCode::MemoryAtomicNotifyOpcode: {
             Instruction* instr = compiler->append(byteCode, Instruction::AtomicNotify, opcode, 2, 1);
-            instr->addInfo(Instruction::kIsCallback);
-
-            MemoryAtomicNotify* memoryAtomicNotify = reinterpret_cast<MemoryAtomicNotify*>(byteCode);
-            Operand* operands = instr->operands();
+            instr->addInfo(info | Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(OTAtomicNotify);
+            Operand* operands = instr->operands();
 
-            operands[0] = STACK_OFFSET(memoryAtomicNotify->src0Offset());
-            operands[1] = STACK_OFFSET(memoryAtomicNotify->src1Offset());
-            operands[2] = STACK_OFFSET(memoryAtomicNotify->dstOffset());
+            if (info & Instruction::kMultiMemory) {
+                MemoryAtomicNotifyMemIdx* memoryAtomicNotifyMemIdx = reinterpret_cast<MemoryAtomicNotifyMemIdx*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryAtomicNotifyMemIdx->src0Offset());
+                operands[1] = STACK_OFFSET(memoryAtomicNotifyMemIdx->src1Offset());
+                operands[2] = STACK_OFFSET(memoryAtomicNotifyMemIdx->dstOffset());
+            } else {
+                MemoryAtomicNotify* memoryAtomicNotify = reinterpret_cast<MemoryAtomicNotify*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryAtomicNotify->src0Offset());
+                operands[1] = STACK_OFFSET(memoryAtomicNotify->src1Offset());
+                operands[2] = STACK_OFFSET(memoryAtomicNotify->dstOffset());
+            }
             break;
         }
         default: {
@@ -2170,19 +2406,26 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ParamTypes::ParamSrcDstValue:
-        case ParamTypes::ParamSrc2Value: {
+        case ParamTypes::ParamSrcDstValueMemIdx:
+        case ParamTypes::ParamSrc2Value:
+        case ParamTypes::ParamSrc2ValueMemIdx: {
             ASSERT(group != Instruction::Any);
 
-            uint32_t resultCount = (paramType == ParamTypes::ParamSrcDstValue) ? 1 : 0;
+            uint32_t resultCount = (paramType == ParamTypes::ParamSrcDstValue || paramType == ParamTypes::ParamSrcDstValueMemIdx) ? 1 : 0;
             Instruction* instr = compiler->append(byteCode, group, opcode, 2 - resultCount, resultCount);
             instr->addInfo(info);
             instr->setRequiredRegsDescriptor(requiredInit);
-
-            ByteCodeOffset2Value* offset2Operation = reinterpret_cast<ByteCodeOffset2Value*>(byteCode);
-
             Operand* operands = instr->operands();
-            operands[0] = STACK_OFFSET(offset2Operation->stackOffset1());
-            operands[1] = STACK_OFFSET(offset2Operation->stackOffset2());
+
+            if (info & Instruction::kMultiMemory) {
+                ByteCodeOffset2ValueMemIdx* offset2OperationMemIdx = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(byteCode);
+                operands[0] = STACK_OFFSET(offset2OperationMemIdx->stackOffset1());
+                operands[1] = STACK_OFFSET(offset2OperationMemIdx->stackOffset2());
+            } else {
+                ByteCodeOffset2Value* offset2Operation = reinterpret_cast<ByteCodeOffset2Value*>(byteCode);
+                operands[0] = STACK_OFFSET(offset2Operation->stackOffset1());
+                operands[1] = STACK_OFFSET(offset2Operation->stackOffset2());
+            }
             break;
         }
         case ParamTypes::ParamSrc2Dst:
