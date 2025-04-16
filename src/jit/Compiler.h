@@ -237,6 +237,7 @@ public:
     static const uint16_t kFreeUnusedEarly = 1 << 6;
     static const uint16_t kKeepInstruction = 1 << 7;
     static const uint16_t kEarlyReturn = kKeepInstruction;
+    static const uint16_t kMultiMemory = 1 << 8;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -560,6 +561,18 @@ struct TrapJump {
 struct MemoryInitArguments {
     Instance* instance;
     uint32_t segmentIndex;
+    uint16_t memIndex;
+};
+
+struct MemoryCopyArguments {
+    Instance* instance;
+    uint16_t srcMemIndex;
+    uint16_t dstMemIndex;
+};
+
+struct MemoryFillArguments {
+    Instance* instance;
+    uint16_t memIndex;
 };
 
 struct InitTableArguments {
@@ -601,8 +614,7 @@ struct CompileContext {
     size_t nextTryBlock;
     size_t currentTryBlock;
     size_t trapBlocksStart;
-    uint64_t initialMemorySize;
-    uint64_t maximumMemorySize;
+    Module* module;
     std::vector<TrapBlock> trapBlocks;
     std::vector<size_t> tryBlockStack;
     std::vector<SlowCase*> slowCases;
