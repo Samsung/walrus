@@ -86,6 +86,119 @@ class FunctionType;
     F(Store64)                  \
     F(FillOpcodeTable)
 
+#define FOR_EACH_BYTECODE_MEMIDX_OP(F) \
+    F(I32LoadMemIdx)                   \
+    F(I64LoadMemIdx)                   \
+    F(F32LoadMemIdx)                   \
+    F(F64LoadMemIdx)                   \
+    F(I32Load8SMemIdx)                 \
+    F(I32Load8UMemIdx)                 \
+    F(I32Load16SMemIdx)                \
+    F(I32Load16UMemIdx)                \
+    F(I64Load8SMemIdx)                 \
+    F(I64Load8UMemIdx)                 \
+    F(I64Load16UMemIdx)                \
+    F(I64Load16SMemIdx)                \
+    F(I64Load32SMemIdx)                \
+    F(I64Load32UMemIdx)                \
+    F(V128LoadMemIdx)                  \
+    F(V128Load8X8SMemIdx)              \
+    F(V128Load8X8UMemIdx)              \
+    F(V128Load16X4SMemIdx)             \
+    F(V128Load16X4UMemIdx)             \
+    F(V128Load32X2SMemIdx)             \
+    F(V128Load32X2UMemIdx)             \
+    F(V128Load8SplatMemIdx)            \
+    F(V128Load16SplatMemIdx)           \
+    F(V128Load32SplatMemIdx)           \
+    F(V128Load64SplatMemIdx)           \
+    F(V128Load64LaneMemIdx)            \
+    F(V128Load32LaneMemIdx)            \
+    F(V128Load16LaneMemIdx)            \
+    F(V128Load8LaneMemIdx)             \
+    F(V128Store8LaneMemIdx)            \
+    F(V128Store16LaneMemIdx)           \
+    F(V128Store32LaneMemIdx)           \
+    F(V128Store64LaneMemIdx)           \
+    F(V128Load32ZeroMemIdx)            \
+    F(V128Load64ZeroMemIdx)            \
+    F(I32StoreMemIdx)                  \
+    F(I64StoreMemIdx)                  \
+    F(F32StoreMemIdx)                  \
+    F(F64StoreMemIdx)                  \
+    F(I32Store8MemIdx)                 \
+    F(I32Store16MemIdx)                \
+    F(I64Store8MemIdx)                 \
+    F(I64Store16MemIdx)                \
+    F(I64Store32MemIdx)                \
+    F(V128StoreMemIdx)                 \
+    F(MemoryAtomicNotifyMemIdx)        \
+    F(MemoryAtomicWait32MemIdx)        \
+    F(MemoryAtomicWait64MemIdx)        \
+    F(I32AtomicLoadMemIdx)             \
+    F(I64AtomicLoadMemIdx)             \
+    F(I32AtomicLoad8UMemIdx)           \
+    F(I32AtomicLoad16UMemIdx)          \
+    F(I64AtomicLoad8UMemIdx)           \
+    F(I64AtomicLoad16UMemIdx)          \
+    F(I64AtomicLoad32UMemIdx)          \
+    F(I32AtomicStoreMemIdx)            \
+    F(I64AtomicStoreMemIdx)            \
+    F(I32AtomicStore8MemIdx)           \
+    F(I32AtomicStore16MemIdx)          \
+    F(I64AtomicStore8MemIdx)           \
+    F(I64AtomicStore16MemIdx)          \
+    F(I64AtomicStore32MemIdx)          \
+    F(I32AtomicRmwAddMemIdx)           \
+    F(I64AtomicRmwAddMemIdx)           \
+    F(I32AtomicRmw8AddUMemIdx)         \
+    F(I32AtomicRmw16AddUMemIdx)        \
+    F(I64AtomicRmw8AddUMemIdx)         \
+    F(I64AtomicRmw16AddUMemIdx)        \
+    F(I64AtomicRmw32AddUMemIdx)        \
+    F(I32AtomicRmwSubMemIdx)           \
+    F(I64AtomicRmwSubMemIdx)           \
+    F(I32AtomicRmw8SubUMemIdx)         \
+    F(I32AtomicRmw16SubUMemIdx)        \
+    F(I64AtomicRmw8SubUMemIdx)         \
+    F(I64AtomicRmw16SubUMemIdx)        \
+    F(I64AtomicRmw32SubUMemIdx)        \
+    F(I32AtomicRmwAndMemIdx)           \
+    F(I64AtomicRmwAndMemIdx)           \
+    F(I32AtomicRmw8AndUMemIdx)         \
+    F(I32AtomicRmw16AndUMemIdx)        \
+    F(I64AtomicRmw8AndUMemIdx)         \
+    F(I64AtomicRmw16AndUMemIdx)        \
+    F(I64AtomicRmw32AndUMemIdx)        \
+    F(I32AtomicRmwOrMemIdx)            \
+    F(I64AtomicRmwOrMemIdx)            \
+    F(I32AtomicRmw8OrUMemIdx)          \
+    F(I32AtomicRmw16OrUMemIdx)         \
+    F(I64AtomicRmw8OrUMemIdx)          \
+    F(I64AtomicRmw16OrUMemIdx)         \
+    F(I64AtomicRmw32OrUMemIdx)         \
+    F(I32AtomicRmwXorMemIdx)           \
+    F(I64AtomicRmwXorMemIdx)           \
+    F(I32AtomicRmw8XorUMemIdx)         \
+    F(I32AtomicRmw16XorUMemIdx)        \
+    F(I64AtomicRmw8XorUMemIdx)         \
+    F(I64AtomicRmw16XorUMemIdx)        \
+    F(I64AtomicRmw32XorUMemIdx)        \
+    F(I32AtomicRmwXchgMemIdx)          \
+    F(I64AtomicRmwXchgMemIdx)          \
+    F(I32AtomicRmw8XchgUMemIdx)        \
+    F(I32AtomicRmw16XchgUMemIdx)       \
+    F(I64AtomicRmw8XchgUMemIdx)        \
+    F(I64AtomicRmw16XchgUMemIdx)       \
+    F(I64AtomicRmw32XchgUMemIdx)       \
+    F(I32AtomicRmwCmpxchgMemIdx)       \
+    F(I64AtomicRmwCmpxchgMemIdx)       \
+    F(I32AtomicRmw8CmpxchgUMemIdx)     \
+    F(I32AtomicRmw16CmpxchgUMemIdx)    \
+    F(I64AtomicRmw8CmpxchgUMemIdx)     \
+    F(I64AtomicRmw16CmpxchgUMemIdx)    \
+    F(I64AtomicRmw32CmpxchgUMemIdx)
+
 #define FOR_EACH_BYTECODE_BINARY_OP(F)            \
     F(I32Add, add, int32_t, int32_t)              \
     F(I32Sub, sub, int32_t, int32_t)              \
@@ -241,6 +354,23 @@ class FunctionType;
     F(F64Load, double, double)       \
     F(V128Load, Vec128, Vec128)
 
+#define FOR_EACH_BYTECODE_LOAD_MEMIDX_OP(F) \
+    F(I32LoadMemIdx, int32_t, int32_t)      \
+    F(I32Load8SMemIdx, int8_t, int32_t)     \
+    F(I32Load8UMemIdx, uint8_t, int32_t)    \
+    F(I32Load16SMemIdx, int16_t, int32_t)   \
+    F(I32Load16UMemIdx, uint16_t, int32_t)  \
+    F(I64LoadMemIdx, int64_t, int64_t)      \
+    F(I64Load8SMemIdx, int8_t, int64_t)     \
+    F(I64Load8UMemIdx, uint8_t, int64_t)    \
+    F(I64Load16SMemIdx, int16_t, int64_t)   \
+    F(I64Load16UMemIdx, uint16_t, int64_t)  \
+    F(I64Load32SMemIdx, int32_t, int64_t)   \
+    F(I64Load32UMemIdx, uint32_t, int64_t)  \
+    F(F32LoadMemIdx, float, float)          \
+    F(F64LoadMemIdx, double, double)        \
+    F(V128LoadMemIdx, Vec128, Vec128)
+
 #define FOR_EACH_BYTECODE_STORE_OP(F) \
     F(I32Store, int32_t, int32_t)     \
     F(I32Store16, int32_t, int16_t)   \
@@ -252,6 +382,18 @@ class FunctionType;
     F(F32Store, float, float)         \
     F(F64Store, double, double)       \
     F(V128Store, Vec128, Vec128)
+
+#define FOR_EACH_BYTECODE_STORE_MEMIDX_OP(F) \
+    F(I32StoreMemIdx, int32_t, int32_t)      \
+    F(I32Store16MemIdx, int32_t, int16_t)    \
+    F(I32Store8MemIdx, int32_t, int8_t)      \
+    F(I64StoreMemIdx, int64_t, int64_t)      \
+    F(I64Store32MemIdx, int64_t, int32_t)    \
+    F(I64Store16MemIdx, int64_t, int16_t)    \
+    F(I64Store8MemIdx, int64_t, int8_t)      \
+    F(F32StoreMemIdx, float, float)          \
+    F(F64StoreMemIdx, double, double)        \
+    F(V128StoreMemIdx, Vec128, Vec128)
 
 #define FOR_EACH_BYTECODE_SIMD_BINARY_OP(F)                       \
     F(I8X16Add, add, uint8_t, uint8_t)                            \
@@ -468,6 +610,12 @@ class FunctionType;
     F(V128Load32Splat, uint32_t)                \
     F(V128Load64Splat, uint64_t)
 
+#define FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_MEMIDX_OP(F) \
+    F(V128Load8SplatMemIdx, uint8_t)                   \
+    F(V128Load16SplatMemIdx, uint16_t)                 \
+    F(V128Load32SplatMemIdx, uint32_t)                 \
+    F(V128Load64SplatMemIdx, uint64_t)
+
 #define FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(F) \
     F(V128Load8X8S, S8x8, int16_t)               \
     F(V128Load8X8U, U8x8, uint16_t)              \
@@ -476,17 +624,37 @@ class FunctionType;
     F(V128Load32X2S, S32x2, int64_t)             \
     F(V128Load32X2U, U32x2, uint64_t)
 
+#define FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_MEMIDX_OP(F) \
+    F(V128Load8X8SMemIdx, S8x8, int16_t)                \
+    F(V128Load8X8UMemIdx, U8x8, uint16_t)               \
+    F(V128Load16X4SMemIdx, S16x4, int32_t)              \
+    F(V128Load16X4UMemIdx, U16x4, uint32_t)             \
+    F(V128Load32X2SMemIdx, S32x2, int64_t)              \
+    F(V128Load32X2UMemIdx, U32x2, uint64_t)
+
 #define FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(F) \
     F(V128Load8Lane, uint8_t)                  \
     F(V128Load16Lane, uint16_t)                \
     F(V128Load32Lane, uint32_t)                \
     F(V128Load64Lane, uint64_t)
 
+#define FOR_EACH_BYTECODE_SIMD_LOAD_LANE_MEMIDX_OP(F) \
+    F(V128Load8LaneMemIdx, uint8_t)                   \
+    F(V128Load16LaneMemIdx, uint16_t)                 \
+    F(V128Load32LaneMemIdx, uint32_t)                 \
+    F(V128Load64LaneMemIdx, uint64_t)
+
 #define FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(F) \
     F(V128Store8Lane, uint8_t)                  \
     F(V128Store16Lane, uint16_t)                \
     F(V128Store32Lane, uint32_t)                \
     F(V128Store64Lane, uint64_t)
+
+#define FOR_EACH_BYTECODE_SIMD_STORE_LANE_MEMIDX_OP(F) \
+    F(V128Store8LaneMemIdx, uint8_t)                   \
+    F(V128Store16LaneMemIdx, uint16_t)                 \
+    F(V128Store32LaneMemIdx, uint32_t)                 \
+    F(V128Store64LaneMemIdx, uint64_t)
 
 #define FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(F) \
     F(I8X16ExtractLaneS, int8_t, int32_t)         \
@@ -512,6 +680,10 @@ class FunctionType;
     F(V128Load64Zero)                    \
     F(I8X16Shuffle)
 
+#define FOR_EACH_BYTECODE_SIMD_ETC_MEMIDX_OP(F) \
+    F(V128Load32ZeroMemIdx)                     \
+    F(V128Load64ZeroMemIdx)
+
 // Extended Features
 #define FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(F) \
     F(I32AtomicLoad, uint32_t, uint32_t)    \
@@ -522,6 +694,15 @@ class FunctionType;
     F(I64AtomicLoad16U, uint16_t, uint64_t) \
     F(I64AtomicLoad32U, uint32_t, uint64_t)
 
+#define FOR_EACH_BYTECODE_ATOMIC_LOAD_MEMIDX_OP(F) \
+    F(I32AtomicLoadMemIdx, uint32_t, uint32_t)     \
+    F(I64AtomicLoadMemIdx, uint64_t, uint64_t)     \
+    F(I32AtomicLoad8UMemIdx, uint8_t, uint32_t)    \
+    F(I32AtomicLoad16UMemIdx, uint16_t, uint32_t)  \
+    F(I64AtomicLoad8UMemIdx, uint8_t, uint64_t)    \
+    F(I64AtomicLoad16UMemIdx, uint16_t, uint64_t)  \
+    F(I64AtomicLoad32UMemIdx, uint32_t, uint64_t)
+
 #define FOR_EACH_BYTECODE_ATOMIC_STORE_OP(F) \
     F(I32AtomicStore, uint32_t, uint32_t)    \
     F(I64AtomicStore, uint64_t, uint64_t)    \
@@ -530,6 +711,15 @@ class FunctionType;
     F(I64AtomicStore8, uint64_t, uint8_t)    \
     F(I64AtomicStore16, uint64_t, uint16_t)  \
     F(I64AtomicStore32, uint64_t, uint32_t)
+
+#define FOR_EACH_BYTECODE_ATOMIC_STORE_MEMIDX_OP(F) \
+    F(I32AtomicStoreMemIdx, uint32_t, uint32_t)     \
+    F(I64AtomicStoreMemIdx, uint64_t, uint64_t)     \
+    F(I32AtomicStore8MemIdx, uint32_t, uint8_t)     \
+    F(I32AtomicStore16MemIdx, uint32_t, uint16_t)   \
+    F(I64AtomicStore8MemIdx, uint64_t, uint8_t)     \
+    F(I64AtomicStore16MemIdx, uint64_t, uint16_t)   \
+    F(I64AtomicStore32MemIdx, uint64_t, uint32_t)
 
 #define FOR_EACH_BYTECODE_ATOMIC_RMW_OP(F)                                \
     F(I64AtomicRmwAdd, uint64_t, uint64_t, Memory::AtomicRmwOp::Add)      \
@@ -580,6 +770,55 @@ class FunctionType;
     F(I32AtomicRmw8XchgU, uint32_t, uint8_t, Memory::AtomicRmwOp::Xchg)   \
     F(I32AtomicRmw16XchgU, uint32_t, uint16_t, Memory::AtomicRmwOp::Xchg)
 
+#define FOR_EACH_BYTECODE_ATOMIC_RMW_MEMIDX_OP(F)                               \
+    F(I64AtomicRmwAddMemIdx, uint64_t, uint64_t, Memory::AtomicRmwOp::Add)      \
+    F(I64AtomicRmw8AddUMemIdx, uint64_t, uint8_t, Memory::AtomicRmwOp::Add)     \
+    F(I64AtomicRmw16AddUMemIdx, uint64_t, uint16_t, Memory::AtomicRmwOp::Add)   \
+    F(I64AtomicRmw32AddUMemIdx, uint64_t, uint32_t, Memory::AtomicRmwOp::Add)   \
+    F(I32AtomicRmwAddMemIdx, uint32_t, uint32_t, Memory::AtomicRmwOp::Add)      \
+    F(I32AtomicRmw8AddUMemIdx, uint32_t, uint8_t, Memory::AtomicRmwOp::Add)     \
+    F(I32AtomicRmw16AddUMemIdx, uint32_t, uint16_t, Memory::AtomicRmwOp::Add)   \
+                                                                                \
+    F(I64AtomicRmwSubMemIdx, uint64_t, uint64_t, Memory::AtomicRmwOp::Sub)      \
+    F(I64AtomicRmw8SubUMemIdx, uint64_t, uint8_t, Memory::AtomicRmwOp::Sub)     \
+    F(I64AtomicRmw16SubUMemIdx, uint64_t, uint16_t, Memory::AtomicRmwOp::Sub)   \
+    F(I64AtomicRmw32SubUMemIdx, uint64_t, uint32_t, Memory::AtomicRmwOp::Sub)   \
+    F(I32AtomicRmwSubMemIdx, uint32_t, uint32_t, Memory::AtomicRmwOp::Sub)      \
+    F(I32AtomicRmw8SubUMemIdx, uint32_t, uint8_t, Memory::AtomicRmwOp::Sub)     \
+    F(I32AtomicRmw16SubUMemIdx, uint32_t, uint16_t, Memory::AtomicRmwOp::Sub)   \
+                                                                                \
+    F(I64AtomicRmwAndMemIdx, uint64_t, uint64_t, Memory::AtomicRmwOp::And)      \
+    F(I64AtomicRmw8AndUMemIdx, uint64_t, uint8_t, Memory::AtomicRmwOp::And)     \
+    F(I64AtomicRmw16AndUMemIdx, uint64_t, uint16_t, Memory::AtomicRmwOp::And)   \
+    F(I64AtomicRmw32AndUMemIdx, uint64_t, uint32_t, Memory::AtomicRmwOp::And)   \
+    F(I32AtomicRmwAndMemIdx, uint32_t, uint32_t, Memory::AtomicRmwOp::And)      \
+    F(I32AtomicRmw8AndUMemIdx, uint32_t, uint8_t, Memory::AtomicRmwOp::And)     \
+    F(I32AtomicRmw16AndUMemIdx, uint32_t, uint16_t, Memory::AtomicRmwOp::And)   \
+                                                                                \
+    F(I64AtomicRmwOrMemIdx, uint64_t, uint64_t, Memory::AtomicRmwOp::Or)        \
+    F(I64AtomicRmw8OrUMemIdx, uint64_t, uint8_t, Memory::AtomicRmwOp::Or)       \
+    F(I64AtomicRmw16OrUMemIdx, uint64_t, uint16_t, Memory::AtomicRmwOp::Or)     \
+    F(I64AtomicRmw32OrUMemIdx, uint64_t, uint32_t, Memory::AtomicRmwOp::Or)     \
+    F(I32AtomicRmwOrMemIdx, uint32_t, uint32_t, Memory::AtomicRmwOp::Or)        \
+    F(I32AtomicRmw8OrUMemIdx, uint32_t, uint8_t, Memory::AtomicRmwOp::Or)       \
+    F(I32AtomicRmw16OrUMemIdx, uint32_t, uint16_t, Memory::AtomicRmwOp::Or)     \
+                                                                                \
+    F(I64AtomicRmwXorMemIdx, uint64_t, uint64_t, Memory::AtomicRmwOp::Xor)      \
+    F(I64AtomicRmw8XorUMemIdx, uint64_t, uint8_t, Memory::AtomicRmwOp::Xor)     \
+    F(I64AtomicRmw16XorUMemIdx, uint64_t, uint16_t, Memory::AtomicRmwOp::Xor)   \
+    F(I64AtomicRmw32XorUMemIdx, uint64_t, uint32_t, Memory::AtomicRmwOp::Xor)   \
+    F(I32AtomicRmwXorMemIdx, uint32_t, uint32_t, Memory::AtomicRmwOp::Xor)      \
+    F(I32AtomicRmw8XorUMemIdx, uint32_t, uint8_t, Memory::AtomicRmwOp::Xor)     \
+    F(I32AtomicRmw16XorUMemIdx, uint32_t, uint16_t, Memory::AtomicRmwOp::Xor)   \
+                                                                                \
+    F(I64AtomicRmwXchgMemIdx, uint64_t, uint64_t, Memory::AtomicRmwOp::Xchg)    \
+    F(I64AtomicRmw8XchgUMemIdx, uint64_t, uint8_t, Memory::AtomicRmwOp::Xchg)   \
+    F(I64AtomicRmw16XchgUMemIdx, uint64_t, uint16_t, Memory::AtomicRmwOp::Xchg) \
+    F(I64AtomicRmw32XchgUMemIdx, uint64_t, uint32_t, Memory::AtomicRmwOp::Xchg) \
+    F(I32AtomicRmwXchgMemIdx, uint32_t, uint32_t, Memory::AtomicRmwOp::Xchg)    \
+    F(I32AtomicRmw8XchgUMemIdx, uint32_t, uint8_t, Memory::AtomicRmwOp::Xchg)   \
+    F(I32AtomicRmw16XchgUMemIdx, uint32_t, uint16_t, Memory::AtomicRmwOp::Xchg)
+
 #define FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(F) \
     F(I32AtomicRmwCmpxchg, uint32_t, uint32_t)     \
     F(I64AtomicRmwCmpxchg, uint64_t, uint64_t)     \
@@ -589,11 +828,25 @@ class FunctionType;
     F(I64AtomicRmw16CmpxchgU, uint64_t, uint16_t)  \
     F(I64AtomicRmw32CmpxchgU, uint64_t, uint32_t)
 
+#define FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_MEMIDX_OP(F) \
+    F(I32AtomicRmwCmpxchgMemIdx, uint32_t, uint32_t)      \
+    F(I64AtomicRmwCmpxchgMemIdx, uint64_t, uint64_t)      \
+    F(I32AtomicRmw8CmpxchgUMemIdx, uint32_t, uint8_t)     \
+    F(I32AtomicRmw16CmpxchgUMemIdx, uint32_t, uint16_t)   \
+    F(I64AtomicRmw8CmpxchgUMemIdx, uint64_t, uint8_t)     \
+    F(I64AtomicRmw16CmpxchgUMemIdx, uint64_t, uint16_t)   \
+    F(I64AtomicRmw32CmpxchgUMemIdx, uint64_t, uint32_t)
+
 #define FOR_EACH_BYTECODE_ATOMIC_OTHER(F) \
     F(MemoryAtomicNotify)                 \
     F(MemoryAtomicWait32)                 \
     F(MemoryAtomicWait64)                 \
     F(AtomicFence)
+
+#define FOR_EACH_BYTECODE_ATOMIC_OTHER_MEMIDX(F) \
+    F(MemoryAtomicNotifyMemIdx)                  \
+    F(MemoryAtomicWait32MemIdx)                  \
+    F(MemoryAtomicWait64MemIdx)
 
 #define FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(F)                            \
     F(I32X4RelaxedTruncF32X4S, (simdTruncSatOperation<float, int32_t>))          \
@@ -627,6 +880,7 @@ class FunctionType;
 
 #define FOR_EACH_BYTECODE(F)                        \
     FOR_EACH_BYTECODE_OP(F)                         \
+    FOR_EACH_BYTECODE_MEMIDX_OP(F)                  \
     FOR_EACH_BYTECODE_BINARY_OP(F)                  \
     FOR_EACH_BYTECODE_UNARY_OP(F)                   \
     FOR_EACH_BYTECODE_UNARY_OP_2(F)                 \
@@ -768,6 +1022,33 @@ protected:
     uint32_t m_value;
 };
 
+class ByteCodeOffset2ValueMemIdx : public ByteCode {
+public:
+    ByteCodeOffset2ValueMemIdx(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, uint32_t value)
+        : ByteCode(opcode)
+        , m_memIndex(index)
+        , m_alignment(alignment)
+        , m_stackOffset1(stackOffset1)
+        , m_stackOffset2(stackOffset2)
+        , m_value(value)
+    {
+    }
+
+    uint16_t memIndex() const { return m_memIndex; }
+    uint16_t alignment() const { return m_alignment; }
+    ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
+    ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
+    uint32_t uint32Value() const { return m_value; }
+    int32_t int32Value() const { return static_cast<int32_t>(m_value); }
+
+protected:
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
+    ByteCodeStackOffset m_stackOffset1;
+    ByteCodeStackOffset m_stackOffset2;
+    uint32_t m_value;
+};
+
 class ByteCodeOffset4 : public ByteCode {
 public:
     ByteCodeOffset4(Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset)
@@ -805,6 +1086,38 @@ public:
     uint32_t offset() const { return m_value; }
 
 protected:
+    ByteCodeStackOffset m_stackOffset1;
+    ByteCodeStackOffset m_stackOffset2;
+    ByteCodeStackOffset m_stackOffset3;
+    ByteCodeStackOffset m_stackOffset4;
+    uint32_t m_value;
+};
+
+class ByteCodeOffset4ValueMemIdx : public ByteCode {
+public:
+    ByteCodeOffset4ValueMemIdx(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, uint32_t value)
+        : ByteCode(opcode)
+        , m_memIndex(index)
+        , m_alignment(alignment)
+        , m_stackOffset1(src0Offset)
+        , m_stackOffset2(src1Offset)
+        , m_stackOffset3(src2Offset)
+        , m_stackOffset4(dstOffset)
+        , m_value(value)
+    {
+    }
+
+    uint16_t memIndex() const { return m_memIndex; }
+    uint16_t alignment() const { return m_alignment; }
+    ByteCodeStackOffset src0Offset() const { return m_stackOffset1; }
+    ByteCodeStackOffset src1Offset() const { return m_stackOffset2; }
+    ByteCodeStackOffset src2Offset() const { return m_stackOffset3; }
+    ByteCodeStackOffset dstOffset() const { return m_stackOffset4; }
+    uint32_t offset() const { return m_value; }
+
+protected:
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
     ByteCodeStackOffset m_stackOffset1;
     ByteCodeStackOffset m_stackOffset2;
     ByteCodeStackOffset m_stackOffset3;
@@ -1411,22 +1724,25 @@ public:
     MemorySize(uint32_t index, ByteCodeStackOffset dstOffset)
         : ByteCode(Opcode::MemorySizeOpcode)
         , m_dstOffset(dstOffset)
+        , m_memIndex(index)
     {
-        ASSERT(index == 0);
     }
 
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint16_t memIndex() const { return m_memIndex; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("memory.size ");
         DUMP_BYTECODE_OFFSET(dstOffset);
+        printf("memIndex: %" PRIu16, m_memIndex);
     }
 #endif
 
 protected:
     ByteCodeStackOffset m_dstOffset;
+    uint16_t m_memIndex;
 };
 
 class MemoryInit : public ByteCode {
@@ -1434,9 +1750,9 @@ public:
     MemoryInit(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCode(Opcode::MemoryInitOpcode)
         , m_segmentIndex(segmentIndex)
+        , m_memIndex(index)
         , m_srcOffsets{ src0, src1, src2 }
     {
-        ASSERT(index == 0);
     }
 
     uint32_t segmentIndex() const
@@ -1449,6 +1765,8 @@ public:
         return m_srcOffsets;
     }
 
+    uint16_t memIndex() const { return m_memIndex; }
+
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
@@ -1457,11 +1775,13 @@ public:
         DUMP_BYTECODE_OFFSET(srcOffsets[1]);
         DUMP_BYTECODE_OFFSET(srcOffsets[2]);
         printf("segmentIndex: %" PRIu32, m_segmentIndex);
+        printf("memIndex: %" PRIu16, m_memIndex);
     }
 #endif
 
 protected:
     uint32_t m_segmentIndex;
+    uint16_t m_memIndex;
     ByteCodeStackOffset m_srcOffsets[3];
 };
 
@@ -1469,15 +1789,18 @@ class MemoryCopy : public ByteCodeOffset3 {
 public:
     MemoryCopy(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCodeOffset3(Opcode::MemoryCopyOpcode, src0, src1, src2)
+        , m_srcMemIndex(srcIndex)
+        , m_dstMemIndex(dstIndex)
     {
-        ASSERT(srcIndex == 0);
-        ASSERT(dstIndex == 0);
     }
 
     const ByteCodeStackOffset* srcOffsets() const
     {
         return stackOffsets();
     }
+
+    uint16_t srcMemIndex() const { return m_srcMemIndex; }
+    uint16_t dstMemIndex() const { return m_dstMemIndex; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -1486,22 +1809,30 @@ public:
         DUMP_BYTECODE_OFFSET(stackOffsets[0]);
         DUMP_BYTECODE_OFFSET(stackOffsets[1]);
         DUMP_BYTECODE_OFFSET(stackOffsets[2]);
+        printf("srcMemIndex: %" PRIu16, m_srcMemIndex);
+        printf("dstMemIndex: %" PRIu16, m_dstMemIndex);
     }
 #endif
+
+protected:
+    uint16_t m_srcMemIndex;
+    uint16_t m_dstMemIndex;
 };
 
 class MemoryFill : public ByteCodeOffset3 {
 public:
     MemoryFill(uint32_t memIdx, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
         : ByteCodeOffset3(Opcode::MemoryFillOpcode, src0, src1, src2)
+        , m_memIndex(memIdx)
     {
-        ASSERT(memIdx == 0);
     }
 
     const ByteCodeStackOffset* srcOffsets() const
     {
         return stackOffsets();
     }
+
+    uint16_t memIndex() const { return m_memIndex; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -1510,8 +1841,12 @@ public:
         DUMP_BYTECODE_OFFSET(stackOffsets[0]);
         DUMP_BYTECODE_OFFSET(stackOffsets[1]);
         DUMP_BYTECODE_OFFSET(stackOffsets[2]);
+        printf("memIndex: %" PRIu16, m_memIndex);
     }
 #endif
+
+protected:
+    uint16_t m_memIndex;
 };
 
 class DataDrop : public ByteCode {
@@ -1543,12 +1878,13 @@ class MemoryGrow : public ByteCodeOffset2 {
 public:
     MemoryGrow(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCodeOffset2(Opcode::MemoryGrowOpcode, srcOffset, dstOffset)
+        , m_memIndex(index)
     {
-        ASSERT(index == 0);
     }
 
     ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
     ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+    uint16_t memIndex() const { return m_memIndex; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -1556,8 +1892,12 @@ public:
         printf("memory.grow ");
         DUMP_BYTECODE_OFFSET(stackOffset1);
         DUMP_BYTECODE_OFFSET(stackOffset2);
+        printf("memIndex: %" PRIu16, m_memIndex);
     }
 #endif
+
+protected:
+    uint16_t m_memIndex;
 };
 
 // dummy ByteCode for memory load operation
@@ -1565,6 +1905,25 @@ class MemoryLoad : public ByteCodeOffset2Value {
 public:
     MemoryLoad(Opcode code, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
         : ByteCodeOffset2Value(code, srcOffset, dstOffset, offset)
+    {
+    }
+
+    uint32_t offset() const { return uint32Value(); }
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+};
+
+// dummy ByteCode for multi memory load operation
+class MemoryLoadMemIdx : public ByteCodeOffset2ValueMemIdx {
+public:
+    MemoryLoadMemIdx(uint32_t index, uint32_t alignment, Opcode code, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : ByteCodeOffset2ValueMemIdx(index, alignment, code, srcOffset, dstOffset, offset)
     {
     }
 
@@ -1611,6 +1970,44 @@ protected:
     ByteCodeStackOffset m_dstOffset;
 };
 
+// dummy ByteCode for simd multi memory load operation
+class SIMDMemoryLoadMemIdx : public ByteCode {
+public:
+    SIMDMemoryLoadMemIdx(uint32_t memIndex, uint32_t alignment, Opcode code, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
+        : ByteCode(code)
+        , m_offset(offset)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_index(index)
+        , m_dstOffset(dst)
+        , m_memIndex(memIndex)
+        , m_alignment(alignment)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset index() const { return m_index; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint16_t memIndex() const { return m_memIndex; }
+    uint16_t alignment() const { return m_alignment; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_index;
+    ByteCodeStackOffset m_dstOffset;
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
+};
+
 #if !defined(NDEBUG)
 #define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                              \
     void dump(size_t pos)                                                                                                            \
@@ -1629,6 +2026,27 @@ protected:
         {                                                                                   \
         }                                                                                   \
         DEFINE_LOAD_BYTECODE_DUMP(name)                                                     \
+    };
+
+#if !defined(NDEBUG)
+#define DEFINE_LOAD_MEMIDX_BYTECODE_DUMP(name)                                                                           \
+    void dump(size_t pos)                                                                                                \
+    {                                                                                                                    \
+        printf(#name " src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16, \
+               (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);     \
+    }
+#else
+#define DEFINE_LOAD_MEMIDX_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_LOAD_MEMIDX_BYTECODE(name, ...)                                                                                          \
+    class name##MemIdx : public MemoryLoadMemIdx {                                                                                      \
+    public:                                                                                                                             \
+        name##MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : MemoryLoadMemIdx(index, alignment, Opcode::name##MemIdxOpcode, offset, srcOffset, dstOffset)                              \
+        {                                                                                                                               \
+        }                                                                                                                               \
+        DEFINE_LOAD_MEMIDX_BYTECODE_DUMP(name)                                                                                          \
     };
 
 #if !defined(NDEBUG)
@@ -1651,11 +2069,51 @@ protected:
         DEFINE_SIMD_LOAD_LANE_BYTECODE_DUMP(name)                                                                                     \
     };
 
+#if !defined(NDEBUG)
+#define DEFINE_SIMD_LOAD_LANE_MEMIDX_BYTECODE_DUMP(name)                                                                                                                   \
+    void dump(size_t pos)                                                                                                                                                  \
+    {                                                                                                                                                                      \
+        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,               \
+               (uint32_t)m_index, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset, (uint16_t)m_memIndex, (uint16_t)m_alignment); \
+    }
+#else
+#define DEFINE_SIMD_LOAD_LANE_MEMIDX_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_SIMD_LOAD_LANE_MEMIDX_BYTECODE(name, opType)                                                                                                                          \
+    class name##MemIdx : public SIMDMemoryLoadMemIdx {                                                                                                                               \
+    public:                                                                                                                                                                          \
+        name##MemIdx(uint32_t memIndex, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst) \
+            : SIMDMemoryLoadMemIdx(memIndex, alignment, Opcode::name##MemIdxOpcode, offset, src0, src1, index, dst)                                                                  \
+        {                                                                                                                                                                            \
+        }                                                                                                                                                                            \
+        DEFINE_SIMD_LOAD_LANE_BYTECODE_DUMP(name)                                                                                                                                    \
+    };
+
 // dummy ByteCode for memory store operation
 class MemoryStore : public ByteCodeOffset2Value {
 public:
     MemoryStore(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
         : ByteCodeOffset2Value(opcode, src0, src1, offset)
+    {
+    }
+
+    uint32_t offset() const { return uint32Value(); }
+    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
+    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+};
+
+// dummy ByteCode for multi memory store operation
+class MemoryStoreMemIdx : public ByteCodeOffset2ValueMemIdx {
+public:
+    MemoryStoreMemIdx(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
+        : ByteCodeOffset2ValueMemIdx(memIndex, alignment, opcode, src0, src1, offset)
     {
     }
 
@@ -1697,6 +2155,41 @@ protected:
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_index;
+};
+
+// dummy ByteCode for simd multi memory store operation
+class SIMDMemoryStoreMemIdx : public ByteCode {
+public:
+    SIMDMemoryStoreMemIdx(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index)
+        : ByteCode(opcode)
+        , m_offset(offset)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_index(index)
+        , m_memIndex(memIndex)
+        , m_alignment(alignment)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset index() const { return m_index; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    uint16_t memIndex() const { return m_memIndex; }
+    uint16_t alignment() const { return m_alignment; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_index;
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
 };
 
 // dummy ByteCode for simd extract lane operation
@@ -1772,6 +2265,27 @@ protected:
     };
 
 #if !defined(NDEBUG)
+#define DEFINE_STORE_MEMIDX_BYTECODE_DUMP(name)                                                                            \
+    void dump(size_t pos)                                                                                                  \
+    {                                                                                                                      \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16, \
+               (uint32_t)src0Offset(), (uint32_t)src1Offset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);     \
+    }
+#else
+#define DEFINE_STORE_MEMIDX_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_STORE_MEMIDX_BYTECODE(name, readType, writeType)                                                               \
+    class name##MemIdx : public MemoryStoreMemIdx {                                                                           \
+    public:                                                                                                                   \
+        name##MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1) \
+            : MemoryStoreMemIdx(index, alignment, Opcode::name##MemIdxOpcode, offset, src0, src1)                             \
+        {                                                                                                                     \
+        }                                                                                                                     \
+        DEFINE_STORE_MEMIDX_BYTECODE_DUMP(name)                                                                               \
+    };
+
+#if !defined(NDEBUG)
 #define DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)                                                                                                                                     \
     void dump(size_t pos)                                                                                                                                                              \
     {                                                                                                                                                                                  \
@@ -1789,6 +2303,28 @@ protected:
         {                                                                                                    \
         }                                                                                                    \
         DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)                                                           \
+    };
+
+#if !defined(NDEBUG)
+#define DEFINE_SIMD_STORE_LANE_MEMIDX_BYTECODE_DUMP(name)                                                                                   \
+    void dump(size_t pos)                                                                                                                   \
+    {                                                                                                                                       \
+        printf(#name " idx: %" PRIu32 " src0: %" PRIu32 " src1: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16, \
+               (uint32_t)m_index,                                                                                                           \
+               (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_offset, (uint16_t)m_memIndex, (uint16_t)m_alignment);            \
+    }
+#else
+#define DEFINE_SIMD_STORE_LANE_MEMIDX_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_SIMD_STORE_LANE_MEMIDX_BYTECODE(name, opType)                                                                                                \
+    class name##MemIdx : public SIMDMemoryStoreMemIdx {                                                                                                     \
+    public:                                                                                                                                                 \
+        name##MemIdx(uint32_t memIndex, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index) \
+            : SIMDMemoryStoreMemIdx(memIndex, alignment, Opcode::name##MemIdxOpcode, offset, src0, src1, index)                                             \
+        {                                                                                                                                                   \
+        }                                                                                                                                                   \
+        DEFINE_SIMD_STORE_LANE_BYTECODE_DUMP(name)                                                                                                          \
     };
 
 
@@ -1861,6 +2397,41 @@ protected:
     ByteCodeStackOffset m_dstOffset;
 };
 
+class AtomicRmwMemIdx : public ByteCode {
+public:
+    AtomicRmwMemIdx(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
+        : ByteCode(opcode)
+        , m_offset(offset)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_dstOffset(dst)
+        , m_memIndex(memIndex)
+        , m_alignment(alignment)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint16_t memIndex() const { return m_memIndex; }
+    uint16_t alignment() const { return m_alignment; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_dstOffset;
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
+};
+
 class AtomicRmwCmpxchg : public ByteCodeOffset4Value {
 public:
     AtomicRmwCmpxchg(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
@@ -1874,6 +2445,30 @@ public:
     {
     }
 #endif
+};
+
+class AtomicRmwCmpxchgMemIdx : public ByteCodeOffset4Value {
+public:
+    AtomicRmwCmpxchgMemIdx(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
+        : ByteCodeOffset4Value(opcode, src0, src1, src2, dst, offset)
+        , m_memIndex(memIndex)
+        , m_alignment(alignment)
+
+    {
+    }
+
+    uint16_t memIndex() const { return m_memIndex; }
+    uint16_t alignment() const { return m_alignment; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+    }
+#endif
+
+protected:
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
 };
 
 class MemoryAtomicWait32 : public ByteCodeOffset4Value {
@@ -1890,6 +2485,33 @@ public:
 #endif
 };
 
+class MemoryAtomicWait32MemIdx : public ByteCodeOffset4Value {
+public:
+    MemoryAtomicWait32MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
+        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait32Opcode, src0, src1, src2, dst, offset)
+        , m_memIndex(index)
+        , m_alignment(alignment)
+    {
+    }
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryAtomicWait32 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,
+               (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment);
+    }
+#endif
+
+    uint16_t memIndex() const
+    {
+        return m_memIndex;
+    }
+    uint16_t alignment() const { return m_alignment; }
+
+protected:
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
+};
+
 class MemoryAtomicWait64 : public ByteCodeOffset4Value {
 public:
     MemoryAtomicWait64(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
@@ -1903,6 +2525,34 @@ public:
         printf("MemoryAtomicWait64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value);
     }
 #endif
+};
+
+class MemoryAtomicWait64MemIdx : public ByteCodeOffset4Value {
+public:
+    MemoryAtomicWait64MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
+        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait64Opcode, src0, src1, src2, dst, offset)
+        , m_memIndex(index)
+        , m_alignment(alignment)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryAtomicWait64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,
+               (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment);
+    }
+#endif
+
+    uint16_t memIndex() const
+    {
+        return m_memIndex;
+    }
+    uint16_t alignment() const { return m_alignment; }
+
+protected:
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
 };
 
 class MemoryAtomicNotify : public ByteCode {
@@ -1932,6 +2582,42 @@ protected:
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_dstOffset;
+};
+
+class MemoryAtomicNotifyMemIdx : public ByteCode {
+public:
+    MemoryAtomicNotifyMemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
+        : ByteCode(Opcode::MemoryAtomicNotifyOpcode)
+        , m_offset(offset)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_dstOffset(dst)
+        , m_memIndex(index)
+        , m_alignment(alignment)
+    {
+    }
+
+    uint32_t offset() const { return m_offset; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint16_t memIndex() const { return m_memIndex; }
+    uint16_t alignment() const { return m_alignment; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryAtomicNotify src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,
+               (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset, (uint16_t)m_memIndex, (uint16_t)m_alignment);
+    }
+#endif
+protected:
+    uint32_t m_offset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_dstOffset;
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
 };
 
 class AtomicFence : public ByteCode {
@@ -1971,6 +2657,27 @@ protected:
     };
 
 #if !defined(NDEBUG)
+#define DEFINE_RMW_MEMIDX_BYTECODE_DUMP(name)                                                                                                           \
+    void dump(size_t pos)                                                                                                                               \
+    {                                                                                                                                                   \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,             \
+               (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset, (uint16_t)m_memIndex, (uint16_t)m_alignment); \
+    }
+#else
+#define DEFINE_RMW_MEMIDX_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_RMW_MEMIDX_BYTECODE(name, paramType, writeType, operationName)                                                                          \
+    class name##MemIdx : public AtomicRmwMemIdx {                                                                                                      \
+    public:                                                                                                                                            \
+        name##MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst) \
+            : AtomicRmwMemIdx(index, alignment, Opcode::name##MemIdxOpcode, offset, src0, src1, dst)                                                   \
+        {                                                                                                                                              \
+        }                                                                                                                                              \
+        DEFINE_RMW_MEMIDX_BYTECODE_DUMP(name)                                                                                                          \
+    };
+
+#if !defined(NDEBUG)
 #define DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)                                                                                                                                                                                               \
     void dump(size_t pos)                                                                                                                                                                                                                    \
     {                                                                                                                                                                                                                                        \
@@ -1990,25 +2697,70 @@ protected:
         DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)                                                                                       \
     };
 
+#if !defined(NDEBUG)
+#define DEFINE_RMW_CMPXCHG_MEMIDX_BYTECODE_DUMP(name)                                                                                                                                   \
+    void dump(size_t pos)                                                                                                                                                               \
+    {                                                                                                                                                                                   \
+        printf(#name " src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,                           \
+               (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment); \
+    }
+#else
+#define DEFINE_RMW_CMPXCHG_MEMIDX_BYTECODE_DUMP(name)
+#endif
+
+#define DEFINE_RMW_CMPXCHG_MEMIDX_BYTECODE(name, paramType, writeType)                                                                                                           \
+    class name##MemIdx : public AtomicRmwCmpxchgMemIdx {                                                                                                                         \
+    public:                                                                                                                                                                      \
+        name##MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst) \
+            : AtomicRmwCmpxchgMemIdx(index, alignment, Opcode::name##MemIdxOpcode, offset, src0, src1, src2, dst)                                                                \
+        {                                                                                                                                                                        \
+        }                                                                                                                                                                        \
+        DEFINE_RMW_CMPXCHG_BYTECODE_DUMP(name)                                                                                                                                   \
+    };
+
 
 FOR_EACH_BYTECODE_LOAD_OP(DEFINE_LOAD_BYTECODE)
+FOR_EACH_BYTECODE_LOAD_OP(DEFINE_LOAD_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_STORE_OP(DEFINE_STORE_BYTECODE)
+FOR_EACH_BYTECODE_STORE_OP(DEFINE_STORE_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(DEFINE_LOAD_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(DEFINE_LOAD_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(DEFINE_LOAD_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(DEFINE_LOAD_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(DEFINE_SIMD_LOAD_LANE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(DEFINE_SIMD_LOAD_LANE_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(DEFINE_SIMD_STORE_LANE_BYTECODE)
+FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(DEFINE_SIMD_STORE_LANE_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(DEFINE_SIMD_EXTRACT_LANE_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(DEFINE_SIMD_REPLACE_LANE_BYTECODE)
 FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(DEFINE_LOAD_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(DEFINE_LOAD_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_ATOMIC_STORE_OP(DEFINE_STORE_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_STORE_OP(DEFINE_STORE_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_ATOMIC_RMW_OP(DEFINE_RMW_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_RMW_OP(DEFINE_RMW_MEMIDX_BYTECODE)
 FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(DEFINE_RMW_CMPXCHG_BYTECODE)
+FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(DEFINE_RMW_CMPXCHG_MEMIDX_BYTECODE)
 #undef DEFINE_LOAD_BYTECODE_DUMP
+#undef DEFINE_LOAD_MEMIDX_BYTECODE_DUMP
 #undef DEFINE_LOAD_BYTECODE
+#undef DEFINE_LOAD_MEMIDX_BYTECODE
 #undef DEFINE_STORE_BYTECODE_DUMP
+#undef DEFINE_STORE_MEMIDX_BYTECODE_DUMP
 #undef DEFINE_STORE_BYTECODE
+#undef DEFINE_STORE_MEMIDX_BYTECODE
+#undef DEFINE_SIMD_LOAD_LANE_BYTECODE
+#undef DEFINE_SIMD_LOAD_LANE_MEMIDX_BYTECODE
+#undef DEFINE_SIMD_STORE_LANE_BYTECODE
+#undef DEFINE_SIMD_STORE_LANE_MEMIDX_BYTECODE
 #undef DEFINE_RMW_BYTECODE_DUMP
+#undef DEFINE_RMW_MEMIDX_BYTECODE_DUMP
 #undef DEFINE_RMW_BYTECODE
+#undef DEFINE_RMW_MEMIDX_BYTECODE
+#undef DEFINE_RMW_CMPXCHG_BYTECODE_DUMP
+#undef DEFINE_RMW_CMPXCHG_MEMIDX_BYTECODE_DUMP
+#undef DEFINE_RMW_CMPXCHG_BYTECODE
+#undef DEFINE_RMW_CMPXCHG_MEMIDX_BYTECODE
 
 // FOR_EACH_BYTECODE_SIMD_ETC_OP
 class V128BitSelect : public ByteCodeOffset4 {
@@ -2041,6 +2793,33 @@ public:
 #endif
 };
 
+class V128Load32ZeroMemIdx : public MemoryLoad {
+public:
+    V128Load32ZeroMemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : MemoryLoad(Opcode::V128Load32ZeroOpcode, offset, srcOffset, dstOffset)
+        , m_memIndex(index)
+        , m_alignment(alignment)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("V128Load32Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);
+    }
+#endif
+
+    uint16_t memIndex() const
+    {
+        return m_memIndex;
+    }
+    uint16_t alignment() const { return m_alignment; }
+
+protected:
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
+};
+
 class V128Load64Zero : public MemoryLoad {
 public:
     V128Load64Zero(uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
@@ -2054,6 +2833,33 @@ public:
         printf("V128Load64Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset());
     }
 #endif
+};
+
+class V128Load64ZeroMemIdx : public MemoryLoad {
+public:
+    V128Load64ZeroMemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : MemoryLoad(Opcode::V128Load64ZeroOpcode, offset, srcOffset, dstOffset)
+        , m_memIndex(index)
+        , m_alignment(alignment)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("V128Load64Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);
+    }
+#endif
+
+    uint16_t memIndex() const
+    {
+        return m_memIndex;
+    }
+    uint16_t alignment() const { return m_alignment; }
+
+protected:
+    uint16_t m_memIndex;
+    uint16_t m_alignment;
 };
 
 class I8X16Shuffle : public ByteCode {

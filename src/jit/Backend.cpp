@@ -234,8 +234,7 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     , nextTryBlock(0)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
-    , initialMemorySize(0)
-    , maximumMemorySize(0)
+    , module(module)
 {
     // Compiler is not initialized yet.
     size_t offset = Instance::alignedSize();
@@ -244,19 +243,6 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     globalsStart = targetBuffersStart + Memory::TargetBuffer::sizeInPointers(numberOfMemoryTypes) * sizeof(void*);
     tableStart = globalsStart + module->numberOfGlobalTypes() * sizeof(void*);
     functionsStart = tableStart + module->numberOfTableTypes() * sizeof(void*);
-
-    if (module->numberOfMemoryTypes() > 0) {
-        MemoryType* memoryType = module->memoryType(0);
-        initialMemorySize = memoryType->initialSize() * Memory::s_memoryPageSize;
-        maximumMemorySize = memoryType->maximumSize() * Memory::s_memoryPageSize;
-
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-        /* Four GB memory cannot be allocated on 32 bit systems. */
-        if (maximumMemorySize >= ((uint64_t)1 << 32)) {
-            maximumMemorySize = ((uint64_t)1 << 32) - Memory::s_memoryPageSize;
-        }
-#endif /* SLJIT_32BIT_ARCHITECTURE */
-    }
 }
 
 CompileContext* CompileContext::get(sljit_compiler* compiler)

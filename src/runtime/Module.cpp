@@ -347,7 +347,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Value offset;
                 fakeFunction.call(state, nullptr, &offset);
 
-                Memory* m = data->instance->memory(0);
+                Memory* m = data->instance->memory(data->init->memIndex());
                 const auto& initData = data->init->initData();
                 if (m->sizeInByte() >= initData.size() && (offset.asI32() + initData.size()) <= m->sizeInByte() && offset.asI32() >= 0) {
                     memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offset.asI32(), 0, initData.size());

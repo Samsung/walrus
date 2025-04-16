@@ -180,12 +180,12 @@ void Memory::init(ExecutionState& state, DataSegment* source, uint32_t dstStart,
     this->initMemory(source, dstStart, srcStart, srcSize);
 }
 
-void Memory::copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size)
+void Memory::copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size, Memory* dstMem)
 {
     checkAccess(state, srcStart, size);
-    checkAccess(state, dstStart, size);
+    checkAccess(state, dstStart, size, 0, dstMem);
 
-    this->copyMemory(dstStart, srcStart, size);
+    this->copyMemory(dstMem, dstStart, srcStart, size);
 }
 
 void Memory::fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size)
@@ -206,14 +206,14 @@ void Memory::initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStar
 #endif
 }
 
-void Memory::copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size)
+void Memory::copyMemory(Memory* dstMemory, uint32_t dstStart, uint32_t srcStart, uint32_t size)
 {
 #if defined(WALRUS_BIG_ENDIAN)
     auto srcBegin = m_buffer + m_sizeInByte + srcStart - size;
-    auto dstBegin = m_buffer + m_sizeInByte + dstStart - size;
+    auto dstBegin = dstMemory->m_buffer + dstMemory->m_sizeInByte + dstStart - size;
 #else
-    auto srcBegin = m_buffer + srcStart;
-    auto dstBegin = m_buffer + dstStart;
+    auto srcBegin = this->m_buffer + srcStart;
+    auto dstBegin = dstMemory->m_buffer + dstStart;
 #endif
     auto srcEnd = srcBegin + size;
     auto dstEnd = dstBegin + size;

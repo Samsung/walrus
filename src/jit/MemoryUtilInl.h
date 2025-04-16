@@ -19,7 +19,7 @@
 static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, MemoryInitArguments* args)
 {
     Instance* instance = args->instance;
-    Memory* memory = instance->memory(0);
+    Memory* memory = instance->memory(args->memIndex);
     DataSegment& sg = instance->dataSegment(args->segmentIndex);
 
     if (!memory->checkAccess(dstStart, srcSize)) {
@@ -34,21 +34,22 @@ static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSiz
     return ExecutionContext::NoError;
 }
 
-static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, Instance* instance)
+static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, MemoryCopyArguments* args)
 {
-    Memory* memory = instance->memory(0);
+    Memory* srcMemory = args->instance->memory(args->srcMemIndex);
+    Memory* dstMemory = args->instance->memory(args->dstMemIndex);
 
-    if (!memory->checkAccess(srcStart, size) || !memory->checkAccess(dstStart, size)) {
+    if (!srcMemory->checkAccess(srcStart, size) || !srcMemory->checkAccess(dstStart, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
-    memory->copyMemory(dstStart, srcStart, size);
+    srcMemory->copyMemory(dstMemory, dstStart, srcStart, size);
     return ExecutionContext::NoError;
 }
 
-static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, Instance* instance)
+static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, MemoryFillArguments* args)
 {
-    Memory* memory = instance->memory(0);
+    Memory* memory = args->instance->memory(args->memIndex);
 
     if (!memory->checkAccess(start, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
@@ -58,9 +59,9 @@ static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, Instan
     return ExecutionContext::NoError;
 }
 
-static sljit_s32 growMemory(uint32_t newSize, Instance* instance)
+static sljit_s32 growMemory(uint32_t newSize, Instance* instance, uint16_t memIndex)
 {
-    Memory* memory = instance->memory(0);
+    Memory* memory = instance->memory(memIndex);
     uint32_t oldSize = memory->sizeInPageSize();
 
     if (memory->grow(static_cast<uint64_t>(newSize) * Memory::s_memoryPageSize)) {
@@ -80,11 +81,13 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::MemorySizeOpcode: {
         ASSERT(!(instr->info() & Instruction::kIsCallback));
 
+        uint16_t memIndex = reinterpret_cast<MemorySize*>(instr->byteCode())->memIndex();
         JITArg dstArg(params);
 
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
         sljit_emit_op2(compiler, SLJIT_LSHR, dstArg.arg, dstArg.argw, SLJIT_MEM1(kInstanceReg),
-                       context->targetBuffersStart + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET, SLJIT_IMM, 16);
+                       context->targetBuffersStart + offsetof(Memory::TargetBuffer, sizeInByte) + memIndex * sizeof(Memory::TargetBuffer) + WORD_LOW_OFFSET,
+                       SLJIT_IMM, 16);
         return;
     }
     case ByteCode::MemoryInitOpcode:
@@ -103,12 +106,24 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
             sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
             sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, instance), kInstanceReg, 0);
             sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, segmentIndex), SLJIT_IMM, memoryInit->segmentIndex());
+            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, memIndex), SLJIT_IMM, memoryInit->memIndex());
             addr = GET_FUNC_ADDR(sljit_sw, initMemory);
         } else if (opcode == ByteCode::MemoryCopyOpcode) {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kInstanceReg, 0);
+            MemoryCopy* memoryCopy = reinterpret_cast<MemoryCopy*>(instr->byteCode());
+
+            sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
+            sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, instance), kInstanceReg, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, srcMemIndex), SLJIT_IMM, memoryCopy->srcMemIndex());
+            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, dstMemIndex), SLJIT_IMM, memoryCopy->dstMemIndex());
             addr = GET_FUNC_ADDR(sljit_sw, copyMemory);
         } else {
-            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kInstanceReg, 0);
+            MemoryFill* memoryFill = reinterpret_cast<MemoryFill*>(instr->byteCode());
+
+            sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
+            sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryFillArguments, instance), kInstanceReg, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryFillArguments, memIndex), SLJIT_IMM, memoryFill->memIndex());
             addr = GET_FUNC_ADDR(sljit_sw, fillMemory);
         }
 
@@ -120,13 +135,17 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
     }
     default: {
         ASSERT(opcode == ByteCode::MemoryGrowOpcode && (instr->info() & Instruction::kIsCallback));
+
+        uint16_t memIndex = reinterpret_cast<MemoryGrow*>(instr->byteCode())->memIndex();
+
         JITArg arg(params);
 
         MOVE_TO_REG(compiler, SLJIT_MOV32, SLJIT_R0, arg.arg, arg.argw);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kInstanceReg, 0);
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, memIndex);
 
         sljit_sw addr = GET_FUNC_ADDR(sljit_sw, growMemory);
-        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2(32, 32, W), SLJIT_IMM, addr);
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(32, 32, W, W), SLJIT_IMM, addr);
 
         arg.set(params + 1);
         MOVE_FROM_REG(compiler, SLJIT_MOV32, arg.arg, arg.argw, SLJIT_R0);

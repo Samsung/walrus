@@ -48,6 +48,7 @@ DEFAULT_RUNNERS = []
 JIT_EXCLUDE_FILES = []
 jit = False
 jit_no_reg_alloc = False
+multi_memory = False
 
 
 class runner(object):
@@ -72,6 +73,7 @@ def _run_wast_tests(engine, files, is_fail, args=None):
         subprocess_args =  qemu + [engine, "--mapdirs", "./test/wasi", "/var"]
         if jit or jit_no_reg_alloc: subprocess_args.append("--jit")
         if jit_no_reg_alloc: subprocess_args.append("--jit-no-reg-alloc")
+        if multi_memory: subprocess_args.append("--enable-multi-memory")
         if args: subprocess_args.append("--args")
         subprocess_args.append(file)
         if args: subprocess_args.extend(args)
@@ -120,13 +122,20 @@ def run_basic_tests(engine):
 @runner('wasm-test-core', default=True)
 def run_core_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-spec', 'core')
+    global multi_memory
 
     print('Running wasm-test-core tests:')
-    xpass = glob(join(TEST_DIR, '**/*.wast'), recursive=True)
-    xpass_result = _run_wast_tests(engine, xpass, False)
+    xpass_core = [i for i in glob(join(TEST_DIR, '**/*.wast'), recursive=True) if "multi-memory" not in i]
+    xpass_multi_memory = [i for i in glob(join(TEST_DIR, '**/*.wast'), recursive=True) if "multi-memory" in i]
 
-    tests_total = len(xpass)
-    fail_total = xpass_result
+    xpass_core_result = _run_wast_tests(engine, xpass_core, False)
+
+    multi_memory = True
+    xpass_multi_memory_result = _run_wast_tests(engine, xpass_multi_memory, False)
+    multi_memory = False
+
+    tests_total = len(xpass_core) + len(xpass_multi_memory)
+    fail_total = xpass_core_result + xpass_multi_memory_result
     print('TOTAL: %d' % (tests_total))
     print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
