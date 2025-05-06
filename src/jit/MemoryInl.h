@@ -1742,118 +1742,140 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     addr.check(compiler, operands, offset, size, memIndex);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    JITArg srcValue;
-    JITArg dst;
-    JITArgPair dstPair, srcExpectedPair;
-    sljit_s32 tmpReg = 0;
-    sljit_s32 srcExpectedReg = 0;
-    sljit_s32 srcValueReg = 0;
+    JITArg srcExpected, srcValue, dst;
+    JITArgPair dstPair, srcExpectedPair, srcValuePair;
+    sljit_s32 srcExpectedReg, srcValueReg, maskReg, oldSrcExpectedReg;
 
-    dstPair.arg2 = 0;
-
-    if ((operationSize & SLJIT_32) || operationSize == SLJIT_MOV32) {
-        JITArg tmp(operands + 0);
-        JITArg srcExpected(operands + 1);
-
-        srcValue = JITArg(operands + 2);
-        dst = JITArg(operands + 3);
-        tmpReg = GET_SOURCE_REG(tmp.arg, instr->requiredReg(1));
-        srcExpectedReg = GET_SOURCE_REG(srcExpected.arg, instr->requiredReg(2));
-        srcValueReg = GET_TARGET_REG(srcValue.arg, instr->requiredReg(0));
-    } else {
-        JITArgPair tmpPair(operands + 0);
-        JITArgPair srcValuePair(operands + 2);
-        dstPair.set(operands + 3);
-
-        srcExpectedPair = JITArgPair(operands + 1);
-        tmpReg = GET_TARGET_REG(tmpPair.arg1, instr->requiredReg(1));
-        srcExpectedReg = GET_TARGET_REG(srcExpectedPair.arg1, instr->requiredReg(2));
-
-        srcValue.arg = srcValuePair.arg1;
-        srcValue.argw = srcValuePair.arg1w;
-        srcValueReg = GET_TARGET_REG(srcValuePair.arg1, instr->requiredReg(0));
-        dst.arg = dstPair.arg1;
-        dst.argw = dstPair.arg1w;
-        sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
-    }
-
-    struct sljit_jump* compareFalse;
+    struct sljit_jump* compareUpperHalfFalse;
     struct sljit_jump* compareTopFalse;
     struct sljit_jump* storeSuccess;
-    struct sljit_label* restartOnFailure = sljit_emit_label(compiler);
+    struct sljit_jump* earlyReturn;
+
+    bool is32BitOp = (operationSize & SLJIT_32) || operationSize == SLJIT_MOV32;
+
+    if (is32BitOp) {
+        srcExpected = JITArg(operands + 1);
+        srcValue = JITArg(operands + 2);
+        dst = JITArg(operands + 3);
+
+        srcExpectedReg = GET_SOURCE_REG(srcExpected.arg, instr->requiredReg(2));
+        srcValueReg = GET_SOURCE_REG(srcValue.arg, instr->requiredReg(1));
+    } else {
+        srcExpectedPair = JITArgPair(operands + 1);
+        srcExpectedReg = GET_SOURCE_REG(srcExpectedPair.arg1, instr->requiredReg(2));
+
+        srcValuePair = JITArgPair(operands + 2);
+        srcValue.arg = srcValuePair.arg1;
+        srcValue.argw = srcValuePair.arg1w;
+        srcValueReg = GET_SOURCE_REG(srcValue.arg, instr->requiredReg(1));
+
+        dstPair = JITArgPair(operands + 3);
+        dst.arg = dstPair.arg1;
+        dst.argw = dstPair.arg1w;
+    }
+
+    maskReg = SLJIT_TMP_DEST_REG;
+    oldSrcExpectedReg = srcExpectedReg;
+
+    MOVE_TO_REG(compiler, is32BitOp ? SLJIT_MOV32 : SLJIT_MOV, srcValueReg, srcValue.arg, srcValue.argw);
+
+    if (SLJIT_IS_IMM(addr.loadArg.arg)) {
+        sljit_emit_op1(compiler, SLJIT_MOV, srcExpectedReg, 0, addr.loadArg.arg, addr.loadArg.argw);
+    }
+
     sljit_s32 baseReg = SLJIT_EXTRACT_REG(addr.memArg.arg);
 
-    sljit_s32 shiftReg = 0;
-    sljit_s32 maskReg = 0;
-
     if (noShortAtomic && size <= 2) {
+        sljit_s32 oldSrcValueReg = srcValueReg;
         operationSize = SLJIT_MOV32;
 
-        shiftReg = instr->requiredReg(1);
-        maskReg = instr->requiredReg(2);
+        srcValueReg = instr->requiredReg(1);
+        srcExpectedReg = instr->requiredReg(2);
+        maskReg = instr->requiredReg(3);
+
+        sljit_emit_op1(compiler, SLJIT_MOV32, srcExpectedReg, 0, oldSrcExpectedReg, 0);
+
+        sljit_emit_op2(compiler, SLJIT_AND, maskReg, 0, baseReg, 0, SLJIT_IMM, 0x3);
+        sljit_emit_op2(compiler, SLJIT_SHL32, maskReg, 0, maskReg, 0, SLJIT_IMM, 3);
+
+        sljit_emit_op1(compiler, size == 1 ? SLJIT_MOV32_U8 : SLJIT_MOV32_U16, srcValueReg, 0, oldSrcValueReg, 0);
+
+        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), context->stackTmpStart, maskReg, 0);
+        sljit_emit_op2(compiler, SLJIT_SHL32, srcValueReg, 0, srcValueReg, 0, maskReg, 0);
     }
 
     if (noShortAtomic && size <= 2) {
-        sljit_emit_op2(compiler, SLJIT_AND, shiftReg, 0, baseReg, 0, SLJIT_IMM, 0x3);
-        sljit_emit_op1(compiler, SLJIT_MOV32, shiftReg, 0, shiftReg, 0);
-        sljit_emit_op2(compiler, SLJIT_SHL32, shiftReg, 0, shiftReg, 0, SLJIT_IMM, 3);
+        // if this is true, abort after the load, and return the loaded return value
+        compareTopFalse = sljit_emit_cmp(compiler, SLJIT_LESS_EQUAL, srcExpectedReg, 0, SLJIT_IMM, size == 1 ? 0xff : 0xffff);
+        sljit_emit_op1(compiler, SLJIT_MOV32, srcValueReg, 0, SLJIT_IMM, 0xffffffff); // 0xffffffff here is outside the possible range of the normal operation, used as a flag to return early
+        sljit_set_label(compareTopFalse, sljit_emit_label(compiler));
 
-        sljit_emit_op2(compiler, SLJIT_SHL32, maskReg, 0, SLJIT_IMM, (0xffffffff) >> ((4 - size) * 8), shiftReg, 0);
-        sljit_emit_op2(compiler, SLJIT_AND32, baseReg, 0, baseReg, 0, SLJIT_IMM, ~0x3);
-        sljit_emit_op2(compiler, SLJIT_AND32, srcValueReg, 0, srcValueReg, 0, maskReg, 0);
+        sljit_emit_op2(compiler, SLJIT_SHL32, srcExpectedReg, 0, srcExpectedReg, 0, maskReg, 0);
+
+        sljit_emit_op2(compiler, SLJIT_AND, baseReg, 0, baseReg, 0, SLJIT_IMM, ~0x3);
     }
 
-    if (!(operationSize & SLJIT_32) && operationSize != SLJIT_MOV32) {
-        compareTopFalse = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_IMM, 0, srcExpectedPair.arg2, srcExpectedPair.arg2w);
-    }
+    struct sljit_label* restartOnFailure = sljit_emit_label(compiler);
 
-    if (!(noShortAtomic && size <= 2)) {
-        sljit_emit_op1(compiler, operationSize, tmpReg, 0, srcValue.arg, srcValue.argw);
+    if (noShortAtomic && size <= 2) {
+        sljit_emit_op1(compiler, SLJIT_MOV32, maskReg, 0, SLJIT_MEM1(SLJIT_SP), context->stackTmpStart);
+        sljit_emit_op2(compiler, SLJIT_SHL32, maskReg, 0, SLJIT_IMM, size == 1 ? 0xff : 0xffff, maskReg, 0);
     }
 
     sljit_emit_atomic_load(compiler, operationSize, SLJIT_TMP_DEST_REG, baseReg);
 
-    if (noShortAtomic && size <= 2) {
-        sljit_emit_op2(compiler, SLJIT_AND32, tmpReg, 0, SLJIT_TMP_DEST_REG, 0, maskReg, 0);
-        sljit_emit_op2(compiler, SLJIT_LSHR32, tmpReg, 0, tmpReg, 0, shiftReg, 0);
-    }
-
-    compareFalse = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, (noShortAtomic && size <= 2 ? tmpReg : SLJIT_TMP_DEST_REG), 0, srcExpectedReg, 0);
-
-    if (noShortAtomic && size <= 2) {
-        sljit_emit_op2(compiler, SLJIT_SHL32, tmpReg, 0, tmpReg, 0, shiftReg, 0);
-
-        sljit_emit_op1(compiler, SLJIT_MOV32, srcExpectedReg, 0, SLJIT_TMP_DEST_REG, 0);
-        sljit_emit_op2(compiler, SLJIT_XOR32, maskReg, 0, maskReg, 0, SLJIT_IMM, -1);
-        sljit_emit_op2(compiler, SLJIT_AND32, srcExpectedReg, 0, srcExpectedReg, 0, maskReg, 0);
-        sljit_emit_op2(compiler, SLJIT_OR32, tmpReg, 0, srcValueReg, 0, srcExpectedReg, 0);
+    if (!is32BitOp && srcExpectedPair.arg2 != 0) {
+        compareUpperHalfFalse = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, srcExpectedPair.arg2, srcExpectedPair.arg2w, SLJIT_IMM, 0);
     }
 
     if (noShortAtomic && size <= 2) {
-        sljit_emit_op1(compiler, SLJIT_MOV32, srcExpectedReg, 0, SLJIT_TMP_DEST_REG, 0);
+        earlyReturn = sljit_emit_cmp(compiler, SLJIT_EQUAL, srcValueReg, 0, SLJIT_IMM, 0xffffffff);
     }
-    sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, tmpReg, baseReg, SLJIT_TMP_DEST_REG);
+
     if (noShortAtomic && size <= 2) {
-        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_TMP_DEST_REG, 0, srcExpectedReg, 0);
+        sljit_emit_op2(compiler, SLJIT_AND32, maskReg, 0, maskReg, 0, SLJIT_TMP_DEST_REG, 0);
     }
+
+    sljit_s32 compare = SLJIT_NOT_EQUAL | (operationSize & SLJIT_32) | (operationSize == SLJIT_MOV32 ? SLJIT_32 : 0);
+    struct sljit_jump* compareFalse = sljit_emit_cmp(compiler, compare, maskReg, 0, srcExpectedReg, 0);
+
+    if (noShortAtomic && size <= 2) {
+        sljit_emit_op2(compiler, SLJIT_XOR32, maskReg, 0, maskReg, 0, srcValueReg, 0);
+        sljit_emit_op2(compiler, SLJIT_XOR32, maskReg, 0, maskReg, 0, SLJIT_TMP_DEST_REG, 0);
+        srcValueReg = maskReg;
+    }
+
+    sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, srcValueReg, baseReg, SLJIT_TMP_DEST_REG);
     sljit_set_label(sljit_emit_jump(compiler, SLJIT_ATOMIC_NOT_STORED), restartOnFailure);
-    storeSuccess = sljit_emit_jump(compiler, SLJIT_ATOMIC_STORED);
 
-    if (!(operationSize & SLJIT_32) && operationSize != SLJIT_MOV32) {
-        sljit_set_label(compareTopFalse, sljit_emit_label(compiler));
-        sljit_emit_op1(compiler, operationSize, SLJIT_TMP_DEST_REG, 0, addr.memArg.arg, addr.memArg.argw);
+    if ((noShortAtomic && size <= 2) || (!is32BitOp && srcExpectedPair.arg2 != 0)) {
+        storeSuccess = sljit_emit_jump(compiler, SLJIT_ATOMIC_STORED);
+    }
+
+    if (noShortAtomic && size <= 2) {
+        sljit_set_label(earlyReturn, sljit_emit_label(compiler));
+    }
+
+    if (!is32BitOp && srcExpectedPair.arg2 != 0) {
+        sljit_set_label(compareUpperHalfFalse, sljit_emit_label(compiler));
     }
 
     sljit_set_label(compareFalse, sljit_emit_label(compiler));
-    sljit_set_label(storeSuccess, sljit_emit_label(compiler));
-
-    if (noShortAtomic && size <= 2) {
-        sljit_emit_op2(compiler, SLJIT_LSHR32, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, shiftReg, 0);
-        sljit_emit_op2(compiler, SLJIT_AND32, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, (0xffffffff) >> ((4 - size) * 8));
+    if ((noShortAtomic && size <= 2) || (!is32BitOp && srcExpectedPair.arg2 != 0)) {
+        sljit_set_label(storeSuccess, sljit_emit_label(compiler));
     }
 
+    if (size <= 2) {
+        if (noShortAtomic) {
+            sljit_emit_op1(compiler, SLJIT_MOV32, maskReg, 0, SLJIT_MEM1(SLJIT_SP), context->stackTmpStart);
+            sljit_emit_op2(compiler, SLJIT_LSHR32, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, maskReg, 0);
+        }
+#if (defined(SLJIT_CONFIG_RISCV) && SLJIT_CONFIG_RISCV)
+        sljit_emit_op1(compiler, size == 1 ? SLJIT_MOV32_U8 : SLJIT_MOV32_U16, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0);
+#endif /* SLJIT_CONFIG_RISCV */
+    }
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_TMP_DEST_REG, 0);
-    if (dstPair.arg2 != 0) {
+    if (!is32BitOp && dstPair.arg2 != 0) {
         sljit_emit_op1(compiler, SLJIT_MOV, dstPair.arg2, dstPair.arg2w, SLJIT_IMM, 0);
     }
 #else /* !SLJIT_32BIT_ARCHITECTURE */
@@ -1864,6 +1886,9 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 srcExpectedReg = GET_SOURCE_REG(srcExpected.arg, instr->requiredReg(2));
     sljit_s32 srcValueReg = GET_SOURCE_REG(srcValue.arg, instr->requiredReg(1));
     sljit_s32 maskReg = SLJIT_TMP_DEST_REG;
+    sljit_s32 oldSrcExpectedReg = srcExpectedReg;
+    struct sljit_jump* compareTopFalse;
+    struct sljit_jump* storeSuccess;
 
     MOVE_TO_REG(compiler, (operationSize & SLJIT_32) || operationSize == SLJIT_MOV32 ? SLJIT_MOV32 : SLJIT_MOV, srcValueReg, srcValue.arg, srcValue.argw);
 
@@ -1875,7 +1900,6 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 
     if (noShortAtomic && size <= 2) {
         sljit_s32 oldSrcValueReg = srcValueReg;
-        sljit_s32 oldSrcExpectedReg = srcExpectedReg;
         operationSize = SLJIT_MOV32;
 
         srcValueReg = instr->requiredReg(1);
@@ -1889,7 +1913,11 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), context->stackTmpStart, maskReg, 0);
         sljit_emit_op2(compiler, SLJIT_SHL32, srcValueReg, 0, srcValueReg, 0, maskReg, 0);
-        sljit_emit_op2(compiler, SLJIT_ROTL32, srcExpectedReg, 0, oldSrcExpectedReg, 0, maskReg, 0);
+
+        sljit_emit_op1(compiler, size == 1 ? SLJIT_MOV32_U8 : SLJIT_MOV32_U16, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, size == 1 ? 0xff : 0xffff);
+        compareTopFalse = sljit_emit_cmp(compiler, SLJIT_GREATER, oldSrcExpectedReg, 0, SLJIT_TMP_DEST_REG, 0);
+
+        sljit_emit_op2(compiler, SLJIT_SHL32, srcExpectedReg, 0, oldSrcExpectedReg, 0, maskReg, 0);
 
         sljit_emit_op2(compiler, SLJIT_AND, baseReg, 0, baseReg, 0, SLJIT_IMM, ~0x3);
     }
@@ -1925,9 +1953,18 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_atomic_store(compiler, operationSize | SLJIT_SET_ATOMIC_STORED, srcValueReg, baseReg, SLJIT_TMP_DEST_REG);
     sljit_set_label(sljit_emit_jump(compiler, SLJIT_ATOMIC_NOT_STORED), restartOnFailure);
 
+    if (noShortAtomic && size <= 2) {
+        storeSuccess = sljit_emit_jump(compiler, SLJIT_ATOMIC_STORED);
+
+        sljit_set_label(compareTopFalse, sljit_emit_label(compiler));
+        sljit_emit_op2(compiler, SLJIT_AND, baseReg, 0, baseReg, 0, SLJIT_IMM, ~0x3);
+        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(baseReg), 0);
+    }
+
     sljit_set_label(compareFalse, sljit_emit_label(compiler));
 
     if (noShortAtomic && size <= 2) {
+        sljit_set_label(storeSuccess, sljit_emit_label(compiler));
         sljit_emit_op1(compiler, SLJIT_MOV32, maskReg, 0, SLJIT_MEM1(SLJIT_SP), context->stackTmpStart);
         sljit_emit_op2(compiler, SLJIT_LSHR32, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, maskReg, 0);
         sljit_emit_op1(compiler, size == 1 ? SLJIT_MOV32_U8 : SLJIT_MOV32_U16, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0);
