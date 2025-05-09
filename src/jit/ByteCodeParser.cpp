@@ -2208,9 +2208,9 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
             if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
                 requiredInit = OTAtomicRmwShort64;
-                compiler->increaseStackTmpSize(4);
             }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
+            compiler->increaseStackTmpSize(4);
             FALLTHROUGH;
         }
         case ByteCode::I64AtomicRmw32AddUMemIdxOpcode:
@@ -2281,9 +2281,9 @@ static void compileFunction(JITCompiler* compiler)
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
             if (requiredInit == OTNone && !(compiler->options() & JITCompiler::kHasShortAtomic)) {
                 requiredInit = OTAtomicRmwCmpxchgShort64;
-                compiler->increaseStackTmpSize(4);
             }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
+            compiler->increaseStackTmpSize(4);
             FALLTHROUGH;
         }
         case ByteCode::I64AtomicRmw32CmpxchgUMemIdxOpcode:

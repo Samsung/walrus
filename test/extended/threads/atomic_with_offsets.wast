@@ -152,3 +152,55 @@
 (invoke "initOffset" (i64.const 0xffffffffffffffff) (i32.const 24000))
 (assert_return (invoke "i64.atomic.rmw32.cmpxchg_u" (i32.const 21169) (i64.const 0xffffffff) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0xffffffff))
 (assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0xffffffffbeefbeef))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 2872))
+(assert_return (invoke "i32.atomic.rmw16.cmpxchg_u" (i32.const 47) (i32.const 0x01ff1111) (i32.const 0xcafecafe)) (i32.const 0x1111))
+(assert_return (invoke "i64.atomic.load" (i32.const 2852)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 8216))
+(assert_return (invoke "i64.atomic.rmw8.cmpxchg_u" (i32.const 5389) (i64.const 0x1000000000000000) (i64.const 0x4242424242424242)) (i64.const 0x11))
+(assert_return (invoke "i64.atomic.load" (i32.const 8196)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 16096))
+(assert_return (invoke "i64.atomic.rmw.cmpxchg" (i32.const 13265) (i64.const 0x1101011111111111) (i64.const 0x0101010102020202)) (i64.const 0x1111111111111111))
+(assert_return (invoke "i64.atomic.load" (i32.const 16076)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 24000))
+(assert_return (invoke "i64.atomic.rmw16.cmpxchg_u" (i32.const 21169) (i64.const 0x00101111) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0x1111))
+(assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 24000))
+(assert_return (invoke "i64.atomic.rmw16.cmpxchg_u" (i32.const 21169) (i64.const 0x0010000000001111) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0x1111))
+(assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 8216))
+(assert_return (invoke "i64.atomic.rmw8.cmpxchg_u" (i32.const 5390) (i64.const 0x1010000000000011) (i64.const 0x4242424242424242)) (i64.const 0x11))
+(assert_return (invoke "i64.atomic.load" (i32.const 8196)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 24000))
+(assert_return (invoke "i64.atomic.rmw16.cmpxchg_u" (i32.const 21171) (i64.const 0x1234567800001111) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0x1111))
+(assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0xffffffffffffffff) (i32.const 24000))
+(assert_return (invoke "i64.atomic.rmw16.cmpxchg_u" (i32.const 21171) (i64.const 0x00f000000000ffff) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0xffff))
+(assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0xffffffffffffffff))
+
+(invoke "initOffset" (i64.const 0xffffffffffffffff) (i32.const 24000))
+(assert_return (invoke "i64.atomic.rmw32.cmpxchg_u" (i32.const 21169) (i64.const 0x01010000ffffffff) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0xffffffff))
+(assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0xffffffffffffffff))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 24000))
+(assert_return (invoke "i64.atomic.rmw16.cmpxchg_u" (i32.const 21171) (i64.const 0x1211) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0x1111))
+(assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x1111111111111111) (i32.const 24000))
+(assert_return (invoke "i64.atomic.rmw8.cmpxchg_u" (i32.const 21171) (i64.const 0x41) (i64.const 0xbeefbeefbeefbeef)) (i64.const 0x11))
+(assert_return (invoke "i64.atomic.load" (i32.const 23980)) (i64.const 0x1111111111111111))
+
+(invoke "initOffset" (i64.const 0x8877665544332211) (i32.const 8216))
+(assert_return (invoke "i64.atomic.rmw8.cmpxchg_u" (i32.const 5390) (i64.const 0x66) (i64.const 0x4242424242424242)) (i64.const 0x66))
+(assert_return (invoke "i64.atomic.load" (i32.const 8196)) (i64.const 0x8877425544332211))
+
+(invoke "initOffset" (i64.const 0x8877665544332211) (i32.const 8216))
+(assert_return (invoke "i64.atomic.rmw8.cmpxchg_u" (i32.const 5390) (i64.const 0x99) (i64.const 0x4242424242424242)) (i64.const 0x66))
+(assert_return (invoke "i64.atomic.load" (i32.const 8196)) (i64.const 0x8877665544332211))
