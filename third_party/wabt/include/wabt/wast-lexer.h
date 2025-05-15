@@ -28,6 +28,9 @@
 #include "wabt/opcode.h"
 #include "wabt/token.h"
 
+#include "string-view-lite/string_view.h"
+#include "wabt/make-unique.h"
+
 namespace wabt {
 
 class ErrorHandler;
@@ -38,11 +41,11 @@ class WastLexer {
   WABT_DISALLOW_COPY_AND_ASSIGN(WastLexer);
 
   WastLexer(std::unique_ptr<LexerSource> source,
-            std::string_view filename,
+            nonstd::string_view filename,
             Errors*);
 
   // Convenience functions.
-  static std::unique_ptr<WastLexer> CreateBufferLexer(std::string_view filename,
+  static std::unique_ptr<WastLexer> CreateBufferLexer(nonstd::string_view filename,
                                                       const void* data,
                                                       size_t size,
                                                       Errors*);
@@ -51,7 +54,7 @@ class WastLexer {
 
   // TODO(binji): Move this out of the lexer.
   std::unique_ptr<LexerSourceLineFinder> MakeLineFinder() {
-    return std::make_unique<LexerSourceLineFinder>(source_->Clone());
+    return MakeUnique<LexerSourceLineFinder>(source_->Clone());
   }
 
  private:
@@ -59,7 +62,7 @@ class WastLexer {
   enum class CharClass { IdChar = 1, Keyword = 2, HexDigit = 4, Digit = 8 };
 
   Location GetLocation();
-  std::string_view GetText(size_t offset = 0);
+  nonstd::string_view GetText(size_t offset = 0);
 
   Token BareToken(TokenType);
   Token LiteralToken(TokenType, LiteralType);
@@ -68,7 +71,7 @@ class WastLexer {
   int PeekChar();
   int ReadChar();
   bool MatchChar(char);
-  bool MatchString(std::string_view);
+  bool MatchString(nonstd::string_view);
   void Newline();
   bool ReadBlockComment();             // Returns false if EOF.
   bool ReadLineComment();              // Returns false if EOF.
@@ -94,7 +97,7 @@ class WastLexer {
   Token GetHexNumberToken(TokenType);
   Token GetInfToken();
   Token GetNanToken();
-  Token GetNameEqNumToken(std::string_view name, TokenType);
+  Token GetNameEqNumToken(nonstd::string_view name, TokenType);
   Token GetIdChars();
   Token GetKeywordToken();
   Token GetReservedToken();

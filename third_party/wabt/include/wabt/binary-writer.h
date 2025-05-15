@@ -22,6 +22,8 @@
 #include "wabt/opcode.h"
 #include "wabt/stream.h"
 
+#include "string-view-lite/string_view.h"
+
 namespace wabt {
 
 struct Module;
@@ -49,7 +51,7 @@ Result WriteBinaryModule(Stream*, const Module*, const WriteBinaryOptions&);
 void WriteType(Stream* stream, Type type, const char* desc = nullptr);
 
 void WriteStr(Stream* stream,
-              std::string_view s,
+              nonstd::string_view s,
               const char* desc,
               PrintChars print_chars = PrintChars::No);
 

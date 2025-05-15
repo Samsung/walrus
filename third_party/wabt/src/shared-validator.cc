@@ -388,7 +388,7 @@ Result SharedValidator::OnTag(const Location& loc, Var sig_var) {
 Result SharedValidator::OnExport(const Location& loc,
                                  ExternalKind kind,
                                  Var item_var,
-                                 std::string_view name) {
+                                 nonstd::string_view name) {
   Result result = Result::Ok;
   auto name_str = std::string(name);
   if (export_names_.find(name_str) != export_names_.end()) {

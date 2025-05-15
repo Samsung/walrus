@@ -16,6 +16,8 @@
 
 #include "wabt/token.h"
 
+#include "string-view-lite/string_view.h"
+
 namespace wabt {
 
 const char* GetTokenTypeName(TokenType token_type) {
@@ -52,7 +54,7 @@ Token::Token(Location loc, TokenType token_type, Type type)
   Construct(type_, type);
 }
 
-Token::Token(Location loc, TokenType token_type, std::string_view text)
+Token::Token(Location loc, TokenType token_type, nonstd::string_view text)
     : loc(loc), token_type_(token_type) {
   assert(HasText());
   Construct(text_, text);
