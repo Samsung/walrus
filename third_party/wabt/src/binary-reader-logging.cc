@@ -145,7 +145,7 @@ Result BinaryReaderLogging::BeginSection(Index section_index,
 
 Result BinaryReaderLogging::BeginCustomSection(Index section_index,
                                                Offset size,
-                                               std::string_view section_name) {
+                                               nonstd::string_view section_name) {
   LOGF("BeginCustomSection('" PRIstringview "', size: %" PRIzd ")\n",
        WABT_PRINTF_STRING_VIEW_ARG(section_name), size);
   Indent();
@@ -199,8 +199,8 @@ Result BinaryReaderLogging::OnArrayType(Index index,
 
 Result BinaryReaderLogging::OnImport(Index index,
                                      ExternalKind kind,
-                                     std::string_view module_name,
-                                     std::string_view field_name) {
+                                     nonstd::string_view module_name,
+                                     nonstd::string_view field_name) {
   LOGF("OnImport(index: %" PRIindex ", kind: %s, module: \"" PRIstringview
        "\", field: \"" PRIstringview "\")\n",
        index, GetKindName(kind), WABT_PRINTF_STRING_VIEW_ARG(module_name),
@@ -209,8 +209,8 @@ Result BinaryReaderLogging::OnImport(Index index,
 }
 
 Result BinaryReaderLogging::OnImportFunc(Index import_index,
-                                         std::string_view module_name,
-                                         std::string_view field_name,
+                                         nonstd::string_view module_name,
+                                         nonstd::string_view field_name,
                                          Index func_index,
                                          Index sig_index) {
   LOGF("OnImportFunc(import_index: %" PRIindex ", func_index: %" PRIindex
@@ -221,23 +221,25 @@ Result BinaryReaderLogging::OnImportFunc(Index import_index,
 }
 
 Result BinaryReaderLogging::OnImportTable(Index import_index,
-                                          std::string_view module_name,
-                                          std::string_view field_name,
+                                          nonstd::string_view module_name,
+                                          nonstd::string_view field_name,
                                           Index table_index,
                                           Type elem_type,
-                                          const Limits* elem_limits) {
+                                          const Limits* elem_limits,
+                                          bool is_import,
+                                          bool has_init_expr) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), elem_limits);
   LOGF("OnImportTable(import_index: %" PRIindex ", table_index: %" PRIindex
        ", elem_type: %s, %s)\n",
        import_index, table_index, elem_type.GetName().c_str(), buf);
   return reader_->OnImportTable(import_index, module_name, field_name,
-                                table_index, elem_type, elem_limits);
+                                table_index, elem_type, elem_limits, is_import, has_init_expr);
 }
 
 Result BinaryReaderLogging::OnImportMemory(Index import_index,
-                                           std::string_view module_name,
-                                           std::string_view field_name,
+                                           nonstd::string_view module_name,
+                                           nonstd::string_view field_name,
                                            Index memory_index,
                                            const Limits* page_limits,
                                            uint32_t page_size) {
@@ -251,8 +253,8 @@ Result BinaryReaderLogging::OnImportMemory(Index import_index,
 }
 
 Result BinaryReaderLogging::OnImportGlobal(Index import_index,
-                                           std::string_view module_name,
-                                           std::string_view field_name,
+                                           nonstd::string_view module_name,
+                                           nonstd::string_view field_name,
                                            Index global_index,
                                            Type type,
                                            bool mutable_) {
@@ -266,8 +268,8 @@ Result BinaryReaderLogging::OnImportGlobal(Index import_index,
 }
 
 Result BinaryReaderLogging::OnImportTag(Index import_index,
-                                        std::string_view module_name,
-                                        std::string_view field_name,
+                                        nonstd::string_view module_name,
+                                        nonstd::string_view field_name,
                                         Index tag_index,
                                         Index sig_index) {
   LOGF("OnImportTag(import_index: %" PRIindex ", tag_index: %" PRIindex
@@ -280,12 +282,13 @@ Result BinaryReaderLogging::OnImportTag(Index import_index,
 Result BinaryReaderLogging::BeginTable(Index index,
                                        Type elem_type,
                                        const Limits* elem_limits,
+                                       bool is_import,
                                        bool has_init_expr) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), elem_limits);
   LOGF("OnTable(index: %" PRIindex ", elem_type: %s, %s)\n", index,
        elem_type.GetName().c_str(), buf);
-  return reader_->BeginTable(index, elem_type, elem_limits, has_init_expr);
+  return reader_->BeginTable(index, elem_type, elem_limits, is_import, has_init_expr);
 }
 
 Result BinaryReaderLogging::OnMemory(Index index,
@@ -306,7 +309,7 @@ Result BinaryReaderLogging::BeginGlobal(Index index, Type type, bool mutable_) {
 Result BinaryReaderLogging::OnExport(Index index,
                                      ExternalKind kind,
                                      Index item_index,
-                                     std::string_view name) {
+                                     nonstd::string_view name) {
   LOGF("OnExport(index: %" PRIindex ", kind: %s, item_index: %" PRIindex
        ", name: \"" PRIstringview "\")\n",
        index, GetKindName(kind), item_index, WABT_PRINTF_STRING_VIEW_ARG(name));
@@ -523,7 +526,7 @@ Result BinaryReaderLogging::OnModuleNameSubsection(Index index,
   return reader_->OnModuleNameSubsection(index, name_type, subsection_size);
 }
 
-Result BinaryReaderLogging::OnModuleName(std::string_view name) {
+Result BinaryReaderLogging::OnModuleName(nonstd::string_view name) {
   LOGF("OnModuleName(name: \"" PRIstringview "\")\n",
        WABT_PRINTF_STRING_VIEW_ARG(name));
   return reader_->OnModuleName(name);
@@ -538,7 +541,7 @@ Result BinaryReaderLogging::OnFunctionNameSubsection(Index index,
   return reader_->OnFunctionNameSubsection(index, name_type, subsection_size);
 }
 
-Result BinaryReaderLogging::OnFunctionName(Index index, std::string_view name) {
+Result BinaryReaderLogging::OnFunctionName(Index index, nonstd::string_view name) {
   LOGF("OnFunctionName(index: %" PRIindex ", name: \"" PRIstringview "\")\n",
        index, WABT_PRINTF_STRING_VIEW_ARG(name));
   return reader_->OnFunctionName(index, name);
@@ -555,7 +558,7 @@ Result BinaryReaderLogging::OnLocalNameSubsection(Index index,
 
 Result BinaryReaderLogging::OnLocalName(Index func_index,
                                         Index local_index,
-                                        std::string_view name) {
+                                        nonstd::string_view name) {
   LOGF("OnLocalName(func_index: %" PRIindex ", local_index: %" PRIindex
        ", name: \"" PRIstringview "\")\n",
        func_index, local_index, WABT_PRINTF_STRING_VIEW_ARG(name));
@@ -573,7 +576,7 @@ Result BinaryReaderLogging::OnNameSubsection(
 
 Result BinaryReaderLogging::OnNameEntry(NameSectionSubsection type,
                                         Index index,
-                                        std::string_view name) {
+                                        nonstd::string_view name) {
   LOGF("OnNameEntry(type: %s, index: %" PRIindex ", name: \"" PRIstringview
        "\")\n",
        GetNameSectionSubsectionName(type), index,
@@ -592,21 +595,21 @@ Result BinaryReaderLogging::OnDylinkInfo(uint32_t mem_size,
   return reader_->OnDylinkInfo(mem_size, mem_align, table_size, table_align);
 }
 
-Result BinaryReaderLogging::OnDylinkNeeded(std::string_view so_name) {
+Result BinaryReaderLogging::OnDylinkNeeded(nonstd::string_view so_name) {
   LOGF("OnDylinkNeeded(name: " PRIstringview ")\n",
        WABT_PRINTF_STRING_VIEW_ARG(so_name));
   return reader_->OnDylinkNeeded(so_name);
 }
 
-Result BinaryReaderLogging::OnDylinkExport(std::string_view name,
+Result BinaryReaderLogging::OnDylinkExport(nonstd::string_view name,
                                            uint32_t flags) {
   LOGF("OnDylinkExport(name: " PRIstringview ", flags: 0x%x)\n",
        WABT_PRINTF_STRING_VIEW_ARG(name), flags);
   return reader_->OnDylinkExport(name, flags);
 }
 
-Result BinaryReaderLogging::OnDylinkImport(std::string_view module,
-                                           std::string_view name,
+Result BinaryReaderLogging::OnDylinkImport(nonstd::string_view module,
+                                           nonstd::string_view name,
                                            uint32_t flags) {
   LOGF("OnDylinkImport(module: " PRIstringview ", name: " PRIstringview
        ", flags: 0x%x)\n",
@@ -632,7 +635,7 @@ Result BinaryReaderLogging::OnReloc(RelocType type,
   return reader_->OnReloc(type, offset, index, addend);
 }
 
-Result BinaryReaderLogging::OnFeature(uint8_t prefix, std::string_view name) {
+Result BinaryReaderLogging::OnFeature(uint8_t prefix, nonstd::string_view name) {
   LOGF("OnFeature(prefix: '%c', name: '" PRIstringview "')\n", prefix,
        WABT_PRINTF_STRING_VIEW_ARG(name));
   return reader_->OnFeature(prefix, name);
@@ -640,7 +643,7 @@ Result BinaryReaderLogging::OnFeature(uint8_t prefix, std::string_view name) {
 
 Result BinaryReaderLogging::OnDataSymbol(Index index,
                                          uint32_t flags,
-                                         std::string_view name,
+                                         nonstd::string_view name,
                                          Index segment,
                                          uint32_t offset,
                                          uint32_t size) {
@@ -651,7 +654,7 @@ Result BinaryReaderLogging::OnDataSymbol(Index index,
 
 Result BinaryReaderLogging::OnFunctionSymbol(Index index,
                                              uint32_t flags,
-                                             std::string_view name,
+                                             nonstd::string_view name,
                                              Index func_index) {
   LOGF("OnFunctionSymbol(name: " PRIstringview " flags: 0x%x index: %" PRIindex
        ")\n",
@@ -661,7 +664,7 @@ Result BinaryReaderLogging::OnFunctionSymbol(Index index,
 
 Result BinaryReaderLogging::OnGlobalSymbol(Index index,
                                            uint32_t flags,
-                                           std::string_view name,
+                                           nonstd::string_view name,
                                            Index global_index) {
   LOGF("OnGlobalSymbol(name: " PRIstringview " flags: 0x%x index: %" PRIindex
        ")\n",
@@ -679,7 +682,7 @@ Result BinaryReaderLogging::OnSectionSymbol(Index index,
 
 Result BinaryReaderLogging::OnTagSymbol(Index index,
                                         uint32_t flags,
-                                        std::string_view name,
+                                        nonstd::string_view name,
                                         Index tag_index) {
   LOGF("OnTagSymbol(name: " PRIstringview " flags: 0x%x index: %" PRIindex
        ")\n",
@@ -689,7 +692,7 @@ Result BinaryReaderLogging::OnTagSymbol(Index index,
 
 Result BinaryReaderLogging::OnTableSymbol(Index index,
                                           uint32_t flags,
-                                          std::string_view name,
+                                          nonstd::string_view name,
                                           Index table_index) {
   LOGF("OnTableSymbol(name: " PRIstringview " flags: 0x%x index: %" PRIindex
        ")\n",
@@ -698,7 +701,7 @@ Result BinaryReaderLogging::OnTableSymbol(Index index,
 }
 
 Result BinaryReaderLogging::OnSegmentInfo(Index index,
-                                          std::string_view name,
+                                          nonstd::string_view name,
                                           Address alignment,
                                           uint32_t flags) {
   LOGF("OnSegmentInfo(%d name: " PRIstringview ", alignment: %" PRIaddress
@@ -713,7 +716,7 @@ Result BinaryReaderLogging::OnInitFunction(uint32_t priority,
   return reader_->OnInitFunction(priority, symbol_index);
 }
 
-Result BinaryReaderLogging::OnComdatBegin(std::string_view name,
+Result BinaryReaderLogging::OnComdatBegin(nonstd::string_view name,
                                           uint32_t flags,
                                           Index count) {
   LOGF("OnComdatBegin(" PRIstringview ", flags: %d, count: %" PRIindex ")\n",
@@ -727,7 +730,7 @@ Result BinaryReaderLogging::OnComdatEntry(ComdatType kind, Index index) {
   return reader_->OnComdatEntry(kind, index);
 }
 
-Result BinaryReaderLogging::BeginCodeMetadataSection(std::string_view name,
+Result BinaryReaderLogging::BeginCodeMetadataSection(nonstd::string_view name,
                                                      Offset size) {
   LOGF("BeginCodeMetadataSection('" PRIstringview "', size:%" PRIzd ")\n",
        WABT_PRINTF_STRING_VIEW_ARG(name), size);
@@ -737,13 +740,13 @@ Result BinaryReaderLogging::BeginCodeMetadataSection(std::string_view name,
 Result BinaryReaderLogging::OnCodeMetadata(Offset code_offset,
                                            const void* data,
                                            Address size) {
-  std::string_view content(static_cast<const char*>(data), size);
+  nonstd::string_view content(static_cast<const char*>(data), size);
   LOGF("OnCodeMetadata(offset: %" PRIzd ", data: \"" PRIstringview "\")\n",
        code_offset, WABT_PRINTF_STRING_VIEW_ARG(content));
   return reader_->OnCodeMetadata(code_offset, data, size);
 }
 
-Result BinaryReaderLogging::OnGenericCustomSection(std::string_view name,
+Result BinaryReaderLogging::OnGenericCustomSection(nonstd::string_view name,
                                                    const void* data,
                                                    Offset size) {
   LOGF("OnGenericCustomSection(name: \"" PRIstringview "\", size: %" PRIzd

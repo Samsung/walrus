@@ -211,17 +211,17 @@ public:
         m_externalDelegate->OnTypeCount(count);
         return Result::Ok;
     }
-    Result OnFuncType(Index index, Index param_count, Type *param_types, Index result_count, Type *result_types) override {
-        CHECK_RESULT(m_validator.OnFuncType(GetLocation(), param_count, param_types, result_count, result_types, index));
+    Result OnFuncType(Index index, Index param_count, Type *param_types, Index result_count, Type *result_types, GCTypeExtension* gc_ext) override {
+        CHECK_RESULT(m_validator.OnFuncType(GetLocation(), param_count, param_types, result_count, result_types, index, gc_ext));
         m_functionTypes.push_back(SimpleFuncType( { ToInterp(param_count, param_types), ToInterp(result_count, result_types) }));
-        m_externalDelegate->OnFuncType(index, param_count, param_types, result_count, result_types);
+        m_externalDelegate->OnFuncType(index, param_count, param_types, result_count, result_types, gc_ext);
         return Result::Ok;
     }
-    Result OnStructType(Index index, Index field_count, TypeMut *fields) override {
+    Result OnStructType(Index index, Index field_count, TypeMut *fields, GCTypeExtension* gc_ext) override {
         abort();
         return Result::Ok;
     }
-    Result OnArrayType(Index index, TypeMut field) override {
+    Result OnArrayType(Index index, TypeMut field, GCTypeExtension* gc_ext) override {
         abort();
         return Result::Ok;
     }
@@ -246,16 +246,16 @@ public:
         m_externalDelegate->OnImportFunc(import_index, std::string(module_name), std::string(field_name), func_index, sig_index);
         return Result::Ok;
     }
-    Result OnImportTable(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
-        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits));
+    Result OnImportTable(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits, bool is_import, bool has_init_expr) override {
+        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, is_import, has_init_expr));
         m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
     }
-    Result OnImportMemory(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index memory_index, const Limits *page_limits) override {
-        CHECK_RESULT(m_validator.OnMemory(GetLocation(), *page_limits));
+    Result OnImportMemory(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index memory_index, const Limits *page_limits, uint32_t page_size) override {
+        CHECK_RESULT(m_validator.OnMemory(GetLocation(), *page_limits, page_size));
         m_externalDelegate->OnImportMemory(import_index, std::string(module_name), std::string(field_name), memory_index, page_limits->initial,
-            page_limits->has_max ? page_limits->max : (page_limits->is_64? (WABT_MAX_PAGES64 - 1) : (WABT_MAX_PAGES32 - 1)), page_limits->is_shared);
+            page_limits->has_max ? page_limits->max : page_size - 1, page_limits->is_shared);
         return Result::Ok;
     }
     Result OnImportGlobal(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index global_index, Type type, bool mutable_) override {
@@ -297,8 +297,8 @@ public:
         m_externalDelegate->OnTableCount(count);
         return Result::Ok;
     }
-    Result OnTable(Index index, Type elem_type, const Limits *elem_limits) override {
-        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits));
+    Result BeginTable(Index index, Type elem_type, const Limits* elem_limits, bool is_import, bool has_init_expr) override {
+        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, is_import, has_init_expr));
         m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnTable(index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
@@ -315,10 +315,9 @@ public:
         m_externalDelegate->OnMemoryCount(count);
         return Result::Ok;
     }
-    Result OnMemory(Index index, const Limits *limits) override {
-        CHECK_RESULT(m_validator.OnMemory(GetLocation(), *limits));
-        m_externalDelegate->OnMemory(index, limits->initial,
-            limits->has_max ? limits->max : (limits->is_64 ? (WABT_MAX_PAGES64 - 1) : (WABT_MAX_PAGES32 - 1)), limits->is_shared);
+    Result OnMemory(Index index, const Limits *limits, uint32_t page_size) override {
+        CHECK_RESULT(m_validator.OnMemory(GetLocation(), *limits, page_size));
+        m_externalDelegate->OnMemory(index, limits->initial, limits->has_max ? limits->max : page_size - 1, limits->is_shared);
         return Result::Ok;
     }
     Result EndMemorySection() override {
@@ -334,7 +333,7 @@ public:
         return Result::Ok;
     }
     Result BeginGlobal(Index index, Type type, bool mutable_) override {
-        CHECK_RESULT(m_validator.OnGlobal(GetLocation(), type, mutable_));
+        CHECK_RESULT(m_validator.BeginGlobal(GetLocation(), type, mutable_));
         m_externalDelegate->BeginGlobal(index, type, mutable_);
         assert(m_lastInitType == Type::___);
         m_lastInitType = type;
@@ -591,7 +590,8 @@ public:
         m_externalDelegate->OnCallIndirectExpr(sig_index, table_index);
         return Result::Ok;
     }
-    Result OnCallRefExpr() override {
+    Result OnCallRefExpr(Type sig_type) override {
+        // TODO: implement properly
         abort();
         return Result::Ok;
     }
@@ -835,7 +835,7 @@ public:
         return Result::Ok;
     }
     Result OnRefNullExpr(Type type) override {
-        CHECK_RESULT(m_validator.OnRefNull(GetLocation(), type));
+        CHECK_RESULT(m_validator.OnRefNull(GetLocation(), Var(type, GetLocation())));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnRefNullExpr(type);
         return Result::Ok;
@@ -1351,7 +1351,157 @@ public:
         abort();
         return Result::Ok;
     }
-    Result EndLinkingSection() override {
+    Result EndLinkingSection() override
+    {
+        abort();
+        return Result::Ok;
+    }
+    // TODO: add implementations:
+    Result OnRecursiveType(Index first_type_index, Index type_count) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result BeginTableInitExpr(Index index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result EndTableInitExpr(Index index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result EndTable(Index index) override
+    {
+        return Result::Ok;
+    }
+    Result EndLocalDecls() override
+    {
+        return Result::Ok;
+    }
+    Result OnArrayCopyExpr(Index dst_type_index, Index src_type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayFillExpr(Index type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayGetExpr(Opcode opcode, Index type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayInitDataExpr(Index type_index, Index data_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayInitElemExpr(Index type_index, Index elem_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayNewExpr(Index type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayNewDataExpr(Index type_index, Index data_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayNewDefaultExpr(Index type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayNewElemExpr(Index type_index, Index elem_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArrayNewFixedExpr(Index type_index, Index count) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnArraySetExpr(Index type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnBrOnCastExpr(Opcode opcode, Index depth, Type type1, Type type2) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnBrOnNonNullExpr(Index depth) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnBrOnNullExpr(Index depth) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnGCUnaryExpr(Opcode opcode) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnRefAsNonNullExpr() override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnRefCastExpr(Type type) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnRefTestExpr(Type type) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnReturnCallRefExpr(Type sig_type) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnStructGetExpr(Opcode opcode, Index type_index, Index field_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnStructNewExpr(Index type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnStructNewDefaultExpr(Index type_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnStructSetExpr(Index type_index, Index field_index) override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnThrowRefExpr() override
+    {
+        abort();
+        return Result::Ok;
+    }
+    Result OnTryTableExpr(Type sig_type, const CatchClauseVector &catches) override
+    {
         abort();
         return Result::Ok;
     }

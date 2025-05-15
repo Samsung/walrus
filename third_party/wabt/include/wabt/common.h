@@ -35,7 +35,7 @@
 
 #include "wabt/base-types.h"
 #include "wabt/result.h"
-#include "wabt/string-format.h"
+#include "string-view-lite/string_view.h"
 #include "wabt/type.h"
 
 #define WABT_FATAL(...) fprintf(stderr, __VA_ARGS__), exit(1)
@@ -209,7 +209,7 @@ struct Location {
   };
 
   Location() : line(0), first_column(0), last_column(0) {}
-  Location(std::string_view filename,
+  Location(nonstd::string_view filename,
            int line,
            int first_column,
            int last_column)
@@ -219,7 +219,7 @@ struct Location {
         last_column(last_column) {}
   explicit Location(size_t offset) : offset(offset) {}
 
-  std::string_view filename;
+  nonstd::string_view filename;
   union {
     // For text files.
     struct {
@@ -400,7 +400,7 @@ struct Limits {
 
 enum { WABT_USE_NATURAL_ALIGNMENT = 0xFFFFFFFFFFFFFFFF };
 
-Result ReadFile(std::string_view filename, std::vector<uint8_t>* out_data);
+Result ReadFile(nonstd::string_view filename, std::vector<uint8_t>* out_data);
 
 void InitStdio();
 

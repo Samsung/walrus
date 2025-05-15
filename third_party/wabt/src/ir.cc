@@ -150,7 +150,7 @@ bool FuncSignature::operator==(const FuncSignature& rhs) const {
   return true;
 }
 
-const Export* Module::GetExport(std::string_view name) const {
+const Export* Module::GetExport(nonstd::string_view name) const {
   Index index = export_bindings.FindIndex(name);
   if (index >= exports.size()) {
     return nullptr;
@@ -671,7 +671,9 @@ void MakeTypeBindingReverseMapping(
     std::vector<std::string>* out_reverse_mapping) {
   out_reverse_mapping->clear();
   out_reverse_mapping->resize(num_types);
-  for (const auto& [name, binding] : bindings) {
+  for (const auto& item : bindings) {
+    const auto binding = item.second;
+    const auto name = item.first;
     assert(static_cast<size_t>(binding.index) < out_reverse_mapping->size());
     (*out_reverse_mapping)[binding.index] = name;
   }
@@ -682,7 +684,7 @@ Var::Var() : Var(kInvalidIndex, Location()) {}
 Var::Var(Index index, const Location& loc)
     : loc(loc), type_(VarType::Index), opt_type_(0), index_(index) {}
 
-Var::Var(std::string_view name, const Location& loc)
+Var::Var(nonstd::string_view name, const Location& loc)
     : loc(loc), type_(VarType::Name), opt_type_(0), name_(name) {}
 
 Var::Var(Type type, const Location& loc)
@@ -745,7 +747,7 @@ void Var::set_name(std::string&& name) {
   Construct(name_, std::move(name));
 }
 
-void Var::set_name(std::string_view name) {
+void Var::set_name(nonstd::string_view name) {
   set_name(std::string(name));
 }
 
