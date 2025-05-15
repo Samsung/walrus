@@ -35,7 +35,7 @@
 
 #include "wabt/base-types.h"
 #include "wabt/result.h"
-#include "wabt/string-format.h"
+#include "string-view-lite/string_view.h"
 #include "wabt/type.h"
 
 #define WABT_FATAL(...) fprintf(stderr, __VA_ARGS__), exit(1)

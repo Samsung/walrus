@@ -155,7 +155,7 @@ class BinaryReader {
   Index NumTotalFuncs();
 
   [[nodiscard]] Result ReadInitExpr(Index index);
-  [[nodiscard]] Result ReadTable(Type* out_elem_type, Limits* out_elem_limits);
+  [[nodiscard]] Result ReadTable(Type* out_elem_type, Limits* out_elem_limits, bool* is_import, bool* has_init_expr);
   [[nodiscard]] Result ReadMemory(Limits* out_page_limits,
                                   uint32_t* out_page_size);
   [[nodiscard]] Result ReadGlobalHeader(Type* out_type, bool* out_mutable);
@@ -661,7 +661,7 @@ Result BinaryReader::ReadInitExpr(Index index) {
   return Result::Ok;
 }
 
-Result BinaryReader::ReadTable(Type* out_elem_type, Limits* out_elem_limits) {
+Result BinaryReader::ReadTable(Type* out_elem_type, Limits* out_elem_limits, bool* is_import, bool* has_init_expr) {
   CHECK_RESULT(ReadRefType(out_elem_type, "table elem type"));
 
   uint8_t flags;
@@ -777,8 +777,29 @@ Result BinaryReader::ReadFunctionBody(Offset end_offset) {
 }
 
 Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
-  std::stack<Opcode> nested_blocks;
-  while (state_.offset < end_offset) {
+    std::stack<Opcode> nested_blocks;
+
+    // FIXME remove preprocess iteration
+    std::stack<Opcode> empty_blocks;
+    CALLBACK(OnStartReadInstructions, state_.offset, end_offset);
+    auto start_offset = state_.offset;
+    bool in_preprocess = delegate_->NeedsPreprocess();
+    if (in_preprocess) {
+      CALLBACK(OnStartPreprocess);
+    }
+
+    while (true) {
+      if (state_.offset >= end_offset) {
+        if (in_preprocess) {
+          CALLBACK(OnEndPreprocess);
+          in_preprocess = false;
+          nested_blocks.swap(empty_blocks);
+          state_.offset = start_offset;
+        } else {
+          break;
+      }
+    }
+
     Opcode opcode;
     CHECK_RESULT(ReadOpcode(&opcode, "opcode"));
     CALLBACK(OnOpcode, opcode);
@@ -929,12 +950,20 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
         CALLBACK0(OnOpcodeBare);
         break;
 
-      case Opcode::End:
+    case Opcode::End:
         CALLBACK0(OnEndExpr);
         if (nested_blocks.empty()) {
-          return Result::Ok;
+            if (in_preprocess) {
+                CALLBACK(OnEndPreprocess);
+                in_preprocess = false;
+                nested_blocks.swap(empty_blocks);
+                state_.offset = start_offset;
+            } else {
+                return Result::Ok;
+            }
+        } else {
+            nested_blocks.pop();
         }
-        nested_blocks.pop();
         break;
 
       case Opcode::I32Const: {
@@ -2963,9 +2992,11 @@ Result BinaryReader::ReadImportSection(Offset section_size) {
       case ExternalKind::Table: {
         Type elem_type;
         Limits elem_limits;
-        CHECK_RESULT(ReadTable(&elem_type, &elem_limits));
+        bool is_import;
+        bool has_init_expr;
+        CHECK_RESULT(ReadTable(&elem_type, &elem_limits, &is_import, &has_init_expr));
         CALLBACK(OnImportTable, i, module_name, field_name, num_table_imports_,
-                 elem_type, &elem_limits);
+                 elem_type, &elem_limits, is_import, has_init_expr);
         num_table_imports_++;
         break;
       }
@@ -3035,6 +3066,7 @@ Result BinaryReader::ReadTableSection(Offset section_size) {
     Index table_index = num_table_imports_ + i;
     Type elem_type;
     Limits elem_limits;
+    bool is_import; // TODO: initialize value
     bool has_init_expr = false;
 
     if (options_.features.function_references_enabled() &&
@@ -3051,8 +3083,8 @@ Result BinaryReader::ReadTableSection(Offset section_size) {
       }
     }
 
-    CHECK_RESULT(ReadTable(&elem_type, &elem_limits));
-    CALLBACK(BeginTable, table_index, elem_type, &elem_limits, has_init_expr);
+    CHECK_RESULT(ReadTable(&elem_type, &elem_limits, &is_import, &has_init_expr)); // TODO: this will overwrite is_import and has_init_expr
+    CALLBACK(BeginTable, table_index, elem_type, &elem_limits, is_import, has_init_expr);
 
     if (has_init_expr) {
       CALLBACK(BeginTableInitExpr, table_index);

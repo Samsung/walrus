@@ -26,6 +26,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "string-view-lite/string_view.h"
+
 #if COMPILER_IS_MSVC
 #include <fcntl.h>
 #include <io.h>

@@ -31,6 +31,7 @@
 #include "wabt/common.h"
 #include "wabt/intrusive-list.h"
 #include "wabt/opcode.h"
+#include "string-view-lite/string_view.h"
 
 namespace wabt {
 
@@ -1106,6 +1107,8 @@ struct Table {
   Limits elem_limits;
   Type elem_type;
   ExprList init_expr;
+  bool is_import;
+  bool has_init_expr;
 };
 
 using ExprListVector = std::vector<ExprList>;

@@ -22,6 +22,8 @@
 #include "wabt/literal.h"
 #include "wabt/opcode.h"
 
+#include "string-view-lite/string_view.h"
+
 namespace wabt {
 
 struct Literal {

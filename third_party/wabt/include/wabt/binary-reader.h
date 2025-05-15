@@ -27,6 +27,8 @@
 #include "wabt/feature.h"
 #include "wabt/opcode.h"
 
+#include "string-view-lite/string_view.h"
+
 namespace wabt {
 
 class Stream;
@@ -139,7 +141,9 @@ class BinaryReaderDelegate {
                                std::string_view field_name,
                                Index table_index,
                                Type elem_type,
-                               const Limits* elem_limits) = 0;
+                               const Limits* elem_limits,
+                               bool is_import,
+                               bool has_init_expr) = 0;
   virtual Result OnImportMemory(Index import_index,
                                 std::string_view module_name,
                                 std::string_view field_name,
@@ -171,6 +175,7 @@ class BinaryReaderDelegate {
   virtual Result BeginTable(Index index,
                             Type elem_type,
                             const Limits* elem_limits,
+                            bool is_import,
                             bool has_init_expr) = 0;
   virtual Result BeginTableInitExpr(Index index) = 0;
   virtual Result EndTableInitExpr(Index index) = 0;
@@ -215,6 +220,13 @@ class BinaryReaderDelegate {
   virtual Result OnLocalDeclCount(Index count) = 0;
   virtual Result OnLocalDecl(Index decl_index, Index count, Type type) = 0;
   virtual Result EndLocalDecls() = 0;
+
+  /* Preprocess */
+  // FIXME remove preprocess
+  virtual bool NeedsPreprocess() { return false; }
+  virtual Result OnStartPreprocess() { return Result::Ok; }
+  virtual Result OnEndPreprocess() { return Result::Ok; }
+  virtual Result OnStartReadInstructions(Offset start, Offset end) { return Result::Ok; }
 
   /* Function expressions; called between BeginFunctionBody and
    EndFunctionBody */

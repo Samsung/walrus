@@ -28,6 +28,9 @@
 #include "wabt/ir.h"
 #include "wabt/wast-lexer.h"
 
+// include Walrus's Optional
+#include "../../../../src/util/Optional.h"
+
 namespace wabt {
 
 struct WastParseOptions {
@@ -342,7 +345,7 @@ class WastParser {
 
   // two-element queue of upcoming tokens
   class TokenQueue {
-    std::array<std::optional<Token>, 2> tokens{};
+    std::array<Walrus::Optional<Token>, 2> tokens{};
     bool i{};
 
    public:

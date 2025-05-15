@@ -23,6 +23,8 @@
 
 #include "wabt/common.h"
 
+#include "string-view-lite/string_view.h"
+
 namespace wabt {
 
 enum class ErrorLevel {

@@ -2074,7 +2074,7 @@ void BinaryWriter::WriteCodeMetadataSections() {
   stream_ = &tmp_stream;
   for (auto& s : code_metadata_sections_) {
     std::string name = "metadata.code.";
-    name.append(s.first);
+    name.append(s.first.to_string());
     auto& section = s.second;
     BeginCustomSection(name.c_str());
     WriteU32Leb128(stream_, section.entries.size(), "function count");

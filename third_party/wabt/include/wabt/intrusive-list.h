@@ -21,6 +21,8 @@
 #include <iterator>
 #include <memory>
 
+#include "wabt/make-unique.h"
+
 // This uses a similar interface as std::list, but is missing the following
 // features:
 //
@@ -411,13 +413,13 @@ inline typename intrusive_list<T>::const_reference intrusive_list<T>::back()
 template <typename T>
 template <class... Args>
 inline void intrusive_list<T>::emplace_front(Args&&... args) {
-  push_front(std::make_unique<T>(std::forward<Args>(args)...));
+  push_front(MakeUnique<T>(std::forward<Args>(args)...));
 }
 
 template <typename T>
 template <class... Args>
 inline void intrusive_list<T>::emplace_back(Args&&... args) {
-  push_back(std::make_unique<T>(std::forward<Args>(args)...));
+  push_back(MakeUnique<T>(std::forward<Args>(args)...));
 }
 
 template <typename T>
@@ -437,7 +439,7 @@ inline void intrusive_list<T>::push_front(std::unique_ptr<T> node) {
 
 template <typename T>
 inline void intrusive_list<T>::push_front(T&& node) {
-  push_front(std::make_unique<T>(std::move(node)));
+  push_front(MakeUnique<T>(std::move(node)));
 }
 
 template <typename T>
@@ -457,7 +459,7 @@ inline void intrusive_list<T>::push_back(std::unique_ptr<T> node) {
 
 template <typename T>
 inline void intrusive_list<T>::push_back(T&& node) {
-  push_back(std::make_unique<T>(std::move(node)));
+  push_back(MakeUnique<T>(std::move(node)));
 }
 
 template <typename T>
@@ -505,7 +507,7 @@ template <class... Args>
 inline typename intrusive_list<T>::iterator intrusive_list<T>::emplace(
     iterator pos,
     Args&&... args) {
-  return insert(pos, std::make_unique<T>(std::forward<Args>(args)...));
+  return insert(pos, MakeUnique<T>(std::forward<Args>(args)...));
 }
 
 template <typename T>
@@ -537,7 +539,7 @@ template <typename T>
 inline typename intrusive_list<T>::iterator intrusive_list<T>::insert(
     iterator pos,
     T&& node) {
-  return insert(pos, std::make_unique<T>(std::move(node)));
+  return insert(pos, MakeUnique<T>(std::move(node)));
 }
 
 template <typename T>

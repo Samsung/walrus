@@ -20,6 +20,7 @@
 #include "runtime/Store.h"
 #include "runtime/Module.h"
 
+#include "wabt/binary-reader.h"
 #include "wabt/walrus/binary-reader-walrus.h"
 
 namespace wabt {
@@ -29,6 +30,7 @@ enum class WASMOpcode : size_t {
                     text, decomp)                                            \
     name##Opcode,
 #include "wabt/opcode.def"
+
 #undef WABT_OPCODE
     OpcodeKindEnd,
 };
@@ -104,6 +106,7 @@ WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
       { WASMCodeInfo::type1, WASMCodeInfo::type2, WASMCodeInfo::type3 },     \
       text },
 #include "wabt/opcode.def"
+
 
 #undef WABT_OPCODE
 };
@@ -747,7 +750,8 @@ public:
                             Index paramCount,
                             Type* paramTypes,
                             Index resultCount,
-                            Type* resultTypes) override
+                            Type* resultTypes,
+                            GCTypeExtension* gc_ext) override
     {
         Walrus::ValueTypeVector* param = new Walrus::ValueTypeVector();
         param->reserve(paramCount);
@@ -1633,27 +1637,27 @@ public:
         if (srcPosition != dstPosition) {
             switch (type) {
             case Walrus::Value::I32:
-                pushByteCode(Walrus::MoveI32(srcPosition, dstPosition), WASMOpcode::MoveI32Opcode);
+                pushByteCode(Walrus::MoveI32(srcPosition, dstPosition));
                 break;
             case Walrus::Value::F32:
-                pushByteCode(Walrus::MoveF32(srcPosition, dstPosition), WASMOpcode::MoveF32Opcode);
+                pushByteCode(Walrus::MoveF32(srcPosition, dstPosition));
                 break;
             case Walrus::Value::I64:
-                pushByteCode(Walrus::MoveI64(srcPosition, dstPosition), WASMOpcode::MoveI64Opcode);
+                pushByteCode(Walrus::MoveI64(srcPosition, dstPosition));
                 break;
             case Walrus::Value::F64:
-                pushByteCode(Walrus::MoveF64(srcPosition, dstPosition), WASMOpcode::MoveF64Opcode);
+                pushByteCode(Walrus::MoveF64(srcPosition, dstPosition));
                 break;
             case Walrus::Value::V128:
-                pushByteCode(Walrus::MoveV128(srcPosition, dstPosition), WASMOpcode::MoveV128Opcode);
+                pushByteCode(Walrus::MoveV128(srcPosition, dstPosition));
                 break;
             default:
                 ASSERT(type == Walrus::Value::FuncRef || type == Walrus::Value::ExternRef);
 
                 if (sizeof(size_t) == 4) {
-                    pushByteCode(Walrus::MoveI32(srcPosition, dstPosition), WASMOpcode::MoveI32Opcode);
+                    pushByteCode(Walrus::MoveI32(srcPosition, dstPosition));
                 } else {
-                    pushByteCode(Walrus::MoveI64(srcPosition, dstPosition), WASMOpcode::MoveI64Opcode);
+                    pushByteCode(Walrus::MoveI64(srcPosition, dstPosition));
                 }
                 break;
             }
@@ -2371,9 +2375,9 @@ public:
     {
         Walrus::ByteCodeStackOffset dst = computeExprResultPosition(toValueKind(type));
 #if defined(WALRUS_32)
-        pushByteCode(Walrus::Const32(dst, Walrus::Value::Null), WASMOpcode::Const32Opcode);
+        pushByteCode(Walrus::Const32(dst, Walrus::Value::Null));
 #else
-        pushByteCode(Walrus::Const64(dst, Walrus::Value::Null), WASMOpcode::Const64Opcode);
+        pushByteCode(Walrus::Const64(dst, Walrus::Value::Null));
 #endif
     }
 

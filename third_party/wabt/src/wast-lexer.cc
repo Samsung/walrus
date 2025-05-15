@@ -59,7 +59,7 @@ std::unique_ptr<WastLexer> WastLexer::CreateBufferLexer(
     const void* data,
     size_t size,
     Errors* errors) {
-  return std::make_unique<WastLexer>(std::make_unique<LexerSource>(data, size),
+  return MakeUnique<WastLexer>(MakeUnique<LexerSource>(data, size),
                                      filename, errors);
 }
 

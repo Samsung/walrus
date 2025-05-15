@@ -21,6 +21,8 @@
 
 #include "wabt/common.h"
 
+#include "string-view-lite/string_view.h"
+
 namespace wabt {
 
 // These functions all return Result::Ok on success and Result::Error on

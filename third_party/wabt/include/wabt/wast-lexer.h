@@ -28,6 +28,9 @@
 #include "wabt/opcode.h"
 #include "wabt/token.h"
 
+#include "string-view-lite/string_view.h"
+#include "wabt/make-unique.h"
+
 namespace wabt {
 
 class ErrorHandler;
@@ -51,7 +54,7 @@ class WastLexer {
 
   // TODO(binji): Move this out of the lexer.
   std::unique_ptr<LexerSourceLineFinder> MakeLineFinder() {
-    return std::make_unique<LexerSourceLineFinder>(source_->Clone());
+    return MakeUnique<LexerSourceLineFinder>(source_->Clone());
   }
 
  private:
