@@ -419,7 +419,7 @@ static void emitFloatSelect(sljit_compiler* compiler, Instruction* instr, sljit_
     }
 
     sljit_s32 otherReg = baseReg ^ 0x1;
-    sljit_emit_fselect(compiler, type, targetReg, args[1].arg, args[1].argw, args[baseReg].arg);
+    sljit_emit_fselect(compiler, type, targetReg, args[otherReg].arg, args[otherReg].argw, args[baseReg].arg);
     MOVE_FROM_FREG(compiler, movOpcode, args[2].arg, args[2].argw, targetReg);
 }
 
