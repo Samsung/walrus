@@ -1230,6 +1230,9 @@ int main(int argc, const char* argv[])
         }
     }
 
+#ifdef ENABLE_WASI
+    uvwasi_destroy(&uvwasi);
+#endif
     // finalize
     delete store;
     delete engine;
