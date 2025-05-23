@@ -1231,6 +1231,7 @@ int main(int argc, const char* argv[])
     }
 
     // finalize
+    uvwasi_destroy(&uvwasi);
     delete store;
     delete engine;
 
