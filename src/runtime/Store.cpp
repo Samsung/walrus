@@ -42,6 +42,10 @@ Store::~Store()
         delete m_externs[i];
     }
 
+    for (size_t i = 0; i < m_waiterList.size(); i++) {
+        delete m_waiterList[i];
+    }
+
     Store::finalize();
 }
 

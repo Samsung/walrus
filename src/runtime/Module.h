@@ -271,12 +271,6 @@ public:
     {
     }
 
-    ~Data()
-    {
-        ASSERT(!!m_moduleFunction);
-        delete m_moduleFunction;
-    }
-
     ModuleFunction* moduleFunction() const
     {
         ASSERT(!!m_moduleFunction);
@@ -312,17 +306,6 @@ public:
         , m_offsetFunction(nullptr)
         , m_exprFunctions(std::move(exprFunctions))
     {
-    }
-
-    ~Element()
-    {
-        if (m_offsetFunction) {
-            delete m_offsetFunction;
-        }
-
-        for (size_t i = 0; i < m_exprFunctions.size(); i++) {
-            delete m_exprFunctions[i];
-        }
     }
 
     SegmentMode mode() const

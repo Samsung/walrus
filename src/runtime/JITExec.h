@@ -60,6 +60,13 @@ struct ExecutionContext {
     {
     }
 
+    void clearException()
+    {
+        ASSERT(capturedException != nullptr);
+        delete capturedException;
+        capturedException = nullptr;
+    }
+
     InstanceConstData* currentInstanceConstData;
     ExecutionState& state;
     Instance* instance;

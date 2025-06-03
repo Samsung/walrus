@@ -471,7 +471,7 @@ private:
     bool m_inInitExpr;
     Walrus::ModuleFunction* m_currentFunction;
     Walrus::FunctionType* m_currentFunctionType;
-    uint16_t m_initialFunctionStackSize;
+    uint32_t m_initialFunctionStackSize;
     uint16_t m_functionStackSizeSoFar;
 
     std::vector<VMStackInfo> m_vmStack;
@@ -504,6 +504,7 @@ private:
     Walrus::SegmentMode m_segmentMode;
 
     Walrus::WASMParsingResult m_result;
+    std::string m_walrusParseError;
 
     PreprocessData m_preprocessData;
 
@@ -536,8 +537,6 @@ private:
 
         m_vmStack.push_back(VMStackInfo(*this, type, pos, m_functionStackSizeSoFar, localIndex));
         size_t allocSize = Walrus::valueStackAllocatedSize(type);
-        // FIXME too many stack usage. we could not support this(yet)
-        ASSERT(m_functionStackSizeSoFar + allocSize <= std::numeric_limits<Walrus::ByteCodeStackOffset>::max());
 
         m_functionStackSizeSoFar += allocSize;
         m_currentFunction->m_requiredStackSize = std::max(
@@ -610,6 +609,13 @@ private:
         m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
         m_currentFunction->m_requiredStackSize = std::max(
             m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
+    }
+
+    void beginNewFunction(Walrus::Value::Type type, bool inInitExpr)
+    {
+        Walrus::ModuleFunction* mf = new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(type));
+        m_result.m_functions.push_back(mf);
+        beginFunction(mf, inInitExpr);
     }
 
     void endFunction()
@@ -712,6 +718,11 @@ public:
     // should be allocated on the stack
     static void* operator new(size_t) = delete;
     static void* operator new[](size_t) = delete;
+
+    std::string WalrusParseError()
+    {
+        return m_walrusParseError;
+    }
 
     virtual void BeginModule(uint32_t version) override
     {
@@ -852,7 +863,7 @@ public:
 
     virtual void BeginElemSegmentInitExpr(Index index) override
     {
-        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)), true);
+        beginNewFunction(Walrus::Value::I32, true);
     }
 
     virtual void EndElemSegmentInitExpr(Index index) override
@@ -872,7 +883,7 @@ public:
 
     virtual void BeginElemExpr(Index elem_index, Index expr_index) override
     {
-        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::FuncRef)), true);
+        beginNewFunction(Walrus::Value::FuncRef, true);
     }
 
     virtual void EndElemExpr(Index elem_index, Index expr_index) override
@@ -917,7 +928,7 @@ public:
         ASSERT(index == m_result.m_datas.size());
         ASSERT(m_dataSegmentMemIndex == static_cast<size_t>(-1));
         m_dataSegmentMemIndex = memoryIndex;
-        beginFunction(new Walrus::ModuleFunction(Walrus::Store::getDefaultFunctionType(Walrus::Value::I32)), true);
+        beginNewFunction(Walrus::Value::I32, true);
     }
 
     virtual void BeginDataSegmentInitExpr(Index index) override
@@ -1025,6 +1036,9 @@ public:
             m_currentFunction->m_local.push_back(wType);
             m_localInfo.push_back(LocalInfo(wType, m_functionStackSizeSoFar));
             auto sz = Walrus::valueStackAllocatedSize(wType);
+
+            // FIXME too many stack usage. we could not support this(yet)
+
             m_initialFunctionStackSize += sz;
             m_functionStackSizeSoFar += sz;
             count--;
@@ -1116,7 +1130,7 @@ public:
 #endif
 
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
-        m_currentFunction->m_requiredStackSize = m_functionStackSizeSoFar;
+        m_currentFunction->m_requiredStackSize = std::max(m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
 
         // Explicit init local variable if needs
         for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
@@ -2478,6 +2492,11 @@ public:
 
     virtual void EndFunctionBody(Index index) override
     {
+        // FIXME too many stack usage. we could not support this(yet)
+        if (m_initialFunctionStackSize > std::numeric_limits<Walrus::ByteCodeStackOffset>::max()) {
+            m_walrusParseError = std::string("Function stack usage is larger then supported maxium (65535 bytes).");
+        }
+
         m_lastI32EqzPos = s_noI32Eqz;
 #if !defined(NDEBUG)
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
@@ -2815,6 +2834,10 @@ std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, 
     std::string error = ReadWasmBinary(filename, data, len, &delegate, featureFlags);
     if (error.length()) {
         return std::make_pair(nullptr, error);
+    }
+
+    if (delegate.WalrusParseError().length()) {
+        return std::make_pair(nullptr, delegate.WalrusParseError());
     }
 
     Module* module = new Module(store, delegate.parsingResult());
