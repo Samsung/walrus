@@ -777,6 +777,15 @@ public:
     {
         clear();
         m_functionList.clear();
+
+        if (m_brTableLabels != nullptr) {
+            sljit_read_only_buffer* current = &m_brTableLabels->header;
+            while (current != nullptr) {
+                sljit_read_only_buffer* next = current->next;
+                delete reinterpret_cast<BranchTableLabels*>(current);
+                current = next;
+            };
+        }
     }
 
     Module* module() { return m_module; }
