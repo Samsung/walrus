@@ -289,6 +289,14 @@ void WASI::fd_seek(ExecutionState& state, Value* argv, Value* result, Instance* 
     result[0] = Value(uvwasi_fd_seek(WASI::g_uvwasi, fd, fileDelta, whence, file_size));
 }
 
+void WASI::fd_filestat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uvwasi_filestat_t* buf = reinterpret_cast<uvwasi_filestat_t*>(get_memory_pointer(instance, argv[1], sizeof(uvwasi_filestat_t)));
+
+    result[0] = Value(uvwasi_fd_filestat_get(WASI::g_uvwasi, fd, buf));
+}
+
 void WASI::fd_advise(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
@@ -431,6 +439,11 @@ void WASI::random_get(ExecutionState& state, Value* argv, Value* result, Instanc
     void* buf = get_memory_pointer(instance, argv[0], length);
 
     result[0] = Value(uvwasi_random_get(WASI::g_uvwasi, buf, length));
+}
+
+void WASI::sched_yield(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    result[0] = Value(uvwasi_sched_yield(WASI::g_uvwasi));
 }
 
 } // namespace Walrus
