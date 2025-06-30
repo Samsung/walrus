@@ -37,12 +37,17 @@
 #include <alloca.h>
 #endif
 
-#define ERROR_IF(expr, ...)    \
-  do {                         \
-    if (expr) {                \
-      PrintError(__VA_ARGS__); \
-      return Result::Error;    \
-    }                          \
+#define ERROR(...)           \
+  do {                       \
+    PrintError(__VA_ARGS__); \
+    return Result::Error;    \
+  } while (0)
+
+#define ERROR_IF(expr, ...) \
+  do {                      \
+    if (expr) {             \
+      ERROR(__VA_ARGS__);   \
+    }                       \
   } while (0)
 
 #define ERROR_UNLESS(expr, ...) ERROR_IF(!(expr), __VA_ARGS__)
@@ -100,6 +105,7 @@ class BinaryReader {
                              const char* type_name,
                              const char* desc);
   [[nodiscard]] Result ReadU8(uint8_t* out_value, const char* desc);
+  [[nodiscard]] Result ReadU16(uint16_t* out_value, const char* desc);
   [[nodiscard]] Result ReadU32(uint32_t* out_value, const char* desc);
   [[nodiscard]] Result ReadF32(uint32_t* out_value, const char* desc);
   [[nodiscard]] Result ReadF64(uint64_t* out_value, const char* desc);
@@ -110,9 +116,12 @@ class BinaryReader {
   [[nodiscard]] Result ReadS64Leb128(uint64_t* out_value, const char* desc);
   [[nodiscard]] Result ReadType(Type* out_value, const char* desc);
   [[nodiscard]] Result ReadRefType(Type* out_value, const char* desc);
+  [[nodiscard]] Result ReadHeapType(Type* out_value,
+                                    bool is_nullable,
+                                    const char* desc);
   [[nodiscard]] Result ReadExternalKind(ExternalKind* out_value,
                                         const char* desc);
-  [[nodiscard]] Result ReadStr(nonstd::string_view* out_str, const char* desc);
+  [[nodiscard]] Result ReadStr(std::string_view* out_str, const char* desc);
   [[nodiscard]] Result ReadBytes(const void** out_data,
                                  Address* out_data_size,
                                  const char* desc);
@@ -122,6 +131,8 @@ class BinaryReader {
   [[nodiscard]] Result ReadIndex(Index* index, const char* desc);
   [[nodiscard]] Result ReadOffset(Offset* offset, const char* desc);
   [[nodiscard]] Result ReadAlignment(Address* align_log2, const char* desc);
+  [[nodiscard]] Result CheckAlignment(Address* align_log2, const char* desc);
+  [[nodiscard]] Result TakeHasMemidx(Address* align_log2, bool* has_memidx);
   [[nodiscard]] Result ReadMemidx(Index* memidx, const char* desc);
   [[nodiscard]] Result ReadMemLocation(Address* alignment_log2,
                                        Index* memidx,
@@ -137,6 +148,7 @@ class BinaryReader {
   [[nodiscard]] Result ReadCount(Index* index, const char* desc);
   [[nodiscard]] Result ReadField(TypeMut* out_value);
 
+  bool IsConcreteReferenceType(Type::Enum);
   bool IsConcreteType(Type);
   bool IsBlockType(Type);
 
@@ -144,7 +156,8 @@ class BinaryReader {
 
   [[nodiscard]] Result ReadInitExpr(Index index);
   [[nodiscard]] Result ReadTable(Type* out_elem_type, Limits* out_elem_limits);
-  [[nodiscard]] Result ReadMemory(Limits* out_page_limits);
+  [[nodiscard]] Result ReadMemory(Limits* out_page_limits,
+                                  uint32_t* out_page_size);
   [[nodiscard]] Result ReadGlobalHeader(Type* out_type, bool* out_mutable);
   [[nodiscard]] Result ReadTagType(Index* out_sig_index);
   [[nodiscard]] Result ReadAddress(Address* out_value,
@@ -156,12 +169,12 @@ class BinaryReader {
   [[nodiscard]] Result ReadNameSection(Offset section_size);
   [[nodiscard]] Result ReadRelocSection(Offset section_size);
   [[nodiscard]] Result ReadDylinkSection(Offset section_size);
-  [[nodiscard]] Result ReadGenericCustomSection(nonstd::string_view name,
+  [[nodiscard]] Result ReadGenericCustomSection(std::string_view name,
                                                 Offset section_size);
   [[nodiscard]] Result ReadDylink0Section(Offset section_size);
   [[nodiscard]] Result ReadTargetFeaturesSections(Offset section_size);
   [[nodiscard]] Result ReadLinkingSection(Offset section_size);
-  [[nodiscard]] Result ReadCodeMetadataSection(nonstd::string_view name,
+  [[nodiscard]] Result ReadCodeMetadataSection(std::string_view name,
                                                Offset section_size);
   [[nodiscard]] Result ReadCustomSection(Index section_index,
                                          Offset section_size);
@@ -185,10 +198,12 @@ class BinaryReader {
   BinaryReaderDelegate::State state_;
   BinaryReaderLogging logging_delegate_;
   BinaryReaderDelegate* delegate_ = nullptr;
+  std::vector<Index> sub_types_;
   TypeVector param_types_;
   TypeVector result_types_;
   TypeMutVector fields_;
   std::vector<Index> target_depths_;
+  CatchClauseVector catches_;
   const ReadBinaryOptions& options_;
   BinarySection last_known_section_ = BinarySection::Invalid;
   bool did_read_names_section_ = false;
@@ -200,6 +215,7 @@ class BinaryReader {
   Index num_tag_imports_ = 0;
   Index num_function_signatures_ = 0;
   Index num_function_bodies_ = 0;
+  Index num_data_segments_ = 0;
   Index data_count_ = kInvalidIndex;
 
   using ReadEndRestoreGuard =
@@ -295,6 +311,10 @@ Result BinaryReader::ReadU8(uint8_t* out_value, const char* desc) {
   return ReadT(out_value, "uint8_t", desc);
 }
 
+Result BinaryReader::ReadU16(uint16_t* out_value, const char* desc) {
+  return ReadT(out_value, "uint16_t", desc);
+}
+
 Result BinaryReader::ReadU32(uint32_t* out_value, const char* desc) {
   return ReadT(out_value, "uint32_t", desc);
 }
@@ -350,10 +370,25 @@ Result BinaryReader::ReadS64Leb128(uint64_t* out_value, const char* desc) {
 Result BinaryReader::ReadType(Type* out_value, const char* desc) {
   uint32_t type = 0;
   CHECK_RESULT(ReadS32Leb128(&type, desc));
-  if (static_cast<Type::Enum>(type) == Type::Reference) {
-    uint32_t heap_type = 0;
-    CHECK_RESULT(ReadS32Leb128(&heap_type, desc));
-    *out_value = Type(Type::Reference, heap_type);
+  if (options_.features.reference_types_enabled() &&
+      Type::EnumIsReferenceWithIndex(static_cast<Type::Enum>(type))) {
+    uint64_t heap_type = 0;
+    CHECK_RESULT(ReadS64Leb128(&heap_type, desc));
+
+    if (static_cast<int64_t>(heap_type) < 0 ||
+        static_cast<int64_t>(heap_type) >= kInvalidIndex) {
+      Type::Enum heap_type_code = static_cast<Type::Enum>(heap_type);
+      ERROR_UNLESS(heap_type_code == Type::FuncRef ||
+                       heap_type_code == Type::ExternRef ||
+                       (options_.features.gc_enabled() &&
+                        Type::EnumIsNonTypedGCRef(heap_type_code)),
+                   "not allowed reference type: %s", desc);
+      *out_value =
+          Type(heap_type_code, static_cast<Type::Enum>(type) == Type::RefNull);
+    } else {
+      *out_value =
+          Type(static_cast<Type::Enum>(type), static_cast<Index>(heap_type));
+    }
   } else {
     *out_value = static_cast<Type>(type);
   }
@@ -361,10 +396,30 @@ Result BinaryReader::ReadType(Type* out_value, const char* desc) {
 }
 
 Result BinaryReader::ReadRefType(Type* out_value, const char* desc) {
-  uint32_t type = 0;
-  CHECK_RESULT(ReadS32Leb128(&type, desc));
-  *out_value = static_cast<Type>(type);
+  CHECK_RESULT(ReadType(out_value, desc));
   ERROR_UNLESS(out_value->IsRef(), "%s must be a reference type", desc);
+  return Result::Ok;
+}
+
+Result BinaryReader::ReadHeapType(Type* out_value,
+                                  bool is_nullable,
+                                  const char* desc) {
+  uint64_t heap_type;
+  CHECK_RESULT(ReadS64Leb128(&heap_type, "heap type"));
+
+  if (static_cast<int64_t>(heap_type) < 0 ||
+      static_cast<int64_t>(heap_type) >= kInvalidIndex) {
+    Type::Enum type_code = static_cast<Type::Enum>(heap_type);
+    ERROR_UNLESS(IsConcreteReferenceType(type_code),
+                 "expected valid %s type (got " PRItypecode ")", desc,
+                 WABT_PRINTF_TYPE_CODE(type_code));
+    *out_value = Type(type_code, is_nullable);
+  } else {
+    ERROR_UNLESS(options_.features.function_references_enabled(),
+                 "type references are not enabled for %s", desc);
+    *out_value = Type(is_nullable ? Type::RefNull : Type::Ref,
+                      static_cast<Index>(heap_type));
+  }
   return Result::Ok;
 }
 
@@ -378,14 +433,14 @@ Result BinaryReader::ReadExternalKind(ExternalKind* out_value,
   return Result::Ok;
 }
 
-Result BinaryReader::ReadStr(nonstd::string_view* out_str, const char* desc) {
+Result BinaryReader::ReadStr(std::string_view* out_str, const char* desc) {
   uint32_t str_len = 0;
   CHECK_RESULT(ReadU32Leb128(&str_len, "string length"));
 
   ERROR_UNLESS(state_.offset + str_len <= read_end_,
                "unable to read string: %s", desc);
 
-  *out_str = nonstd::string_view(
+  *out_str = std::string_view(
       reinterpret_cast<const char*>(state_.data) + state_.offset, str_len);
   state_.offset += str_len;
 
@@ -432,12 +487,24 @@ Result BinaryReader::ReadOffset(Offset* offset, const char* desc) {
 Result BinaryReader::ReadAlignment(Address* alignment_log2, const char* desc) {
   uint32_t value;
   CHECK_RESULT(ReadU32Leb128(&value, desc));
-  if (value >= 128 ||
-      (value >= 32 && !options_.features.multi_memory_enabled())) {
-    PrintError("invalid %s: %u", desc, value);
+  *alignment_log2 = value;
+  return Result::Ok;
+}
+
+Result BinaryReader::CheckAlignment(Address* align_log2, const char* desc) {
+  uint32_t value = *align_log2;
+  if (value >= 32) {
+    PrintError("invalid %s: %" PRIu32, desc, value);
     return Result::Error;
   }
-  *alignment_log2 = value;
+  return Result::Ok;
+}
+
+Result BinaryReader::TakeHasMemidx(Address* align_log2, bool* has_memidx) {
+  // extract the has_memidx flag
+  *has_memidx = (*align_log2 >> 6) & 1;
+  // then clear it
+  *align_log2 &= ~(1 << 6);
   return Result::Ok;
 }
 
@@ -453,12 +520,14 @@ Result BinaryReader::ReadMemLocation(Address* alignment_log2,
                                      const char* desc_memidx,
                                      const char* desc_offset,
                                      uint8_t* lane_val) {
+  bool has_memidx = false;
   CHECK_RESULT(ReadAlignment(alignment_log2, desc_align));
+  CHECK_RESULT(TakeHasMemidx(alignment_log2, &has_memidx));
+  CHECK_RESULT(CheckAlignment(alignment_log2, desc_align));
   *memidx = 0;
-  if (*alignment_log2 >> 6) {
+  if (has_memidx) {
     ERROR_IF(!options_.features.multi_memory_enabled(),
              "multi_memory not allowed");
-    *alignment_log2 = *alignment_log2 & ((1 << 6) - 1);
     CHECK_RESULT(ReadMemidx(memidx, desc_memidx));
   }
   CHECK_RESULT(ReadAddress(offset, 0, desc_offset));
@@ -513,7 +582,8 @@ Result BinaryReader::ReadField(TypeMut* out_value) {
   // TODO: Reuse for global header too?
   Type field_type;
   CHECK_RESULT(ReadType(&field_type, "field type"));
-  ERROR_UNLESS(IsConcreteType(field_type),
+  ERROR_UNLESS(IsConcreteType(field_type) || field_type == Type::I8 ||
+                   field_type == Type::I16,
                "expected valid field type (got " PRItypecode ")",
                WABT_PRINTF_TYPE_CODE(field_type));
 
@@ -523,6 +593,30 @@ Result BinaryReader::ReadField(TypeMut* out_value) {
   out_value->type = field_type;
   out_value->mutable_ = mutable_;
   return Result::Ok;
+}
+
+bool BinaryReader::IsConcreteReferenceType(Type::Enum type) {
+  switch (type) {
+    case Type::FuncRef:
+    case Type::ExternRef:
+      return options_.features.reference_types_enabled();
+
+    case Type::ExnRef:
+      return options_.features.exceptions_enabled();
+
+    case Type::NullFuncRef:
+    case Type::NullExternRef:
+    case Type::NullRef:
+    case Type::AnyRef:
+    case Type::EqRef:
+    case Type::I31Ref:
+    case Type::StructRef:
+    case Type::ArrayRef:
+      return options_.features.gc_enabled();
+
+    default:
+      return false;
+  }
 }
 
 bool BinaryReader::IsConcreteType(Type type) {
@@ -536,15 +630,12 @@ bool BinaryReader::IsConcreteType(Type type) {
     case Type::V128:
       return options_.features.simd_enabled();
 
-    case Type::FuncRef:
-    case Type::ExternRef:
-      return options_.features.reference_types_enabled();
-
-    case Type::Reference:
+    case Type::Ref:
+    case Type::RefNull:
       return options_.features.function_references_enabled();
 
     default:
-      return false;
+      return IsConcreteReferenceType(type);
   }
 }
 
@@ -580,9 +671,10 @@ Result BinaryReader::ReadTable(Type* out_elem_type, Limits* out_elem_limits) {
   bool has_max = flags & WABT_BINARY_LIMITS_HAS_MAX_FLAG;
   bool is_shared = flags & WABT_BINARY_LIMITS_IS_SHARED_FLAG;
   bool is_64 = flags & WABT_BINARY_LIMITS_IS_64_FLAG;
-  const uint8_t unknown_flags = flags & ~WABT_BINARY_LIMITS_ALL_FLAGS;
+  const uint8_t unknown_flags = flags & ~WABT_BINARY_LIMITS_ALL_TABLE_FLAGS;
   ERROR_IF(is_shared, "tables may not be shared");
-  ERROR_IF(is_64, "tables may not be 64-bit");
+  ERROR_IF(is_64 && !options_.features.memory64_enabled(),
+           "memory64 not allowed");
   ERROR_UNLESS(unknown_flags == 0, "malformed table limits flag: %d", flags);
   CHECK_RESULT(ReadU32Leb128(&initial, "table initial elem count"));
   if (has_max) {
@@ -590,12 +682,14 @@ Result BinaryReader::ReadTable(Type* out_elem_type, Limits* out_elem_limits) {
   }
 
   out_elem_limits->has_max = has_max;
+  out_elem_limits->is_64 = is_64;
   out_elem_limits->initial = initial;
   out_elem_limits->max = max;
   return Result::Ok;
 }
 
-Result BinaryReader::ReadMemory(Limits* out_page_limits) {
+Result BinaryReader::ReadMemory(Limits* out_page_limits,
+                                uint32_t* out_page_size) {
   uint8_t flags;
   uint64_t initial;
   uint64_t max = 0;
@@ -603,12 +697,17 @@ Result BinaryReader::ReadMemory(Limits* out_page_limits) {
   bool has_max = flags & WABT_BINARY_LIMITS_HAS_MAX_FLAG;
   bool is_shared = flags & WABT_BINARY_LIMITS_IS_SHARED_FLAG;
   bool is_64 = flags & WABT_BINARY_LIMITS_IS_64_FLAG;
-  const uint8_t unknown_flags = flags & ~WABT_BINARY_LIMITS_ALL_FLAGS;
+  bool has_custom_page_size =
+      flags & WABT_BINARY_LIMITS_HAS_CUSTOM_PAGE_SIZE_FLAG;
+  const uint8_t unknown_flags = flags & ~WABT_BINARY_LIMITS_ALL_MEMORY_FLAGS;
   ERROR_UNLESS(unknown_flags == 0, "malformed memory limits flag: %d", flags);
   ERROR_IF(is_shared && !options_.features.threads_enabled(),
            "memory may not be shared: threads not allowed");
   ERROR_IF(is_64 && !options_.features.memory64_enabled(),
            "memory64 not allowed");
+  ERROR_IF(
+      has_custom_page_size && !options_.features.custom_page_sizes_enabled(),
+      "custom page sizes not allowed");
   if (options_.features.memory64_enabled()) {
     CHECK_RESULT(ReadU64Leb128(&initial, "memory initial page count"));
     if (has_max) {
@@ -623,6 +722,14 @@ Result BinaryReader::ReadMemory(Limits* out_page_limits) {
       CHECK_RESULT(ReadU32Leb128(&max32, "memory max page count"));
       max = max32;
     }
+  }
+  if (has_custom_page_size) {
+    uint32_t page_size_log2;
+    CHECK_RESULT(ReadU32Leb128(&page_size_log2, "memory page size"));
+    ERROR_IF(page_size_log2 > 16, "malformed memory page size");
+    *out_page_size = 1 << page_size_log2;
+  } else {
+    *out_page_size = WABT_DEFAULT_PAGE_SIZE;
   }
 
   out_page_limits->has_max = has_max;
@@ -671,28 +778,7 @@ Result BinaryReader::ReadFunctionBody(Offset end_offset) {
 
 Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
   std::stack<Opcode> nested_blocks;
-
-  // FIXME remove preprocess iteration
-  std::stack<Opcode> empty_blocks;
-  CALLBACK(OnStartReadInstructions, state_.offset, end_offset);
-  auto start_offset = state_.offset;
-  bool in_preprocess = delegate_->NeedsPreprocess();
-  if (in_preprocess) {
-      CALLBACK(OnStartPreprocess);
-  }
-
-  while (true) {
-    if (state_.offset >= end_offset) {
-      if (in_preprocess) {
-        CALLBACK(OnEndPreprocess);
-        in_preprocess = false;
-        nested_blocks.swap(empty_blocks);
-        state_.offset = start_offset;
-      } else {
-        break;
-      }
-    }
-
+  while (state_.offset < end_offset) {
     Opcode opcode;
     CHECK_RESULT(ReadOpcode(&opcode, "opcode"));
     CALLBACK(OnOpcode, opcode);
@@ -790,6 +876,22 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
         break;
       }
 
+      case Opcode::BrOnNonNull: {
+        Index depth;
+        CHECK_RESULT(ReadIndex(&depth, "br_on_non_null depth"));
+        CALLBACK(OnBrOnNonNullExpr, depth);
+        CALLBACK(OnOpcodeIndex, depth);
+        break;
+      }
+
+      case Opcode::BrOnNull: {
+        Index depth;
+        CHECK_RESULT(ReadIndex(&depth, "br_on_null depth"));
+        CALLBACK(OnBrOnNullExpr, depth);
+        CALLBACK(OnOpcodeIndex, depth);
+        break;
+      }
+
       case Opcode::BrTable: {
         Index num_targets;
         CHECK_RESULT(ReadCount(&num_targets, "br_table target count"));
@@ -830,17 +932,9 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
       case Opcode::End:
         CALLBACK0(OnEndExpr);
         if (nested_blocks.empty()) {
-          if (in_preprocess) {
-            CALLBACK(OnEndPreprocess);
-            in_preprocess = false;
-            nested_blocks.swap(empty_blocks);
-            state_.offset = start_offset;
-          } else {
-            return Result::Ok;
-          }
-        } else {
-            nested_blocks.pop();
+          return Result::Ok;
         }
+        nested_blocks.pop();
         break;
 
       case Opcode::I32Const: {
@@ -1516,6 +1610,38 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
         break;
       }
 
+      case Opcode::TryTable: {
+        nested_blocks.push(opcode);
+        Type sig_type;
+        CHECK_RESULT(ReadType(&sig_type, "try_table signature type"));
+        ERROR_UNLESS(IsBlockType(sig_type),
+                     "expected valid block signature type");
+        Index count;
+        CHECK_RESULT(ReadCount(&count, "catch count"));
+
+        catches_.resize(count);
+        for (Index i = 0; i < count; i++) {
+          uint8_t handler;
+          CHECK_RESULT(ReadU8(&handler, "catch handler"));
+          ERROR_UNLESS(handler < 4, "expected valid catch handler");
+          bool is_catch_all = handler & 2;
+          Index tag = kInvalidIndex;
+          if (!(is_catch_all)) {
+            CHECK_RESULT(ReadIndex(&tag, "catch tag"));
+          }
+          Index depth;
+          CHECK_RESULT(ReadIndex(&depth, "catch depth"));
+          CatchClause catch_;
+          catch_.kind = CatchKind(handler);
+          catch_.tag = tag;
+          catch_.depth = depth;
+          catches_[i] = catch_;
+        }
+
+        CALLBACK(OnTryTableExpr, sig_type, catches_);
+        break;
+      }
+
       case Opcode::Catch: {
         Index index;
         CHECK_RESULT(ReadIndex(&index, "tag index"));
@@ -1554,6 +1680,12 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
         CHECK_RESULT(ReadIndex(&index, "tag index"));
         CALLBACK(OnThrowExpr, index);
         CALLBACK(OnOpcodeIndex, index);
+        break;
+      }
+
+      case Opcode::ThrowRef: {
+        CALLBACK(OnThrowRefExpr);
+        CALLBACK(OnOpcodeBare);
         break;
       }
 
@@ -1847,6 +1979,11 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
         break;
       }
 
+      case Opcode::RefAsNonNull:
+        CALLBACK(OnRefAsNonNullExpr);
+        CALLBACK(OnOpcodeBare);
+        break;
+
       case Opcode::RefFunc: {
         Index func;
         CHECK_RESULT(ReadIndex(&func, "func index"));
@@ -1857,7 +1994,7 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
 
       case Opcode::RefNull: {
         Type type;
-        CHECK_RESULT(ReadRefType(&type, "ref.null type"));
+        CHECK_RESULT(ReadHeapType(&type, true, "ref.null"));
         CALLBACK(OnRefNullExpr, type);
         CALLBACK(OnOpcodeType, type);
         break;
@@ -1868,10 +2005,203 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
         CALLBACK(OnOpcodeBare);
         break;
 
-      case Opcode::CallRef:
-        CALLBACK(OnCallRefExpr);
-        CALLBACK(OnOpcodeBare);
+      case Opcode::CallRef: {
+        uint32_t type;
+        CHECK_RESULT(ReadU32Leb128(&type, "call_ref type"));
+
+        Type sig_type(Type::RefNull, type);
+        CALLBACK(OnCallRefExpr, sig_type);
+        CALLBACK(OnOpcodeType, sig_type);
         break;
+      }
+
+      case Opcode::ReturnCallRef: {
+        uint32_t type;
+        CHECK_RESULT(ReadU32Leb128(&type, "return_call_ref type"));
+
+        Type sig_type(Type::RefNull, type);
+        CALLBACK(OnReturnCallRefExpr, sig_type);
+        CALLBACK(OnOpcodeType, sig_type);
+        break;
+      }
+
+      case Opcode::ArrayCopy: {
+        uint32_t dst_type_index, src_type_index;
+        CHECK_RESULT(ReadIndex(&dst_type_index, "dst type index"));
+        CHECK_RESULT(ReadIndex(&src_type_index, "src type index"));
+        CALLBACK(OnArrayCopyExpr, dst_type_index, src_type_index);
+        CALLBACK(OnOpcodeIndexIndex, dst_type_index, src_type_index);
+        break;
+      }
+
+      case Opcode::ArrayFill: {
+        uint32_t type_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CALLBACK(OnArrayFillExpr, type_index);
+        CALLBACK(OnOpcodeIndex, type_index);
+        break;
+      }
+
+      case Opcode::ArrayGet:
+      case Opcode::ArrayGetS:
+      case Opcode::ArrayGetU: {
+        uint32_t type_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CALLBACK(OnArrayGetExpr, opcode, type_index);
+        CALLBACK(OnOpcodeIndex, type_index);
+        break;
+      }
+
+      case Opcode::ArrayInitData: {
+        uint32_t type_index, data_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CHECK_RESULT(ReadIndex(&data_index, "data index"));
+        CALLBACK(OnArrayInitDataExpr, type_index, data_index);
+        CALLBACK(OnOpcodeIndexIndex, type_index, data_index);
+        break;
+      }
+
+      case Opcode::ArrayInitElem: {
+        uint32_t type_index, elem_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CHECK_RESULT(ReadIndex(&elem_index, "elem index"));
+        CALLBACK(OnArrayInitElemExpr, type_index, elem_index);
+        CALLBACK(OnOpcodeIndexIndex, type_index, elem_index);
+        break;
+      }
+
+      case Opcode::ArrayNew: {
+        uint32_t type_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CALLBACK(OnArrayNewExpr, type_index);
+        CALLBACK(OnOpcodeIndex, type_index);
+        break;
+      }
+
+      case Opcode::ArrayNewData: {
+        uint32_t type_index, data_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CHECK_RESULT(ReadIndex(&data_index, "data index"));
+        CALLBACK(OnArrayNewDataExpr, type_index, data_index);
+        CALLBACK(OnOpcodeIndexIndex, type_index, data_index);
+        break;
+      }
+
+      case Opcode::ArrayNewDefault: {
+        uint32_t type_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CALLBACK(OnArrayNewDefaultExpr, type_index);
+        CALLBACK(OnOpcodeIndex, type_index);
+        break;
+      }
+
+      case Opcode::ArrayNewElem: {
+        uint32_t type_index, elem_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CHECK_RESULT(ReadIndex(&elem_index, "elem index"));
+        CALLBACK(OnArrayNewElemExpr, type_index, elem_index);
+        CALLBACK(OnOpcodeIndexIndex, type_index, elem_index);
+        break;
+      }
+
+      case Opcode::ArrayNewFixed: {
+        uint32_t type_index, count;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CHECK_RESULT(ReadIndex(&count, "count"));
+        CALLBACK(OnArrayNewFixedExpr, type_index, count);
+        CALLBACK(OnOpcodeUint32Uint32, type_index, count);
+        break;
+      }
+
+      case Opcode::ArraySet: {
+        uint32_t type_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CALLBACK(OnArraySetExpr, type_index);
+        CALLBACK(OnOpcodeIndex, type_index);
+        break;
+      }
+
+      case Opcode::ArrayLen:
+      case Opcode::AnyConvertExtern:
+      case Opcode::ExternConvertAny:
+      case Opcode::RefI31:
+      case Opcode::RefEq:
+      case Opcode::I31GetS:
+      case Opcode::I31GetU:
+        CALLBACK(OnGCUnaryExpr, opcode);
+        CALLBACK0(OnOpcodeBare);
+        break;
+
+      case Opcode::RefCast:
+      case Opcode::RefCastNull: {
+        Type type;
+        CHECK_RESULT(
+            ReadHeapType(&type, opcode == Opcode::RefCastNull, "ref.cast"));
+        CALLBACK(OnRefCastExpr, type);
+        CALLBACK(OnOpcodeType, type);
+        break;
+      }
+
+      case Opcode::RefTest:
+      case Opcode::RefTestNull: {
+        Type type;
+        CHECK_RESULT(
+            ReadHeapType(&type, opcode == Opcode::RefTestNull, "ref.test"));
+        CALLBACK(OnRefTestExpr, type);
+        CALLBACK(OnOpcodeType, type);
+        break;
+      }
+
+      case Opcode::BrOnCast:
+      case Opcode::BrOnCastFail: {
+        Index depth;
+        uint8_t flags;
+        Type type1, type2;
+        CHECK_RESULT(ReadU8(&flags, "br_on_cast flags"));
+        CHECK_RESULT(ReadIndex(&depth, "br_on_cast depth"));
+        CHECK_RESULT(
+            ReadHeapType(&type1, (flags & 0x1) != 0, "br_on_cast type1"));
+        CHECK_RESULT(
+            ReadHeapType(&type2, (flags & 0x2) != 0, "br_on_cast type2"));
+        CALLBACK(OnBrOnCastExpr, opcode, depth, type1, type2);
+        break;
+      }
+
+      case Opcode::StructGet:
+      case Opcode::StructGetS:
+      case Opcode::StructGetU: {
+        uint32_t type_index, field_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CHECK_RESULT(ReadIndex(&field_index, "field index"));
+        CALLBACK(OnStructGetExpr, opcode, type_index, field_index);
+        CALLBACK(OnOpcodeIndexIndex, type_index, field_index);
+        break;
+      }
+
+      case Opcode::StructNew: {
+        uint32_t type_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CALLBACK(OnStructNewExpr, type_index);
+        CALLBACK(OnOpcodeIndex, type_index);
+        break;
+      }
+
+      case Opcode::StructNewDefault: {
+        uint32_t type_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CALLBACK(OnStructNewDefaultExpr, type_index);
+        CALLBACK(OnOpcodeIndex, type_index);
+        break;
+      }
+
+      case Opcode::StructSet: {
+        uint32_t type_index, field_index;
+        CHECK_RESULT(ReadIndex(&type_index, "type index"));
+        CHECK_RESULT(ReadIndex(&field_index, "field index"));
+        CALLBACK(OnStructSetExpr, type_index, field_index);
+        CALLBACK(OnOpcodeIndexIndex, type_index, field_index);
+        break;
+      }
 
       default:
         return ReportUnexpectedOpcode(opcode);
@@ -1913,7 +2243,7 @@ Result BinaryReader::ReadNameSection(Offset section_size) {
       case NameSectionSubsection::Module:
         CALLBACK(OnModuleNameSubsection, i, name_type, subsection_size);
         if (subsection_size) {
-          nonstd::string_view name;
+          std::string_view name;
           CHECK_RESULT(ReadStr(&name, "module name"));
           CALLBACK(OnModuleName, name);
         }
@@ -1928,7 +2258,7 @@ Result BinaryReader::ReadNameSection(Offset section_size) {
 
           for (Index j = 0; j < num_names; ++j) {
             Index function_index;
-            nonstd::string_view function_name;
+            std::string_view function_name;
 
             CHECK_RESULT(ReadIndex(&function_index, "function index"));
             ERROR_UNLESS(function_index != last_function_index,
@@ -1967,7 +2297,7 @@ Result BinaryReader::ReadNameSection(Offset section_size) {
             Index last_local_index = kInvalidIndex;
             for (Index k = 0; k < num_locals; ++k) {
               Index local_index;
-              nonstd::string_view local_name;
+              std::string_view local_name;
 
               CHECK_RESULT(ReadIndex(&local_index, "named index"));
               ERROR_UNLESS(local_index != last_local_index,
@@ -2000,7 +2330,7 @@ Result BinaryReader::ReadNameSection(Offset section_size) {
           CALLBACK(OnNameCount, num_names);
           for (Index j = 0; j < num_names; ++j) {
             Index index;
-            nonstd::string_view name;
+            std::string_view name;
 
             CHECK_RESULT(ReadIndex(&index, "index"));
             CHECK_RESULT(ReadStr(&name, "name"));
@@ -2047,14 +2377,17 @@ Result BinaryReader::ReadRelocSection(Offset section_size) {
       case RelocType::MemoryAddressRelSLEB64:
       case RelocType::MemoryAddressI32:
       case RelocType::MemoryAddressI64:
+      case RelocType::MemoryAddressLocRelI32:
       case RelocType::FunctionOffsetI32:
+      case RelocType::FunctionOffsetI64:
       case RelocType::SectionOffsetI32:
       case RelocType::MemoryAddressTLSSLEB:
-      case RelocType::MemoryAddressTLSI32:
+      case RelocType::MemoryAddressTLSSLEB64:
         CHECK_RESULT(ReadS32Leb128(&addend, "addend"));
         break;
 
       case RelocType::FuncIndexLEB:
+      case RelocType::FuncIndexI32:
       case RelocType::TableIndexSLEB:
       case RelocType::TableIndexSLEB64:
       case RelocType::TableIndexI32:
@@ -2064,6 +2397,7 @@ Result BinaryReader::ReadRelocSection(Offset section_size) {
       case RelocType::GlobalIndexI32:
       case RelocType::TagIndexLEB:
       case RelocType::TableIndexRelSLEB:
+      case RelocType::TableIndexRelSLEB64:
       case RelocType::TableNumberLEB:
         break;
 
@@ -2110,7 +2444,7 @@ Result BinaryReader::ReadDylink0Section(Offset section_size) {
         CHECK_RESULT(ReadU32Leb128(&count, "needed_dynlibs"));
         CALLBACK(OnDylinkNeededCount, count);
         while (count--) {
-          nonstd::string_view so_name;
+          std::string_view so_name;
           CHECK_RESULT(ReadStr(&so_name, "dylib so_name"));
           CALLBACK(OnDylinkNeeded, so_name);
         }
@@ -2120,8 +2454,8 @@ Result BinaryReader::ReadDylink0Section(Offset section_size) {
         CALLBACK(OnDylinkImportCount, count);
         for (Index i = 0; i < count; ++i) {
           uint32_t flags = 0;
-          nonstd::string_view module;
-          nonstd::string_view field;
+          std::string_view module;
+          std::string_view field;
           CHECK_RESULT(ReadStr(&module, "module"));
           CHECK_RESULT(ReadStr(&field, "field"));
           CHECK_RESULT(ReadU32Leb128(&flags, "flags"));
@@ -2133,7 +2467,7 @@ Result BinaryReader::ReadDylink0Section(Offset section_size) {
         CALLBACK(OnDylinkExportCount, count);
         for (Index i = 0; i < count; ++i) {
           uint32_t flags = 0;
-          nonstd::string_view name;
+          std::string_view name;
           CHECK_RESULT(ReadStr(&name, "name"));
           CHECK_RESULT(ReadU32Leb128(&flags, "flags"));
           CALLBACK(OnDylinkExport, name, flags);
@@ -2170,7 +2504,7 @@ Result BinaryReader::ReadDylinkSection(Offset section_size) {
   CHECK_RESULT(ReadU32Leb128(&count, "needed_dynlibs"));
   CALLBACK(OnDylinkNeededCount, count);
   while (count--) {
-    nonstd::string_view so_name;
+    std::string_view so_name;
     CHECK_RESULT(ReadStr(&so_name, "dylib so_name"));
     CALLBACK(OnDylinkNeeded, so_name);
   }
@@ -2186,7 +2520,7 @@ Result BinaryReader::ReadTargetFeaturesSections(Offset section_size) {
   CALLBACK(OnFeatureCount, count);
   while (count--) {
     uint8_t prefix;
-    nonstd::string_view name;
+    std::string_view name;
     CHECK_RESULT(ReadU8(&prefix, "prefix"));
     CHECK_RESULT(ReadStr(&name, "feature name"));
     CALLBACK(OnFeature, prefix, name);
@@ -2195,7 +2529,7 @@ Result BinaryReader::ReadTargetFeaturesSections(Offset section_size) {
   return Result::Ok;
 }
 
-Result BinaryReader::ReadGenericCustomSection(nonstd::string_view name,
+Result BinaryReader::ReadGenericCustomSection(std::string_view name,
                                               Offset section_size) {
   CALLBACK(BeginGenericCustomSection, section_size);
   const void* data;
@@ -2229,7 +2563,7 @@ Result BinaryReader::ReadLinkingSection(Offset section_size) {
         CHECK_RESULT(ReadU32Leb128(&count, "sym count"));
         CALLBACK(OnSymbolCount, count);
         for (Index i = 0; i < count; ++i) {
-          nonstd::string_view name;
+          std::string_view name;
           uint32_t flags = 0;
           uint32_t kind = 0;
           CHECK_RESULT(ReadU32Leb128(&kind, "sym type"));
@@ -2289,11 +2623,12 @@ Result BinaryReader::ReadLinkingSection(Offset section_size) {
         CHECK_RESULT(ReadU32Leb128(&count, "info count"));
         CALLBACK(OnSegmentInfoCount, count);
         for (Index i = 0; i < count; i++) {
-          nonstd::string_view name;
+          std::string_view name;
           Address alignment_log2;
           uint32_t flags;
           CHECK_RESULT(ReadStr(&name, "segment name"));
           CHECK_RESULT(ReadAlignment(&alignment_log2, "segment alignment"));
+          CHECK_RESULT(CheckAlignment(&alignment_log2, "segment alignment"));
           CHECK_RESULT(ReadU32Leb128(&flags, "segment flags"));
           CALLBACK(OnSegmentInfo, i, name, alignment_log2, flags);
         }
@@ -2315,7 +2650,7 @@ Result BinaryReader::ReadLinkingSection(Offset section_size) {
         while (count--) {
           uint32_t flags;
           uint32_t entry_count;
-          nonstd::string_view name;
+          std::string_view name;
           CHECK_RESULT(ReadStr(&name, "comdat name"));
           CHECK_RESULT(ReadU32Leb128(&flags, "flags"));
           CHECK_RESULT(ReadU32Leb128(&entry_count, "entry count"));
@@ -2368,7 +2703,7 @@ Result BinaryReader::ReadTagSection(Offset section_size) {
   return Result::Ok;
 }
 
-Result BinaryReader::ReadCodeMetadataSection(nonstd::string_view name,
+Result BinaryReader::ReadCodeMetadataSection(std::string_view name,
                                              Offset section_size) {
   CALLBACK(BeginCodeMetadataSection, name, section_size);
 
@@ -2421,7 +2756,7 @@ Result BinaryReader::ReadCodeMetadataSection(nonstd::string_view name,
 
 Result BinaryReader::ReadCustomSection(Index section_index,
                                        Offset section_size) {
-  nonstd::string_view section_name;
+  std::string_view section_name;
   CHECK_RESULT(ReadStr(&section_name, "section name"));
   CALLBACK(BeginCustomSection, section_index, section_size, section_name);
   ValueRestoreGuard<bool, &BinaryReader::reading_custom_section_> guard(this);
@@ -2450,7 +2785,7 @@ Result BinaryReader::ReadCustomSection(Index section_index,
     CHECK_RESULT(ReadLinkingSection(section_size));
   } else if (options_.features.code_metadata_enabled() &&
              section_name.find(WABT_BINARY_SECTION_CODE_METADATA) == 0) {
-    nonstd::string_view metadata_name = section_name;
+    std::string_view metadata_name = section_name;
     metadata_name.remove_prefix(sizeof(WABT_BINARY_SECTION_CODE_METADATA) - 1);
     CHECK_RESULT(ReadCodeMetadataSection(metadata_name, section_size));
   } else {
@@ -2467,10 +2802,25 @@ Result BinaryReader::ReadTypeSection(Offset section_size) {
   CHECK_RESULT(ReadCount(&num_signatures, "type count"));
   CALLBACK(OnTypeCount, num_signatures);
 
+  Index type_index = 0;
   for (Index i = 0; i < num_signatures; ++i) {
     Type form;
+    uint32_t recursive_count = 1;
+
     if (options_.features.gc_enabled()) {
-      CHECK_RESULT(ReadType(&form, "type form"));
+      CHECK_RESULT(ReadType(&form, "type form or gc info"));
+
+      if (form == Type::Rec) {
+        CHECK_RESULT(ReadU32Leb128(&recursive_count, "recursive count"));
+
+        CALLBACK(OnRecursiveType, type_index, recursive_count);
+
+        if (recursive_count == 0) {
+          continue;
+        }
+
+        CHECK_RESULT(ReadType(&form, "type form or gc info"));
+      }
     } else {
       uint8_t type;
       CHECK_RESULT(ReadU8(&type, "type form"));
@@ -2478,73 +2828,107 @@ Result BinaryReader::ReadTypeSection(Offset section_size) {
       form = Type::Func;
     }
 
-    switch (form) {
-      case Type::Func: {
-        Index num_params;
-        CHECK_RESULT(ReadCount(&num_params, "function param count"));
+    while (true) {
+      GCTypeExtension gc_ext;
+      gc_ext.is_final_sub_type = true;
+      gc_ext.sub_type_count = 0;
+      gc_ext.sub_types = nullptr;
 
-        param_types_.resize(num_params);
+      if (options_.features.gc_enabled() &&
+          (form == Type::Sub || form == Type::SubFinal)) {
+        gc_ext.is_final_sub_type = (form == Type::SubFinal);
+        CHECK_RESULT(ReadU32Leb128(&gc_ext.sub_type_count, "sub type count"));
+        sub_types_.resize(gc_ext.sub_type_count);
 
-        for (Index j = 0; j < num_params; ++j) {
-          Type param_type;
-          CHECK_RESULT(ReadType(&param_type, "function param type"));
-          ERROR_UNLESS(IsConcreteType(param_type),
-                       "expected valid param type (got " PRItypecode ")",
-                       WABT_PRINTF_TYPE_CODE(param_type));
-          param_types_[j] = param_type;
+        for (Index i = 0; i < gc_ext.sub_type_count; i++) {
+          Index sub_type;
+          CHECK_RESULT(ReadU32Leb128(&sub_type, "sub type index"));
+          sub_types_[i] = sub_type;
         }
 
-        Index num_results;
-        CHECK_RESULT(ReadCount(&num_results, "function result count"));
-
-        result_types_.resize(num_results);
-
-        for (Index j = 0; j < num_results; ++j) {
-          Type result_type;
-          CHECK_RESULT(ReadType(&result_type, "function result type"));
-          ERROR_UNLESS(IsConcreteType(result_type),
-                       "expected valid result type (got " PRItypecode ")",
-                       WABT_PRINTF_TYPE_CODE(result_type));
-          result_types_[j] = result_type;
+        if (gc_ext.sub_type_count > 0) {
+          gc_ext.sub_types = sub_types_.data();
         }
 
-        Type* param_types = num_params ? param_types_.data() : nullptr;
-        Type* result_types = num_results ? result_types_.data() : nullptr;
+        CHECK_RESULT(ReadType(&form, "type form"));
+      }
 
-        CALLBACK(OnFuncType, i, num_params, param_types, num_results,
-                 result_types);
+      switch (form) {
+        case Type::Func: {
+          Index num_params;
+          CHECK_RESULT(ReadCount(&num_params, "function param count"));
+
+          param_types_.resize(num_params);
+
+          for (Index j = 0; j < num_params; ++j) {
+            Type param_type;
+            CHECK_RESULT(ReadType(&param_type, "function param type"));
+            ERROR_UNLESS(IsConcreteType(param_type),
+                         "expected valid param type (got " PRItypecode ")",
+                         WABT_PRINTF_TYPE_CODE(param_type));
+            param_types_[j] = param_type;
+          }
+
+          Index num_results;
+          CHECK_RESULT(ReadCount(&num_results, "function result count"));
+
+          result_types_.resize(num_results);
+
+          for (Index j = 0; j < num_results; ++j) {
+            Type result_type;
+            CHECK_RESULT(ReadType(&result_type, "function result type"));
+            ERROR_UNLESS(IsConcreteType(result_type),
+                         "expected valid result type (got " PRItypecode ")",
+                         WABT_PRINTF_TYPE_CODE(result_type));
+            result_types_[j] = result_type;
+          }
+
+          Type* param_types = num_params ? param_types_.data() : nullptr;
+          Type* result_types = num_results ? result_types_.data() : nullptr;
+
+          CALLBACK(OnFuncType, type_index, num_params, param_types, num_results,
+                   result_types, &gc_ext);
+          break;
+        }
+
+        case Type::Struct: {
+          ERROR_UNLESS(options_.features.gc_enabled(),
+                       "invalid type form: struct not allowed");
+          Index num_fields;
+          CHECK_RESULT(ReadCount(&num_fields, "field count"));
+
+          fields_.resize(num_fields);
+          for (Index j = 0; j < num_fields; ++j) {
+            CHECK_RESULT(ReadField(&fields_[j]));
+          }
+
+          CALLBACK(OnStructType, type_index, fields_.size(), fields_.data(),
+                   &gc_ext);
+          break;
+        }
+
+        case Type::Array: {
+          ERROR_UNLESS(options_.features.gc_enabled(),
+                       "invalid type form: array not allowed");
+
+          TypeMut field;
+          CHECK_RESULT(ReadField(&field));
+          CALLBACK(OnArrayType, type_index, field, &gc_ext);
+          break;
+        };
+
+        default:
+          PrintError("unexpected type form (got " PRItypecode ")",
+                     WABT_PRINTF_TYPE_CODE(form));
+          return Result::Error;
+      }
+
+      type_index++;
+      if (--recursive_count == 0) {
         break;
       }
 
-      case Type::Struct: {
-        ERROR_UNLESS(options_.features.gc_enabled(),
-                     "invalid type form: struct not allowed");
-        Index num_fields;
-        CHECK_RESULT(ReadCount(&num_fields, "field count"));
-
-        fields_.resize(num_fields);
-        for (Index j = 0; j < num_fields; ++j) {
-          CHECK_RESULT(ReadField(&fields_[j]));
-        }
-
-        CALLBACK(OnStructType, i, fields_.size(), fields_.data());
-        break;
-      }
-
-      case Type::Array: {
-        ERROR_UNLESS(options_.features.gc_enabled(),
-                     "invalid type form: array not allowed");
-
-        TypeMut field;
-        CHECK_RESULT(ReadField(&field));
-        CALLBACK(OnArrayType, i, field);
-        break;
-      };
-
-      default:
-        PrintError("unexpected type form (got " PRItypecode ")",
-                   WABT_PRINTF_TYPE_CODE(form));
-        return Result::Error;
+      CHECK_RESULT(ReadType(&form, "type form or gc info"));
     }
   }
   CALLBACK0(EndTypeSection);
@@ -2557,9 +2941,9 @@ Result BinaryReader::ReadImportSection(Offset section_size) {
   CHECK_RESULT(ReadCount(&num_imports, "import count"));
   CALLBACK(OnImportCount, num_imports);
   for (Index i = 0; i < num_imports; ++i) {
-    nonstd::string_view module_name;
+    std::string_view module_name;
     CHECK_RESULT(ReadStr(&module_name, "import module name"));
-    nonstd::string_view field_name;
+    std::string_view field_name;
     CHECK_RESULT(ReadStr(&field_name, "import field name"));
 
     uint8_t kind;
@@ -2588,9 +2972,10 @@ Result BinaryReader::ReadImportSection(Offset section_size) {
 
       case ExternalKind::Memory: {
         Limits page_limits;
-        CHECK_RESULT(ReadMemory(&page_limits));
+        uint32_t page_size;
+        CHECK_RESULT(ReadMemory(&page_limits, &page_size));
         CALLBACK(OnImportMemory, i, module_name, field_name,
-                 num_memory_imports_, &page_limits);
+                 num_memory_imports_, &page_limits, page_size);
         num_memory_imports_++;
         break;
       }
@@ -2650,8 +3035,32 @@ Result BinaryReader::ReadTableSection(Offset section_size) {
     Index table_index = num_table_imports_ + i;
     Type elem_type;
     Limits elem_limits;
+    bool has_init_expr = false;
+
+    if (options_.features.function_references_enabled() &&
+        state_.offset < read_end_ && state_.data[state_.offset] == 0x40) {
+      state_.offset++;
+      has_init_expr = true;
+
+      uint8_t value;
+      CHECK_RESULT(ReadU8(&value, "table init"));
+      if (value != 0) {
+        PrintError("unsupported table intializer: 0x%x\n",
+                   static_cast<int>(value));
+        return Result::Error;
+      }
+    }
+
     CHECK_RESULT(ReadTable(&elem_type, &elem_limits));
-    CALLBACK(OnTable, table_index, elem_type, &elem_limits);
+    CALLBACK(BeginTable, table_index, elem_type, &elem_limits, has_init_expr);
+
+    if (has_init_expr) {
+      CALLBACK(BeginTableInitExpr, table_index);
+      CHECK_RESULT(ReadInitExpr(table_index));
+      CALLBACK(EndTableInitExpr, table_index);
+    }
+
+    CALLBACK(EndTable, table_index);
   }
   CALLBACK0(EndTableSection);
   return Result::Ok;
@@ -2665,8 +3074,9 @@ Result BinaryReader::ReadMemorySection(Offset section_size) {
   for (Index i = 0; i < num_memories; ++i) {
     Index memory_index = num_memory_imports_ + i;
     Limits page_limits;
-    CHECK_RESULT(ReadMemory(&page_limits));
-    CALLBACK(OnMemory, memory_index, &page_limits);
+    uint32_t page_size;
+    CHECK_RESULT(ReadMemory(&page_limits, &page_size));
+    CALLBACK(OnMemory, memory_index, &page_limits, page_size);
   }
   CALLBACK0(EndMemorySection);
   return Result::Ok;
@@ -2698,7 +3108,7 @@ Result BinaryReader::ReadExportSection(Offset section_size) {
   CHECK_RESULT(ReadCount(&num_exports, "export count"));
   CALLBACK(OnExportCount, num_exports);
   for (Index i = 0; i < num_exports; ++i) {
-    nonstd::string_view name;
+    std::string_view name;
     CHECK_RESULT(ReadStr(&name, "export item name"));
 
     ExternalKind kind;
@@ -2741,6 +3151,11 @@ Result BinaryReader::ReadElemSection(Offset section_size) {
     }
     Type elem_type = Type::FuncRef;
 
+    if (options_.features.function_references_enabled() &&
+        !(flags & SegUseElemExprs)) {
+      elem_type = Type(Type::FuncRef, Type::ReferenceNonNull);
+    }
+
     CALLBACK(BeginElemSegment, i, table_index, flags);
 
     if (!(flags & SegPassive)) {
@@ -2759,7 +3174,6 @@ Result BinaryReader::ReadElemSection(Offset section_size) {
         ERROR_UNLESS(kind == ExternalKind::Func,
                      "segment elem type must be func (%s)",
                      elem_type.GetName().c_str());
-        elem_type = Type::FuncRef;
       }
     }
 
@@ -2769,7 +3183,6 @@ Result BinaryReader::ReadElemSection(Offset section_size) {
     CHECK_RESULT(ReadCount(&num_elem_exprs, "elem count"));
 
     CALLBACK(OnElemSegmentElemExprCount, i, num_elem_exprs);
-
     for (Index j = 0; j < num_elem_exprs; ++j) {
       CALLBACK(BeginElemExpr, i, j);
       if (flags & SegUseElemExprs) {
@@ -2821,6 +3234,7 @@ Result BinaryReader::ReadCodeSection(Offset section_size) {
       ERROR_UNLESS(IsConcreteType(local_type), "expected valid local type");
       CALLBACK(OnLocalDecl, k, num_local_types, local_type);
     }
+    CALLBACK(EndLocalDecls);
 
     if (options_.skip_function_bodies) {
       state_.offset = end_offset;
@@ -2836,13 +3250,13 @@ Result BinaryReader::ReadCodeSection(Offset section_size) {
 
 Result BinaryReader::ReadDataSection(Offset section_size) {
   CALLBACK(BeginDataSection, section_size);
-  Index num_data_segments;
-  CHECK_RESULT(ReadCount(&num_data_segments, "data segment count"));
-  CALLBACK(OnDataSegmentCount, num_data_segments);
+  CHECK_RESULT(ReadCount(&num_data_segments_, "data segment count"));
+  CALLBACK(OnDataSegmentCount, num_data_segments_);
   // If the DataCount section is not present, then data_count_ will be invalid.
-  ERROR_UNLESS(data_count_ == kInvalidIndex || data_count_ == num_data_segments,
-               "data segment count does not equal count in DataCount section");
-  for (Index i = 0; i < num_data_segments; ++i) {
+  ERROR_UNLESS(
+      data_count_ == kInvalidIndex || data_count_ == num_data_segments_,
+      "data segment count does not equal count in DataCount section");
+  for (Index i = 0; i < num_data_segments_; ++i) {
     uint32_t flags;
     CHECK_RESULT(ReadU32Leb128(&flags, "data segment flags"));
     ERROR_IF(flags != 0 && !options_.features.bulk_memory_enabled(),
@@ -3032,11 +3446,24 @@ Result BinaryReader::ReadModule(const ReadModuleOptions& options) {
   uint32_t magic = 0;
   CHECK_RESULT(ReadU32(&magic, "magic"));
   ERROR_UNLESS(magic == WABT_BINARY_MAGIC, "bad magic value");
-  uint32_t version = 0;
-  CHECK_RESULT(ReadU32(&version, "version"));
-  ERROR_UNLESS(version == WABT_BINARY_VERSION,
-               "bad wasm file version: %#x (expected %#x)", version,
-               WABT_BINARY_VERSION);
+
+  uint16_t version = 0, layer = 0;
+  CHECK_RESULT(ReadU16(&version, "version"));
+  CHECK_RESULT(ReadU16(&layer, "layer"));
+
+  switch (layer) {
+    case WABT_BINARY_LAYER_MODULE:
+      ERROR_UNLESS(version == WABT_BINARY_VERSION,
+                   "bad wasm file version: %#x (expected %#x)", version,
+                   WABT_BINARY_VERSION);
+      break;
+    case WABT_BINARY_LAYER_COMPONENT:
+      ERROR("wasm components are not yet supported in this tool");
+      break;
+    default:
+      ERROR("unsupported wasm layer: %#x", layer);
+      break;
+  }
 
   CALLBACK(BeginModule, version);
   CHECK_RESULT(ReadSections(ReadSectionsOptions{options.stop_on_first_error}));
@@ -3044,6 +3471,11 @@ Result BinaryReader::ReadModule(const ReadModuleOptions& options) {
   // in case the code section was omitted.
   ERROR_UNLESS(num_function_signatures_ == num_function_bodies_,
                "function signature count != function body count");
+  // This is checked in ReadDataSection, but it must be checked at the end too,
+  // in case the data section was omitted.
+  ERROR_IF(num_data_segments_ == 0 && data_count_ != kInvalidIndex &&
+               data_count_ != 0,
+           "Data section missing but DataCount non-zero");
   CALLBACK0(EndModule);
 
   return Result::Ok;

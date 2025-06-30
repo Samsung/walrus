@@ -132,7 +132,7 @@ void Stream::WriteMemoryDump(const void* start,
   }
 }
 
-Result OutputBuffer::WriteToFile(nonstd::string_view filename) const {
+Result OutputBuffer::WriteToFile(std::string_view filename) const {
   std::string filename_str(filename);
   FILE* file = fopen(filename_str.c_str(), "wb");
   if (!file) {
@@ -229,7 +229,7 @@ Result MemoryStream::TruncateImpl(size_t size) {
   return Result::Ok;
 }
 
-FileStream::FileStream(nonstd::string_view filename, Stream* log_stream)
+FileStream::FileStream(std::string_view filename, Stream* log_stream)
     : Stream(log_stream), file_(nullptr), offset_(0), should_close_(false) {
   std::string filename_str(filename);
   file_ = fopen(filename_str.c_str(), "wb");

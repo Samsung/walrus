@@ -41,7 +41,7 @@ namespace {
 }  // namespace
 
 WastLexer::WastLexer(std::unique_ptr<LexerSource> source,
-                     nonstd::string_view filename,
+                     std::string_view filename,
                      Errors* errors)
     : source_(std::move(source)),
       filename_(filename),
@@ -55,11 +55,11 @@ WastLexer::WastLexer(std::unique_ptr<LexerSource> source,
 
 // static
 std::unique_ptr<WastLexer> WastLexer::CreateBufferLexer(
-    nonstd::string_view filename,
+    std::string_view filename,
     const void* data,
     size_t size,
     Errors* errors) {
-  return MakeUnique<WastLexer>(MakeUnique<LexerSource>(data, size),
+  return std::make_unique<WastLexer>(std::make_unique<LexerSource>(data, size),
                                      filename, errors);
 }
 
@@ -193,7 +193,7 @@ Location WastLexer::GetLocation() {
   return Location(filename_, line_, column(token_start_), column(cursor_));
 }
 
-nonstd::string_view WastLexer::GetText(size_t offset) {
+std::string_view WastLexer::GetText(size_t offset) {
   // Bounds checks are necessary because token_start may have been moved
   // (e.g. if GetStringToken found a newline and reset token_start to
   // point at it).
@@ -204,7 +204,7 @@ nonstd::string_view WastLexer::GetText(size_t offset) {
   if (cursor_ <= token_start_ + offset)
     return {};
 
-  return nonstd::string_view(token_start_ + offset,
+  return std::string_view(token_start_ + offset,
                           (cursor_ - token_start_) - offset);
 }
 
@@ -236,7 +236,7 @@ bool WastLexer::MatchChar(char c) {
   return false;
 }
 
-bool WastLexer::MatchString(nonstd::string_view s) {
+bool WastLexer::MatchString(std::string_view s) {
   const char* saved_cursor = cursor_;
   for (char c : s) {
     if (ReadChar() != c) {
@@ -587,7 +587,7 @@ Token WastLexer::GetNanToken() {
   return GetKeywordToken();
 }
 
-Token WastLexer::GetNameEqNumToken(nonstd::string_view name,
+Token WastLexer::GetNameEqNumToken(std::string_view name,
                                    TokenType token_type) {
   if (MatchString(name)) {
     if (MatchString("0x")) {
