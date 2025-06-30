@@ -158,7 +158,7 @@ class Stream {
 };
 
 struct OutputBuffer {
-  Result WriteToFile(nonstd::string_view filename) const;
+  Result WriteToFile(std::string_view filename) const;
   Result WriteToStdout() const;
 
   void clear() { data.clear(); }
@@ -180,7 +180,7 @@ class MemoryStream : public Stream {
 
   void Clear();
 
-  Result WriteToFile(nonstd::string_view filename) {
+  Result WriteToFile(std::string_view filename) {
     return buf_->WriteToFile(filename);
   }
 
@@ -198,7 +198,7 @@ class MemoryStream : public Stream {
 class FileStream : public Stream {
  public:
   WABT_DISALLOW_COPY_AND_ASSIGN(FileStream);
-  explicit FileStream(nonstd::string_view filename, Stream* log_stream = nullptr);
+  explicit FileStream(std::string_view filename, Stream* log_stream = nullptr);
   explicit FileStream(FILE*, Stream* log_stream = nullptr);
   FileStream(FileStream&&);
   FileStream& operator=(FileStream&&);

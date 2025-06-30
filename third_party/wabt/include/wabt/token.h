@@ -17,7 +17,7 @@
 #ifndef WABT_TOKEN_H_
 #define WABT_TOKEN_H_
 
-#include "string-view-lite/string_view.h"
+#include <string_view>
 
 #include "wabt/literal.h"
 #include "wabt/opcode.h"
@@ -26,10 +26,10 @@ namespace wabt {
 
 struct Literal {
   Literal() = default;
-  Literal(LiteralType type, nonstd::string_view text) : type(type), text(text) {}
+  Literal(LiteralType type, std::string_view text) : type(type), text(text) {}
 
   LiteralType type;
-  nonstd::string_view text;
+  std::string_view text;
 };
 
 enum class TokenType {
@@ -80,7 +80,7 @@ struct Token {
   Token() : token_type_(TokenType::Invalid) {}
   Token(Location, TokenType);
   Token(Location, TokenType, Type);
-  Token(Location, TokenType, nonstd::string_view);
+  Token(Location, TokenType, std::string_view);
   Token(Location, TokenType, Opcode);
   Token(Location, TokenType, const Literal&);
 
@@ -95,7 +95,7 @@ struct Token {
   bool HasOpcode() const { return IsTokenTypeOpcode(token_type_); }
   bool HasLiteral() const { return IsTokenTypeLiteral(token_type_); }
 
-  nonstd::string_view text() const {
+  std::string_view text() const {
     assert(HasText());
     return text_;
   }
@@ -122,7 +122,7 @@ struct Token {
   TokenType token_type_;
 
   union {
-    nonstd::string_view text_;
+    std::string_view text_;
     Type type_;
     Opcode opcode_;
     Literal literal_;
