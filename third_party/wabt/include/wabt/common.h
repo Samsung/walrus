@@ -27,14 +27,13 @@
 #include <cstring>
 #include <memory>
 #include <string>
-#include "string-view-lite/string_view.h"
+#include <string_view>
 #include <type_traits>
 #include <vector>
 
 #include "wabt/config.h"
 
 #include "wabt/base-types.h"
-#include "wabt/make-unique.h"
 #include "wabt/result.h"
 #include "wabt/string-format.h"
 #include "wabt/type.h"
@@ -45,14 +44,18 @@
 #define WABT_USE(x) static_cast<void>(x)
 
 // 64k
-#define WABT_PAGE_SIZE 0x10000
-// # of pages that fit in 32-bit address space
-#define WABT_MAX_PAGES32 0x10000
-// # of pages that fit in 64-bit address space
-#define WABT_MAX_PAGES64 0x1000000000000
-#define WABT_BYTES_TO_PAGES(x) ((x) >> 16)
-#define WABT_ALIGN_UP_TO_PAGE(x) \
-  (((x) + WABT_PAGE_SIZE - 1) & ~(WABT_PAGE_SIZE - 1))
+#define WABT_DEFAULT_PAGE_SIZE 0x10000
+
+inline uint64_t WABT_BYTES_TO_MIN_PAGES(uint64_t num_bytes,
+                                        uint32_t page_size) {
+  if ((page_size == 0) ||
+      (page_size & (page_size - 1))) {  // malformed page sizes
+    WABT_UNREACHABLE;
+    return 0;
+  }
+  uint64_t num_pages = num_bytes / page_size;
+  return (page_size * num_pages == num_bytes) ? num_pages : num_pages + 1;
+}
 
 #define WABT_ENUM_COUNT(name) \
   (static_cast<int>(name::Last) - static_cast<int>(name::First) + 1)
@@ -191,6 +194,7 @@ enum class LabelType {
   If,
   Else,
   Try,
+  TryTable,
   Catch,
 
   First = Func,
@@ -205,7 +209,7 @@ struct Location {
   };
 
   Location() : line(0), first_column(0), last_column(0) {}
-  Location(nonstd::string_view filename,
+  Location(std::string_view filename,
            int line,
            int first_column,
            int last_column)
@@ -215,7 +219,7 @@ struct Location {
         last_column(last_column) {}
   explicit Location(size_t offset) : offset(offset) {}
 
-  nonstd::string_view filename;
+  std::string_view filename;
   union {
     // For text files.
     struct {
@@ -234,6 +238,13 @@ enum class SegmentKind {
   Active,
   Passive,
   Declared,
+};
+
+enum class CatchKind {
+  Catch,
+  CatchRef,
+  CatchAll,
+  CatchAllRef,
 };
 
 // Used in test asserts for special expected values "nan:canonical" and
@@ -278,10 +289,14 @@ enum class RelocType {
   TableIndexI64 = 19,           // Memory64: Like TableIndexI32
   TableNumberLEB = 20,          // e.g. Immediate of table.get
   MemoryAddressTLSSLEB = 21,    // Address relative to __tls_base
-  MemoryAddressTLSI32 = 22,     // Address relative to __tls_base
+  FunctionOffsetI64 = 22,       // Memory64: Like FunctionOffsetI32
+  MemoryAddressLocRelI32 = 23,  // Address relative to the relocation's location
+  TableIndexRelSLEB64 = 24,     // Memory64: TableIndexRelSLEB
+  MemoryAddressTLSSLEB64 = 25,  // Memory64: MemoryAddressTLSSLEB
+  FuncIndexI32 = 26,            // Function index as an I32
 
   First = FuncIndexLEB,
-  Last = MemoryAddressTLSI32,
+  Last = FuncIndexI32,
 };
 constexpr int kRelocTypeCount = WABT_ENUM_COUNT(RelocType);
 
@@ -385,7 +400,7 @@ struct Limits {
 
 enum { WABT_USE_NATURAL_ALIGNMENT = 0xFFFFFFFFFFFFFFFF };
 
-Result ReadFile(nonstd::string_view filename, std::vector<uint8_t>* out_data);
+Result ReadFile(std::string_view filename, std::vector<uint8_t>* out_data);
 
 void InitStdio();
 
