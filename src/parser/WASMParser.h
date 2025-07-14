@@ -33,6 +33,7 @@ struct WASMParsingResult {
     void clear();
 
     bool m_seenStartAttribute;
+    bool m_typesAddedToStore;
     uint32_t m_version;
     uint32_t m_start;
 

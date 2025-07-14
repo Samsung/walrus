@@ -226,6 +226,7 @@ public:
         return Result::Ok;
     }
     Result EndTypeSection() override {
+        m_externalDelegate->EndTypeSection();
         return Result::Ok;
     }
 

@@ -17,6 +17,7 @@
 #ifndef __WalrusObjectType__
 #define __WalrusObjectType__
 
+#include "runtime/Type.h"
 #include "runtime/Value.h"
 
 namespace Walrus {
@@ -28,6 +29,7 @@ public:
     enum Kind : uint8_t {
         Invalid,
         FunctionKind,
+        RecursiveTypeKind,
         GlobalKind,
         TableKind,
         MemoryKind,
@@ -47,11 +49,45 @@ protected:
     Kind m_kind;
 };
 
-class FunctionType : public ObjectType {
+class CompositeType : public ObjectType {
 public:
-    FunctionType(ValueTypeVector* param,
-                 ValueTypeVector* result)
-        : ObjectType(ObjectType::FunctionKind)
+    friend class TypeStore;
+
+    ObjectType* getNextType() const
+    {
+        return m_nextType;
+    }
+
+    CompositeType* getNextCompositeType() const
+    {
+        ASSERT(m_nextType == nullptr || m_nextType->kind() == ObjectType::FunctionKind);
+        return static_cast<CompositeType*>(m_nextType);
+    }
+
+    void setNextType(ObjectType* nextType)
+    {
+        m_nextType = nextType;
+    }
+
+protected:
+    CompositeType(Kind kind)
+        : ObjectType(kind)
+        , m_nextType(nullptr)
+    {
+        ASSERT(kind == FunctionKind);
+    }
+
+private:
+    ObjectType* m_nextType;
+};
+
+class FunctionType : public CompositeType {
+public:
+    friend class TypeStore;
+
+    FunctionType(TypeVector* param,
+                 TypeVector* result)
+        : CompositeType(ObjectType::FunctionKind)
         , m_paramTypes(param)
         , m_resultTypes(result)
         , m_paramStackSize(computeStackSize(*m_paramTypes))
@@ -65,20 +101,20 @@ public:
         delete m_resultTypes;
     }
 
-    const ValueTypeVector& param() const { return *m_paramTypes; }
-    const ValueTypeVector& result() const { return *m_resultTypes; }
+    const TypeVector& param() const { return *m_paramTypes; }
+    const TypeVector& result() const { return *m_resultTypes; }
     size_t paramStackSize() const { return m_paramStackSize; }
     size_t resultStackSize() const { return m_resultStackSize; }
 
     bool equals(const FunctionType* other) const;
 
 private:
-    ValueTypeVector* m_paramTypes;
-    ValueTypeVector* m_resultTypes;
+    TypeVector* m_paramTypes;
+    TypeVector* m_resultTypes;
     size_t m_paramStackSize;
     size_t m_resultStackSize;
 
-    static size_t computeStackSize(const ValueTypeVector& v)
+    static size_t computeStackSize(const TypeVector& v)
     {
         size_t s = 0;
         for (size_t i = 0; i < v.size(); i++) {
@@ -90,10 +126,10 @@ private:
 
 class GlobalType : public ObjectType {
 public:
-    GlobalType(Value::Type type, bool mut);
+    GlobalType(Type type, bool mut);
     ~GlobalType();
 
-    Value::Type type() const { return m_type; }
+    Type type() const { return m_type; }
     bool isMutable() const { return m_mutable; }
     ModuleFunction* function() const { return m_function; }
 
@@ -104,14 +140,14 @@ public:
     }
 
 private:
-    Value::Type m_type;
+    Type m_type;
     bool m_mutable;
     ModuleFunction* m_function;
 };
 
 class TableType : public ObjectType {
 public:
-    TableType(Value::Type type, uint32_t initSize, uint32_t maxSize)
+    TableType(Type type, uint32_t initSize, uint32_t maxSize)
         : ObjectType(ObjectType::TableKind)
         , m_type(type)
         , m_initialSize(initSize)
@@ -119,12 +155,12 @@ public:
     {
     }
 
-    Value::Type type() const { return m_type; }
+    Type type() const { return m_type; }
     uint32_t initialSize() const { return m_initialSize; }
     uint32_t maximumSize() const { return m_maximumSize; }
 
 private:
-    Value::Type m_type;
+    Type m_type;
     uint32_t m_initialSize;
     uint32_t m_maximumSize;
 };

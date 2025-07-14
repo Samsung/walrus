@@ -233,7 +233,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName() == "global_f64") {
                 importValues.push_back(Global::createGlobal(store, Value(double(0x4084d00000000000)), false));
             } else if (import->fieldName() == "table") {
-                importValues.push_back(Table::createTable(store, Value::Type::FuncRef, 10, 20));
+                importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20));
             } else if (import->fieldName() == "memory") {
                 importValues.push_back(Memory::createMemory(store, 1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize, false));
             } else {
@@ -373,17 +373,17 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
     }
     case wabt::Type::FuncRef: {
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
-            return Walrus::Value(Walrus::Value::FuncRef, Walrus::Value::Null);
+            return Walrus::Value(Walrus::Value::NullFuncRef, Walrus::Value::Null);
         }
         // Add one similar to wabt interpreter.
-        return Walrus::Value(Walrus::Value::FuncRef, c.ref_bits() + 1, Walrus::Value::Force);
+        return Walrus::Value(Walrus::Value::NullFuncRef, c.ref_bits() + 1, Walrus::Value::Force);
     }
     case wabt::Type::ExternRef: {
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
-            return Walrus::Value(Walrus::Value::ExternRef, Walrus::Value::Null);
+            return Walrus::Value(Walrus::Value::NullExternRef, Walrus::Value::Null);
         }
         // Add one similar to wabt interpreter.
-        return Walrus::Value(Walrus::Value::ExternRef, c.ref_bits() + 1, Walrus::Value::Force);
+        return Walrus::Value(Walrus::Value::NullExternRef, c.ref_bits() + 1, Walrus::Value::Force);
     }
     default:
         printf("Error: unknown value type during converting wabt::Const to wabt::Value\n");
@@ -487,7 +487,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
             return false;
         }
 
-    } else if (c.type() == wabt::Type::ExternRef && v.type() == Walrus::Value::ExternRef) {
+    } else if (c.type() == wabt::Type::ExternRef && v.type() == Walrus::Value::NullExternRef) {
         // FIXME value of c.ref_bits() for RefNull
         wabt::Const constNull;
         constNull.set_null(c.type());
@@ -497,7 +497,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         }
         // Add one similar to wabt interpreter.
         return (c.ref_bits() + 1) == reinterpret_cast<uintptr_t>(v.asExternal());
-    } else if (c.type() == wabt::Type::FuncRef && v.type() == Walrus::Value::FuncRef) {
+    } else if (c.type() == wabt::Type::FuncRef && v.type() == Walrus::Value::NullFuncRef) {
         // FIXME value of c.ref_bits() for RefNull
         wabt::Const constNull;
         constNull.set_null(c.type());
