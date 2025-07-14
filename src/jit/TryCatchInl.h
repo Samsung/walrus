@@ -248,7 +248,7 @@ static void emitThrow(sljit_compiler* compiler, Instruction* instr)
     CompileContext* context = CompileContext::get(compiler);
     Throw* throwTag = reinterpret_cast<Throw*>(instr->byteCode());
     TagType* tagType = context->compiler->module()->tagType(throwTag->tagIndex());
-    const ValueTypeVector& types = context->compiler->module()->functionType(tagType->sigIndex())->param();
+    const TypeVector& types = context->compiler->module()->functionType(tagType->sigIndex())->param();
 
     emitStoreOntoStack(compiler, instr->params(), throwTag->dataOffsets(), types, false);
 

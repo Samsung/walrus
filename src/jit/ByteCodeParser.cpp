@@ -1687,7 +1687,7 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::EndOpcode: {
-            const ValueTypeVector& result = function->functionType()->result();
+            const TypeVector& result = function->functionType()->result();
 
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, result.size(), 0);
             Operand* param = instr->params();

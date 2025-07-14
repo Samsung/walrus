@@ -454,9 +454,9 @@ static wasm_valkind_t FromWalrusValueType(const Value::Type& type)
         return WASM_F32;
     case Value::Type::F64:
         return WASM_F64;
-    case Value::Type::FuncRef:
+    case Value::Type::NullFuncRef:
         return WASM_FUNCREF;
-    case Value::Type::ExternRef:
+    case Value::Type::NullExternRef:
         return WASM_ANYREF;
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -476,16 +476,16 @@ static Value::Type ToWalrusValueType(const wasm_valkind_t& kind)
     case WASM_F64:
         return Value::Type::F64;
     case WASM_FUNCREF:
-        return Value::Type::FuncRef;
+        return Value::Type::NullFuncRef;
     case WASM_ANYREF:
-        return Value::Type::ExternRef;
+        return Value::Type::NullExternRef;
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return Value::Type::Void;
     }
 }
 
-static void FromWalrusValueTypes(const ValueTypeVector& types, wasm_valtype_vec_t* out)
+static void FromWalrusValueTypes(const TypeVector& types, wasm_valtype_vec_t* out)
 {
     wasm_valtype_vec_new_uninitialized(out, types.size());
     for (size_t i = 0; i < types.size(); i++) {
@@ -887,8 +887,8 @@ own wasm_module_t* wasm_module_deserialize(wasm_store_t*, const wasm_byte_vec_t*
 // Function Instances
 static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
 {
-    ValueTypeVector* params = new ValueTypeVector();
-    ValueTypeVector* results = new ValueTypeVector();
+    TypeVector* params = new TypeVector();
+    TypeVector* results = new TypeVector();
     params->reserve(ft->params.size);
     results->reserve(ft->results.size);
 

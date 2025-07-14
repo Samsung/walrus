@@ -49,6 +49,7 @@ public:
 
     virtual void OnTypeCount(Index count) = 0;
     virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes) = 0;
+    virtual void EndTypeSection() = 0;
 
     virtual void OnImportCount(Index count) = 0;
     virtual void OnImportFunc(Index importIndex, std::string moduleName, std::string fieldName, Index funcIndex, Index sigIndex) = 0;
