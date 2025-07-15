@@ -472,6 +472,29 @@ public:
         return isNull(m_ref);
     }
 
+    bool isZeroValue()
+    {
+        switch (m_type) {
+        case I32:
+            return m_f32 == 0;
+        case F32:
+            return m_i32 == 0;
+        case F64:
+            return m_f64 == 0;
+        case I64:
+            return m_i64 == 0;
+        case FuncRef:
+        case ExternRef:
+            return m_ref == nullptr;
+        case V128:
+            uint8_t empty[16];
+            return m_v128.m_data == empty;
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+
     static bool isNull(void* ptr)
     {
         return ptr == reinterpret_cast<void*>(NullBits);

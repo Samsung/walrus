@@ -18,6 +18,7 @@
 #define __WalrusByteCode__
 
 #include "runtime/Module.h"
+#include "Walrus.h"
 
 #if !defined(NDEBUG)
 #include <cinttypes>
@@ -966,6 +967,12 @@ public:
 
     Opcode opcode() const;
     size_t getSize() const;
+    std::vector<Walrus::ByteCodeStackOffset> getByteCodeStackOffsets(FunctionType* funcType) const;
+    void setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offset, Walrus::ByteCodeStackOffset original);
+    void dump() const
+    {
+        return;
+    }
 
 protected:
     friend class Interpreter;
@@ -998,6 +1005,8 @@ public:
 
     ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
     ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
+    void setStackOffset1(Walrus::ByteCodeStackOffset o) { m_stackOffset1 = o; }
+    void setStackOffset2(Walrus::ByteCodeStackOffset o) { m_stackOffset2 = o; }
 
 protected:
     ByteCodeStackOffset m_stackOffset1;
@@ -1016,6 +1025,7 @@ public:
     ByteCodeStackOffset stackOffset1() const { return m_stackOffsets[0]; }
     ByteCodeStackOffset stackOffset2() const { return m_stackOffsets[1]; }
     ByteCodeStackOffset stackOffset3() const { return m_stackOffsets[2]; }
+    void setStackOffset(uint8_t index, Walrus::ByteCodeStackOffset o) { m_stackOffsets[index] = o; }
 
 protected:
     ByteCodeStackOffset m_stackOffsets[3];
@@ -1031,6 +1041,7 @@ public:
     }
 
     ByteCodeStackOffset stackOffset() const { return m_stackOffset; }
+    void setStackOffset(ByteCodeStackOffset o) { m_stackOffset = o; }
     uint32_t uint32Value() const { return m_value; }
     int32_t int32Value() const { return static_cast<int32_t>(m_value); }
 
@@ -1050,7 +1061,9 @@ public:
     }
 
     ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
+    void setStackOffset1(ByteCodeStackOffset o) { m_stackOffset1 = o; }
     ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
+    void setStackOffset2(ByteCodeStackOffset o) { m_stackOffset2 = o; }
     uint32_t uint32Value() const { return m_value; }
     int32_t int32Value() const { return static_cast<int32_t>(m_value); }
 
@@ -1075,7 +1088,9 @@ public:
     uint16_t memIndex() const { return m_memIndex; }
     uint16_t alignment() const { return m_alignment; }
     ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
+    void setStackOffset1(ByteCodeStackOffset o) { m_stackOffset1 = o; }
     ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
+    void setStackOffset2(ByteCodeStackOffset o) { m_stackOffset2 = o; }
     uint32_t uint32Value() const { return m_value; }
     int32_t int32Value() const { return static_cast<int32_t>(m_value); }
 
@@ -1100,6 +1115,7 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_stackOffsets[1]; }
     ByteCodeStackOffset src2Offset() const { return m_stackOffsets[2]; }
     ByteCodeStackOffset dstOffset() const { return m_stackOffsets[3]; }
+    void setStackOffset(size_t index, ByteCodeStackOffset o) { m_stackOffsets[index] = o; }
 
 protected:
     ByteCodeStackOffset m_stackOffsets[4];
@@ -1269,6 +1285,7 @@ public:
     const ByteCodeStackOffset* srcOffset() const { return stackOffsets(); }
     ByteCodeStackOffset dstOffset() const { return stackOffset3(); }
     void setDstOffset(ByteCodeStackOffset o) { m_stackOffsets[2] = o; }
+    void setSrcOffsset(ByteCodeStackOffset o, size_t index) { m_stackOffsets[index] = o; }
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
@@ -1466,6 +1483,11 @@ public:
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call));
     }
 
+    void setStackOffset(size_t index, ByteCodeStackOffset o)
+    {
+        reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call))[index] = o;
+    }
+
     uint16_t parameterOffsetsSize() const
     {
         return m_parameterOffsetsSize;
@@ -1516,11 +1538,19 @@ public:
     }
 
     ByteCodeStackOffset calleeOffset() const { return m_calleeOffset; }
+    void setCalleeOffset(ByteCodeStackOffset o) { m_calleeOffset = o; }
     uint32_t tableIndex() const { return m_tableIndex; }
     FunctionType* functionType() const { return m_functionType; }
     ByteCodeStackOffset* stackOffsets() const
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallIndirect));
+    }
+
+    void setStackOffset(size_t index, ByteCodeStackOffset o)
+    {
+        (reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallIndirect)))[index] = o;
+
+        // *(reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call) + index * sizeof(ByteCodeStackOffset))) = o;
     }
 
     uint16_t parameterOffsetsSize() const
@@ -1922,11 +1952,15 @@ public:
     }
 
     ByteCodeStackOffset condOffset() const { return m_condOffset; }
+    void setCondOffset(ByteCodeStackOffset o) { m_condOffset = o; }
     uint16_t valueSize() const { return m_valueSize; }
     bool isFloat() const { return m_isFloat != 0; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -1959,6 +1993,7 @@ public:
     }
 
     ByteCodeStackOffset condOffset() const { return m_condOffset; }
+    void setCondOffset(ByteCodeStackOffset o) { m_condOffset = o; }
     int32_t defaultOffset() const { return m_defaultOffset; }
     static inline size_t offsetOfDefault() { return offsetof(BrTable, m_defaultOffset); }
 
@@ -2031,6 +2066,10 @@ public:
     const ByteCodeStackOffset* srcOffsets() const
     {
         return m_srcOffsets;
+    }
+    void setStackOffset(size_t index, ByteCodeStackOffset o)
+    {
+        m_srcOffsets[index] = o;
     }
 
     uint16_t memIndex() const { return m_memIndex; }
@@ -3329,6 +3368,10 @@ public:
     {
         return m_srcOffsets;
     }
+    void setStackOffset(size_t index, ByteCodeStackOffset o)
+    {
+        m_srcOffsets[index] = o;
+    }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -3393,6 +3436,11 @@ public:
     {
         return m_srcOffsets;
     }
+    void setStackOffset(size_t index, ByteCodeStackOffset o)
+    {
+        m_srcOffsets[index] = o;
+    }
+
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
@@ -4341,6 +4389,10 @@ public:
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Throw));
     }
+    void setDataOffset(size_t index, ByteCodeStackOffset o)
+    {
+        reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Throw))[index] = o;
+    }
 
     uint32_t offsetsSize() const
     {
@@ -4414,6 +4466,11 @@ public:
     ByteCodeStackOffset* resultOffsets() const
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(End));
+    }
+
+    void setResultOffset(size_t index, ByteCodeStackOffset o)
+    {
+        reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(End))[index] = o;
     }
 
     uint32_t offsetsSize() const

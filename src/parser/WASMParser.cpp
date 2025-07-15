@@ -16,6 +16,7 @@
 #include "Walrus.h"
 
 #include "parser/WASMParser.h"
+#include "parser/LiveAnalysis.h"
 #include "interpreter/ByteCode.h"
 #include "runtime/GCArray.h"
 #include "runtime/Module.h"
@@ -23,7 +24,10 @@
 #include "runtime/TypeStore.h"
 
 #include "wabt/binary-reader.h"
+#include "runtime/Value.h"
 #include "wabt/walrus/binary-reader-walrus.h"
+#include <cstdint>
+#include <utility>
 
 namespace wabt {
 
@@ -1396,21 +1400,21 @@ public:
 
         // Explicit init local variable if needs
         for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
-            if (m_preprocessData.m_localVariableInfo[i].m_needsExplicitInitOnStartup) {
-                auto localPos = m_localInfo[i].m_position;
-                auto size = Walrus::valueSize(m_localInfo[i].m_valueType);
-                if (size == 4) {
-                    pushByteCode(Walrus::Const32(localPos, 0), WASMOpcode::I32ConstOpcode);
-                } else if (size == 8) {
-                    pushByteCode(Walrus::Const64(localPos, 0), WASMOpcode::I64ConstOpcode);
-                } else {
-                    ASSERT(size == 16);
-                    uint8_t empty[16] = {
-                        0,
-                    };
-                    pushByteCode(Walrus::Const128(localPos, empty), WASMOpcode::V128ConstOpcode);
-                }
-            }
+            // if (m_preprocessData.m_localVariableInfo[i].m_needsExplicitInitOnStartup) {
+            //     auto localPos = m_localInfo[i].m_position;
+            //     auto size = Walrus::valueSize(m_localInfo[i].m_valueType);
+            //     if (size == 4) {
+            //         pushByteCode(Walrus::Const32(localPos, 0), WASMOpcode::I32ConstOpcode);
+            //     } else if (size == 8) {
+            //         pushByteCode(Walrus::Const64(localPos, 0), WASMOpcode::I64ConstOpcode);
+            //     } else {
+            //         ASSERT(size == 16);
+            //         uint8_t empty[16] = {
+            //             0,
+            //         };
+            //         pushByteCode(Walrus::Const128(localPos, empty), WASMOpcode::V128ConstOpcode);
+            //     }
+            // }
 #if !defined(NDEBUG)
             m_currentFunction->m_localDebugData.push_back(m_localInfo[i].m_position);
 #endif
@@ -1425,14 +1429,14 @@ public:
 
             uint8_t constantBuffer[16];
             constValue.writeToMemory(constantBuffer);
-            if (constSize == 4) {
-                pushByteCode(Walrus::Const32(constPos, *reinterpret_cast<uint32_t*>(constantBuffer)), WASMOpcode::I32ConstOpcode);
-            } else if (constSize == 8) {
-                pushByteCode(Walrus::Const64(constPos, *reinterpret_cast<uint64_t*>(constantBuffer)), WASMOpcode::I64ConstOpcode);
-            } else {
-                ASSERT(constSize == 16);
-                pushByteCode(Walrus::Const128(constPos, constantBuffer), WASMOpcode::V128ConstOpcode);
-            }
+            // if (constSize == 4) {
+            //     pushByteCode(Walrus::Const32(constPos, *reinterpret_cast<uint32_t*>(constantBuffer)), WASMOpcode::I32ConstOpcode);
+            // } else if (constSize == 8) {
+            //     pushByteCode(Walrus::Const64(constPos, *reinterpret_cast<uint64_t*>(constantBuffer)), WASMOpcode::I64ConstOpcode);
+            // } else {
+            //     ASSERT(constSize == 16);
+            //     pushByteCode(Walrus::Const128(constPos, constantBuffer), WASMOpcode::V128ConstOpcode);
+            // }
 #if !defined(NDEBUG)
             m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i]);
 #endif
@@ -3194,6 +3198,21 @@ public:
         }
 
         m_lastI32EqzPos = s_noI32Eqz;
+
+        ASSERT(m_currentFunction == m_result.m_functions[index]);
+        std::vector<std::pair<size_t, Walrus::Value>> locals;
+        for (uint32_t i = 0; i < m_localInfo.size(); i++) {
+            locals.push_back(std::make_pair(m_localInfo[i].m_position, Walrus::Value(m_localInfo[i].m_valueType)));
+        }
+
+        for (auto constant : m_preprocessData.m_constantData) {
+            locals.push_back(std::make_pair(constant.second, constant.first));
+        }
+
+        LiveAnalysis analysis;
+        analysis.optimizeLocals(m_currentFunction, locals, m_localInfo.size());
+
+
 #if !defined(NDEBUG)
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
             m_currentFunction->dumpByteCode(m_currentByteCode);
@@ -3206,7 +3225,6 @@ public:
         }
 #endif
 
-        ASSERT(m_currentFunction == m_result.m_functions[index]);
         endFunction();
     }
 
