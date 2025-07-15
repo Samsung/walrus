@@ -17,8 +17,11 @@
 #ifndef __WalrusModule__
 #define __WalrusModule__
 
+#include "Walrus.h"
 #include "runtime/ObjectType.h"
 #include "runtime/Object.h"
+#include "wabt/ir.h"
+#include <cstdint>
 
 namespace wabt {
 class WASMBinaryReader;
@@ -203,6 +206,18 @@ public:
     }
 
     template <typename CodeType>
+    void pushByteCodeToFront(const CodeType& code)
+    {
+        char* first = (char*)&code;
+        size_t start = m_byteCode.size();
+
+        for (size_t i = 0; i < sizeof(CodeType); i++) {
+            m_byteCode.insert(i, *first);
+            first++;
+        }
+    }
+
+    template <typename CodeType>
     CodeType* peekByteCode(size_t position)
     {
         return reinterpret_cast<CodeType*>(&m_byteCode[position]);
@@ -243,6 +258,17 @@ public:
     JITFunction* jitFunction()
     {
         return m_jitFunction;
+    }
+#endif
+    void setStackSize(uint16_t size)
+    {
+        m_requiredStackSize = size;
+    }
+
+#if !defined(NDEBUG)
+    void pushLocalDebugData(Walrus::ByteCodeStackOffset o)
+    {
+        m_localDebugData.push_back(o);
     }
 #endif
 
