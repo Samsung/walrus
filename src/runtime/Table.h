@@ -17,6 +17,7 @@
 #ifndef __WalrusTable__
 #define __WalrusTable__
 
+#include "runtime/Type.h"
 #include "runtime/Value.h"
 #include "runtime/Object.h"
 
@@ -30,7 +31,7 @@ class Table : public Extern {
     friend class JITFieldAccessor;
 
 public:
-    static Table* createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init = nullptr);
+    static Table* createTable(Store* store, Type type, uint32_t initialSize, uint32_t maximumSize, void* init = nullptr);
 
     virtual Object::Kind kind() const override
     {
@@ -42,7 +43,7 @@ public:
         return true;
     }
 
-    Value::Type type() const
+    Type type() const
     {
         return m_type;
     }
@@ -101,12 +102,12 @@ public:
     void fillTable(uint32_t n, void* value, uint32_t index);
 
 private:
-    Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init);
+    Table(Type type, uint32_t initialSize, uint32_t maximumSize, void* init);
 
     void throwException(ExecutionState& state) const;
 
     // Table has elements of reference type (FuncRef | ExternRef)
-    Value::Type m_type;
+    Type m_type;
     uint32_t m_size;
     uint32_t m_maximumSize;
 

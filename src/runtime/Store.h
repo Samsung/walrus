@@ -18,6 +18,7 @@
 #define __WalrusStore__
 
 #include "util/Vector.h"
+#include "runtime/TypeStore.h"
 #include "runtime/Value.h"
 #include <mutex>
 #include <condition_variable>
@@ -84,10 +85,16 @@ public:
         return m_instances.back();
     }
 
+    TypeStore& getTypeStore()
+    {
+        return m_typeStore;
+    }
+
     Waiter* getWaiter(void* address);
 
 private:
     Engine* m_engine;
+    TypeStore m_typeStore;
 
     Vector<Module*> m_modules;
     Vector<Instance*> m_instances;

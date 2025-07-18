@@ -38,24 +38,22 @@ uint32_t Instruction::valueTypeToOperandType(Value::Type type)
 {
     switch (type) {
     case Value::I32:
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    case Value::FuncRef:
-    case Value::ExternRef:
-#endif /* SLJIT_32BIT_ARCHITECTURE */
         return Instruction::Int32Operand;
     case Value::I64:
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-    case Value::FuncRef:
-    case Value::ExternRef:
-#endif /* SLJIT_32BIT_ARCHITECTURE */
         return Instruction::Int64Operand;
     case Value::V128:
         return Instruction::V128Operand;
     case Value::F32:
         return Instruction::Float32Operand;
-    default:
-        ASSERT(type == Value::F64);
+    case Value::F64:
         return Instruction::Float64Operand;
+    default:
+        ASSERT(Value::isRefType(type));
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+        return Instruction::Int32Operand;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+        return Instruction::Int64Operand;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
     }
 }
 

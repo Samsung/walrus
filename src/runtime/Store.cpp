@@ -35,6 +35,7 @@ Store::~Store()
     }
 
     for (size_t i = 0; i < m_modules.size(); i++) {
+        getTypeStore().releaseTypes(m_modules[i]->m_functionTypes);
         delete m_modules[i];
     }
 
@@ -63,39 +64,45 @@ void Store::finalize()
 #endif
 }
 
+#define ALLOCATE_DEFAULT_TYPE(type)                                                                                                  \
+    case Value::Type::type:                                                                                                          \
+        g_defaultFunctionTypes[Value::Type::type] = new FunctionType(new TypeVector(), new TypeVector({ Type(Value::Type::type) })); \
+        break;
+
 FunctionType* Store::getDefaultFunctionType(Value::Type type)
 {
-    switch (type) {
-    case Value::Type::I32:
-        if (!g_defaultFunctionTypes[type])
-            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I32 }));
-        break;
-    case Value::Type::I64:
-        if (!g_defaultFunctionTypes[type])
-            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::I64 }));
-        break;
-    case Value::Type::F32:
-        if (!g_defaultFunctionTypes[type])
-            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F32 }));
-        break;
-    case Value::Type::F64:
-        if (!g_defaultFunctionTypes[type])
-            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::F64 }));
-        break;
-    case Value::Type::V128:
-        if (!g_defaultFunctionTypes[type])
-            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::V128 }));
-        break;
-    case Value::Type::FuncRef:
-        if (!g_defaultFunctionTypes[type])
-            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::FuncRef }));
-        break;
-    case Value::Type::ExternRef:
-        if (!g_defaultFunctionTypes[type])
-            g_defaultFunctionTypes[type] = new FunctionType(new ValueTypeVector(), new ValueTypeVector({ Value::ExternRef }));
-        break;
-    default:
-        RELEASE_ASSERT_NOT_REACHED();
+    if (!g_defaultFunctionTypes[type]) {
+        switch (type) {
+            ALLOCATE_DEFAULT_TYPE(I32)
+            ALLOCATE_DEFAULT_TYPE(I64)
+            ALLOCATE_DEFAULT_TYPE(F32)
+            ALLOCATE_DEFAULT_TYPE(F64)
+            ALLOCATE_DEFAULT_TYPE(V128)
+            ALLOCATE_DEFAULT_TYPE(AnyRef)
+            ALLOCATE_DEFAULT_TYPE(NoAnyRef)
+            ALLOCATE_DEFAULT_TYPE(EqRef)
+            ALLOCATE_DEFAULT_TYPE(I31Ref)
+            ALLOCATE_DEFAULT_TYPE(StructRef)
+            ALLOCATE_DEFAULT_TYPE(ArrayRef)
+            ALLOCATE_DEFAULT_TYPE(ExternRef)
+            ALLOCATE_DEFAULT_TYPE(NoExternRef)
+            ALLOCATE_DEFAULT_TYPE(FuncRef)
+            ALLOCATE_DEFAULT_TYPE(DefinedRef)
+            ALLOCATE_DEFAULT_TYPE(NoFuncRef)
+            ALLOCATE_DEFAULT_TYPE(NullAnyRef)
+            ALLOCATE_DEFAULT_TYPE(NullNoAnyRef)
+            ALLOCATE_DEFAULT_TYPE(NullEqRef)
+            ALLOCATE_DEFAULT_TYPE(NullI31Ref)
+            ALLOCATE_DEFAULT_TYPE(NullStructRef)
+            ALLOCATE_DEFAULT_TYPE(NullArrayRef)
+            ALLOCATE_DEFAULT_TYPE(NullExternRef)
+            ALLOCATE_DEFAULT_TYPE(NullNoExternRef)
+            ALLOCATE_DEFAULT_TYPE(NullFuncRef)
+            ALLOCATE_DEFAULT_TYPE(NullNoFuncRef)
+            ALLOCATE_DEFAULT_TYPE(NullDefinedRef)
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+        }
     }
 
     return g_defaultFunctionTypes[type];

@@ -31,7 +31,7 @@ bool FunctionType::equals(const FunctionType* other) const
         return false;
     }
 
-    if (memcmp(m_paramTypes->data(), other->param().data(), sizeof(Value::Type) * other->param().size())) {
+    if (memcmp(m_paramTypes->data(), other->param().data(), sizeof(Type) * other->param().size())) {
         return false;
     }
 
@@ -39,31 +39,29 @@ bool FunctionType::equals(const FunctionType* other) const
         return false;
     }
 
-    if (memcmp(m_resultTypes->data(), other->result().data(), sizeof(Value::Type) * other->result().size())) {
+    if (memcmp(m_resultTypes->data(), other->result().data(), sizeof(Type) * other->result().size())) {
         return false;
     }
 
     return true;
 }
 
-GlobalType::GlobalType(Value::Type type, bool mut)
+GlobalType::GlobalType(Type type, bool mut)
     : ObjectType(ObjectType::GlobalKind)
     , m_type(type)
     , m_mutable(mut)
     , m_function(nullptr)
 {
 #ifndef NDEBUG
-    switch (type) {
+    switch (type.type()) {
     case Value::I32:
     case Value::I64:
     case Value::F32:
     case Value::F64:
     case Value::V128:
-    case Value::FuncRef:
-    case Value::ExternRef:
         return;
     default:
-        ASSERT_NOT_REACHED();
+        ASSERT(type.isRef());
         return;
     }
 #endif

@@ -24,7 +24,7 @@
 
 namespace Walrus {
 
-Table* Table::createTable(Store* store, Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
+Table* Table::createTable(Store* store, Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
 {
     Table* tbl = new Table(type, initialSize, maximumSize, init ? init : reinterpret_cast<void*>(Value::NullBits));
     store->appendExtern(tbl);
@@ -32,7 +32,7 @@ Table* Table::createTable(Store* store, Value::Type type, uint32_t initialSize, 
     return tbl;
 }
 
-Table::Table(Value::Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
+Table::Table(Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
     : m_type(type)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
@@ -48,7 +48,7 @@ void Table::init(ExecutionState& state, Instance* instance, ElementSegment* sour
     if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->exprFunctions().size())) {
         throwException(state);
     }
-    if (UNLIKELY(m_type != Value::Type::FuncRef)) {
+    if (UNLIKELY(!m_type.isRef())) {
         Trap::throwException(state, "type mismatch");
     }
 

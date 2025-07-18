@@ -55,7 +55,7 @@ struct DependencyGenContext {
     }
 
     void update(size_t dependencyStart, size_t id);
-    void update(size_t dependencyStart, size_t id, size_t excludeStart, const ValueTypeVector& param, VariableList* variableList);
+    void update(size_t dependencyStart, size_t id, size_t excludeStart, const TypeVector& param, VariableList* variableList);
     void updateWithGetter(VariableList* variableList, VariableRef ref, Instruction* getter);
     void assignReference(VariableRef ref, size_t offset, uint32_t typeInfo);
 
@@ -86,7 +86,7 @@ void DependencyGenContext::update(size_t dependencyStart, size_t id)
     }
 }
 
-void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excludeStart, const ValueTypeVector& param, VariableList* variableList)
+void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excludeStart, const TypeVector& param, VariableList* variableList)
 {
     size_t size = currentDependencies.size();
     size_t offset = excludeStart;
@@ -360,7 +360,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                             dependencyCtx.update(it.u.handler->m_dependencyStart, label->id());
                         } else {
                             TagType* tagType = module()->tagType(it.tagIndex);
-                            const ValueTypeVector& param = module()->functionType(tagType->sigIndex())->param();
+                            const TypeVector& param = module()->functionType(tagType->sigIndex())->param();
                             Label* catchLabel = it.u.handler;
 
                             m_variableList->pushCatchUpdate(catchLabel, param.size());
@@ -444,7 +444,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                         dependencyCtx.update(it.u.handler->m_dependencyStart, instr->id());
                     } else {
                         TagType* tagType = module()->tagType(it.tagIndex);
-                        const ValueTypeVector& param = module()->functionType(tagType->sigIndex())->param();
+                        const TypeVector& param = module()->functionType(tagType->sigIndex())->param();
                         Label* catchLabel = it.u.handler;
 
                         dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
@@ -693,7 +693,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     list++;
                 } while (param < end);
             } else {
-                const ValueTypeVector* types = nullptr;
+                const TypeVector* types = nullptr;
 
                 switch (instr->opcode()) {
                 case ByteCode::CallOpcode: {

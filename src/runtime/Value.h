@@ -100,14 +100,39 @@ public:
     enum RefNull { Null };
     enum ForceInit { Force };
 
+    // Some tpyes (such as Void, GenericRef) are pseudo types, not used by WebAssembly
     enum Type : uint8_t {
         I32,
         I64,
         F32,
         F64,
         V128,
-        FuncRef,
+        // I8/I16 packed types are only used by structs/arrays
+        I8,
+        I16,
+        AnyRef,
+        // NoAnyRef is (ref none), but this name follows the other No... naming conventions
+        NoAnyRef,
+        EqRef,
+        I31Ref,
+        StructRef,
+        ArrayRef,
         ExternRef,
+        NoExternRef,
+        FuncRef,
+        DefinedRef,
+        NoFuncRef,
+        NullAnyRef,
+        NullNoAnyRef,
+        NullEqRef,
+        NullI31Ref,
+        NullStructRef,
+        NullArrayRef,
+        NullExternRef,
+        NullNoExternRef,
+        NullFuncRef,
+        NullNoFuncRef,
+        NullDefinedRef,
         Void, // Void type should be located at end
         NUM = Void
     };
@@ -150,13 +175,13 @@ public:
 
     explicit Value(Function* func)
         : m_ref(func)
-        , m_type(FuncRef)
+        , m_type(NullFuncRef)
     {
     }
 
     explicit Value(void* ptr)
         : m_ref(ptr)
-        , m_type(ExternRef)
+        , m_type(NullExternRef)
     {
     }
 
@@ -197,12 +222,9 @@ public:
         case V128:
             m_v128 = *reinterpret_cast<const Vec128*>(memory);
             break;
-        case FuncRef:
-        case ExternRef:
-            m_ref = *reinterpret_cast<void**>(const_cast<uint8_t*>(memory));
-            break;
         default:
-            ASSERT_NOT_REACHED();
+            ASSERT(isRef());
+            m_ref = *reinterpret_cast<void**>(const_cast<uint8_t*>(memory));
             break;
         }
     }
@@ -259,37 +281,43 @@ public:
 
     Function* asFunction() const
     {
-        ASSERT(type() == FuncRef);
+        ASSERT(type() == FuncRef || type() == NullFuncRef);
         return reinterpret_cast<Function*>(m_ref);
     }
 
     Object* asObject() const
     {
-        ASSERT(type() == ExternRef);
+        ASSERT(type() == ExternRef || type() == NullExternRef);
         return reinterpret_cast<Object*>(m_ref);
     }
 
     Table* asTable() const
     {
-        ASSERT(type() == ExternRef);
+        ASSERT(type() == ExternRef || type() == NullExternRef);
         return reinterpret_cast<Table*>(m_ref);
     }
 
     Memory* asMemory() const
     {
-        ASSERT(type() == ExternRef);
+        ASSERT(type() == ExternRef || type() == NullExternRef);
         return reinterpret_cast<Memory*>(m_ref);
     }
 
     Global* asGlobal() const
     {
-        ASSERT(type() == ExternRef);
+        ASSERT(type() == ExternRef || type() == NullExternRef);
         return reinterpret_cast<Global*>(m_ref);
     }
 
     void* asExternal() const
     {
-        ASSERT(type() == ExternRef);
+        ASSERT(type() == ExternRef || type() == NullExternRef);
+        return reinterpret_cast<void*>(m_ref);
+    }
+
+    void* asReference() const
+    {
+        ASSERT(isRef());
         return reinterpret_cast<void*>(m_ref);
     }
 
@@ -316,13 +344,9 @@ public:
             *reinterpret_cast<Vec128*>(ptr) = m_v128;
             break;
         }
-        case FuncRef:
-        case ExternRef: {
-            *reinterpret_cast<void**>(ptr) = m_ref;
-            break;
-        }
         default: {
-            ASSERT_NOT_REACHED();
+            ASSERT(isRef());
+            *reinterpret_cast<void**>(ptr) = m_ref;
             break;
         }
         }
@@ -341,9 +365,39 @@ public:
         }
     }
 
+    static bool isRefType(Type type)
+    {
+        return type >= AnyRef && type <= NullDefinedRef;
+    }
+
+    static bool isNullableRefType(Type type)
+    {
+        return type >= NullAnyRef && type <= NullDefinedRef;
+    }
+
+    static bool isPackedType(Type type)
+    {
+        return type == I8 || type == I16;
+    }
+
+    bool isRef() const
+    {
+        return isRefType(m_type);
+    }
+
+    bool isNullableRef() const
+    {
+        return isNullableRefType(m_type);
+    }
+
+    bool isPacked() const
+    {
+        return isPackedType(m_type);
+    }
+
     bool isNull() const
     {
-        ASSERT(m_type == ExternRef || m_type == FuncRef);
+        ASSERT(isNullableRef());
         return isNull(m_ref);
     }
 
@@ -368,14 +422,11 @@ public:
             case F64:
             case I64:
                 return m_i64 == v.m_i64;
-            case FuncRef:
-            case ExternRef:
-                return m_ref == v.m_ref;
             case V128:
                 return m_v128 == v.m_v128;
             default:
-                ASSERT_NOT_REACHED();
-                break;
+                ASSERT(isRef());
+                return m_ref == v.m_ref;
             }
         }
         return false;
@@ -394,12 +445,9 @@ public:
             return std::to_string(asF64());
         case V128:
             return (std::string)(asV128());
-        case FuncRef:
-        case ExternRef:
-            return std::to_string((size_t)(asExternal()));
         default:
-            ASSERT_NOT_REACHED();
-            return "";
+            ASSERT(isRef());
+            return std::to_string((size_t)(asExternal()));
         }
     }
 
@@ -429,10 +477,10 @@ inline size_t valueSize(Value::Type type)
         return sizeof(double);
     case Value::V128:
         return 16;
-    case Value::FuncRef:
-    case Value::ExternRef:
-        return sizeof(size_t);
     default:
+        if (Value::isRefType(type)) {
+            return sizeof(size_t);
+        }
         RELEASE_ASSERT_NOT_REACHED();
         return 0;
     }
@@ -453,10 +501,10 @@ inline size_t valueStackAllocatedSize(Value::Type type)
         return 16;
     case Value::Void:
         return 0;
-    case Value::FuncRef:
-    case Value::ExternRef:
-        return sizeof(size_t);
     default:
+        if (Value::isRefType(type)) {
+            return sizeof(size_t);
+        }
         RELEASE_ASSERT_NOT_REACHED();
         return 0;
     }
@@ -485,13 +533,7 @@ inline bool needsCPUWordAlignedAddress(Value::Type type)
     // everything is already aligned!
     return false;
 #else
-    switch (type) {
-    case Value::FuncRef:
-    case Value::ExternRef:
-        return true;
-    default:
-        return false;
-    }
+    return Value::isRefType(type);
 #endif
 }
 

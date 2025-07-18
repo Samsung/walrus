@@ -344,11 +344,11 @@ private:
 class Module : public Object {
     friend class wabt::WASMBinaryReader;
     friend class JITCompiler;
+    friend class Store;
 
 public:
     Module(Store* store, WASMParsingResult& result);
 
-    ~Module();
 
     virtual Object::Kind kind() const override
     {
@@ -446,6 +446,8 @@ public:
 #endif
 
 private:
+    ~Module();
+
     Store* m_store;
     bool m_seenStartAttribute;
     uint32_t m_version;

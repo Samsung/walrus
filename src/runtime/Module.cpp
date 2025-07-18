@@ -75,6 +75,8 @@ ModuleFunction::~ModuleFunction()
 
 Module::~Module()
 {
+    // Types are freed by the type store.
+
     for (size_t i = 0; i < m_imports.size(); i++) {
         delete m_imports[i];
     }
@@ -93,10 +95,6 @@ Module::~Module()
 
     for (size_t i = 0; i < m_elements.size(); i++) {
         delete m_elements[i];
-    }
-
-    for (size_t i = 0; i < m_functionTypes.size(); i++) {
-        delete m_functionTypes[i];
     }
 
     for (size_t i = 0; i < m_globalTypes.size(); i++) {
@@ -307,7 +305,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 struct RunData {
                     Instance* instance;
                     ModuleFunction* exprFunc;
-                    Function* func;
+                    void* ref;
                 } data = { instance, exprs[i], nullptr };
                 Walrus::Trap trap;
                 trap.run([](Walrus::ExecutionState& state, void* d) {
@@ -315,11 +313,11 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                     DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
                     Value func;
                     fakeFunction.call(state, nullptr, &func);
-                    data->func = func.asFunction();
+                    data->ref = func.asReference();
                 },
                          &data);
 
-                table->setElement(state, i + offset, data.func);
+                table->setElement(state, i + offset, data.ref);
             }
 
             instance->m_elementSegments[i].drop();
@@ -398,10 +396,50 @@ static const char* typeName(Value::Type v)
         return "f64";
     case Value::V128:
         return "v128";
-    case Value::FuncRef:
-        return "FuncRef";
+    case Value::AnyRef:
+        return "AnyRef";
+    case Value::NoAnyRef:
+        return "NoAnyRef";
+    case Value::EqRef:
+        return "EqRef";
+    case Value::I31Ref:
+        return "I31Ref";
+    case Value::StructRef:
+        return "StructRef";
+    case Value::ArrayRef:
+        return "ArrayRef";
     case Value::ExternRef:
         return "ExternRef";
+    case Value::NoExternRef:
+        return "NoExternRef";
+    case Value::FuncRef:
+        return "FuncRef";
+    case Value::DefinedRef:
+        return "DefinedRef";
+    case Value::NoFuncRef:
+        return "NoFuncRef";
+    case Value::NullAnyRef:
+        return "NullAnyRef";
+    case Value::NullNoAnyRef:
+        return "NullNoAnyRef";
+    case Value::NullEqRef:
+        return "NullEqRef";
+    case Value::NullI31Ref:
+        return "NullI31Ref";
+    case Value::NullStructRef:
+        return "NullStructRef";
+    case Value::NullArrayRef:
+        return "NullArrayRef";
+    case Value::NullExternRef:
+        return "NullExternRef";
+    case Value::NullNoExternRef:
+        return "NullNoExternRef";
+    case Value::NullFuncRef:
+        return "NullFuncRef";
+    case Value::NullNoFuncRef:
+        return "NullNoFuncRef";
+    case Value::NullDefinedRef:
+        return "NullDefinedRef";
     default:
         RELEASE_ASSERT_NOT_REACHED();
     }
@@ -440,11 +478,10 @@ static void dumpValue(Value v)
         printf(" %" PRIu8, v.asV128().m_data[14]);
         printf(" %" PRIu8, v.asV128().m_data[15]);
         break;
-    case Value::FuncRef:
-        break;
-    case Value::ExternRef:
-        break;
     default:
+        if (v.isRef()) {
+            break;
+        }
         RELEASE_ASSERT_NOT_REACHED();
     }
     printf(", %s", typeName(v.type()));

@@ -27,7 +27,7 @@ static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize
         return ExecutionContext::OutOfBoundsTableAccessError;
     }
 
-    if (UNLIKELY(table->type() != Value::Type::FuncRef)) {
+    if (UNLIKELY(!table->type().isRef())) {
         return ExecutionContext::TypeMismatchError;
     }
 

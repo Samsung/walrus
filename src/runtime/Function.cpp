@@ -56,8 +56,8 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
     uint16_t parameterOffsetSize = ft->paramStackSize() / sizeof(size_t);
     uint16_t resultOffsetSize = ft->resultStackSize() / sizeof(size_t);
     ALLOCA(uint16_t, offsetBuffer, (parameterOffsetSize + resultOffsetSize) * sizeof(uint16_t));
-    const ValueTypeVector& paramTypeInfo = ft->param();
-    const ValueTypeVector& resultTypeInfo = ft->result();
+    const TypeVector& paramTypeInfo = ft->param();
+    const TypeVector& resultTypeInfo = ft->result();
 
     size_t argc = paramTypeInfo.size();
     uint8_t* paramBuffer = valueBuffer;
@@ -120,8 +120,8 @@ void ImportedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteC
                                        uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
     const FunctionType* ft = functionType();
-    const ValueTypeVector& paramTypeInfo = ft->param();
-    const ValueTypeVector& resultTypeInfo = ft->result();
+    const TypeVector& paramTypeInfo = ft->param();
+    const TypeVector& resultTypeInfo = ft->result();
 
     ALLOCA(Value, paramVector, sizeof(Value) * paramTypeInfo.size());
     ALLOCA(Value, resultVector, sizeof(Value) * resultTypeInfo.size());
@@ -163,8 +163,8 @@ void WasiFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeS
                                    uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
     const FunctionType* ft = functionType();
-    const ValueTypeVector& paramTypeInfo = ft->param();
-    const ValueTypeVector& resultTypeInfo = ft->result();
+    const TypeVector& paramTypeInfo = ft->param();
+    const TypeVector& resultTypeInfo = ft->result();
 
     ALLOCA(Value, paramVector, sizeof(Value) * paramTypeInfo.size());
     ALLOCA(Value, resultVector, sizeof(Value) * resultTypeInfo.size());

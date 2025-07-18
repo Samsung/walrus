@@ -381,7 +381,7 @@ static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp, Operand* p
 
 static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
 static void emitMove(sljit_compiler*, uint32_t type, Operand* from, Operand* to);
-static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const ValueTypeVector& types, bool isWordOffsets);
+static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const TypeVector& types, bool isWordOffsets);
 
 #if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM) || (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86) || (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV && defined __riscv_vector)
 #define HAS_SIMD
@@ -699,7 +699,7 @@ static void emitImmediate(sljit_compiler* compiler, Instruction* instr)
     emitStoreImmediate(compiler, result, instr, (instr->info() & Instruction::kHasFloatOperand) != 0);
 }
 
-static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const ValueTypeVector& types, bool isWordOffsets)
+static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const TypeVector& types, bool isWordOffsets)
 {
     for (auto it : types) {
         Operand dst = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);

@@ -17,8 +17,9 @@
 
 #include "parser/WASMParser.h"
 #include "interpreter/ByteCode.h"
-#include "runtime/Store.h"
 #include "runtime/Module.h"
+#include "runtime/Store.h"
+#include "runtime/TypeStore.h"
 
 #include "wabt/walrus/binary-reader-walrus.h"
 
@@ -108,25 +109,33 @@ WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
 #undef WABT_OPCODE
 };
 
-static Walrus::Value::Type toValueKind(Type type)
+static Walrus::Type toRefValueKind(Type type)
+{
+    switch (type) {
+    case Type::FuncRef:
+        return Walrus::Value::NullFuncRef;
+    case Type::ExternRef:
+        return Walrus::Value::NullExternRef;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
+static Walrus::Type toValueKind(Type type)
 {
     switch (type) {
     case Type::I32:
-        return Walrus::Value::Type::I32;
+        return Walrus::Value::I32;
     case Type::I64:
-        return Walrus::Value::Type::I64;
+        return Walrus::Value::I64;
     case Type::F32:
-        return Walrus::Value::Type::F32;
+        return Walrus::Value::F32;
     case Type::F64:
-        return Walrus::Value::Type::F64;
+        return Walrus::Value::F64;
     case Type::V128:
-        return Walrus::Value::Type::V128;
-    case Type::FuncRef:
-        return Walrus::Value::Type::FuncRef;
-    case Type::ExternRef:
-        return Walrus::Value::Type::ExternRef;
+        return Walrus::Value::V128;
     default:
-        RELEASE_ASSERT_NOT_REACHED();
+        return toRefValueKind(type);
     }
 }
 
@@ -310,6 +319,7 @@ private:
     size_t* m_readerOffsetPointer;
     const uint8_t* m_readerDataPointer;
     size_t m_codeEndOffset;
+    Walrus::TypeStore& typeStore;
 
     struct PreprocessData {
         struct LocalVariableInfo {
@@ -499,6 +509,7 @@ private:
     size_t m_dataSegmentMemIndex = -1;
 
     uint32_t m_elementTableIndex;
+    Type m_elementType;
     Walrus::Optional<Walrus::ModuleFunction*> m_elementOffsetFunction;
     Walrus::Vector<Walrus::ModuleFunction*> m_elementExprFunctions;
     Walrus::SegmentMode m_segmentMode;
@@ -690,10 +701,11 @@ private:
     }
 
 public:
-    WASMBinaryReader()
+    WASMBinaryReader(Walrus::TypeStore& typeStore)
         : m_readerOffsetPointer(nullptr)
         , m_readerDataPointer(nullptr)
         , m_codeEndOffset(0)
+        , typeStore(typeStore)
         , m_inInitExpr(false)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
@@ -749,17 +761,23 @@ public:
                             Index resultCount,
                             Type* resultTypes) override
     {
-        Walrus::ValueTypeVector* param = new Walrus::ValueTypeVector();
+        Walrus::TypeVector* param = new Walrus::TypeVector();
         param->reserve(paramCount);
         for (size_t i = 0; i < paramCount; i++) {
             param->push_back(toValueKind(paramTypes[i]));
         }
-        Walrus::ValueTypeVector* result = new Walrus::ValueTypeVector();
+        Walrus::TypeVector* result = new Walrus::TypeVector();
         for (size_t i = 0; i < resultCount; i++) {
             result->push_back(toValueKind(resultTypes[i]));
         }
         ASSERT(index == m_result.m_functionTypes.size());
         m_result.m_functionTypes.push_back(new Walrus::FunctionType(param, result));
+    }
+
+    virtual void EndTypeSection() override
+    {
+        m_result.m_typesAddedToStore = true;
+        typeStore.updateTypes(m_result.m_functionTypes);
     }
 
     virtual void OnImportCount(Index count) override
@@ -797,9 +815,9 @@ public:
     {
         ASSERT(tableIndex == m_result.m_tableTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
-        ASSERT(type == Type::FuncRef || type == Type::ExternRef);
+        ASSERT(type.IsRef());
 
-        m_result.m_tableTypes.push_back(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
+        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type), initialSize, maximumSize));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Table,
             moduleName, fieldName, m_result.m_tableTypes[tableIndex]));
@@ -845,8 +863,8 @@ public:
     virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) override
     {
         ASSERT(index == m_result.m_tableTypes.size());
-        ASSERT(type == Type::FuncRef || type == Type::ExternRef);
-        m_result.m_tableTypes.push_back(new Walrus::TableType(type == Type::FuncRef ? Walrus::Value::Type::FuncRef : Walrus::Value::Type::ExternRef, initialSize, maximumSize));
+        ASSERT(type.IsRef());
+        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type), initialSize, maximumSize));
     }
 
     virtual void OnElemSegmentCount(Index count) override
@@ -874,6 +892,7 @@ public:
 
     virtual void OnElemSegmentElemType(Index index, Type elemType) override
     {
+        m_elementType = elemType;
     }
 
     virtual void OnElemSegmentElemExprCount(Index index, Index count) override
@@ -883,7 +902,7 @@ public:
 
     virtual void BeginElemExpr(Index elem_index, Index expr_index) override
     {
-        beginNewFunction(Walrus::Value::FuncRef, true);
+        beginNewFunction(toRefValueKind(m_elementType), true);
     }
 
     virtual void EndElemExpr(Index elem_index, Index expr_index) override
@@ -1181,7 +1200,7 @@ public:
     {
     }
 
-    uint16_t computeFunctionParameterOrResultOffsetCount(const Walrus::ValueTypeVector& types)
+    uint16_t computeFunctionParameterOrResultOffsetCount(const Walrus::TypeVector& types)
     {
         uint16_t result = 0;
         for (auto t : types) {
@@ -1648,7 +1667,7 @@ public:
                 pushByteCode(Walrus::MoveV128(srcPosition, dstPosition), WASMOpcode::MoveV128Opcode);
                 break;
             default:
-                ASSERT(type == Walrus::Value::FuncRef || type == Walrus::Value::ExternRef);
+                ASSERT(Walrus::Value::isRefType(type));
 
                 if (sizeof(size_t) == 4) {
                     pushByteCode(Walrus::MoveI32(srcPosition, dstPosition), WASMOpcode::MoveI32Opcode);
@@ -2363,7 +2382,7 @@ public:
 
     virtual void OnRefFuncExpr(Index func_index) override
     {
-        auto dst = computeExprResultPosition(Walrus::Value::Type::FuncRef);
+        auto dst = computeExprResultPosition(Walrus::Value::Type::NullFuncRef);
         pushByteCode(Walrus::RefFunc(func_index, dst), WASMOpcode::RefFuncOpcode);
     }
 
@@ -2779,6 +2798,7 @@ namespace Walrus {
 
 WASMParsingResult::WASMParsingResult()
     : m_seenStartAttribute(false)
+    , m_typesAddedToStore(false)
     , m_version(0)
     , m_start(0)
 {
@@ -2806,8 +2826,10 @@ void WASMParsingResult::clear()
         delete m_elements[i];
     }
 
-    for (size_t i = 0; i < m_functionTypes.size(); i++) {
-        delete m_functionTypes[i];
+    if (!m_typesAddedToStore) {
+        for (size_t i = 0; i < m_functionTypes.size(); i++) {
+            delete m_functionTypes[i];
+        }
     }
 
     for (size_t i = 0; i < m_globalTypes.size(); i++) {
@@ -2829,14 +2851,20 @@ void WASMParsingResult::clear()
 
 std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len, const uint32_t JITFlags, const uint32_t featureFlags)
 {
-    wabt::WASMBinaryReader delegate;
+    wabt::WASMBinaryReader delegate(store->getTypeStore());
 
     std::string error = ReadWasmBinary(filename, data, len, &delegate, featureFlags);
     if (error.length()) {
+        if (delegate.parsingResult().m_typesAddedToStore) {
+            store->getTypeStore().releaseTypes(delegate.parsingResult().m_functionTypes);
+        }
         return std::make_pair(nullptr, error);
     }
 
     if (delegate.WalrusParseError().length()) {
+        if (delegate.parsingResult().m_typesAddedToStore) {
+            store->getTypeStore().releaseTypes(delegate.parsingResult().m_functionTypes);
+        }
         return std::make_pair(nullptr, delegate.WalrusParseError());
     }
 
