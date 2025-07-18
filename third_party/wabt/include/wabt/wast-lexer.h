@@ -25,9 +25,11 @@
 #include "wabt/error.h"
 #include "wabt/lexer-source-line-finder.h"
 #include "wabt/literal.h"
-#include "wabt/make-unique.h"
 #include "wabt/opcode.h"
 #include "wabt/token.h"
+
+#include "string-view-lite/string_view.h"
+#include "wabt/make-unique.h"
 
 namespace wabt {
 
@@ -39,11 +41,11 @@ class WastLexer {
   WABT_DISALLOW_COPY_AND_ASSIGN(WastLexer);
 
   WastLexer(std::unique_ptr<LexerSource> source,
-            nonstd::string_view filename,
+            std::string_view filename,
             Errors*);
 
   // Convenience functions.
-  static std::unique_ptr<WastLexer> CreateBufferLexer(nonstd::string_view filename,
+  static std::unique_ptr<WastLexer> CreateBufferLexer(std::string_view filename,
                                                       const void* data,
                                                       size_t size,
                                                       Errors*);
@@ -60,7 +62,7 @@ class WastLexer {
   enum class CharClass { IdChar = 1, Keyword = 2, HexDigit = 4, Digit = 8 };
 
   Location GetLocation();
-  nonstd::string_view GetText(size_t offset = 0);
+  std::string_view GetText(size_t offset = 0);
 
   Token BareToken(TokenType);
   Token LiteralToken(TokenType, LiteralType);
@@ -69,7 +71,7 @@ class WastLexer {
   int PeekChar();
   int ReadChar();
   bool MatchChar(char);
-  bool MatchString(nonstd::string_view);
+  bool MatchString(std::string_view);
   void Newline();
   bool ReadBlockComment();             // Returns false if EOF.
   bool ReadLineComment();              // Returns false if EOF.
@@ -95,7 +97,7 @@ class WastLexer {
   Token GetHexNumberToken(TokenType);
   Token GetInfToken();
   Token GetNanToken();
-  Token GetNameEqNumToken(nonstd::string_view name, TokenType);
+  Token GetNameEqNumToken(std::string_view name, TokenType);
   Token GetIdChars();
   Token GetKeywordToken();
   Token GetReservedToken();

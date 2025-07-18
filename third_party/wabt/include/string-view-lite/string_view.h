@@ -8,8 +8,8 @@
 
 #pragma once
 
-#ifndef NONSTD_SV_LITE_H_INCLUDED
-#define NONSTD_SV_LITE_H_INCLUDED
+#ifndef std_SV_LITE_H_INCLUDED
+#define std_SV_LITE_H_INCLUDED
 
 #define string_view_lite_MAJOR  1
 #define string_view_lite_MINOR  7
@@ -23,14 +23,14 @@
 // string-view lite configuration:
 
 #define nssv_STRING_VIEW_DEFAULT  0
-#define nssv_STRING_VIEW_NONSTD   1
+#define nssv_STRING_VIEW_std   1
 #define nssv_STRING_VIEW_STD      2
 
 // tweak header support:
 
 #ifdef __has_include
-# if __has_include(<nonstd/string_view.tweak.hpp>)
-#  include <nonstd/string_view.tweak.hpp>
+# if __has_include(<std/string_view.tweak.hpp>)
+#  include <std/string_view.tweak.hpp>
 # endif
 #define nssv_HAVE_TWEAK_HEADER  1
 #else
@@ -41,7 +41,7 @@
 // string_view selection and configuration:
 
 #if !defined( nssv_CONFIG_SELECT_STRING_VIEW )
-# define nssv_CONFIG_SELECT_STRING_VIEW  ( nssv_HAVE_STD_STRING_VIEW ? nssv_STRING_VIEW_STD : nssv_STRING_VIEW_NONSTD )
+# define nssv_CONFIG_SELECT_STRING_VIEW  ( nssv_HAVE_STD_STRING_VIEW ? nssv_STRING_VIEW_STD : nssv_STRING_VIEW_std )
 #endif
 
 #ifndef  nssv_CONFIG_STD_SV_OPERATOR
@@ -130,7 +130,7 @@
 
 #if nssv_CONFIG_CONVERSION_STD_STRING_FREE_FUNCTIONS
 
-namespace nonstd {
+namespace std {
 
 template< class CharT, class Traits, class Allocator = std::allocator<CharT> >
 std::basic_string<CharT, Traits, Allocator>
@@ -184,11 +184,11 @@ constexpr std::wstring_view operator "" _sv( const wchar_t* str, size_t len ) no
 
 #endif // nssv_CONFIG_USR_SV_OPERATOR
 
-} // namespace nonstd
+} // namespace std
 
 #endif // nssv_CONFIG_CONVERSION_STD_STRING_FREE_FUNCTIONS
 
-namespace nonstd {
+namespace std {
 
 using std::string_view;
 using std::wstring_view;
@@ -207,7 +207,7 @@ using std::operator>=;
 
 using std::operator<<;
 
-} // namespace nonstd
+} // namespace std
 
 #else // nssv_HAVE_STD_STRING_VIEW
 
@@ -470,7 +470,7 @@ nssv_DISABLE_MSVC_WARNINGS( 4455 26481 26472 )
 //nssv_DISABLE_CLANG_WARNINGS( "-Wuser-defined-literals" )
 //nssv_DISABLE_GNUC_WARNINGS( -Wliteral-suffix )
 
-namespace nonstd { namespace sv_lite {
+namespace std { namespace sv_lite {
 
 //
 // basic_string_view declaration:
@@ -701,7 +701,7 @@ public:
 #else
         if ( pos >= size() )
         {
-            throw std::out_of_range("nonstd::string_view::at()");
+            throw std::out_of_range("std::string_view::at()");
         }
 #endif
         return data_at( pos );
@@ -743,7 +743,7 @@ public:
 #else
         if ( pos > size() )
         {
-            throw std::out_of_range("nonstd::string_view::copy()");
+            throw std::out_of_range("std::string_view::copy()");
         }
 #endif
         const size_type rlen = (std::min)( n, size() - pos );
@@ -760,7 +760,7 @@ public:
 #else
         if ( pos > size() )
         {
-            throw std::out_of_range("nonstd::string_view::substr()");
+            throw std::out_of_range("std::string_view::substr()");
         }
 #endif
         return basic_string_view( data() + pos, (std::min)( n, size() - pos ) );
@@ -1473,7 +1473,7 @@ typedef basic_string_view<char16_t>  u16string_view;
 typedef basic_string_view<char32_t>  u32string_view;
 #endif
 
-}} // namespace nonstd::sv_lite
+}} // namespace std::sv_lite
 
 //
 // 24.4.6 Suffix for basic_string_view literals:
@@ -1481,59 +1481,59 @@ typedef basic_string_view<char32_t>  u32string_view;
 
 #if nssv_HAVE_USER_DEFINED_LITERALS
 
-namespace nonstd {
+namespace std {
 nssv_inline_ns namespace literals {
 nssv_inline_ns namespace string_view_literals {
 
 #if nssv_CONFIG_STD_SV_OPERATOR && nssv_HAVE_STD_DEFINED_LITERALS
 
-nssv_constexpr nonstd::sv_lite::string_view operator "" sv( const char* str, size_t len ) nssv_noexcept  // (1)
+nssv_constexpr std::sv_lite::string_view operator "" sv( const char* str, size_t len ) nssv_noexcept  // (1)
 {
-    return nonstd::sv_lite::string_view{ str, len };
+    return std::sv_lite::string_view{ str, len };
 }
 
-nssv_constexpr nonstd::sv_lite::u16string_view operator "" sv( const char16_t* str, size_t len ) nssv_noexcept  // (2)
+nssv_constexpr std::sv_lite::u16string_view operator "" sv( const char16_t* str, size_t len ) nssv_noexcept  // (2)
 {
-    return nonstd::sv_lite::u16string_view{ str, len };
+    return std::sv_lite::u16string_view{ str, len };
 }
 
-nssv_constexpr nonstd::sv_lite::u32string_view operator "" sv( const char32_t* str, size_t len ) nssv_noexcept  // (3)
+nssv_constexpr std::sv_lite::u32string_view operator "" sv( const char32_t* str, size_t len ) nssv_noexcept  // (3)
 {
-    return nonstd::sv_lite::u32string_view{ str, len };
+    return std::sv_lite::u32string_view{ str, len };
 }
 
-nssv_constexpr nonstd::sv_lite::wstring_view operator "" sv( const wchar_t* str, size_t len ) nssv_noexcept  // (4)
+nssv_constexpr std::sv_lite::wstring_view operator "" sv( const wchar_t* str, size_t len ) nssv_noexcept  // (4)
 {
-    return nonstd::sv_lite::wstring_view{ str, len };
+    return std::sv_lite::wstring_view{ str, len };
 }
 
 #endif // nssv_CONFIG_STD_SV_OPERATOR && nssv_HAVE_STD_DEFINED_LITERALS
 
 #if nssv_CONFIG_USR_SV_OPERATOR
 
-nssv_constexpr nonstd::sv_lite::string_view operator "" _sv( const char* str, size_t len ) nssv_noexcept  // (1)
+nssv_constexpr std::sv_lite::string_view operator "" _sv( const char* str, size_t len ) nssv_noexcept  // (1)
 {
-    return nonstd::sv_lite::string_view{ str, len };
+    return std::sv_lite::string_view{ str, len };
 }
 
-nssv_constexpr nonstd::sv_lite::u16string_view operator "" _sv( const char16_t* str, size_t len ) nssv_noexcept  // (2)
+nssv_constexpr std::sv_lite::u16string_view operator "" _sv( const char16_t* str, size_t len ) nssv_noexcept  // (2)
 {
-    return nonstd::sv_lite::u16string_view{ str, len };
+    return std::sv_lite::u16string_view{ str, len };
 }
 
-nssv_constexpr nonstd::sv_lite::u32string_view operator "" _sv( const char32_t* str, size_t len ) nssv_noexcept  // (3)
+nssv_constexpr std::sv_lite::u32string_view operator "" _sv( const char32_t* str, size_t len ) nssv_noexcept  // (3)
 {
-    return nonstd::sv_lite::u32string_view{ str, len };
+    return std::sv_lite::u32string_view{ str, len };
 }
 
-nssv_constexpr nonstd::sv_lite::wstring_view operator "" _sv( const wchar_t* str, size_t len ) nssv_noexcept  // (4)
+nssv_constexpr std::sv_lite::wstring_view operator "" _sv( const wchar_t* str, size_t len ) nssv_noexcept  // (4)
 {
-    return nonstd::sv_lite::wstring_view{ str, len };
+    return std::sv_lite::wstring_view{ str, len };
 }
 
 #endif // nssv_CONFIG_USR_SV_OPERATOR
 
-}}} // namespace nonstd::literals::string_view_literals
+}}} // namespace std::literals::string_view_literals
 
 #endif
 
@@ -1543,7 +1543,7 @@ nssv_constexpr nonstd::sv_lite::wstring_view operator "" _sv( const wchar_t* str
 
 #if nssv_CONFIG_CONVERSION_STD_STRING_FREE_FUNCTIONS
 
-namespace nonstd {
+namespace std {
 namespace sv_lite {
 
 // Exclude MSVC 14 (19.00): it yields ambiguous to_string():
@@ -1582,15 +1582,15 @@ to_string_view( std::basic_string<CharT, Traits, Allocator> const & s )
     return basic_string_view<CharT, Traits>( s.data(), s.size() );
 }
 
-}} // namespace nonstd::sv_lite
+}} // namespace std::sv_lite
 
 #endif // nssv_CONFIG_CONVERSION_STD_STRING_FREE_FUNCTIONS
 
 //
-// make types and algorithms available in namespace nonstd:
+// make types and algorithms available in namespace std:
 //
 
-namespace nonstd {
+namespace std {
 
 using sv_lite::basic_string_view;
 using sv_lite::string_view;
@@ -1621,7 +1621,7 @@ using sv_lite::to_string;
 using sv_lite::to_string_view;
 #endif
 
-} // namespace nonstd
+} // namespace std
 
 // 24.4.5 Hash support (C++11):
 
@@ -1635,40 +1635,40 @@ using sv_lite::to_string_view;
 namespace std {
 
 template<>
-struct hash< nonstd::string_view >
+struct hash< std::string_view >
 {
 public:
-    std::size_t operator()( nonstd::string_view v ) const nssv_noexcept
+    std::size_t operator()( std::string_view v ) const nssv_noexcept
     {
         return std::hash<std::string>()( std::string( v.data(), v.size() ) );
     }
 };
 
 template<>
-struct hash< nonstd::wstring_view >
+struct hash< std::wstring_view >
 {
 public:
-    std::size_t operator()( nonstd::wstring_view v ) const nssv_noexcept
+    std::size_t operator()( std::wstring_view v ) const nssv_noexcept
     {
         return std::hash<std::wstring>()( std::wstring( v.data(), v.size() ) );
     }
 };
 
 template<>
-struct hash< nonstd::u16string_view >
+struct hash< std::u16string_view >
 {
 public:
-    std::size_t operator()( nonstd::u16string_view v ) const nssv_noexcept
+    std::size_t operator()( std::u16string_view v ) const nssv_noexcept
     {
         return std::hash<std::u16string>()( std::u16string( v.data(), v.size() ) );
     }
 };
 
 template<>
-struct hash< nonstd::u32string_view >
+struct hash< std::u32string_view >
 {
 public:
-    std::size_t operator()( nonstd::u32string_view v ) const nssv_noexcept
+    std::size_t operator()( std::u32string_view v ) const nssv_noexcept
     {
         return std::hash<std::u32string>()( std::u32string( v.data(), v.size() ) );
     }
@@ -1681,4 +1681,4 @@ public:
 nssv_RESTORE_WARNINGS()
 
 #endif // nssv_HAVE_STD_STRING_VIEW
-#endif // NONSTD_SV_LITE_H_INCLUDED
+#endif // std_SV_LITE_H_INCLUDED
