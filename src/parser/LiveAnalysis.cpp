@@ -139,6 +139,11 @@ void LiveAnalysis::extendNaiveRange(std::vector<LiveAnalysis::BasicBlock>& basic
     }
 
     for (VariableRange& range : ranges) {
+        if (!range.value.isZeroValue()) {
+            range.needsInit = true;
+            range.start = 0;
+        }
+
         if (range.reads.empty() && range.sets.empty()) {
             continue;
         }
@@ -155,39 +160,32 @@ void LiveAnalysis::extendNaiveRange(std::vector<LiveAnalysis::BasicBlock>& basic
     }
 }
 
-void LiveAnalysis::pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func, bool neverUsedElementExists, Walrus::ByteCodeStackOffset neverUsedElementPos, uint8_t neverUsedElementSize)
+void LiveAnalysis::pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func)
 {
-    if (neverUsedElementExists) {
-        if (neverUsedElementSize == 4) {
-            func->pushByteCodeToFront(Walrus::Const32(neverUsedElementPos, 0));
-        } else if (neverUsedElementSize == 8) {
-            func->pushByteCodeToFront(Walrus::Const64(neverUsedElementPos, 0));
-        } else if (neverUsedElementSize == 16) {
-            uint8_t empty[16];
-            func->pushByteCodeToFront(Walrus::Const128(neverUsedElementPos, empty));
+    uint16_t constSize = 0;
+    if (!UnusedReads.elements.empty()) {
+        if (UnusedReads.valueSize == 4) {
+            func->pushByteCodeToFront(Walrus::Const32(UnusedReads.pos, 0));
+            constSize += sizeof(Walrus::Const32);
+        } else if (UnusedReads.valueSize == 8) {
+            func->pushByteCodeToFront(Walrus::Const64(UnusedReads.pos, 0));
+            constSize += sizeof(Walrus::Const64);
+        } else if (UnusedReads.valueSize == 16) {
+            uint8_t empty[16] = { 0 };
+            func->pushByteCodeToFront(Walrus::Const128(UnusedReads.pos, empty));
+            constSize += sizeof(Walrus::Const128);
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
 
-    std::vector<Walrus::ByteCodeStackOffset> pushedOffsets;
-    if (neverUsedElementExists) {
-        pushedOffsets.push_back(neverUsedElementPos);
-    }
-    uint16_t constSize = 0;
     for (auto& range : ranges) {
-        if (range.isParam) {
+        if (range.isParam || !range.needsInit || (range.sets.empty() && range.reads.empty())) {
             continue;
         }
 
-        if (!range.needsInit && (!neverUsedElementExists && range.newOffset == neverUsedElementPos)) {
+        if (range.newOffset != UINT16_MAX && (range.newOffset == UnusedReads.pos || range.newOffset == UnusedWrites.pos)) {
             continue;
-        }
-
-        if (!range.needsInit && std::find(pushedOffsets.begin(), pushedOffsets.end(), range.newOffset) != pushedOffsets.end()) {
-            continue;
-        } else {
-            pushedOffsets.push_back(range.newOffset);
         }
 
         switch (range.value.type()) {
@@ -252,44 +250,43 @@ void LiveAnalysis::pushVariableInits(std::vector<LiveAnalysis::VariableRange>& r
 void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<VariableRange>& ranges, uint16_t stackStart, uint16_t stackEnd)
 {
     std::vector<std::pair<size_t, size_t>> freeSpaces = { std::make_pair(stackStart, stackEnd) };
-    bool neverUsedElementExists = false;
-    uint8_t neverUsedElementSize = 0;
+
     for (VariableRange& range : ranges) {
-        bool isNeverUsed = false;
-        if (range.isParam) {
+        if ((range.reads.empty() && range.sets.empty()) || !range.value.isZeroValue() || range.isParam) {
             continue;
         }
 
-        if (range.reads.empty()) {
-            isNeverUsed = true;
-        }
+        // if (range.sets.empty() && !range.reads.empty() && !range.needsInit) {
+        if (range.sets.empty() && !range.reads.empty()) {
+            UnusedReads.elements.push_back(&range);
 
-        // if (range.sets.empty() && !range.reads.empty() && range.value.isZeroValue()) {
-        //     isNeverUsed = true;
-        // }
+            if (UnusedReads.valueSize < Walrus::valueSize(range.value.type())) {
+                UnusedReads.valueSize = Walrus::valueSize(range.value.type());
+            }
+        } else if (!range.sets.empty() && range.reads.empty()) {
+            UnusedWrites.elements.push_back(&range);
 
-        if (isNeverUsed && Walrus::valueSize(range.value.type()) > neverUsedElementSize) {
-            neverUsedElementSize = Walrus::valueSize(range.value.type());
-        }
-
-        if (isNeverUsed) {
-            neverUsedElementExists = true;
+            if (UnusedWrites.valueSize < Walrus::valueSize(range.value.type())) {
+                UnusedWrites.valueSize = Walrus::valueSize(range.value.type());
+            }
         }
     }
 
-    uint16_t neverUsedElementPos = freeSpaces.front().first;
-    if (neverUsedElementExists) {
-        freeSpaces.front().first += neverUsedElementSize;
+    if (!UnusedWrites.elements.empty()) {
+        UnusedWrites.pos = freeSpaces.front().first;
+        freeSpaces.front().first += UnusedWrites.valueSize;
 
-        for (VariableRange& range : ranges) {
-            if (range.isParam) {
-                continue;
-            }
+        for (VariableRange* range : UnusedWrites.elements) {
+            range->newOffset = UnusedWrites.pos;
+        }
+    }
 
-            if (range.reads.empty()) {
-                range.newOffset = neverUsedElementPos;
-                range.needsInit = false;
-            }
+    if (!UnusedReads.elements.empty()) {
+        UnusedReads.pos = freeSpaces.front().first;
+        freeSpaces.front().first += UnusedReads.valueSize;
+
+        for (VariableRange* range : UnusedReads.elements) {
+            range->newOffset = UnusedReads.pos;
         }
     }
 
@@ -305,7 +302,10 @@ void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<Variable
             }
 
             ASSERT(!freeSpaces.empty());
-            if (range.start == byteCodeOffset && !range.isParam && range.newOffset != neverUsedElementPos) {
+            bool isUnusedRead = std::find(UnusedReads.elements.begin(), UnusedReads.elements.end(), &range) != UnusedReads.elements.end();
+            bool isUnusedWrite = std::find(UnusedWrites.elements.begin(), UnusedWrites.elements.end(), &range) != UnusedWrites.elements.end();
+
+            if (range.start == byteCodeOffset && !range.isParam && !(isUnusedRead || isUnusedWrite)) {
                 for (size_t i = 0; i < freeSpaces.size(); i++) {
                     if ((freeSpaces[i].second - freeSpaces[i].first) >= Walrus::valueSize(range.value.type())) {
                         range.newOffset = freeSpaces[i].first;
@@ -320,7 +320,7 @@ void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<Variable
                 }
             }
 
-            if (range.end == byteCodeOffset && range.newOffset != UINT16_MAX && (range.newOffset != neverUsedElementPos || !neverUsedElementExists) && !range.isParam) {
+            if (range.end == byteCodeOffset && range.newOffset != UINT16_MAX && !(isUnusedRead || isUnusedWrite) && !range.isParam) {
                 bool insertedSpace = false;
                 for (auto& space : freeSpaces) {
                     if (space.first - Walrus::valueSize(range.value.type()) == range.newOffset) {
@@ -400,7 +400,7 @@ void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<Variable
         byteCodeOffset += code->getSize();
     }
 
-    pushVariableInits(ranges, func, neverUsedElementExists, neverUsedElementPos, neverUsedElementSize);
+    pushVariableInits(ranges, func);
 
     // func->setStackSize(func->requiredStackSize() + constSize);
 }
@@ -455,6 +455,15 @@ void LiveAnalysis::orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunctio
             case Walrus::ByteCode::ThrowOpcode:
             case Walrus::ByteCode::BrTableOpcode:
             case Walrus::ByteCode::EndOpcode: {
+                // SIMD ByteCodes
+            case Walrus::ByteCode::V128Store8LaneOpcode:
+            case Walrus::ByteCode::V128Store8LaneMemIdxOpcode:
+            case Walrus::ByteCode::V128Store16LaneOpcode:
+            case Walrus::ByteCode::V128Store16LaneMemIdxOpcode:
+            case Walrus::ByteCode::V128Store32LaneOpcode:
+            case Walrus::ByteCode::V128Store32LaneMemIdxOpcode:
+            case Walrus::ByteCode::V128Store64LaneOpcode:
+            case Walrus::ByteCode::V128Store64LaneMemIdxOpcode:
                 elem->reads.push_back(byteCodeOffset);
                 break;
             }

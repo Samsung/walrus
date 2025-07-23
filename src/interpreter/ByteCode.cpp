@@ -156,18 +156,21 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         FOR_EACH_BYTECODE_LOAD_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
+        FOR_EACH_BYTECODE_SIMD_ETC_MEMIDX_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
 #undef GENERATE_MEMORY_LOAD_CODE_CASE
-        {
-            offsets.push_back(reinterpret_cast<Walrus::MemoryLoad *>(const_cast<ByteCode *>(this))->srcOffset());
-            offsets.push_back(reinterpret_cast<Walrus::MemoryLoad *>(const_cast<ByteCode *>(this))->dstOffset());
-            break;
-        }
+    case Walrus::ByteCode::V128Load32ZeroOpcode:
+    case Walrus::ByteCode::V128Load64ZeroOpcode: {
+        offsets.push_back(reinterpret_cast<Walrus::MemoryLoad *>(const_cast<ByteCode *>(this))->srcOffset());
+        offsets.push_back(reinterpret_cast<Walrus::MemoryLoad *>(const_cast<ByteCode *>(this))->dstOffset());
+        break;
+    }
 
 #define GENERATE_SIMD_MEMORY_LOAD_CASE(name, ...) \
     case Walrus::ByteCode::name##Opcode:
         FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(GENERATE_SIMD_MEMORY_LOAD_CASE)
 #undef GENERATE_SIMD_MEMORY_LOAD_CASE
         {
+            offsets.push_back(reinterpret_cast<Walrus::SIMDMemoryLoad *>(const_cast<ByteCode *>(this))->index());
             offsets.push_back(reinterpret_cast<Walrus::SIMDMemoryLoad *>(const_cast<ByteCode *>(this))->src0Offset());
             offsets.push_back(reinterpret_cast<Walrus::SIMDMemoryLoad *>(const_cast<ByteCode *>(this))->src1Offset());
             offsets.push_back(reinterpret_cast<Walrus::SIMDMemoryLoad *>(const_cast<ByteCode *>(this))->dstOffset());
@@ -200,6 +203,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_SIMD_MEMORY_STORE_CASE)
 #undef GENERATE_SIMD_MEMORY_STORE_CASE
         {
+            offsets.push_back(reinterpret_cast<Walrus::SIMDMemoryStore *>(const_cast<ByteCode *>(this))->index());
             offsets.push_back(reinterpret_cast<Walrus::SIMDMemoryStore *>(const_cast<ByteCode *>(this))->src0Offset());
             offsets.push_back(reinterpret_cast<Walrus::SIMDMemoryStore *>(const_cast<ByteCode *>(this))->src1Offset());
             break;
@@ -209,6 +213,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(GENERATE_SIMD_EXTRACT_LANE_CODE_CASE)
 #undef GENERATE_SIMD_EXTRACT_LANE_CODE_CASE
         {
+            offsets.push_back(reinterpret_cast<Walrus::SIMDExtractLane *>(const_cast<ByteCode *>(this))->index());
             offsets.push_back(reinterpret_cast<Walrus::SIMDExtractLane *>(const_cast<ByteCode *>(this))->srcOffset());
             offsets.push_back(reinterpret_cast<Walrus::SIMDExtractLane *>(const_cast<ByteCode *>(this))->dstOffset());
             break;
@@ -218,6 +223,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(GENERATE_SIMD_REPLACE_LANE_CODE_CASE)
 #undef GENERATE_SIMD_REPLACE_LANE_CODE_CASE
         {
+            offsets.push_back(reinterpret_cast<Walrus::SIMDReplaceLane *>(const_cast<ByteCode *>(this))->index());
             offsets.push_back(reinterpret_cast<Walrus::SIMDReplaceLane *>(const_cast<ByteCode *>(this))->srcOffsets()[0]);
             offsets.push_back(reinterpret_cast<Walrus::SIMDReplaceLane *>(const_cast<ByteCode *>(this))->srcOffsets()[1]);
             offsets.push_back(reinterpret_cast<Walrus::SIMDReplaceLane *>(const_cast<ByteCode *>(this))->dstOffset());
@@ -549,8 +555,6 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
         }
         break;
     }
-
-
 #define GENERATE_BYTECODE_OFFSET2VALUE_MEMIDX_CASE(name, ...) \
     case Walrus::ByteCode::name##Opcode:
         FOR_EACH_BYTECODE_STORE_MEMIDX_OP(GENERATE_BYTECODE_OFFSET2VALUE_MEMIDX_CASE)
@@ -571,13 +575,81 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
         FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(GENERATE_SIMD_MEMORY_LOAD_CASE)
 #undef GENERATE_SIMD_MEMORY_LOAD_CASE
         {
+            SIMDMemoryLoad *memoryLoad = reinterpret_cast<SIMDMemoryLoad *>(const_cast<ByteCode *>(this));
+            switch (index) {
+            case 0: {
+                memoryLoad->setIndex(offset);
+                break;
+            }
+            case 1: {
+                memoryLoad->setSrc0Offset(offset);
+                break;
+            }
+            case 2: {
+                memoryLoad->setSrc1Offset(offset);
+                break;
+            }
+            case 3: {
+                memoryLoad->setDstOffset(offset);
+                break;
+            }
+            }
             break;
         }
-#define GENERATE_SIMD_MEMORY_STORE_CASE(name, ...) \
+#define GENERATE_SIMD_MEMORY_LOAD_LANE_MEMIDX_CASE(name, ...) \
     case Walrus::ByteCode::name##Opcode:
-        FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_SIMD_MEMORY_STORE_CASE)
-#undef GENERATE_SIMD_MEMORY_STORE_CASE
+        FOR_EACH_BYTECODE_SIMD_LOAD_LANE_MEMIDX_OP(GENERATE_SIMD_MEMORY_LOAD_LANE_MEMIDX_CASE)
+#undef GENERATE_SIMD_MEMORY_LOAD_LANE_MEMIDX_CASE
         {
+            SIMDMemoryLoadMemIdx *memoryLoad = reinterpret_cast<SIMDMemoryLoadMemIdx *>(const_cast<ByteCode *>(this));
+            switch (index) {
+            case 0: {
+                memoryLoad->setIndex(offset);
+                break;
+            }
+            case 1: {
+                memoryLoad->setSrc0Offset(offset);
+                break;
+            }
+            case 2: {
+                memoryLoad->setSrc1Offset(offset);
+                break;
+            }
+            case 3: {
+                memoryLoad->setDstOffset(offset);
+                break;
+            }
+            }
+            break;
+        }
+#define GENERATE_SIMD_MEMORY_STORE_LANE_CASE(name, ...) \
+    case Walrus::ByteCode::name##Opcode:
+        FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_SIMD_MEMORY_STORE_LANE_CASE)
+#undef GENERATE_SIMD_MEMORY_STORE_LANE_CASE
+        {
+            SIMDMemoryStore *memoryStore = reinterpret_cast<SIMDMemoryStore *>(const_cast<ByteCode *>(this));
+            if (index == 0) {
+                memoryStore->setIndex(offset);
+            } else if (index == 1) {
+                memoryStore->setSrc0Offset(offset);
+            } else {
+                memoryStore->setSrc1Offset(offset);
+            }
+            break;
+        }
+#define GENERATE_SIMD_MEMORY_STORE_LANE_MEMIDX_CASE(name, ...) \
+    case Walrus::ByteCode::name##Opcode:
+        FOR_EACH_BYTECODE_SIMD_STORE_LANE_MEMIDX_OP(GENERATE_SIMD_MEMORY_STORE_LANE_MEMIDX_CASE)
+#undef GENERATE_SIMD_MEMORY_STORE_LANE_MEMIDX_CASE
+        {
+            SIMDMemoryStoreMemIdx *memoryStore = reinterpret_cast<SIMDMemoryStoreMemIdx *>(const_cast<ByteCode *>(this));
+            if (index == 0) {
+                memoryStore->setIndex(offset);
+            } else if (index == 1) {
+                memoryStore->setSrc0Offset(offset);
+            } else {
+                memoryStore->setSrc1Offset(offset);
+            }
             break;
         }
 #define GENERATE_SIMD_EXTRACT_LANE_CODE_CASE(name, ...) \
@@ -585,6 +657,14 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
         FOR_EACH_BYTECODE_SIMD_EXTRACT_LANE_OP(GENERATE_SIMD_EXTRACT_LANE_CODE_CASE)
 #undef GENERATE_SIMD_EXTRACT_LANE_CODE_CASE
         {
+            SIMDExtractLane *extractLane = reinterpret_cast<SIMDExtractLane *>(const_cast<ByteCode *>(this));
+            if (index == 0) {
+                extractLane->setIndex(offset);
+            } else if (index == 1) {
+                extractLane->setSrcOffset(offset);
+            } else {
+                extractLane->setDstOffset(offset);
+            }
             break;
         }
 #define GENERATE_SIMD_REPLACE_LANE_CODE_CASE(name, ...) \
@@ -592,9 +672,28 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
         FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(GENERATE_SIMD_REPLACE_LANE_CODE_CASE)
 #undef GENERATE_SIMD_REPLACE_LANE_CODE_CASE
         {
+            SIMDReplaceLane *replaceLane = reinterpret_cast<SIMDReplaceLane *>(const_cast<ByteCode *>(this));
+
+            switch (index) {
+            case 0: {
+                replaceLane->setIndex(offset);
+                break;
+            }
+            case 1: {
+                replaceLane->setSrc0Offset(offset);
+                break;
+            }
+            case 2: {
+                replaceLane->setSrc1Offset(offset);
+                break;
+            }
+            case 3: {
+                replaceLane->setDstOffset(offset);
+                break;
+            }
+            }
             break;
         }
-    // Special cases that require manual handling. This list needs to be extended if new byte codes are introduced.
     case Walrus::ByteCode::SelectOpcode: {
         Walrus::Select *sel = reinterpret_cast<Walrus::Select *>(const_cast<ByteCode *>(this));
         switch (index) {
@@ -628,6 +727,8 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
         break;
     }
     case Walrus::ByteCode::MemorySizeOpcode: {
+        MemorySize *memorySize = reinterpret_cast<Walrus::MemorySize *>(const_cast<ByteCode *>(this));
+        memorySize->setDstOffset(offset);
         break;
     }
     case Walrus::ByteCode::MemoryInitOpcode: {

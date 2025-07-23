@@ -27,6 +27,7 @@ namespace Walrus {
 
 uvwasi_t* WASI::g_uvwasi;
 WASI::WasiFuncInfo WASI::g_wasiFunctions[WasiFuncIndex::FuncEnd];
+std::vector<std::pair<std::string, uint32_t>> WASI::preopens;
 
 static void* get_memory_pointer(Instance* instance, Value& value, size_t size)
 {
