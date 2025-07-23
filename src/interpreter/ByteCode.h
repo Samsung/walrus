@@ -1763,6 +1763,11 @@ public:
     {
     }
 
+    void setDstOffset(Walrus::ByteCodeStackOffset o)
+    {
+        m_dstOffset = o;
+    }
+
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     uint16_t memIndex() const { return m_memIndex; }
 
@@ -1992,9 +1997,13 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset index() const { return m_index; }
+    void setIndex(ByteCodeStackOffset o) { m_index = o; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -2026,9 +2035,13 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset index() const { return m_index; }
+    void setIndex(ByteCodeStackOffset o) { m_index = o; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
     uint16_t memIndex() const { return m_memIndex; }
     uint16_t alignment() const { return m_alignment; }
 
@@ -2181,8 +2194,11 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset index() const { return m_index; }
+    void setIndex(Walrus::ByteCodeStackOffset o) { m_index = o; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -2212,8 +2228,11 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset index() const { return m_index; }
+    void setIndex(Walrus::ByteCodeStackOffset o) { m_index = o; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(Walrus::ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(Walrus::ByteCodeStackOffset o) { m_src1Offset = o; }
     uint16_t memIndex() const { return m_memIndex; }
     uint16_t alignment() const { return m_alignment; }
 
@@ -2243,8 +2262,11 @@ public:
     }
 
     ByteCodeStackOffset index() const { return m_index; }
+    void setIndex(ByteCodeStackOffset o) { m_index = o; }
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset o) { m_srcOffset = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -2269,8 +2291,12 @@ public:
     }
 
     uint32_t index() const { return m_index; }
+    void setIndex(ByteCodeStackOffset o) { m_index = o; }
     const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_srcOffsets[0] = o; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_srcOffsets[1] = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
