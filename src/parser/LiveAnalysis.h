@@ -62,12 +62,28 @@ public:
         }
     };
 
+    struct StackElement {
+        Walrus::ByteCodeStackOffset pos;
+        uint8_t valueSize;
+        std::vector<VariableRange*> elements;
+
+        StackElement()
+            : pos(UINT16_MAX)
+            , valueSize(0)
+        {
+        }
+    };
+
     void orderStack(Walrus::ModuleFunction* func, std::vector<VariableRange>& ranges, uint16_t stackStart, uint16_t stackEnd);
     void extendNaiveRange(std::vector<BasicBlock>& basicBlocks, std::vector<VariableRange>& ranges);
     void orderInsAndOuts(std::vector<BasicBlock>& basicBlocks, std::vector<VariableRange>& ranges, size_t end, size_t position = 0);
     void assignBasicBlocks(Walrus::ByteCode* code, std::vector<BasicBlock>& basicBlocks, size_t byteCodeOffset);
     void optimizeLocals(Walrus::ModuleFunction* func, std::vector<std::pair<size_t, Walrus::Value>>& locals, size_t constantStart);
     void orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunction* func, std::vector<VariableRange>& ranges, Walrus::ByteCodeStackOffset byteCodeOffset);
-    void pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func, bool neverUsedElementExists, Walrus::ByteCodeStackOffset neverUsedElementPos, uint8_t neverUsedElementSize);
+    // void pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func, bool neverUsedElementExists, Walrus::ByteCodeStackOffset neverUsedElementPos, uint8_t neverUsedElementSize);
+    void pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func);
+
+    StackElement UnusedReads;
+    StackElement UnusedWrites;
 };
 } // namespace wabt
