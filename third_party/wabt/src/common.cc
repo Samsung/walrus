@@ -26,6 +26,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "string-view-lite/string_view.h"
+
 #if COMPILER_IS_MSVC
 #include <fcntl.h>
 #include <io.h>
@@ -43,21 +45,38 @@ Reloc::Reloc(RelocType type, Offset offset, Index index, int32_t addend)
 const char* g_kind_name[] = {"func", "table", "memory", "global", "tag"};
 WABT_STATIC_ASSERT(WABT_ARRAY_SIZE(g_kind_name) == kExternalKindCount);
 
+// clang-format off
 const char* g_reloc_type_name[] = {
-    "R_WASM_FUNCTION_INDEX_LEB",   "R_WASM_TABLE_INDEX_SLEB",
-    "R_WASM_TABLE_INDEX_I32",      "R_WASM_MEMORY_ADDR_LEB",
-    "R_WASM_MEMORY_ADDR_SLEB",     "R_WASM_MEMORY_ADDR_I32",
-    "R_WASM_TYPE_INDEX_LEB",       "R_WASM_GLOBAL_INDEX_LEB",
-    "R_WASM_FUNCTION_OFFSET_I32",  "R_WASM_SECTION_OFFSET_I32",
-    "R_WASM_TAG_INDEX_LEB",        "R_WASM_MEMORY_ADDR_REL_SLEB",
-    "R_WASM_TABLE_INDEX_REL_SLEB", "R_WASM_GLOBAL_INDEX_I32",
-    "R_WASM_MEMORY_ADDR_LEB64",    "R_WASM_MEMORY_ADDR_SLEB64",
-    "R_WASM_MEMORY_ADDR_I64",      "R_WASM_MEMORY_ADDR_REL_SLEB64",
-    "R_WASM_TABLE_INDEX_SLEB64",   "R_WASM_TABLE_INDEX_I64",
-    "R_WASM_TABLE_NUMBER_LEB",     "R_WASM_MEMORY_ADDR_TLS_SLEB",
-    "R_WASM_MEMORY_ADDR_TLS_I32",
+    "R_WASM_FUNCTION_INDEX_LEB",
+    "R_WASM_TABLE_INDEX_SLEB",
+    "R_WASM_TABLE_INDEX_I32",
+    "R_WASM_MEMORY_ADDR_LEB",
+    "R_WASM_MEMORY_ADDR_SLEB",
+    "R_WASM_MEMORY_ADDR_I32",
+    "R_WASM_TYPE_INDEX_LEB",
+    "R_WASM_GLOBAL_INDEX_LEB",
+    "R_WASM_FUNCTION_OFFSET_I32",
+    "R_WASM_SECTION_OFFSET_I32",
+    "R_WASM_TAG_INDEX_LEB",
+    "R_WASM_MEMORY_ADDR_REL_SLEB",
+    "R_WASM_TABLE_INDEX_REL_SLEB",
+    "R_WASM_GLOBAL_INDEX_I32",
+    "R_WASM_MEMORY_ADDR_LEB64",
+    "R_WASM_MEMORY_ADDR_SLEB64",
+    "R_WASM_MEMORY_ADDR_I64",
+    "R_WASM_MEMORY_ADDR_REL_SLEB64",
+    "R_WASM_TABLE_INDEX_SLEB64",
+    "R_WASM_TABLE_INDEX_I64",
+    "R_WASM_TABLE_NUMBER_LEB",
+    "R_WASM_MEMORY_ADDR_TLS_SLEB",
+    "R_WASM_FUNCTION_OFFSET_I64",
+    "R_WASM_MEMORY_ADDR_LOCREL_I32",
+    "R_WASM_TABLE_INDEX_REL_SLEB64",
+    "R_WASM_MEMORY_ADDR_TLS_SLEB64",
+    "R_WASM_FUNCTION_INDEX_I32",
 };
 WABT_STATIC_ASSERT(WABT_ARRAY_SIZE(g_reloc_type_name) == kRelocTypeCount);
+// clang-format on
 
 static Result ReadAll(FILE* stream,
                       const char* name,

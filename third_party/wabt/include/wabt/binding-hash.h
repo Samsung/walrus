@@ -19,11 +19,12 @@
 
 #include <functional>
 #include <string>
-#include "string-view-lite/string_view.h"
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
 #include "wabt/common.h"
+#include "string-view-lite/string_view.h"
 
 namespace wabt {
 

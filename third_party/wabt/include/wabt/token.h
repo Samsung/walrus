@@ -17,10 +17,12 @@
 #ifndef WABT_TOKEN_H_
 #define WABT_TOKEN_H_
 
-#include "string-view-lite/string_view.h"
+#include <string_view>
 
 #include "wabt/literal.h"
 #include "wabt/opcode.h"
+
+#include "string-view-lite/string_view.h"
 
 namespace wabt {
 

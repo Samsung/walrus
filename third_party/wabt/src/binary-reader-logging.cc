@@ -99,6 +99,19 @@ void BinaryReaderLogging::LogTypes(TypeVector& types) {
   LogTypes(types.size(), types.data());
 }
 
+void BinaryReaderLogging::LogGCInfo(GCTypeExtension* gc_ext) {
+  if (gc_ext->is_final_sub_type && gc_ext->sub_type_count == 0) {
+    return;
+  }
+
+  LOGF_NOINDENT("(sub%s", gc_ext->is_final_sub_type ? " final" : "");
+
+  for (Index i = 0; i < gc_ext->sub_type_count; i++) {
+    LOGF_NOINDENT(" %" PRIindex, gc_ext->sub_types[i]);
+  }
+  LOGF_NOINDENT("), ");
+}
+
 void BinaryReaderLogging::LogField(TypeMut field) {
   if (field.mutable_) {
     LOGF_NOINDENT("(mut ");
@@ -143,21 +156,26 @@ Result BinaryReaderLogging::OnFuncType(Index index,
                                        Index param_count,
                                        Type* param_types,
                                        Index result_count,
-                                       Type* result_types) {
-  LOGF("OnFuncType(index: %" PRIindex ", params: ", index);
+                                       Type* result_types,
+                                       GCTypeExtension* gc_ext) {
+  LOGF("OnFuncType(index: %" PRIindex ", ", index);
+  LogGCInfo(gc_ext);
+  LOGF_NOINDENT("params: ");
   LogTypes(param_count, param_types);
   LOGF_NOINDENT(", results: ");
   LogTypes(result_count, result_types);
   LOGF_NOINDENT(")\n");
   return reader_->OnFuncType(index, param_count, param_types, result_count,
-                             result_types);
+                             result_types, gc_ext);
 }
 
 Result BinaryReaderLogging::OnStructType(Index index,
                                          Index field_count,
-                                         TypeMut* fields) {
-  LOGF("OnStructType(index: %" PRIindex ", fields: ", index);
-  LOGF_NOINDENT("[");
+                                         TypeMut* fields,
+                                         GCTypeExtension* gc_ext) {
+  LOGF("OnStructType(index: %" PRIindex ", ", index);
+  LogGCInfo(gc_ext);
+  LOGF_NOINDENT("fields: [");
   for (Index i = 0; i < field_count; ++i) {
     LogField(fields[i]);
     if (i != field_count - 1) {
@@ -165,14 +183,18 @@ Result BinaryReaderLogging::OnStructType(Index index,
     }
   }
   LOGF_NOINDENT("])\n");
-  return reader_->OnStructType(index, field_count, fields);
+  return reader_->OnStructType(index, field_count, fields, gc_ext);
 }
 
-Result BinaryReaderLogging::OnArrayType(Index index, TypeMut field) {
-  LOGF("OnArrayType(index: %" PRIindex ", field: ", index);
+Result BinaryReaderLogging::OnArrayType(Index index,
+                                        TypeMut field,
+                                        GCTypeExtension* gc_ext) {
+  LOGF("OnArrayType(index: %" PRIindex ", ", index);
+  LogGCInfo(gc_ext);
+  LOGF_NOINDENT("field: ");
   LogField(field);
   LOGF_NOINDENT(")\n");
-  return reader_->OnArrayType(index, field);
+  return reader_->OnArrayType(index, field, gc_ext);
 }
 
 Result BinaryReaderLogging::OnImport(Index index,
@@ -203,28 +225,31 @@ Result BinaryReaderLogging::OnImportTable(Index import_index,
                                           nonstd::string_view field_name,
                                           Index table_index,
                                           Type elem_type,
-                                          const Limits* elem_limits) {
+                                          const Limits* elem_limits,
+                                          bool is_import,
+                                          bool has_init_expr) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), elem_limits);
   LOGF("OnImportTable(import_index: %" PRIindex ", table_index: %" PRIindex
        ", elem_type: %s, %s)\n",
        import_index, table_index, elem_type.GetName().c_str(), buf);
   return reader_->OnImportTable(import_index, module_name, field_name,
-                                table_index, elem_type, elem_limits);
+                                table_index, elem_type, elem_limits, is_import, has_init_expr);
 }
 
 Result BinaryReaderLogging::OnImportMemory(Index import_index,
                                            nonstd::string_view module_name,
                                            nonstd::string_view field_name,
                                            Index memory_index,
-                                           const Limits* page_limits) {
+                                           const Limits* page_limits,
+                                           uint32_t page_size) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), page_limits);
   LOGF("OnImportMemory(import_index: %" PRIindex ", memory_index: %" PRIindex
        ", %s)\n",
        import_index, memory_index, buf);
   return reader_->OnImportMemory(import_index, module_name, field_name,
-                                 memory_index, page_limits);
+                                 memory_index, page_limits, page_size);
 }
 
 Result BinaryReaderLogging::OnImportGlobal(Index import_index,
@@ -254,21 +279,25 @@ Result BinaryReaderLogging::OnImportTag(Index import_index,
                               sig_index);
 }
 
-Result BinaryReaderLogging::OnTable(Index index,
-                                    Type elem_type,
-                                    const Limits* elem_limits) {
+Result BinaryReaderLogging::BeginTable(Index index,
+                                       Type elem_type,
+                                       const Limits* elem_limits,
+                                       bool is_import,
+                                       bool has_init_expr) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), elem_limits);
   LOGF("OnTable(index: %" PRIindex ", elem_type: %s, %s)\n", index,
        elem_type.GetName().c_str(), buf);
-  return reader_->OnTable(index, elem_type, elem_limits);
+  return reader_->BeginTable(index, elem_type, elem_limits, is_import, has_init_expr);
 }
 
-Result BinaryReaderLogging::OnMemory(Index index, const Limits* page_limits) {
+Result BinaryReaderLogging::OnMemory(Index index,
+                                     const Limits* page_limits,
+                                     uint32_t page_size) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), page_limits);
   LOGF("OnMemory(index: %" PRIindex ", %s)\n", index, buf);
-  return reader_->OnMemory(index, page_limits);
+  return reader_->OnMemory(index, page_limits, page_size);
 }
 
 Result BinaryReaderLogging::BeginGlobal(Index index, Type type, bool mutable_) {
@@ -315,6 +344,27 @@ Result BinaryReaderLogging::OnBrExpr(Index depth) {
 Result BinaryReaderLogging::OnBrIfExpr(Index depth) {
   LOGF("OnBrIfExpr(depth: %" PRIindex ")\n", depth);
   return reader_->OnBrIfExpr(depth);
+}
+
+Result BinaryReaderLogging::OnBrOnCastExpr(Opcode opcode,
+                                           Index depth,
+                                           Type type1,
+                                           Type type2) {
+  LOGF("OnBrOnCastExpr(opcode: \"%s\" (%u), depth: %" PRIindex
+       ", type1: %s, type2: %s)\n",
+       opcode.GetName(), opcode.GetCode(), depth, type1.GetName().c_str(),
+       type2.GetName().c_str());
+  return reader_->OnBrOnCastExpr(opcode, depth, type1, type2);
+}
+
+Result BinaryReaderLogging::OnBrOnNonNullExpr(Index depth) {
+  LOGF("OnBrOnNonNullExpr(depth: %" PRIindex ")\n", depth);
+  return reader_->OnBrOnNonNullExpr(depth);
+}
+
+Result BinaryReaderLogging::OnBrOnNullExpr(Index depth) {
+  LOGF("OnBrOnNullExpr(depth: %" PRIindex ")\n", depth);
+  return reader_->OnBrOnNullExpr(depth);
 }
 
 Result BinaryReaderLogging::OnBrTableExpr(Index num_targets,
@@ -384,11 +434,53 @@ Result BinaryReaderLogging::OnSelectExpr(Index result_count,
   return reader_->OnSelectExpr(result_count, result_types);
 }
 
+Result BinaryReaderLogging::OnStructGetExpr(Opcode opcode,
+                                            Index type_index,
+                                            Index field_index) {
+  LOGF("OnStructGetExpr(opcode: \"%s\" (%u), type_index: %" PRIindex
+       ", field_index: %" PRIindex ")\n",
+       opcode.GetName(), opcode.GetCode(), type_index, field_index);
+  return reader_->OnStructGetExpr(opcode, type_index, field_index);
+}
+
 Result BinaryReaderLogging::OnTryExpr(Type sig_type) {
   LOGF("OnTryExpr(sig: ");
   LogType(sig_type);
   LOGF_NOINDENT(")\n");
   return reader_->OnTryExpr(sig_type);
+}
+
+Result BinaryReaderLogging::OnTryTableExpr(Type sig_type,
+                                           const CatchClauseVector& catches) {
+  LOGF("OnTryTableExpr(sig: ");
+  LogType(sig_type);
+  Index count = catches.size();
+  LOGF_NOINDENT(", n: %" PRIindex ", catches: [", count);
+
+  for (auto& catch_ : catches) {
+    auto tag = catch_.tag;
+    auto depth = catch_.depth;
+    switch (catch_.kind) {
+      case CatchKind::Catch:
+        LOGF_NOINDENT("catch %" PRIindex " %" PRIindex, tag, depth);
+        break;
+      case CatchKind::CatchRef:
+        LOGF_NOINDENT("catch_ref %" PRIindex " %" PRIindex, tag, depth);
+        break;
+      case CatchKind::CatchAll:
+        LOGF_NOINDENT("catch_all %" PRIindex, depth);
+        break;
+      case CatchKind::CatchAllRef:
+        LOGF_NOINDENT("catch_all_ref %" PRIindex, depth);
+        break;
+    }
+    if (--count != 0) {
+      LOGF_NOINDENT(", ");
+    }
+  }
+  LOGF_NOINDENT("])\n");
+
+  return reader_->OnTryTableExpr(sig_type, catches);
 }
 
 Result BinaryReaderLogging::OnSimdLaneOpExpr(Opcode opcode, uint64_t value) {
@@ -724,6 +816,13 @@ Result BinaryReaderLogging::OnGenericCustomSection(nonstd::string_view name,
     return reader_->name(opcode);                                      \
   }
 
+#define DEFINE_OPCODE_INDEX(name, desc)                            \
+  Result BinaryReaderLogging::name(Opcode opcode, Index index) {   \
+    LOGF(#name "(opcode: \"%s\" (%u), " desc ": %" PRIindex ")\n", \
+         opcode.GetName(), opcode.GetCode(), index);               \
+    return reader_->name(opcode, index);                           \
+  }
+
 #define DEFINE_LOAD_STORE_OPCODE(name)                                        \
   Result BinaryReaderLogging::name(Opcode opcode, Index memidx,               \
                                    Address alignment_log2, Address offset) {  \
@@ -757,6 +856,7 @@ DEFINE_END(EndCustomSection)
 
 DEFINE_BEGIN(BeginTypeSection)
 DEFINE_INDEX(OnTypeCount)
+DEFINE_INDEX_INDEX(OnRecursiveType, "first_type_index", "type_count")
 DEFINE_END(EndTypeSection)
 
 DEFINE_BEGIN(BeginImportSection)
@@ -770,6 +870,9 @@ DEFINE_END(EndFunctionSection)
 
 DEFINE_BEGIN(BeginTableSection)
 DEFINE_INDEX(OnTableCount)
+DEFINE_INDEX(BeginTableInitExpr)
+DEFINE_INDEX(EndTableInitExpr)
+DEFINE_INDEX(EndTable)
 DEFINE_END(EndTableSection)
 
 DEFINE_BEGIN(BeginMemorySection)
@@ -795,6 +898,18 @@ DEFINE_BEGIN(BeginCodeSection)
 DEFINE_INDEX(OnFunctionBodyCount)
 DEFINE_INDEX(EndFunctionBody)
 DEFINE_INDEX(OnLocalDeclCount)
+DEFINE0(EndLocalDecls)
+DEFINE_INDEX_INDEX(OnArrayCopyExpr, "dst_type_index", "src_type_index")
+DEFINE_INDEX_DESC(OnArrayFillExpr, "type_index")
+DEFINE_OPCODE_INDEX(OnArrayGetExpr, "type_index")
+DEFINE_INDEX_INDEX(OnArrayInitDataExpr, "type_index", "data_index")
+DEFINE_INDEX_INDEX(OnArrayInitElemExpr, "type_index", "elem_index")
+DEFINE_INDEX_DESC(OnArrayNewExpr, "type_index")
+DEFINE_INDEX_INDEX(OnArrayNewDataExpr, "type_index", "data_index")
+DEFINE_INDEX_DESC(OnArrayNewDefaultExpr, "type_index")
+DEFINE_INDEX_INDEX(OnArrayNewElemExpr, "type_index", "elem_index")
+DEFINE_INDEX_INDEX(OnArrayNewFixedExpr, "type_index", "count")
+DEFINE_INDEX_DESC(OnArraySetExpr, "type_index")
 DEFINE_LOAD_STORE_OPCODE(OnAtomicLoadExpr);
 DEFINE_LOAD_STORE_OPCODE(OnAtomicRmwExpr);
 DEFINE_LOAD_STORE_OPCODE(OnAtomicRmwCmpxchgExpr);
@@ -805,7 +920,7 @@ DEFINE_LOAD_STORE_OPCODE(OnAtomicNotifyExpr);
 DEFINE_OPCODE(OnBinaryExpr)
 DEFINE_INDEX_DESC(OnCallExpr, "func_index")
 DEFINE_INDEX_INDEX(OnCallIndirectExpr, "sig_index", "table_index")
-DEFINE0(OnCallRefExpr)
+DEFINE_TYPE(OnCallRefExpr)
 DEFINE_INDEX_DESC(OnCatchExpr, "tag_index");
 DEFINE0(OnCatchAllExpr);
 DEFINE_OPCODE(OnCompareExpr)
@@ -814,6 +929,7 @@ DEFINE_INDEX_DESC(OnDelegateExpr, "depth");
 DEFINE0(OnDropExpr)
 DEFINE0(OnElseExpr)
 DEFINE0(OnEndExpr)
+DEFINE_OPCODE(OnGCUnaryExpr)
 DEFINE_INDEX_DESC(OnGlobalGetExpr, "index")
 DEFINE_INDEX_DESC(OnGlobalSetExpr, "index")
 DEFINE_LOAD_STORE_OPCODE(OnLoadExpr);
@@ -834,20 +950,28 @@ DEFINE_INDEX(OnTableGetExpr)
 DEFINE_INDEX(OnTableGrowExpr)
 DEFINE_INDEX(OnTableSizeExpr)
 DEFINE_INDEX_DESC(OnTableFillExpr, "table index")
+DEFINE0(OnRefAsNonNullExpr)
+DEFINE_TYPE(OnRefCastExpr)
 DEFINE_INDEX(OnRefFuncExpr)
 DEFINE_TYPE(OnRefNullExpr)
+DEFINE_TYPE(OnRefTestExpr)
 DEFINE0(OnRefIsNullExpr)
 DEFINE0(OnNopExpr)
 DEFINE_INDEX_DESC(OnRethrowExpr, "depth");
 DEFINE_INDEX_DESC(OnReturnCallExpr, "func_index")
 
 DEFINE_INDEX_INDEX(OnReturnCallIndirectExpr, "sig_index", "table_index")
+DEFINE_TYPE(OnReturnCallRefExpr)
 DEFINE0(OnReturnExpr)
 DEFINE_LOAD_STORE_OPCODE(OnLoadSplatExpr);
 DEFINE_LOAD_STORE_OPCODE(OnLoadZeroExpr);
 DEFINE_LOAD_STORE_OPCODE(OnStoreExpr);
+DEFINE_INDEX_DESC(OnStructNewExpr, "type_index")
+DEFINE_INDEX_DESC(OnStructNewDefaultExpr, "type_index")
+DEFINE_INDEX_INDEX(OnStructSetExpr, "type_index", "field_index")
 DEFINE_INDEX_DESC(OnThrowExpr, "tag_index")
 DEFINE0(OnUnreachableExpr)
+DEFINE0(OnThrowRefExpr)
 DEFINE_OPCODE(OnUnaryExpr)
 DEFINE_OPCODE(OnTernaryExpr)
 DEFINE_SIMD_LOAD_STORE_LANE_OPCODE(OnSimdLoadLaneExpr);

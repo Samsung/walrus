@@ -22,6 +22,8 @@
 #include "wabt/opcode.h"
 #include "wabt/stream.h"
 
+#include "string-view-lite/string_view.h"
+
 namespace wabt {
 
 struct Module;

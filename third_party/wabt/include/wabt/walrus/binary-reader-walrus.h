@@ -25,6 +25,7 @@
 #include "wabt/base-types.h"
 #include "wabt/type.h"
 #include "wabt/leb128.h"
+#include "wabt/binary-reader.h"
 
 namespace wabt {
 
@@ -48,7 +49,7 @@ public:
     virtual bool OnFeature(uint8_t prefix, std::string name) = 0;
 
     virtual void OnTypeCount(Index count) = 0;
-    virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes) = 0;
+    virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes, GCTypeExtension* gc_ext) = 0;
     virtual void EndTypeSection() = 0;
 
     virtual void OnImportCount(Index count) = 0;

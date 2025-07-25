@@ -25,9 +25,11 @@
 #include "wabt/error.h"
 #include "wabt/lexer-source-line-finder.h"
 #include "wabt/literal.h"
-#include "wabt/make-unique.h"
 #include "wabt/opcode.h"
 #include "wabt/token.h"
+
+#include "string-view-lite/string_view.h"
+#include "wabt/make-unique.h"
 
 namespace wabt {
 

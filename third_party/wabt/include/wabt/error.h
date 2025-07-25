@@ -18,10 +18,12 @@
 #define WABT_ERROR_H_
 
 #include <string>
-#include "string-view-lite/string_view.h"
+#include <string_view>
 #include <vector>
 
 #include "wabt/common.h"
+
+#include "string-view-lite/string_view.h"
 
 namespace wabt {
 
