@@ -26,43 +26,55 @@ namespace Walrus {
 
 class Module;
 
+// This class is managed through TypeStore.
+class RecursiveType {
+public:
+    friend class TypeStore;
+
+    RecursiveType(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode)
+        : m_next(next)
+        , m_prev(nullptr)
+        , m_firstType(firstType)
+        , m_refCount(1)
+        , m_typeCount(typeCount)
+        , m_hashCode(hashCode)
+    {
+    }
+
+    bool isSingleType() const
+    {
+        return m_firstType->getNextType() == nullptr;
+    }
+
+private:
+    RecursiveType* m_next;
+    RecursiveType* m_prev;
+    CompositeType* m_firstType;
+    size_t m_refCount;
+    size_t m_typeCount;
+    size_t m_hashCode;
+};
+
 class TypeStore {
 public:
-    class RecursiveType : public ObjectType {
-    public:
-        friend class TypeStore;
-
-        RecursiveType(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode)
-            : ObjectType(ObjectType::RecursiveTypeKind)
-            , m_next(next)
-            , m_prev(nullptr)
-            , m_firstType(firstType)
-            , m_refCount(1)
-            , m_typeCount(typeCount)
-            , m_hashCode(hashCode)
-        {
-        }
-
-    private:
-        RecursiveType* m_next;
-        RecursiveType* m_prev;
-        CompositeType* m_firstType;
-        size_t m_refCount;
-        size_t m_typeCount;
-        size_t m_hashCode;
-    };
+    static constexpr uintptr_t NoIndex = ~static_cast<uintptr_t>(0);
 
     TypeStore()
         : m_first(nullptr)
     {
     }
 
-    void updateTypes(Vector<FunctionType*>& types);
-    void releaseTypes(Vector<FunctionType*>& types);
-    void releaseTypes(FunctionTypeVector& types);
+    static void ConnectTypes(Vector<CompositeType*>& types, size_t index)
+    {
+        types[index - 1]->m_nextType = types[index];
+    }
+
+    void updateTypes(Vector<CompositeType*>& types);
+    void releaseTypes(Vector<CompositeType*>& types);
+    void releaseTypes(CompositeTypeVector& types);
 
 private:
-    static void updateRefs(CompositeType* type, const Vector<FunctionType*>& types);
+    static void updateRefs(CompositeType* type, const Vector<CompositeType*>& types);
     void releaseRecursiveType(RecursiveType* recType);
 
     RecursiveType* m_first;

@@ -275,11 +275,11 @@ public:
     FunctionType* operator[](const size_t idx)
     {
         ASSERT(idx < m_vector.size());
-        return m_vector[idx];
+        return m_vector[idx]->asFunction();
     }
 
 private:
-    FunctionTypeVector m_vector;
+    CompositeTypeVector m_vector;
 };
 
 } // namespace Walrus

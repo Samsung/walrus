@@ -86,6 +86,8 @@ static Features getFeatures(const uint32_t featureFlags) {
     features.enable_threads();
     // TODO: should use command line flag for this (--enable-relaxed-simd)
     features.enable_relaxed_simd();
+    // TODO: should use command line flag for this (--enable-gc)
+    features.enable_gc();
     if (featureFlags & FeatureFlagValue::enableMultiMemory) {
         features.enable_multi_memory();
     }
@@ -211,6 +213,12 @@ public:
         m_externalDelegate->OnTypeCount(count);
         return Result::Ok;
     }
+    Result OnRecursiveType(Index first_type_index, Index type_count) override
+    {
+        CHECK_RESULT(m_validator.OnRecursiveType(first_type_index, type_count));
+        m_externalDelegate->OnRecursiveType(first_type_index, type_count);
+        return Result::Ok;
+    }
     Result OnFuncType(Index index, Index param_count, Type *param_types, Index result_count, Type *result_types, GCTypeExtension* gc_ext) override {
         CHECK_RESULT(m_validator.OnFuncType(GetLocation(), param_count, param_types, result_count, result_types, index, gc_ext));
         m_functionTypes.push_back(SimpleFuncType( { ToInterp(param_count, param_types), ToInterp(result_count, result_types) }));
@@ -218,11 +226,13 @@ public:
         return Result::Ok;
     }
     Result OnStructType(Index index, Index field_count, TypeMut *fields, GCTypeExtension* gc_ext) override {
-        abort();
+        CHECK_RESULT(m_validator.OnStructType(GetLocation(), field_count, fields, gc_ext));
+        m_externalDelegate->OnStructType(index, field_count, fields, gc_ext);
         return Result::Ok;
     }
     Result OnArrayType(Index index, TypeMut field, GCTypeExtension* gc_ext) override {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayType(GetLocation(), field, gc_ext));
+        m_externalDelegate->OnArrayType(index, field, gc_ext);
         return Result::Ok;
     }
     Result EndTypeSection() override {
@@ -1357,11 +1367,6 @@ public:
         return Result::Ok;
     }
     // TODO: add implementations:
-    Result OnRecursiveType(Index first_type_index, Index type_count) override
-    {
-        abort();
-        return Result::Ok;
-    }
     Result BeginTableInitExpr(Index index) override
     {
         abort();

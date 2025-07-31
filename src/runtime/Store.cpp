@@ -35,7 +35,7 @@ Store::~Store()
     }
 
     for (size_t i = 0; i < m_modules.size(); i++) {
-        getTypeStore().releaseTypes(m_modules[i]->m_functionTypes);
+        getTypeStore().releaseTypes(m_modules[i]->m_compositeTypes);
         delete m_modules[i];
     }
 

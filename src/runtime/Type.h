@@ -81,7 +81,37 @@ private:
     CompositeType* m_ref;
 };
 
+class MutableType : public Type {
+public:
+    MutableType()
+        : Type()
+        , m_isMutable(false)
+    {
+    }
+
+    MutableType(Value::Type kind, bool isMutable)
+        : Type(kind)
+        , m_isMutable(isMutable)
+    {
+    }
+
+    MutableType(Value::Type kind, CompositeType* ref, bool isMutable)
+        : Type(kind, ref)
+        , m_isMutable(isMutable)
+    {
+    }
+
+    bool isMutable() const
+    {
+        return m_isMutable;
+    }
+
+private:
+    bool m_isMutable;
+};
+
 typedef Vector<Type, std::allocator<Type>> TypeVector;
+typedef Vector<MutableType, std::allocator<MutableType>> MutableTypeVector;
 
 } // namespace Walrus
 
