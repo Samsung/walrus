@@ -49,7 +49,10 @@ public:
     virtual bool OnFeature(uint8_t prefix, std::string name) = 0;
 
     virtual void OnTypeCount(Index count) = 0;
-    virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes, GCTypeExtension* gc_ext) = 0;
+    virtual void OnRecursiveType(Index firstTypeIndex, Index typeCount) = 0;
+    virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes, GCTypeExtension* gcExt) = 0;
+    virtual void OnStructType(Index index, Index fieldCount, TypeMut *fieldTypes, GCTypeExtension* gcExt) = 0;
+    virtual void OnArrayType(Index index, TypeMut fieldType, GCTypeExtension* gcExt) = 0;
     virtual void EndTypeSection() = 0;
 
     virtual void OnImportCount(Index count) = 0;

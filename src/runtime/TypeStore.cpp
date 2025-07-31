@@ -28,7 +28,7 @@ static size_t computeHash(size_t hash, size_t value)
     return hash ^ ((hash << 5) + (hash >> 2) + value);
 }
 
-static size_t computeHash(size_t hash, const Type& type, size_t recStart, const Vector<FunctionType*>& types)
+static size_t computeHash(size_t hash, const Type& type, size_t recStart, const Vector<CompositeType*>& types)
 {
     hash = computeHash(hash, static_cast<size_t>(type.type()));
     if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
@@ -43,8 +43,21 @@ static size_t computeHash(size_t hash, const Type& type, size_t recStart, const 
     return hash;
 }
 
-static size_t computeHash(size_t hash, ObjectType* type, size_t recStart, const Vector<FunctionType*>& types)
+static size_t computeHash(size_t hash, CompositeType* type, size_t recStart, const Vector<CompositeType*>& types)
 {
+    hash = computeHash(hash, static_cast<size_t>(type->kind()));
+    hash = computeHash(hash, static_cast<size_t>(type->isFinal()));
+
+    if (type->subType() != reinterpret_cast<CompositeType*>(TypeStore::NoIndex)) {
+        uintptr_t index = reinterpret_cast<uintptr_t>(type->subType());
+        if (index >= recStart) {
+            index = recStart - index - 1;
+        } else {
+            index = reinterpret_cast<uintptr_t>(types[index]);
+        }
+        hash = computeHash(hash, static_cast<size_t>(index));
+    }
+
     if (type->kind() == ObjectType::FunctionKind) {
         FunctionType* funcType = static_cast<FunctionType*>(type);
 
@@ -57,19 +70,37 @@ static size_t computeHash(size_t hash, ObjectType* type, size_t recStart, const 
         for (auto it : funcType->result()) {
             hash = computeHash(hash, it, recStart, types);
         }
+        return hash;
     }
+
+    if (type->kind() == ObjectType::StructKind) {
+        StructType* structType = static_cast<StructType*>(type);
+
+        hash = computeHash(hash, structType->fields().size());
+        for (auto it : structType->fields()) {
+            hash = computeHash(hash, it, recStart, types);
+            hash = computeHash(hash, static_cast<size_t>(it.isMutable()));
+        }
+
+        return hash;
+    }
+
+    ASSERT(type->kind() == ObjectType::ArrayKind);
+    ArrayType* arrayType = static_cast<ArrayType*>(type);
+    hash = computeHash(hash, arrayType->field(), recStart, types);
+    hash = computeHash(hash, static_cast<size_t>(arrayType->field().isMutable()));
     return hash;
 }
 
-static void copyTypes(Vector<FunctionType*>& types, size_t idx, ObjectType* type)
+static void copyTypes(Vector<CompositeType*>& types, size_t idx, ObjectType* type)
 {
     do {
-        types[idx++] = static_cast<FunctionType*>(type);
+        types[idx++] = static_cast<CompositeType*>(type);
         type = static_cast<CompositeType*>(type)->getNextType();
-    } while (type != nullptr && type->kind() != ObjectType::RecursiveTypeKind);
+    } while (type != nullptr);
 }
 
-static bool compareType(const Type& type1, const Type& type2, const Vector<FunctionType*>& types)
+static bool compareType(const Type& type1, const Type& type2, const Vector<CompositeType*>& types)
 {
     if (type1.type() != type2.type()) {
         return false;
@@ -82,7 +113,7 @@ static bool compareType(const Type& type1, const Type& type2, const Vector<Funct
     return types[reinterpret_cast<uintptr_t>(type1.ref())] == type2.ref();
 }
 
-static bool compareTypes(CompositeType* type1, size_t index2, const Vector<FunctionType*>& types)
+static bool compareTypes(CompositeType* type1, size_t index2, const Vector<CompositeType*>& types)
 {
     CompositeType* type2 = types[index2];
 
@@ -91,8 +122,8 @@ static bool compareTypes(CompositeType* type1, size_t index2, const Vector<Funct
     }
 
     if (type1->kind() == ObjectType::FunctionKind) {
-        FunctionType* funcType1 = static_cast<FunctionType*>(type1);
-        FunctionType* funcType2 = static_cast<FunctionType*>(type2);
+        FunctionType* funcType1 = type1->asFunction();
+        FunctionType* funcType2 = type2->asFunction();
 
         if (funcType1->param().size() != funcType2->param().size()
             || funcType1->result().size() != funcType2->result().size()) {
@@ -115,20 +146,41 @@ static bool compareTypes(CompositeType* type1, size_t index2, const Vector<Funct
         return true;
     }
 
-    return false;
+    if (type1->kind() == ObjectType::StructKind) {
+        StructType* structType1 = type1->asStruct();
+        StructType* structType2 = type2->asStruct();
+
+        if (structType1->fields().size() != structType2->fields().size()) {
+            return false;
+        }
+
+        size_t size = structType1->fields().size();
+        for (size_t i = 0; i < size; i++) {
+            if (structType1->fields()[i].isMutable() != structType2->fields()[i].isMutable() || !compareType(structType1->fields()[i], structType2->fields()[i], types)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    ASSERT(type1->kind() == ObjectType::ArrayKind);
+    ArrayType* arrayType1 = type1->asArray();
+    ArrayType* arrayType2 = type2->asArray();
+
+    return arrayType1->field().isMutable() == arrayType2->field().isMutable() && compareType(arrayType1->field(), arrayType2->field(), types);
 }
 
-static void updateRef(Type& type, const Vector<FunctionType*>& types)
+static void updateRef(Type& type, const Vector<CompositeType*>& types)
 {
     if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
         type = Type(type.type(), types[reinterpret_cast<uintptr_t>(type.ref())]);
     }
 }
 
-void TypeStore::updateRefs(CompositeType* type, const Vector<FunctionType*>& types)
+void TypeStore::updateRefs(CompositeType* type, const Vector<CompositeType*>& types)
 {
     if (type->kind() == ObjectType::FunctionKind) {
-        FunctionType* funcType = static_cast<FunctionType*>(type);
+        FunctionType* funcType = type->asFunction();
 
         size_t size = funcType->param().size();
         for (size_t i = 0; i < size; i++) {
@@ -141,9 +193,23 @@ void TypeStore::updateRefs(CompositeType* type, const Vector<FunctionType*>& typ
         }
         return;
     }
+
+    if (type->kind() == ObjectType::StructKind) {
+        StructType* structType = static_cast<StructType*>(type);
+
+        size_t size = structType->fields().size();
+        for (size_t i = 0; i < size; i++) {
+            updateRef((*structType->m_fieldTypes)[i], types);
+        }
+        return;
+    }
+
+    ASSERT(type->kind() == ObjectType::ArrayKind);
+    ArrayType* arrayType = static_cast<ArrayType*>(type);
+    updateRef(arrayType->m_field, types);
 }
 
-void TypeStore::updateTypes(Vector<FunctionType*>& types)
+void TypeStore::updateTypes(Vector<CompositeType*>& types)
 {
     // Iterate through each recursive types
     size_t size = types.size();
@@ -162,7 +228,7 @@ void TypeStore::updateTypes(Vector<FunctionType*>& types)
         do {
             hashCode = computeHash(hashCode, compType, i, types);
             typeCount++;
-            compType = compType->getNextCompositeType();
+            compType = compType->getNextType();
         } while (compType != nullptr);
 
         RecursiveType* current = m_first;
@@ -178,11 +244,11 @@ void TypeStore::updateTypes(Vector<FunctionType*>& types)
                     if (!compareTypes(compType, j, types)) {
                         break;
                     }
-                    compType = compType->getNextCompositeType();
+                    compType = compType->getNextType();
                     j++;
                 } while (compType != nullptr);
 
-                if (compType != nullptr) {
+                if (compType == nullptr) {
                     break;
                 }
             }
@@ -192,7 +258,7 @@ void TypeStore::updateTypes(Vector<FunctionType*>& types)
         if (current != nullptr) {
             CompositeType* compType = firstType;
             do {
-                CompositeType* next = compType->getNextCompositeType();
+                CompositeType* next = compType->getNextType();
                 delete compType;
                 compType = next;
             } while (compType != nullptr);
@@ -210,14 +276,11 @@ void TypeStore::updateTypes(Vector<FunctionType*>& types)
         copyTypes(types, i, firstType);
 
         compType = firstType;
-        while (true) {
+        do {
             updateRefs(compType, types);
-            if (compType->getNextType() == nullptr) {
-                compType->m_nextType = recType;
-                break;
-            }
-            compType = compType->getNextCompositeType();
-        }
+            compType->m_recursiveType = recType;
+            compType = compType->getNextType();
+        } while (compType != nullptr);
     }
 }
 
@@ -239,34 +302,32 @@ void TypeStore::releaseRecursiveType(RecursiveType* recType)
     }
 
     CompositeType* current = recType->m_firstType;
+    ASSERT(current != nullptr);
 
-    while (true) {
-        ObjectType* next = current->getNextType();
+    do {
+        CompositeType* next = current->getNextType();
         delete current;
-        if (next == recType) {
-            break;
-        }
-        current = static_cast<CompositeType*>(next);
-    }
+        current = next;
+    } while (current != nullptr);
     delete recType;
 }
 
-void TypeStore::releaseTypes(Vector<FunctionType*>& types)
+void TypeStore::releaseTypes(Vector<CompositeType*>& types)
 {
     size_t size = types.size();
     for (size_t i = 0; i < size; i++) {
-        if (types[i]->getNextType()->kind() == ObjectType::RecursiveTypeKind) {
-            releaseRecursiveType(static_cast<RecursiveType*>(types[i]->getNextType()));
+        if (types[i]->getNextType() == nullptr) {
+            releaseRecursiveType(types[i]->getRecursiveType());
         }
     }
 }
 
-void TypeStore::releaseTypes(FunctionTypeVector& types)
+void TypeStore::releaseTypes(CompositeTypeVector& types)
 {
     size_t size = types.size();
     for (size_t i = 0; i < size; i++) {
-        if (types[i]->getNextType()->kind() == ObjectType::RecursiveTypeKind) {
-            releaseRecursiveType(static_cast<RecursiveType*>(types[i]->getNextType()));
+        if (types[i]->getNextType() == nullptr) {
+            releaseRecursiveType(types[i]->getRecursiveType());
         }
     }
 }

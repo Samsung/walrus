@@ -23,13 +23,18 @@
 namespace Walrus {
 
 class ModuleFunction;
+class FunctionType;
+class StructType;
+class ArrayType;
+class RecursiveType;
 
 class ObjectType {
 public:
     enum Kind : uint8_t {
         Invalid,
         FunctionKind,
-        RecursiveTypeKind,
+        StructKind,
+        ArrayKind,
         GlobalKind,
         TableKind,
         MemoryKind,
@@ -53,32 +58,60 @@ class CompositeType : public ObjectType {
 public:
     friend class TypeStore;
 
-    ObjectType* getNextType() const
+    CompositeType* getNextType() const
     {
         return m_nextType;
     }
 
-    CompositeType* getNextCompositeType() const
+    RecursiveType* getRecursiveType() const
     {
-        ASSERT(m_nextType == nullptr || m_nextType->kind() == ObjectType::FunctionKind);
-        return static_cast<CompositeType*>(m_nextType);
+        return m_recursiveType;
     }
 
-    void setNextType(ObjectType* nextType)
+    CompositeType* subType() const
     {
-        m_nextType = nextType;
+        return m_subType;
+    }
+
+    bool isFinal() const
+    {
+        return m_isFinal;
+    }
+
+    FunctionType* asFunction()
+    {
+        ASSERT(kind() == ObjectType::FunctionKind);
+        return reinterpret_cast<FunctionType*>(this);
+    }
+
+    StructType* asStruct()
+    {
+        ASSERT(kind() == ObjectType::StructKind);
+        return reinterpret_cast<StructType*>(this);
+    }
+
+    ArrayType* asArray()
+    {
+        ASSERT(kind() == ObjectType::ArrayKind);
+        return reinterpret_cast<ArrayType*>(this);
     }
 
 protected:
-    CompositeType(Kind kind)
+    CompositeType(Kind kind, bool isFinal, CompositeType* subType)
         : ObjectType(kind)
         , m_nextType(nullptr)
+        , m_recursiveType(nullptr)
+        , m_subType(subType)
+        , m_isFinal(isFinal)
     {
-        ASSERT(kind == FunctionKind);
+        ASSERT(kind == FunctionKind || kind == StructKind || kind == ArrayKind);
     }
 
 private:
-    ObjectType* m_nextType;
+    CompositeType* m_nextType;
+    RecursiveType* m_recursiveType;
+    CompositeType* m_subType;
+    bool m_isFinal;
 };
 
 class FunctionType : public CompositeType {
@@ -86,8 +119,20 @@ public:
     friend class TypeStore;
 
     FunctionType(TypeVector* param,
+                 TypeVector* result,
+                 bool isFinal,
+                 CompositeType* subType)
+        : CompositeType(ObjectType::FunctionKind, isFinal, subType)
+        , m_paramTypes(param)
+        , m_resultTypes(result)
+        , m_paramStackSize(computeStackSize(*m_paramTypes))
+        , m_resultStackSize(computeStackSize(*m_resultTypes))
+    {
+    }
+
+    FunctionType(TypeVector* param,
                  TypeVector* result)
-        : CompositeType(ObjectType::FunctionKind)
+        : CompositeType(ObjectType::FunctionKind, false, nullptr)
         , m_paramTypes(param)
         , m_resultTypes(result)
         , m_paramStackSize(computeStackSize(*m_paramTypes))
@@ -122,6 +167,47 @@ private:
         }
         return s;
     }
+};
+
+class StructType : public CompositeType {
+public:
+    friend class TypeStore;
+
+    StructType(MutableTypeVector* fields,
+               bool isFinal,
+               CompositeType* subType)
+        : CompositeType(ObjectType::StructKind, isFinal, subType)
+        , m_fieldTypes(fields)
+    {
+    }
+
+    ~StructType()
+    {
+        delete m_fieldTypes;
+    }
+
+    const MutableTypeVector& fields() const { return *m_fieldTypes; }
+
+private:
+    MutableTypeVector* m_fieldTypes;
+};
+
+class ArrayType : public CompositeType {
+public:
+    friend class TypeStore;
+
+    ArrayType(MutableType field,
+              bool isFinal,
+              CompositeType* subType)
+        : CompositeType(ObjectType::ArrayKind, isFinal, subType)
+        , m_field(field)
+    {
+    }
+
+    const MutableType& field() const { return m_field; }
+
+private:
+    MutableType m_field;
 };
 
 class GlobalType : public ObjectType {
@@ -201,7 +287,7 @@ private:
 };
 
 // ObjectType Vectors
-typedef VectorWithFixedSize<FunctionType*, std::allocator<FunctionType*>> FunctionTypeVector;
+typedef VectorWithFixedSize<CompositeType*, std::allocator<CompositeType*>> CompositeTypeVector;
 typedef VectorWithFixedSize<GlobalType*, std::allocator<GlobalType*>> GlobalTypeVector;
 typedef VectorWithFixedSize<TableType*, std::allocator<TableType*>> TableTypeVector;
 typedef VectorWithFixedSize<MemoryType*, std::allocator<MemoryType*>> MemoryTypeVector;

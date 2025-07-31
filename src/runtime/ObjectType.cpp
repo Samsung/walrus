@@ -18,6 +18,7 @@
 
 #include "runtime/ObjectType.h"
 #include "runtime/Module.h"
+#include "runtime/TypeStore.h"
 
 namespace Walrus {
 
@@ -25,6 +26,21 @@ bool FunctionType::equals(const FunctionType* other) const
 {
     if (this == other) {
         return true;
+    }
+
+    // TODO: This should work for all types.
+    // However, functions defined by API has no type at
+    // the moment represented by a null recursive type.
+    if (getRecursiveType() != nullptr && other->getRecursiveType() != nullptr) {
+        return getRecursiveType() == other->getRecursiveType();
+    }
+
+    if (getRecursiveType() != nullptr && !getRecursiveType()->isSingleType()) {
+        return false;
+    }
+
+    if (other->getRecursiveType() != nullptr && !other->getRecursiveType()->isSingleType()) {
+        return false;
     }
 
     if (m_paramTypes->size() != other->param().size()) {

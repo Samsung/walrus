@@ -52,7 +52,7 @@ Module::Module(Store* store, WASMParsingResult& result)
     , m_functions(std::move(result.m_functions))
     , m_datas(std::move(result.m_datas))
     , m_elements(std::move(result.m_elements))
-    , m_functionTypes(std::move(result.m_functionTypes))
+    , m_compositeTypes(std::move(result.m_compositeTypes))
     , m_globalTypes(std::move(result.m_globalTypes))
     , m_tableTypes(std::move(result.m_tableTypes))
     , m_memoryTypes(std::move(result.m_memoryTypes))
@@ -235,7 +235,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
     // init tag
     while (tagIndex < m_tagTypes.size()) {
-        instance->m_tags[tagIndex] = Tag::createTag(m_store, m_functionTypes[m_tagTypes[tagIndex]->sigIndex()]);
+        instance->m_tags[tagIndex] = Tag::createTag(m_store, m_compositeTypes[m_tagTypes[tagIndex]->sigIndex()]->asFunction());
         tagIndex++;
     }
 

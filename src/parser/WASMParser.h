@@ -45,7 +45,7 @@ struct WASMParsingResult {
     Vector<Data*> m_datas;
     Vector<Element*> m_elements;
 
-    Vector<FunctionType*> m_functionTypes;
+    Vector<CompositeType*> m_compositeTypes;
     Vector<GlobalType*> m_globalTypes;
     Vector<TableType*> m_tableTypes;
     Vector<MemoryType*> m_memoryTypes;

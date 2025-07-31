@@ -376,10 +376,16 @@ public:
         return m_functions[index];
     }
 
+    CompositeType* compositeType(uint32_t index) const
+    {
+        ASSERT(index < m_compositeTypes.size());
+        return m_compositeTypes[index];
+    }
+
     FunctionType* functionType(uint32_t index) const
     {
-        ASSERT(index < m_functionTypes.size());
-        return m_functionTypes[index];
+        ASSERT(index < m_compositeTypes.size());
+        return m_compositeTypes[index]->asFunction();
     }
 
     size_t numberOfTableTypes()
@@ -461,7 +467,7 @@ private:
     VectorWithFixedSize<Data*, std::allocator<Data*>> m_datas;
     VectorWithFixedSize<Element*, std::allocator<Element*>> m_elements;
 
-    FunctionTypeVector m_functionTypes;
+    CompositeTypeVector m_compositeTypes;
     GlobalTypeVector m_globalTypes;
     TableTypeVector m_tableTypes;
     MemoryTypeVector m_memoryTypes;
