@@ -225,13 +225,13 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "global_i32") {
-                importValues.push_back(Global::createGlobal(store, Value(int32_t(666)), false));
+                importValues.push_back(Global::createGlobal(store, Value(int32_t(666)), MutableType(Value::I32, false)));
             } else if (import->fieldName() == "global_i64") {
-                importValues.push_back(Global::createGlobal(store, Value(int64_t(666)), false));
+                importValues.push_back(Global::createGlobal(store, Value(int64_t(666)), MutableType(Value::I64, false)));
             } else if (import->fieldName() == "global_f32") {
-                importValues.push_back(Global::createGlobal(store, Value(float(0x44268000)), false));
+                importValues.push_back(Global::createGlobal(store, Value(float(0x44268000)), MutableType(Value::F32, false)));
             } else if (import->fieldName() == "global_f64") {
-                importValues.push_back(Global::createGlobal(store, Value(double(0x4084d00000000000)), false));
+                importValues.push_back(Global::createGlobal(store, Value(double(0x4084d00000000000)), MutableType(Value::F64, false)));
             } else if (import->fieldName() == "table") {
                 importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20));
             } else if (import->fieldName() == "memory") {

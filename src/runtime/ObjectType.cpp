@@ -62,10 +62,9 @@ bool FunctionType::equals(const FunctionType* other) const
     return true;
 }
 
-GlobalType::GlobalType(Type type, bool mut)
+GlobalType::GlobalType(const MutableType& type)
     : ObjectType(ObjectType::GlobalKind)
     , m_type(type)
-    , m_mutable(mut)
     , m_function(nullptr)
 {
 #ifndef NDEBUG

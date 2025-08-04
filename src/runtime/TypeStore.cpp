@@ -22,6 +22,19 @@
 
 namespace Walrus {
 
+RecursiveType* RecursiveType::create(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode, size_t totalSubTypeSize)
+{
+    RecursiveType* result = reinterpret_cast<RecursiveType*>(malloc(sizeof(RecursiveType) + (totalSubTypeSize - 1) * sizeof(CompositeType*)));
+    new (result) RecursiveType(next, firstType, typeCount, hashCode);
+    return result;
+}
+
+void RecursiveType::destroy(RecursiveType* type)
+{
+    type->~RecursiveType();
+    free(type);
+}
+
 static size_t computeHash(size_t hash, size_t value)
 {
     // Shift-Add-XOR hash
@@ -48,8 +61,8 @@ static size_t computeHash(size_t hash, CompositeType* type, size_t recStart, con
     hash = computeHash(hash, static_cast<size_t>(type->kind()));
     hash = computeHash(hash, static_cast<size_t>(type->isFinal()));
 
-    if (type->subType() != reinterpret_cast<CompositeType*>(TypeStore::NoIndex)) {
-        uintptr_t index = reinterpret_cast<uintptr_t>(type->subType());
+    if (type->subTypeList() != reinterpret_cast<CompositeType**>(TypeStore::NoIndex)) {
+        uintptr_t index = reinterpret_cast<uintptr_t>(type->subTypeList());
         if (index >= recStart) {
             index = recStart - index - 1;
         } else {
@@ -177,8 +190,24 @@ static void updateRef(Type& type, const Vector<CompositeType*>& types)
     }
 }
 
-void TypeStore::updateRefs(CompositeType* type, const Vector<CompositeType*>& types)
+CompositeType** TypeStore::updateRefs(CompositeType* type, const Vector<CompositeType*>& types, CompositeType** nextSubType)
 {
+    uintptr_t index = reinterpret_cast<uintptr_t>(type->subTypeList());
+    type->m_subTypeList = nextSubType;
+
+    if (index == TypeStore::NoIndex) {
+        nextSubType[0] = reinterpret_cast<CompositeType*>(1);
+        nextSubType[1] = type;
+        nextSubType += 2;
+    } else {
+        // Subtype index is always less than type index.
+        uintptr_t size = types[index]->subTypeCount();
+        nextSubType[0] = reinterpret_cast<CompositeType*>(size + 1);
+        memcpy(nextSubType + 1, types[index]->subTypeList() + 1, sizeof(CompositeType*) * size);
+        nextSubType[size + 1] = type;
+        nextSubType += size + 2;
+    }
+
     if (type->kind() == ObjectType::FunctionKind) {
         FunctionType* funcType = type->asFunction();
 
@@ -191,7 +220,7 @@ void TypeStore::updateRefs(CompositeType* type, const Vector<CompositeType*>& ty
         for (size_t i = 0; i < size; i++) {
             updateRef((*funcType->m_resultTypes)[i], types);
         }
-        return;
+        return nextSubType;
     }
 
     if (type->kind() == ObjectType::StructKind) {
@@ -201,12 +230,13 @@ void TypeStore::updateRefs(CompositeType* type, const Vector<CompositeType*>& ty
         for (size_t i = 0; i < size; i++) {
             updateRef((*structType->m_fieldTypes)[i], types);
         }
-        return;
+        return nextSubType;
     }
 
     ASSERT(type->kind() == ObjectType::ArrayKind);
     ArrayType* arrayType = static_cast<ArrayType*>(type);
     updateRef(arrayType->m_field, types);
+    return nextSubType;
 }
 
 void TypeStore::updateTypes(Vector<CompositeType*>& types)
@@ -268,7 +298,26 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
             continue;
         }
 
-        RecursiveType* recType = new RecursiveType(m_first, firstType, typeCount, hashCode);
+        size_t totalSize = 0;
+        compType = firstType;
+        do {
+            uintptr_t index = reinterpret_cast<uintptr_t>(compType->subTypeList());
+            totalSize += 2;
+
+            while (index != TypeStore::NoIndex) {
+                if (index >= i) {
+                    totalSize++;
+                    index = reinterpret_cast<uintptr_t>(types[index]->subTypeList());
+                } else {
+                    totalSize += types[index]->subTypeCount();
+                    break;
+                }
+            }
+            compType = compType->getNextType();
+        } while (compType != nullptr);
+
+        RecursiveType* recType = RecursiveType::create(m_first, firstType, typeCount, hashCode, totalSize);
+
         if (m_first != nullptr) {
             m_first->m_prev = recType;
         }
@@ -276,11 +325,14 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
         copyTypes(types, i, firstType);
 
         compType = firstType;
+        CompositeType** nextSubType = recType->m_subTypes;
         do {
-            updateRefs(compType, types);
+            nextSubType = updateRefs(compType, types, nextSubType);
             compType->m_recursiveType = recType;
             compType = compType->getNextType();
         } while (compType != nullptr);
+
+        ASSERT(nextSubType == recType->m_subTypes + totalSize);
     }
 }
 
@@ -309,7 +361,8 @@ void TypeStore::releaseRecursiveType(RecursiveType* recType)
         delete current;
         current = next;
     } while (current != nullptr);
-    delete recType;
+
+    RecursiveType::destroy(recType);
 }
 
 void TypeStore::releaseTypes(Vector<CompositeType*>& types)

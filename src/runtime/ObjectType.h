@@ -68,9 +68,22 @@ public:
         return m_recursiveType;
     }
 
-    CompositeType* subType() const
+    CompositeType** subTypeList() const
     {
-        return m_subType;
+        return m_subTypeList;
+    }
+
+    uintptr_t subTypeCount() const
+    {
+        return reinterpret_cast<uintptr_t>(m_subTypeList[0]);
+    }
+
+    // Type "less" comparison operation.
+    // It is simple, and easy to implement in JIT.
+    bool isSubTypeOf(CompositeType* actual) const
+    {
+        uintptr_t count = subTypeCount();
+        return (count <= actual->subTypeCount() && actual->subTypeList()[count] == this);
     }
 
     bool isFinal() const
@@ -97,11 +110,11 @@ public:
     }
 
 protected:
-    CompositeType(Kind kind, bool isFinal, CompositeType* subType)
+    CompositeType(Kind kind, bool isFinal, CompositeType** subTypeList)
         : ObjectType(kind)
         , m_nextType(nullptr)
         , m_recursiveType(nullptr)
-        , m_subType(subType)
+        , m_subTypeList(subTypeList)
         , m_isFinal(isFinal)
     {
         ASSERT(kind == FunctionKind || kind == StructKind || kind == ArrayKind);
@@ -110,7 +123,10 @@ protected:
 private:
     CompositeType* m_nextType;
     RecursiveType* m_recursiveType;
-    CompositeType* m_subType;
+    // Subtype list is an index or TypeStore::NoIndex during parsing, not a pointer.
+    // The m_subTypeList[0] is the szie of the items in the list, see subTypeCount().
+    // The m_subTypeList[subTypeCount()] is pointer to the composite type.
+    CompositeType** m_subTypeList;
     bool m_isFinal;
 };
 
@@ -121,8 +137,8 @@ public:
     FunctionType(TypeVector* param,
                  TypeVector* result,
                  bool isFinal,
-                 CompositeType* subType)
-        : CompositeType(ObjectType::FunctionKind, isFinal, subType)
+                 CompositeType** subTypeList)
+        : CompositeType(ObjectType::FunctionKind, isFinal, subTypeList)
         , m_paramTypes(param)
         , m_resultTypes(result)
         , m_paramStackSize(computeStackSize(*m_paramTypes))
@@ -175,8 +191,8 @@ public:
 
     StructType(MutableTypeVector* fields,
                bool isFinal,
-               CompositeType* subType)
-        : CompositeType(ObjectType::StructKind, isFinal, subType)
+               CompositeType** subTypeList)
+        : CompositeType(ObjectType::StructKind, isFinal, subTypeList)
         , m_fieldTypes(fields)
     {
     }
@@ -198,8 +214,8 @@ public:
 
     ArrayType(MutableType field,
               bool isFinal,
-              CompositeType* subType)
-        : CompositeType(ObjectType::ArrayKind, isFinal, subType)
+              CompositeType** subTypeList)
+        : CompositeType(ObjectType::ArrayKind, isFinal, subTypeList)
         , m_field(field)
     {
     }
@@ -212,11 +228,11 @@ private:
 
 class GlobalType : public ObjectType {
 public:
-    GlobalType(Type type, bool mut);
+    GlobalType(const MutableType& type);
     ~GlobalType();
 
-    Type type() const { return m_type; }
-    bool isMutable() const { return m_mutable; }
+    MutableType type() const { return m_type; }
+    bool isMutable() const { return m_type.isMutable(); }
     ModuleFunction* function() const { return m_function; }
 
     inline void setFunction(ModuleFunction* func)
@@ -226,8 +242,7 @@ public:
     }
 
 private:
-    Type m_type;
-    bool m_mutable;
+    MutableType m_type;
     ModuleFunction* m_function;
 };
 

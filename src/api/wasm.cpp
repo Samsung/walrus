@@ -1031,7 +1031,8 @@ own wasm_trap_t* wasm_func_call(
 own wasm_global_t* wasm_global_new(
     wasm_store_t* store, const wasm_globaltype_t* gt, const wasm_val_t* val)
 {
-    Global* glob = Global::createGlobal(store->get(), ToWalrusValue(*val), gt->mut);
+    Value value = ToWalrusValue(*val);
+    Global* glob = Global::createGlobal(store->get(), value, MutableType(value.type(), gt->mut));
     return new wasm_global_t(glob, gt->clone());
 }
 

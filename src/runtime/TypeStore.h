@@ -31,6 +31,14 @@ class RecursiveType {
 public:
     friend class TypeStore;
 
+    static RecursiveType* create(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode, size_t totalSubTypeSize);
+
+    bool isSingleType() const
+    {
+        return m_firstType->getNextType() == nullptr;
+    }
+
+private:
     RecursiveType(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode)
         : m_next(next)
         , m_prev(nullptr)
@@ -41,18 +49,20 @@ public:
     {
     }
 
-    bool isSingleType() const
+    ~RecursiveType()
     {
-        return m_firstType->getNextType() == nullptr;
     }
 
-private:
+    static void destroy(RecursiveType* type);
+
     RecursiveType* m_next;
     RecursiveType* m_prev;
     CompositeType* m_firstType;
     size_t m_refCount;
     size_t m_typeCount;
     size_t m_hashCode;
+    // Concatenation of subtype arrays used by all types
+    CompositeType* m_subTypes[1];
 };
 
 class TypeStore {
@@ -74,7 +84,7 @@ public:
     void releaseTypes(CompositeTypeVector& types);
 
 private:
-    static void updateRefs(CompositeType* type, const Vector<CompositeType*>& types);
+    static CompositeType** updateRefs(CompositeType* type, const Vector<CompositeType*>& types, CompositeType** nextSubType);
     void releaseRecursiveType(RecursiveType* recType);
 
     RecursiveType* m_first;
