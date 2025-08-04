@@ -75,6 +75,8 @@ public:
         return Value::isPackedType(type());
     }
 
+    bool isSubType(const Type& expected) const;
+
 private:
     // Type is uintptr_t to support memcmp comparison
     uintptr_t m_type;

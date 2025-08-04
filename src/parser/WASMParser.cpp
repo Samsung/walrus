@@ -110,7 +110,7 @@ WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
 #undef WABT_OPCODE
 };
 
-static Walrus::Type toRefValueKind(Type type)
+static Walrus::Type toRefValueKind(Type type, Walrus::WASMParsingResult* result)
 {
     switch (type) {
     case Type::NullFuncRef:
@@ -134,15 +134,21 @@ static Walrus::Type toRefValueKind(Type type)
     case Type::ArrayRef:
         return type.IsNullableNonTypedRef() ? Walrus::Value::NullArrayRef : Walrus::Value::ArrayRef;
     case Type::Ref:
+        if (result != nullptr) {
+            return Walrus::Type(Walrus::Value::DefinedRef, result->m_compositeTypes[type.GetReferenceIndex()]);
+        }
         return Walrus::Type(Walrus::Value::DefinedRef, reinterpret_cast<Walrus::CompositeType*>(type.GetReferenceIndex()));
     case Type::RefNull:
+        if (result != nullptr) {
+            return Walrus::Type(Walrus::Value::NullDefinedRef, result->m_compositeTypes[type.GetReferenceIndex()]);
+        }
         return Walrus::Type(Walrus::Value::NullDefinedRef, reinterpret_cast<Walrus::CompositeType*>(type.GetReferenceIndex()));
     default:
         RELEASE_ASSERT_NOT_REACHED();
     }
 }
 
-static Walrus::Type toValueKind(Type type)
+static Walrus::Type toValueKind(Type type, Walrus::WASMParsingResult* result)
 {
     switch (type) {
     case Type::I32:
@@ -156,16 +162,16 @@ static Walrus::Type toValueKind(Type type)
     case Type::V128:
         return Walrus::Value::V128;
     default:
-        return toRefValueKind(type);
+        return toRefValueKind(type, result);
     }
 }
 
-static Walrus::CompositeType* toSubType(GCTypeExtension* gcExt)
+static Walrus::CompositeType** toSubType(GCTypeExtension* gcExt)
 {
     if (gcExt->sub_type_count == 0) {
-        return reinterpret_cast<Walrus::CompositeType*>(Walrus::TypeStore::NoIndex);
+        return reinterpret_cast<Walrus::CompositeType**>(Walrus::TypeStore::NoIndex);
     }
-    return reinterpret_cast<Walrus::CompositeType*>(gcExt->sub_types[0]);
+    return reinterpret_cast<Walrus::CompositeType**>(gcExt->sub_types[0]);
 }
 
 static Walrus::SegmentMode toSegmentMode(uint8_t flags)
@@ -187,6 +193,17 @@ static Walrus::SegmentMode toSegmentMode(uint8_t flags)
         return Walrus::SegmentMode::Active;
     }
 }
+
+#if !defined(NDEBUG)
+// Type checking should be done by validator.
+static Walrus::Value::Type toDebugType(Walrus::Value::Type type)
+{
+    if (Walrus::Value::isRefType(type)) {
+        return Walrus::Value::DefinedRef;
+    }
+    return type;
+}
+#endif
 
 class WASMBinaryReader : public wabt::WASMBinaryReaderDelegate {
 private:
@@ -809,11 +826,11 @@ public:
         Walrus::TypeVector* param = new Walrus::TypeVector();
         param->reserve(paramCount);
         for (size_t i = 0; i < paramCount; i++) {
-            param->push_back(toValueKind(paramTypes[i]));
+            param->push_back(toValueKind(paramTypes[i], nullptr));
         }
         Walrus::TypeVector* result = new Walrus::TypeVector();
         for (size_t i = 0; i < resultCount; i++) {
-            result->push_back(toValueKind(resultTypes[i]));
+            result->push_back(toValueKind(resultTypes[i], nullptr));
         }
         ASSERT(index == m_result.m_compositeTypes.size());
         m_result.m_compositeTypes.push_back(new Walrus::FunctionType(param, result, gcExt->is_final_sub_type, toSubType(gcExt)));
@@ -830,7 +847,7 @@ public:
         Walrus::MutableTypeVector* fields = new Walrus::MutableTypeVector();
         fields->reserve(fieldCount);
         for (size_t i = 0; i < fieldCount; i++) {
-            Walrus::Type type = toValueKind(fieldTypes[i].type);
+            Walrus::Type type = toValueKind(fieldTypes[i].type, nullptr);
             fields->push_back(Walrus::MutableType(type.type(), type.ref(), fieldTypes[i].mutable_));
         }
         ASSERT(index == m_result.m_compositeTypes.size());
@@ -845,7 +862,7 @@ public:
                              GCTypeExtension* gcExt) override
     {
         ASSERT(index == m_result.m_compositeTypes.size());
-        Walrus::Type type = toValueKind(fieldType.type);
+        Walrus::Type type = toValueKind(fieldType.type, nullptr);
         m_result.m_compositeTypes.push_back(new Walrus::ArrayType(Walrus::MutableType(type.type(), type.ref(), fieldType.mutable_),
                                                                   gcExt->is_final_sub_type, toSubType(gcExt)));
         if (index < m_recursiveTypeEnd && index > m_recursiveTypeStart) {
@@ -884,7 +901,8 @@ public:
     {
         ASSERT(globalIndex == m_result.m_globalTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
-        m_result.m_globalTypes.push_back(new Walrus::GlobalType(toValueKind(type), mutable_));
+        Walrus::Type globalType = toValueKind(type, &m_result);
+        m_result.m_globalTypes.push_back(new Walrus::GlobalType(Walrus::MutableType(globalType.type(), globalType.ref(), mutable_)));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Global,
             moduleName, fieldName, m_result.m_globalTypes[globalIndex]));
@@ -896,7 +914,7 @@ public:
         ASSERT(m_result.m_imports.size() == importIndex);
         ASSERT(type.IsRef());
 
-        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type), initialSize, maximumSize));
+        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type, &m_result), initialSize, maximumSize));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Table,
             moduleName, fieldName, m_result.m_tableTypes[tableIndex]));
@@ -943,7 +961,7 @@ public:
     {
         ASSERT(index == m_result.m_tableTypes.size());
         ASSERT(type.IsRef());
-        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type), initialSize, maximumSize));
+        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type, &m_result), initialSize, maximumSize));
     }
 
     virtual void OnElemSegmentCount(Index count) override
@@ -981,7 +999,7 @@ public:
 
     virtual void BeginElemExpr(Index elem_index, Index expr_index) override
     {
-        beginNewFunction(toRefValueKind(m_elementType), true);
+        beginNewFunction(toRefValueKind(m_elementType, &m_result), true);
     }
 
     virtual void EndElemExpr(Index elem_index, Index expr_index) override
@@ -1073,7 +1091,8 @@ public:
     virtual void BeginGlobal(Index index, Type type, bool mutable_) override
     {
         ASSERT(m_result.m_globalTypes.size() == index);
-        m_result.m_globalTypes.push_back(new Walrus::GlobalType(toValueKind(type), mutable_));
+        Walrus::Type globalType = toValueKind(type, &m_result);
+        m_result.m_globalTypes.push_back(new Walrus::GlobalType(Walrus::MutableType(globalType.type(), globalType.ref(), mutable_)));
     }
 
     virtual void BeginGlobalInitExpr(Index index) override
@@ -1130,7 +1149,7 @@ public:
     virtual void OnLocalDecl(Index decl_index, Index count, Type type) override
     {
         while (count) {
-            auto wType = toValueKind(type);
+            auto wType = toValueKind(type, &m_result);
             m_currentFunction->m_local.push_back(wType);
             m_localInfo.push_back(LocalInfo(wType, m_functionStackSizeSoFar));
             auto sz = Walrus::valueStackAllocatedSize(wType);
@@ -1298,7 +1317,7 @@ public:
         size_t siz = functionType->param().size();
 
         for (size_t i = 0; i < siz; i++) {
-            ASSERT(peekVMStackValueType() == functionType->param()[siz - i - 1]);
+            ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(functionType->param()[siz - i - 1]));
             size_t sourcePos = popVMStack();
             auto type = functionType->param()[siz - i - 1];
             size_t s = Walrus::valueSize(type);
@@ -1455,7 +1474,7 @@ public:
     {
         auto localPos = m_localInfo[localIndex].m_position;
 
-        ASSERT(m_localInfo[localIndex].m_valueType == peekVMStackValueType());
+        ASSERT(toDebugType(m_localInfo[localIndex].m_valueType) == toDebugType(peekVMStackValueType()));
         auto src = popVMStackInfo();
         generateMoveCodeIfNeeds(src.position(), localPos, src.valueType());
         m_preprocessData.addLocalVariableWrite(localIndex);
@@ -1465,7 +1484,7 @@ public:
     {
         auto valueType = m_localInfo[localIndex].m_valueType;
         auto localPos = m_localInfo[localIndex].m_position;
-        ASSERT(valueType == peekVMStackValueType());
+        ASSERT(toDebugType(valueType) == toDebugType(peekVMStackValueType()));
         auto dstInfo = peekVMStackInfo();
         generateMoveCodeIfNeeds(dstInfo.position(), localPos, valueType);
         m_preprocessData.addLocalVariableWrite(localIndex);
@@ -1491,7 +1510,7 @@ public:
         auto valueType = m_result.m_globalTypes[index]->type();
         auto stackPos = peekVMStack();
 
-        ASSERT(peekVMStackValueType() == valueType);
+        ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(valueType));
         auto sz = Walrus::valueSize(valueType);
         if (sz == 4) {
             pushByteCode(Walrus::GlobalSet32(stackPos, index), WASMOpcode::GlobalSetOpcode);
@@ -1607,14 +1626,14 @@ public:
                     auto ft = getFunctionType(blockInfo.m_returnValueType);
                     const auto& result = ft->result();
                     for (size_t i = 0; i < result.size(); i++) {
-                        ASSERT(peekVMStackValueType() == result[result.size() - i - 1]);
+                        ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(result[result.size() - i - 1]));
                         auto info = peekVMStackInfo();
                         generateMoveCodeIfNeeds(info.position(), info.nonOptimizedPosition(), info.valueType());
                         info.setPosition(info.nonOptimizedPosition());
                         popVMStack();
                     }
                 } else if (blockInfo.m_returnValueType != Type::Void) {
-                    ASSERT(peekVMStackValueType() == toValueKind(blockInfo.m_returnValueType));
+                    ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(toValueKind(blockInfo.m_returnValueType, &m_result)));
                     auto info = peekVMStackInfo();
                     generateMoveCodeIfNeeds(info.position(), info.nonOptimizedPosition(), info.valueType());
                     info.setPosition(info.nonOptimizedPosition());
@@ -1713,7 +1732,7 @@ public:
                             parameterSize += Walrus::valueStackAllocatedSize(result[i]);
                         }
                     } else if (iter->m_returnValueType != Type::Void) {
-                        parameterSize += Walrus::valueStackAllocatedSize(toValueKind(iter->m_returnValueType));
+                        parameterSize += Walrus::valueStackAllocatedSize(toValueKind(iter->m_returnValueType, &m_result));
                     }
                 }
             }
@@ -2469,7 +2488,7 @@ public:
 
     virtual void OnRefNullExpr(Type type) override
     {
-        Walrus::ByteCodeStackOffset dst = computeExprResultPosition(toValueKind(type));
+        Walrus::ByteCodeStackOffset dst = computeExprResultPosition(toValueKind(type, &m_result));
 #if defined(WALRUS_32)
         pushByteCode(Walrus::Const32(dst, Walrus::Value::Null));
 #else
@@ -2514,7 +2533,7 @@ public:
 #if !defined(NDEBUG)
             if (!blockInfo.m_shouldRestoreVMStackAtEnd) {
                 if (!blockInfo.m_returnValueType.IsIndex() && blockInfo.m_returnValueType != Type::Void) {
-                    ASSERT(peekVMStackValueType() == toValueKind(blockInfo.m_returnValueType));
+                    ASSERT(peekVMStackValueType() == toValueKind(blockInfo.m_returnValueType, &m_result));
                 }
             }
 #endif
@@ -2557,7 +2576,7 @@ public:
                         pushVMStack(result[i]);
                     }
                 } else if (blockInfo.m_returnValueType != Type::Void) {
-                    pushVMStack(toValueKind(blockInfo.m_returnValueType));
+                    pushVMStack(toValueKind(blockInfo.m_returnValueType, &m_result));
                 }
             }
 

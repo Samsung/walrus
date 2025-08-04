@@ -26,9 +26,9 @@ class Global : public Extern {
     friend class JITFieldAccessor;
 
 public:
-    static Global* createGlobal(Store* store, const Value& value, const bool& mut)
+    static Global* createGlobal(Store* store, const Value& value, const MutableType& type)
     {
-        Global* glob = new Global(value, mut);
+        Global* glob = new Global(value, type);
         store->appendExtern(glob);
         return glob;
     }
@@ -53,9 +53,14 @@ public:
         return m_value;
     }
 
+    const MutableType& type() const
+    {
+        return m_type;
+    }
+
     bool isMutable() const
     {
-        return m_mutable;
+        return m_type.isMutable();
     }
 
     void setValue(const Value& value)
@@ -65,14 +70,14 @@ public:
     }
 
 private:
-    Global(const Value& value, const bool& mut)
+    Global(const Value& value, const MutableType& type)
         : m_value(value)
-        , m_mutable(mut)
+        , m_type(type)
     {
     }
 
     Value m_value;
-    bool m_mutable;
+    MutableType m_type;
 };
 
 } // namespace Walrus

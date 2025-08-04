@@ -120,8 +120,8 @@ public:
         ExternRef,
         NoExternRef,
         FuncRef,
-        DefinedRef,
         NoFuncRef,
+        DefinedRef,
         NullAnyRef,
         NullNoAnyRef,
         NullEqRef,
@@ -373,6 +373,14 @@ public:
     static bool isNullableRefType(Type type)
     {
         return type >= NullAnyRef && type <= NullDefinedRef;
+    }
+
+    static Type toNonNullableRefType(Type type)
+    {
+        if (isNullableRefType(type)) {
+            return static_cast<Type>(static_cast<uint8_t>(type) - (static_cast<uint8_t>(NullAnyRef) - static_cast<uint8_t>(AnyRef)));
+        }
+        return type;
     }
 
     static bool isPackedType(Type type)

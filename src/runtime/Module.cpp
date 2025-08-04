@@ -172,7 +172,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         }
         case ImportType::Global: {
             if (UNLIKELY(imports[i]->kind() != Object::GlobalKind
-                         || m_imports[i]->globalType()->type() != imports[i]->asGlobal()->value().type()
+                         || !m_imports[i]->globalType()->type().isSubType(imports[i]->asGlobal()->type())
                          || m_imports[i]->globalType()->isMutable() != imports[i]->asGlobal()->isMutable())) {
                 Trap::throwException(state, "incompatible import type");
             }
@@ -247,7 +247,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     // init global
     while (globIndex < m_globalTypes.size()) {
         GlobalType* globalType = m_globalTypes[globIndex];
-        instance->m_globals[globIndex] = Global::createGlobal(m_store, Value(globalType->type()), globalType->isMutable());
+        instance->m_globals[globIndex] = Global::createGlobal(m_store, Value(globalType->type()), globalType->type());
 
         if (globalType->function()) {
             struct RunData {
