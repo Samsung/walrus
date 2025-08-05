@@ -52,27 +52,32 @@ ByteCode::Opcode ByteCode::opcode() const
 size_t ByteCode::getSize() const
 {
     switch (this->opcode()) {
-    case ThrowOpcode: {
-        const Throw* throwCode = reinterpret_cast<const Throw*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(Throw) + sizeof(ByteCodeStackOffset) * throwCode->offsetsSize());
+    case BrTableOpcode: {
+        const BrTable* brTable = reinterpret_cast<const BrTable*>(this);
+        return ByteCode::pointerAlignedSize(sizeof(BrTable) + sizeof(int32_t) * brTable->tableSize());
     }
     case CallOpcode: {
         const Call* call = reinterpret_cast<const Call*>(this);
         return ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * call->parameterOffsetsSize()
                                             + sizeof(ByteCodeStackOffset) * call->resultOffsetsSize());
     }
-    case BrTableOpcode: {
-        const BrTable* brTable = reinterpret_cast<const BrTable*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(BrTable) + sizeof(int32_t) * brTable->tableSize());
-    }
     case CallIndirectOpcode: {
         const CallIndirect* callIndirect = reinterpret_cast<const CallIndirect*>(this);
         return ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * callIndirect->parameterOffsetsSize()
                                             + sizeof(ByteCodeStackOffset) * callIndirect->resultOffsetsSize());
     }
+    case CallRefOpcode: {
+        const CallRef* callRef = reinterpret_cast<const CallRef*>(this);
+        return ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * callRef->parameterOffsetsSize()
+                                            + sizeof(ByteCodeStackOffset) * callRef->resultOffsetsSize());
+    }
     case EndOpcode: {
         const End* end = reinterpret_cast<const End*>(this);
         return ByteCode::pointerAlignedSize(sizeof(End) + sizeof(ByteCodeStackOffset) * end->offsetsSize());
+    }
+    case ThrowOpcode: {
+        const Throw* throwCode = reinterpret_cast<const Throw*>(this);
+        return ByteCode::pointerAlignedSize(sizeof(Throw) + sizeof(ByteCodeStackOffset) * throwCode->offsetsSize());
     }
     default: {
         return g_byteCodeSize[this->opcode()];

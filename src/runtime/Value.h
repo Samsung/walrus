@@ -455,7 +455,7 @@ public:
             return (std::string)(asV128());
         default:
             ASSERT(isRef());
-            return std::to_string((size_t)(asExternal()));
+            return std::to_string((size_t)(asReference()));
         }
     }
 

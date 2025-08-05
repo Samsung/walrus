@@ -152,6 +152,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL3(OTOp2F32, /* SSD */ F32, F32, F32 | S0 | S1)                                   \
     OL3(OTOp2F64, /* SSD */ F64, F64, F64 | S0 | S1)                                   \
     OL1(OTGetI32, /* S */ I32)                                                         \
+    OL1(OTGetPTR, /* S */ PTR)                                                         \
     OL1(OTPutI32, /* D */ I32)                                                         \
     OL1(OTPutI64, /* D */ I64)                                                         \
     OL1(OTPutV128, /* D */ V128)                                                       \
@@ -485,7 +486,9 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode: {
+        case ByteCode::JumpIfFalseOpcode:
+        case ByteCode::JumpIfNullOpcode:
+        case ByteCode::JumpIfNonNullOpcode: {
             ByteCodeOffsetValue* offsetValue = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
             labels[COMPUTE_OFFSET(idx, offsetValue->int32Value())] = nullptr;
             break;
@@ -1034,7 +1037,8 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::CallOpcode:
-        case ByteCode::CallIndirectOpcode: {
+        case ByteCode::CallIndirectOpcode:
+        case ByteCode::CallRefOpcode: {
             FunctionType* functionType;
             ByteCodeStackOffset* stackOffset;
             uint32_t callerCount;
@@ -1044,10 +1048,15 @@ static void compileFunction(JITCompiler* compiler)
                 functionType = compiler->module()->function(call->index())->functionType();
                 stackOffset = call->stackOffsets();
                 callerCount = 0;
-            } else {
+            } else if (opcode == ByteCode::CallIndirectOpcode) {
                 CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(byteCode);
                 functionType = callIndirect->functionType();
                 stackOffset = callIndirect->stackOffsets();
+                callerCount = 1;
+            } else {
+                CallRef* callRef = reinterpret_cast<CallRef*>(byteCode);
+                functionType = callRef->functionType();
+                stackOffset = callRef->stackOffsets();
                 callerCount = 1;
             }
 
@@ -1063,6 +1072,8 @@ static void compileFunction(JITCompiler* compiler)
 
             if (opcode == ByteCode::CallIndirectOpcode) {
                 *operand++ = STACK_OFFSET(reinterpret_cast<CallIndirect*>(byteCode)->calleeOffset());
+            } else if (opcode == ByteCode::CallRefOpcode) {
+                *operand++ = STACK_OFFSET(reinterpret_cast<CallRef*>(byteCode)->calleeOffset());
             }
 
             for (auto it : functionType->result()) {
@@ -1542,10 +1553,12 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode: {
+        case ByteCode::JumpIfFalseOpcode:
+        case ByteCode::JumpIfNullOpcode:
+        case ByteCode::JumpIfNonNullOpcode: {
             ByteCodeOffsetValue* offsetValue = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
             Instruction* instr = compiler->appendBranch(byteCode, opcode, labels[COMPUTE_OFFSET(idx, offsetValue->int32Value())], STACK_OFFSET(offsetValue->stackOffset()));
-            instr->setRequiredRegsDescriptor(OTGetI32);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::JumpIfTrueOpcode || opcode == ByteCode::JumpIfFalseOpcode ? OTGetI32 : OTGetPTR);
             break;
         }
         case ByteCode::BrTableOpcode: {
@@ -1684,6 +1697,14 @@ static void compileFunction(JITCompiler* compiler)
             group = Instruction::Any;
             paramType = ParamTypes::ParamDst;
             requiredInit = OTPutPTR;
+            break;
+        }
+        case ByteCode::RefAsNonNullOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, 1, 0);
+            instr->setRequiredRegsDescriptor(OTGetPTR);
+
+            RefAsNonNull* refAsNonNullOperation = reinterpret_cast<RefAsNonNull*>(byteCode);
+            *instr->operands() = STACK_OFFSET(refAsNonNullOperation->stackOffset());
             break;
         }
         case ByteCode::EndOpcode: {

@@ -486,30 +486,58 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         default:
             return false;
         }
-
-    } else if (c.type() == wabt::Type::ExternRef && v.type() == Walrus::Value::NullExternRef) {
-        // FIXME value of c.ref_bits() for RefNull
-        wabt::Const constNull;
-        constNull.set_null(c.type());
-        if (c.ref_bits() == constNull.ref_bits()) {
-            // check RefNull
-            return v.isNull();
-        }
-        // Add one similar to wabt interpreter.
-        return (c.ref_bits() + 1) == reinterpret_cast<uintptr_t>(v.asExternal());
-    } else if (c.type() == wabt::Type::FuncRef && v.type() == Walrus::Value::NullFuncRef) {
-        // FIXME value of c.ref_bits() for RefNull
-        wabt::Const constNull;
-        constNull.set_null(c.type());
-        if (c.ref_bits() == constNull.ref_bits()) {
-            // check RefNull
-            return v.isNull();
-        }
-        // Add one similar to wabt interpreter.
-        return (c.ref_bits() + 1) == reinterpret_cast<uintptr_t>(v.asFunction());
     }
 
-    return false;
+    bool sameRefType = false;
+    Value::Type vType = Value::toNonNullableRefType(v.type());
+
+    if (vType == Walrus::Value::DefinedRef || c.type() == wabt::Type::NullRef) {
+        // No precise type information.
+        sameRefType = c.type().IsRef();
+    } else {
+        switch (c.type()) {
+        case wabt::Type::NullFuncRef:
+        case wabt::Type::FuncRef:
+            sameRefType = vType == Walrus::Value::FuncRef || vType == Walrus::Value::NoFuncRef;
+            break;
+        case wabt::Type::NullExternRef:
+        case wabt::Type::ExternRef:
+            sameRefType = vType == Walrus::Value::ExternRef || vType == Walrus::Value::NoExternRef;
+            break;
+        case wabt::Type::AnyRef:
+            sameRefType = (vType == Walrus::Value::AnyRef || vType == Walrus::Value::NoAnyRef
+                           || vType == Walrus::Value::EqRef || vType == Walrus::Value::I31Ref
+                           || vType == Walrus::Value::StructRef || vType == Walrus::Value::ArrayRef);
+            break;
+        case wabt::Type::I31Ref:
+            sameRefType = vType == Walrus::Value::I31Ref || vType == Walrus::Value::NoAnyRef;
+            break;
+        case wabt::Type::StructRef:
+            sameRefType = vType == Walrus::Value::StructRef || vType == Walrus::Value::NoAnyRef;
+            break;
+        case wabt::Type::ArrayRef:
+            sameRefType = vType == Walrus::Value::ArrayRef || vType == Walrus::Value::NoAnyRef;
+            break;
+        default:
+            return false;
+        }
+    }
+
+    if (!sameRefType) {
+        return false;
+    }
+
+    if (c.ref_bits() == wabt::Const::kRefNullBits) {
+        // check RefNull
+        return v.isNull();
+    }
+
+    if (c.ref_bits() == wabt::Const::kRefAnyValueBits || (c.type() != wabt::Type::ExternRef && c.type() != wabt::Type::NullExternRef)) {
+        return true;
+    }
+
+    // Add one similar to wabt interpreter.
+    return (c.ref_bits() + 1) == reinterpret_cast<uintptr_t>(v.asReference());
 }
 
 static void printConstVector(wabt::ConstVector& v)
@@ -562,27 +590,18 @@ static void printConstVector(wabt::ConstVector& v)
             printf("%s", result);
             break;
         }
-        case wabt::Type::ExternRef: {
-            // FIXME value of c.ref_bits() for RefNull
-            wabt::Const constNull;
-            constNull.set_null(c.type());
-            if (c.ref_bits() == constNull.ref_bits()) {
-                printf("ref.null");
-                return;
-            }
-            break;
-        }
-        case wabt::Type::FuncRef: {
-            // FIXME value of c.ref_bits() for RefNull
-            wabt::Const constNull;
-            constNull.set_null(c.type());
-            if (c.ref_bits() == constNull.ref_bits()) {
-                printf("ref.null");
-                return;
-            }
-            break;
-        }
         default: {
+            if (c.type().IsRef()) {
+                // FIXME value of c.ref_bits() for RefNull
+                wabt::Const constNull;
+                constNull.set_null(c.type());
+                if (c.ref_bits() == constNull.ref_bits()) {
+                    printf("ref.null");
+                } else {
+                    printf("ref");
+                }
+                break;
+            }
             printf("Error: unkown wabt::Const type\n");
             RELEASE_ASSERT_NOT_REACHED();
             break;

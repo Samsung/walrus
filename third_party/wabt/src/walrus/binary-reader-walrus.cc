@@ -256,8 +256,8 @@ public:
         m_externalDelegate->OnImportFunc(import_index, std::string(module_name), std::string(field_name), func_index, sig_index);
         return Result::Ok;
     }
-    Result OnImportTable(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits, bool is_import, bool has_init_expr) override {
-        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, is_import, has_init_expr));
+    Result OnImportTable(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
+        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, true, false));
         m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
@@ -307,10 +307,32 @@ public:
         m_externalDelegate->OnTableCount(count);
         return Result::Ok;
     }
-    Result BeginTable(Index index, Type elem_type, const Limits* elem_limits, bool is_import, bool has_init_expr) override {
-        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, is_import, has_init_expr));
+    Result BeginTable(Index index, Type elem_type, const Limits* elem_limits, bool has_init_expr) override {
+        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, false, has_init_expr));
         m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnTable(index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
+        assert(m_lastInitType == Type::___);
+        m_lastInitType = elem_type;
+        return Result::Ok;
+    }
+    Result BeginTableInitExpr(Index index) override
+    {
+        assert(m_lastInitType != Type::___);
+        CHECK_RESULT(m_validator.BeginInitExpr(GetLocation(), m_lastInitType));
+        PushLabel(LabelKind::Try);
+        m_externalDelegate->BeginTableInitExpr(index);
+        return Result::Ok;
+    }
+    Result EndTableInitExpr(Index index) override
+    {
+        CHECK_RESULT(m_validator.EndInitExpr());
+        PopLabel();
+        m_externalDelegate->EndTableInitExpr(index);
+        return Result::Ok;
+    }
+    Result EndTable(Index index) override
+    {
+        m_lastInitType = Type::___;
         return Result::Ok;
     }
     Result EndTableSection() override {
@@ -569,6 +591,26 @@ public:
         m_externalDelegate->OnBrIfExpr(depth);
         return Result::Ok;
     }
+    Result OnBrOnNonNullExpr(Index depth) override
+    {
+        Index drop_count, keep_count, catch_drop_count;
+        CHECK_RESULT(GetBrDropKeepCount(depth, &drop_count, &keep_count));
+        CHECK_RESULT(m_validator.GetCatchCount(depth, &catch_drop_count));
+        CHECK_RESULT(m_validator.OnBrOnNonNull(GetLocation(), Var(depth, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnBrOnNonNullExpr(depth);
+        return Result::Ok;
+    }
+    Result OnBrOnNullExpr(Index depth) override
+    {
+        Index drop_count, keep_count, catch_drop_count;
+        CHECK_RESULT(m_validator.OnBrOnNull(GetLocation(), Var(depth, GetLocation())));
+        CHECK_RESULT(GetBrDropKeepCount(depth, &drop_count, &keep_count));
+        CHECK_RESULT(m_validator.GetCatchCount(depth, &catch_drop_count));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnBrOnNullExpr(depth);
+        return Result::Ok;
+    }
     Result OnBrTableExpr(Index num_targets, Index *target_depths, Index default_target_depth) override {
         CHECK_RESULT(m_validator.BeginBrTable(GetLocation()));
         Index drop_count, keep_count, catch_drop_count;
@@ -601,8 +643,9 @@ public:
         return Result::Ok;
     }
     Result OnCallRefExpr(Type sig_type) override {
-        // TODO: implement properly
-        abort();
+        CHECK_RESULT(m_validator.OnCallRef(GetLocation(), Var(sig_type, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnCallRefExpr(sig_type);
         return Result::Ok;
     }
     void SubBlockCheck() {
@@ -1366,21 +1409,6 @@ public:
         abort();
         return Result::Ok;
     }
-    // TODO: add implementations:
-    Result BeginTableInitExpr(Index index) override
-    {
-        abort();
-        return Result::Ok;
-    }
-    Result EndTableInitExpr(Index index) override
-    {
-        abort();
-        return Result::Ok;
-    }
-    Result EndTable(Index index) override
-    {
-        return Result::Ok;
-    }
     Result EndLocalDecls() override
     {
         return Result::Ok;
@@ -1445,16 +1473,6 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnBrOnNonNullExpr(Index depth) override
-    {
-        abort();
-        return Result::Ok;
-    }
-    Result OnBrOnNullExpr(Index depth) override
-    {
-        abort();
-        return Result::Ok;
-    }
     Result OnGCUnaryExpr(Opcode opcode) override
     {
         abort();
@@ -1462,7 +1480,9 @@ public:
     }
     Result OnRefAsNonNullExpr() override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnRefAsNonNull(Location()));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnRefAsNonNullExpr();
         return Result::Ok;
     }
     Result OnRefCastExpr(Type type) override

@@ -155,7 +155,7 @@ class BinaryReader {
   Index NumTotalFuncs();
 
   [[nodiscard]] Result ReadInitExpr(Index index);
-  [[nodiscard]] Result ReadTable(Type* out_elem_type, Limits* out_elem_limits, bool* is_import, bool* has_init_expr);
+  [[nodiscard]] Result ReadTable(Type* out_elem_type, Limits* out_elem_limits);
   [[nodiscard]] Result ReadMemory(Limits* out_page_limits,
                                   uint32_t* out_page_size);
   [[nodiscard]] Result ReadGlobalHeader(Type* out_type, bool* out_mutable);
@@ -661,7 +661,7 @@ Result BinaryReader::ReadInitExpr(Index index) {
   return Result::Ok;
 }
 
-Result BinaryReader::ReadTable(Type* out_elem_type, Limits* out_elem_limits, bool* is_import, bool* has_init_expr) {
+Result BinaryReader::ReadTable(Type* out_elem_type, Limits* out_elem_limits) {
   CHECK_RESULT(ReadRefType(out_elem_type, "table elem type"));
 
   uint8_t flags;
@@ -2992,11 +2992,9 @@ Result BinaryReader::ReadImportSection(Offset section_size) {
       case ExternalKind::Table: {
         Type elem_type;
         Limits elem_limits;
-        bool is_import;
-        bool has_init_expr;
-        CHECK_RESULT(ReadTable(&elem_type, &elem_limits, &is_import, &has_init_expr));
+        CHECK_RESULT(ReadTable(&elem_type, &elem_limits));
         CALLBACK(OnImportTable, i, module_name, field_name, num_table_imports_,
-                 elem_type, &elem_limits, is_import, has_init_expr);
+                 elem_type, &elem_limits);
         num_table_imports_++;
         break;
       }
@@ -3066,7 +3064,6 @@ Result BinaryReader::ReadTableSection(Offset section_size) {
     Index table_index = num_table_imports_ + i;
     Type elem_type;
     Limits elem_limits;
-    bool is_import; // TODO: initialize value
     bool has_init_expr = false;
 
     if (options_.features.function_references_enabled() &&
@@ -3083,8 +3080,8 @@ Result BinaryReader::ReadTableSection(Offset section_size) {
       }
     }
 
-    CHECK_RESULT(ReadTable(&elem_type, &elem_limits, &is_import, &has_init_expr)); // TODO: this will overwrite is_import and has_init_expr
-    CALLBACK(BeginTable, table_index, elem_type, &elem_limits, is_import, has_init_expr);
+    CHECK_RESULT(ReadTable(&elem_type, &elem_limits));
+    CALLBACK(BeginTable, table_index, elem_type, &elem_limits, has_init_expr);
 
     if (has_init_expr) {
       CALLBACK(BeginTableInitExpr, table_index);

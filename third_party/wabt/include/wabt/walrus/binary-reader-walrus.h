@@ -77,6 +77,8 @@ public:
 
     virtual void OnTableCount(Index count) = 0;
     virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) = 0;
+    virtual void BeginTableInitExpr(Index index) = 0;
+    virtual void EndTableInitExpr(Index index) = 0;
 
     virtual void OnElemSegmentCount(Index count) = 0;
     virtual void BeginElemSegment(Index index, Index tableIndex, uint8_t flags) = 0;
@@ -116,6 +118,7 @@ public:
 
     virtual void OnCallExpr(Index index) = 0;
     virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) = 0;
+    virtual void OnCallRefExpr(Type sig_type) = 0;
     virtual void OnI32ConstExpr(uint32_t value) = 0;
     virtual void OnI64ConstExpr(uint64_t value) = 0;
     virtual void OnF32ConstExpr(uint32_t value) = 0;
@@ -136,6 +139,8 @@ public:
     virtual void OnBlockExpr(Type sigType) = 0;
     virtual void OnBrExpr(Index depth) = 0;
     virtual void OnBrIfExpr(Index depth) = 0;
+    virtual void OnBrOnNonNullExpr(Index depth) = 0;
+    virtual void OnBrOnNullExpr(Index depth) = 0;
     virtual void OnBrTableExpr(Index numTargets, Index *targetDepths, Index defaultTargetDepth) = 0;
     virtual void OnSelectExpr(Index resultCount, Type *resultTypes) = 0;
     virtual void OnThrowExpr(Index tagIndex) = 0;
@@ -162,6 +167,7 @@ public:
     virtual void OnRefFuncExpr(Index func_index) = 0;
     virtual void OnRefNullExpr(Type type) = 0;
     virtual void OnRefIsNullExpr() = 0;
+    virtual void OnRefAsNonNullExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
     virtual void OnUnreachableExpr() = 0;

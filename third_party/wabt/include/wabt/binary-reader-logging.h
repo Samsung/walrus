@@ -76,9 +76,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
                        nonstd::string_view field_name,
                        Index table_index,
                        Type elem_type,
-                       const Limits* elem_limits,
-                       bool is_import,
-                       bool has_init_expr) override;
+                       const Limits* elem_limits) override;
   Result OnImportMemory(Index import_index,
                         nonstd::string_view module_name,
                         nonstd::string_view field_name,
@@ -108,7 +106,6 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result BeginTable(Index index,
                     Type elem_type,
                     const Limits* elem_limits,
-                    bool is_import,
                     bool has_init_expr) override;
   Result BeginTableInitExpr(Index index) override;
   Result EndTableInitExpr(Index index) override;

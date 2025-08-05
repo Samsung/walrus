@@ -1132,6 +1132,30 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(JumpIfNull)
+        :
+    {
+        JumpIfNull* code = (JumpIfNull*)programCounter;
+        if (readValue<uintptr_t>(bp, code->srcOffset())) {
+            ADD_PROGRAM_COUNTER(JumpIfNull);
+        } else {
+            programCounter += code->offset();
+        }
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(JumpIfNonNull)
+        :
+    {
+        JumpIfNonNull* code = (JumpIfNonNull*)programCounter;
+        if (readValue<uintptr_t>(bp, code->srcOffset())) {
+            programCounter += code->offset();
+        } else {
+            ADD_PROGRAM_COUNTER(JumpIfNonNull);
+        }
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(Call)
         :
     {
@@ -1143,6 +1167,13 @@ NextInstruction:
         :
     {
         callIndirectOperation(state, programCounter, bp, instance);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(CallRef)
+        :
+    {
+        callRefOperation(state, programCounter, bp, instance);
         NEXT_INSTRUCTION();
     }
 
@@ -1651,6 +1682,20 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(RefAsNonNull)
+        :
+    {
+        RefAsNonNull* code = (RefAsNonNull*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->stackOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null reference");
+        }
+
+        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(Throw)
         :
     {
@@ -1758,4 +1803,27 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
+
+NEVER_INLINE void Interpreter::callRefOperation(
+    ExecutionState& state,
+    size_t& programCounter,
+    uint8_t* bp,
+    Instance* instance)
+{
+    CallRef* code = (CallRef*)programCounter;
+
+    auto target = readValue<Function*>(bp, code->calleeOffset());
+    if (UNLIKELY(Value::isNull(target))) {
+        Trap::throwException(state, "null function reference");
+    }
+    const FunctionType* ft = target->functionType();
+    if (!ft->equals(code->functionType())) {
+        Trap::throwException(state, "call by reference type mismatch");
+    }
+
+    target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                                                   + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+}
+
 } // namespace Walrus
