@@ -91,9 +91,7 @@ class BinaryReaderNop : public BinaryReaderDelegate {
                        nonstd::string_view field_name,
                        Index table_index,
                        Type elem_type,
-                       const Limits* elem_limits,
-                       bool is_import,
-                       bool has_init_expr) override {
+                       const Limits* elem_limits) override {
     return Result::Ok;
   }
   Result OnImportMemory(Index import_index,
@@ -135,7 +133,6 @@ class BinaryReaderNop : public BinaryReaderDelegate {
   Result BeginTable(Index index,
                     Type elem_type,
                     const Limits* elem_limits,
-                    bool is_import,
                     bool has_init_expr) override {
     return Result::Ok;
   }

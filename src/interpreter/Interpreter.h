@@ -122,6 +122,11 @@ private:
                                       size_t& programCounter,
                                       uint8_t* bp,
                                       Instance* instance);
+
+    static void callRefOperation(ExecutionState& state,
+                                 size_t& programCounter,
+                                 uint8_t* bp,
+                                 Instance* instance);
 };
 
 } // namespace Walrus

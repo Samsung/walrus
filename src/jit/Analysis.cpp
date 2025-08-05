@@ -506,9 +506,12 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         if (instr->opcode() == ByteCode::CallOpcode) {
             Call* call = reinterpret_cast<Call*>(instr->byteCode());
             functionType = module()->function(call->index())->functionType();
-        } else {
+        } else if (instr->opcode() == ByteCode::CallIndirectOpcode) {
             CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
             functionType = callIndirect->functionType();
+        } else {
+            CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+            functionType = callRef->functionType();
         }
 
         ASSERT(functionType->result().size() == resultCount);
@@ -706,6 +709,11 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     types = &callIndirect->functionType()->param();
                     break;
                 }
+                case ByteCode::CallRefOpcode: {
+                    CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+                    types = &callRef->functionType()->param();
+                    break;
+                }
                 case ByteCode::ThrowOpcode: {
                     Throw* throwTag = reinterpret_cast<Throw*>(instr->byteCode());
                     TagType* tagType = module()->tagType(throwTag->tagIndex());
@@ -724,9 +732,13 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     variable.info |= Instruction::valueTypeToOperandType(it);
                 }
 
-                if (instr->opcode() == ByteCode::CallIndirectOpcode) {
+                if (instr->opcode() == ByteCode::CallIndirectOpcode || instr->opcode() == ByteCode::CallRefOpcode) {
                     VariableList::Variable& variable = m_variableList->variables[*param];
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+                    variable.info |= (instr->opcode() == ByteCode::CallIndirectOpcode) ? Instruction::Int32Operand : Instruction::Int64Operand;
+#else /* !SLJIT_64BIT_ARCHITECTURE */
                     variable.info |= Instruction::Int32Operand;
+#endif /* SLJIT_64BIT_ARCHITECTURE */
                 }
             }
         }

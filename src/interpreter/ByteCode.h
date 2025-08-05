@@ -43,6 +43,7 @@ class FunctionType;
     F(BrTable)                  \
     F(Call)                     \
     F(CallIndirect)             \
+    F(CallRef)                  \
     F(Select)                   \
     F(MemorySize)               \
     F(MemoryGrow)               \
@@ -71,6 +72,8 @@ class FunctionType;
     F(Jump)                     \
     F(JumpIfTrue)               \
     F(JumpIfFalse)              \
+    F(JumpIfNull)               \
+    F(JumpIfNonNull)            \
     F(GlobalGet32)              \
     F(GlobalGet64)              \
     F(GlobalGet128)             \
@@ -84,6 +87,7 @@ class FunctionType;
     F(Load64)                   \
     F(Store32)                  \
     F(Store64)                  \
+    F(RefAsNonNull)             \
     F(FillOpcodeTable)
 
 #define FOR_EACH_BYTECODE_MEMIDX_OP(F) \
@@ -1487,6 +1491,61 @@ protected:
     uint16_t m_resultOffsetsSize;
 };
 
+class CallRef : public ByteCode {
+public:
+    CallRef(ByteCodeStackOffset stackOffset, FunctionType* functionType,
+            uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize)
+        : ByteCode(Opcode::CallRefOpcode)
+        , m_calleeOffset(stackOffset)
+        , m_functionType(functionType)
+        , m_parameterOffsetsSize(parameterOffsetsSize)
+        , m_resultOffsetsSize(resultOffsetsSize)
+    {
+    }
+
+    ByteCodeStackOffset calleeOffset() const { return m_calleeOffset; }
+    FunctionType* functionType() const { return m_functionType; }
+    ByteCodeStackOffset* stackOffsets() const
+    {
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallRef));
+    }
+
+    uint16_t parameterOffsetsSize() const
+    {
+        return m_parameterOffsetsSize;
+    }
+
+    uint16_t resultOffsetsSize() const
+    {
+        return m_resultOffsetsSize;
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("call_ref ");
+        size_t c = 0;
+        auto arr = stackOffsets();
+        printf("paramOffsets: ");
+        for (size_t i = 0; i < m_parameterOffsetsSize; i++) {
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
+        }
+        printf(" ");
+
+        printf("resultOffsets: ");
+        for (size_t i = 0; i < m_resultOffsetsSize; i++) {
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
+        }
+    }
+#endif
+
+protected:
+    ByteCodeStackOffset m_calleeOffset;
+    FunctionType* m_functionType;
+    uint16_t m_parameterOffsetsSize;
+    uint16_t m_resultOffsetsSize;
+};
+
 class Load32 : public ByteCodeOffset2 {
 public:
     Load32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
@@ -1634,6 +1693,54 @@ public:
     void dump(size_t pos)
     {
         printf("jump_if_false ");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("dst: %" PRId32, (int32_t)pos + offset());
+    }
+#endif
+};
+
+class JumpIfNull : public ByteCodeOffsetValue {
+public:
+    JumpIfNull(ByteCodeStackOffset srcOffset, int32_t offset = 0)
+        : ByteCodeOffsetValue(Opcode::JumpIfNullOpcode, srcOffset, static_cast<uint32_t>(offset))
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    int32_t offset() const { return int32Value(); }
+    void setOffset(int32_t offset)
+    {
+        m_value = static_cast<uint32_t>(offset);
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("br_on_null ");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("dst: %" PRId32, (int32_t)pos + offset());
+    }
+#endif
+};
+
+class JumpIfNonNull : public ByteCodeOffsetValue {
+public:
+    JumpIfNonNull(ByteCodeStackOffset srcOffset, int32_t offset = 0)
+        : ByteCodeOffsetValue(Opcode::JumpIfNonNullOpcode, srcOffset, static_cast<uint32_t>(offset))
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    int32_t offset() const { return int32Value(); }
+    void setOffset(int32_t offset)
+    {
+        m_value = static_cast<uint32_t>(offset);
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("br_on_non_null ");
         DUMP_BYTECODE_OFFSET(stackOffset);
         printf("dst: %" PRId32, (int32_t)pos + offset());
     }
@@ -3126,6 +3233,28 @@ public:
         printf("funcIndex: %" PRIu32, funcIndex());
     }
 #endif
+};
+
+class RefAsNonNull : public ByteCode {
+public:
+    RefAsNonNull(ByteCodeStackOffset stackOffset)
+        : ByteCode(Opcode::RefAsNonNullOpcode)
+        , m_stackOffset(stackOffset)
+    {
+    }
+
+    ByteCodeStackOffset stackOffset() const { return m_stackOffset; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ref.as_non_null ");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+    }
+#endif
+
+private:
+    ByteCodeStackOffset m_stackOffset;
 };
 
 class GlobalGet32 : public ByteCodeOffsetValue {

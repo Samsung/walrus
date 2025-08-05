@@ -693,8 +693,9 @@ void JITCompiler::allocateRegisters()
             // No register assignment required.
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
+                   || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
-                   || instr->opcode() == ByteCode::JumpOpcode || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
+                   || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
 
             if (!hasResult) {
                 continue;
@@ -1026,8 +1027,9 @@ void JITCompiler::allocateRegistersSimple()
             // No register assignment required.
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
+                   || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
-                   || instr->opcode() == ByteCode::JumpOpcode || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
+                   || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
             continue;
         }
 

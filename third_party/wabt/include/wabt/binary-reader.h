@@ -141,9 +141,7 @@ class BinaryReaderDelegate {
                                nonstd::string_view field_name,
                                Index table_index,
                                Type elem_type,
-                               const Limits* elem_limits,
-                               bool is_import,
-                               bool has_init_expr) = 0;
+                               const Limits* elem_limits) = 0;
   virtual Result OnImportMemory(Index import_index,
                                 nonstd::string_view module_name,
                                 nonstd::string_view field_name,
@@ -175,7 +173,6 @@ class BinaryReaderDelegate {
   virtual Result BeginTable(Index index,
                             Type elem_type,
                             const Limits* elem_limits,
-                            bool is_import,
                             bool has_init_expr) = 0;
   virtual Result BeginTableInitExpr(Index index) = 0;
   virtual Result EndTableInitExpr(Index index) = 0;

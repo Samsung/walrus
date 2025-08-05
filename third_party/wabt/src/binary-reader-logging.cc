@@ -225,16 +225,14 @@ Result BinaryReaderLogging::OnImportTable(Index import_index,
                                           nonstd::string_view field_name,
                                           Index table_index,
                                           Type elem_type,
-                                          const Limits* elem_limits,
-                                          bool is_import,
-                                          bool has_init_expr) {
+                                          const Limits* elem_limits) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), elem_limits);
   LOGF("OnImportTable(import_index: %" PRIindex ", table_index: %" PRIindex
        ", elem_type: %s, %s)\n",
        import_index, table_index, elem_type.GetName().c_str(), buf);
   return reader_->OnImportTable(import_index, module_name, field_name,
-                                table_index, elem_type, elem_limits, is_import, has_init_expr);
+                                table_index, elem_type, elem_limits);
 }
 
 Result BinaryReaderLogging::OnImportMemory(Index import_index,
@@ -282,13 +280,12 @@ Result BinaryReaderLogging::OnImportTag(Index import_index,
 Result BinaryReaderLogging::BeginTable(Index index,
                                        Type elem_type,
                                        const Limits* elem_limits,
-                                       bool is_import,
                                        bool has_init_expr) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), elem_limits);
   LOGF("OnTable(index: %" PRIindex ", elem_type: %s, %s)\n", index,
        elem_type.GetName().c_str(), buf);
-  return reader_->BeginTable(index, elem_type, elem_limits, is_import, has_init_expr);
+  return reader_->BeginTable(index, elem_type, elem_limits, has_init_expr);
 }
 
 Result BinaryReaderLogging::OnMemory(Index index,

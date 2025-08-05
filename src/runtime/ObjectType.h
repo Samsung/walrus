@@ -253,17 +253,26 @@ public:
         , m_type(type)
         , m_initialSize(initSize)
         , m_maximumSize(maxSize)
+        , m_function(nullptr)
     {
     }
 
     Type type() const { return m_type; }
     uint32_t initialSize() const { return m_initialSize; }
     uint32_t maximumSize() const { return m_maximumSize; }
+    ModuleFunction* function() const { return m_function; }
+
+    inline void setFunction(ModuleFunction* func)
+    {
+        ASSERT(!m_function);
+        m_function = func;
+    }
 
 private:
     Type m_type;
     uint32_t m_initialSize;
     uint32_t m_maximumSize;
+    ModuleFunction* m_function;
 };
 
 class MemoryType : public ObjectType {

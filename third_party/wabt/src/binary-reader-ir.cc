@@ -128,9 +128,7 @@ class BinaryReaderIR : public BinaryReaderNop {
                        nonstd::string_view field_name,
                        Index table_index,
                        Type elem_type,
-                       const Limits* elem_limits,
-                       bool is_import,
-                       bool has_init_expr) override;
+                       const Limits* elem_limits) override;
         Result OnImportMemory(Index import_index,
                         nonstd::string_view module_name,
                         nonstd::string_view field_name,
@@ -156,7 +154,6 @@ class BinaryReaderIR : public BinaryReaderNop {
   Result BeginTable(Index index,
                     Type elem_type,
                     const Limits* elem_limits,
-                    bool is_import,
                     bool has_init_expr) override;
   Result BeginTableInitExpr(Index index) override;
   Result EndTableInitExpr(Index index) override;
@@ -671,16 +668,14 @@ Result BinaryReaderIR::OnImportTable(Index import_index,
                                      nonstd::string_view field_name,
                                      Index table_index,
                                      Type elem_type,
-                                     const Limits* elem_limits,
-                                     bool is_import,
-                                     bool has_init_expr) {
+                                     const Limits* elem_limits) {
   auto import = MakeUnique<TableImport>();
   import->module_name = module_name.to_string();
   import->field_name = field_name.to_string();
   import->table.elem_limits = *elem_limits;
   import->table.elem_type = elem_type;
-  import->table.is_import = is_import;
-  import->table.has_init_expr = has_init_expr;
+  import->table.is_import = true;
+  import->table.has_init_expr = false;
   module_->AppendField(
       MakeUnique<ImportModuleField>(std::move(import), GetLocation()));
   return Result::Ok;
@@ -763,7 +758,6 @@ Result BinaryReaderIR::OnTableCount(Index count) {
 Result BinaryReaderIR::BeginTable(Index index,
                                   Type elem_type,
                                   const Limits* elem_limits,
-                                  bool,
                                   bool) {
   auto field = MakeUnique<TableModuleField>(GetLocation());
   Table& table = field->table;

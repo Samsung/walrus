@@ -223,7 +223,29 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
     // init table
     while (tableIndex < m_tableTypes.size()) {
-        instance->m_tables[tableIndex] = Table::createTable(m_store, m_tableTypes[tableIndex]->type(), m_tableTypes[tableIndex]->initialSize(), m_tableTypes[tableIndex]->maximumSize());
+        TableType* tableType = m_tableTypes[tableIndex];
+        void* initValue = nullptr;
+
+        if (tableType->function()) {
+            struct RunData {
+                Instance* instance;
+                Module* module;
+                ModuleFunction* mf;
+                void* initValue;
+            } data = { instance, this, tableType->function(), nullptr };
+            Walrus::Trap trap;
+            trap.run([](Walrus::ExecutionState& state, void* d) {
+                RunData* data = reinterpret_cast<RunData*>(d);
+                DefinedFunctionWithTryCatch fakeFunction(data->instance, data->mf);
+                Value result;
+                fakeFunction.call(state, nullptr, &result);
+                data->initValue = result.asReference();
+            },
+                     &data);
+            initValue = data.initValue;
+        }
+
+        instance->m_tables[tableIndex] = Table::createTable(m_store, tableType->type(), tableType->initialSize(), tableType->maximumSize(), initValue);
         tableIndex++;
     }
 

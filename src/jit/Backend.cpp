@@ -751,9 +751,13 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
     } else {
         JITArg src(instr->operands());
 
-        sljit_s32 type = (instr->opcode() == ByteCode::JumpIfTrueOpcode) ? SLJIT_NOT_EQUAL : SLJIT_EQUAL;
+        sljit_s32 type = (instr->opcode() == ByteCode::JumpIfTrueOpcode || instr->opcode() == ByteCode::JumpIfNonNullOpcode) ? SLJIT_NOT_EQUAL : SLJIT_EQUAL;
 
-        jump = sljit_emit_cmp(compiler, type | SLJIT_32, src.arg, src.argw, SLJIT_IMM, 0);
+        if (instr->opcode() == ByteCode::JumpIfTrueOpcode || instr->opcode() == ByteCode::JumpIfFalseOpcode) {
+            type |= SLJIT_32;
+        }
+
+        jump = sljit_emit_cmp(compiler, type, src.arg, src.argw, SLJIT_IMM, 0);
     }
 
     instr->asExtended()->value().targetLabel->jumpFrom(jump);
@@ -939,6 +943,14 @@ static void emitRefFunc(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, kInstanceReg, 0);
     moveIntToDest(compiler, SLJIT_MOV_P, dstArg, context->functionsStart + (sizeof(Function*) * (reinterpret_cast<RefFunc*>(instr->byteCode()))->funcIndex()));
+}
+
+static void emitRefAsNonNull(sljit_compiler* compiler, Instruction* instr)
+{
+    JITArg srcArg(instr->params());
+    CompileContext* context = CompileContext::get(compiler);
+
+    context->appendTrapJump(ExecutionContext::NullReferenceError, sljit_emit_cmp(compiler, SLJIT_EQUAL, srcArg.arg, srcArg.argw, SLJIT_IMM, 0));
 }
 
 static void emitStackInit(sljit_compiler* compiler, Instruction* instr)
@@ -1329,6 +1341,10 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 #endif /* HAS_SIMD */
             case ByteCode::RefFuncOpcode: {
                 emitRefFunc(m_compiler, item->asInstruction());
+                break;
+            }
+            case ByteCode::RefAsNonNullOpcode: {
+                emitRefAsNonNull(m_compiler, item->asInstruction());
                 break;
             }
             case ByteCode::ElemDropOpcode: {
