@@ -166,12 +166,12 @@ static Walrus::Type toValueKind(Type type, Walrus::WASMParsingResult* result)
     }
 }
 
-static Walrus::CompositeType** toSubType(GCTypeExtension* gcExt)
+static const Walrus::CompositeType** toSubType(GCTypeExtension* gcExt)
 {
     if (gcExt->sub_type_count == 0) {
-        return reinterpret_cast<Walrus::CompositeType**>(Walrus::TypeStore::NoIndex);
+        return reinterpret_cast<const Walrus::CompositeType**>(Walrus::TypeStore::NoIndex);
     }
-    return reinterpret_cast<Walrus::CompositeType**>(gcExt->sub_types[0]);
+    return reinterpret_cast<const Walrus::CompositeType**>(gcExt->sub_types[0]);
 }
 
 static Walrus::SegmentMode toSegmentMode(uint8_t flags)

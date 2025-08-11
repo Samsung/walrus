@@ -32,6 +32,8 @@
 
 namespace Walrus {
 
+DEFINE_GLOBAL_TYPE_INFO(moduleTypeInfo, ModuleKind);
+
 ModuleFunction::ModuleFunction(FunctionType* functionType)
     : m_hasTryCatch(false)
     , m_requiredStackSize(std::max(functionType->paramStackSize(), functionType->resultStackSize()))
@@ -43,7 +45,8 @@ ModuleFunction::ModuleFunction(FunctionType* functionType)
 }
 
 Module::Module(Store* store, WASMParsingResult& result)
-    : m_store(store)
+    : Object(GET_GLOBAL_TYPE_INFO(moduleTypeInfo))
+    , m_store(store)
     , m_seenStartAttribute(result.m_seenStartAttribute)
     , m_version(result.m_version)
     , m_start(result.m_start)

@@ -28,6 +28,8 @@
 
 namespace Walrus {
 
+DEFINE_GLOBAL_TYPE_INFO(memoryTypeInfo, MemoryKind);
+
 Memory* Memory::createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared)
 {
     Memory* mem = new Memory(initialSizeInByte, maximumSizeInByte, isShared);
@@ -36,7 +38,8 @@ Memory* Memory::createMemory(Store* store, uint64_t initialSizeInByte, uint64_t 
 }
 
 Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared)
-    : m_sizeInByte(initialSizeInByte)
+    : Extern(GET_GLOBAL_TYPE_INFO(memoryTypeInfo))
+    , m_sizeInByte(initialSizeInByte)
     , m_reservedSizeInByte(0)
     , m_maximumSizeInByte(maximumSizeInByte)
     , m_buffer(nullptr)

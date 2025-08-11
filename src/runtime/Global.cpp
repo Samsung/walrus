@@ -13,37 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "Walrus.h"
 
-#ifndef __WalrusTag__
-#define __WalrusTag__
-
-#include "runtime/Store.h"
-#include "runtime/Object.h"
+#include "Global.h"
 
 namespace Walrus {
 
-class FunctionType;
+DEFINE_GLOBAL_TYPE_INFO(globalTypeInfo, GlobalKind);
 
-class Tag : public Extern {
-public:
-    static Tag* createTag(Store* store, FunctionType* functionType)
-    {
-        Tag* tag = new Tag(functionType);
-        store->appendExtern(tag);
-        return tag;
-    }
-
-    const FunctionType* functionType() const
-    {
-        return m_functionType;
-    }
-
-private:
-    Tag(FunctionType* functionType);
-
-    const FunctionType* m_functionType;
-};
+Global::Global(const Value& value, const MutableType& type)
+    : Extern(GET_GLOBAL_TYPE_INFO(globalTypeInfo))
+    , m_value(value)
+    , m_type(type)
+{
+}
 
 } // namespace Walrus
-
-#endif // __WalrusTag__

@@ -47,16 +47,6 @@ class WasiFunction;
 
 class Function : public Extern {
 public:
-    virtual Object::Kind kind() const override
-    {
-        return Object::FunctionKind;
-    }
-
-    virtual bool isFunction() const override
-    {
-        return true;
-    }
-
     const FunctionType* functionType() const { return m_functionType; }
 
     virtual void call(ExecutionState& state, Value* argv, Value* result) = 0;
@@ -97,10 +87,7 @@ public:
     }
 
 protected:
-    Function(FunctionType* functionType)
-        : m_functionType(functionType)
-    {
-    }
+    Function(FunctionType* functionType);
 
     const FunctionType* m_functionType;
 };

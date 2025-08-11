@@ -33,16 +33,6 @@ public:
         return glob;
     }
 
-    virtual Object::Kind kind() const override
-    {
-        return Object::GlobalKind;
-    }
-
-    virtual bool isGlobal() const override
-    {
-        return true;
-    }
-
     Value& value()
     {
         return m_value;
@@ -70,11 +60,7 @@ public:
     }
 
 private:
-    Global(const Value& value, const MutableType& type)
-        : m_value(value)
-        , m_type(type)
-    {
-    }
+    Global(const Value& value, const MutableType& type);
 
     Value m_value;
     MutableType m_type;

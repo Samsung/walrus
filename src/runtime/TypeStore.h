@@ -62,7 +62,7 @@ private:
     size_t m_typeCount;
     size_t m_hashCode;
     // Concatenation of subtype arrays used by all types
-    CompositeType* m_subTypes[1];
+    const CompositeType* m_subTypes[1];
 };
 
 class TypeStore {
@@ -84,7 +84,7 @@ public:
     void releaseTypes(CompositeTypeVector& types);
 
 private:
-    static CompositeType** updateRefs(CompositeType* type, const Vector<CompositeType*>& types, CompositeType** nextSubType);
+    static const CompositeType** updateRefs(CompositeType* type, const Vector<CompositeType*>& types, const CompositeType** nextSubType);
     void releaseRecursiveType(RecursiveType* recType);
 
     RecursiveType* m_first;

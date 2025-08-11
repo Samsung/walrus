@@ -86,16 +86,6 @@ public:
     static Instance* newInstance(Module* module);
     static void freeInstance(Instance* instance);
 
-    virtual Object::Kind kind() const override
-    {
-        return Object::InstanceKind;
-    }
-
-    virtual bool isInstance() const override
-    {
-        return true;
-    }
-
     static size_t alignedSize()
     {
         return (sizeof(Instance) + sizeof(void*) - 1) & ~(sizeof(void*) - 1);

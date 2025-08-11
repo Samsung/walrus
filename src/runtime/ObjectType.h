@@ -68,7 +68,7 @@ public:
         return m_recursiveType;
     }
 
-    CompositeType** subTypeList() const
+    const CompositeType** subTypeList() const
     {
         return m_subTypeList;
     }
@@ -110,7 +110,7 @@ public:
     }
 
 protected:
-    CompositeType(Kind kind, bool isFinal, CompositeType** subTypeList)
+    CompositeType(Kind kind, bool isFinal, const CompositeType** subTypeList)
         : ObjectType(kind)
         , m_nextType(nullptr)
         , m_recursiveType(nullptr)
@@ -126,7 +126,7 @@ private:
     // Subtype list is an index or TypeStore::NoIndex during parsing, not a pointer.
     // The m_subTypeList[0] is the szie of the items in the list, see subTypeCount().
     // The m_subTypeList[subTypeCount()] is pointer to the composite type.
-    CompositeType** m_subTypeList;
+    const CompositeType** m_subTypeList;
     bool m_isFinal;
 };
 
@@ -137,7 +137,7 @@ public:
     FunctionType(TypeVector* param,
                  TypeVector* result,
                  bool isFinal,
-                 CompositeType** subTypeList)
+                 const CompositeType** subTypeList)
         : CompositeType(ObjectType::FunctionKind, isFinal, subTypeList)
         , m_paramTypes(param)
         , m_resultTypes(result)
@@ -191,7 +191,7 @@ public:
 
     StructType(MutableTypeVector* fields,
                bool isFinal,
-               CompositeType** subTypeList)
+               const CompositeType** subTypeList)
         : CompositeType(ObjectType::StructKind, isFinal, subTypeList)
         , m_fieldTypes(fields)
     {
@@ -214,7 +214,7 @@ public:
 
     ArrayType(MutableType field,
               bool isFinal,
-              CompositeType** subTypeList)
+              const CompositeType** subTypeList)
         : CompositeType(ObjectType::ArrayKind, isFinal, subTypeList)
         , m_field(field)
     {

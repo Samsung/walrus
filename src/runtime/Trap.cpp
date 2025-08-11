@@ -19,6 +19,13 @@
 
 namespace Walrus {
 
+DEFINE_GLOBAL_TYPE_INFO(trapTypeInfo, TrapKind);
+
+Trap::Trap()
+    : Object(GET_GLOBAL_TYPE_INFO(trapTypeInfo))
+{
+}
+
 Trap::TrapResult Trap::run(void (*runner)(ExecutionState&, void*), void* data)
 {
     Trap::TrapResult r;

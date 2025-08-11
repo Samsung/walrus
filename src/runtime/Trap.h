@@ -38,15 +38,7 @@ public:
         }
     };
 
-    virtual Object::Kind kind() const override
-    {
-        return Object::TrapKind;
-    }
-
-    virtual bool isTrap() const override
-    {
-        return true;
-    }
+    Trap();
 
     TrapResult run(void (*runner)(ExecutionState&, void*), void* data);
     static void throwException(const std::string& message);
