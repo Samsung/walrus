@@ -24,6 +24,8 @@
 
 namespace Walrus {
 
+DEFINE_GLOBAL_TYPE_INFO(tableTypeInfo, TableKind);
+
 Table* Table::createTable(Store* store, Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
 {
     Table* tbl = new Table(type, initialSize, maximumSize, init ? init : reinterpret_cast<void*>(Value::NullBits));
@@ -33,7 +35,8 @@ Table* Table::createTable(Store* store, Type type, uint32_t initialSize, uint32_
 }
 
 Table::Table(Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
-    : m_type(type)
+    : Extern(GET_GLOBAL_TYPE_INFO(tableTypeInfo))
+    , m_type(type)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
 {

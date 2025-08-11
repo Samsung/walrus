@@ -63,16 +63,6 @@ public:
 
     ~Memory();
 
-    virtual Object::Kind kind() const override
-    {
-        return Object::MemoryKind;
-    }
-
-    virtual bool isMemory() const override
-    {
-        return true;
-    }
-
     uint8_t* buffer() const
     {
         return m_buffer;

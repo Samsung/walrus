@@ -349,17 +349,6 @@ class Module : public Object {
 public:
     Module(Store* store, WASMParsingResult& result);
 
-
-    virtual Object::Kind kind() const override
-    {
-        return Object::ModuleKind;
-    }
-
-    virtual bool isModule() const override
-    {
-        return true;
-    }
-
     Store* store() const
     {
         return m_store;

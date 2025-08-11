@@ -190,22 +190,35 @@ static void updateRef(Type& type, const Vector<CompositeType*>& types)
     }
 }
 
-CompositeType** TypeStore::updateRefs(CompositeType* type, const Vector<CompositeType*>& types, CompositeType** nextSubType)
+const CompositeType** TypeStore::updateRefs(CompositeType* type, const Vector<CompositeType*>& types, const CompositeType** nextSubType)
 {
     uintptr_t index = reinterpret_cast<uintptr_t>(type->subTypeList());
-    type->m_subTypeList = nextSubType;
+    type->m_subTypeList = nextSubType + 1;
+
+    switch (type->kind()) {
+    case ObjectType::StructKind:
+        nextSubType[0] = reinterpret_cast<CompositeType*>(Object::StructKind);
+        break;
+    case ObjectType::ArrayKind:
+        nextSubType[0] = reinterpret_cast<CompositeType*>(Object::ArrayKind);
+        break;
+    default:
+        ASSERT(type->kind() == ObjectType::FunctionKind);
+        nextSubType[0] = reinterpret_cast<CompositeType*>(Object::FunctionKind);
+        break;
+    }
 
     if (index == TypeStore::NoIndex) {
-        nextSubType[0] = reinterpret_cast<CompositeType*>(1);
-        nextSubType[1] = type;
-        nextSubType += 2;
+        nextSubType[1] = reinterpret_cast<CompositeType*>(1);
+        nextSubType[2] = type;
+        nextSubType += 3;
     } else {
         // Subtype index is always less than type index.
         uintptr_t size = types[index]->subTypeCount();
-        nextSubType[0] = reinterpret_cast<CompositeType*>(size + 1);
-        memcpy(nextSubType + 1, types[index]->subTypeList() + 1, sizeof(CompositeType*) * size);
-        nextSubType[size + 1] = type;
-        nextSubType += size + 2;
+        nextSubType[1] = reinterpret_cast<CompositeType*>(size + 1);
+        memcpy(nextSubType + 2, types[index]->subTypeList() + 1, sizeof(CompositeType*) * size);
+        nextSubType[size + 2] = type;
+        nextSubType += size + 3;
     }
 
     if (type->kind() == ObjectType::FunctionKind) {
@@ -302,7 +315,7 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
         compType = firstType;
         do {
             uintptr_t index = reinterpret_cast<uintptr_t>(compType->subTypeList());
-            totalSize += 2;
+            totalSize += 3;
 
             while (index != TypeStore::NoIndex) {
                 if (index >= i) {
@@ -325,7 +338,7 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
         copyTypes(types, i, firstType);
 
         compType = firstType;
-        CompositeType** nextSubType = recType->m_subTypes;
+        const CompositeType** nextSubType = recType->m_subTypes;
         do {
             nextSubType = updateRefs(compType, types, nextSubType);
             compType->m_recursiveType = recType;

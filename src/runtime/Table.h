@@ -33,16 +33,6 @@ class Table : public Extern {
 public:
     static Table* createTable(Store* store, Type type, uint32_t initialSize, uint32_t maximumSize, void* init = nullptr);
 
-    virtual Object::Kind kind() const override
-    {
-        return Object::TableKind;
-    }
-
-    virtual bool isTable() const override
-    {
-        return true;
-    }
-
     Type type() const
     {
         return m_type;

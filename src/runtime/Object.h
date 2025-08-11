@@ -29,63 +29,77 @@ class Table;
 class Memory;
 class Trap;
 class Tag;
+class CompositeType;
 
 class Object {
 public:
-    virtual ~Object() {}
-
     enum Kind : uint8_t {
-        Invalid,
+        // WebAssembly types
+        // TODO: Implement Struct and Array
+        StructKind,
+        ArrayKind,
+        FunctionKind,
+        // Host types
         ModuleKind,
         InstanceKind,
-        FunctionKind,
         GlobalKind,
         TableKind,
         MemoryKind,
         TrapKind,
         TagKind,
+        Invalid,
     };
 
-    virtual Kind kind() const = 0;
-
-    virtual bool isModule() const
+    Object(const CompositeType** typeInfo)
+        : m_typeInfo(typeInfo)
     {
-        return false;
     }
 
-    virtual bool isInstance() const
+    virtual ~Object() {}
+
+    Kind kind() const
     {
-        return false;
+        return static_cast<Kind>(reinterpret_cast<uintptr_t>(m_typeInfo[-1]));
     }
 
-    virtual bool isFunction() const
+    bool isModule() const
     {
-        return false;
+        return kind() == ModuleKind;
     }
 
-    virtual bool isGlobal() const
+    bool isInstance() const
     {
-        return false;
+        return kind() == InstanceKind;
     }
 
-    virtual bool isTable() const
+    bool isFunction() const
     {
-        return false;
+        return kind() == FunctionKind;
     }
 
-    virtual bool isMemory() const
+    bool isGlobal() const
     {
-        return false;
+        return kind() == GlobalKind;
     }
 
-    virtual bool isTrap() const
+    bool isTable() const
     {
-        return false;
+        return kind() == TableKind;
     }
 
-    virtual bool isTag() const
+    bool isMemory() const
     {
-        return false;
+        return kind() == MemoryKind;
+    }
+
+    bool isTrap() const
+    {
+        return kind() == TrapKind;
+    }
+
+    bool isTag() const
+    {
+        return kind() == TagKind;
     }
 
     Module* asModule()
@@ -135,6 +149,13 @@ public:
         ASSERT(isTag());
         return reinterpret_cast<Tag*>(this);
     }
+
+private:
+    // Type info is the concatenation of type kind and type casting data.
+    //   m_typeInfo[-1] is the type kind
+    //   m_typeInfo[0] is the size of the base classes
+    //   m_typeInfo[1..n] base classes
+    const CompositeType** m_typeInfo;
 };
 
 // Extern objects could be shared with other Module
@@ -154,13 +175,18 @@ public:
     }
 
 protected:
-    Extern()
+    Extern(const CompositeType** typeInfo)
+        : Object(typeInfo)
     {
 #ifndef NDEBUG
         g_externCount++;
 #endif
     }
 };
+
+#define DEFINE_GLOBAL_TYPE_INFO(name, type) \
+    static const CompositeType* name[2] = { reinterpret_cast<CompositeType*>(Object::type), reinterpret_cast<CompositeType*>(0) }
+#define GET_GLOBAL_TYPE_INFO(name) ((name) + 1)
 
 typedef Vector<Object*> ObjectVector;
 typedef Vector<Extern*> ExternVector;

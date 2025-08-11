@@ -27,6 +27,8 @@
 
 namespace Walrus {
 
+DEFINE_GLOBAL_TYPE_INFO(instanceTypeInfo, InstanceKind);
+
 Instance* Instance::newInstance(Module* module)
 {
     // Must follow the order in Module::instantiate.
@@ -53,7 +55,8 @@ void Instance::freeInstance(Instance* instance)
 }
 
 Instance::Instance(Module* module)
-    : m_module(module)
+    : Object(GET_GLOBAL_TYPE_INFO(instanceTypeInfo))
+    , m_module(module)
     , m_memories(nullptr)
     , m_globals(nullptr)
     , m_tables(nullptr)
