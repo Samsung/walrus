@@ -168,6 +168,9 @@ public:
     virtual void OnRefNullExpr(Type type) = 0;
     virtual void OnRefIsNullExpr() = 0;
     virtual void OnRefAsNonNullExpr() = 0;
+    virtual void OnRefCastExpr(Type type) = 0;
+    virtual void OnRefTestExpr(Type type) = 0;
+    virtual void OnGCUnaryExpr(int opcode) = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
     virtual void OnUnreachableExpr() = 0;

@@ -25,6 +25,8 @@
     printf(#name ": %" PRIu32 " ", (uint32_t)m_##name);
 #endif
 
+#include "runtime/Value.h"
+
 namespace Walrus {
 
 class FunctionType;
@@ -88,6 +90,13 @@ class FunctionType;
     F(Store32)                  \
     F(Store64)                  \
     F(RefAsNonNull)             \
+    F(RefCastGeneric)           \
+    F(RefCastDefined)           \
+    F(RefTestGeneric)           \
+    F(RefTestDefined)           \
+    F(RefI31)                   \
+    F(I31GetS)                  \
+    F(I31GetU)                  \
     F(FillOpcodeTable)
 
 #define FOR_EACH_BYTECODE_MEMIDX_OP(F) \
@@ -1350,6 +1359,8 @@ FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OP(DEFINE_TERNARY_BYTECODE)
 FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OTHER(DEFINE_TERNARY_BYTECODE)
+
+DEFINE_UNARY_BYTECODE(RefI31)
 
 #define DEFINE_MOVE_BYTECODE(name)                                         \
     class name : public ByteCodeOffset2 {                                  \
@@ -3255,6 +3266,174 @@ public:
 
 private:
     ByteCodeStackOffset m_stackOffset;
+};
+
+class RefCastGeneric : public ByteCode {
+public:
+    static constexpr uint8_t IsNullable = 0x1;
+    static constexpr uint8_t IsSrcTagged = 0x2;
+
+    RefCastGeneric(ByteCodeStackOffset srcOffset, Value::Type typeInfo, uint8_t srcInfo)
+        : ByteCode(Opcode::RefCastGenericOpcode)
+        , m_srcOffset(srcOffset)
+        , m_typeInfo(typeInfo)
+        , m_srcInfo(srcInfo)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    Value::Type typeInfo() const { return m_typeInfo; }
+    uint8_t srcInfo() const { return m_srcInfo; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ref.cast ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        printf("type: %d srcInfo: 0x%x", static_cast<int>(m_typeInfo), static_cast<int>(m_srcInfo));
+    }
+#endif
+
+private:
+    ByteCodeStackOffset m_srcOffset;
+    Value::Type m_typeInfo;
+    uint8_t m_srcInfo;
+};
+
+class CompositeType;
+
+class RefCastDefined : public ByteCode {
+public:
+    RefCastDefined(ByteCodeStackOffset srcOffset, const CompositeType** typeInfo, uint8_t srcInfo)
+        : ByteCode(Opcode::RefCastGenericOpcode)
+        , m_typeInfo(typeInfo)
+        , m_srcOffset(srcOffset)
+        , m_srcInfo(srcInfo)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    const CompositeType** typeInfo() const { return m_typeInfo; }
+    uint8_t srcInfo() const { return m_srcInfo; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ref.cast ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        printf("type: %d srcInfo: 0x%x", static_cast<int>(reinterpret_cast<intptr_t>(m_typeInfo[-1])), static_cast<int>(m_srcInfo));
+    }
+#endif
+
+private:
+    const CompositeType** m_typeInfo;
+    ByteCodeStackOffset m_srcOffset;
+    uint8_t m_srcInfo;
+};
+
+class RefTestGeneric : public ByteCode {
+public:
+    RefTestGeneric(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset, Value::Type typeInfo, uint8_t srcInfo)
+        : ByteCode(Opcode::RefTestGenericOpcode)
+        , m_srcOffset(srcOffset)
+        , m_dstOffset(dstOffset)
+        , m_typeInfo(typeInfo)
+        , m_srcInfo(srcInfo)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    Value::Type typeInfo() const { return m_typeInfo; }
+    uint8_t srcInfo() const { return m_srcInfo; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ref.cast ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
+        printf("type: %d srcInfo: 0x%x", static_cast<int>(m_typeInfo), static_cast<int>(m_srcInfo));
+    }
+#endif
+
+private:
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
+    Value::Type m_typeInfo;
+    uint8_t m_srcInfo;
+};
+
+class RefTestDefined : public ByteCode {
+public:
+    RefTestDefined(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset, const CompositeType** typeInfo, uint8_t srcInfo)
+        : ByteCode(Opcode::RefTestGenericOpcode)
+        , m_typeInfo(typeInfo)
+        , m_srcOffset(srcOffset)
+        , m_dstOffset(dstOffset)
+        , m_srcInfo(srcInfo)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    const CompositeType** typeInfo() const { return m_typeInfo; }
+    uint8_t srcInfo() const { return m_srcInfo; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ref.cast ");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
+        printf("type: %d srcInfo: 0x%x", static_cast<int>(reinterpret_cast<intptr_t>(m_typeInfo[-1])), static_cast<int>(m_srcInfo));
+    }
+#endif
+
+private:
+    const CompositeType** m_typeInfo;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
+    uint8_t m_srcInfo;
+};
+
+class I31Get : public ByteCodeOffset2Value {
+public:
+    I31Get(Opcode opcode, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset, bool isNullable)
+        : ByteCodeOffset2Value(opcode, srcOffset, dstOffset, isNullable ? 1 : 0)
+    {
+        ASSERT(opcode == Opcode::I31GetSOpcode || opcode == Opcode::I31GetUOpcode);
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+    bool isNullable() const { return uint32Value() != 0; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("I31Get%s ", opcode() == Opcode::I31GetSOpcode ? "S" : "U");
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
+        printf("nullable: %s", isNullable() ? "true" : "false");
+    }
+#endif
+};
+
+class I31GetS : public I31Get {
+public:
+    I31GetS(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset, bool isNullable)
+        : I31Get(Opcode::I31GetSOpcode, srcOffset, dstOffset, isNullable)
+    {
+    }
+};
+
+class I31GetU : public I31Get {
+public:
+    I31GetU(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset, bool isNullable)
+        : I31Get(Opcode::I31GetUOpcode, srcOffset, dstOffset, isNullable)
+    {
+    }
 };
 
 class GlobalGet32 : public ByteCodeOffsetValue {

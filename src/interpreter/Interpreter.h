@@ -127,6 +127,9 @@ private:
                                  size_t& programCounter,
                                  uint8_t* bp,
                                  Instance* instance);
+
+    static bool testRefGeneric(void* refPtr, Value::Type type);
+    static bool testRefDefined(void* refPtr, const CompositeType** typeInfo);
 };
 
 } // namespace Walrus

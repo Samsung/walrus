@@ -553,7 +553,7 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
     JITArg dstArg(instr->operands());
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalGet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalGet->index() * sizeof(void*));
 
     if (instr->info() & Instruction::kHasFloatOperand) {
         moveFloatToDest(compiler, SLJIT_MOV_F64, dstArg, JITFieldAccessor::globalValueOffset());
@@ -571,7 +571,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
 
     if (instr->info() & Instruction::kHasFloatOperand) {
         floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
-        baseReg = SLJIT_TMP_MEM_REG;
+        baseReg = SLJIT_TMP_DEST_REG;
     } else {
         src.set(instr->operands());
         baseReg = instr->requiredReg(0);

@@ -92,7 +92,7 @@ void Table::initTable(Instance* instance, ElementSegment* source, uint32_t dstSt
         struct RunData {
             Instance* instance;
             ModuleFunction* exprFunc;
-            Function* func;
+            void* initValue;
         } data = { instance, exprFunc, nullptr };
         Walrus::Trap trap;
         trap.run([](Walrus::ExecutionState& state, void* d) {
@@ -100,11 +100,11 @@ void Table::initTable(Instance* instance, ElementSegment* source, uint32_t dstSt
             DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
             Value func;
             fakeFunction.call(state, nullptr, &func);
-            data->func = func.asFunction();
+            data->initValue = func.asReference();
         },
                  &data);
 
-        m_elements[i] = data.func;
+        m_elements[i] = data.initValue;
     }
 }
 

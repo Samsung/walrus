@@ -62,6 +62,11 @@ public:
         return static_cast<Kind>(reinterpret_cast<uintptr_t>(m_typeInfo[-1]));
     }
 
+    const CompositeType** typeInfo()
+    {
+        return m_typeInfo;
+    }
+
     bool isModule() const
     {
         return kind() == ModuleKind;

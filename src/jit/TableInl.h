@@ -117,7 +117,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::TableSizeOpcode: {
         JITArg dstArg(instr->operands());
 
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kInstanceReg), context->tableStart + ((reinterpret_cast<TableSize*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kInstanceReg), context->tableStart + ((reinterpret_cast<TableSize*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
         moveIntToDest(compiler, SLJIT_MOV32, dstArg, JITFieldAccessor::tableSizeOffset());
         break;
     }

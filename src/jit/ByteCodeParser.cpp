@@ -205,7 +205,9 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTConvertFloat64FromInt64, /* SD */ I64, F64)                                  \
     OL4(OTSelectI32, /* SSSD */ I32, I32, I32, I32 | S0 | S1)                          \
     OL4(OTSelectF32, /* SSSD */ F32, F32, I32, F32 | S0 | S1)                          \
-    OL4(OTSelectF64, /* SSSD */ F64, F64, I32, F64 | S0 | S1)
+    OL4(OTSelectF64, /* SSSD */ F64, F64, I32, F64 | S0 | S1)                          \
+    OL2(OTRefI31, /* SD */ I32, PTR)                                                   \
+    OL2(OTGCOp1, /* SD */ PTR, I32)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 
@@ -1706,6 +1708,61 @@ static void compileFunction(JITCompiler* compiler)
 
             RefAsNonNull* refAsNonNullOperation = reinterpret_cast<RefAsNonNull*>(byteCode);
             *instr->operands() = STACK_OFFSET(refAsNonNullOperation->stackOffset());
+            break;
+        }
+        case ByteCode::RefI31Opcode: {
+            group = Instruction::GCUnary;
+            paramType = ParamTypes::ParamSrcDst;
+            info = Instruction::kFreeUnusedEarly;
+            requiredInit = OTRefI31;
+            break;
+        }
+        case ByteCode::I31GetSOpcode:
+        case ByteCode::I31GetUOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCUnary, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(OTGCOp1);
+            instr->addInfo(Instruction::kFreeUnusedEarly);
+
+            I31Get* i31GetOperation = reinterpret_cast<I31Get*>(byteCode);
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(i31GetOperation->srcOffset());
+            operands[1] = STACK_OFFSET(i31GetOperation->dstOffset());
+            break;
+        }
+        case ByteCode::RefCastGenericOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 0);
+            instr->setRequiredRegsDescriptor(OTGetPTR);
+
+            RefCastGeneric* refCastGenericOperation = reinterpret_cast<RefCastGeneric*>(byteCode);
+            *instr->operands() = STACK_OFFSET(refCastGenericOperation->srcOffset());
+            break;
+        }
+        case ByteCode::RefCastDefinedOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 0);
+            instr->setRequiredRegsDescriptor(OTGetPTR);
+
+            RefCastDefined* refCastDefinedOperation = reinterpret_cast<RefCastDefined*>(byteCode);
+            *instr->operands() = STACK_OFFSET(refCastDefinedOperation->srcOffset());
+            break;
+        }
+        case ByteCode::RefTestGenericOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(OTGCOp1);
+
+            RefTestGeneric* refTestGenericOperation = reinterpret_cast<RefTestGeneric*>(byteCode);
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(refTestGenericOperation->srcOffset());
+            operands[1] = STACK_OFFSET(refTestGenericOperation->dstOffset());
+            break;
+        }
+        case ByteCode::RefTestDefinedOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(OTGCOp1);
+
+            RefTestDefined* refTestDefinedOperation = reinterpret_cast<RefTestDefined*>(byteCode);
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(refTestDefinedOperation->srcOffset());
+            operands[1] = STACK_OFFSET(refTestDefinedOperation->dstOffset());
             break;
         }
         case ByteCode::EndOpcode: {

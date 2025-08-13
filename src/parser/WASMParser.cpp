@@ -270,6 +270,12 @@ private:
             m_valueType = Walrus::Value::toNonNullableRefType(m_valueType);
         }
 
+        void refCast(Walrus::Value::Type valueType)
+        {
+            ASSERT(Walrus::Value::isRefType(m_valueType) && Walrus::Value::isRefType(valueType));
+            m_valueType = valueType;
+        }
+
         size_t stackAllocatedSize() const
         {
             return Walrus::valueStackAllocatedSize(m_valueType);
@@ -2265,7 +2271,7 @@ public:
 
     virtual void OnTableSetExpr(Index tableIndex) override
     {
-        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->type());
+        ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(m_result.m_tableTypes[tableIndex]->type()));
         auto src1 = popVMStack();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src0 = popVMStack();
@@ -2276,7 +2282,7 @@ public:
     {
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->type());
+        ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(m_result.m_tableTypes[tableIndex]->type()));
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
         pushByteCode(Walrus::TableGrow(tableIndex, src0, src1, dst), WASMOpcode::TableGrowOpcode);
@@ -2303,7 +2309,7 @@ public:
     {
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src2 = popVMStack();
-        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->type());
+        ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(m_result.m_tableTypes[tableIndex]->type()));
         auto src1 = popVMStack();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src0 = popVMStack();
@@ -2547,6 +2553,100 @@ public:
         VMStackInfo& info = peekVMStackInfo();
         info.toNonNullableRef();
         pushByteCode(Walrus::RefAsNonNull(info.position()), WASMOpcode::RefAsNonNullOpcode);
+    }
+
+    uint8_t computeSrcInfo(Walrus::Type& targetType)
+    {
+        VMStackInfo& info = peekVMStackInfo();
+        uint8_t srcInfo = 0;
+
+        if (Walrus::Value::isNullableRefType(info.valueType())
+            && Walrus::Value::isNullableRefType(targetType)) {
+            srcInfo |= Walrus::RefCastGeneric::IsNullable;
+        }
+
+        if (Walrus::Value::isTaggedRefType(info.valueType())) {
+            srcInfo |= Walrus::RefCastGeneric::IsSrcTagged;
+        }
+
+        targetType = Walrus::Value::toNonNullableRefType(targetType);
+
+        // Casting to other generic types are always
+        // successful if the validator accepts them.
+        if (targetType != Walrus::Value::I31Ref
+            && targetType != Walrus::Value::StructRef
+            && targetType != Walrus::Value::ArrayRef) {
+            // The casting is always successful in the other cases.
+            targetType = Walrus::Value::AnyRef;
+        }
+
+        return srcInfo;
+    }
+
+    virtual void OnRefCastExpr(Type type) override
+    {
+        Walrus::Type targetType = toRefValueKind(type, &m_result);
+        uint8_t srcInfo = computeSrcInfo(targetType);
+
+        VMStackInfo& info = peekVMStackInfo();
+        info.refCast(targetType);
+
+        if (type.IsReferenceWithIndex()) {
+            const Walrus::CompositeType** typeInfo = m_result.m_compositeTypes[type.GetReferenceIndex()]->subTypeList();
+            pushByteCode(Walrus::RefCastDefined(info.position(), typeInfo, srcInfo), WASMOpcode::RefCastOpcode);
+        } else {
+            pushByteCode(Walrus::RefCastGeneric(info.position(), targetType, srcInfo), WASMOpcode::RefCastOpcode);
+        }
+    }
+
+    virtual void OnRefTestExpr(Type type) override
+    {
+        Walrus::Type targetType = toRefValueKind(type, &m_result);
+        auto src = popVMStack();
+        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+
+        uint8_t srcInfo = computeSrcInfo(targetType);
+
+        if (type.IsReferenceWithIndex()) {
+            const Walrus::CompositeType** typeInfo = m_result.m_compositeTypes[type.GetReferenceIndex()]->subTypeList();
+            pushByteCode(Walrus::RefTestDefined(src, dst, typeInfo, srcInfo), WASMOpcode::RefTestOpcode);
+        } else {
+            pushByteCode(Walrus::RefTestGeneric(src, dst, targetType, srcInfo), WASMOpcode::RefTestOpcode);
+        }
+    }
+
+    virtual void OnGCUnaryExpr(int opcode) override
+    {
+        switch (opcode) {
+        case Opcode::RefEq:
+            break;
+        case Opcode::ArrayLen:
+            break;
+        case Opcode::AnyConvertExtern:
+            break;
+        case Opcode::ExternConvertAny:
+            break;
+        case Opcode::RefI31: {
+            auto src = popVMStack();
+            auto dst = computeExprResultPosition(Walrus::Value::Type::I31Ref);
+            pushByteCode(Walrus::RefI31(src, dst), WASMOpcode::RefI31Opcode);
+            break;
+        }
+        case Opcode::I31GetS: {
+            bool isNullable = Walrus::Value::isNullableRefType(peekVMStackInfo().valueType());
+            auto src = popVMStack();
+            auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+            pushByteCode(Walrus::I31GetS(src, dst, isNullable), WASMOpcode::I31GetSOpcode);
+            break;
+        }
+        case Opcode::I31GetU: {
+            bool isNullable = Walrus::Value::isNullableRefType(peekVMStackInfo().valueType());
+            auto src = popVMStack();
+            auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+            pushByteCode(Walrus::I31GetU(src, dst, isNullable), WASMOpcode::I31GetSOpcode);
+            break;
+        }
+        }
     }
 
     virtual void OnNopExpr() override

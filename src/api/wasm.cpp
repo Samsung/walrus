@@ -540,7 +540,7 @@ static Value ToWalrusValue(const wasm_val_t& val)
     case WASM_F64:
         return Value(val.of.f64);
     case WASM_ANYREF:
-        return Value(const_cast<Object*>(val.of.ref->get()));
+        return Value(Value::NullExternRef, const_cast<Object*>(val.of.ref->get()));
     case WASM_FUNCREF:
         return Value(static_cast<Function*>(const_cast<Object*>(val.of.ref->get())));
     default:
@@ -1085,7 +1085,7 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
         return ref;
     }
 
-    Value val(ref);
+    Value val(Value::NullExternRef, ref);
     if (val.isNull()) {
         return nullptr;
     }
