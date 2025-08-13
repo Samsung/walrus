@@ -1475,7 +1475,9 @@ public:
     }
     Result OnGCUnaryExpr(Opcode opcode) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnGCUnary(GetLocation(), opcode));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnGCUnaryExpr(opcode);
         return Result::Ok;
     }
     Result OnRefAsNonNullExpr() override
@@ -1487,12 +1489,16 @@ public:
     }
     Result OnRefCastExpr(Type type) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnRefCast(GetLocation(), Var(type, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnRefCastExpr(type);
         return Result::Ok;
     }
     Result OnRefTestExpr(Type type) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnRefTest(GetLocation(), Var(type, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnRefTestExpr(type);
         return Result::Ok;
     }
     Result OnReturnCallRefExpr(Type sig_type) override

@@ -61,6 +61,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::NullFunctionReferenceError:
             Trap::throwException(state, "null function reference");
             return resultOffsets;
+        case ExecutionContext::NullI31ReferenceError:
+            Trap::throwException(state, "null i31 reference");
+            return resultOffsets;
         case ExecutionContext::UndefinedElementError:
             Trap::throwException(state, "undefined element");
             return resultOffsets;
@@ -72,6 +75,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
             return resultOffsets;
         case ExecutionContext::CallRefTypeMismatchError:
             Trap::throwException(state, "call by reference type mismatch");
+            return resultOffsets;
+        case ExecutionContext::CastFailureError:
+            Trap::throwException(state, "cast failure");
             return resultOffsets;
         case ExecutionContext::InvalidConversionToIntegerError:
             Trap::throwException(state, "invalid conversion to integer");

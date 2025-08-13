@@ -267,22 +267,22 @@ CompileContext* CompileContext::get(sljit_compiler* compiler)
 static void moveIntToDest(sljit_compiler* compiler, sljit_s32 movOp, JITArg& dstArg, sljit_sw offset)
 {
     if (SLJIT_IS_REG(dstArg.arg)) {
-        sljit_emit_op1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+        sljit_emit_op1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_TMP_DEST_REG), offset);
         return;
     }
 
-    sljit_emit_op1(compiler, movOp, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+    sljit_emit_op1(compiler, movOp, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_TMP_DEST_REG), offset);
     sljit_emit_op1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_TMP_DEST_REG, 0);
 }
 
 static void moveFloatToDest(sljit_compiler* compiler, sljit_s32 movOp, JITArg& dstArg, sljit_sw offset)
 {
     if (SLJIT_IS_REG(dstArg.arg)) {
-        sljit_emit_fop1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+        sljit_emit_fop1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_MEM1(SLJIT_TMP_DEST_REG), offset);
         return;
     }
 
-    sljit_emit_fop1(compiler, movOp, SLJIT_TMP_DEST_FREG, 0, SLJIT_MEM1(SLJIT_TMP_MEM_REG), offset);
+    sljit_emit_fop1(compiler, movOp, SLJIT_TMP_DEST_FREG, 0, SLJIT_MEM1(SLJIT_TMP_DEST_REG), offset);
     sljit_emit_fop1(compiler, movOp, dstArg.arg, dstArg.argw, SLJIT_TMP_DEST_FREG, 0);
 }
 
@@ -421,6 +421,7 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
 #include "MemoryUtilInl.h"
 #include "TableInl.h"
 #include "TryCatchInl.h"
+#include "GarbageCollectorInl.h"
 
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
 #include "SimdX86Inl.h"
@@ -877,7 +878,7 @@ static void emitGlobalGet32(sljit_compiler* compiler, Instruction* instr)
     GlobalGet32* globalGet = reinterpret_cast<GlobalGet32*>(instr->byteCode());
     JITArg dstArg(instr->operands());
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalGet->index() * sizeof(void*));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalGet->index() * sizeof(void*));
 
     if (instr->info() & Instruction::kHasFloatOperand) {
         moveFloatToDest(compiler, SLJIT_MOV_F32, dstArg, JITFieldAccessor::globalValueOffset());
@@ -895,7 +896,7 @@ static void emitGlobalSet32(sljit_compiler* compiler, Instruction* instr)
 
     if (instr->info() & Instruction::kHasFloatOperand) {
         floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
-        baseReg = SLJIT_TMP_MEM_REG;
+        baseReg = SLJIT_TMP_DEST_REG;
     } else {
         src.set(instr->operands());
         baseReg = instr->requiredReg(0);
@@ -927,7 +928,7 @@ static void emitRefFunc(sljit_compiler* compiler, Instruction* instr)
 
     CompileContext* context = CompileContext::get(compiler);
 
-    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_MEM_REG, 0, kInstanceReg, 0);
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, kInstanceReg, 0);
     moveIntToDest(compiler, SLJIT_MOV_P, dstArg, context->functionsStart + (sizeof(Function*) * (reinterpret_cast<RefFunc*>(instr->byteCode()))->funcIndex()));
 }
 
@@ -1267,6 +1268,14 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 #endif /* HAS_SIMD */
         case Instruction::StackInit: {
             emitStackInit(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCUnary: {
+            emitGCUnary(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCCast: {
+            emitGCCast(m_compiler, item->asInstruction());
             break;
         }
         case Instruction::Atomic: {

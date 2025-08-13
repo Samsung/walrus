@@ -1206,7 +1206,7 @@ static void emitGlobalGet64(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
     GlobalGet64* globalGet = reinterpret_cast<GlobalGet64*>(instr->byteCode());
-    sljit_s32 baseReg = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_TMP_MEM_REG : instr->requiredReg(0);
+    sljit_s32 baseReg = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_TMP_DEST_REG : instr->requiredReg(0);
 
     sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalGet->index() * sizeof(void*));
 
@@ -1240,7 +1240,7 @@ static void emitGlobalSet64(sljit_compiler* compiler, Instruction* instr)
     if (instr->info() & Instruction::kHasFloatOperand) {
         JITArg src;
         floatOperandToArg(compiler, instr->operands(), src, SLJIT_TMP_DEST_FREG);
-        sljit_s32 baseReg = SLJIT_TMP_MEM_REG;
+        sljit_s32 baseReg = SLJIT_TMP_DEST_REG;
 
         sljit_emit_op1(compiler, SLJIT_MOV, baseReg, 0, SLJIT_MEM1(kInstanceReg), context->globalsStart + globalSet->index() * sizeof(void*));
 

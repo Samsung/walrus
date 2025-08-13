@@ -96,7 +96,9 @@ public:
     // https://webassembly.github.io/spec/core/syntax/types.html
 
     // RefNull
-    static constexpr uintptr_t NullBits = uintptr_t(0);
+    static constexpr uintptr_t NullBits = uintptr_t(0x0);
+    static constexpr uintptr_t RefI31 = uintptr_t(0x1);
+    static constexpr uintptr_t RefI31Shift = ((sizeof(void*) * 8) - 31);
     enum RefNull { Null };
     enum ForceInit { Force };
 
@@ -110,6 +112,19 @@ public:
         // I8/I16 packed types are only used by structs/arrays
         I8,
         I16,
+        // The any, extern, and eq groups represent the same objects in Walrus.
+        // WebAssembly allows defining internal (so called host) types, and
+        // these types might need special handling, but in Walrus, the internal
+        // types follows the same rules as WebAssembly defined types. This
+        // model simplifies operations, improves performance, and has no
+        // disadvantages. For example, any.convert_extern and extern.convert_any
+        // are no operations.
+
+        // The order of references are important. They are grouped together to
+        // improve type comparison speed.
+        // See: isRefType / isTaggedRefType / isNullableRefType.
+        ExternRef,
+        NoExternRef,
         AnyRef,
         // NoAnyRef is (ref none), but this name follows the other No... naming conventions
         NoAnyRef,
@@ -117,19 +132,17 @@ public:
         I31Ref,
         StructRef,
         ArrayRef,
-        ExternRef,
-        NoExternRef,
         FuncRef,
         NoFuncRef,
         DefinedRef,
+        NullExternRef,
+        NullNoExternRef,
         NullAnyRef,
         NullNoAnyRef,
         NullEqRef,
         NullI31Ref,
         NullStructRef,
         NullArrayRef,
-        NullExternRef,
-        NullNoExternRef,
         NullFuncRef,
         NullNoFuncRef,
         NullDefinedRef,
@@ -179,9 +192,9 @@ public:
     {
     }
 
-    explicit Value(void* ptr)
+    explicit Value(Type type, void* ptr)
         : m_ref(ptr)
-        , m_type(NullExternRef)
+        , m_type(type)
     {
     }
 
@@ -367,12 +380,17 @@ public:
 
     static bool isRefType(Type type)
     {
-        return type >= AnyRef && type <= NullDefinedRef;
+        return type >= ExternRef && type <= NullDefinedRef;
+    }
+
+    static bool isTaggedRefType(Type type)
+    {
+        return (type >= ExternRef && type <= I31Ref) || (type >= NullExternRef && type <= NullI31Ref);
     }
 
     static bool isNullableRefType(Type type)
     {
-        return type >= NullAnyRef && type <= NullDefinedRef;
+        return type >= NullExternRef && type <= NullDefinedRef;
     }
 
     static Type toNonNullableRefType(Type type)
@@ -388,9 +406,40 @@ public:
         return type == I8 || type == I16;
     }
 
+    static bool isI31Value(void* ref)
+    {
+        return (reinterpret_cast<uintptr_t>(ref) & RefI31) != 0;
+    }
+
+    static void* toI31Value(int32_t v)
+    {
+        return reinterpret_cast<void*>((static_cast<uintptr_t>(v) << RefI31Shift) | RefI31);
+    }
+
+    static int32_t getI31SValue(void* ref)
+    {
+        return static_cast<int32_t>(reinterpret_cast<intptr_t>(ref) >> RefI31Shift);
+    }
+
+    static int32_t getI31UValue(void* ref)
+    {
+        return static_cast<int32_t>(reinterpret_cast<uintptr_t>(ref) >> RefI31Shift);
+    }
+
     bool isRef() const
     {
         return isRefType(m_type);
+    }
+
+    bool isTaggedRef() const
+    {
+        return isTaggedRefType(m_type);
+    }
+
+    bool isI31() const
+    {
+        ASSERT(isTaggedRef());
+        return isI31Value(m_ref);
     }
 
     bool isNullableRef() const

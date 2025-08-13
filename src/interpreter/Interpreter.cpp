@@ -1696,6 +1696,117 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(RefCastGeneric)
+        :
+    {
+        RefCastGeneric* code = (RefCastGeneric*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            if (!(code->srcInfo() & Walrus::RefCastGeneric::IsNullable)) {
+                Trap::throwException(state, "null reference");
+            }
+        } else if (!testRefGeneric(ptr, code->typeInfo())) {
+            Trap::throwException(state, "cast failure");
+        }
+
+        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(RefCastDefined)
+        :
+    {
+        RefCastDefined* code = (RefCastDefined*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            if (!(code->srcInfo() & Walrus::RefCastGeneric::IsNullable)) {
+                Trap::throwException(state, "null reference");
+            }
+        } else if (!testRefDefined(ptr, code->typeInfo())) {
+            Trap::throwException(state, "cast failure");
+        }
+
+        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(RefTestGeneric)
+        :
+    {
+        RefTestGeneric* code = (RefTestGeneric*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        int32_t result;
+        if (UNLIKELY(Value::isNull(ptr))) {
+            result = (code->srcInfo() & Walrus::RefCastGeneric::IsNullable) ? 1 : 0;
+        } else {
+            result = static_cast<int32_t>(testRefGeneric(ptr, code->typeInfo()));
+        }
+        writeValue<int32_t>(bp, code->dstOffset(), result);
+
+        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(RefTestDefined)
+        :
+    {
+        RefTestDefined* code = (RefTestDefined*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        int32_t result;
+        if (UNLIKELY(Value::isNull(ptr))) {
+            result = (code->srcInfo() & Walrus::RefCastGeneric::IsNullable) ? 1 : 0;
+        } else {
+            result = static_cast<int32_t>(testRefDefined(ptr, code->typeInfo()));
+        }
+        writeValue<int32_t>(bp, code->dstOffset(), result);
+
+        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(RefI31)
+        :
+    {
+        RefI31* code = (RefI31*)programCounter;
+
+        int32_t value = readValue<int32_t>(bp, code->srcOffset());
+        writeValue<void*>(bp, code->dstOffset(), Value::toI31Value(value));
+        ADD_PROGRAM_COUNTER(RefI31);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I31GetS)
+        :
+    {
+        I31GetS* code = (I31GetS*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null i31 reference");
+        }
+        writeValue<int32_t>(bp, code->dstOffset(), Value::getI31SValue(ptr));
+        ADD_PROGRAM_COUNTER(I31GetS);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(I31GetU)
+        :
+    {
+        I31GetU* code = (I31GetU*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null i31 reference");
+        }
+        writeValue<int32_t>(bp, code->dstOffset(), Value::getI31UValue(ptr));
+        ADD_PROGRAM_COUNTER(I31GetU);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(Throw)
         :
     {
@@ -1824,6 +1935,45 @@ NEVER_INLINE void Interpreter::callRefOperation(
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+}
+
+NEVER_INLINE bool Interpreter::testRefGeneric(void* refPtr, Value::Type type)
+{
+    ASSERT(!Value::isNull(refPtr));
+
+    if (type == Value::AnyRef) {
+        return true;
+    }
+
+    ASSERT(type == Value::I31Ref || type == Value::StructRef || type == Value::ArrayRef);
+
+    if (Value::isI31Value(refPtr)) {
+        return type == Value::I31Ref;
+    }
+
+    Object::Kind kind = reinterpret_cast<Object*>(refPtr)->kind();
+
+    if (type == Value::StructRef) {
+        return kind == Object::StructKind;
+    }
+
+    return kind == Object::ArrayKind;
+}
+
+NEVER_INLINE bool Interpreter::testRefDefined(void* refPtr, const CompositeType** typeInfo)
+{
+    ASSERT(!Value::isNull(refPtr));
+
+    if (Value::isI31Value(refPtr)) {
+        return false;
+    }
+
+    const CompositeType** actualTypeInfo = reinterpret_cast<Object*>(refPtr)->typeInfo();
+    uintptr_t subTypeCount = reinterpret_cast<uintptr_t>(typeInfo[0]);
+    ASSERT(subTypeCount > 0);
+
+    return reinterpret_cast<uintptr_t>(actualTypeInfo[0]) >= subTypeCount
+        && actualTypeInfo[subTypeCount] == typeInfo[subTypeCount];
 }
 
 } // namespace Walrus

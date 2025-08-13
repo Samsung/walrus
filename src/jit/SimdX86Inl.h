@@ -2221,11 +2221,11 @@ static void emitShuffleSIMD(sljit_compiler* compiler, Instruction* instr)
             source++;
         }
 
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_MEM_REG, 0, SLJIT_IMM, static_cast<sljit_sw>(context->shuffleOffset));
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, static_cast<sljit_sw>(context->shuffleOffset));
         context->shuffleOffset += 32;
 
-        sljit_emit_simd_op2(compiler, shuffleOp, SLJIT_TMP_DEST_FREG, args[1].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 0);
-        sljit_emit_simd_op2(compiler, shuffleOp, dst, args[0].arg, SLJIT_MEM1(SLJIT_TMP_MEM_REG), 16);
+        sljit_emit_simd_op2(compiler, shuffleOp, SLJIT_TMP_DEST_FREG, args[1].arg, SLJIT_MEM1(SLJIT_TMP_DEST_REG), 0);
+        sljit_emit_simd_op2(compiler, shuffleOp, dst, args[0].arg, SLJIT_MEM1(SLJIT_TMP_DEST_REG), 16);
         simdEmitSSEOp(compiler, SimdOp::por, dst, SLJIT_TMP_DEST_FREG);
     }
 
