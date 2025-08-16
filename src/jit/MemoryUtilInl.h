@@ -95,7 +95,7 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::MemoryFillOpcode: {
         ASSERT(instr->info() & Instruction::kIsCallback);
 
-        emitInitR0R1R2(compiler, SLJIT_MOV32, params);
+        emitInitR0R1R2(compiler, SLJIT_MOV32, SLJIT_MOV32, SLJIT_MOV32, params);
 
         sljit_sw addr;
 

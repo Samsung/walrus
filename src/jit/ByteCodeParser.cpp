@@ -183,7 +183,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTStoreF64, /* SSTT */ I32, F64 | NOTMP, PTR, I32 | S0)                        \
     OL4(OTStoreV128, /* SSTT */ I32, V128 | TMP, PTR, I32 | S0)                        \
     OL3(OTCallback3Arg, /* SSS */ I32, I32, I32)                                       \
-    OL3(OTTableGrow, /* SSD */ I32, PTR, I32 | S0 | S1)                                \
+    OL3(OTTableGrow, /* SSD */ PTR, I32, I32 | S0 | S1)                                \
+    OL3(OTTableFill, /* SSS */ I32, PTR, I32)                                          \
     OL4(OTTableSet, /* SSTT */ I32, PTR, I32 | S0, PTR)                                \
     OL3(OTTableGet, /* SDT */ I32, PTR | TMP | S0, I32)                                \
     OL1(OTGlobalGetF32, /* D */ F32)                                                   \
@@ -1450,7 +1451,7 @@ static void compileFunction(JITCompiler* compiler)
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            instr->setRequiredRegsDescriptor(OTTableFill);
             compiler->increaseStackTmpSize(sizeof(TableFillArguments));
 
             Operand* operands = instr->operands();

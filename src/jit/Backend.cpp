@@ -306,77 +306,63 @@ static void emitInitR0R1(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32 m
     sljit_emit_op1(compiler, movOp2, SLJIT_R1, 0, SLJIT_TMP_DEST_REG, 0);
 }
 
-static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp, Operand* params)
+static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32 movOp2, sljit_s32 movOp3, Operand* params)
 {
     JITArg src[3] = { params, params + 1, params + 2 };
-    int dependencies[3] = { 0 };
+    int i = 0;
 
-    if (src[1].arg == SLJIT_R0) {
-        dependencies[0] = 1;
-    }
-    if (src[2].arg == SLJIT_R0) {
-        dependencies[0]++;
-    }
+    if (src[1].arg == SLJIT_R0 || src[2].arg == SLJIT_R0) {
+        i = 1;
 
-    if (src[0].arg == SLJIT_R1) {
-        dependencies[1] = 1;
-    }
-    if (src[2].arg == SLJIT_R1) {
-        dependencies[1]++;
-    }
+        if (src[0].arg == SLJIT_R1 || src[2].arg == SLJIT_R1) {
+            i = 2;
 
-    if (src[0].arg == SLJIT_R2) {
-        dependencies[2] = 1;
-    }
-    if (src[1].arg == SLJIT_R2) {
-        dependencies[2]++;
-    }
+            if (src[0].arg == SLJIT_R2 || src[1].arg == SLJIT_R2) {
+                // Rotating three registers.
+                if (src[0].arg == SLJIT_R1) {
+                    ASSERT(src[1].arg == SLJIT_R2 && src[2].arg == SLJIT_R0);
 
-    for (int i = 0; i < 3; i++) {
-        if (dependencies[i] != 0) {
-            continue;
+                    sljit_emit_op1(compiler, movOp3, SLJIT_TMP_DEST_REG, 0, SLJIT_R0, 0);
+                    sljit_emit_op1(compiler, movOp1, SLJIT_R0, 0, SLJIT_R1, 0);
+                    sljit_emit_op1(compiler, movOp2, SLJIT_R1, 0, SLJIT_R2, 0);
+                    sljit_emit_op1(compiler, movOp3, SLJIT_R2, 0, SLJIT_TMP_DEST_REG, 0);
+                    return;
+                }
+
+                ASSERT(src[0].arg == SLJIT_R2 && src[1].arg == SLJIT_R0 && src[2].arg == SLJIT_R1);
+                sljit_emit_op1(compiler, movOp2, SLJIT_TMP_DEST_REG, 0, SLJIT_R0, 0);
+                sljit_emit_op1(compiler, movOp1, SLJIT_R0, 0, SLJIT_R2, 0);
+                sljit_emit_op1(compiler, movOp3, SLJIT_R2, 0, SLJIT_R1, 0);
+                sljit_emit_op1(compiler, movOp2, SLJIT_R1, 0, SLJIT_TMP_DEST_REG, 0);
+                return;
+            }
         }
-
-        sljit_emit_op1(compiler, movOp, SLJIT_R(i), 0, src[i].arg, src[i].argw);
-
-        int other1 = i > 0 ? 0 : 1;
-        int other2 = i < 2 ? 2 : 1;
-        int sljit_r1 = SLJIT_R(other1);
-        int sljit_r2 = SLJIT_R(other2);
-
-        ASSERT(i != other1 && i != other2 && other1 != other2);
-
-        if (src[other2].arg != sljit_r1) {
-            MOVE_TO_REG(compiler, movOp, sljit_r1, src[other1].arg, src[other1].argw);
-            MOVE_TO_REG(compiler, movOp, sljit_r2, src[other2].arg, src[other2].argw);
-        } else if (src[other1].arg != sljit_r2) {
-            sljit_emit_op1(compiler, movOp, sljit_r2, 0, sljit_r1, 0);
-            MOVE_TO_REG(compiler, movOp, sljit_r1, src[other1].arg, src[other1].argw);
-        } else {
-            // Swap arguments.
-            sljit_emit_op1(compiler, movOp, SLJIT_TMP_DEST_FREG, 0, sljit_r1, 0);
-            sljit_emit_op1(compiler, movOp, sljit_r1, 0, sljit_r2, 0);
-            sljit_emit_op1(compiler, movOp, sljit_r2, 0, SLJIT_TMP_DEST_FREG, 0);
-        }
-
-        return;
     }
 
-    sljit_emit_op1(compiler, movOp, SLJIT_TMP_DEST_FREG, 0, SLJIT_R0, 0);
+    sljit_s32 movOps[3] = { movOp1, movOp2, movOp3 };
 
-    if (src[0].arg == SLJIT_R1) {
-        ASSERT(src[1].arg == SLJIT_R2);
+    int other1 = i > 0 ? 0 : 1;
+    int other2 = i < 2 ? 2 : 1;
+    int sljit_r1 = SLJIT_R(other1);
+    int sljit_r2 = SLJIT_R(other2);
 
-        sljit_emit_op1(compiler, movOp, SLJIT_R0, 0, SLJIT_R1, 0);
-        sljit_emit_op1(compiler, movOp, SLJIT_R1, 0, SLJIT_R2, 0);
-        sljit_emit_op1(compiler, movOp, SLJIT_R2, 0, SLJIT_TMP_DEST_FREG, 0);
-        return;
+    // This operation does not destroy arguments.
+    sljit_emit_op1(compiler, movOps[i], SLJIT_R(i), 0, src[i].arg, src[i].argw);
+
+    ASSERT(i != other1 && i != other2 && other1 != other2);
+
+    if (src[other2].arg != sljit_r1) {
+        MOVE_TO_REG(compiler, movOps[other1], sljit_r1, src[other1].arg, src[other1].argw);
+        MOVE_TO_REG(compiler, movOps[other2], sljit_r2, src[other2].arg, src[other2].argw);
+    } else if (src[other1].arg != sljit_r2) {
+        sljit_emit_op1(compiler, movOps[other2], sljit_r2, 0, sljit_r1, 0);
+        MOVE_TO_REG(compiler, movOps[other1], sljit_r1, src[other1].arg, src[other1].argw);
+    } else {
+        // Swap arguments.
+        sljit_emit_op1(compiler, movOps[other2], SLJIT_TMP_DEST_REG, 0, sljit_r1, 0);
+        sljit_emit_op1(compiler, movOps[other1], sljit_r1, 0, sljit_r2, 0);
+        sljit_emit_op1(compiler, movOps[other2], sljit_r2, 0, SLJIT_TMP_DEST_REG, 0);
     }
-
-    ASSERT(src[2].arg == SLJIT_R1);
-    sljit_emit_op1(compiler, movOp, SLJIT_R0, 0, SLJIT_R2, 0);
-    sljit_emit_op1(compiler, movOp, SLJIT_R2, 0, SLJIT_R1, 0);
-    sljit_emit_op1(compiler, movOp, SLJIT_R1, 0, SLJIT_TMP_DEST_FREG, 0);
 }
 
 static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
