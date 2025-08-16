@@ -101,7 +101,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     switch (instr->opcode()) {
     case ByteCode::TableInitOpcode: {
         ASSERT(instr->info() & Instruction::kIsCallback);
-        emitInitR0R1R2(compiler, SLJIT_MOV32, instr->operands());
+        emitInitR0R1R2(compiler, SLJIT_MOV32, SLJIT_MOV32, SLJIT_MOV32, instr->operands());
 
         TableInit* tableInit = reinterpret_cast<TableInit*>(instr->byteCode());
         sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
@@ -123,7 +123,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     }
     case ByteCode::TableCopyOpcode: {
         ASSERT(instr->info() & Instruction::kIsCallback);
-        emitInitR0R1R2(compiler, SLJIT_MOV32, instr->operands());
+        emitInitR0R1R2(compiler, SLJIT_MOV32, SLJIT_MOV32, SLJIT_MOV32, instr->operands());
 
         TableCopy* tableCopy = reinterpret_cast<TableCopy*>(instr->byteCode());
         sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
@@ -138,7 +138,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     }
     case ByteCode::TableFillOpcode: {
         ASSERT(instr->info() & Instruction::kIsCallback);
-        emitInitR0R1R2(compiler, SLJIT_MOV32, instr->operands());
+        emitInitR0R1R2(compiler, SLJIT_MOV32, SLJIT_MOV_P, SLJIT_MOV32, instr->operands());
 
         sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableFillArguments, instance), kInstanceReg, 0);
@@ -155,7 +155,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         Operand* operands = instr->operands();
         JITArg args[3] = { operands, operands + 1, operands + 2 };
 
-        emitInitR0R1(compiler, SLJIT_MOV32, SLJIT_MOV_P, args);
+        emitInitR0R1(compiler, SLJIT_MOV_P, SLJIT_MOV32, args);
 
         sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_R2, 0, SLJIT_IMM, ((reinterpret_cast<TableGrow*>(instr->byteCode()))->tableIndex()));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kInstanceReg, 0);

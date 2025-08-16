@@ -298,7 +298,7 @@ jobs:
       - uses: lukka/get-cmake@latest
       - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
         with:
-          sdk-version: 20348
+          sdk-version: 26100
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -309,7 +309,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1.13.0
         with:
           arch: ${{ matrix.arch }}
-          sdk: "10.0.20348.0"
+          sdk: "10.0.26100.0"
       - name: Build ${{ matrix.arch }} Release
         run: |
           CMake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
