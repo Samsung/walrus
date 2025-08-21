@@ -55,6 +55,7 @@ public:
     F(fd_seek, I32I64I32I32_RI32)                          \
     F(fd_advise, I32I64I64I32_RI32)                        \
     F(path_open, I32I32I32I32I32I64I64I32I32_RI32)         \
+    F(path_readlink, I32I32I32I32I32I32_RI32)              \
     F(path_create_directory, I32I32I32_RI32)               \
     F(path_remove_directory, I32I32I32_RI32)               \
     F(path_filestat_get, I32I32I32I32I32_RI32)             \
