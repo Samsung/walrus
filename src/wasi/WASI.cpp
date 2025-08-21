@@ -323,6 +323,18 @@ void WASI::path_open(ExecutionState& state, Value* argv, Value* result, Instance
                                        oflags, rights, right_inheriting, fdflags, ret_fd));
 }
 
+void WASI::path_readlink(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t path_len = argv[2].asI32();
+    uint32_t buf_len = argv[4].asI32();
+    uvwasi_size_t* bufused = reinterpret_cast<uvwasi_size_t*>(get_memory_pointer(instance, argv[5], sizeof(uvwasi_size_t)));
+    const char* path = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], path_len));
+    char* buf = reinterpret_cast<char*>(get_memory_pointer(instance, argv[3], buf_len));
+
+    result[0] = Value(uvwasi_path_readlink(g_uvwasi, fd, path, path_len, buf, buf_len, bufused));
+}
+
 void WASI::path_create_directory(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
