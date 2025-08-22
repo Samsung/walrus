@@ -22,8 +22,10 @@ This will fetch the testsuite and gtest repos, which are needed for some tests.
 
 You'll need [CMake](https://cmake.org). You can then run CMake, the normal way:
 
+> Note: Due to the need for supporting old targets only supporting cmake 2.8, the defined cmake version is 2.8, however due to many environments shipping newer cmake versions which do not support cmake versions below 3.5, you may need to override the minimum version using `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`
+
 ```console
-$ cmake -H. -Bout/release/x64 -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+$ cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/release/x64 -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
 $ ninja -Cout/release/x64
 $ ./out/release/x64/walrus test.wasm // run walrus executable
 ```
