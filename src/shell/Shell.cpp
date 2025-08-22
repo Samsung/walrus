@@ -32,6 +32,10 @@
 #include "wasi/WASI.h"
 #endif
 
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif /* ENABLE_GC */
+
 struct spectestseps : std::numpunct<char> {
     char do_thousands_sep() const { return '_'; }
     std::string do_grouping() const { return "\3"; }
@@ -1169,6 +1173,10 @@ int main(int argc, const char* argv[])
 #if defined(WALRUS_GOOGLE_PERF)
     ProfilerStart("gperf_result");
 #endif
+
+#ifdef ENABLE_GC
+    GC_INIT();
+#endif /* ENABLE_GC */
 
     Engine* engine = new Engine();
     Store* store = new Store(engine);

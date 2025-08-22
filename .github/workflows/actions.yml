@@ -38,12 +38,12 @@ jobs:
       - name: Install Packages
         run: |
           brew update
-          brew install cmake ninja pkg-config
+          brew install ninja pkg-config
       - name: Build x64
         env:
           BUILD_OPTIONS: -DWALRUS_MODE=${{ matrix.mode }} -DWALRUS_OUTPUT=shell -GNinja
         run: |
-          cmake -H. -Bout/mac $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/mac $BUILD_OPTIONS
           ninja -Cout/mac
       - name: "Remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang"
         if: matrix.mode == 'debug' && matrix.switch == ''
@@ -69,12 +69,12 @@ jobs:
       - name: Install Packages
         run: |
           brew update
-          brew install cmake ninja
+          brew install ninja
       - name: Build arm64
         env:
           BUILD_OPTIONS: -DWALRUS_MODE=${{ matrix.mode }} -DWALRUS_OUTPUT=shell -GNinja
         run: |
-          cmake -H. -Bout/mac $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/mac $BUILD_OPTIONS
           ninja -Cout/mac
       - name: "Remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang"
         if: matrix.mode == 'debug'
@@ -121,7 +121,7 @@ jobs:
         env:
           BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_MODE=${{ matrix.mode }} -DWALRUS_OUTPUT=shell ${{ matrix.compile.options }} -GNinja
         run: |
-          CC=clang CXX=clang++ cmake -H. -Bout/ $BUILD_OPTIONS
+          CC=clang CXX=clang++ cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/ $BUILD_OPTIONS
           ninja -Cout/
       - name: "Remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang when walrus interpreter is used"
         if: matrix.mode == 'debug' && matrix.switch == ''
@@ -157,7 +157,7 @@ jobs:
         env:
           BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
         run: |
-          cmake -H. -Bout/linux/${{ matrix.arch }} $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/linux/${{ matrix.arch }} $BUILD_OPTIONS
           ninja -Cout/linux/${{ matrix.arch }}
       - name: Run Tests
         run: |
@@ -177,7 +177,7 @@ jobs:
         env:
           BUILD_OPTIONS: -DWALRUS_JITPERF=1 -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell -GNinja
         run: |
-          cmake -H. -Bout/linux/x64 $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/linux/x64 $BUILD_OPTIONS
           ninja -Cout/linux/x64
 
   build-test-on-arches-with-qemu:
@@ -270,7 +270,7 @@ jobs:
           CFLAGS: ${{ matrix.arch.toolchain.CFLAGS }}
           CXXFLAGS: ${{ matrix.arch.toolchain.CXXFLAGS }}
         run: |
-          cmake -H. -DCMAKE_EXE_LINKER_FLAGS="-static" -Bout/ -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DWALRUS_ARCH=${{ matrix.arch.walrus }} -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell ${{ matrix.compile.options }} -GNinja 
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -DCMAKE_EXE_LINKER_FLAGS="-static" -Bout/ -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DWALRUS_ARCH=${{ matrix.arch.walrus }} -DWALRUS_HOST=linux -DWALRUS_MODE=debug -DWALRUS_OUTPUT=shell ${{ matrix.compile.options }} -GNinja
           ninja -C out/
       - name: "Remove 2 test files due to stack overflow occurred by recursion calls in interpreter mode build by gcc"
         if: matrix.switch == ''
@@ -296,6 +296,8 @@ jobs:
         with:
           submodules: true
       - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "~3.25.0"  # <--= optional, use most recent 3.25.x version
       - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
         with:
           sdk-version: 26100
@@ -312,7 +314,7 @@ jobs:
           sdk: "10.0.26100.0"
       - name: Build ${{ matrix.arch }} Release
         run: |
-          CMake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
+          CMake -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
           CMake --build out/ --config Release
       - name: Run tests
         run: |
@@ -342,7 +344,7 @@ jobs:
         env:
           BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_HOST=linux -DWALRUS_MODE=${{ matrix.mode }} -DWALRUS_OUTPUT=shell -DWALRUS_EXTENDED_FEATURES=ON -GNinja
         run: |
-          cmake -H. -Bout/extended $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/extended $BUILD_OPTIONS
           ninja -Cout/extended
       - name: Run Tests
         run: |
@@ -371,7 +373,7 @@ jobs:
         env:
           BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
         run: |
-          cmake -H. -Bout/linux/${{ matrix.arch }} $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/linux/${{ matrix.arch }} $BUILD_OPTIONS
           ninja -Cout/linux/${{ matrix.arch }}
       - name: Run Tests
         run: |
@@ -395,7 +397,7 @@ jobs:
         env:
           BUILD_OPTIONS: -DWALRUS_MODE=${{ matrix.mode }} -DWALRUS_ARCH=x64 -DWALRUS_OUTPUT=api_test -GNinja
         run: |
-          cmake -H. -Bout/api_test $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/api_test $BUILD_OPTIONS
           ninja -Cout/api_test
           cp third_party/wasm-c-api/example/*.wasm out/api_test/.
       - name: Run Tests
@@ -431,7 +433,7 @@ jobs:
           BUILD_OPTIONS: -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
         run: |
           export PATH=$GITHUB_WORKSPACE/cov-analysis-linux64/bin:$PATH
-          cmake -H. -Bout/coverity_scan $BUILD_OPTIONS
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/coverity_scan $BUILD_OPTIONS
           cov-build --dir cov-int ninja -Cout/coverity_scan
       - name: Submit
         env:

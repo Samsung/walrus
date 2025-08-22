@@ -25,9 +25,9 @@ ENDIF()
 
 # Default options per compiler
 IF ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC" OR ${COMPILER_CLANG_CL})
-    SET (WALRUS_CXXFLAGS /std:c++14 /fp:strict /Zc:__cplusplus /EHs /source-charset:utf-8 /D_CRT_SECURE_NO_WARNINGS /D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING /wd4244 /wd4267 /wd4805 /wd4018 /wd4172)
+    SET (WALRUS_CXXFLAGS /std:c++14 /fp:strict /Zc:__cplusplus /EHs /source-charset:utf-8 /D_CRT_SECURE_NO_WARNINGS /DGC_NOT_DLL  /D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING /wd4244 /wd4267 /wd4805 /wd4018 /wd4172)
     SET (WALRUS_CXXFLAGS_RELEASE /O2 /Oy-)
-    SET (WALRUS_THIRDPARTY_CFLAGS /D_CRT_SECURE_NO_WARNINGS /Oy- /wd4146 /EHs)
+    SET (WALRUS_THIRDPARTY_CFLAGS /D_CRT_SECURE_NO_WARNINGS /DGC_NOT_DLL /Oy- /wd4146 /EHs)
     IF (${COMPILER_CLANG_CL})
         SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} /EHs -Wno-invalid-offsetof -Wno-inline-new-delete -fintegrated-cc1)
     ENDIF()
@@ -184,8 +184,9 @@ ELSEIF (${WALRUS_HOST} STREQUAL "darwin")
     ENDIF()
     SET (WALRUS_LDFLAGS -lpthread -Wl,-dead_strip)
     # bdwgc mac cannot support pthread_getattr_np
-    SET (WALRUS_THIRDPARTY_CFLAGS ${WALRUS_THIRDPARTY_CFLAGS} -UHAVE_PTHREAD_GETATTR_NP)
+    SET (WALRUS_THIRDPARTY_CFLAGS ${WALRUS_THIRDPARTY_CFLAGS} -UHAVE_PTHREAD_GETATTR_NP -UUSE_GET_STACKBASE_FOR_MAIN)
     SET (WALRUS_BUILD_64BIT ON)
+    SET (WALRUS_BUILD_64BIT_LARGE ON)
 ELSEIF (${WALRUS_HOST} STREQUAL "windows")
     # in windows, default stack limit is 1MB
     # but expand stack to 8MB when building to exe for running test
@@ -211,7 +212,6 @@ ELSEIF (${WALRUS_HOST} STREQUAL "windows")
     ELSE()
         MESSAGE (FATAL_ERROR ${WALRUS_ARCH} " is unsupported")
     ENDIF()
-
 ELSE()
     MESSAGE (FATAL_ERROR ${WALRUS_HOST} " with " ${WALRUS_ARCH} " is unsupported")
 ENDIF()
