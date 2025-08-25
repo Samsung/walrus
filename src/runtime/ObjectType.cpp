@@ -18,6 +18,7 @@
 
 #include "runtime/ObjectType.h"
 #include "runtime/Module.h"
+#include "runtime/GCStruct.h"
 #include "runtime/TypeStore.h"
 
 namespace Walrus {
@@ -60,6 +61,45 @@ bool FunctionType::equals(const FunctionType* other) const
     }
 
     return true;
+}
+
+bool StructType::initialize()
+{
+    size_t fieldCount = fields().size();
+    m_fieldOffsets.reserve(fieldCount);
+
+    uint32_t offset = sizeof(GCStruct);
+    uint32_t align = sizeof(void*);
+
+    for (size_t i = 0; i < fieldCount; i++) {
+        Value::Type type = fields()[i].type();
+        uint32_t size;
+
+        if (type == Value::I8) {
+            size = 1;
+        } else if (type == Value::I16) {
+            size = 2;
+        } else {
+            size = static_cast<uint32_t>(valueSize(fields()[i]));
+        }
+
+        if (align < size) {
+            align = size;
+        }
+
+        uint32_t newOffset = (offset + (size - 1)) & ~(size - 1);
+        if (newOffset < offset) {
+            // Overflow check
+            return false;
+        }
+
+        m_fieldOffsets[i] = newOffset;
+        offset = newOffset + size;
+    }
+
+    m_structSize = (offset + (align - 1)) & ~(align - 1);
+    // Overflow check
+    return m_structSize >= offset;
 }
 
 GlobalType::GlobalType(const MutableType& type)

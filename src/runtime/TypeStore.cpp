@@ -22,10 +22,11 @@
 
 namespace Walrus {
 
-RecursiveType* RecursiveType::create(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode, size_t totalSubTypeSize)
+RecursiveType* RecursiveType::create(TypeStore* typeStore, RecursiveType* next, CompositeType* firstType,
+                                     size_t typeCount, size_t hashCode, size_t totalSubTypeSize)
 {
     RecursiveType* result = reinterpret_cast<RecursiveType*>(malloc(sizeof(RecursiveType) + (totalSubTypeSize - 1) * sizeof(CompositeType*)));
-    new (result) RecursiveType(next, firstType, typeCount, hashCode);
+    new (result) RecursiveType(typeStore, next, firstType, typeCount, hashCode);
     return result;
 }
 
@@ -44,7 +45,7 @@ static size_t computeHash(size_t hash, size_t value)
 static size_t computeHash(size_t hash, const Type& type, size_t recStart, const Vector<CompositeType*>& types)
 {
     hash = computeHash(hash, static_cast<size_t>(type.type()));
-    if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
+    if (type.type() == Value::DefinedRef || type.type() == Value::NullDefinedRef) {
         uintptr_t index = reinterpret_cast<uintptr_t>(type.ref());
         if (index >= recStart) {
             index = recStart - index - 1;
@@ -185,7 +186,7 @@ static bool compareTypes(CompositeType* type1, size_t index2, const Vector<Compo
 
 static void updateRef(Type& type, const Vector<CompositeType*>& types)
 {
-    if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
+    if (type.type() == Value::DefinedRef || type.type() == Value::NullDefinedRef) {
         type = Type(type.type(), types[reinterpret_cast<uintptr_t>(type.ref())]);
     }
 }
@@ -329,7 +330,7 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
             compType = compType->getNextType();
         } while (compType != nullptr);
 
-        RecursiveType* recType = RecursiveType::create(m_first, firstType, typeCount, hashCode, totalSize);
+        RecursiveType* recType = RecursiveType::create(this, m_first, firstType, typeCount, hashCode, totalSize);
 
         if (m_first != nullptr) {
             m_first->m_prev = recType;
@@ -395,6 +396,16 @@ void TypeStore::releaseTypes(CompositeTypeVector& types)
         if (types[i]->getNextType() == nullptr) {
             releaseRecursiveType(types[i]->getRecursiveType());
         }
+    }
+}
+
+void TypeStore::ReleaseRef(const CompositeType** typeInfo)
+{
+    size_t index = reinterpret_cast<size_t>(typeInfo[0]);
+    ASSERT(index > 0);
+    RecursiveType* recType = typeInfo[index]->getRecursiveType();
+    if (--recType->m_refCount == 0) {
+        recType->m_typeStore->releaseRecursiveType(recType);
     }
 }
 
