@@ -207,7 +207,12 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTSelectF32, /* SSSD */ F32, F32, I32, F32 | S0 | S1)                          \
     OL4(OTSelectF64, /* SSSD */ F64, F64, I32, F64 | S0 | S1)                          \
     OL2(OTRefI31, /* SD */ I32, PTR)                                                   \
-    OL2(OTGCOp1, /* SD */ PTR, I32)
+    OL2(OTGCOp1, /* SD / SS */ PTR, I32)                                               \
+    OL2(OTGCMoveI64, /* SD / SS */ PTR, I64)                                           \
+    OL2(OTGCMoveF32, /* SD / SS */ PTR, F32)                                           \
+    OL2(OTGCMoveF64, /* SD / SS */ PTR, F64)                                           \
+    OL2(OTGCMoveV128, /* SD / SS */ PTR, V128)                                         \
+    OL2(OTGCMovePtr, /* SD / SS */ PTR, PTR)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 
@@ -429,6 +434,13 @@ enum OperandTypes : uint32_t {
 #undef OL6
 #undef OL7
 
+#undef I64_LOW
+#undef I32
+#undef I64
+#undef V128
+#undef F32
+#undef F64
+
 enum ParamTypes {
     NoParam,
     ParamSrc,
@@ -461,6 +473,27 @@ static bool isAtomicMemIdxOp(ByteCode::Opcode opcode)
     default: {
         return false;
     }
+    }
+}
+
+static uint32_t typeToRequiredInit(Value::Type type)
+{
+    switch (type) {
+    case Value::I8:
+    case Value::I16:
+    case Value::I32:
+        return OTGCOp1;
+    case Value::I64:
+        return OTGCMoveI64;
+    case Value::F32:
+        return OTGCMoveF32;
+    case Value::F64:
+        return OTGCMoveF64;
+    case Value::V128:
+        return OTGCMoveV128;
+    default:
+        ASSERT(Value::isRefType(type));
+        return OTGCMovePtr;
     }
 }
 
@@ -1763,6 +1796,53 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(refTestDefinedOperation->srcOffset());
             operands[1] = STACK_OFFSET(refTestDefinedOperation->dstOffset());
+            break;
+        }
+        case ByteCode::StructNewOpcode: {
+            StructNew* structNew = reinterpret_cast<StructNew*>(byteCode);
+            uint32_t size = structNew->offsetsSize();
+
+            Instruction* instr = compiler->append(byteCode, Instruction::GCStructNew, opcode, size, 1);
+            instr->addInfo(Instruction::kIsCallback);
+            Operand* param = instr->params();
+            Operand* end = param + size;
+            ByteCodeStackOffset* stackOffset = structNew->dataOffsets();
+
+            // Does not use pointer sized offsets.
+            while (param < end) {
+                *param++ = STACK_OFFSET(*stackOffset++);
+            }
+            *param = structNew->dstOffset();
+            break;
+        }
+        case ByteCode::StructNewDefaultOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCStructNew, opcode, 0, 1);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTPutPTR);
+            StructNewDefault* structNewDefaultOperation = reinterpret_cast<StructNewDefault*>(byteCode);
+            *instr->operands() = STACK_OFFSET(structNewDefaultOperation->dstOffset());
+            break;
+        }
+        case ByteCode::StructGetOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCStructAccess, opcode, 1, 1);
+
+            StructGet* structGet = reinterpret_cast<StructGet*>(byteCode);
+            instr->setRequiredRegsDescriptor(typeToRequiredInit(structGet->type()));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(structGet->srcOffset());
+            operands[1] = STACK_OFFSET(structGet->dstOffset());
+            break;
+        }
+        case ByteCode::StructSetOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCStructAccess, opcode, 2, 0);
+
+            StructSet* structSet = reinterpret_cast<StructSet*>(byteCode);
+            instr->setRequiredRegsDescriptor(typeToRequiredInit(structSet->type()));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(structSet->src0Offset());
+            operands[1] = STACK_OFFSET(structSet->src1Offset());
             break;
         }
         case ByteCode::EndOpcode: {

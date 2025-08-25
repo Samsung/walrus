@@ -79,6 +79,10 @@ size_t ByteCode::getSize() const
         const Throw* throwCode = reinterpret_cast<const Throw*>(this);
         return ByteCode::pointerAlignedSize(sizeof(Throw) + sizeof(ByteCodeStackOffset) * throwCode->offsetsSize());
     }
+    case StructNewOpcode: {
+        const StructNew* structNewCode = reinterpret_cast<const StructNew*>(this);
+        return ByteCode::pointerAlignedSize(sizeof(StructNew) + sizeof(ByteCodeStackOffset) * structNewCode->offsetsSize());
+    }
     default: {
         return g_byteCodeSize[this->opcode()];
     }
