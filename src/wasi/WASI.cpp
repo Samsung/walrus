@@ -197,6 +197,14 @@ void WASI::fd_write(ExecutionState& state, Value* argv, Value* result, Instance*
     result[0] = Value(uvwasi_fd_write(WASI::g_uvwasi, fd, iovs, iovsLen, nwritten));
 }
 
+void WASI::fd_tell(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uvwasi_filesize_t* offset = reinterpret_cast<uvwasi_filesize_t*>(get_memory_pointer(instance, argv[1], sizeof(uvwasi_filesize_t)));
+
+    result[0] = Value(uvwasi_fd_tell(WASI::g_uvwasi, fd, offset));
+}
+
 void WASI::fd_read(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
