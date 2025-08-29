@@ -514,14 +514,21 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                            || vType == Walrus::Value::StructRef || vType == Walrus::Value::ArrayRef);
             break;
         case wabt::Type::I31Ref:
-            sameRefType = vType == Walrus::Value::I31Ref || vType == Walrus::Value::NoAnyRef;
+            sameRefType = Value::isNull(v.asReference()) || Value::isI31Value(v.asReference());
             break;
         case wabt::Type::StructRef:
-            sameRefType = vType == Walrus::Value::StructRef || vType == Walrus::Value::NoAnyRef;
-            break;
-        case wabt::Type::ArrayRef:
-            sameRefType = vType == Walrus::Value::ArrayRef || vType == Walrus::Value::NoAnyRef;
-            break;
+        case wabt::Type::ArrayRef: {
+            if (Value::isNull(v.asReference())) {
+                return c.ref_bits() == wabt::Const::kRefNullBits;
+            }
+
+            if (Value::isI31Value(v.asReference())) {
+                return false;
+            }
+
+            Object* object = reinterpret_cast<Object*>(v.asReference());
+            return object->kind() == (c.type() == wabt::Type::StructRef ? Object::StructKind : Object::ArrayKind);
+        }
         default:
             return false;
         }
@@ -531,9 +538,9 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         return false;
     }
 
-    if (c.ref_bits() == wabt::Const::kRefNullBits) {
+    if (Value::isNull(v.asReference())) {
         // check RefNull
-        return v.isNull();
+        return c.ref_bits() == wabt::Const::kRefNullBits;
     }
 
     if (c.ref_bits() == wabt::Const::kRefAnyValueBits || (c.type() != wabt::Type::ExternRef && c.type() != wabt::Type::NullExternRef)) {
@@ -1186,7 +1193,6 @@ int main(int argc, const char* argv[])
 
     parseArguments(argc, argv, options);
 
-
 #ifdef ENABLE_WASI
     // initialize WASI
     uvwasi_t uvwasi;
@@ -1260,6 +1266,12 @@ int main(int argc, const char* argv[])
 #ifdef ENABLE_WASI
     uvwasi_destroy(&uvwasi);
 #endif
+
+#ifdef ENABLE_GC
+    GC_gcollect_and_unmap();
+    GC_invoke_finalizers();
+#endif /* ENABLE_GC */
+
     // finalize
     delete store;
     delete engine;
