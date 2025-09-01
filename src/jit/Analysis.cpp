@@ -705,6 +705,15 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     VariableList::Variable& variable = m_variableList->variables[*param++];
                     variable.info |= Instruction::valueTypeToOperandType(unpackType(it.type()));
                 }
+            } else if (instr->opcode() == ByteCode::ArrayNewFixedOpcode) {
+                Value::Type type = reinterpret_cast<ArrayNewFixed*>(instr->byteCode())->typeInfo()->field().type();
+                uint32_t info = Instruction::valueTypeToOperandType(unpackType(type));
+                end = param + instr->paramCount();
+
+                while (param < end) {
+                    VariableList::Variable& variable = m_variableList->variables[*param++];
+                    variable.info |= info;
+                }
             } else {
                 const TypeVector* types = nullptr;
 

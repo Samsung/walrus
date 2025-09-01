@@ -206,8 +206,17 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTSelectI32, /* SSSD */ I32, I32, I32, I32 | S0 | S1)                          \
     OL4(OTSelectF32, /* SSSD */ F32, F32, I32, F32 | S0 | S1)                          \
     OL4(OTSelectF64, /* SSSD */ F64, F64, I32, F64 | S0 | S1)                          \
-    OL2(OTRefI31, /* SD */ I32, PTR)                                                   \
     OL2(OTGCOp1, /* SD / SS */ PTR, I32)                                               \
+    OL2(OTGCOp1Rev, /* SD */ I32, PTR)                                                 \
+    OL4(OTGCArrayMoveI32, /* SSDT / SSST */ PTR, I32, I32, PTR)                        \
+    OL4(OTGCArrayMoveI64, /* SSDT / SSST */ PTR, I32, I64, PTR)                        \
+    OL4(OTGCArrayMovePtr, /* SSDT / SSST */ PTR, I32, PTR, PTR)                        \
+    OL4(OTGCArrayGetF32, /* SSDT */ PTR, I32, F32, PTR)                                \
+    OL4(OTGCArrayGetF64, /* SSDT */ PTR, I32, F64, PTR)                                \
+    OL4(OTGCArrayGetV128, /* SSDT */ PTR, I32, V128, PTR)                              \
+    OL4(OTGCArraySetF32, /* SSST */ PTR, I32, F32 | NOTMP, PTR)                        \
+    OL4(OTGCArraySetF64, /* SSST */ PTR, I32, F64 | NOTMP, PTR)                        \
+    OL4(OTGCArraySetV128, /* SSST */ PTR, I32, V128 | NOTMP, PTR)                      \
     OL2(OTGCStructMoveI64, /* SD / SS */ PTR, I64)                                     \
     OL2(OTGCStructMovePtr, /* SD / SS */ PTR, PTR)                                     \
     OL2(OTGCStructGetF32, /* SD */ PTR, F32)                                           \
@@ -215,7 +224,13 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTGCStructGetV128, /* SD */ PTR, V128)                                         \
     OL2(OTGCStructSetF32, /* SS */ PTR, F32 | NOTMP)                                   \
     OL2(OTGCStructSetF64, /* SS */ PTR, F64 | NOTMP)                                   \
-    OL2(OTGCStructSetV128, /* SS */ PTR, V128 | NOTMP)
+    OL2(OTGCStructSetV128, /* SS */ PTR, V128 | NOTMP)                                 \
+    OL3(OTGCArrayNewI32, /* SSD */ I32, I32, PTR)                                      \
+    OL3(OTGCArrayNewI64, /* SSD */ I64, I32, PTR)                                      \
+    OL3(OTGCArrayNewF32, /* SSD */ F32, I32, PTR)                                      \
+    OL3(OTGCArrayNewF64, /* SSD */ F64, I32, PTR)                                      \
+    OL3(OTGCArrayNewV128, /* SSD */ V128, I32, PTR)                                    \
+    OL3(OTGCArrayNewPtr, /* SSD */ PTR, I32, PTR)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 
@@ -476,6 +491,27 @@ static bool isAtomicMemIdxOp(ByteCode::Opcode opcode)
     default: {
         return false;
     }
+    }
+}
+
+static uint32_t typeToArrayRequiredInit(Value::Type type, bool isGet)
+{
+    switch (type) {
+    case Value::I8:
+    case Value::I16:
+    case Value::I32:
+        return OTGCArrayMoveI32;
+    case Value::I64:
+        return OTGCArrayMoveI64;
+    case Value::F32:
+        return isGet ? OTGCArrayGetF32 : OTGCArraySetF32;
+    case Value::F64:
+        return isGet ? OTGCArrayGetF64 : OTGCArraySetF64;
+    case Value::V128:
+        return isGet ? OTGCArrayGetV128 : OTGCArraySetV128;
+    default:
+        ASSERT(Value::isRefType(type));
+        return OTGCArrayMovePtr;
     }
 }
 
@@ -1750,7 +1786,7 @@ static void compileFunction(JITCompiler* compiler)
             group = Instruction::GCUnary;
             paramType = ParamTypes::ParamSrcDst;
             info = Instruction::kFreeUnusedEarly;
-            requiredInit = OTRefI31;
+            requiredInit = OTGCOp1Rev;
             break;
         }
         case ByteCode::I31GetSOpcode:
@@ -1799,6 +1835,118 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(refTestDefinedOperation->srcOffset());
             operands[1] = STACK_OFFSET(refTestDefinedOperation->dstOffset());
+            break;
+        }
+        case ByteCode::ArrayNewOpcode: {
+            ArrayNew* arrayNew = reinterpret_cast<ArrayNew*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayNew, opcode, 2, 1);
+            instr->addInfo(Instruction::kIsCallback);
+
+            switch (arrayNew->typeInfo()->field().type()) {
+            case Value::I8:
+            case Value::I16:
+            case Value::I32:
+                requiredInit = OTGCArrayNewI32;
+                break;
+            case Value::I64:
+                requiredInit = OTGCArrayNewI64;
+                break;
+            case Value::F32:
+                requiredInit = OTGCArrayNewF32;
+                break;
+            case Value::F64:
+                requiredInit = OTGCArrayNewF64;
+                break;
+            case Value::V128:
+                requiredInit = OTGCArrayNewV128;
+                break;
+            default:
+                ASSERT(Value::isRefType(arrayNew->typeInfo()->field().type()));
+                requiredInit = OTGCArrayNewPtr;
+                break;
+            }
+            instr->setRequiredRegsDescriptor(requiredInit);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayNew->src0Offset());
+            operands[1] = STACK_OFFSET(arrayNew->src1Offset());
+            operands[2] = STACK_OFFSET(arrayNew->dstOffset());
+            break;
+        }
+        case ByteCode::ArrayNewDefaultOpcode: {
+            ArrayNewDefault* arrayNewDefault = reinterpret_cast<ArrayNewDefault*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayNew, opcode, 1, 1);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTGCOp1Rev);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayNewDefault->srcOffset());
+            operands[1] = STACK_OFFSET(arrayNewDefault->dstOffset());
+            break;
+        }
+        case ByteCode::ArrayNewFixedOpcode: {
+            ArrayNewFixed* arrayNewFixed = reinterpret_cast<ArrayNewFixed*>(byteCode);
+            uint32_t size = arrayNewFixed->offsetsSize();
+
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayNew, opcode, size, 1);
+            instr->addInfo(Instruction::kIsCallback);
+            Operand* param = instr->params();
+            Operand* end = param + size;
+            ByteCodeStackOffset* stackOffset = arrayNewFixed->dataOffsets();
+
+            // Does not use pointer sized offsets.
+            while (param < end) {
+                *param++ = STACK_OFFSET(*stackOffset++);
+            }
+            *param = STACK_OFFSET(arrayNewFixed->dstOffset());
+            break;
+        }
+        case ByteCode::ArrayNewDataOpcode:
+        case ByteCode::ArrayNewElemOpcode: {
+            ArrayNewFrom* arrayNewFrom = reinterpret_cast<ArrayNewFrom*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayNew, opcode, 2, 1);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTGCArrayNewI32);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayNewFrom->src0Offset());
+            operands[1] = STACK_OFFSET(arrayNewFrom->src1Offset());
+            operands[2] = STACK_OFFSET(arrayNewFrom->dstOffset());
+            break;
+        }
+        case ByteCode::ArrayGetOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayAccess, opcode, 2, 1);
+
+            ArrayGet* arrayGet = reinterpret_cast<ArrayGet*>(byteCode);
+            instr->setRequiredRegsDescriptor(typeToArrayRequiredInit(arrayGet->type(), true));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayGet->src0Offset());
+            operands[1] = STACK_OFFSET(arrayGet->src1Offset());
+            operands[2] = STACK_OFFSET(arrayGet->dstOffset());
+            break;
+        }
+        case ByteCode::ArraySetOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayAccess, opcode, 3, 0);
+
+            ArraySet* arraySet = reinterpret_cast<ArraySet*>(byteCode);
+            instr->setRequiredRegsDescriptor(typeToArrayRequiredInit(arraySet->type(), false));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arraySet->src0Offset());
+            operands[1] = STACK_OFFSET(arraySet->src1Offset());
+            operands[2] = STACK_OFFSET(arraySet->src2Offset());
+            break;
+        }
+        case ByteCode::ArrayLenOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::GCUnary, opcode, 1, 1);
+
+            ArrayLen* arrayLen = reinterpret_cast<ArrayLen*>(byteCode);
+            instr->setRequiredRegsDescriptor(OTGCOp1);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayLen->srcOffset());
+            operands[1] = STACK_OFFSET(arrayLen->dstOffset());
             break;
         }
         case ByteCode::StructNewOpcode: {

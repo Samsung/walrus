@@ -37,10 +37,13 @@ struct ExecutionContext {
         OutOfBoundsMemAccessError,
         OutOfBoundsTableAccessError,
         TypeMismatchError,
+        // These two must follow each other.
         AllocationError,
+        ArrayOutOfBounds,
         NullReferenceError,
         NullFunctionReferenceError,
         NullI31ReferenceError,
+        NullArrayReferenceError,
         NullStructReferenceError,
         UndefinedElementError,
         UninitializedElementError,

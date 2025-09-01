@@ -171,6 +171,13 @@ public:
     virtual void OnRefCastExpr(Type type) = 0;
     virtual void OnRefTestExpr(Type type) = 0;
     virtual void OnGCUnaryExpr(int opcode) = 0;
+    virtual void OnArrayNewExpr(Index type_index) = 0;
+    virtual void OnArrayNewDefaultExpr(Index type_index) = 0;
+    virtual void OnArrayNewFixedExpr(Index type_index, Index count) = 0;
+    virtual void OnArrayNewDataExpr(Index type_index, Index data_index) = 0;
+    virtual void OnArrayNewElemExpr(Index type_index, Index elem_index) = 0;
+    virtual void OnArrayGetExpr(Opcode opcode, Index type_index) = 0;
+    virtual void OnArraySetExpr(Index type_index) = 0;
     virtual void OnStructNewExpr(Index type_index) = 0;
     virtual void OnStructNewDefaultExpr(Index type_index) = 0;
     virtual void OnStructGetExpr(Opcode opcode, Index type_index, Index field_index) = 0;

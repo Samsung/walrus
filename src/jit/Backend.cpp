@@ -18,6 +18,7 @@
 
 #include "Walrus.h"
 
+#include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
 #include "runtime/Global.h"
 #include "runtime/Function.h"
@@ -193,6 +194,11 @@ public:
     {
         return offsetof(Table, m_elements);
     }
+
+    static sljit_sw arrayLength()
+    {
+        return offsetof(GCArray, m_length);
+    }
 };
 
 class SlowCase {
@@ -241,9 +247,11 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     size_t offset = Instance::alignedSize();
     size_t numberOfMemoryTypes = module->numberOfMemoryTypes();
     targetBuffersStart = offset + numberOfMemoryTypes * sizeof(void*);
-    globalsStart = targetBuffersStart + Memory::TargetBuffer::sizeInPointers(numberOfMemoryTypes) * sizeof(void*);
+    globalsStart = targetBuffersStart + numberOfMemoryTypes * sizeof(Memory::TargetBuffer);
     tableStart = globalsStart + module->numberOfGlobalTypes() * sizeof(void*);
     functionsStart = tableStart + module->numberOfTableTypes() * sizeof(void*);
+    dataSegmentsStart = functionsStart + (module->numberOfFunctions() + module->numberOfTagTypes()) * sizeof(void*);
+    elementSegmentsStart = dataSegmentsStart + module->numberOfDataSegments() * sizeof(DataSegment);
 }
 
 CompileContext* CompileContext::get(sljit_compiler* compiler)
@@ -1280,6 +1288,14 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             emitGCCast(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::GCArrayNew: {
+            emitGCArrayNew(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCArrayAccess: {
+            emitGCArrayAccess(m_compiler, item->asInstruction());
+            break;
+        }
         case Instruction::GCStructNew: {
             emitGCStructNew(m_compiler, item->asInstruction());
             break;
@@ -1691,7 +1707,11 @@ void JITCompiler::emitEpilog()
         lastLabel = sljit_emit_label(m_compiler);
 
         sljit_set_label(it.jump, lastLabel);
-        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(it.jumpType));
+        if (it.jumpType == ExecutionContext::AllocationError) {
+            sljit_emit_op2(m_compiler, SLJIT_ADD, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(ExecutionContext::AllocationError));
+        } else {
+            sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(it.jumpType));
+        }
     }
 
     if (trapJumpIndex > 0 || (trapJumps.size() > 0 && trapJumps[0].jumpType == ExecutionContext::GenericTrap)) {

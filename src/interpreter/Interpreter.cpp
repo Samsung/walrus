@@ -22,6 +22,7 @@
 #include "runtime/Function.h"
 #include "runtime/Memory.h"
 #include "runtime/Table.h"
+#include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
 #include "runtime/Global.h"
 #include "runtime/Module.h"
@@ -1504,11 +1505,11 @@ NextInstruction:
     {
         MemoryInit* code = (MemoryInit*)programCounter;
         Memory* m = memories[code->memIndex()];
-        DataSegment& sg = instance->dataSegment(code->segmentIndex());
+        DataSegment* sg = instance->dataSegment(code->segmentIndex());
         auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         auto srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
         auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
-        m->init(state, &sg, dstStart, srcStart, size);
+        m->init(state, sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(MemoryInit);
         NEXT_INSTRUCTION();
     }
@@ -1544,8 +1545,8 @@ NextInstruction:
         :
     {
         DataDrop* code = (DataDrop*)programCounter;
-        DataSegment& sg = instance->dataSegment(code->segmentIndex());
-        sg.drop();
+        DataSegment* sg = instance->dataSegment(code->segmentIndex());
+        sg->drop();
         ADD_PROGRAM_COUNTER(DataDrop);
         NEXT_INSTRUCTION();
     }
@@ -1651,7 +1652,7 @@ NextInstruction:
         :
     {
         TableInit* code = (TableInit*)programCounter;
-        ElementSegment& sg = instance->elementSegment(code->segmentIndex());
+        ElementSegment* sg = instance->elementSegment(code->segmentIndex());
 
         int32_t dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
         int32_t srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
@@ -1659,7 +1660,7 @@ NextInstruction:
 
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
-        table->init(state, instance, &sg, dstStart, srcStart, size);
+        table->init(state, sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();
     }
@@ -1668,7 +1669,7 @@ NextInstruction:
         :
     {
         ElemDrop* code = (ElemDrop*)programCounter;
-        instance->elementSegment(code->segmentIndex()).drop();
+        instance->elementSegment(code->segmentIndex())->drop();
         ADD_PROGRAM_COUNTER(ElemDrop);
         NEXT_INSTRUCTION();
     }
@@ -1808,6 +1809,152 @@ NextInstruction:
         writeValue<int32_t>(bp, code->dstOffset(), Value::getI31UValue(ptr));
 
         ADD_PROGRAM_COUNTER(I31GetU);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayNew)
+        :
+    {
+        ArrayNew* code = (ArrayNew*)programCounter;
+
+        uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
+        GCArray* result = GCArray::arrayNew(length, code->typeInfo(), bp + code->src0Offset());
+        if (UNLIKELY(result == nullptr)) {
+            Trap::throwException(state, "memory allocation failed");
+        }
+        writeValue<void*>(bp, code->dstOffset(), result);
+
+        ADD_PROGRAM_COUNTER(ArrayNew);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayNewDefault)
+        :
+    {
+        ArrayNewDefault* code = (ArrayNewDefault*)programCounter;
+
+        uint32_t length = readValue<uint32_t>(bp, code->srcOffset());
+        GCArray* result = GCArray::arrayNewDefault(length, code->typeInfo());
+        if (UNLIKELY(result == nullptr)) {
+            Trap::throwException(state, "memory allocation failed");
+        }
+        writeValue<void*>(bp, code->dstOffset(), result);
+
+        ADD_PROGRAM_COUNTER(ArrayNewDefault);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayNewFixed)
+        :
+    {
+        ArrayNewFixed* code = (ArrayNewFixed*)programCounter;
+
+        GCArray* result = GCArray::arrayNewFixed(code->length(), code->typeInfo(), code->dataOffsets(), bp);
+        if (UNLIKELY(result == nullptr)) {
+            Trap::throwException(state, "memory allocation failed");
+        }
+        writeValue<void*>(bp, code->dstOffset(), result);
+
+        programCounter += ByteCode::pointerAlignedSize(sizeof(ArrayNewFixed) + sizeof(ByteCodeStackOffset) * code->offsetsSize());
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayNewData)
+        :
+    {
+        ArrayNewData* code = (ArrayNewData*)programCounter;
+
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
+        GCArray* result = GCArray::arrayNewData(offset, length, code->typeInfo(), instance->dataSegment(code->index()));
+        if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsAccess)) {
+            if (UNLIKELY(result == nullptr)) {
+                Trap::throwException(state, "memory allocation failed");
+            }
+            Trap::throwException(state, "out of bounds array access");
+        }
+        writeValue<void*>(bp, code->dstOffset(), result);
+
+        ADD_PROGRAM_COUNTER(ArrayNewData);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayNewElem)
+        :
+    {
+        ArrayNewData* code = (ArrayNewData*)programCounter;
+
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
+        uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
+        GCArray* result = GCArray::arrayNewElem(offset, length, code->typeInfo(), instance->elementSegment(code->index()));
+        if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsAccess)) {
+            if (UNLIKELY(result == nullptr)) {
+                Trap::throwException(state, "memory allocation failed");
+            }
+            Trap::throwException(state, "out of bounds array access");
+        }
+        writeValue<void*>(bp, code->dstOffset(), result);
+
+        ADD_PROGRAM_COUNTER(ArrayNewElem);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayGet)
+        :
+    {
+        ArrayGet* code = (ArrayGet*)programCounter;
+
+        GCArray* ptr = readValue<GCArray*>(bp, code->src0Offset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null array reference");
+        }
+
+        uint32_t pos = readValue<uint32_t>(bp, code->src1Offset());
+        if (UNLIKELY(pos >= ptr->length())) {
+            Trap::throwException(state, "out of bounds array access");
+        }
+
+        GCArray::get(bp + code->dstOffset(), reinterpret_cast<uint8_t*>(ptr),
+                     pos, code->type(), code->isSigned());
+
+        ADD_PROGRAM_COUNTER(ArrayGet);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArraySet)
+        :
+    {
+        ArraySet* code = (ArraySet*)programCounter;
+
+        GCArray* ptr = readValue<GCArray*>(bp, code->src0Offset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null array reference");
+        }
+
+        uint32_t pos = readValue<uint32_t>(bp, code->src1Offset());
+        if (UNLIKELY(pos >= ptr->length())) {
+            Trap::throwException(state, "out of bounds array access");
+        }
+
+        GCArray::set(reinterpret_cast<uint8_t*>(ptr), bp + code->src2Offset(),
+                     pos, code->type());
+
+        ADD_PROGRAM_COUNTER(ArraySet);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayLen)
+        :
+    {
+        ArrayLen* code = (ArrayLen*)programCounter;
+
+        GCArray* ptr = readValue<GCArray*>(bp, code->srcOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null array reference");
+        }
+
+        writeValue<uint32_t>(bp, code->dstOffset(), ptr->length());
+        ADD_PROGRAM_COUNTER(ArrayLen);
         NEXT_INSTRUCTION();
     }
 
