@@ -83,6 +83,7 @@ GCStruct* GCStruct::structNewDefault(const StructType* type)
 #endif // ENABLE_GC
 }
 
+#ifdef ENABLE_GC
 void GCStruct::addRef()
 {
     if (++m_refCount == 1) {
@@ -96,5 +97,6 @@ void GCStruct::releaseRef()
         objectTypeInfo()->getRecursiveType()->typeStore()->deleteRootRef(this);
     }
 }
+#endif // ENABLE_GC
 
 } // namespace Walrus

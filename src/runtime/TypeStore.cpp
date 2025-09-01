@@ -16,6 +16,7 @@
 #include "Walrus.h"
 
 #include "runtime/TypeStore.h"
+#include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
 #include "runtime/Module.h"
 #include "runtime/ObjectType.h"
@@ -435,9 +436,14 @@ void TypeStore::insertRootRef(Object* object)
         m_rootRefs[m_rootRefsSize - 1] = reinterpret_cast<Object*>(NoIndex);
     }
 
-    ASSERT(object->kind() == Object::StructKind);
-    ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 1);
-    reinterpret_cast<GCStruct*>(object)->m_rootIndex = m_rootRefsFreeListHead;
+    if (object->kind() == Object::StructKind) {
+        ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 1);
+        reinterpret_cast<GCStruct*>(object)->m_rootIndex = m_rootRefsFreeListHead;
+    } else {
+        ASSERT(object->kind() == Object::ArrayKind);
+        ASSERT(reinterpret_cast<GCArray*>(object)->m_refCount == 1);
+        reinterpret_cast<GCArray*>(object)->m_rootIndex = m_rootRefsFreeListHead;
+    }
 
     uintptr_t freeRef = reinterpret_cast<uintptr_t>(m_rootRefs[m_rootRefsFreeListHead]);
     m_rootRefs[m_rootRefsFreeListHead] = object;
@@ -446,9 +452,16 @@ void TypeStore::insertRootRef(Object* object)
 
 void TypeStore::deleteRootRef(Object* object)
 {
-    ASSERT(object->kind() == Object::StructKind);
-    ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 0);
-    uintptr_t freeRef = reinterpret_cast<GCStruct*>(object)->m_rootIndex;
+    uintptr_t freeRef;
+
+    if (object->kind() == Object::StructKind) {
+        ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 0);
+        freeRef = reinterpret_cast<GCStruct*>(object)->m_rootIndex;
+    } else {
+        ASSERT(object->kind() == Object::ArrayKind);
+        ASSERT(reinterpret_cast<GCArray*>(object)->m_refCount == 0);
+        freeRef = reinterpret_cast<GCArray*>(object)->m_rootIndex;
+    }
 
     ASSERT(m_rootRefs[freeRef] == object);
     m_rootRefs[freeRef] = reinterpret_cast<Object*>(m_rootRefsFreeListHead);

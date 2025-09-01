@@ -58,6 +58,11 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::AllocationError:
             Trap::throwException(state, "memory allocation failed");
             return resultOffsets;
+        case ExecutionContext::ArrayOutOfBounds:
+            COMPILE_ASSERT(ExecutionContext::AllocationError + 1 == ExecutionContext::ArrayOutOfBounds,
+                           "AllocationError and ArrayOutOfBounds errors must follow each other");
+            Trap::throwException(state, "out of bounds array access");
+            return resultOffsets;
         case ExecutionContext::NullReferenceError:
             Trap::throwException(state, "null reference");
             return resultOffsets;
@@ -66,6 +71,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
             return resultOffsets;
         case ExecutionContext::NullI31ReferenceError:
             Trap::throwException(state, "null i31 reference");
+            return resultOffsets;
+        case ExecutionContext::NullArrayReferenceError:
+            Trap::throwException(state, "null array reference");
             return resultOffsets;
         case ExecutionContext::NullStructReferenceError:
             Trap::throwException(state, "null structure reference");

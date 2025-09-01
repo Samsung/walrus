@@ -33,12 +33,20 @@ Instance* Instance::newInstance(Module* module)
 {
     // Must follow the order in Module::instantiate.
 
+    COMPILE_ASSERT((sizeof(Memory::TargetBuffer) % sizeof(void*)) == 0, "TargetBuffer must be pointer aligned");
+    COMPILE_ASSERT((sizeof(DataSegment) % sizeof(void*)) == 0, "DataSegment must be pointer aligned");
+    COMPILE_ASSERT((sizeof(ElementSegment) % sizeof(void*)) == 0, "ElementSegment must be pointer aligned");
+
     size_t numberOfRefs = module->numberOfMemoryTypes()
-        + Memory::TargetBuffer::sizeInPointers(module->numberOfMemoryTypes())
         + module->numberOfGlobalTypes() + module->numberOfTableTypes()
         + module->numberOfFunctions() + module->numberOfTagTypes();
 
-    void* result = malloc(alignedSize() + numberOfRefs * sizeof(void*));
+    size_t totalSize = numberOfRefs * sizeof(void*)
+        + module->numberOfMemoryTypes() * sizeof(Memory::TargetBuffer)
+        + module->numberOfDataSegments() * sizeof(DataSegment)
+        + module->numberOfElemSegments() * sizeof(ElementSegment);
+
+    void* result = malloc(alignedSize() + totalSize);
 
     // Placement new.
     new (result) Instance(module);
@@ -140,11 +148,6 @@ Global* Instance::resolveExportGlobal(std::string& name)
 DataSegment::DataSegment(Data* d)
     : m_data(d)
     , m_sizeInByte(m_data->initData().size())
-{
-}
-
-ElementSegment::ElementSegment(Element* elem)
-    : m_element(elem)
 {
 }
 

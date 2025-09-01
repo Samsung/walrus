@@ -2629,8 +2629,13 @@ public:
         switch (opcode) {
         case Opcode::RefEq:
             break;
-        case Opcode::ArrayLen:
+        case Opcode::ArrayLen: {
+            bool isNullable = Walrus::Value::isNullableRefType(peekVMStackInfo().valueType());
+            auto src = popVMStack();
+            auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+            pushByteCode(Walrus::ArrayLen(src, dst, isNullable), WASMOpcode::ArrayLenOpcode);
             break;
+        }
         case Opcode::AnyConvertExtern:
             break;
         case Opcode::ExternConvertAny:
@@ -2656,6 +2661,105 @@ public:
             break;
         }
         }
+    }
+
+    virtual void OnArrayNewExpr(Index type_index) override
+    {
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(Walrus::Value::Type::DefinedRef);
+        pushByteCode(Walrus::ArrayNew(typeInfo, src0, src1, dst), WASMOpcode::ArrayNewOpcode);
+    }
+
+    virtual void OnArrayNewDefaultExpr(Index type_index) override
+    {
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src = popVMStack();
+        auto dst = computeExprResultPosition(Walrus::Value::Type::DefinedRef);
+        pushByteCode(Walrus::ArrayNewDefault(typeInfo, src, dst), WASMOpcode::ArrayNewDefaultOpcode);
+    }
+
+    virtual void OnArrayNewFixedExpr(Index type_index, Index count) override
+    {
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        auto pos = m_currentFunction->currentByteCodeSize();
+
+        pushByteCode(Walrus::ArrayNewFixed(typeInfo, count), WASMOpcode::ArrayNewFixedOpcode);
+
+        m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * count));
+        ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
+        Walrus::ArrayNewFixed* code = m_currentFunction->peekByteCode<Walrus::ArrayNewFixed>(pos);
+        for (size_t i = 0; i < count; i++) {
+            ASSERT(peekVMStackValueType() == toDebugType(typeInfo->field().stackType()));
+            code->dataOffsets()[count - i - 1] = popVMStack();
+        }
+
+        code->setDstOffset(computeExprResultPosition(Walrus::Value::Type::DefinedRef));
+    }
+
+    virtual void OnArrayNewDataExpr(Index type_index, Index data_index) override
+    {
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(Walrus::Value::Type::DefinedRef);
+        pushByteCode(Walrus::ArrayNewData(typeInfo, data_index, src0, src1, dst), WASMOpcode::ArrayNewDataOpcode);
+    }
+
+    virtual void OnArrayNewElemExpr(Index type_index, Index elem_index) override
+    {
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(Walrus::Value::Type::DefinedRef);
+        pushByteCode(Walrus::ArrayNewElem(typeInfo, elem_index, src0, src1, dst), WASMOpcode::ArrayNewDataOpcode);
+    }
+
+    virtual void OnArrayGetExpr(Opcode opcode, Index type_index) override
+    {
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        uint8_t info = 0;
+
+        if (opcode == Opcode::ArrayGetS) {
+            info |= Walrus::ArrayGet::IsSigned;
+        }
+
+        if (Walrus::Value::isNullableRefType(peekVMStackInfo().valueType())) {
+            info |= Walrus::ArrayGet::IsNullable;
+        }
+
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        Walrus::Value::Type type = typeInfo->field().type();
+
+        auto src0 = popVMStack();
+        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+        pushByteCode(Walrus::ArrayGet(src0, src1, dst, type, info), WASMOpcode::ArrayGetSOpcode);
+    }
+
+    virtual void OnArraySetExpr(Index type_index) override
+    {
+        uint8_t info = 0;
+        auto src2 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+
+        if (Walrus::Value::isNullableRefType(peekVMStackInfo().valueType())) {
+            info |= Walrus::ArrayGet::IsNullable;
+        }
+
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        Walrus::Value::Type type = typeInfo->field().type();
+
+        auto src0 = popVMStack();
+        pushByteCode(Walrus::ArraySet(src0, src1, src2, type, info), WASMOpcode::ArraySetOpcode);
     }
 
     virtual void OnStructNewExpr(Index type_index) override

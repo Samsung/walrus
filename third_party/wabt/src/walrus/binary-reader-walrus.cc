@@ -1423,7 +1423,9 @@ public:
     }
     Result OnArrayGetExpr(Opcode opcode, Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayGet(GetLocation(), opcode, Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayGetExpr(opcode, type_index);
         return Result::Ok;
     }
     Result OnArrayInitDataExpr(Index type_index, Index data_index) override
@@ -1438,32 +1440,44 @@ public:
     }
     Result OnArrayNewExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNew(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewExpr(type_index);
         return Result::Ok;
     }
     Result OnArrayNewDataExpr(Index type_index, Index data_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewData(GetLocation(), Var(type_index, GetLocation()), Var(data_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewDataExpr(type_index, data_index);
         return Result::Ok;
     }
     Result OnArrayNewDefaultExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewDefault(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewDefaultExpr(type_index);
         return Result::Ok;
     }
     Result OnArrayNewElemExpr(Index type_index, Index elem_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewElem(GetLocation(), Var(type_index, GetLocation()), Var(elem_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewElemExpr(type_index, elem_index);
         return Result::Ok;
     }
     Result OnArrayNewFixedExpr(Index type_index, Index count) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewFixed(GetLocation(), Var(type_index, GetLocation()), count));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewFixedExpr(type_index, count);
         return Result::Ok;
     }
     Result OnArraySetExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArraySet(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArraySetExpr(type_index);
         return Result::Ok;
     }
     Result OnBrOnCastExpr(Opcode opcode, Index depth, Type type1, Type type2) override

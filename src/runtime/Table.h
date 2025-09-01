@@ -81,9 +81,9 @@ public:
     void grow(uint64_t newSize, void* val);
     void copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
     void fill(ExecutionState& state, uint32_t n, void* value, uint32_t index);
-    void init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void init(ExecutionState& state, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
-    void initTable(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void initTable(ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
     void copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
     void fillTable(uint32_t n, void* value, uint32_t index);
 

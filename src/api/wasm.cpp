@@ -23,6 +23,7 @@
 #include "runtime/Engine.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
+#include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
 #include "runtime/Function.h"
 #include "runtime/Table.h"
@@ -266,16 +267,26 @@ struct wasm_ref_t {
     {
         ASSERT(!!o);
 
+#ifdef ENABLE_GC
         if (o->kind() == Object::StructKind) {
             const_cast<GCStruct*>(reinterpret_cast<const GCStruct*>(o))->addRef();
+        } else if (o->kind() == Object::ArrayKind) {
+            const_cast<GCArray*>(reinterpret_cast<const GCArray*>(o))->addRef();
         }
+#endif
     }
 
     virtual ~wasm_ref_t()
     {
-        if (obj != nullptr && obj->kind() == Object::StructKind) {
-            const_cast<GCStruct*>(reinterpret_cast<const GCStruct*>(obj))->releaseRef();
+#ifdef ENABLE_GC
+        if (obj != nullptr) {
+            if (obj->kind() == Object::StructKind) {
+                const_cast<GCStruct*>(reinterpret_cast<const GCStruct*>(obj))->releaseRef();
+            } else if (obj->kind() == Object::ArrayKind) {
+                const_cast<GCArray*>(reinterpret_cast<const GCArray*>(obj))->releaseRef();
+            }
         }
+#endif
     }
 
     const Object* get() const

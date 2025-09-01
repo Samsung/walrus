@@ -66,7 +66,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
     sljit_sw targetBufferOffset = context->targetBuffersStart;
     if (memIndex != 0) {
-        targetBufferOffset += Memory::TargetBuffer::sizeInPointers(memIndex) * sizeof(void*);
+        targetBufferOffset += memIndex * sizeof(Memory::TargetBuffer);
     }
 
     if (UNLIKELY(maximumMemorySize < size)) {

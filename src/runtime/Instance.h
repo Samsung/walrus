@@ -58,21 +58,35 @@ private:
 };
 
 class ElementSegment {
-public:
-    ElementSegment(Element* elem);
+    friend class Module;
 
-    Optional<Element*> element() const
+public:
+    ElementSegment()
     {
-        return m_element;
+    }
+
+    size_t size() const
+    {
+        return m_elements.size();
+    }
+
+    void* element(size_t index) const
+    {
+        return m_elements[index];
+    }
+
+    const VectorWithFixedSize<void*, std::allocator<void*>>& elements() const
+    {
+        return m_elements;
     }
 
     void drop()
     {
-        m_element = nullptr;
+        m_elements.clear();
     }
 
 private:
-    Optional<Element*> m_element;
+    VectorWithFixedSize<void*, std::allocator<void*>> m_elements;
 };
 
 class Instance : public Object {
@@ -108,8 +122,8 @@ public:
     Tag* tag(uint32_t index) const { return m_tags[index]; }
     Global* global(uint32_t index) const { return m_globals[index]; }
 
-    DataSegment& dataSegment(uint32_t index) { return m_dataSegments[index]; }
-    ElementSegment& elementSegment(uint32_t index) { return m_elementSegments[index]; }
+    DataSegment* dataSegment(uint32_t index) { return m_dataSegments + index; }
+    ElementSegment* elementSegment(uint32_t index) { return m_elementSegments + index; }
 
     Optional<ExportType*> resolveExportType(std::string& name);
 
@@ -134,9 +148,8 @@ private:
     Table** m_tables;
     Function** m_functions;
     Tag** m_tags;
-
-    VectorWithFixedSize<DataSegment, std::allocator<DataSegment>> m_dataSegments;
-    VectorWithFixedSize<ElementSegment, std::allocator<ElementSegment>> m_elementSegments;
+    DataSegment* m_dataSegments;
+    ElementSegment* m_elementSegments;
 };
 } // namespace Walrus
 
