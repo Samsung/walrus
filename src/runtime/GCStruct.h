@@ -30,8 +30,10 @@ public:
     static GCStruct* structNew(const StructType* type, ByteCodeStackOffset* offsets, uint8_t* bp);
     static GCStruct* structNewDefault(const StructType* type);
 
+#ifdef ENABLE_GC
     void addRef();
     void releaseRef();
+#endif
 
     static inline void set(uint8_t* dst, uint8_t* src, Value::Type type)
     {

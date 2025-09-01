@@ -115,6 +115,10 @@ public:
         GCUnary,
         // Garbage Collector type casting operations
         GCCast,
+        // Garbage Collector array creation (e.g. ArrayNew)
+        GCArrayNew,
+        // Garbage Collector array getter/setter operators
+        GCArrayAccess,
         // Garbage Collector StructNew and StructNewDefault
         GCStructNew,
         // Garbage Collector structure getter/setter operators
@@ -618,6 +622,8 @@ struct CompileContext {
     size_t globalsStart;
     size_t tableStart;
     size_t functionsStart;
+    size_t dataSegmentsStart;
+    size_t elementSegmentsStart;
     sljit_sw stackTmpStart;
     size_t nextTryBlock;
     size_t currentTryBlock;

@@ -84,19 +84,19 @@ void Table::grow(uint64_t newSize, void* val)
     m_size = newSize;
 }
 
-void Table::init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Table::init(ExecutionState& state, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
     if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)m_size)) {
         throwException(state);
     }
-    if (UNLIKELY(!source->element() || (srcStart + srcSize) > source->element()->exprFunctions().size())) {
+    if (UNLIKELY((srcStart + srcSize) > source->size())) {
         throwException(state);
     }
     if (UNLIKELY(!m_type.isRef())) {
         Trap::throwException(state, "type mismatch");
     }
 
-    this->initTable(instance, source, dstStart, srcStart, srcSize);
+    this->initTable(source, dstStart, srcStart, srcSize);
 }
 
 void Table::copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
@@ -122,31 +122,9 @@ void Table::throwException(ExecutionState& state) const
     Trap::throwException(state, "out of bounds table access");
 }
 
-void Table::initTable(Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Table::initTable(ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
-    const auto& exprs = source->element()->exprFunctions();
-    uint32_t end = dstStart + srcSize;
-
-    for (uint32_t i = dstStart; i < end; i++) {
-        ModuleFunction* exprFunc = exprs[srcStart++];
-
-        struct RunData {
-            Instance* instance;
-            ModuleFunction* exprFunc;
-            void* initValue;
-        } data = { instance, exprFunc, nullptr };
-        Walrus::Trap trap;
-        trap.run([](Walrus::ExecutionState& state, void* d) {
-            RunData* data = reinterpret_cast<RunData*>(d);
-            DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
-            Value func;
-            fakeFunction.call(state, nullptr, &func);
-            data->initValue = func.asReference();
-        },
-                 &data);
-
-        m_elements[i] = data.initValue;
-    }
+    memcpy(m_elements + dstStart, source->elements().data() + srcStart, srcSize * sizeof(void*));
 }
 
 void Table::copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
