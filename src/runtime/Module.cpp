@@ -153,7 +153,12 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     }
 
     if (imports.size() < m_imports.size()) {
-        Trap::throwException(state, "Insufficient import");
+        std::string message = "Insufficient import(s):\n";
+
+        for (uint32_t i = imports.size(); i < m_imports.size(); i++) {
+            message.append("  " + m_imports[i]->moduleName() + " : " + m_imports[i]->fieldName() + " -- Type:" + m_imports[i]->typeToString() + "\n");
+        }
+        Trap::throwException(state, message);
     }
 
     for (size_t i = 0; i < m_imports.size(); i++) {

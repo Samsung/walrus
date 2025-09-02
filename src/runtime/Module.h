@@ -131,6 +131,29 @@ public:
         return static_cast<const MemoryType*>(m_type);
     }
 
+    std::string typeToString()
+    {
+        switch (m_importType) {
+        case Type::Function: {
+            return std::string("Function");
+        }
+        case Type::Global: {
+            return std::string("Global");
+        }
+        case Type::Memory: {
+            return std::string("Memory");
+        }
+        case Type::Table: {
+            return std::string("Table");
+        }
+        case Type::Tag: {
+            return std::string("Tag");
+        }
+        }
+
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+
 private:
     Type m_importType;
     std::string m_moduleName;
