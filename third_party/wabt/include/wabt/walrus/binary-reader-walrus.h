@@ -51,7 +51,7 @@ public:
     virtual void OnTypeCount(Index count) = 0;
     virtual void OnRecursiveType(Index firstTypeIndex, Index typeCount) = 0;
     virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes, GCTypeExtension* gcExt) = 0;
-    virtual void OnStructType(Index index, Index fieldCount, TypeMut *fieldTypes, GCTypeExtension* gcExt) = 0;
+    virtual bool OnStructType(Index index, Index fieldCount, TypeMut *fieldTypes, GCTypeExtension* gcExt) = 0;
     virtual void OnArrayType(Index index, TypeMut fieldType, GCTypeExtension* gcExt) = 0;
     virtual void EndTypeSection() = 0;
 
@@ -171,6 +171,10 @@ public:
     virtual void OnRefCastExpr(Type type) = 0;
     virtual void OnRefTestExpr(Type type) = 0;
     virtual void OnGCUnaryExpr(int opcode) = 0;
+    virtual void OnStructNewExpr(Index type_index) = 0;
+    virtual void OnStructNewDefaultExpr(Index type_index) = 0;
+    virtual void OnStructGetExpr(Opcode opcode, Index type_index, Index field_index) = 0;
+    virtual void OnStructSetExpr(Index type_index, Index field_index) = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
     virtual void OnUnreachableExpr() = 0;

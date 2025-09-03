@@ -18,6 +18,7 @@
 
 #include "Walrus.h"
 
+#include "runtime/GCStruct.h"
 #include "runtime/Global.h"
 #include "runtime/Function.h"
 #include "runtime/Instance.h"
@@ -367,6 +368,7 @@ static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32
 
 static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
 static void emitMove(sljit_compiler*, uint32_t type, Operand* from, Operand* to);
+static void emitStoreImmediate(sljit_compiler* compiler, Operand* to, Instruction* instr, bool isFloat);
 static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const TypeVector& types, bool isWordOffsets);
 
 #if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM) || (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86) || (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV && defined __riscv_vector)
@@ -665,11 +667,11 @@ static void emitMove(sljit_compiler* compiler, uint32_t type, Operand* from, Ope
         return;
     }
 
-    sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_TMP_DEST_FREG);
+    sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_TMP_DEST_VREG);
     sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128, dstReg, src.arg, src.argw);
 
-    if (dstReg == SLJIT_TMP_DEST_FREG) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_FREG, dst.arg, dst.argw);
+    if (dstReg == SLJIT_TMP_DEST_VREG) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_VREG, dst.arg, dst.argw);
     }
 }
 
@@ -1276,6 +1278,14 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         }
         case Instruction::GCCast: {
             emitGCCast(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCStructNew: {
+            emitGCStructNew(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCStructAccess: {
+            emitGCStructAccess(m_compiler, item->asInstruction());
             break;
         }
         case Instruction::Atomic: {

@@ -189,6 +189,7 @@ class StructType : public CompositeType {
 public:
     friend class TypeStore;
 
+    // The maximum structure size is limited to 4GB
     StructType(MutableTypeVector* fields,
                bool isFinal,
                const CompositeType** subTypeList)
@@ -202,10 +203,16 @@ public:
         delete m_fieldTypes;
     }
 
+    bool initialize();
+
     const MutableTypeVector& fields() const { return *m_fieldTypes; }
+    uint32_t structSize() const { return m_structSize; }
+    const VectorWithFixedSize<uint32_t, std::allocator<uint32_t>>& fieldOffsets() const { return m_fieldOffsets; }
 
 private:
     MutableTypeVector* m_fieldTypes;
+    uint32_t m_structSize;
+    VectorWithFixedSize<uint32_t, std::allocator<uint32_t>> m_fieldOffsets;
 };
 
 class ArrayType : public CompositeType {

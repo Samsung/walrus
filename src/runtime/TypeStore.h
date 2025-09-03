@@ -25,13 +25,15 @@
 namespace Walrus {
 
 class Module;
+class TypeStore;
 
 // This class is managed through TypeStore.
 class RecursiveType {
 public:
     friend class TypeStore;
 
-    static RecursiveType* create(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode, size_t totalSubTypeSize);
+    static RecursiveType* create(TypeStore* typeStore, RecursiveType* next, CompositeType* firstType,
+                                 size_t typeCount, size_t hashCode, size_t totalSubTypeSize);
 
     bool isSingleType() const
     {
@@ -39,8 +41,9 @@ public:
     }
 
 private:
-    RecursiveType(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode)
-        : m_next(next)
+    RecursiveType(TypeStore* typeStore, RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode)
+        : m_typeStore(typeStore)
+        , m_next(next)
         , m_prev(nullptr)
         , m_firstType(firstType)
         , m_refCount(1)
@@ -55,6 +58,7 @@ private:
 
     static void destroy(RecursiveType* type);
 
+    TypeStore* m_typeStore;
     RecursiveType* m_next;
     RecursiveType* m_prev;
     CompositeType* m_firstType;
@@ -82,6 +86,13 @@ public:
     void updateTypes(Vector<CompositeType*>& types);
     void releaseTypes(Vector<CompositeType*>& types);
     void releaseTypes(CompositeTypeVector& types);
+
+    static void AddRef(const CompositeType* type)
+    {
+        type->getRecursiveType()->m_refCount++;
+    }
+
+    static void ReleaseRef(const CompositeType** typeInfo);
 
 private:
     static const CompositeType** updateRefs(CompositeType* type, const Vector<CompositeType*>& types, const CompositeType** nextSubType);

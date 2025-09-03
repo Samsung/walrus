@@ -695,6 +695,11 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     variable.info |= (*list & Instruction::TypeMask);
                     list++;
                 } while (param < end);
+            } else if (instr->opcode() == ByteCode::StructNewOpcode) {
+                for (auto it : reinterpret_cast<StructNew*>(instr->byteCode())->typeInfo()->fields()) {
+                    VariableList::Variable& variable = m_variableList->variables[*param++];
+                    variable.info |= Instruction::valueTypeToOperandType(it.type());
+                }
             } else {
                 const TypeVector* types = nullptr;
 
