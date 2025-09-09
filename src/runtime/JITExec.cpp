@@ -55,6 +55,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::TypeMismatchError:
             Trap::throwException(state, "type mismatch");
             return resultOffsets;
+        case ExecutionContext::AllocationError:
+            Trap::throwException(state, "memory allocation failed");
+            return resultOffsets;
         case ExecutionContext::NullReferenceError:
             Trap::throwException(state, "null reference");
             return resultOffsets;
@@ -63,6 +66,9 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
             return resultOffsets;
         case ExecutionContext::NullI31ReferenceError:
             Trap::throwException(state, "null i31 reference");
+            return resultOffsets;
+        case ExecutionContext::NullStructReferenceError:
+            Trap::throwException(state, "null structure reference");
             return resultOffsets;
         case ExecutionContext::UndefinedElementError:
             Trap::throwException(state, "undefined element");

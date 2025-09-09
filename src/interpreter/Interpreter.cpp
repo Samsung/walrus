@@ -22,6 +22,7 @@
 #include "runtime/Function.h"
 #include "runtime/Memory.h"
 #include "runtime/Table.h"
+#include "runtime/GCStruct.h"
 #include "runtime/Global.h"
 #include "runtime/Module.h"
 #include "runtime/Trap.h"
@@ -1775,6 +1776,7 @@ NextInstruction:
 
         int32_t value = readValue<int32_t>(bp, code->srcOffset());
         writeValue<void*>(bp, code->dstOffset(), Value::toI31Value(value));
+
         ADD_PROGRAM_COUNTER(RefI31);
         NEXT_INSTRUCTION();
     }
@@ -1789,6 +1791,7 @@ NextInstruction:
             Trap::throwException(state, "null i31 reference");
         }
         writeValue<int32_t>(bp, code->dstOffset(), Value::getI31SValue(ptr));
+
         ADD_PROGRAM_COUNTER(I31GetS);
         NEXT_INSTRUCTION();
     }
@@ -1803,7 +1806,73 @@ NextInstruction:
             Trap::throwException(state, "null i31 reference");
         }
         writeValue<int32_t>(bp, code->dstOffset(), Value::getI31UValue(ptr));
+
         ADD_PROGRAM_COUNTER(I31GetU);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(StructNew)
+        :
+    {
+        StructNew* code = (StructNew*)programCounter;
+
+        GCStruct* result = GCStruct::structNew(code->typeInfo(), code->dataOffsets(), bp);
+        if (UNLIKELY(result == nullptr)) {
+            Trap::throwException(state, "memory allocation failed");
+        }
+        writeValue<void*>(bp, code->dstOffset(), result);
+
+        programCounter += ByteCode::pointerAlignedSize(sizeof(StructNew) + sizeof(ByteCodeStackOffset) * code->offsetsSize());
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(StructNewDefault)
+        :
+    {
+        StructNewDefault* code = (StructNewDefault*)programCounter;
+
+        GCStruct* result = GCStruct::structNewDefault(code->typeInfo());
+        if (UNLIKELY(result == nullptr)) {
+            Trap::throwException(state, "memory allocation failed");
+        }
+        writeValue<void*>(bp, code->dstOffset(), result);
+
+        ADD_PROGRAM_COUNTER(StructNewDefault);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(StructGet)
+        :
+    {
+        StructGet* code = (StructGet*)programCounter;
+
+        GCStruct* ptr = readValue<GCStruct*>(bp, code->srcOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null structure reference");
+        }
+
+        GCStruct::get(bp + code->dstOffset(),
+                      reinterpret_cast<uint8_t*>(ptr) + code->memberOffset(),
+                      code->type(), code->isSigned());
+
+        ADD_PROGRAM_COUNTER(StructGet);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(StructSet)
+        :
+    {
+        StructSet* code = (StructSet*)programCounter;
+
+        GCStruct* ptr = readValue<GCStruct*>(bp, code->src0Offset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null structure reference");
+        }
+
+        GCStruct::set(reinterpret_cast<uint8_t*>(ptr) + code->memberOffset(),
+                      bp + code->src1Offset(), code->type());
+
+        ADD_PROGRAM_COUNTER(StructSet);
         NEXT_INSTRUCTION();
     }
 

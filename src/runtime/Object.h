@@ -67,6 +67,11 @@ public:
         return m_typeInfo;
     }
 
+    const CompositeType* objectTypeInfo()
+    {
+        return m_typeInfo[reinterpret_cast<size_t>(m_typeInfo[0])];
+    }
+
     bool isModule() const
     {
         return kind() == ModuleKind;

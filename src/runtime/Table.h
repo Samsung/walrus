@@ -33,6 +33,8 @@ class Table : public Extern {
 public:
     static Table* createTable(Store* store, Type type, uint32_t initialSize, uint32_t maximumSize, void* init = nullptr);
 
+    ~Table();
+
     Type type() const
     {
         return m_type;
@@ -46,13 +48,6 @@ public:
     uint32_t maximumSize() const
     {
         return m_maximumSize;
-    }
-
-    void grow(uint64_t newSize, void* val)
-    {
-        ASSERT(newSize <= m_maximumSize);
-        m_elements.resize(newSize, val);
-        m_size = newSize;
     }
 
     void* getElement(ExecutionState& state, uint32_t elemIndex) const
@@ -83,6 +78,7 @@ public:
         m_elements[elemIndex] = val;
     }
 
+    void grow(uint64_t newSize, void* val);
     void copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
     void fill(ExecutionState& state, uint32_t n, void* value, uint32_t index);
     void init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
@@ -102,7 +98,7 @@ private:
     uint32_t m_maximumSize;
 
     // FIXME handle references of Function objects
-    Vector<void*> m_elements;
+    void** m_elements;
 };
 
 } // namespace Walrus

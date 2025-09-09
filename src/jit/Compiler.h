@@ -111,10 +111,14 @@ public:
         TernarySIMD,
         // Special type for initializing values from the stack
         StackInit,
-        // Garbage Collector Unary operations
+        // Garbage Collector unary operations
         GCUnary,
-        // Type casting operations
+        // Garbage Collector type casting operations
         GCCast,
+        // Garbage Collector StructNew and StructNewDefault
+        GCStructNew,
+        // Garbage Collector structure getter/setter operators
+        GCStructAccess,
         // Atomic memory operations (e.g. I32AtomicRmwAdd, I64AtomicRmw16OrU)
         Atomic,
         // Special types for thread synchronization operations

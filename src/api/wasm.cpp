@@ -23,12 +23,14 @@
 #include "runtime/Engine.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
+#include "runtime/GCStruct.h"
 #include "runtime/Function.h"
 #include "runtime/Table.h"
 #include "runtime/Memory.h"
 #include "runtime/Global.h"
 #include "runtime/Instance.h"
 #include "runtime/Trap.h"
+#include "runtime/TypeStore.h"
 #include "parser/WASMParser.h"
 
 using namespace Walrus;
@@ -263,9 +265,18 @@ struct wasm_ref_t {
         : obj(o)
     {
         ASSERT(!!o);
+
+        if (o->kind() == Object::StructKind) {
+            const_cast<GCStruct*>(reinterpret_cast<const GCStruct*>(o))->addRef();
+        }
     }
 
-    virtual ~wasm_ref_t() {}
+    virtual ~wasm_ref_t()
+    {
+        if (obj != nullptr && obj->kind() == Object::StructKind) {
+            const_cast<GCStruct*>(reinterpret_cast<const GCStruct*>(obj))->releaseRef();
+        }
+    }
 
     const Object* get() const
     {
@@ -431,6 +442,7 @@ struct wasm_trap_t : wasm_ref_t {
     virtual ~wasm_trap_t()
     {
         delete obj;
+        obj = nullptr;
     }
 
     const Trap* get() const
