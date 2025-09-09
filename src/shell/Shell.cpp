@@ -32,10 +32,6 @@
 #include "wasi/WASI.h"
 #endif
 
-#ifdef ENABLE_GC
-#include "GCUtil.h"
-#endif /* ENABLE_GC */
-
 struct spectestseps : std::numpunct<char> {
     char do_thousands_sep() const { return '_'; }
     std::string do_grouping() const { return "\3"; }
@@ -514,14 +510,21 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                            || vType == Walrus::Value::StructRef || vType == Walrus::Value::ArrayRef);
             break;
         case wabt::Type::I31Ref:
-            sameRefType = vType == Walrus::Value::I31Ref || vType == Walrus::Value::NoAnyRef;
+            sameRefType = Value::isNull(v.asReference()) || Value::isI31Value(v.asReference());
             break;
         case wabt::Type::StructRef:
-            sameRefType = vType == Walrus::Value::StructRef || vType == Walrus::Value::NoAnyRef;
-            break;
-        case wabt::Type::ArrayRef:
-            sameRefType = vType == Walrus::Value::ArrayRef || vType == Walrus::Value::NoAnyRef;
-            break;
+        case wabt::Type::ArrayRef: {
+            if (Value::isNull(v.asReference())) {
+                return c.ref_bits() == wabt::Const::kRefNullBits;
+            }
+
+            if (Value::isI31Value(v.asReference())) {
+                return false;
+            }
+
+            Object* object = reinterpret_cast<Object*>(v.asReference());
+            return object->kind() == (c.type() == wabt::Type::StructRef ? Object::StructKind : Object::ArrayKind);
+        }
         default:
             return false;
         }
@@ -531,9 +534,9 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
         return false;
     }
 
-    if (c.ref_bits() == wabt::Const::kRefNullBits) {
+    if (Value::isNull(v.asReference())) {
         // check RefNull
-        return v.isNull();
+        return c.ref_bits() == wabt::Const::kRefNullBits;
     }
 
     if (c.ref_bits() == wabt::Const::kRefAnyValueBits || (c.type() != wabt::Type::ExternRef && c.type() != wabt::Type::NullExternRef)) {
@@ -1173,10 +1176,6 @@ int main(int argc, const char* argv[])
 #if defined(WALRUS_GOOGLE_PERF)
     ProfilerStart("gperf_result");
 #endif
-
-#ifdef ENABLE_GC
-    GC_INIT();
-#endif /* ENABLE_GC */
 
     Engine* engine = new Engine();
     Store* store = new Store(engine);

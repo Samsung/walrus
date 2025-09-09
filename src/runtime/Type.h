@@ -49,6 +49,15 @@ public:
         return static_cast<Value::Type>(m_type);
     }
 
+    // Storage type on the WebAssembly stack.
+    Value::Type stackType() const
+    {
+        if (isPacked()) {
+            return Value::I32;
+        }
+        return static_cast<Value::Type>(m_type);
+    }
+
     operator Value::Type() const
     {
         ASSERT(!isPacked());

@@ -349,15 +349,48 @@ if (f.type == Type::B) { puts("failed in msvc."); }
     static void operator delete(void*) = delete;  \
     static void operator delete[](void*) = delete;
 
-#define ALLOCA(Type, Result, Bytes)                                                             \
-    std::unique_ptr<uint8_t[]> Result##HolderWhenUsingMalloc;                                   \
-    size_t bytes##Result = (Bytes);                                                             \
-    Type* Result;                                                                               \
-    if (LIKELY(bytes##Result < 2048)) {                                                         \
-        Result = (Type*)alloca(bytes##Result);                                                  \
-    } else {                                                                                    \
-        Result##HolderWhenUsingMalloc = std::unique_ptr<uint8_t[]>(new uint8_t[bytes##Result]); \
-        Result = (Type*)Result##HolderWhenUsingMalloc.get();                                    \
+#ifdef ENABLE_GC
+#define ALLOCA_RESULT_REF(name)                    \
+    class name##AllocaGCReference {                \
+    public:                                        \
+        name##AllocaGCReference()                  \
+            : m_ptr(nullptr)                       \
+        {                                          \
+        }                                          \
+        ~name##AllocaGCReference()                 \
+        {                                          \
+            if (m_ptr != nullptr) {                \
+                GC_FREE(m_ptr);                    \
+            }                                      \
+        }                                          \
+        void* get() const                          \
+        {                                          \
+            return m_ptr;                          \
+        }                                          \
+        void init(size_t size)                     \
+        {                                          \
+            ASSERT(m_ptr == nullptr);              \
+            m_ptr = GC_MALLOC_UNCOLLECTABLE(size); \
+        }                                          \
+                                                   \
+    private:                                       \
+        void* m_ptr;                               \
+    } name##HolderWhenUsingMalloc;
+#define ALLOCA_RESULT_INIT(name) name##HolderWhenUsingMalloc.init(bytes##name);
+#else
+#define ALLOCA_RESULT_REF(name) std::unique_ptr<uint8_t[]> name##HolderWhenUsingMalloc;
+#define ALLOCA_RESULT_INIT(name) name##HolderWhenUsingMalloc = std::unique_ptr<uint8_t[]>(new uint8_t[bytes##name]);
+#endif
+
+#define ALLOCA(Type, Result, Bytes)                          \
+    ALLOCA_RESULT_REF(Result);                               \
+    size_t bytes##Result = (Bytes);                          \
+    Type* Result;                                            \
+    if (LIKELY(bytes##Result < 2048)) {                      \
+        Result = (Type*)alloca(bytes##Result);               \
+    } else {                                                 \
+        ALLOCA_RESULT_INIT(Result);                          \
+        Result = (Type*)Result##HolderWhenUsingMalloc.get(); \
     }
 
 #if !defined(STACK_GROWS_DOWN) && !defined(STACK_GROWS_UP)

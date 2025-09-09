@@ -22,6 +22,10 @@
 #include "runtime/Module.h"
 #include "runtime/Function.h"
 
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif /* ENABLE_GC */
+
 namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(tableTypeInfo, TableKind);
@@ -40,7 +44,44 @@ Table::Table(Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
 {
-    m_elements.resize(initialSize, init);
+    if (initialSize == 0) {
+        m_elements = nullptr;
+        return;
+    }
+#ifdef ENABLE_GC
+    m_elements = reinterpret_cast<void**>(GC_MALLOC_UNCOLLECTABLE(static_cast<size_t>(initialSize) * sizeof(void*)));
+#else
+    m_elements = reinterpret_cast<void**>(malloc(static_cast<size_t>(initialSize) * sizeof(void*)));
+#endif
+    std::fill(m_elements, m_elements + initialSize, init);
+}
+
+Table::~Table()
+{
+#ifdef ENABLE_GC
+    GC_FREE(m_elements);
+#else
+    free(m_elements);
+#endif
+}
+
+void Table::grow(uint64_t newSize, void* val)
+{
+    ASSERT(newSize <= m_maximumSize);
+    if (newSize == m_size) {
+        return;
+    }
+#ifdef ENABLE_GC
+    if (LIKELY(m_elements != nullptr)) {
+        m_elements = reinterpret_cast<void**>(GC_REALLOC(m_elements, static_cast<size_t>(newSize) * sizeof(void*)));
+    } else {
+        m_elements = reinterpret_cast<void**>(GC_MALLOC_UNCOLLECTABLE(static_cast<size_t>(newSize) * sizeof(void*)));
+    }
+#else
+    m_elements = reinterpret_cast<void**>(realloc(m_elements, static_cast<size_t>(newSize) * sizeof(void*)));
+#endif
+    std::fill(m_elements + m_size, m_elements + newSize, val);
+    m_size = newSize;
 }
 
 void Table::init(ExecutionState& state, Instance* instance, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
