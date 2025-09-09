@@ -274,6 +274,11 @@ static VariableRef mergeVariables(VariableList* variableList, VariableRef head, 
     return head;
 }
 
+static inline Value::Type unpackType(Value::Type type)
+{
+    return Value::isPackedType(type) ? Value::I32 : type;
+}
+
 #define VARIABLE_GET_LABEL(v) (reinterpret_cast<InstructionListItem*>(v)->asLabel())
 
 void JITCompiler::buildVariables(uint32_t requiredStackSize)
@@ -695,6 +700,11 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     variable.info |= (*list & Instruction::TypeMask);
                     list++;
                 } while (param < end);
+            } else if (instr->opcode() == ByteCode::StructNewOpcode) {
+                for (auto it : reinterpret_cast<StructNew*>(instr->byteCode())->typeInfo()->fields()) {
+                    VariableList::Variable& variable = m_variableList->variables[*param++];
+                    variable.info |= Instruction::valueTypeToOperandType(unpackType(it.type()));
+                }
             } else {
                 const TypeVector* types = nullptr;
 

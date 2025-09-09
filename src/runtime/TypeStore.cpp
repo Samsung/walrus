@@ -15,17 +15,23 @@
  */
 #include "Walrus.h"
 
-#include "parser/WASMParser.h"
 #include "runtime/TypeStore.h"
+#include "runtime/GCStruct.h"
 #include "runtime/Module.h"
 #include "runtime/ObjectType.h"
+#include "parser/WASMParser.h"
+
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif /* ENABLE_GC */
 
 namespace Walrus {
 
-RecursiveType* RecursiveType::create(RecursiveType* next, CompositeType* firstType, size_t typeCount, size_t hashCode, size_t totalSubTypeSize)
+RecursiveType* RecursiveType::create(TypeStore* typeStore, RecursiveType* next, CompositeType* firstType,
+                                     size_t typeCount, size_t hashCode, size_t totalSubTypeSize)
 {
     RecursiveType* result = reinterpret_cast<RecursiveType*>(malloc(sizeof(RecursiveType) + (totalSubTypeSize - 1) * sizeof(CompositeType*)));
-    new (result) RecursiveType(next, firstType, typeCount, hashCode);
+    new (result) RecursiveType(typeStore, next, firstType, typeCount, hashCode);
     return result;
 }
 
@@ -44,7 +50,7 @@ static size_t computeHash(size_t hash, size_t value)
 static size_t computeHash(size_t hash, const Type& type, size_t recStart, const Vector<CompositeType*>& types)
 {
     hash = computeHash(hash, static_cast<size_t>(type.type()));
-    if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
+    if (type.type() == Value::DefinedRef || type.type() == Value::NullDefinedRef) {
         uintptr_t index = reinterpret_cast<uintptr_t>(type.ref());
         if (index >= recStart) {
             index = recStart - index - 1;
@@ -119,7 +125,7 @@ static bool compareType(const Type& type1, const Type& type2, const Vector<Compo
         return false;
     }
 
-    if (type1 != Value::DefinedRef && type1 != Value::NullDefinedRef) {
+    if (type1.type() != Value::DefinedRef && type1.type() != Value::NullDefinedRef) {
         return true;
     }
 
@@ -185,7 +191,7 @@ static bool compareTypes(CompositeType* type1, size_t index2, const Vector<Compo
 
 static void updateRef(Type& type, const Vector<CompositeType*>& types)
 {
-    if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
+    if (type.type() == Value::DefinedRef || type.type() == Value::NullDefinedRef) {
         type = Type(type.type(), types[reinterpret_cast<uintptr_t>(type.ref())]);
     }
 }
@@ -329,7 +335,7 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
             compType = compType->getNextType();
         } while (compType != nullptr);
 
-        RecursiveType* recType = RecursiveType::create(m_first, firstType, typeCount, hashCode, totalSize);
+        RecursiveType* recType = RecursiveType::create(this, m_first, firstType, typeCount, hashCode, totalSize);
 
         if (m_first != nullptr) {
             m_first->m_prev = recType;
@@ -397,5 +403,58 @@ void TypeStore::releaseTypes(CompositeTypeVector& types)
         }
     }
 }
+
+void TypeStore::ReleaseRef(const CompositeType** typeInfo)
+{
+    size_t index = reinterpret_cast<size_t>(typeInfo[0]);
+    ASSERT(index > 0);
+    RecursiveType* recType = typeInfo[index]->getRecursiveType();
+    if (--recType->m_refCount == 0) {
+        recType->m_typeStore->releaseRecursiveType(recType);
+    }
+}
+
+#ifdef ENABLE_GC
+
+void TypeStore::insertRootRef(Object* object)
+{
+    if (m_rootRefsFreeListHead == NoIndex) {
+        m_rootRefsFreeListHead = m_rootRefsSize;
+        m_rootRefsSize += RootRefsGrowthFactor;
+
+        if (m_rootRefs == nullptr) {
+            m_rootRefs = reinterpret_cast<Object**>(GC_MALLOC_UNCOLLECTABLE(static_cast<size_t>(m_rootRefsSize) * sizeof(Object*)));
+        } else {
+            m_rootRefs = reinterpret_cast<Object**>(GC_REALLOC(m_rootRefs, static_cast<size_t>(m_rootRefsSize) * sizeof(Object*)));
+        }
+
+        // Insert all entries as free references.
+        for (uintptr_t i = m_rootRefsFreeListHead; i < m_rootRefsSize - 1; i++) {
+            m_rootRefs[i] = reinterpret_cast<Object*>(i + 1);
+        }
+        m_rootRefs[m_rootRefsSize - 1] = reinterpret_cast<Object*>(NoIndex);
+    }
+
+    ASSERT(object->kind() == Object::StructKind);
+    ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 1);
+    reinterpret_cast<GCStruct*>(object)->m_rootIndex = m_rootRefsFreeListHead;
+
+    uintptr_t freeRef = reinterpret_cast<uintptr_t>(m_rootRefs[m_rootRefsFreeListHead]);
+    m_rootRefs[m_rootRefsFreeListHead] = object;
+    m_rootRefsFreeListHead = freeRef;
+}
+
+void TypeStore::deleteRootRef(Object* object)
+{
+    ASSERT(object->kind() == Object::StructKind);
+    ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 0);
+    uintptr_t freeRef = reinterpret_cast<GCStruct*>(object)->m_rootIndex;
+
+    ASSERT(m_rootRefs[freeRef] == object);
+    m_rootRefs[freeRef] = reinterpret_cast<Object*>(m_rootRefsFreeListHead);
+    m_rootRefsFreeListHead = freeRef;
+}
+
+#endif
 
 } // namespace Walrus

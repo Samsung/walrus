@@ -54,10 +54,7 @@ struct Waiter {
 
 class Store {
 public:
-    Store(Engine* engine)
-        : m_engine(engine)
-    {
-    }
+    Store(Engine* engine);
 
     ~Store();
 
