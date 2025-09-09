@@ -17,15 +17,14 @@
 #ifndef __WalrusByteCode__
 #define __WalrusByteCode__
 
+#include "runtime/Module.h"
+
 #if !defined(NDEBUG)
 #include <cinttypes>
-#include "runtime/Module.h"
 
 #define DUMP_BYTECODE_OFFSET(name) \
     printf(#name ": %" PRIu32 " ", (uint32_t)m_##name);
 #endif
-
-#include "runtime/Value.h"
 
 namespace Walrus {
 
@@ -97,6 +96,10 @@ class FunctionType;
     F(RefI31)                   \
     F(I31GetS)                  \
     F(I31GetU)                  \
+    F(StructNew)                \
+    F(StructNewDefault)         \
+    F(StructGet)                \
+    F(StructSet)                \
     F(FillOpcodeTable)
 
 #define FOR_EACH_BYTECODE_MEMIDX_OP(F) \
@@ -3434,6 +3437,149 @@ public:
         : I31Get(Opcode::I31GetUOpcode, srcOffset, dstOffset, isNullable)
     {
     }
+};
+
+class StructNew : public ByteCode {
+public:
+    StructNew(const StructType* typeInfo)
+        : ByteCode(Opcode::StructNewOpcode)
+        , m_typeInfo(typeInfo)
+        , m_dstOffset(0)
+    {
+    }
+
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
+    const StructType* typeInfo() const { return m_typeInfo; }
+
+    ByteCodeStackOffset* dataOffsets() const
+    {
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(StructNew));
+    }
+
+    uint32_t offsetsSize() const
+    {
+        return m_typeInfo->fields().size();
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("StructNew ");
+        DUMP_BYTECODE_OFFSET(dstOffset);
+        printf("offsets: ");
+        auto arr = dataOffsets();
+        uint32_t size = offsetsSize();
+        for (size_t i = 0; i < offsetsSize(); i++) {
+            printf("%" PRIu32 " ", (uint32_t)arr[i]);
+        }
+    }
+#endif
+
+private:
+    const StructType* m_typeInfo;
+    ByteCodeStackOffset m_dstOffset;
+};
+
+class StructNewDefault : public ByteCode {
+public:
+    StructNewDefault(const StructType* typeInfo, ByteCodeStackOffset dstOffset)
+        : ByteCode(Opcode::StructNewDefaultOpcode)
+        , m_typeInfo(typeInfo)
+        , m_dstOffset(dstOffset)
+    {
+    }
+
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    const StructType* typeInfo() const { return m_typeInfo; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("StructNewDefault ");
+        DUMP_BYTECODE_OFFSET(dstOffset);
+    }
+#endif
+
+private:
+    const StructType* m_typeInfo;
+    ByteCodeStackOffset m_dstOffset;
+};
+
+class StructGet : public ByteCode {
+public:
+    static constexpr uint8_t IsSigned = 0x1;
+    static constexpr uint8_t IsNullable = 0x2;
+
+    StructGet(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset,
+              uint32_t memberOffset, Value::Type type, uint8_t info)
+        : ByteCode(Opcode::StructGetOpcode)
+        , m_memberOffset(memberOffset)
+        , m_srcOffset(srcOffset)
+        , m_dstOffset(dstOffset)
+        , m_type(type)
+        , m_info(info)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    uint32_t memberOffset() const { return m_memberOffset; }
+    Value::Type type() const { return m_type; }
+    bool isSigned() const { return (m_info & IsSigned) != 0; }
+    bool isNullable() const { return (m_info & IsNullable) != 0; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("StructGet%s ", Value::isPackedType(m_type) ? ((m_info & IsSigned) != 0 ? "S" : "U") : "");
+        DUMP_BYTECODE_OFFSET(srcOffset);
+        DUMP_BYTECODE_OFFSET(dstOffset);
+    }
+#endif
+
+private:
+    uint32_t m_memberOffset;
+    ByteCodeStackOffset m_srcOffset;
+    ByteCodeStackOffset m_dstOffset;
+    Value::Type m_type;
+    uint8_t m_info;
+};
+
+class StructSet : public ByteCode {
+public:
+    StructSet(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset,
+              uint32_t memberOffset, Value::Type type, uint8_t info)
+        : ByteCode(Opcode::StructSetOpcode)
+        , m_memberOffset(memberOffset)
+        , m_src0Offset(src0Offset)
+        , m_src1Offset(src1Offset)
+        , m_type(type)
+        , m_info(info)
+    {
+    }
+
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    uint32_t memberOffset() const { return m_memberOffset; }
+    Value::Type type() const { return m_type; }
+    bool isNullable() const { return (m_info & StructGet::IsNullable) != 0; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("StructSet ");
+        DUMP_BYTECODE_OFFSET(src0Offset);
+        DUMP_BYTECODE_OFFSET(src1Offset);
+    }
+#endif
+
+private:
+    uint32_t m_memberOffset;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    Value::Type m_type;
+    uint8_t m_info;
 };
 
 class GlobalGet32 : public ByteCodeOffsetValue {
