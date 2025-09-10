@@ -41,11 +41,6 @@ public:
             setUninitialized();
         }
 
-        static size_t sizeInPointers(size_t memoryCount)
-        {
-            return ((memoryCount * sizeof(Memory::TargetBuffer)) + (sizeof(void*) - 1)) / sizeof(void*);
-        }
-
         void setUninitialized()
         {
             sizeInByte = ~(uint64_t)0;

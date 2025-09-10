@@ -444,6 +444,16 @@ public:
         return m_tagTypes[index];
     }
 
+    size_t numberOfDataSegments() const
+    {
+        return m_datas.size();
+    }
+
+    size_t numberOfElemSegments() const
+    {
+        return m_elements.size();
+    }
+
     const VectorWithFixedSize<ImportType*, std::allocator<ImportType*>>& imports() const
     {
         return m_imports;

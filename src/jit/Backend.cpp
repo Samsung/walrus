@@ -18,6 +18,8 @@
 
 #include "Walrus.h"
 
+#include "runtime/GCArray.h"
+#include "runtime/GCStruct.h"
 #include "runtime/Global.h"
 #include "runtime/Function.h"
 #include "runtime/Instance.h"
@@ -192,6 +194,11 @@ public:
     {
         return offsetof(Table, m_elements);
     }
+
+    static sljit_sw arrayLength()
+    {
+        return offsetof(GCArray, m_length);
+    }
 };
 
 class SlowCase {
@@ -240,9 +247,11 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     size_t offset = Instance::alignedSize();
     size_t numberOfMemoryTypes = module->numberOfMemoryTypes();
     targetBuffersStart = offset + numberOfMemoryTypes * sizeof(void*);
-    globalsStart = targetBuffersStart + Memory::TargetBuffer::sizeInPointers(numberOfMemoryTypes) * sizeof(void*);
+    globalsStart = targetBuffersStart + numberOfMemoryTypes * sizeof(Memory::TargetBuffer);
     tableStart = globalsStart + module->numberOfGlobalTypes() * sizeof(void*);
     functionsStart = tableStart + module->numberOfTableTypes() * sizeof(void*);
+    dataSegmentsStart = functionsStart + (module->numberOfFunctions() + module->numberOfTagTypes()) * sizeof(void*);
+    elementSegmentsStart = dataSegmentsStart + module->numberOfDataSegments() * sizeof(DataSegment);
 }
 
 CompileContext* CompileContext::get(sljit_compiler* compiler)
@@ -367,6 +376,7 @@ static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32
 
 static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);
 static void emitMove(sljit_compiler*, uint32_t type, Operand* from, Operand* to);
+static void emitStoreImmediate(sljit_compiler* compiler, Operand* to, Instruction* instr, bool isFloat);
 static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const TypeVector& types, bool isWordOffsets);
 
 #if (defined SLJIT_CONFIG_ARM && SLJIT_CONFIG_ARM) || (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86) || (defined SLJIT_CONFIG_RISCV && SLJIT_CONFIG_RISCV && defined __riscv_vector)
@@ -665,11 +675,11 @@ static void emitMove(sljit_compiler* compiler, uint32_t type, Operand* from, Ope
         return;
     }
 
-    sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_TMP_DEST_FREG);
+    sljit_s32 dstReg = GET_TARGET_REG(dst.arg, SLJIT_TMP_DEST_VREG);
     sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128, dstReg, src.arg, src.argw);
 
-    if (dstReg == SLJIT_TMP_DEST_FREG) {
-        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_FREG, dst.arg, dst.argw);
+    if (dstReg == SLJIT_TMP_DEST_VREG) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128, SLJIT_TMP_DEST_VREG, dst.arg, dst.argw);
     }
 }
 
@@ -1278,6 +1288,22 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             emitGCCast(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::GCArrayNew: {
+            emitGCArrayNew(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCArrayAccess: {
+            emitGCArrayAccess(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCStructNew: {
+            emitGCStructNew(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCStructAccess: {
+            emitGCStructAccess(m_compiler, item->asInstruction());
+            break;
+        }
         case Instruction::Atomic: {
             emitAtomic(m_compiler, item->asInstruction());
             break;
@@ -1681,7 +1707,11 @@ void JITCompiler::emitEpilog()
         lastLabel = sljit_emit_label(m_compiler);
 
         sljit_set_label(it.jump, lastLabel);
-        sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(it.jumpType));
+        if (it.jumpType == ExecutionContext::AllocationError) {
+            sljit_emit_op2(m_compiler, SLJIT_ADD, SLJIT_R0, 0, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(ExecutionContext::AllocationError));
+        } else {
+            sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(it.jumpType));
+        }
     }
 
     if (trapJumpIndex > 0 || (trapJumps.size() > 0 && trapJumps[0].jumpType == ExecutionContext::GenericTrap)) {

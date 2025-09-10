@@ -133,7 +133,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     instance->m_memories = reinterpret_cast<Memory**>(references);
     references += numberOfMemoryTypes();
     Memory::TargetBuffer* targetBuffers = reinterpret_cast<Memory::TargetBuffer*>(references);
-    references += Memory::TargetBuffer::sizeInPointers(numberOfMemoryTypes());
+    references += numberOfMemoryTypes() * (sizeof(Memory::TargetBuffer) / sizeof(void*));
     instance->m_globals = reinterpret_cast<Global**>(references);
     references += numberOfGlobalTypes();
     instance->m_tables = reinterpret_cast<Table**>(references);
@@ -141,6 +141,10 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     instance->m_functions = reinterpret_cast<Function**>(references);
     references += numberOfFunctions();
     instance->m_tags = reinterpret_cast<Tag**>(references);
+    references += numberOfTagTypes();
+    instance->m_dataSegments = reinterpret_cast<DataSegment*>(references);
+    references += numberOfDataSegments() * (sizeof(DataSegment) / sizeof(void*));
+    instance->m_elementSegments = reinterpret_cast<ElementSegment*>(references);
 
     size_t funcIndex = 0;
     size_t globIndex = 0;
@@ -301,10 +305,31 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     }
 
     // init table(elem segment)
-    instance->m_elementSegments.reserve(m_elements.size());
     for (size_t i = 0; i < m_elements.size(); i++) {
         Element* elem = m_elements[i];
-        instance->m_elementSegments[i] = ElementSegment(elem);
+        new (instance->m_elementSegments + i) ElementSegment();
+
+        const auto& exprs = elem->exprFunctions();
+        VectorWithFixedSize<void*, std::allocator<void*>>& result = instance->m_elementSegments[i].m_elements;
+        result.reserve(exprs.size());
+        for (size_t j = 0; j < exprs.size(); j++) {
+            struct RunData {
+                Instance* instance;
+                ModuleFunction* exprFunc;
+                void* ref;
+            } data = { instance, exprs[j], nullptr };
+            Walrus::Trap trap;
+            trap.run([](Walrus::ExecutionState& state, void* d) {
+                RunData* data = reinterpret_cast<RunData*>(d);
+                DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
+                Value func;
+                fakeFunction.call(state, nullptr, &func);
+                data->ref = func.asReference();
+            },
+                     &data);
+
+            result[j] = data.ref;
+        }
 
         if (elem->mode() == SegmentMode::Active) {
             uint32_t offset = 0;
@@ -325,31 +350,16 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                          &data);
             }
 
-            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes() || offset + elem->exprFunctions().size() > instance->m_tables[elem->tableIndex()]->size())) {
+            if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes())) {
                 Trap::throwException(state, "out of bounds table access");
             }
 
-            const auto& exprs = elem->exprFunctions();
-            Table* table = instance->m_tables[elem->tableIndex()];
-            for (size_t i = 0; i < exprs.size(); i++) {
-                struct RunData {
-                    Instance* instance;
-                    ModuleFunction* exprFunc;
-                    void* ref;
-                } data = { instance, exprs[i], nullptr };
-                Walrus::Trap trap;
-                trap.run([](Walrus::ExecutionState& state, void* d) {
-                    RunData* data = reinterpret_cast<RunData*>(d);
-                    DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
-                    Value func;
-                    fakeFunction.call(state, nullptr, &func);
-                    data->ref = func.asReference();
-                },
-                         &data);
-
-                table->setElement(state, i + offset, data.ref);
+            uint32_t size = instance->m_tables[elem->tableIndex()]->size();
+            if (UNLIKELY(offset > size || (size - offset) < elem->exprFunctions().size())) {
+                Trap::throwException(state, "out of bounds table access");
             }
 
+            instance->m_tables[elem->tableIndex()]->initTable(instance->m_elementSegments + i, offset, 0, exprs.size());
             instance->m_elementSegments[i].drop();
         } else if (elem->mode() == SegmentMode::Declared) {
             instance->m_elementSegments[i].drop();
@@ -357,7 +367,6 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     }
 
     // init memory
-    instance->m_dataSegments.reserve(m_datas.size());
     for (size_t i = 0; i < m_datas.size(); i++) {
         Data* init = m_datas[i];
         instance->m_dataSegments[i] = DataSegment(init);
@@ -398,8 +407,6 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     ASSERT(tableIndex == numberOfTableTypes());
     ASSERT(memIndex == numberOfMemoryTypes());
     ASSERT(tagIndex == numberOfTagTypes());
-    ASSERT(m_datas.size() == instance->m_dataSegments.size());
-    ASSERT(m_elements.size() == instance->m_elementSegments.size());
 #endif
 
     if (m_seenStartAttribute) {

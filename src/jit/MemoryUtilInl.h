@@ -20,17 +20,17 @@ static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSiz
 {
     Instance* instance = args->instance;
     Memory* memory = instance->memory(args->memIndex);
-    DataSegment& sg = instance->dataSegment(args->segmentIndex);
+    DataSegment* sg = instance->dataSegment(args->segmentIndex);
 
     if (!memory->checkAccess(dstStart, srcSize)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
-    if (srcStart >= sg.sizeInByte() || srcStart + srcSize > sg.sizeInByte()) {
+    if (srcStart >= sg->sizeInByte() || srcStart + srcSize > sg->sizeInByte()) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
-    memory->initMemory(&sg, dstStart, srcStart, srcSize);
+    memory->initMemory(sg, dstStart, srcStart, srcSize);
     return ExecutionContext::NoError;
 }
 
@@ -156,8 +156,8 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
 static void dropData(uint32_t segmentIndex, Instance* instance)
 {
-    DataSegment& sg = instance->dataSegment(segmentIndex);
-    sg.drop();
+    DataSegment* sg = instance->dataSegment(segmentIndex);
+    sg->drop();
 }
 
 static void emitDataDrop(sljit_compiler* compiler, Instruction* instr)

@@ -227,8 +227,7 @@ public:
     }
     Result OnStructType(Index index, Index field_count, TypeMut *fields, GCTypeExtension* gc_ext) override {
         CHECK_RESULT(m_validator.OnStructType(GetLocation(), field_count, fields, gc_ext));
-        m_externalDelegate->OnStructType(index, field_count, fields, gc_ext);
-        return Result::Ok;
+        return m_externalDelegate->OnStructType(index, field_count, fields, gc_ext) ? Result::Ok : Result::Error;
     }
     Result OnArrayType(Index index, TypeMut field, GCTypeExtension* gc_ext) override {
         CHECK_RESULT(m_validator.OnArrayType(GetLocation(), field, gc_ext));
@@ -482,7 +481,6 @@ public:
         return Result::Ok;
     }
     Result OnOpcodeIndexIndex(Index value, Index value2) override {
-        abort();
         return Result::Ok;
     }
     Result OnOpcodeUint32(uint32_t value) override {
@@ -1425,7 +1423,9 @@ public:
     }
     Result OnArrayGetExpr(Opcode opcode, Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayGet(GetLocation(), opcode, Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayGetExpr(opcode, type_index);
         return Result::Ok;
     }
     Result OnArrayInitDataExpr(Index type_index, Index data_index) override
@@ -1440,32 +1440,44 @@ public:
     }
     Result OnArrayNewExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNew(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewExpr(type_index);
         return Result::Ok;
     }
     Result OnArrayNewDataExpr(Index type_index, Index data_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewData(GetLocation(), Var(type_index, GetLocation()), Var(data_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewDataExpr(type_index, data_index);
         return Result::Ok;
     }
     Result OnArrayNewDefaultExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewDefault(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewDefaultExpr(type_index);
         return Result::Ok;
     }
     Result OnArrayNewElemExpr(Index type_index, Index elem_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewElem(GetLocation(), Var(type_index, GetLocation()), Var(elem_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewElemExpr(type_index, elem_index);
         return Result::Ok;
     }
     Result OnArrayNewFixedExpr(Index type_index, Index count) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayNewFixed(GetLocation(), Var(type_index, GetLocation()), count));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayNewFixedExpr(type_index, count);
         return Result::Ok;
     }
     Result OnArraySetExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArraySet(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArraySetExpr(type_index);
         return Result::Ok;
     }
     Result OnBrOnCastExpr(Opcode opcode, Index depth, Type type1, Type type2) override
@@ -1508,22 +1520,30 @@ public:
     }
     Result OnStructGetExpr(Opcode opcode, Index type_index, Index field_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnStructGet(GetLocation(), opcode, Var(type_index, GetLocation()), Var(field_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnStructGetExpr(opcode, type_index, field_index);
         return Result::Ok;
     }
     Result OnStructNewExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnStructNew(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnStructNewExpr(type_index);
         return Result::Ok;
     }
     Result OnStructNewDefaultExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnStructNewDefault(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnStructNewDefaultExpr(type_index);
         return Result::Ok;
     }
     Result OnStructSetExpr(Index type_index, Index field_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnStructSet(GetLocation(), Var(type_index, GetLocation()), Var(field_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnStructSetExpr(type_index, field_index);
         return Result::Ok;
     }
     Result OnThrowRefExpr() override

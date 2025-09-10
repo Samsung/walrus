@@ -111,10 +111,18 @@ public:
         TernarySIMD,
         // Special type for initializing values from the stack
         StackInit,
-        // Garbage Collector Unary operations
+        // Garbage Collector unary operations
         GCUnary,
-        // Type casting operations
+        // Garbage Collector type casting operations
         GCCast,
+        // Garbage Collector array creation (e.g. ArrayNew)
+        GCArrayNew,
+        // Garbage Collector array getter/setter operators
+        GCArrayAccess,
+        // Garbage Collector StructNew and StructNewDefault
+        GCStructNew,
+        // Garbage Collector structure getter/setter operators
+        GCStructAccess,
         // Atomic memory operations (e.g. I32AtomicRmwAdd, I64AtomicRmw16OrU)
         Atomic,
         // Special types for thread synchronization operations
@@ -614,6 +622,8 @@ struct CompileContext {
     size_t globalsStart;
     size_t tableStart;
     size_t functionsStart;
+    size_t dataSegmentsStart;
+    size_t elementSegmentsStart;
     sljit_sw stackTmpStart;
     size_t nextTryBlock;
     size_t currentTryBlock;

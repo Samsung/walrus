@@ -23,7 +23,7 @@ static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize
     auto source = instance->elementSegment(args->segmentIndex);
 
     if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)table->size())
-        || UNLIKELY(!source.element() || (srcStart + srcSize) > source.element()->exprFunctions().size())) {
+        || UNLIKELY((srcStart + srcSize) > source->size())) {
         return ExecutionContext::OutOfBoundsTableAccessError;
     }
 
@@ -31,7 +31,7 @@ static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize
         return ExecutionContext::TypeMismatchError;
     }
 
-    table->initTable(instance, &source, dstStart, srcStart, srcSize);
+    table->initTable(source, dstStart, srcStart, srcSize);
     return ExecutionContext::NoError;
 }
 
@@ -79,7 +79,7 @@ static sljit_s32 growTable(void* ptr, uint32_t newSize, uint32_t tableIndex, Ins
 
 static void dropElement(uint32_t segmentIndex, Instance* instance)
 {
-    instance->elementSegment(segmentIndex).drop();
+    instance->elementSegment(segmentIndex)->drop();
 }
 
 static void emitElemDrop(sljit_compiler* compiler, Instruction* instr)
