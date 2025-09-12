@@ -25,6 +25,10 @@
 #include "runtime/Tag.h"
 #include "interpreter/ByteCode.h"
 
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif /* ENABLE_GC */
+
 namespace Walrus {
 
 class Instance;

@@ -20,12 +20,24 @@
 #include "runtime/Instance.h"
 #include "runtime/ObjectType.h"
 
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif /* ENABLE_GC */
+
 namespace Walrus {
 
 #ifndef NDEBUG
 size_t Extern::g_externCount;
 #endif
 FunctionType* Store::g_defaultFunctionTypes[Value::Type::NUM];
+
+Store::Store(Engine* engine)
+    : m_engine(engine)
+{
+#ifdef ENABLE_GC
+    GC_INIT();
+#endif /* ENABLE_GC */
+}
 
 Store::~Store()
 {
@@ -48,6 +60,11 @@ Store::~Store()
     }
 
     Store::finalize();
+
+#ifdef ENABLE_GC
+    GC_gcollect_and_unmap();
+    GC_invoke_finalizers();
+#endif /* ENABLE_GC */
 }
 
 void Store::finalize()
