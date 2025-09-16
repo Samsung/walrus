@@ -170,6 +170,7 @@ public:
     virtual void OnRefAsNonNullExpr() = 0;
     virtual void OnRefCastExpr(Type type) = 0;
     virtual void OnRefTestExpr(Type type) = 0;
+    virtual void OnBrOnCastExpr(Opcode opcode, Index depth, Type type) = 0;
     virtual void OnGCUnaryExpr(int opcode) = 0;
     virtual void OnArrayNewExpr(Index type_index) = 0;
     virtual void OnArrayNewDefaultExpr(Index type_index) = 0;

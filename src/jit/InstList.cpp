@@ -222,7 +222,8 @@ ExtendedInstruction* JITCompiler::appendExtended(ByteCode* byteCode, Instruction
 Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset)
 {
     ASSERT(opcode == ByteCode::JumpOpcode || opcode == ByteCode::JumpIfTrueOpcode || opcode == ByteCode::JumpIfFalseOpcode
-           || opcode == ByteCode::JumpIfNullOpcode || opcode == ByteCode::JumpIfNonNullOpcode);
+           || opcode == ByteCode::JumpIfNullOpcode || opcode == ByteCode::JumpIfNonNullOpcode
+           || opcode == ByteCode::JumpIfCastGenericOpcode || opcode == ByteCode::JumpIfCastDefinedOpcode);
     ASSERT(label != nullptr);
 
     ExtendedInstruction* branch;
