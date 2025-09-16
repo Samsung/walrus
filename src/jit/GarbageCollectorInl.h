@@ -90,15 +90,15 @@ static void emitGCUnary(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
-static void emitGCCast(sljit_compiler* compiler, Instruction* instr)
+static void emitGCCastGeneric(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
-    const CompositeType** typeInfo = nullptr;
     Value::Type genericType = Value::Void;
     uint8_t srcInfo = 0;
     Operand* operands = instr->operands();
     JITArg args[2];
-    bool isTest = false;
+    bool isTestOrCastFail = false;
+    Label* label = nullptr;
 
     args[0].set(operands);
 
@@ -109,24 +109,20 @@ static void emitGCCast(sljit_compiler* compiler, Instruction* instr)
         srcInfo = refCastGeneric->srcInfo();
         break;
     }
-    case ByteCode::RefCastDefinedOpcode: {
-        RefCastDefined* refCastDefined = reinterpret_cast<RefCastDefined*>(instr->byteCode());
-        typeInfo = refCastDefined->typeInfo();
-        srcInfo = refCastDefined->srcInfo();
-        break;
-    }
     case ByteCode::RefTestGenericOpcode: {
         RefTestGeneric* refTestGeneric = reinterpret_cast<RefTestGeneric*>(instr->byteCode());
         genericType = refTestGeneric->typeInfo();
         srcInfo = refTestGeneric->srcInfo();
-        isTest = true;
+        isTestOrCastFail = true;
+        args[1].set(operands + 1);
         break;
     }
-    case ByteCode::RefTestDefinedOpcode: {
-        RefTestDefined* refTestDefined = reinterpret_cast<RefTestDefined*>(instr->byteCode());
-        typeInfo = refTestDefined->typeInfo();
-        srcInfo = refTestDefined->srcInfo();
-        isTest = true;
+    case ByteCode::JumpIfCastGenericOpcode: {
+        JumpIfCastGeneric* jumpIfCastGeneric = reinterpret_cast<JumpIfCastGeneric*>(instr->byteCode());
+        genericType = jumpIfCastGeneric->typeInfo();
+        srcInfo = jumpIfCastGeneric->srcInfo();
+        label = instr->asExtended()->value().targetLabel;
+        isTestOrCastFail = (srcInfo & JumpIfCastGeneric::IsCastFail) != 0;
         break;
     }
     default:
@@ -136,17 +132,23 @@ static void emitGCCast(sljit_compiler* compiler, Instruction* instr)
 
     // The code has specialzed cases for many checks.
     if (genericType == Value::AnyRef) {
-        if ((srcInfo & RefCastGeneric::IsNullable) != 0) {
+        if ((srcInfo & JumpIfCastGeneric::IsNullable) != 0 || (srcInfo & JumpIfCastGeneric::IsSrcNullable) == 0) {
             // Everything matches to this case. Redundant.
-            if (isTest) {
+            if (label != nullptr) {
+                if (!isTestOrCastFail) {
+                    label->jumpFrom(sljit_emit_jump(compiler, SLJIT_JUMP));
+                }
+            } else if (isTestOrCastFail) {
                 sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_IMM, 1);
             }
             return;
         }
 
         // Null check.
-        if (!isTest) {
-            context->appendTrapJump(ExecutionContext::NullReferenceError,
+        if (label != nullptr) {
+            label->jumpFrom(sljit_emit_cmp(compiler, isTestOrCastFail ? SLJIT_EQUAL : SLJIT_NOT_EQUAL, args[0].arg, args[0].argw, SLJIT_IMM, 0));
+        } else if (!isTestOrCastFail) {
+            context->appendTrapJump(ExecutionContext::CastFailureError,
                                     sljit_emit_cmp(compiler, SLJIT_EQUAL, args[0].arg, args[0].argw, SLJIT_IMM, 0));
         } else {
             sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, args[0].arg, args[0].argw, SLJIT_IMM, 0);
@@ -155,11 +157,41 @@ static void emitGCCast(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
+    if (genericType == Value::NoAnyRef) {
+        if ((srcInfo & JumpIfCastGeneric::IsNullable) == 0 || (srcInfo & JumpIfCastGeneric::IsSrcNullable) == 0) {
+            // Nothing matches to this case. Redundant.
+            if (label != nullptr) {
+                if (isTestOrCastFail) {
+                    label->jumpFrom(sljit_emit_jump(compiler, SLJIT_JUMP));
+                }
+            } else if (!isTestOrCastFail) {
+                context->appendTrapJump(ExecutionContext::CastFailureError, sljit_emit_jump(compiler, SLJIT_JUMP));
+            } else {
+                sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_IMM, 0);
+            }
+            return;
+        }
+
+        // Null check.
+        if (label != nullptr) {
+            label->jumpFrom(sljit_emit_cmp(compiler, isTestOrCastFail ? SLJIT_NOT_EQUAL : SLJIT_EQUAL, args[0].arg, args[0].argw, SLJIT_IMM, 0));
+        } else if (!isTestOrCastFail) {
+            context->appendTrapJump(ExecutionContext::CastFailureError,
+                                    sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, args[0].arg, args[0].argw, SLJIT_IMM, 0));
+        } else {
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, args[0].arg, args[0].argw, SLJIT_IMM, 0);
+            sljit_emit_op_flags(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_EQUAL);
+        }
+        return;
+    }
+
     if (genericType == Value::I31Ref) {
-        if ((srcInfo & RefCastGeneric::IsNullable) == 0) {
+        if ((srcInfo & JumpIfCastGeneric::IsNullable) == 0) {
             sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, args[0].arg, args[0].argw, SLJIT_IMM, static_cast<sljit_sw>(Value::RefI31));
 
-            if (!isTest) {
+            if (label != nullptr) {
+                label->jumpFrom(sljit_emit_jump(compiler, isTestOrCastFail ? SLJIT_ZERO : SLJIT_NOT_ZERO));
+            } else if (!isTestOrCastFail) {
                 context->appendTrapJump(ExecutionContext::CastFailureError, sljit_emit_jump(compiler, SLJIT_ZERO));
             } else {
                 sljit_emit_op_flags(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_NOT_ZERO);
@@ -169,7 +201,9 @@ static void emitGCCast(sljit_compiler* compiler, Instruction* instr)
 
         sljit_emit_op2(compiler, SLJIT_ROTR, SLJIT_TMP_DEST_REG, 0, args[0].arg, args[0].argw, SLJIT_IMM, 1);
 
-        if (!isTest) {
+        if (label != nullptr) {
+            label->jumpFrom(sljit_emit_cmp(compiler, isTestOrCastFail ? SLJIT_SIG_GREATER : SLJIT_SIG_LESS_EQUAL, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0));
+        } else if (!isTestOrCastFail) {
             context->appendTrapJump(ExecutionContext::CastFailureError, sljit_emit_cmp(compiler, SLJIT_SIG_GREATER, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0));
         } else {
             sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_SIG_LESS_EQUAL, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0);
@@ -178,9 +212,250 @@ static void emitGCCast(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    // TODO: Unimplemented cases.
-    SLJIT_UNUSED_ARG(typeInfo);
-    abort();
+    sljit_s32 srcReg = GET_SOURCE_REG(args[0].arg, SLJIT_TMP_DEST_REG);
+    MOVE_TO_REG(compiler, SLJIT_MOV, srcReg, args[0].arg, args[0].argw);
+    sljit_sw kind = static_cast<sljit_sw>((genericType == Value::StructRef) ? Object::StructKind : Object::ArrayKind);
+
+    COMPILE_ASSERT(Object::StructKind == 1 && Object::ArrayKind == 2, "Invalid GC kind constants");
+
+    if ((srcInfo & (JumpIfCastGeneric::IsSrcNullable | JumpIfCastGeneric::IsSrcTagged)) == 0) {
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(srcReg), JITFieldAccessor::objectTypeInfo());
+        if (label != nullptr) {
+            label->jumpFrom(sljit_emit_cmp(compiler, isTestOrCastFail ? SLJIT_NOT_EQUAL : SLJIT_EQUAL, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind));
+        } else if (!isTestOrCastFail) {
+            context->appendTrapJump(ExecutionContext::CastFailureError, sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind));
+        } else {
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind);
+            sljit_emit_op_flags(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_EQUAL);
+        }
+        return;
+    }
+
+    if ((srcInfo & JumpIfCastGeneric::IsNullable) == 0) {
+        sljit_jump* jump = nullptr;
+        if (srcReg != SLJIT_TMP_DEST_REG && label == nullptr && isTestOrCastFail
+            && (srcInfo & (JumpIfCastGeneric::IsSrcNullable | JumpIfCastGeneric::IsSrcTagged)) != (JumpIfCastGeneric::IsSrcNullable | JumpIfCastGeneric::IsSrcTagged)) {
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, srcReg, 0);
+            srcReg = SLJIT_TMP_DEST_REG;
+        }
+
+        if ((srcInfo & JumpIfCastGeneric::IsSrcNullable) != 0) {
+            if ((srcInfo & JumpIfCastGeneric::IsSrcTagged) != 0) {
+                sljit_emit_op2(compiler, SLJIT_ROTR, SLJIT_TMP_DEST_REG, 0, srcReg, 0, SLJIT_IMM, 1);
+                jump = sljit_emit_cmp(compiler, SLJIT_SIG_LESS_EQUAL, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0);
+                sljit_emit_op2(compiler, SLJIT_SHL, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 1);
+                srcReg = SLJIT_TMP_DEST_REG;
+            } else {
+                jump = sljit_emit_cmp(compiler, SLJIT_EQUAL, srcReg, 0, SLJIT_IMM, 0);
+            }
+        } else {
+            ASSERT((srcInfo & JumpIfCastGeneric::IsSrcTagged) != 0);
+            sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, srcReg, 0, SLJIT_IMM, static_cast<sljit_sw>(Value::RefI31));
+            jump = sljit_emit_jump(compiler, SLJIT_NOT_ZERO);
+        }
+
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(srcReg), JITFieldAccessor::objectTypeInfo());
+
+        if (label != nullptr) {
+            label->jumpFrom(sljit_emit_cmp(compiler, isTestOrCastFail ? SLJIT_NOT_EQUAL : SLJIT_EQUAL, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind));
+            if (isTestOrCastFail) {
+                label->jumpFrom(jump);
+            } else {
+                sljit_set_label(jump, sljit_emit_label(compiler));
+            }
+        } else if (!isTestOrCastFail) {
+            context->appendTrapJump(ExecutionContext::CastFailureError, jump);
+            context->appendTrapJump(ExecutionContext::CastFailureError, sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind));
+        } else {
+            ASSERT(srcReg == SLJIT_TMP_DEST_REG);
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)));
+            sljit_set_label(jump, sljit_emit_label(compiler));
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, kind);
+            sljit_emit_op_flags(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_EQUAL);
+        }
+        return;
+    }
+
+    ASSERT((srcInfo & JumpIfCastGeneric::IsSrcNullable) != 0);
+
+    if (label == nullptr && isTestOrCastFail) {
+        sljit_jump* jump = nullptr;
+
+        if ((srcInfo & JumpIfCastGeneric::IsSrcTagged) != 0) {
+            sljit_emit_op2(compiler, SLJIT_ROTR, SLJIT_TMP_DEST_REG, 0, srcReg, 0, SLJIT_IMM, 1);
+            jump = sljit_emit_cmp(compiler, SLJIT_SIG_LESS_EQUAL, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0);
+            sljit_emit_op2(compiler, SLJIT_SHL, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 1);
+        } else {
+            if (srcReg != SLJIT_TMP_DEST_REG) {
+                sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, srcReg, 0);
+            }
+            jump = sljit_emit_cmp(compiler, SLJIT_EQUAL, srcReg, 0, SLJIT_IMM, 0);
+        }
+
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_TMP_DEST_REG), JITFieldAccessor::objectTypeInfo());
+        sljit_set_label(jump, sljit_emit_label(compiler));
+
+        if (genericType == Value::StructRef) {
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)));
+            sljit_set_label(jump, sljit_emit_label(compiler));
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_LESS_EQUAL, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, kind);
+            sljit_emit_op_flags(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_LESS_EQUAL);
+        } else {
+            sljit_emit_op2(compiler, SLJIT_SUB, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind);
+            sljit_set_label(jump, sljit_emit_label(compiler));
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0);
+            sljit_emit_op_flags(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_EQUAL);
+        }
+        return;
+    }
+
+    sljit_jump* jumpIfZero = sljit_emit_cmp(compiler, SLJIT_EQUAL, srcReg, 0, SLJIT_IMM, 0);
+    sljit_jump* jumpIfTagged = nullptr;
+
+    if ((srcInfo & JumpIfCastGeneric::IsSrcTagged) != 0) {
+        sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, srcReg, 0, SLJIT_IMM, static_cast<sljit_sw>(Value::RefI31));
+        jumpIfTagged = sljit_emit_jump(compiler, SLJIT_NOT_ZERO);
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(srcReg), JITFieldAccessor::objectTypeInfo());
+
+    if (label != nullptr) {
+        label->jumpFrom(sljit_emit_cmp(compiler, isTestOrCastFail ? SLJIT_NOT_EQUAL : SLJIT_EQUAL, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind));
+        if (isTestOrCastFail) {
+            sljit_set_label(jumpIfZero, sljit_emit_label(compiler));
+            label->jumpFrom(jumpIfTagged);
+        } else {
+            label->jumpFrom(jumpIfZero);
+            sljit_set_label(jumpIfTagged, sljit_emit_label(compiler));
+        }
+    } else {
+        if ((srcInfo & JumpIfCastGeneric::IsSrcTagged) != 0) {
+            context->appendTrapJump(ExecutionContext::CastFailureError, jumpIfTagged);
+        }
+        context->appendTrapJump(ExecutionContext::CastFailureError, sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_MEM1(SLJIT_TMP_DEST_REG), -static_cast<sljit_sw>(sizeof(sljit_up)), SLJIT_IMM, kind));
+        sljit_set_label(jumpIfZero, sljit_emit_label(compiler));
+    }
+}
+
+static void emitGCCastDefined(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    const CompositeType** typeInfo = nullptr;
+    uint8_t srcInfo = 0;
+    Operand* operands = instr->operands();
+    JITArg args[2];
+    bool isTestOrCastFail = false;
+    Label* label = nullptr;
+
+    args[0].set(operands);
+
+    switch (instr->opcode()) {
+    case ByteCode::RefCastDefinedOpcode: {
+        RefCastDefined* refCastDefined = reinterpret_cast<RefCastDefined*>(instr->byteCode());
+        typeInfo = refCastDefined->typeInfo();
+        srcInfo = refCastDefined->srcInfo();
+        break;
+    }
+    case ByteCode::RefTestDefinedOpcode: {
+        RefTestDefined* refTestDefined = reinterpret_cast<RefTestDefined*>(instr->byteCode());
+        typeInfo = refTestDefined->typeInfo();
+        srcInfo = refTestDefined->srcInfo();
+        isTestOrCastFail = true;
+        args[1].set(operands + 1);
+        break;
+    }
+    case ByteCode::JumpIfCastDefinedOpcode: {
+        JumpIfCastDefined* jumpIfCastDefined = reinterpret_cast<JumpIfCastDefined*>(instr->byteCode());
+        typeInfo = jumpIfCastDefined->typeInfo();
+        srcInfo = jumpIfCastDefined->srcInfo();
+        label = instr->asExtended()->value().targetLabel;
+        isTestOrCastFail = (srcInfo & JumpIfCastGeneric::IsCastFail) != 0;
+        break;
+    }
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    }
+
+    sljit_s32 tmpReg = instr->requiredReg(0);
+    sljit_s32 srcReg;
+    sljit_sw typeIndex = reinterpret_cast<sljit_sw>(typeInfo[0]);
+    sljit_sw typeValue = reinterpret_cast<sljit_sw>(typeInfo[typeIndex]);
+
+    if (label == nullptr && isTestOrCastFail) {
+        srcReg = tmpReg;
+    } else {
+        srcReg = GET_SOURCE_REG(args[0].arg, tmpReg);
+    }
+
+    MOVE_TO_REG(compiler, SLJIT_MOV, srcReg, args[0].arg, args[0].argw);
+
+    sljit_jump* jumpIfZero = nullptr;
+    sljit_jump* jumpIfNotObject = nullptr;
+
+    if ((srcInfo & JumpIfCastGeneric::IsNullable) != 0) {
+        ASSERT((srcInfo & JumpIfCastGeneric::IsSrcNullable) != 0);
+        jumpIfZero = sljit_emit_cmp(compiler, SLJIT_EQUAL, srcReg, 0, SLJIT_IMM, 0);
+        if ((srcInfo & JumpIfCastGeneric::IsSrcTagged) != 0) {
+            sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, srcReg, 0, SLJIT_IMM, static_cast<sljit_sw>(Value::RefI31));
+            jumpIfNotObject = sljit_emit_jump(compiler, SLJIT_NOT_ZERO);
+        }
+    } else if ((srcInfo & JumpIfCastGeneric::IsSrcTagged) != 0) {
+        if ((srcInfo & JumpIfCastGeneric::IsSrcNullable) != 0) {
+            sljit_emit_op2(compiler, SLJIT_ROTR, SLJIT_TMP_DEST_REG, 0, srcReg, 0, SLJIT_IMM, 1);
+            jumpIfNotObject = sljit_emit_cmp(compiler, SLJIT_SIG_LESS_EQUAL, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0);
+        } else {
+            sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, srcReg, 0, SLJIT_IMM, static_cast<sljit_sw>(Value::RefI31));
+            jumpIfNotObject = sljit_emit_jump(compiler, SLJIT_NOT_ZERO);
+        }
+    } else if ((srcInfo & JumpIfCastGeneric::IsSrcNullable) != 0) {
+        jumpIfNotObject = sljit_emit_cmp(compiler, SLJIT_EQUAL, srcReg, 0, SLJIT_IMM, 0);
+    }
+
+    sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(srcReg), JITFieldAccessor::objectTypeInfo());
+    sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(tmpReg), 0);
+    sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_GREATER, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, typeIndex);
+    sljit_emit_select(compiler, SLJIT_GREATER, SLJIT_TMP_DEST_REG, SLJIT_IMM, typeIndex, SLJIT_TMP_DEST_REG);
+    sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM2(tmpReg, SLJIT_TMP_DEST_REG), SLJIT_POINTER_SHIFT);
+
+    if (label != nullptr) {
+        label->jumpFrom(sljit_emit_cmp(compiler, isTestOrCastFail ? SLJIT_NOT_EQUAL : SLJIT_EQUAL, tmpReg, 0, SLJIT_IMM, typeValue));
+
+        if ((srcInfo & JumpIfCastGeneric::IsNullable) != 0) {
+            if (isTestOrCastFail) {
+                sljit_set_label(jumpIfZero, sljit_emit_label(compiler));
+            } else {
+                label->jumpFrom(jumpIfZero);
+            }
+        }
+
+        if (jumpIfNotObject != nullptr) {
+            if (isTestOrCastFail) {
+                label->jumpFrom(jumpIfNotObject);
+            } else {
+                sljit_set_label(jumpIfNotObject, sljit_emit_label(compiler));
+            }
+        }
+    } else if (!isTestOrCastFail) {
+        if (jumpIfNotObject != nullptr) {
+            context->appendTrapJump(ExecutionContext::CastFailureError, jumpIfNotObject);
+        }
+        context->appendTrapJump(ExecutionContext::CastFailureError, sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, tmpReg, 0, SLJIT_IMM, typeValue));
+        if ((srcInfo & JumpIfCastGeneric::IsNullable) != 0) {
+            sljit_set_label(jumpIfZero, sljit_emit_label(compiler));
+        }
+    } else {
+        if ((srcInfo & JumpIfCastGeneric::IsNullable) != 0) {
+            sljit_emit_op2(compiler, SLJIT_SUB, tmpReg, 0, tmpReg, 0, SLJIT_IMM, typeValue);
+            sljit_set_label(jumpIfZero, sljit_emit_label(compiler));
+            typeValue = 0;
+        }
+        if (jumpIfNotObject != nullptr) {
+            sljit_set_label(jumpIfNotObject, sljit_emit_label(compiler));
+        }
+        sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, tmpReg, 0, SLJIT_IMM, typeValue);
+        sljit_emit_op_flags(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_EQUAL);
+    }
 }
 
 static void emitGCStore(sljit_compiler* compiler, ByteCodeStackOffset stackOffset, Operand* param, Value::Type type)

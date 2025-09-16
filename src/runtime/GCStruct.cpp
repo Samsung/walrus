@@ -73,7 +73,9 @@ GCStruct* GCStruct::structNewDefault(const StructType* type)
     new (result) GCStruct(type);
 
     const VectorWithFixedSize<uint32_t, std::allocator<uint32_t>>& fieldOffsets = type->fieldOffsets();
-    memset(reinterpret_cast<uint8_t*>(result) + fieldOffsets[0], 0, type->structSize() - fieldOffsets[0]);
+    if (fieldOffsets.size() > 0) {
+        memset(reinterpret_cast<uint8_t*>(result) + fieldOffsets[0], 0, type->structSize() - fieldOffsets[0]);
+    }
 
     TypeStore::AddRef(type);
     GC_REGISTER_FINALIZER_NO_ORDER(result, structFinalizer, type->subTypeList(), nullptr, nullptr);

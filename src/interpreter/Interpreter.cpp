@@ -1158,6 +1158,58 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(JumpIfCastGeneric)
+        :
+    {
+        JumpIfCastGeneric* code = (JumpIfCastGeneric*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        bool castSuccessful = false;
+
+        if (UNLIKELY(Value::isNull(ptr))) {
+            castSuccessful = (code->srcInfo() & JumpIfCastGeneric::IsNullable) != 0;
+        } else {
+            castSuccessful = testRefGeneric(ptr, code->typeInfo());
+        }
+
+        if ((code->srcInfo() & JumpIfCastGeneric::IsCastFail) != 0) {
+            castSuccessful = !castSuccessful;
+        }
+
+        if (castSuccessful) {
+            programCounter += code->offset();
+        } else {
+            ADD_PROGRAM_COUNTER(JumpIfCastGeneric);
+        }
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(JumpIfCastDefined)
+        :
+    {
+        JumpIfCastDefined* code = (JumpIfCastDefined*)programCounter;
+
+        void* ptr = readValue<void*>(bp, code->srcOffset());
+        bool castSuccessful = false;
+
+        if (UNLIKELY(Value::isNull(ptr))) {
+            castSuccessful = (code->srcInfo() & JumpIfCastGeneric::IsNullable) != 0;
+        } else {
+            castSuccessful = testRefDefined(ptr, code->typeInfo());
+        }
+
+        if ((code->srcInfo() & JumpIfCastGeneric::IsCastFail) != 0) {
+            castSuccessful = !castSuccessful;
+        }
+
+        if (castSuccessful) {
+            programCounter += code->offset();
+        } else {
+            ADD_PROGRAM_COUNTER(JumpIfCastDefined);
+        }
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(Call)
         :
     {
@@ -1705,14 +1757,14 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            if (!(code->srcInfo() & Walrus::RefCastGeneric::IsNullable)) {
-                Trap::throwException(state, "null reference");
+            if (!(code->srcInfo() & JumpIfCastGeneric::IsNullable)) {
+                Trap::throwException(state, "cast failure");
             }
         } else if (!testRefGeneric(ptr, code->typeInfo())) {
             Trap::throwException(state, "cast failure");
         }
 
-        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        ADD_PROGRAM_COUNTER(RefCastGeneric);
         NEXT_INSTRUCTION();
     }
 
@@ -1723,14 +1775,14 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            if (!(code->srcInfo() & Walrus::RefCastGeneric::IsNullable)) {
-                Trap::throwException(state, "null reference");
+            if (!(code->srcInfo() & JumpIfCastGeneric::IsNullable)) {
+                Trap::throwException(state, "cast failure");
             }
         } else if (!testRefDefined(ptr, code->typeInfo())) {
             Trap::throwException(state, "cast failure");
         }
 
-        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        ADD_PROGRAM_COUNTER(RefCastDefined);
         NEXT_INSTRUCTION();
     }
 
@@ -1742,13 +1794,13 @@ NextInstruction:
         void* ptr = readValue<void*>(bp, code->srcOffset());
         int32_t result;
         if (UNLIKELY(Value::isNull(ptr))) {
-            result = (code->srcInfo() & Walrus::RefCastGeneric::IsNullable) ? 1 : 0;
+            result = (code->srcInfo() & JumpIfCastGeneric::IsNullable) ? 1 : 0;
         } else {
             result = static_cast<int32_t>(testRefGeneric(ptr, code->typeInfo()));
         }
         writeValue<int32_t>(bp, code->dstOffset(), result);
 
-        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        ADD_PROGRAM_COUNTER(RefTestGeneric);
         NEXT_INSTRUCTION();
     }
 
@@ -1760,13 +1812,13 @@ NextInstruction:
         void* ptr = readValue<void*>(bp, code->srcOffset());
         int32_t result;
         if (UNLIKELY(Value::isNull(ptr))) {
-            result = (code->srcInfo() & Walrus::RefCastGeneric::IsNullable) ? 1 : 0;
+            result = (code->srcInfo() & JumpIfCastGeneric::IsNullable) ? 1 : 0;
         } else {
             result = static_cast<int32_t>(testRefDefined(ptr, code->typeInfo()));
         }
         writeValue<int32_t>(bp, code->dstOffset(), result);
 
-        ADD_PROGRAM_COUNTER(RefAsNonNull);
+        ADD_PROGRAM_COUNTER(RefTestDefined);
         NEXT_INSTRUCTION();
     }
 
@@ -2157,14 +2209,18 @@ NEVER_INLINE bool Interpreter::testRefGeneric(void* refPtr, Value::Type type)
 {
     ASSERT(!Value::isNull(refPtr));
 
-    if (type == Value::AnyRef) {
-        return true;
+    if (UNLIKELY(type == Value::AnyRef || type == Value::NoAnyRef)) {
+        return type == Value::AnyRef;
     }
 
     ASSERT(type == Value::I31Ref || type == Value::StructRef || type == Value::ArrayRef);
 
     if (Value::isI31Value(refPtr)) {
         return type == Value::I31Ref;
+    }
+
+    if (type == Value::I31Ref) {
+        return false;
     }
 
     Object::Kind kind = reinterpret_cast<Object*>(refPtr)->kind();

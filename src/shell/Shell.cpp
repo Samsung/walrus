@@ -120,6 +120,39 @@ static void printF64(double v)
     printf("%s : f64\n", formatDecmialString(ss.str()).c_str());
 }
 
+DEFINE_GLOBAL_TYPE_INFO(externalValueTypeInfo, ExternalValueKind);
+
+class ExternalValue : public Object {
+public:
+    ExternalValue(size_t value)
+        : Object(GET_GLOBAL_TYPE_INFO(externalValueTypeInfo))
+        , m_value(value)
+    {
+    }
+
+    size_t value() const
+    {
+        return m_value;
+    }
+
+private:
+    size_t m_value;
+};
+
+static std::vector<ExternalValue*> externalValues;
+
+static ExternalValue* findExternalValue(size_t value)
+{
+    for (size_t i = 0; i < externalValues.size(); i++) {
+        if (externalValues[i]->value() == value) {
+            return externalValues[i];
+        }
+    }
+
+    externalValues.push_back(new ExternalValue(value));
+    return externalValues.back();
+}
+
 static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
@@ -382,8 +415,7 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         if (c.ref_bits() == wabt::Const::kRefNullBits) {
             return Walrus::Value(Walrus::Value::NullExternRef, Walrus::Value::Null);
         }
-        // Add one similar to wabt interpreter.
-        return Walrus::Value(Walrus::Value::NullExternRef, c.ref_bits() + 1, Walrus::Value::Force);
+        return Walrus::Value(Walrus::Value::NullExternRef, findExternalValue(c.ref_bits()));
     }
     default:
         printf("Error: unknown value type during converting wabt::Const to wabt::Value\n");
@@ -502,8 +534,13 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
             break;
         case wabt::Type::NullExternRef:
         case wabt::Type::ExternRef:
-            sameRefType = vType == Walrus::Value::ExternRef || vType == Walrus::Value::NoExternRef;
-            break;
+            if (Value::isNull(v.asReference())) {
+                return c.ref_bits() == wabt::Const::kRefNullBits;
+            }
+
+            return (vType == Walrus::Value::ExternRef || vType == Walrus::Value::NoExternRef)
+                && (v.asObject()->kind() == Object::ExternalValueKind)
+                && (reinterpret_cast<ExternalValue*>(v.asReference())->value() == c.ref_bits());
         case wabt::Type::AnyRef:
             sameRefType = (vType == Walrus::Value::AnyRef || vType == Walrus::Value::NoAnyRef
                            || vType == Walrus::Value::EqRef || vType == Walrus::Value::I31Ref

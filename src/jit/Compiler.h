@@ -113,8 +113,10 @@ public:
         StackInit,
         // Garbage Collector unary operations
         GCUnary,
-        // Garbage Collector type casting operations
-        GCCast,
+        // Garbage Collector generic type casting operations
+        GCCastGeneric,
+        // Garbage Collector defined type casting operations
+        GCCastDefined,
         // Garbage Collector array creation (e.g. ArrayNew)
         GCArrayNew,
         // Garbage Collector array getter/setter operators
@@ -367,7 +369,8 @@ protected:
     explicit ExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands)
         : Instruction(byteCode, group, opcode, paramCount, operands)
     {
-        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackInit);
+        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackInit
+               || opcode == ByteCode::JumpIfCastGenericOpcode || opcode == ByteCode::JumpIfCastDefinedOpcode);
         m_value.targetLabel = nullptr;
     }
 
