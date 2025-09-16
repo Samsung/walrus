@@ -1969,7 +1969,7 @@ public:
     }
 
     template <typename JumpType, typename JumpTypeInverted, WASMOpcode opcode>
-    void GenerateConditionalBranch(Index depth, size_t stackPos)
+    size_t GenerateConditionalBranch(Index depth, size_t stackPos)
     {
         if (m_blockInfo.size() == depth) {
             // this case acts like return
@@ -1980,7 +1980,7 @@ public:
             }
             generateEndCode();
             m_currentFunction->peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
-            return;
+            return pos;
         }
 
         auto& blockInfo = findBlockInfoInBr(depth);
@@ -1997,7 +1997,10 @@ public:
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
             m_currentFunction->peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
-        } else if (blockInfo.m_blockType == BlockInfo::Loop && blockInfo.m_returnValueType.IsIndex() && getFunctionType(blockInfo.m_returnValueType)->param().size()) {
+            return pos;
+        }
+
+        if (blockInfo.m_blockType == BlockInfo::Loop && blockInfo.m_returnValueType.IsIndex() && getFunctionType(blockInfo.m_returnValueType)->param().size()) {
             size_t pos = m_currentFunction->currentByteCodeSize();
             pushByteCode(JumpTypeInverted(stackPos), opcode);
             auto ft = getFunctionType(blockInfo.m_returnValueType);
@@ -2016,14 +2019,18 @@ public:
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
             m_currentFunction->peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
-        } else {
-            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
-            if (blockInfo.m_blockType != BlockInfo::Loop) {
-                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
-                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentFunction->currentByteCodeSize() });
-            }
-            pushByteCode(JumpType(stackPos, offset), opcode);
+            return pos;
         }
+
+        auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+        if (blockInfo.m_blockType != BlockInfo::Loop) {
+            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentFunction->currentByteCodeSize() });
+        }
+
+        size_t pos = m_currentFunction->currentByteCodeSize();
+        pushByteCode(JumpType(stackPos, offset), opcode);
+        return pos;
     }
 
     virtual void OnBrIfExpr(Index depth) override
@@ -2569,24 +2576,35 @@ public:
         VMStackInfo& info = peekVMStackInfo();
         uint8_t srcInfo = 0;
 
-        if (Walrus::Value::isNullableRefType(info.valueType())
-            && Walrus::Value::isNullableRefType(targetType)) {
-            srcInfo |= Walrus::RefCastGeneric::IsNullable;
+        if (Walrus::Value::isNullableRefType(info.valueType())) {
+            srcInfo |= Walrus::JumpIfCastGeneric::IsSrcNullable;
+
+            if (Walrus::Value::isNullableRefType(targetType)) {
+                srcInfo |= Walrus::JumpIfCastGeneric::IsNullable;
+            }
         }
 
         if (Walrus::Value::isTaggedRefType(info.valueType())) {
-            srcInfo |= Walrus::RefCastGeneric::IsSrcTagged;
+            srcInfo |= Walrus::JumpIfCastGeneric::IsSrcTagged;
         }
 
         targetType = Walrus::Value::toNonNullableRefType(targetType);
 
-        // Casting to other generic types are always
-        // successful if the validator accepts them.
-        if (targetType != Walrus::Value::I31Ref
-            && targetType != Walrus::Value::StructRef
-            && targetType != Walrus::Value::ArrayRef) {
-            // The casting is always successful in the other cases.
+        switch (targetType) {
+        case Walrus::Value::I31Ref:
+        case Walrus::Value::StructRef:
+        case Walrus::Value::ArrayRef:
+            break;
+        case Walrus::Value::NoAnyRef:
+        case Walrus::Value::NoExternRef:
+        case Walrus::Value::NoFuncRef:
+            targetType = Walrus::Value::NoAnyRef;
+            break;
+        default:
+            // Casting to other generic types are always
+            // successful if the validator accepts them.
             targetType = Walrus::Value::AnyRef;
+            break;
         }
 
         return srcInfo;
@@ -2611,16 +2629,64 @@ public:
     virtual void OnRefTestExpr(Type type) override
     {
         Walrus::Type targetType = toRefValueKind(type, &m_result);
+        uint8_t srcInfo = computeSrcInfo(targetType);
+
         auto src = popVMStack();
         auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
-
-        uint8_t srcInfo = computeSrcInfo(targetType);
 
         if (type.IsReferenceWithIndex()) {
             const Walrus::CompositeType** typeInfo = m_result.m_compositeTypes[type.GetReferenceIndex()]->subTypeList();
             pushByteCode(Walrus::RefTestDefined(src, dst, typeInfo, srcInfo), WASMOpcode::RefTestOpcode);
         } else {
             pushByteCode(Walrus::RefTestGeneric(src, dst, targetType, srcInfo), WASMOpcode::RefTestOpcode);
+        }
+    }
+
+    // Dummy classes which inverts the fail bit for GenerateConditionalBranch template.
+    class JumpIfCastFailGeneric : public Walrus::JumpIfCastGeneric {
+    public:
+        JumpIfCastFailGeneric(Walrus::ByteCodeStackOffset srcOffset, int32_t offset = 0)
+            : JumpIfCastGeneric(srcOffset, offset)
+        {
+            init(Walrus::Value::Void, Walrus::JumpIfCastGeneric::IsCastFail);
+        }
+    };
+
+    class JumpIfCastFailDefined : public Walrus::JumpIfCastDefined {
+    public:
+        JumpIfCastFailDefined(Walrus::ByteCodeStackOffset srcOffset, int32_t offset = 0)
+            : JumpIfCastDefined(srcOffset, offset)
+        {
+            init(nullptr, Walrus::JumpIfCastGeneric::IsCastFail);
+        }
+    };
+
+    virtual void OnBrOnCastExpr(Opcode opcode, Index depth, Type type) override
+    {
+        Walrus::Type targetType = toRefValueKind(type, &m_result);
+
+        m_preprocessData.seenBranch();
+        ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
+
+        VMStackInfo& info = peekVMStackInfo();
+        uint8_t srcInfo = computeSrcInfo(targetType);
+
+        if (opcode == Opcode::BrOnCastFail) {
+            // Inverted.
+            srcInfo |= Walrus::JumpIfCastGeneric::IsCastFail;
+        }
+
+        if (type.IsReferenceWithIndex()) {
+            size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastDefined, JumpIfCastFailDefined, WASMOpcode::BrOnCastOpcode>(depth, info.position());
+            const Walrus::CompositeType** typeInfo = m_result.m_compositeTypes[type.GetReferenceIndex()]->subTypeList();
+            m_currentFunction->peekByteCode<Walrus::JumpIfCastDefined>(pos)->init(typeInfo, srcInfo);
+        } else {
+            size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastGeneric, JumpIfCastFailGeneric, WASMOpcode::BrOnCastOpcode>(depth, info.position());
+            m_currentFunction->peekByteCode<Walrus::JumpIfCastGeneric>(pos)->init(targetType, srcInfo);
+        }
+
+        if (opcode == Opcode::BrOnCastFail) {
+            info.refCast(targetType);
         }
     }
 
@@ -2886,7 +2952,7 @@ public:
                     auto ft = getFunctionType(blockInfo.m_returnValueType);
                     const auto& param = ft->param();
                     for (size_t i = 0; i < param.size(); i++) {
-                        ASSERT(peekVMStackValueType() == param[param.size() - i - 1]);
+                        ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(param[param.size() - i - 1]));
                         popVMStack();
                     }
 

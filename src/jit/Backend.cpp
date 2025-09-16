@@ -195,6 +195,11 @@ public:
         return offsetof(Table, m_elements);
     }
 
+    static sljit_sw objectTypeInfo()
+    {
+        return offsetof(Object, m_typeInfo);
+    }
+
     static sljit_sw arrayLength()
     {
         return offsetof(GCArray, m_length);
@@ -741,11 +746,19 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
 {
     sljit_jump* jump;
 
-    if (instr->opcode() == ByteCode::JumpOpcode) {
+    switch (instr->opcode()) {
+    case ByteCode::JumpOpcode: {
         jump = sljit_emit_jump(compiler, SLJIT_JUMP);
-
         CompileContext::get(compiler)->emitSlowCases(compiler);
-    } else {
+        break;
+    }
+    case ByteCode::JumpIfCastGenericOpcode:
+        emitGCCastGeneric(compiler, instr);
+        return;
+    case ByteCode::JumpIfCastDefinedOpcode:
+        emitGCCastDefined(compiler, instr);
+        return;
+    default: {
         JITArg src(instr->operands());
 
         sljit_s32 type = (instr->opcode() == ByteCode::JumpIfTrueOpcode || instr->opcode() == ByteCode::JumpIfNonNullOpcode) ? SLJIT_NOT_EQUAL : SLJIT_EQUAL;
@@ -755,6 +768,8 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
         }
 
         jump = sljit_emit_cmp(compiler, type, src.arg, src.argw, SLJIT_IMM, 0);
+        break;
+    }
     }
 
     instr->asExtended()->value().targetLabel->jumpFrom(jump);
@@ -1284,8 +1299,12 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             emitGCUnary(m_compiler, item->asInstruction());
             break;
         }
-        case Instruction::GCCast: {
-            emitGCCast(m_compiler, item->asInstruction());
+        case Instruction::GCCastGeneric: {
+            emitGCCastGeneric(m_compiler, item->asInstruction());
+            break;
+        }
+        case Instruction::GCCastDefined: {
+            emitGCCastDefined(m_compiler, item->asInstruction());
             break;
         }
         case Instruction::GCArrayNew: {

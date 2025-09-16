@@ -208,6 +208,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTSelectF64, /* SSSD */ F64, F64, I32, F64 | S0 | S1)                          \
     OL2(OTGCOp1, /* SD / SS */ PTR, I32)                                               \
     OL2(OTGCOp1Rev, /* SD */ I32, PTR)                                                 \
+    OL2(OTGCCastDefined, /* ST */ PTR, PTR)                                            \
+    OL2(OTGCRefTestDefined, /* SD */ PTR, PTR | TMP)                                   \
     OL4(OTGCArrayMoveI32, /* SSDT / SSST */ PTR, I32, I32, PTR)                        \
     OL4(OTGCArrayMoveI64, /* SSDT / SSST */ PTR, I32, I64, PTR)                        \
     OL4(OTGCArrayMovePtr, /* SSDT / SSST */ PTR, I32, PTR, PTR)                        \
@@ -563,7 +565,9 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::JumpIfTrueOpcode:
         case ByteCode::JumpIfFalseOpcode:
         case ByteCode::JumpIfNullOpcode:
-        case ByteCode::JumpIfNonNullOpcode: {
+        case ByteCode::JumpIfNonNullOpcode:
+        case ByteCode::JumpIfCastGenericOpcode:
+        case ByteCode::JumpIfCastDefinedOpcode: {
             ByteCodeOffsetValue* offsetValue = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
             labels[COMPUTE_OFFSET(idx, offsetValue->int32Value())] = nullptr;
             break;
@@ -1630,10 +1634,25 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::JumpIfTrueOpcode:
         case ByteCode::JumpIfFalseOpcode:
         case ByteCode::JumpIfNullOpcode:
-        case ByteCode::JumpIfNonNullOpcode: {
+        case ByteCode::JumpIfNonNullOpcode:
+        case ByteCode::JumpIfCastGenericOpcode:
+        case ByteCode::JumpIfCastDefinedOpcode: {
             ByteCodeOffsetValue* offsetValue = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
             Instruction* instr = compiler->appendBranch(byteCode, opcode, labels[COMPUTE_OFFSET(idx, offsetValue->int32Value())], STACK_OFFSET(offsetValue->stackOffset()));
-            instr->setRequiredRegsDescriptor(opcode == ByteCode::JumpIfTrueOpcode || opcode == ByteCode::JumpIfFalseOpcode ? OTGetI32 : OTGetPTR);
+
+            switch (opcode) {
+            case ByteCode::JumpIfTrueOpcode:
+            case ByteCode::JumpIfFalseOpcode:
+                requiredInit = OTGetI32;
+                break;
+            case ByteCode::JumpIfCastDefinedOpcode:
+                requiredInit = OTGCCastDefined;
+                break;
+            default:
+                requiredInit = OTGetPTR;
+                break;
+            }
+            instr->setRequiredRegsDescriptor(requiredInit);
             break;
         }
         case ByteCode::BrTableOpcode: {
@@ -1802,7 +1821,7 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::RefCastGenericOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 0);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCastGeneric, opcode, 1, 0);
             instr->setRequiredRegsDescriptor(OTGetPTR);
 
             RefCastGeneric* refCastGenericOperation = reinterpret_cast<RefCastGeneric*>(byteCode);
@@ -1810,15 +1829,15 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::RefCastDefinedOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 0);
-            instr->setRequiredRegsDescriptor(OTGetPTR);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCastDefined, opcode, 1, 0);
+            instr->setRequiredRegsDescriptor(OTGCCastDefined);
 
             RefCastDefined* refCastDefinedOperation = reinterpret_cast<RefCastDefined*>(byteCode);
             *instr->operands() = STACK_OFFSET(refCastDefinedOperation->srcOffset());
             break;
         }
         case ByteCode::RefTestGenericOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 1);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCastGeneric, opcode, 1, 1);
             instr->setRequiredRegsDescriptor(OTGCOp1);
 
             RefTestGeneric* refTestGenericOperation = reinterpret_cast<RefTestGeneric*>(byteCode);
@@ -1828,8 +1847,8 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::RefTestDefinedOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::GCCast, opcode, 1, 1);
-            instr->setRequiredRegsDescriptor(OTGCOp1);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCCastDefined, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(OTGCRefTestDefined);
 
             RefTestDefined* refTestDefinedOperation = reinterpret_cast<RefTestDefined*>(byteCode);
             Operand* operands = instr->operands();
