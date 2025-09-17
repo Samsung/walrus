@@ -236,6 +236,38 @@ void WASI::fd_read(ExecutionState& state, Value* argv, Value* result, Instance* 
     result[0] = Value(uvwasi_fd_read(WASI::g_uvwasi, fd, iovs, iovsLen, nread));
 }
 
+void WASI::fd_pread(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint64_t offset = argv[3].asI64();
+    size_t iovsLen = static_cast<size_t>(argv[2].asI32());
+    uint32_t* iovptr = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[1], iovsLen * (sizeof(uint32_t) << 1)));
+    uint32_t* nread = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[4], sizeof(uint32_t)));
+
+    if (iovptr == nullptr || nread == nullptr) {
+        result[0] = Value(WasiErrNo::inval);
+        return;
+    }
+
+    TemporaryData<uvwasi_iovec_t, 8> iovsBuffer(iovsLen);
+    uvwasi_iovec_t* iovs = iovsBuffer.data();
+    uint64_t sizeInByte = instance->memory(0)->sizeInByte();
+    uint8_t* buffer = instance->memory(0)->buffer();
+
+    for (uint32_t i = 0; i < iovsLen; i++) {
+        if (iovptr[1] > sizeInByte || iovptr[0] > sizeInByte - iovptr[1]) {
+            result[0] = Value(WasiErrNo::inval);
+            return;
+        }
+
+        iovs[i].buf = buffer + iovptr[0];
+        iovs[i].buf_len = iovptr[1];
+        iovptr += 2;
+    }
+
+    result[0] = Value(uvwasi_fd_pread(WASI::g_uvwasi, fd, iovs, iovsLen, offset, nread));
+}
+
 void WASI::fd_readdir(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
