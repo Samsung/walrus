@@ -32,11 +32,13 @@ class Tag;
 class CompositeType;
 
 class Object {
+    friend class JITFieldAccessor;
+
 public:
     enum Kind : uint8_t {
         // WebAssembly types
-        // TODO: Implement Struct and Array
-        StructKind,
+        // Note: value of 0 must not be used for fast JIT type casting, see emitGCCastGeneric
+        StructKind = 1,
         ArrayKind,
         FunctionKind,
         // Host types
@@ -47,6 +49,8 @@ public:
         MemoryKind,
         TrapKind,
         TagKind,
+        // Used by the test system
+        ExternalValueKind,
         Invalid,
     };
 

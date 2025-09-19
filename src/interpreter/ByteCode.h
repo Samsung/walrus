@@ -75,6 +75,8 @@ class FunctionType;
     F(JumpIfFalse)              \
     F(JumpIfNull)               \
     F(JumpIfNonNull)            \
+    F(JumpIfCastGeneric)        \
+    F(JumpIfCastDefined)        \
     F(GlobalGet32)              \
     F(GlobalGet64)              \
     F(GlobalGet128)             \
@@ -1769,6 +1771,95 @@ public:
 #endif
 };
 
+// The parser requires that conditional jumps must be derieved from ByteCodeOffsetValue.
+class JumpIfCastGeneric : public ByteCodeOffsetValue {
+public:
+    static constexpr uint8_t IsNullable = 0x1;
+    static constexpr uint8_t IsSrcNullable = 0x2;
+    static constexpr uint8_t IsSrcTagged = 0x4;
+    static constexpr uint8_t IsCastFail = 0x8;
+
+    JumpIfCastGeneric(ByteCodeStackOffset srcOffset, int32_t offset = 0)
+        : ByteCodeOffsetValue(Opcode::JumpIfCastGenericOpcode, srcOffset, static_cast<uint32_t>(offset))
+        , m_typeInfo(Value::Void)
+        , m_srcInfo(0)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    int32_t offset() const { return int32Value(); }
+    Value::Type typeInfo() const { return m_typeInfo; }
+    uint8_t srcInfo() const { return m_srcInfo; }
+
+    void setOffset(int32_t offset)
+    {
+        m_value = static_cast<uint32_t>(offset);
+    }
+
+    void init(Value::Type typeInfo, uint8_t srcInfo)
+    {
+        m_typeInfo = typeInfo;
+        // Invert bits.
+        m_srcInfo ^= srcInfo;
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("br_on_cast%s ", (m_srcInfo & JumpIfCastGeneric::IsCastFail) != 0 ? "_fail" : "");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("dst: %" PRId32 " type: %d srcInfo: 0x%x",
+               (int32_t)pos + offset(), static_cast<int>(m_typeInfo), static_cast<int>(m_srcInfo));
+    }
+#endif
+
+private:
+    Value::Type m_typeInfo;
+    uint8_t m_srcInfo;
+};
+
+// The parser requires that conditional jumps must be derieved from ByteCodeOffsetValue.
+class JumpIfCastDefined : public ByteCodeOffsetValue {
+public:
+    JumpIfCastDefined(ByteCodeStackOffset srcOffset, int32_t offset = 0)
+        : ByteCodeOffsetValue(Opcode::JumpIfCastDefinedOpcode, srcOffset, static_cast<uint32_t>(offset))
+        , m_typeInfo(nullptr)
+        , m_srcInfo(0)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    int32_t offset() const { return int32Value(); }
+    const CompositeType** typeInfo() const { return m_typeInfo; }
+    uint8_t srcInfo() const { return m_srcInfo; }
+
+    void setOffset(int32_t offset)
+    {
+        m_value = static_cast<uint32_t>(offset);
+    }
+
+    void init(const CompositeType** typeInfo, uint8_t srcInfo)
+    {
+        m_typeInfo = typeInfo;
+        // Invert bits.
+        m_srcInfo ^= srcInfo;
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("br_on_cast%s ", (m_srcInfo & JumpIfCastGeneric::IsCastFail) != 0 ? "_fail" : "");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("dst: %" PRId32 " type: %d srcInfo: 0x%x",
+               (int32_t)pos + offset(), static_cast<int>(reinterpret_cast<intptr_t>(m_typeInfo[-1])), static_cast<int>(m_srcInfo));
+    }
+#endif
+
+private:
+    const CompositeType** m_typeInfo;
+    uint8_t m_srcInfo;
+};
+
 class Select : public ByteCode {
 public:
     Select(ByteCodeStackOffset condOffset, uint16_t size, bool isFloat, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
@@ -3281,9 +3372,6 @@ private:
 
 class RefCastGeneric : public ByteCode {
 public:
-    static constexpr uint8_t IsNullable = 0x1;
-    static constexpr uint8_t IsSrcTagged = 0x2;
-
     RefCastGeneric(ByteCodeStackOffset srcOffset, Value::Type typeInfo, uint8_t srcInfo)
         : ByteCode(Opcode::RefCastGenericOpcode)
         , m_srcOffset(srcOffset)
@@ -3316,7 +3404,7 @@ class CompositeType;
 class RefCastDefined : public ByteCode {
 public:
     RefCastDefined(ByteCodeStackOffset srcOffset, const CompositeType** typeInfo, uint8_t srcInfo)
-        : ByteCode(Opcode::RefCastGenericOpcode)
+        : ByteCode(Opcode::RefCastDefinedOpcode)
         , m_typeInfo(typeInfo)
         , m_srcOffset(srcOffset)
         , m_srcInfo(srcInfo)
@@ -3378,7 +3466,7 @@ private:
 class RefTestDefined : public ByteCode {
 public:
     RefTestDefined(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset, const CompositeType** typeInfo, uint8_t srcInfo)
-        : ByteCode(Opcode::RefTestGenericOpcode)
+        : ByteCode(Opcode::RefTestDefinedOpcode)
         , m_typeInfo(typeInfo)
         , m_srcOffset(srcOffset)
         , m_dstOffset(dstOffset)

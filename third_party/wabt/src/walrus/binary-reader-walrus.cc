@@ -1482,7 +1482,9 @@ public:
     }
     Result OnBrOnCastExpr(Opcode opcode, Index depth, Type type1, Type type2) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnBrOnCast(GetLocation(), opcode, Var(depth, GetLocation()), Var(type1, GetLocation()), Var(type2, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnBrOnCastExpr(opcode, depth, type2);
         return Result::Ok;
     }
     Result OnGCUnaryExpr(Opcode opcode) override
