@@ -290,7 +290,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL3(OTReplaceLaneI64, /* SSD */ V128 | NOTMP, I64, V128 | TMP | S0)              \
     OL3(OTReplaceLaneF32, /* SSD */ V128 | NOTMP, F32 | NOTMP, V128 | TMP | S0)      \
     OL3(OTReplaceLaneF64, /* SSD */ V128 | NOTMP, F64 | NOTMP, V128 | TMP | S0)      \
-    OL4(OTSelectV128, /* SSSD */ V128, V128, I32, V128 | S0 | S1)
+    OL4(OTSelectV128, /* SSSD */ V128 | NOTMP, V128 | NOTMP, I32, V128 | S0 | S1)
 
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
 

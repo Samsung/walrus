@@ -841,6 +841,11 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
     if (instr->info() & Instruction::kIsMergeCompare) {
         Instruction* nextInstr = instr->next()->asInstruction();
 
+        if (operands[1] != VARIABLE_SET_PTR(nullptr)) {
+            args[1].set(operands + 1);
+            sljit_emit_op_flags(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, SLJIT_NOT_EQUAL);
+        }
+
         if (nextInstr->opcode() == ByteCode::SelectOpcode) {
             emitSelect(compiler, nextInstr, SLJIT_NOT_EQUAL);
             return true;

@@ -459,10 +459,9 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
                 type ^= 0x1;
             }
 
-
             sljit_jump* jump;
 
-            if (instr->opcode() != ByteCode::I32AndOpcode) {
+            if (instr->opcode() != ByteCode::I32AndOpcode && (*operand == VARIABLE_SET_PTR(nullptr))) {
                 if (instr->info() & Instruction::kIs32Bit) {
                     type |= SLJIT_32;
                 }
@@ -474,6 +473,12 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
                 }
 
                 sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+
+                if (*operand != VARIABLE_SET_PTR(nullptr)) {
+                    params[0].set(operand);
+                    sljit_emit_op_flags(compiler, SLJIT_MOV32, params[0].arg, params[0].argw, type);
+                }
+
                 jump = sljit_emit_jump(compiler, type);
             }
             nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
@@ -487,13 +492,16 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
 
+    if (*operand != VARIABLE_SET_PTR(nullptr)) {
+        params[0].set(operand);
+        sljit_emit_op_flags(compiler, SLJIT_MOV32, params[0].arg, params[0].argw, type);
+    }
+
     if (nextInstr != nullptr) {
         emitSelect(compiler, nextInstr, type);
         return true;
     }
 
-    params[0].set(operand);
-    sljit_emit_op_flags(compiler, SLJIT_MOV32, params[0].arg, params[0].argw, type);
     return false;
 }
 
