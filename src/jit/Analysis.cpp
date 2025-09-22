@@ -776,6 +776,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
         VariableRef ref = *instr->getResult(0);
         VariableList::Variable& variable = m_variableList->variables[ref];
+        ASSERT((variable.info & Instruction::TypeMask) == Instruction::Int32Operand);
 
         if (variable.u.rangeStart != instr->id() || variable.rangeEnd != instr->id() + 1) {
             instr->clearInfo(Instruction::kIsMergeCompare);
@@ -784,25 +785,39 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
         ASSERT(instr->next()->isInstruction());
         Instruction* nextInstr = instr->next()->asInstruction();
+        bool dropVariable;
+        Operand refAsVariable = VARIABLE_SET(ref, DependencyGenContext::Variable);
 
         switch (nextInstr->opcode()) {
         case ByteCode::JumpIfTrueOpcode:
         case ByteCode::JumpIfFalseOpcode:
-            // These instructions has only one argument.
-            ASSERT(*nextInstr->getParam(0) == VARIABLE_SET(ref, DependencyGenContext::Variable));
-            break;
-        case ByteCode::SelectOpcode:
-            if (*nextInstr->getParam(2) == VARIABLE_SET(ref, DependencyGenContext::Variable)) {
+            // These instructions have only one argument.
+            if (*nextInstr->getParam(0) == refAsVariable) {
+                dropVariable = (variable.u.rangeStart == instr->id() && variable.rangeEnd == instr->id() + 1);
+                break;
+            }
+
+            instr->clearInfo(Instruction::kIsMergeCompare);
+            continue;
+        case ByteCode::SelectOpcode: {
+            if (*nextInstr->getParam(2) == refAsVariable) {
+                dropVariable = (variable.u.rangeStart == instr->id()
+                                && variable.rangeEnd == instr->id() + 1
+                                && *nextInstr->getParam(0) != refAsVariable
+                                && *nextInstr->getParam(1) != refAsVariable);
                 break;
             }
             FALLTHROUGH;
+        }
         default:
             instr->clearInfo(Instruction::kIsMergeCompare);
             continue;
         }
 
-        variable.info |= VariableList::kIsImmediate;
-        variable.value = VARIABLE_SET_PTR(nullptr);
+        if (dropVariable) {
+            variable.info |= VariableList::kIsImmediate;
+            variable.value = VARIABLE_SET_PTR(nullptr);
+        }
 
         if (instr->group() == Instruction::Binary) {
             instr->convertBinaryToCompare();

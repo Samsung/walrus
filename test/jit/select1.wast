@@ -137,6 +137,24 @@
   i32.ne
   select
 )
+
+(func (export "test10") (result i32)
+    (local i32)
+    i32.const 1
+    local.set 0
+  
+    local.get 0
+    i32.eqz
+    local.set 0
+    
+    local.get 0
+    i32.const 2
+  
+    local.get 0
+    select
+    local.set 0
+    local.get 0
+)
 )
 
 (assert_return (invoke "test1") (i32.const 5) (i32.const 267386880))
@@ -149,3 +167,4 @@
 (assert_return (invoke "test7" (i64.const 100)) (i32.const 8))
 (assert_return (invoke "test8" (i32.const 20)) (i32.const 6) (i32.const 1))
 (assert_return (invoke "test9") (f64.const 1.0))
+(assert_return (invoke "test10") (i32.const 2))
