@@ -276,20 +276,4 @@ GCArray* GCArray::arrayNewElem(uint32_t offset, uint32_t length, const ArrayType
 #endif // ENABLE_GC
 }
 
-#ifdef ENABLE_GC
-void GCArray::addRef()
-{
-    if (++m_refCount == 1) {
-        objectTypeInfo()->getRecursiveType()->typeStore()->insertRootRef(this);
-    }
-}
-
-void GCArray::releaseRef()
-{
-    if (--m_refCount == 0) {
-        objectTypeInfo()->getRecursiveType()->typeStore()->deleteRootRef(this);
-    }
-}
-#endif // ENABLE_GC
-
 } // namespace Walrus

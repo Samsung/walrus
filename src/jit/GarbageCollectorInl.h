@@ -414,8 +414,7 @@ static void emitGCCastDefined(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM1(srcReg), JITFieldAccessor::objectTypeInfo());
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(tmpReg), 0);
-    sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_GREATER, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, typeIndex);
-    sljit_emit_select(compiler, SLJIT_GREATER, SLJIT_TMP_DEST_REG, SLJIT_IMM, typeIndex, SLJIT_TMP_DEST_REG);
+    sljit_emit_select(compiler, SLJIT_COMPARE_SELECT | SLJIT_LESS, SLJIT_TMP_DEST_REG, SLJIT_IMM, typeIndex, SLJIT_TMP_DEST_REG);
     sljit_emit_op1(compiler, SLJIT_MOV_P, tmpReg, 0, SLJIT_MEM2(tmpReg, SLJIT_TMP_DEST_REG), SLJIT_POINTER_SHIFT);
 
     if (label != nullptr) {
@@ -721,11 +720,7 @@ static void emitGCArrayAccess(sljit_compiler* compiler, Instruction* instr)
 
     sljit_sw log2Size = static_cast<sljit_sw>(GCArray::getLog2Size(type));
 
-    if (log2Size > 0) {
-        sljit_emit_op2(compiler, SLJIT_SHL, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, log2Size);
-    }
-
-    sljit_emit_op2(compiler, SLJIT_ADD, tmpReg, 0, arrayReg, 0, SLJIT_TMP_DEST_REG, 0);
+    sljit_emit_op2_shift(compiler, SLJIT_ADD | SLJIT_SHL_IMM, tmpReg, 0, arrayReg, 0, SLJIT_TMP_DEST_REG, 0, log2Size);
 
     sljit_sw mask = (static_cast<sljit_sw>(1) << log2Size) - 1;
     sljit_sw startOffset = (static_cast<sljit_sw>(sizeof(GCArray)) + mask) & ~mask;

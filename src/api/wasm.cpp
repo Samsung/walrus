@@ -23,8 +23,7 @@
 #include "runtime/Engine.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
-#include "runtime/GCArray.h"
-#include "runtime/GCStruct.h"
+#include "runtime/GCBase.h"
 #include "runtime/Function.h"
 #include "runtime/Table.h"
 #include "runtime/Memory.h"
@@ -268,10 +267,8 @@ struct wasm_ref_t {
         ASSERT(!!o);
 
 #ifdef ENABLE_GC
-        if (o->kind() == Object::StructKind) {
-            const_cast<GCStruct*>(reinterpret_cast<const GCStruct*>(o))->addRef();
-        } else if (o->kind() == Object::ArrayKind) {
-            const_cast<GCArray*>(reinterpret_cast<const GCArray*>(o))->addRef();
+        if (o->kind() == Object::StructKind || o->kind() == Object::ArrayKind) {
+            const_cast<GCBase*>(reinterpret_cast<const GCBase*>(o))->addRef();
         }
 #endif
     }
@@ -279,12 +276,8 @@ struct wasm_ref_t {
     virtual ~wasm_ref_t()
     {
 #ifdef ENABLE_GC
-        if (obj != nullptr) {
-            if (obj->kind() == Object::StructKind) {
-                const_cast<GCStruct*>(reinterpret_cast<const GCStruct*>(obj))->releaseRef();
-            } else if (obj->kind() == Object::ArrayKind) {
-                const_cast<GCArray*>(reinterpret_cast<const GCArray*>(obj))->releaseRef();
-            }
+        if (obj != nullptr && (obj->kind() == Object::StructKind || obj->kind() == Object::ArrayKind)) {
+            const_cast<GCBase*>(reinterpret_cast<const GCBase*>(obj))->releaseRef();
         }
 #endif
     }

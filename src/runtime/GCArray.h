@@ -17,8 +17,8 @@
 #ifndef __WalrusGCArray__
 #define __WalrusGCArray__
 
-#include "runtime/Store.h"
-#include "runtime/Object.h"
+#include "runtime/GCBase.h"
+#include "runtime/ObjectType.h"
 #include "runtime/Value.h"
 
 namespace Walrus {
@@ -26,7 +26,7 @@ namespace Walrus {
 class DataSegment;
 class ElementSegment;
 
-class GCArray : public Object {
+class GCArray : public GCBase {
     friend class JITFieldAccessor;
     friend class TypeStore;
 
@@ -43,11 +43,6 @@ public:
     {
         return m_length;
     }
-
-#ifdef ENABLE_GC
-    void addRef();
-    void releaseRef();
-#endif
 
     static inline uint32_t getLog2Size(Value::Type type)
     {
@@ -146,20 +141,12 @@ public:
 
 private:
     GCArray(const ArrayType* type, uint32_t length)
-        : Object(type->subTypeList())
+        : GCBase(type->subTypeList())
         , m_length(length)
-#ifdef ENABLE_GC
-        , m_refCount(0)
-        , m_rootIndex(0)
-#endif
     {
     }
 
     uint32_t m_length;
-#ifdef ENABLE_GC
-    size_t m_refCount;
-    size_t m_rootIndex;
-#endif
 };
 
 } // namespace Walrus
