@@ -417,54 +417,46 @@ void TypeStore::ReleaseRef(const CompositeType** typeInfo)
 
 #ifdef ENABLE_GC
 
-void TypeStore::insertRootRef(Object* object)
+void TypeStore::insertRootRef(GCBase* object)
 {
     if (m_rootRefsFreeListHead == NoIndex) {
         m_rootRefsFreeListHead = m_rootRefsSize;
         m_rootRefsSize += RootRefsGrowthFactor;
 
         if (m_rootRefs == nullptr) {
-            m_rootRefs = reinterpret_cast<Object**>(GC_MALLOC_UNCOLLECTABLE(static_cast<size_t>(m_rootRefsSize) * sizeof(Object*)));
+            m_rootRefs = reinterpret_cast<Object**>(GC_MALLOC_UNCOLLECTABLE(m_rootRefsSize * sizeof(Object*)));
+            m_refCounts = reinterpret_cast<size_t*>(GC_MALLOC_ATOMIC_UNCOLLECTABLE(m_rootRefsSize * sizeof(size_t)));
         } else {
-            m_rootRefs = reinterpret_cast<Object**>(GC_REALLOC(m_rootRefs, static_cast<size_t>(m_rootRefsSize) * sizeof(Object*)));
+            m_rootRefs = reinterpret_cast<Object**>(GC_REALLOC(m_rootRefs, m_rootRefsSize * sizeof(Object*)));
+            m_refCounts = reinterpret_cast<size_t*>(GC_REALLOC(m_refCounts, m_rootRefsSize * sizeof(size_t)));
         }
 
         // Insert all entries as free references.
-        for (uintptr_t i = m_rootRefsFreeListHead; i < m_rootRefsSize - 1; i++) {
-            m_rootRefs[i] = reinterpret_cast<Object*>(i + 1);
+        for (size_t i = m_rootRefsFreeListHead; i < m_rootRefsSize - 1; i++) {
+            m_rootRefs[i] = nullptr;
+            m_refCounts[i] = i + 1;
         }
-        m_rootRefs[m_rootRefsSize - 1] = reinterpret_cast<Object*>(NoIndex);
+        m_rootRefs[m_rootRefsSize - 1] = nullptr;
+        m_refCounts[m_rootRefsSize - 1] = static_cast<size_t>(NoIndex);
     }
 
-    if (object->kind() == Object::StructKind) {
-        ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 1);
-        reinterpret_cast<GCStruct*>(object)->m_rootIndex = m_rootRefsFreeListHead;
-    } else {
-        ASSERT(object->kind() == Object::ArrayKind);
-        ASSERT(reinterpret_cast<GCArray*>(object)->m_refCount == 1);
-        reinterpret_cast<GCArray*>(object)->m_rootIndex = m_rootRefsFreeListHead;
-    }
-
-    uintptr_t freeRef = reinterpret_cast<uintptr_t>(m_rootRefs[m_rootRefsFreeListHead]);
+    object->m_refIndex = m_rootRefsFreeListHead;
+    size_t freeRef = m_refCounts[m_rootRefsFreeListHead];
     m_rootRefs[m_rootRefsFreeListHead] = object;
+    m_refCounts[m_rootRefsFreeListHead] = 1;
     m_rootRefsFreeListHead = freeRef;
 }
 
-void TypeStore::deleteRootRef(Object* object)
+void TypeStore::deleteRootRef(GCBase* object)
 {
     uintptr_t freeRef;
 
-    if (object->kind() == Object::StructKind) {
-        ASSERT(reinterpret_cast<GCStruct*>(object)->m_refCount == 0);
-        freeRef = reinterpret_cast<GCStruct*>(object)->m_rootIndex;
-    } else {
-        ASSERT(object->kind() == Object::ArrayKind);
-        ASSERT(reinterpret_cast<GCArray*>(object)->m_refCount == 0);
-        freeRef = reinterpret_cast<GCArray*>(object)->m_rootIndex;
-    }
+    ASSERT(m_refCounts[object->m_refIndex] == 0);
+    freeRef = object->m_refIndex;
 
     ASSERT(m_rootRefs[freeRef] == object);
-    m_rootRefs[freeRef] = reinterpret_cast<Object*>(m_rootRefsFreeListHead);
+    m_rootRefs[freeRef] = nullptr;
+    m_refCounts[freeRef] = m_rootRefsFreeListHead;
     m_rootRefsFreeListHead = freeRef;
 }
 

@@ -17,23 +17,18 @@
 #ifndef __WalrusGCStruct__
 #define __WalrusGCStruct__
 
-#include "runtime/Store.h"
-#include "runtime/Object.h"
+#include "runtime/GCBase.h"
+#include "runtime/ObjectType.h"
 #include "runtime/Value.h"
 
 namespace Walrus {
 
-class GCStruct : public Object {
+class GCStruct : public GCBase {
     friend class TypeStore;
 
 public:
     static GCStruct* structNew(const StructType* type, ByteCodeStackOffset* offsets, uint8_t* bp);
     static GCStruct* structNewDefault(const StructType* type);
-
-#ifdef ENABLE_GC
-    void addRef();
-    void releaseRef();
-#endif
 
     static inline void set(uint8_t* dst, uint8_t* src, Value::Type type)
     {
@@ -99,18 +94,9 @@ public:
 
 private:
     GCStruct(const StructType* type)
-        : Object(type->subTypeList())
-#ifdef ENABLE_GC
-        , m_refCount(0)
-        , m_rootIndex(0)
-#endif
+        : GCBase(type->subTypeList())
     {
     }
-
-#ifdef ENABLE_GC
-    size_t m_refCount;
-    size_t m_rootIndex;
-#endif
 };
 
 } // namespace Walrus

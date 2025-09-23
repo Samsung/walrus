@@ -18,6 +18,7 @@
 #define __WalrusTypeStore__
 
 #include "util/Vector.h"
+#include "runtime/GCBase.h"
 #include "runtime/ObjectType.h"
 #include "runtime/Type.h"
 #include "runtime/Value.h"
@@ -83,6 +84,7 @@ public:
         : m_first(nullptr)
 #ifdef ENABLE_GC
         , m_rootRefs(nullptr)
+        , m_refCounts(nullptr)
         , m_rootRefsSize(0)
         , m_rootRefsFreeListHead(NoIndex)
 #endif
@@ -106,8 +108,23 @@ public:
     static void ReleaseRef(const CompositeType** typeInfo);
 
 #ifdef ENABLE_GC
-    void insertRootRef(Object* object);
-    void deleteRootRef(Object* object);
+    inline void addRef(GCBase* object)
+    {
+        if (object->m_refIndex != GCBase::UnassignedReference) {
+            m_refCounts[object->m_refIndex]++;
+        } else {
+            insertRootRef(object);
+            ASSERT(m_refCounts[object->m_refIndex] == 1);
+        }
+    }
+
+    inline void releaseRef(GCBase* object)
+    {
+        ASSERT(object->m_refIndex != GCBase::UnassignedReference);
+        if (--m_refCounts[object->m_refIndex] == 0) {
+            deleteRootRef(object);
+        }
+    }
 #endif
 
 private:
@@ -118,12 +135,18 @@ private:
     static const CompositeType** updateRefs(CompositeType* type, const Vector<CompositeType*>& types, const CompositeType** nextSubType);
     void releaseRecursiveType(RecursiveType* recType);
 
+#ifdef ENABLE_GC
+    void insertRootRef(GCBase* object);
+    void deleteRootRef(GCBase* object);
+#endif
+
     RecursiveType* m_first;
 
 #ifdef ENABLE_GC
     Object** m_rootRefs;
-    uintptr_t m_rootRefsSize;
-    uintptr_t m_rootRefsFreeListHead;
+    size_t* m_refCounts;
+    size_t m_rootRefsSize;
+    size_t m_rootRefsFreeListHead;
 #endif
 };
 
