@@ -2594,6 +2594,7 @@ public:
         case Walrus::Value::I31Ref:
         case Walrus::Value::StructRef:
         case Walrus::Value::ArrayRef:
+        case Walrus::Value::EqRef:
             break;
         case Walrus::Value::NoAnyRef:
         case Walrus::Value::NoExternRef:
@@ -2693,8 +2694,17 @@ public:
     virtual void OnGCUnaryExpr(int opcode) override
     {
         switch (opcode) {
-        case Opcode::RefEq:
+        case Opcode::RefEq: {
+            auto src1 = popVMStack();
+            auto src0 = popVMStack();
+            auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+            if (sizeof(void*) == 4) {
+                pushByteCode(Walrus::I32Eq(src0, src1, dst), WASMOpcode::RefEqOpcode);
+            } else {
+                pushByteCode(Walrus::I64Eq(src0, src1, dst), WASMOpcode::RefEqOpcode);
+            }
             break;
+        }
         case Opcode::ArrayLen: {
             bool isNullable = Walrus::Value::isNullableRefType(peekVMStackInfo().valueType());
             auto src = popVMStack();
@@ -2703,9 +2713,13 @@ public:
             break;
         }
         case Opcode::AnyConvertExtern:
+        case Opcode::ExternConvertAny: {
+            Walrus::Value::Type type = (opcode == Opcode::AnyConvertExtern) ? Walrus::Value::Type::AnyRef : Walrus::Value::Type::ExternRef;
+            auto src = popVMStack();
+            auto dst = computeExprResultPosition(type);
+            generateMoveCodeIfNeeds(src, dst, type);
             break;
-        case Opcode::ExternConvertAny:
-            break;
+        }
         case Opcode::RefI31: {
             auto src = popVMStack();
             auto dst = computeExprResultPosition(Walrus::Value::Type::I31Ref);
@@ -3008,7 +3022,7 @@ public:
         }
         if (m_shouldContinueToGenerateByteCode) {
             for (size_t i = 0; i < m_currentFunctionType->result().size() && m_vmStack.size(); i++) {
-                ASSERT(popVMStackInfo().valueType() == m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]);
+                ASSERT(toDebugType(popVMStackInfo().valueType()) == toDebugType(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
             }
             ASSERT(m_vmStack.empty());
         }
