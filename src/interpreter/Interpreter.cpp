@@ -2213,23 +2213,25 @@ NEVER_INLINE bool Interpreter::testRefGeneric(void* refPtr, Value::Type type)
         return type == Value::AnyRef;
     }
 
-    ASSERT(type == Value::I31Ref || type == Value::StructRef || type == Value::ArrayRef);
+    ASSERT(type == Value::I31Ref || type == Value::StructRef
+           || type == Value::ArrayRef || type == Value::EqRef);
 
     if (Value::isI31Value(refPtr)) {
-        return type == Value::I31Ref;
-    }
-
-    if (type == Value::I31Ref) {
-        return false;
+        return type == Value::I31Ref || type == Value::EqRef;
     }
 
     Object::Kind kind = reinterpret_cast<Object*>(refPtr)->kind();
 
-    if (type == Value::StructRef) {
+    switch (type) {
+    case Value::I31Ref:
+        return false;
+    case Value::StructRef:
         return kind == Object::StructKind;
+    case Value::ArrayRef:
+        return kind == Object::ArrayKind;
+    default:
+        return kind == Object::StructKind || kind == Object::ArrayKind;
     }
-
-    return kind == Object::ArrayKind;
 }
 
 NEVER_INLINE bool Interpreter::testRefDefined(void* refPtr, const CompositeType** typeInfo)
