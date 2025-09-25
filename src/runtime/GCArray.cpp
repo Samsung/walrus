@@ -201,12 +201,12 @@ GCArray* GCArray::arrayNewData(uint32_t offset, uint32_t length, const ArrayType
 {
     Value::Type valueType = type->field().type();
     uint32_t log2Size = getLog2Size(valueType);
-    size_t size = data->sizeInByte() >> log2Size;
+    size_t size = data->sizeInByte();
 
     ASSERT(!Value::isRefType(valueType));
 
-    if (size < offset || (size - offset) < length) {
-        return reinterpret_cast<GCArray*>(OutOfBoundsAccess);
+    if (size < offset || ((size - offset) >> log2Size) < length) {
+        return reinterpret_cast<GCArray*>(OutOfBoundsMemAccess);
     }
 
 #ifdef ENABLE_GC
@@ -228,7 +228,7 @@ GCArray* GCArray::arrayNewData(uint32_t offset, uint32_t length, const ArrayType
     // Placement new to initialize the common part.
     new (result) GCArray(type, length);
 
-    memcpy(reinterpret_cast<uint8_t*>(result) + startOffset, data->data()->initData().data() + (offset << log2Size), length << log2Size);
+    memcpy(reinterpret_cast<uint8_t*>(result) + startOffset, data->data()->initData().data() + offset, length << log2Size);
 
     TypeStore::AddRef(type);
     GC_REGISTER_FINALIZER_NO_ORDER(result, arrayFinalizer, type->subTypeList(), nullptr, nullptr);
@@ -244,7 +244,7 @@ GCArray* GCArray::arrayNewElem(uint32_t offset, uint32_t length, const ArrayType
 
     const VectorWithFixedSize<void*, std::allocator<void*>>& elements = elem->elements();
     if (elements.size() < offset || (elements.size() - offset) < length) {
-        return reinterpret_cast<GCArray*>(OutOfBoundsAccess);
+        return reinterpret_cast<GCArray*>(OutOfBoundsTableAccess);
     }
 
 #ifdef ENABLE_GC

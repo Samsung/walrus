@@ -417,6 +417,12 @@ static Walrus::Value toWalrusValue(wabt::Const& c)
         }
         return Walrus::Value(Walrus::Value::NullExternRef, findExternalValue(c.ref_bits()));
     }
+    case wabt::Type::AnyRef: {
+        if (c.ref_bits() == wabt::Const::kRefNullBits) {
+            return Walrus::Value(Walrus::Value::NullAnyRef, Walrus::Value::Null);
+        }
+        return Walrus::Value(Walrus::Value::NullAnyRef, findExternalValue(c.ref_bits()));
+    }
     default:
         printf("Error: unknown value type during converting wabt::Const to wabt::Value\n");
         RELEASE_ASSERT_NOT_REACHED();
@@ -538,8 +544,13 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                 return c.ref_bits() == wabt::Const::kRefNullBits;
             }
 
+            if (c.ref_bits() == wabt::Const::kRefAnyValueBits) {
+                return true;
+            }
+
             return (vType == Walrus::Value::ExternRef || vType == Walrus::Value::NoExternRef)
-                && (v.asObject()->kind() == Object::ExternalValueKind)
+                && !v.isI31()
+                && v.asObject()->kind() == Object::ExternalValueKind
                 && (reinterpret_cast<ExternalValue*>(v.asReference())->value() == c.ref_bits());
         case wabt::Type::AnyRef:
             sameRefType = (vType == Walrus::Value::AnyRef || vType == Walrus::Value::NoAnyRef

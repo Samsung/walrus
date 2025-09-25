@@ -71,7 +71,7 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
     uint8_t* paramBuffer = valueBuffer;
     size_t offsetIndex = 0;
     for (size_t i = 0; i < argc; i++) {
-        ASSERT(argv[i].type() == paramTypeInfo[i]);
+        ASSERT(paramTypeInfo[i].isRef() ? argv[i].isRef() : argv[i].type() == paramTypeInfo[i]);
         argv[i].writeToMemory(paramBuffer);
         size_t stackAllocatedSize = valueStackAllocatedSize(paramTypeInfo[i]);
         for (size_t j = 0; j < stackAllocatedSize; j += sizeof(size_t)) {

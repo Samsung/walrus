@@ -31,7 +31,11 @@ class GCArray : public GCBase {
     friend class TypeStore;
 
 public:
-    static constexpr uintptr_t OutOfBoundsAccess = static_cast<uintptr_t>(0x1);
+    static constexpr uintptr_t OutOfBoundsArrayAccess = static_cast<uintptr_t>(0x1);
+    static constexpr uintptr_t OutOfBoundsMemAccess = static_cast<uintptr_t>(0x2);
+    static constexpr uintptr_t OutOfBoundsTableAccess = static_cast<uintptr_t>(0x3);
+    // OutOfBoundsMaxAccess is less than 4, which is the first valid pointer address.
+    static constexpr uintptr_t OutOfBoundsMaxAccess = OutOfBoundsTableAccess;
 
     static GCArray* arrayNew(uint32_t length, const ArrayType* type, uint8_t* value);
     static GCArray* arrayNewDefault(uint32_t length, const ArrayType* type);

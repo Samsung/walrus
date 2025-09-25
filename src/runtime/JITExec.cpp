@@ -46,22 +46,26 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
         case ExecutionContext::IntegerOverflowError:
             Trap::throwException(state, "integer overflow");
             return resultOffsets;
-        case ExecutionContext::OutOfBoundsMemAccessError:
-            Trap::throwException(state, "out of bounds memory access");
-            return resultOffsets;
-        case ExecutionContext::OutOfBoundsTableAccessError:
-            Trap::throwException(state, "out of bounds table access");
-            return resultOffsets;
         case ExecutionContext::TypeMismatchError:
             Trap::throwException(state, "type mismatch");
             return resultOffsets;
         case ExecutionContext::AllocationError:
             Trap::throwException(state, "memory allocation failed");
             return resultOffsets;
-        case ExecutionContext::ArrayOutOfBounds:
-            COMPILE_ASSERT(ExecutionContext::AllocationError + 1 == ExecutionContext::ArrayOutOfBounds,
-                           "AllocationError and ArrayOutOfBounds errors must follow each other");
+        case ExecutionContext::OutOfBoundsArrayAccessError:
+            COMPILE_ASSERT(ExecutionContext::AllocationError + 1 == ExecutionContext::OutOfBoundsArrayAccessError,
+                           "AllocationError and OutOfBoundsArrayAccessError errors must follow each other");
             Trap::throwException(state, "out of bounds array access");
+            return resultOffsets;
+        case ExecutionContext::OutOfBoundsMemAccessError:
+            COMPILE_ASSERT(ExecutionContext::AllocationError + 2 == ExecutionContext::OutOfBoundsMemAccessError,
+                           "AllocationError and OutOfBoundsMemAccessError errors must follow each other");
+            Trap::throwException(state, "out of bounds memory access");
+            return resultOffsets;
+        case ExecutionContext::OutOfBoundsTableAccessError:
+            COMPILE_ASSERT(ExecutionContext::AllocationError + 3 == ExecutionContext::OutOfBoundsTableAccessError,
+                           "AllocationError and OutOfBoundsTableAccessError errors must follow each other");
+            Trap::throwException(state, "out of bounds table access");
             return resultOffsets;
         case ExecutionContext::NullReferenceError:
             Trap::throwException(state, "null reference");

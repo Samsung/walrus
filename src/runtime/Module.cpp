@@ -171,7 +171,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         switch (type) {
         case ImportType::Function: {
             if (UNLIKELY(imports[i]->kind() != Object::FunctionKind
-                         || !imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType()))) {
+                         || !imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType(), true))) {
                 Trap::throwException(state, "incompatible import type");
             }
 

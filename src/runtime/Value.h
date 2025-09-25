@@ -406,6 +406,11 @@ public:
         return type == I8 || type == I16;
     }
 
+    static Value::Type unpackType(Value::Type type)
+    {
+        return isPackedType(type) ? Value::I32 : type;
+    }
+
     static bool isI31Value(void* ref)
     {
         return (reinterpret_cast<uintptr_t>(ref) & RefI31) != 0;

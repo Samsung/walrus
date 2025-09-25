@@ -1919,11 +1919,11 @@ NextInstruction:
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
         uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
         GCArray* result = GCArray::arrayNewData(offset, length, code->typeInfo(), instance->dataSegment(code->index()));
-        if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsAccess)) {
+        if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
                 Trap::throwException(state, "memory allocation failed");
             }
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException(state, "out of bounds memory access");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -1939,11 +1939,11 @@ NextInstruction:
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
         uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
         GCArray* result = GCArray::arrayNewElem(offset, length, code->typeInfo(), instance->elementSegment(code->index()));
-        if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsAccess)) {
+        if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
                 Trap::throwException(state, "memory allocation failed");
             }
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException(state, "out of bounds table access");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 

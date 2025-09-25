@@ -2820,7 +2820,7 @@ public:
         Walrus::Value::Type type = typeInfo->field().type();
 
         auto src0 = popVMStack();
-        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+        auto dst = computeExprResultPosition(Walrus::Value::unpackType(type));
         pushByteCode(Walrus::ArrayGet(src0, src1, dst, type, info), WASMOpcode::ArrayGetSOpcode);
     }
 
@@ -2885,7 +2885,7 @@ public:
         uint32_t memberOffset = typeInfo->fieldOffsets()[field_index];
 
         auto src = popVMStack();
-        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+        auto dst = computeExprResultPosition(Walrus::Value::unpackType(type));
         pushByteCode(Walrus::StructGet(src, dst, memberOffset, type, info), WASMOpcode::StructGetSOpcode);
     }
 
