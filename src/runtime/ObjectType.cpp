@@ -23,7 +23,7 @@
 
 namespace Walrus {
 
-bool FunctionType::equals(const FunctionType* other) const
+bool FunctionType::equals(const FunctionType* other, bool isSubType) const
 {
     if (this == other) {
         return true;
@@ -33,6 +33,9 @@ bool FunctionType::equals(const FunctionType* other) const
     // However, functions defined by API has no type at
     // the moment represented by a null recursive type.
     if (getRecursiveType() != nullptr && other->getRecursiveType() != nullptr) {
+        if (isSubType) {
+            return other->isSubTypeOf(this);
+        }
         return getRecursiveType() == other->getRecursiveType();
     }
 

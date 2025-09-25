@@ -742,7 +742,7 @@ static void emitGCArrayNew(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(P, 32, 32, P, P), SLJIT_IMM,
                          isNewData ? GET_FUNC_ADDR(sljit_sw, GCArray::arrayNewData) : GET_FUNC_ADDR(sljit_sw, GCArray::arrayNewElem));
         context->appendTrapJump(ExecutionContext::AllocationError,
-                                sljit_emit_cmp(compiler, SLJIT_LESS_EQUAL, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(GCArray::OutOfBoundsAccess)));
+                                sljit_emit_cmp(compiler, SLJIT_LESS_EQUAL, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(GCArray::OutOfBoundsMaxAccess)));
         args[0].set(operands + 2);
         MOVE_FROM_REG(compiler, SLJIT_MOV, args[0].arg, args[0].argw, SLJIT_R0);
         break;
@@ -784,14 +784,14 @@ static void emitGCArrayAccess(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_TMP_DEST_REG, 0, indexArg.arg, indexArg.argw);
 
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
-    CompileContext::get(compiler)->appendTrapJump(ExecutionContext::ArrayOutOfBounds,
+    CompileContext::get(compiler)->appendTrapJump(ExecutionContext::OutOfBoundsArrayAccessError,
                                                   sljit_emit_cmp(compiler, SLJIT_LESS_EQUAL | SLJIT_32, SLJIT_MEM1(arrayReg), JITFieldAccessor::arrayLength(), SLJIT_TMP_DEST_REG, 0));
 #else /* !SLJIT_CONFIG_X86 */
 #ifndef SLJIT_TMP_OPT_REG
 #error "Missing implementation"
 #endif
     sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_TMP_OPT_REG, 0, SLJIT_MEM1(arrayReg), JITFieldAccessor::arrayLength());
-    CompileContext::get(compiler)->appendTrapJump(ExecutionContext::ArrayOutOfBounds,
+    CompileContext::get(compiler)->appendTrapJump(ExecutionContext::OutOfBoundsArrayAccessError,
                                                   sljit_emit_cmp(compiler, SLJIT_LESS_EQUAL, SLJIT_TMP_OPT_REG, 0, SLJIT_TMP_DEST_REG, 0));
 #endif /* SLJIT_CONFIG_X86 */
 

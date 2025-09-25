@@ -80,7 +80,7 @@ public:
 
     // Type "less" comparison operation.
     // It is simple, and easy to implement in JIT.
-    bool isSubTypeOf(CompositeType* actual) const
+    bool isSubTypeOf(const CompositeType* actual) const
     {
         uintptr_t count = subTypeCount();
         return (count <= actual->subTypeCount() && actual->subTypeList()[count] == this);
@@ -167,7 +167,7 @@ public:
     size_t paramStackSize() const { return m_paramStackSize; }
     size_t resultStackSize() const { return m_resultStackSize; }
 
-    bool equals(const FunctionType* other) const;
+    bool equals(const FunctionType* other, bool isSubType = false) const;
 
 private:
     TypeVector* m_paramTypes;
