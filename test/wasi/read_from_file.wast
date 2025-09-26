@@ -2,6 +2,7 @@
   (import "wasi_snapshot_preview1" "path_open" (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
   (import "wasi_snapshot_preview1" "fd_write" (func $wasi_fd_write (param i32 i32 i32 i32) (result i32)))
   (import "wasi_snapshot_preview1" "fd_read" (func $wasi_fd_read (param i32 i32 i32 i32) (result i32)))
+  (import "wasi_snapshot_preview1" "fd_pread" (func $wasi_fd_pread (param i32 i32 i32 i64 i32) (result i32)))
   (import "wasi_snapshot_preview1" "proc_exit" (func $proc_exit (param i32)))
 
   (memory 1)
@@ -22,8 +23,8 @@
     i32.const 300 ;; Offset of file name in memory
     i32.const 19 ;; Length of file name
     i32.const 0 ;; oflags: none
-    i64.const 4098 ;; rights: path_open, fd_read
-    i64.const 4098 ;; rights_inheriting: path_open, fd_read
+    i64.const 4102 ;; rights: path_open, fd_read, fd_seek (for fd_pread)
+    i64.const 4102 ;; rights_inheriting: path_open, fd_read, fd_seek (for fd_pread)
     i32.const 0 ;; fdflags: none
     i32.const 0 ;; Offset to store at the opened file descriptor in memory
     call $path_open
@@ -37,6 +38,29 @@
       )
     )
 
+    (i32.store (i32.const 1004) (i32.const 13))
+    (i32.store (i32.const 1000) (i32.const 1500))
+    (i32.store (i32.const 2000) (i32.const 5000))
+
+    (call $wasi_fd_pread
+      (i32.const 0)
+      (i32.load) ;; opened file descriptor
+      
+      (i32.const 1000) ;; store content at this location
+      (i32.const 1) ;; make it into a single buffer
+      (i64.const 6) ;; offset to read from within the file
+      (i32.const 2000) ;; store number of read characters to this location
+    )
+    drop
+    
+    (call $wasi_fd_write
+      (i32.const 1)  ;;file descriptor
+      (i32.const 1000) ;;offset of str offset
+      (i32.const 1)  ;;iovec length
+      (i32.const 2000) ;;result offset
+    )
+    drop
+ 
     (i32.store (i32.const 104) (i32.const 13))
     (i32.store (i32.const 100) (i32.const 0))
     (i32.store (i32.const 200) (i32.const 500))

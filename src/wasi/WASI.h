@@ -46,6 +46,7 @@ public:
     F(fd_write, I32I32I32I32_RI32)                         \
     F(fd_tell, I32I32_RI32)                                \
     F(fd_read, I32I32I32I32_RI32)                          \
+    F(fd_pread, I32I32I32I64I32_RI32)                      \
     F(fd_readdir, I32I32I32I64I32_RI32)                    \
     F(fd_close, I32_RI32)                                  \
     F(fd_fdstat_get, I32I32_RI32)                          \
