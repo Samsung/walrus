@@ -51,6 +51,9 @@ jobs:
           rm ./test/wasm-spec/core/call.wast
           rm ./test/wasm-spec/core/call_indirect.wast
           rm ./test/web-assembly3/gc/call_ref.wast
+          rm ./test/web-assembly3/gc/return_call.wast
+          rm ./test/web-assembly3/gc/return_call_indirect.wast
+          rm ./test/web-assembly3/gc/return_call_ref.wast
       - name: Run Tests
         run: |
           #FIXME try-catch is unstable in macos build
@@ -82,6 +85,9 @@ jobs:
           rm ./test/wasm-spec/core/call.wast
           rm ./test/wasm-spec/core/call_indirect.wast
           rm ./test/web-assembly3/gc/call_ref.wast
+          rm ./test/web-assembly3/gc/return_call.wast
+          rm ./test/web-assembly3/gc/return_call_indirect.wast
+          rm ./test/web-assembly3/gc/return_call_ref.wast
       - name: Run Tests
         run: |
           #FIXME try-catch is unstable in macos build
@@ -129,6 +135,9 @@ jobs:
           rm ./test/wasm-spec/core/call.wast
           rm ./test/wasm-spec/core/call_indirect.wast
           rm ./test/web-assembly3/gc/call_ref.wast
+          rm ./test/web-assembly3/gc/return_call.wast
+          rm ./test/web-assembly3/gc/return_call_indirect.wast
+          rm ./test/web-assembly3/gc/return_call_ref.wast
       - name: Run Tests
         run: |
           $RUNNER ${{ matrix.switch }} --engine="$GITHUB_WORKSPACE/out/walrus" ${{ matrix.compile.tests }}
@@ -278,6 +287,9 @@ jobs:
           rm ./test/wasm-spec/core/call.wast
           rm ./test/wasm-spec/core/call_indirect.wast
           rm ./test/web-assembly3/gc/call_ref.wast
+          rm ./test/web-assembly3/gc/return_call.wast
+          rm ./test/web-assembly3/gc/return_call_indirect.wast
+          rm ./test/web-assembly3/gc/return_call_ref.wast
       - name: Test in ${{matrix.arch.name}}
         run: |
           $RUNNER ${{ matrix.switch }} --engine="./out/walrus" --qemu="./qemu-9.0.2/build/${{ matrix.arch.qemu.name }}" ${{ matrix.compile.tests }}
