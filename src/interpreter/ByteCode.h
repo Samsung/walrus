@@ -103,6 +103,8 @@ class FunctionType;
     F(ArrayNewFixed)            \
     F(ArrayNewData)             \
     F(ArrayNewElem)             \
+    F(ArrayInitData)            \
+    F(ArrayInitElem)            \
     F(ArrayGet)                 \
     F(ArraySet)                 \
     F(ArrayLen)                 \
@@ -3695,6 +3697,72 @@ public:
     ArrayNewElem(const ArrayType* typeInfo, uint32_t index,
                  ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset dstOffset)
         : ArrayNewFrom(Opcode::ArrayNewElemOpcode, typeInfo, index, src0Offset, src1Offset, dstOffset)
+    {
+    }
+};
+
+class ArrayInitFrom : public ByteCode {
+public:
+    ArrayInitFrom(Opcode opcode, uint8_t log2Size, uint32_t index, bool isNullable,
+                  ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset src3Offset)
+        : ByteCode(opcode)
+        , m_index(index)
+        , m_log2Size(log2Size)
+        , m_isNullable(isNullable ? 1 : 0)
+        , m_src0Offset(src0Offset)
+        , m_src1Offset(src1Offset)
+        , m_src2Offset(src2Offset)
+        , m_src3Offset(src3Offset)
+    {
+        ASSERT(opcode == Opcode::ArrayInitDataOpcode || opcode == Opcode::ArrayInitElemOpcode);
+    }
+
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    ByteCodeStackOffset src3Offset() const { return m_src3Offset; }
+    uint8_t log2Size() const { return m_log2Size; }
+    bool isNullable() const { return m_isNullable; }
+    uint32_t index() { return m_index; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ArrayInit%s ", opcode() == Opcode::ArrayInitDataOpcode ? "Data" : "Elem");
+        printf("index: %" PRIu32 " ", m_index);
+        DUMP_BYTECODE_OFFSET(src0Offset);
+        DUMP_BYTECODE_OFFSET(src1Offset);
+        DUMP_BYTECODE_OFFSET(src2Offset);
+        DUMP_BYTECODE_OFFSET(src3Offset);
+    }
+#endif
+
+private:
+    uint32_t m_index;
+    uint8_t m_log2Size;
+    uint8_t m_isNullable;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_src2Offset;
+    ByteCodeStackOffset m_src3Offset;
+};
+
+class ArrayInitData : public ArrayInitFrom {
+public:
+    ArrayInitData(uint8_t log2Size, uint32_t index, bool isNullable,
+                  ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset src3Offset)
+        : ArrayInitFrom(Opcode::ArrayInitDataOpcode, log2Size, index, isNullable,
+                        src0Offset, src1Offset, src2Offset, src3Offset)
+    {
+    }
+};
+
+class ArrayInitElem : public ArrayInitFrom {
+public:
+    ArrayInitElem(uint8_t log2Size, uint32_t index, bool isNullable,
+                  ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset src3Offset)
+        : ArrayInitFrom(Opcode::ArrayInitElemOpcode, log2Size, index, isNullable,
+                        src0Offset, src1Offset, src2Offset, src3Offset)
     {
     }
 };

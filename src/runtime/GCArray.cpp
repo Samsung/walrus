@@ -197,38 +197,36 @@ GCArray* GCArray::arrayNewFixed(uint32_t length, const ArrayType* type, ByteCode
 #endif // ENABLE_GC
 }
 
-GCArray* GCArray::arrayNewData(uint32_t offset, uint32_t length, const ArrayType* type, DataSegment* data)
+GCArray* GCArray::arrayNewData(uint32_t offset, uint32_t size, const ArrayType* type, DataSegment* data)
 {
     Value::Type valueType = type->field().type();
     uint32_t log2Size = getLog2Size(valueType);
-    size_t size = data->sizeInByte();
+    size_t dataSize = data->sizeInByte();
 
     ASSERT(!Value::isRefType(valueType));
 
-    if (size < offset || ((size - offset) >> log2Size) < length) {
+    if (dataSize < offset || ((dataSize - offset) >> log2Size) < size) {
         return reinterpret_cast<GCArray*>(OutOfBoundsMemAccess);
     }
 
 #ifdef ENABLE_GC
-    size = 1 << log2Size;
+    uint32_t startOffset = getAlignedStartOffset(1 << log2Size);
 
-    uint32_t startOffset = getAlignedStartOffset(size);
-
-    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - startOffset) >> log2Size)) {
+    if (UNLIKELY(size >= (std::numeric_limits<uint32_t>::max() - startOffset) >> log2Size)) {
         // Array is larger than 4GB.
         return nullptr;
     }
 
-    uint32_t totalSize = getAlignedTotalSize(startOffset + (length << log2Size));
+    uint32_t totalSize = getAlignedTotalSize(startOffset + (size << log2Size));
     GCArray* result = reinterpret_cast<GCArray*>(GC_MALLOC_ATOMIC(totalSize));
     if (UNLIKELY(result == nullptr)) {
         return result;
     }
 
     // Placement new to initialize the common part.
-    new (result) GCArray(type, length);
+    new (result) GCArray(type, size);
 
-    memcpy(reinterpret_cast<uint8_t*>(result) + startOffset, data->data()->initData().data() + offset, length << log2Size);
+    memcpy(reinterpret_cast<uint8_t*>(result) + startOffset, data->data() + offset, size << log2Size);
 
     TypeStore::AddRef(type);
     GC_REGISTER_FINALIZER_NO_ORDER(result, arrayFinalizer, type->subTypeList(), nullptr, nullptr);
@@ -238,35 +236,32 @@ GCArray* GCArray::arrayNewData(uint32_t offset, uint32_t length, const ArrayType
 #endif // ENABLE_GC
 }
 
-GCArray* GCArray::arrayNewElem(uint32_t offset, uint32_t length, const ArrayType* type, ElementSegment* elem)
+GCArray* GCArray::arrayNewElem(uint32_t offset, uint32_t size, const ArrayType* type, ElementSegment* elem)
 {
     ASSERT(Value::isRefType(type->field().type()));
 
-    const VectorWithFixedSize<void*, std::allocator<void*>>& elements = elem->elements();
-    if (elements.size() < offset || (elements.size() - offset) < length) {
+    if (elem->size() < offset || (elem->size() - offset) < size) {
         return reinterpret_cast<GCArray*>(OutOfBoundsTableAccess);
     }
 
 #ifdef ENABLE_GC
-    size_t size = sizeof(void*);
+    uint32_t startOffset = getAlignedStartOffset(sizeof(void*));
 
-    uint32_t startOffset = getAlignedStartOffset(size);
-
-    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - startOffset) / size)) {
+    if (UNLIKELY(size >= (std::numeric_limits<uint32_t>::max() - startOffset) / sizeof(void*))) {
         // Array is larger than 4GB.
         return nullptr;
     }
 
-    uint32_t totalSize = getAlignedTotalSize(startOffset + (length * size));
+    uint32_t totalSize = getAlignedTotalSize(startOffset + (size * sizeof(void*)));
     GCArray* result = reinterpret_cast<GCArray*>(GC_MALLOC(totalSize));
     if (UNLIKELY(result == nullptr)) {
         return result;
     }
 
     // Placement new to initialize the common part.
-    new (result) GCArray(type, length);
+    new (result) GCArray(type, size);
 
-    memcpy(reinterpret_cast<uint8_t*>(result) + startOffset, elements.data() + offset, length * size);
+    memcpy(reinterpret_cast<uint8_t*>(result) + startOffset, elem->elements() + offset, size * sizeof(void*));
 
     TypeStore::AddRef(type);
     GC_REGISTER_FINALIZER_NO_ORDER(result, arrayFinalizer, type->subTypeList(), nullptr, nullptr);

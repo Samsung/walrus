@@ -696,6 +696,7 @@ void JITCompiler::allocateRegisters()
                    || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode
+                   || instr->opcode() == ByteCode::ArrayInitDataOpcode || instr->opcode() == ByteCode::ArrayInitElemOpcode
                    || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
 
             if (!hasResult) {
@@ -1031,6 +1032,7 @@ void JITCompiler::allocateRegistersSimple()
                    || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode
+                   || instr->opcode() == ByteCode::ArrayInitDataOpcode || instr->opcode() == ByteCode::ArrayInitElemOpcode
                    || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
             continue;
         }

@@ -156,6 +156,10 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         targetBuffers[i].setUninitialized();
     }
 
+    for (size_t i = 0; i < m_elements.size(); i++) {
+        instance->m_elementSegments[i].setUninitialized();
+    }
+
     if (imports.size() < m_imports.size()) {
         std::string message = "Insufficient import(s):\n";
 
@@ -307,11 +311,11 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
     // init table(elem segment)
     for (size_t i = 0; i < m_elements.size(); i++) {
         Element* elem = m_elements[i];
-        new (instance->m_elementSegments + i) ElementSegment();
-
         const auto& exprs = elem->exprFunctions();
-        VectorWithFixedSize<void*, std::allocator<void*>>& result = instance->m_elementSegments[i].m_elements;
-        result.reserve(exprs.size());
+
+        new (instance->m_elementSegments + i) ElementSegment(exprs.size());
+        void** result = instance->m_elementSegments[i].elements();
+
         for (size_t j = 0; j < exprs.size(); j++) {
             struct RunData {
                 Instance* instance;

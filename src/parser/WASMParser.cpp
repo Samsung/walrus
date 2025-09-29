@@ -17,6 +17,7 @@
 
 #include "parser/WASMParser.h"
 #include "interpreter/ByteCode.h"
+#include "runtime/GCArray.h"
 #include "runtime/Module.h"
 #include "runtime/Store.h"
 #include "runtime/TypeStore.h"
@@ -2799,7 +2800,39 @@ public:
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(Walrus::Value::Type::DefinedRef);
-        pushByteCode(Walrus::ArrayNewElem(typeInfo, elem_index, src0, src1, dst), WASMOpcode::ArrayNewDataOpcode);
+        pushByteCode(Walrus::ArrayNewElem(typeInfo, elem_index, src0, src1, dst), WASMOpcode::ArrayNewElemOpcode);
+    }
+
+    virtual void OnArrayInitDataExpr(Index type_index, Index data_index) override
+    {
+        Walrus::Value::Type type = m_result.m_compositeTypes[type_index]->asArray()->field().type();
+        uint8_t log2Size = static_cast<uint8_t>(Walrus::GCArray::getLog2Size(type));
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src3 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src2 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
+        bool isNullable = Walrus::Value::isNullableRefType(peekVMStackValueType());
+        auto src0 = popVMStack();
+        pushByteCode(Walrus::ArrayInitData(log2Size, data_index, isNullable, src0, src1, src2, src3), WASMOpcode::ArrayInitDataOpcode);
+    }
+
+    virtual void OnArrayInitElemExpr(Index type_index, Index elem_index) override
+    {
+        Walrus::Value::Type type = m_result.m_compositeTypes[type_index]->asArray()->field().type();
+        uint8_t log2Size = static_cast<uint8_t>(Walrus::GCArray::getLog2Size(type));
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src3 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src2 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
+        bool isNullable = Walrus::Value::isNullableRefType(peekVMStackValueType());
+        auto src0 = popVMStack();
+        pushByteCode(Walrus::ArrayInitElem(log2Size, elem_index, isNullable, src0, src1, src2, src3), WASMOpcode::ArrayInitElemOpcode);
     }
 
     virtual void OnArrayGetExpr(Opcode opcode, Index type_index) override

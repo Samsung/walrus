@@ -200,8 +200,8 @@ void Memory::fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t
 
 void Memory::initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
-    auto data = source->data()->initData();
-    std::copy(source->data()->initData().begin() + srcStart, source->data()->initData().begin() + srcStart + srcSize,
+    auto data = source->data();
+    std::copy(data + srcStart, data + srcStart + srcSize,
 #if defined(WALRUS_BIG_ENDIAN)
         ReverseArrayIterator(m_buffer + m_sizeInByte - 1)
 #else

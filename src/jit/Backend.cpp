@@ -1311,6 +1311,10 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             emitGCArrayNew(m_compiler, item->asInstruction());
             break;
         }
+        case Instruction::GCArrayInitFromExt: {
+            GCArrayInitFromExt(m_compiler, item->asInstruction());
+            break;
+        }
         case Instruction::GCArrayAccess: {
             emitGCArrayAccess(m_compiler, item->asInstruction());
             break;

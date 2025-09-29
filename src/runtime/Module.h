@@ -302,14 +302,14 @@ public:
 
     uint16_t memIndex() { return m_memIndex; }
 
-    const Vector<uint8_t, std::allocator<uint8_t>>& initData() const
+    const VectorWithFixedSize<uint8_t, std::allocator<uint8_t>>& initData() const
     {
         return m_initData;
     }
 
 private:
     ModuleFunction* m_moduleFunction;
-    Vector<uint8_t, std::allocator<uint8_t>> m_initData;
+    VectorWithFixedSize<uint8_t, std::allocator<uint8_t>> m_initData;
     uint16_t m_memIndex;
 };
 

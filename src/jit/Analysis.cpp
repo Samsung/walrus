@@ -695,64 +695,87 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     variable.info |= (*list & Instruction::TypeMask);
                     list++;
                 } while (param < end);
-            } else if (instr->opcode() == ByteCode::StructNewOpcode) {
-                for (auto it : reinterpret_cast<StructNew*>(instr->byteCode())->typeInfo()->fields()) {
-                    VariableList::Variable& variable = m_variableList->variables[*param++];
-                    variable.info |= Instruction::valueTypeToOperandType(Value::unpackType(it.type()));
-                }
-            } else if (instr->opcode() == ByteCode::ArrayNewFixedOpcode) {
-                Value::Type type = reinterpret_cast<ArrayNewFixed*>(instr->byteCode())->typeInfo()->field().type();
-                uint32_t info = Instruction::valueTypeToOperandType(Value::unpackType(type));
-                end = param + instr->paramCount();
-
-                while (param < end) {
-                    VariableList::Variable& variable = m_variableList->variables[*param++];
-                    variable.info |= info;
-                }
             } else {
-                const TypeVector* types = nullptr;
-
                 switch (instr->opcode()) {
-                case ByteCode::CallOpcode: {
-                    Call* call = reinterpret_cast<Call*>(instr->byteCode());
-                    types = &module()->function(call->index())->functionType()->param();
+                case ByteCode::StructNewOpcode: {
+                    for (auto it : reinterpret_cast<StructNew*>(instr->byteCode())->typeInfo()->fields()) {
+                        VariableList::Variable& variable = m_variableList->variables[*param++];
+                        variable.info |= Instruction::valueTypeToOperandType(Value::unpackType(it.type()));
+                    }
                     break;
                 }
-                case ByteCode::CallIndirectOpcode: {
-                    CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
-                    types = &callIndirect->functionType()->param();
+                case ByteCode::ArrayNewFixedOpcode: {
+                    Value::Type type = reinterpret_cast<ArrayNewFixed*>(instr->byteCode())->typeInfo()->field().type();
+                    uint32_t info = Instruction::valueTypeToOperandType(Value::unpackType(type));
+                    end = param + instr->paramCount();
+
+                    while (param < end) {
+                        VariableList::Variable& variable = m_variableList->variables[*param++];
+                        variable.info |= info;
+                    }
                     break;
                 }
-                case ByteCode::CallRefOpcode: {
-                    CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
-                    types = &callRef->functionType()->param();
-                    break;
-                }
-                case ByteCode::ThrowOpcode: {
-                    Throw* throwTag = reinterpret_cast<Throw*>(instr->byteCode());
-                    TagType* tagType = module()->tagType(throwTag->tagIndex());
-                    types = &module()->functionType(tagType->sigIndex())->param();
+                case ByteCode::ArrayInitDataOpcode:
+                case ByteCode::ArrayInitElemOpcode: {
+                    ASSERT(instr->paramCount() == 4);
+                    VariableList::Variable& variable = m_variableList->variables[*param++];
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+                    variable.info |= Instruction::Int32Operand;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+                    variable.info |= Instruction::Int64Operand;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+                    for (int i = 1; i < 4; i++) {
+                        VariableList::Variable& variable = m_variableList->variables[*param++];
+                        variable.info |= Instruction::Int32Operand;
+                    }
                     break;
                 }
                 default: {
-                    ASSERT(instr->opcode() == ByteCode::EndOpcode);
-                    types = &moduleFunction()->functionType()->result();
-                    break;
-                }
-                }
+                    const TypeVector* types = nullptr;
 
-                for (auto it : *types) {
-                    VariableList::Variable& variable = m_variableList->variables[*param++];
-                    variable.info |= Instruction::valueTypeToOperandType(it);
-                }
+                    switch (instr->opcode()) {
+                    case ByteCode::CallOpcode: {
+                        Call* call = reinterpret_cast<Call*>(instr->byteCode());
+                        types = &module()->function(call->index())->functionType()->param();
+                        break;
+                    }
+                    case ByteCode::CallIndirectOpcode: {
+                        CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
+                        types = &callIndirect->functionType()->param();
+                        break;
+                    }
+                    case ByteCode::CallRefOpcode: {
+                        CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+                        types = &callRef->functionType()->param();
+                        break;
+                    }
+                    case ByteCode::ThrowOpcode: {
+                        Throw* throwTag = reinterpret_cast<Throw*>(instr->byteCode());
+                        TagType* tagType = module()->tagType(throwTag->tagIndex());
+                        types = &module()->functionType(tagType->sigIndex())->param();
+                        break;
+                    }
+                    default: {
+                        ASSERT(instr->opcode() == ByteCode::EndOpcode);
+                        types = &moduleFunction()->functionType()->result();
+                        break;
+                    }
+                    }
 
-                if (instr->opcode() == ByteCode::CallIndirectOpcode || instr->opcode() == ByteCode::CallRefOpcode) {
-                    VariableList::Variable& variable = m_variableList->variables[*param];
+                    for (auto it : *types) {
+                        VariableList::Variable& variable = m_variableList->variables[*param++];
+                        variable.info |= Instruction::valueTypeToOperandType(it);
+                    }
+
+                    if (instr->opcode() == ByteCode::CallIndirectOpcode || instr->opcode() == ByteCode::CallRefOpcode) {
+                        VariableList::Variable& variable = m_variableList->variables[*param];
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-                    variable.info |= (instr->opcode() == ByteCode::CallIndirectOpcode) ? Instruction::Int32Operand : Instruction::Int64Operand;
+                        variable.info |= (instr->opcode() == ByteCode::CallIndirectOpcode) ? Instruction::Int32Operand : Instruction::Int64Operand;
 #else /* !SLJIT_64BIT_ARCHITECTURE */
-                    variable.info |= Instruction::Int32Operand;
+                        variable.info |= Instruction::Int32Operand;
 #endif /* SLJIT_64BIT_ARCHITECTURE */
+                    }
+                }
                 }
             }
         }

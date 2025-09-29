@@ -752,6 +752,83 @@ static void emitGCArrayNew(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
+static sljit_sw initArrayFromData(GCArray* array, uint32_t dst_offset, uint32_t src_offset, GCArrayInitFromExtArguments* args)
+{
+    DataSegment* data = reinterpret_cast<DataSegment*>(args->ptr);
+    uint32_t log2Size = args->log2Size;
+    uint32_t size = args->size;
+    size_t arraySize = array->length();
+    size_t dataSize = data->sizeInByte();
+
+    if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
+        return ExecutionContext::OutOfBoundsArrayAccessError;
+    }
+
+    if (dataSize < src_offset || ((dataSize - src_offset) >> log2Size) < size) {
+        return ExecutionContext::OutOfBoundsMemAccessError;
+    }
+
+    uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
+    uint8_t* dst = reinterpret_cast<uint8_t*>(array) + ((sizeof(GCArray) + mask) & ~mask);
+    memcpy(dst + (static_cast<size_t>(dst_offset) << log2Size), data->data() + src_offset, size << log2Size);
+    return ExecutionContext::NoError;
+}
+
+static sljit_sw initArrayFromElement(GCArray* array, uint32_t dst_offset, uint32_t src_offset, GCArrayInitFromExtArguments* args)
+{
+    ElementSegment* elements = reinterpret_cast<ElementSegment*>(args->ptr);
+    uint32_t size = args->size;
+    size_t arraySize = array->length();
+    size_t elemSize = elements->size();
+
+    if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
+        return ExecutionContext::OutOfBoundsArrayAccessError;
+    }
+
+    if (elemSize < src_offset || (elemSize - src_offset) < size) {
+        return ExecutionContext::OutOfBoundsTableAccessError;
+    }
+
+    uintptr_t mask = static_cast<uintptr_t>(sizeof(void*)) - 1;
+    uint8_t* dst = reinterpret_cast<uint8_t*>((reinterpret_cast<uintptr_t>(array) + sizeof(GCArray) + mask) & ~mask);
+    memcpy(dst + (static_cast<size_t>(dst_offset) * sizeof(void*)), elements->elements() + src_offset, size * sizeof(void*));
+    return ExecutionContext::NoError;
+}
+
+static void GCArrayInitFromExt(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    sljit_sw stackTmpStart = context->stackTmpStart;
+    ArrayInitFrom* arrayInitFrom = reinterpret_cast<ArrayInitFrom*>(instr->byteCode());
+    JITArg arg(instr->getParam(3));
+    size_t start;
+    sljit_sw addr;
+
+    sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayInitFromExtArguments, size), arg.arg, arg.argw);
+
+    if (instr->opcode() == ByteCode::ArrayInitDataOpcode) {
+        start = context->dataSegmentsStart + arrayInitFrom->index() * sizeof(DataSegment);
+        addr = GET_FUNC_ADDR(sljit_sw, initArrayFromData);
+        sljit_emit_op1(compiler, SLJIT_MOV_U8, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayInitFromExtArguments, log2Size), SLJIT_IMM, arrayInitFrom->log2Size());
+    } else {
+        start = context->elementSegmentsStart + arrayInitFrom->index() * sizeof(ElementSegment);
+        addr = GET_FUNC_ADDR(sljit_sw, initArrayFromElement);
+    }
+
+    sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayInitFromExtArguments, ptr), kInstanceReg, 0, SLJIT_IMM, static_cast<sljit_sw>(start));
+    emitInitR0R1R2(compiler, SLJIT_MOV_P, SLJIT_MOV32, SLJIT_MOV32, instr->operands());
+    sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
+
+    if (arrayInitFrom->isNullable()) {
+        CompileContext::get(compiler)->appendTrapJump(ExecutionContext::NullArrayReferenceError,
+                                                      sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, 0));
+    }
+
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, 32, 32, P), SLJIT_IMM, addr);
+    sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
+    context->appendTrapJump(ExecutionContext::GenericTrap, cmp);
+}
+
 static void emitGCArrayAccess(sljit_compiler* compiler, Instruction* instr)
 {
     Value::Type type;
