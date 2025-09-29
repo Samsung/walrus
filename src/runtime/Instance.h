@@ -37,7 +37,7 @@ class DataSegment {
 public:
     DataSegment(Data* data);
 
-    Data* data() const
+    const uint8_t* data() const
     {
         return m_data;
     }
@@ -53,21 +53,17 @@ public:
     }
 
 private:
-    Data* m_data;
+    const uint8_t* m_data;
     size_t m_sizeInByte;
 };
 
 class ElementSegment {
-    friend class Module;
-
 public:
-    ElementSegment()
-    {
-    }
+    ElementSegment(size_t size);
 
     size_t size() const
     {
-        return m_elements.size();
+        return m_size;
     }
 
     void* element(size_t index) const
@@ -75,18 +71,22 @@ public:
         return m_elements[index];
     }
 
-    const VectorWithFixedSize<void*, std::allocator<void*>>& elements() const
+    void** elements() const
     {
         return m_elements;
     }
 
-    void drop()
+    void drop();
+
+    void setUninitialized()
     {
-        m_elements.clear();
+        m_elements = nullptr;
+        m_size = 0;
     }
 
 private:
-    VectorWithFixedSize<void*, std::allocator<void*>> m_elements;
+    void** m_elements;
+    size_t m_size;
 };
 
 class Instance : public Object {

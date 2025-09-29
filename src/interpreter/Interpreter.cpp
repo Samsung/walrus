@@ -1917,8 +1917,8 @@ NextInstruction:
         ArrayNewData* code = (ArrayNewData*)programCounter;
 
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
-        uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
-        GCArray* result = GCArray::arrayNewData(offset, length, code->typeInfo(), instance->dataSegment(code->index()));
+        uint32_t size = readValue<uint32_t>(bp, code->src1Offset());
+        GCArray* result = GCArray::arrayNewData(offset, size, code->typeInfo(), instance->dataSegment(code->index()));
         if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
                 Trap::throwException(state, "memory allocation failed");
@@ -1937,8 +1937,8 @@ NextInstruction:
         ArrayNewData* code = (ArrayNewData*)programCounter;
 
         uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());
-        uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
-        GCArray* result = GCArray::arrayNewElem(offset, length, code->typeInfo(), instance->elementSegment(code->index()));
+        uint32_t size = readValue<uint32_t>(bp, code->src1Offset());
+        GCArray* result = GCArray::arrayNewElem(offset, size, code->typeInfo(), instance->elementSegment(code->index()));
         if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
                 Trap::throwException(state, "memory allocation failed");
@@ -1948,6 +1948,73 @@ NextInstruction:
         writeValue<void*>(bp, code->dstOffset(), result);
 
         ADD_PROGRAM_COUNTER(ArrayNewElem);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayInitData)
+        :
+    {
+        ArrayInitData* code = (ArrayInitData*)programCounter;
+
+        GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
+        if (UNLIKELY(Value::isNull(array))) {
+            Trap::throwException(state, "null array reference");
+        }
+
+        uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t src_offset = readValue<uint32_t>(bp, code->src2Offset());
+        uint32_t size = readValue<uint32_t>(bp, code->src3Offset());
+        DataSegment* data = instance->dataSegment(code->index());
+        uint32_t log2Size = code->log2Size();
+        size_t arraySize = array->length();
+        size_t dataSize = data->sizeInByte();
+
+        if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
+            Trap::throwException(state, "out of bounds array access");
+        }
+
+        if (dataSize < src_offset || ((dataSize - src_offset) >> log2Size) < size) {
+            Trap::throwException(state, "out of bounds memory access");
+        }
+
+        uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
+        uint8_t* dst = reinterpret_cast<uint8_t*>(array) + ((sizeof(GCArray) + mask) & ~mask);
+        memcpy(dst + (static_cast<size_t>(dst_offset) << log2Size), data->data() + src_offset, size << log2Size);
+
+        ADD_PROGRAM_COUNTER(ArrayInitData);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayInitElem)
+        :
+    {
+        ArrayInitElem* code = (ArrayInitElem*)programCounter;
+
+        GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
+        if (UNLIKELY(Value::isNull(array))) {
+            Trap::throwException(state, "null array reference");
+        }
+
+        uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t src_offset = readValue<uint32_t>(bp, code->src2Offset());
+        uint32_t size = readValue<uint32_t>(bp, code->src3Offset());
+        ElementSegment* elements = instance->elementSegment(code->index());
+        size_t arraySize = array->length();
+        size_t elemSize = elements->size();
+
+        if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
+            Trap::throwException(state, "out of bounds array access");
+        }
+
+        if (elemSize < src_offset || (elemSize - src_offset) < size) {
+            Trap::throwException(state, "out of bounds table access");
+        }
+
+        uintptr_t mask = static_cast<uintptr_t>(sizeof(void*)) - 1;
+        uint8_t* dst = reinterpret_cast<uint8_t*>((reinterpret_cast<uintptr_t>(array) + sizeof(GCArray) + mask) & ~mask);
+        memcpy(dst + (static_cast<size_t>(dst_offset) * sizeof(void*)), elements->elements() + src_offset, size * sizeof(void*));
+
+        ADD_PROGRAM_COUNTER(ArrayInitElem);
         NEXT_INSTRUCTION();
     }
 

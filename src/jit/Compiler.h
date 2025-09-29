@@ -119,6 +119,8 @@ public:
         GCCastDefined,
         // Garbage Collector array creation (e.g. ArrayNew)
         GCArrayNew,
+        // Garbage Collector array init from data/elem
+        GCArrayInitFromExt,
         // Garbage Collector array getter/setter operators
         GCArrayAccess,
         // Garbage Collector StructNew and StructNewDefault
@@ -605,6 +607,12 @@ struct TableCopyArguments {
 struct TableFillArguments {
     Instance* instance;
     uint32_t tableIndex;
+};
+
+struct GCArrayInitFromExtArguments {
+    void* ptr;
+    uint32_t size;
+    uint8_t log2Size;
 };
 
 struct CompileContext {

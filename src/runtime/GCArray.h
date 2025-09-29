@@ -40,8 +40,8 @@ public:
     static GCArray* arrayNew(uint32_t length, const ArrayType* type, uint8_t* value);
     static GCArray* arrayNewDefault(uint32_t length, const ArrayType* type);
     static GCArray* arrayNewFixed(uint32_t length, const ArrayType* type, ByteCodeStackOffset* offsets, uint8_t* bp);
-    static GCArray* arrayNewData(uint32_t offset, uint32_t length, const ArrayType* type, DataSegment* data);
-    static GCArray* arrayNewElem(uint32_t offset, uint32_t length, const ArrayType* type, ElementSegment* elem);
+    static GCArray* arrayNewData(uint32_t offset, uint32_t size, const ArrayType* type, DataSegment* data);
+    static GCArray* arrayNewElem(uint32_t offset, uint32_t size, const ArrayType* type, ElementSegment* elem);
 
     uint32_t length() const
     {

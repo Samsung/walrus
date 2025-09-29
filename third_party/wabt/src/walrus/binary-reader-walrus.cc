@@ -1430,12 +1430,16 @@ public:
     }
     Result OnArrayInitDataExpr(Index type_index, Index data_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayInitData(GetLocation(), Var(type_index, GetLocation()), Var(data_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayInitDataExpr(type_index, data_index);
         return Result::Ok;
     }
     Result OnArrayInitElemExpr(Index type_index, Index elem_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayInitElem(GetLocation(), Var(type_index, GetLocation()), Var(elem_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayInitElemExpr(type_index, elem_index);
         return Result::Ok;
     }
     Result OnArrayNewExpr(Index type_index) override

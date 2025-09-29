@@ -25,9 +25,42 @@
 #include "runtime/Global.h"
 #include "runtime/Tag.h"
 
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif /* ENABLE_GC */
+
 namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(instanceTypeInfo, InstanceKind);
+
+ElementSegment::ElementSegment(size_t size)
+    : m_size(size)
+{
+    if (size == 0) {
+        m_elements = nullptr;
+        return;
+    }
+
+    // The references are initialized during instantiation.
+#ifdef ENABLE_GC
+    m_elements = reinterpret_cast<void**>(GC_MALLOC_UNCOLLECTABLE(size * sizeof(void*)));
+#else
+    m_elements = reinterpret_cast<void**>(malloc(size * sizeof(void*)));
+#endif
+}
+
+void ElementSegment::drop()
+{
+    if (m_elements != nullptr) {
+#ifdef ENABLE_GC
+        GC_FREE(m_elements);
+#else
+        free(m_elements);
+#endif
+        m_elements = nullptr;
+        m_size = 0;
+    }
+}
 
 Instance* Instance::newInstance(Module* module)
 {
@@ -81,6 +114,11 @@ Instance::~Instance()
 
     for (size_t i = 0; i < size; i++) {
         targetBuffers[i].deque(m_memories[i]);
+    }
+
+    size = m_module->numberOfElemSegments();
+    for (size_t i = 0; i < size; i++) {
+        m_elementSegments[i].drop();
     }
 }
 
@@ -146,8 +184,8 @@ Global* Instance::resolveExportGlobal(std::string& name)
 }
 
 DataSegment::DataSegment(Data* d)
-    : m_data(d)
-    , m_sizeInByte(m_data->initData().size())
+    : m_data(d->initData().data())
+    , m_sizeInByte(d->initData().size())
 {
 }
 

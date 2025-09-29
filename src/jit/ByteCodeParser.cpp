@@ -209,7 +209,7 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL2(OTGCOp1, /* SD / SS */ PTR, I32)                                               \
     OL2(OTGCOp1Rev, /* SD */ I32, PTR)                                                 \
     OL2(OTGCCastDefined, /* ST */ PTR, PTR)                                            \
-    OL2(OTGCRefTestDefined, /* SD */ PTR, PTR | TMP)                                   \
+    OL2(OTGCRefTestDefined, /* SD */ PTR, PTR | TMP | S0)                              \
     OL4(OTGCArrayMoveI32, /* SSDT / SSST */ PTR, I32, I32, PTR)                        \
     OL4(OTGCArrayMoveI64, /* SSDT / SSST */ PTR, I32, I64, PTR)                        \
     OL4(OTGCArrayMovePtr, /* SSDT / SSST */ PTR, I32, PTR, PTR)                        \
@@ -1931,6 +1931,20 @@ static void compileFunction(JITCompiler* compiler)
             operands[0] = STACK_OFFSET(arrayNewFrom->src0Offset());
             operands[1] = STACK_OFFSET(arrayNewFrom->src1Offset());
             operands[2] = STACK_OFFSET(arrayNewFrom->dstOffset());
+            break;
+        }
+        case ByteCode::ArrayInitDataOpcode:
+        case ByteCode::ArrayInitElemOpcode: {
+            ArrayInitFrom* arrayInitFrom = reinterpret_cast<ArrayInitFrom*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayInitFromExt, opcode, 4, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            compiler->increaseStackTmpSize(sizeof(GCArrayInitFromExtArguments));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayInitFrom->src0Offset());
+            operands[1] = STACK_OFFSET(arrayInitFrom->src1Offset());
+            operands[2] = STACK_OFFSET(arrayInitFrom->src2Offset());
+            operands[3] = STACK_OFFSET(arrayInitFrom->src3Offset());
             break;
         }
         case ByteCode::ArrayGetOpcode: {

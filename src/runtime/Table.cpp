@@ -124,7 +124,7 @@ void Table::throwException(ExecutionState& state) const
 
 void Table::initTable(ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
-    memcpy(m_elements + dstStart, source->elements().data() + srcStart, srcSize * sizeof(void*));
+    memcpy(m_elements + dstStart, source->elements() + srcStart, srcSize * sizeof(void*));
 }
 
 void Table::copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
