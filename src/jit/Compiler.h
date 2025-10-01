@@ -38,6 +38,8 @@ class ExtendedInstruction;
 class BrTableInstruction;
 class Label;
 class JITModule;
+class DataSegment;
+class ElementSegment;
 struct CompileContext;
 struct ExecutionContext;
 
@@ -576,37 +578,23 @@ struct TrapJump {
 };
 
 struct MemoryInitArguments {
-    Instance* instance;
-    uint32_t segmentIndex;
-    uint16_t memIndex;
+    Memory* memory;
+    DataSegment* data;
 };
 
 struct MemoryCopyArguments {
-    Instance* instance;
-    uint16_t srcMemIndex;
-    uint16_t dstMemIndex;
+    Memory* srcMemory;
+    Memory* dstMemory;
 };
 
-struct MemoryFillArguments {
-    Instance* instance;
-    uint16_t memIndex;
-};
-
-struct InitTableArguments {
-    Instance* instance;
-    uint32_t tableIndex;
-    uint32_t segmentIndex;
+struct TableInitArguments {
+    Table* table;
+    ElementSegment* source;
 };
 
 struct TableCopyArguments {
-    Instance* instance;
-    uint32_t srcIndex;
-    uint32_t dstIndex;
-};
-
-struct TableFillArguments {
-    Instance* instance;
-    uint32_t tableIndex;
+    Table* srcTable;
+    Table* dstTable;
 };
 
 struct GCArrayInitFromExtArguments {

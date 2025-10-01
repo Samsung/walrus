@@ -18,26 +18,25 @@
 
 static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, MemoryInitArguments* args)
 {
-    Instance* instance = args->instance;
-    Memory* memory = instance->memory(args->memIndex);
-    DataSegment* sg = instance->dataSegment(args->segmentIndex);
+    Memory* memory = args->memory;
+    DataSegment* data = args->data;
 
     if (!memory->checkAccess(dstStart, srcSize)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
-    if (srcStart >= sg->sizeInByte() || srcStart + srcSize > sg->sizeInByte()) {
+    if (srcStart >= data->sizeInByte() || srcStart + srcSize > data->sizeInByte()) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
-    memory->initMemory(sg, dstStart, srcStart, srcSize);
+    memory->initMemory(data, dstStart, srcStart, srcSize);
     return ExecutionContext::NoError;
 }
 
 static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, MemoryCopyArguments* args)
 {
-    Memory* srcMemory = args->instance->memory(args->srcMemIndex);
-    Memory* dstMemory = args->instance->memory(args->dstMemIndex);
+    Memory* srcMemory = args->srcMemory;
+    Memory* dstMemory = args->dstMemory;
 
     if (!srcMemory->checkAccess(srcStart, size) || !srcMemory->checkAccess(dstStart, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
@@ -47,10 +46,8 @@ static sljit_sw copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size, 
     return ExecutionContext::NoError;
 }
 
-static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, MemoryFillArguments* args)
+static sljit_sw fillMemory(uint32_t start, uint32_t value, uint32_t size, Memory* memory)
 {
-    Memory* memory = args->instance->memory(args->memIndex);
-
     if (!memory->checkAccess(start, size)) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
@@ -104,26 +101,25 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
 
             sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
             sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
-            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, instance), kInstanceReg, 0);
-            sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, segmentIndex), SLJIT_IMM, memoryInit->segmentIndex());
-            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, memIndex), SLJIT_IMM, memoryInit->memIndex());
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, memory),
+                           SLJIT_MEM1(kInstanceReg), Instance::alignedSize() + memoryInit->memIndex() * sizeof(void*));
+            sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryInitArguments, data),
+                           kInstanceReg, 0, SLJIT_IMM, context->dataSegmentsStart + (memoryInit->segmentIndex() * sizeof(ElementSegment)));
             addr = GET_FUNC_ADDR(sljit_sw, initMemory);
         } else if (opcode == ByteCode::MemoryCopyOpcode) {
             MemoryCopy* memoryCopy = reinterpret_cast<MemoryCopy*>(instr->byteCode());
 
             sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
             sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
-            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, instance), kInstanceReg, 0);
-            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, srcMemIndex), SLJIT_IMM, memoryCopy->srcMemIndex());
-            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, dstMemIndex), SLJIT_IMM, memoryCopy->dstMemIndex());
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, srcMemory),
+                           SLJIT_MEM1(kInstanceReg), Instance::alignedSize() + memoryCopy->srcMemIndex() * sizeof(void*));
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryCopyArguments, dstMemory),
+                           SLJIT_MEM1(kInstanceReg), Instance::alignedSize() + memoryCopy->dstMemIndex() * sizeof(void*));
             addr = GET_FUNC_ADDR(sljit_sw, copyMemory);
         } else {
             MemoryFill* memoryFill = reinterpret_cast<MemoryFill*>(instr->byteCode());
 
-            sljit_sw stackTmpStart = CompileContext::get(compiler)->stackTmpStart;
-            sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
-            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryFillArguments, instance), kInstanceReg, 0);
-            sljit_emit_op1(compiler, SLJIT_MOV32_U16, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(MemoryFillArguments, memIndex), SLJIT_IMM, memoryFill->memIndex());
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R3, 0, SLJIT_MEM1(kInstanceReg), Instance::alignedSize() + memoryFill->memIndex() * sizeof(void*));
             addr = GET_FUNC_ADDR(sljit_sw, fillMemory);
         }
 

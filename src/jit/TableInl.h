@@ -16,11 +16,10 @@
 
 /* Only included by Backend.cpp */
 
-static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, InitTableArguments* args)
+static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize, TableInitArguments* args)
 {
-    Instance* instance = args->instance;
-    auto table = instance->table(args->tableIndex);
-    auto source = instance->elementSegment(args->segmentIndex);
+    Table* table = args->table;
+    ElementSegment* source = args->source;
 
     if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)table->size())
         || UNLIKELY((srcStart + srcSize) > source->size())) {
@@ -37,9 +36,8 @@ static sljit_sw initTable(uint32_t dstStart, uint32_t srcStart, uint32_t srcSize
 
 static sljit_sw copyTable(uint32_t dstIndex, uint32_t srcIndex, uint32_t n, TableCopyArguments* args)
 {
-    Instance* instance = args->instance;
-    auto srcTable = instance->table(args->srcIndex);
-    auto dstTable = instance->table(args->dstIndex);
+    Table* srcTable = args->srcTable;
+    Table* dstTable = args->dstTable;
 
     if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)dstTable->size()))) {
         return ExecutionContext::OutOfBoundsTableAccessError;
@@ -49,11 +47,8 @@ static sljit_sw copyTable(uint32_t dstIndex, uint32_t srcIndex, uint32_t n, Tabl
     return ExecutionContext::NoError;
 }
 
-static sljit_sw fillTable(uint32_t index, void* ptr, uint32_t n, TableFillArguments* args)
+static sljit_sw fillTable(uint32_t index, void* ptr, uint32_t n, Table* srcTable)
 {
-    Instance* instance = args->instance;
-    auto srcTable = instance->table(args->tableIndex);
-
     if ((uint64_t)index + (uint64_t)n > (uint64_t)srcTable->size()) {
         return ExecutionContext::OutOfBoundsTableAccessError;
     }
@@ -105,9 +100,10 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
 
         TableInit* tableInit = reinterpret_cast<TableInit*>(instr->byteCode());
         sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(InitTableArguments, instance), kInstanceReg, 0);
-        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(InitTableArguments, tableIndex), SLJIT_IMM, tableInit->tableIndex());
-        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(InitTableArguments, segmentIndex), SLJIT_IMM, tableInit->segmentIndex());
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableInitArguments, table),
+                       SLJIT_MEM1(kInstanceReg), context->tableStart + (tableInit->tableIndex() * sizeof(void*)));
+        sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableInitArguments, source),
+                       kInstanceReg, 0, SLJIT_IMM, context->elementSegmentsStart + (tableInit->segmentIndex() * sizeof(ElementSegment)));
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4V(32, 32, 32, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, initTable));
 
         sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
@@ -127,9 +123,10 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
 
         TableCopy* tableCopy = reinterpret_cast<TableCopy*>(instr->byteCode());
         sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableCopyArguments, instance), kInstanceReg, 0);
-        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableCopyArguments, srcIndex), SLJIT_IMM, tableCopy->srcIndex());
-        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableCopyArguments, dstIndex), SLJIT_IMM, tableCopy->dstIndex());
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableCopyArguments, srcTable),
+                       SLJIT_MEM1(kInstanceReg), context->tableStart + (tableCopy->srcIndex() * sizeof(void*)));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableCopyArguments, dstTable),
+                       SLJIT_MEM1(kInstanceReg), context->tableStart + (tableCopy->dstIndex() * sizeof(void*)));
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4V(32, 32, 32, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, copyTable));
 
         sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
@@ -139,10 +136,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::TableFillOpcode: {
         ASSERT(instr->info() & Instruction::kIsCallback);
         emitInitR0R1R2(compiler, SLJIT_MOV32, SLJIT_MOV_P, SLJIT_MOV32, instr->operands());
-
-        sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableFillArguments, instance), kInstanceReg, 0);
-        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(TableFillArguments, tableIndex), SLJIT_IMM, (reinterpret_cast<TableFill*>(instr->byteCode()))->tableIndex());
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R3, 0, SLJIT_MEM1(kInstanceReg), context->tableStart + ((reinterpret_cast<TableFill*>(instr->byteCode()))->tableIndex() * sizeof(void*)));
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4V(32, P, 32, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, fillTable));
 
         sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
