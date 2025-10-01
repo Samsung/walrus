@@ -1496,7 +1496,7 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(OTCallback3Arg);
-            compiler->increaseStackTmpSize(sizeof(InitTableArguments));
+            compiler->increaseStackTmpSize(sizeof(TableInitArguments));
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(tableInit->srcOffsets()[0]);
@@ -1530,7 +1530,6 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
             instr->setRequiredRegsDescriptor(OTTableFill);
-            compiler->increaseStackTmpSize(sizeof(TableFillArguments));
 
             Operand* operands = instr->operands();
             operands[0] = STACK_OFFSET(tableFill->srcOffsets()[0]);
@@ -1592,7 +1591,9 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrc3;
             info = Instruction::kIsCallback;
             requiredInit = OTCallback3Arg;
-            compiler->increaseStackTmpSize((opcode == ByteCode::MemoryFillOpcode ? sizeof(MemoryFillArguments) : sizeof(MemoryCopyArguments)));
+            if (opcode == ByteCode::MemoryCopyOpcode) {
+                compiler->increaseStackTmpSize(sizeof(MemoryCopyArguments));
+            }
             break;
         }
         case ByteCode::MemoryGrowOpcode: {
