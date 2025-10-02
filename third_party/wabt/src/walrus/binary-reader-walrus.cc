@@ -86,9 +86,8 @@ static Features getFeatures(const uint32_t featureFlags) {
     features.enable_threads();
     // TODO: should use command line flag for this (--enable-relaxed-simd)
     features.enable_relaxed_simd();
-    // TODO: should use command line flag for this (--enable-gc)
-    features.enable_gc();
-    if (featureFlags & FeatureFlagValue::enableMultiMemory) {
+    if (featureFlags & FeatureFlagValue::enableWebAssembly3) {
+        features.enable_gc();
         features.enable_multi_memory();
     }
     return features;
@@ -385,6 +384,7 @@ public:
         return Result::Ok;
     }
     Result EndGlobal(Index index) override {
+        CHECK_RESULT(m_validator.EndGlobal(Location()));
         m_externalDelegate->EndGlobal(index);
         return Result::Ok;
     }
