@@ -48,7 +48,7 @@ DEFAULT_RUNNERS = []
 JIT_EXCLUDE_FILES = []
 jit = False
 jit_no_reg_alloc = False
-multi_memory = False
+web_assembly3 = False
 
 
 class runner(object):
@@ -73,7 +73,7 @@ def _run_wast_tests(engine, files, is_fail, args=None):
         subprocess_args =  qemu + [engine, "--mapdirs", "./test/wasi", "/var"]
         if jit or jit_no_reg_alloc: subprocess_args.append("--jit")
         if jit_no_reg_alloc: subprocess_args.append("--jit-no-reg-alloc")
-        if multi_memory: subprocess_args.append("--enable-multi-memory")
+        if web_assembly3: subprocess_args.append("--enable-web-assembly3")
         if args: subprocess_args.append("--args")
         subprocess_args.append(file)
         if args: subprocess_args.extend(args)
@@ -122,20 +122,13 @@ def run_basic_tests(engine):
 @runner('wasm-test-core', default=True)
 def run_core_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-spec', 'core')
-    global multi_memory
 
     print('Running wasm-test-core tests:')
-    xpass_core = [i for i in glob(join(TEST_DIR, '**/*.wast'), recursive=True) if "multi-memory" not in i]
-    xpass_multi_memory = [i for i in glob(join(TEST_DIR, '**/*.wast'), recursive=True) if "multi-memory" in i]
+    xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass_result = _run_wast_tests(engine, xpass, False)
 
-    xpass_core_result = _run_wast_tests(engine, xpass_core, False)
-
-    multi_memory = True
-    xpass_multi_memory_result = _run_wast_tests(engine, xpass_multi_memory, False)
-    multi_memory = False
-
-    tests_total = len(xpass_core) + len(xpass_multi_memory)
-    fail_total = xpass_core_result + xpass_multi_memory_result
+    tests_total = len(xpass)
+    fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
     print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
@@ -200,6 +193,26 @@ def run_extended_tests(engine):
 
     if fail_total > 0:
         raise Exception("wasm-test-extended failed")
+
+@runner('wasm-test-web-assembly3', default=True)
+def run_extended_tests(engine):
+    global web_assembly3
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'web-assembly3')
+
+    print('Running wasm-extended tests:')
+    xpass = glob(join(TEST_DIR, '**/*.wast'), recursive=True)
+    web_assembly3 = True
+    xpass_result = _run_wast_tests(engine, xpass, False)
+    web_assembly3 = False
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wasm-test-web-assembly3 failed")
 
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
