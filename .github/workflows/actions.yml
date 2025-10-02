@@ -180,6 +180,36 @@ jobs:
           cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/linux/x64 $BUILD_OPTIONS
           ninja -Cout/linux/x64
 
+  build-test-on-aarch64-linux:
+    strategy:
+      matrix:
+        mode:
+          - debug
+          - release
+        switch:
+          - --jit
+          - --jit-no-reg-alloc
+          - ""
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          # sudo apt install -y ninja-build gcc-multilib g++-multilib
+          sudo apt install -y ninja-build
+      - name: Build aarch64-${{ matrix.mode }} ( ${{ matrix.switch }} )
+        env:
+          BUILD_OPTIONS: -DWALRUS_ARCH=aarch64 -DWALRUS_HOST=linux -DWALRUS_MODE=${{ matrix.mode }}-DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/linux/aarch64/${{ matrix.mode }} $BUILD_OPTIONS
+          ninja -Cout/linux/aarch64/${{ matrix.mode }}
+      - name: Run Tests
+        run: |
+          $RUNNER ${{ matrix.switch }} --engine="$GITHUB_WORKSPACE/out/linux/aarch64/${{ matrix.mode}}/walrus"
+
   build-test-on-arches-with-qemu:
     name: ${{ matrix.compile.name }} on ${{ matrix.arch.name }} ${{ matrix.mode }} ${{ matrix.switch }}
     strategy:
@@ -221,16 +251,6 @@ jobs:
               target: arm-linux-user
               name: qemu-arm
             walrus: arm
-          - name: aarch64
-            toolchain:
-              url: https://toolchains.bootlin.com/downloads/releases/toolchains/aarch64/tarballs/aarch64--glibc--stable-2024.05-1.tar.xz
-              name: aarch64--glibc--stable-2024.05-1.tar.xz
-              CC: aarch64-buildroot-linux-gnu-gcc-13.3.0.br_real
-              CXX: aarch64-buildroot-linux-gnu-g++.br_real
-            qemu:
-              target: aarch64-linux-user
-              name: qemu-aarch64
-            walrus: aarch64
           - name: riscv64
             toolchain:
               url: https://toolchains.bootlin.com/downloads/releases/toolchains/riscv64-lp64d/tarballs/riscv64-lp64d--glibc--stable-2024.05-1.tar.xz
@@ -315,6 +335,35 @@ jobs:
       - name: Build ${{ matrix.arch }} Release
         run: |
           CMake -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
+          CMake --build out/ --config Release
+      - name: Run tests
+        run: |
+          python tools\run-tests.py --engine=%cd%\out\walrus.exe
+        shell: cmd
+      - if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 15
+
+  test-on-windows-11-arm:
+    runs-on: windows-11-arm
+    steps:
+      - name: Set git cllf config
+        run: |
+          git config --global core.autocrlf input
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: amd64_arm64
+          sdk: "10.0.26100.0"
+      - name: Build aarch64 Release
+        run: |
+          CMake -DCMAKE_POLICY_VERSION_MINIMUM="3.5" -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=aarch64 -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
           CMake --build out/ --config Release
       - name: Run tests
         run: |
