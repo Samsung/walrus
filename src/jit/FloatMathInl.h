@@ -492,7 +492,7 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
 
     ASSERT(instr->next() != nullptr);
 
-    if (instr->info() & Instruction::kIsMergeCompare) {
+    if (instr->info() & Instruction::kIsMergeCompare && *operand == VARIABLE_SET_PTR(nullptr)) {
         nextInstr = instr->next()->asInstruction();
 
         if (nextInstr->opcode() != ByteCode::SelectOpcode) {
@@ -514,12 +514,15 @@ static bool emitFloatCompare(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_fop1(compiler, opcode, params[0].arg, params[0].argw,
                     params[1].arg, params[1].argw);
 
+    if (*operand != VARIABLE_SET_PTR(nullptr)) {
+        params[0].set(operand);
+        sljit_emit_op_flags(compiler, SLJIT_MOV32, params[0].arg, params[0].argw, type);
+    }
+
     if (nextInstr != nullptr) {
         emitSelect(compiler, nextInstr, type);
         return true;
     }
 
-    params[0].set(operand);
-    sljit_emit_op_flags(compiler, SLJIT_MOV32, params[0].arg, params[0].argw, type);
     return false;
 }

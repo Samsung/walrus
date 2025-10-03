@@ -326,12 +326,10 @@ static void emitSelect128(sljit_compiler* compiler, Instruction* instr, sljit_s3
     Operand* operands = instr->operands();
     assert(instr->opcode() == ByteCode::SelectOpcode && instr->paramCount() == 3);
 
-    JITArg args[2];
+    JITArg arg;
     JITArg target(operands + 3);
 
-    simdOperandToArg(compiler, operands, args[0], SLJIT_SIMD_ELEM_128, instr->requiredReg(0));
-    simdOperandToArg(compiler, operands + 1, args[1], SLJIT_SIMD_ELEM_128, instr->requiredReg(1));
-
+    simdOperandToArg(compiler, operands, arg, SLJIT_SIMD_ELEM_128, SLJIT_TMP_DEST_VREG);
 
     if (type == -1) {
         JITArg cond(operands + 2);
@@ -341,21 +339,24 @@ static void emitSelect128(sljit_compiler* compiler, Instruction* instr, sljit_s3
 
     const sljit_s32 mov_type = SLJIT_SIMD_ELEM_128 | SLJIT_SIMD_REG_128;
     sljit_s32 targetReg = GET_TARGET_REG(target.arg, SLJIT_TMP_DEST_VREG);
-    sljit_s32 baseReg = 0;
+    sljit_s32 otherReg = 1;
 
-    if (args[1].arg == targetReg) {
-        baseReg = 1;
+    if (SLJIT_IS_REG(target.arg) && operands[1] == VARIABLE_SET(target.arg, Instruction::Register)) {
+        otherReg = 0;
         type ^= 1;
-    }
-
-    if (args[0].arg != targetReg) {
-        sljit_emit_simd_mov(compiler, mov_type, targetReg, args[0].arg, args[0].argw);
+    } else if (arg.arg != targetReg) {
+        sljit_emit_simd_mov(compiler, mov_type, targetReg, arg.arg, arg.argw);
     }
 
     sljit_jump* jump = sljit_emit_jump(compiler, type);
-    sljit_s32 otherReg = baseReg ^ 0x1;
 
-    sljit_emit_simd_mov(compiler, mov_type, targetReg, args[otherReg].arg, args[otherReg].argw);
+    simdOperandToArg(compiler, operands + otherReg, arg, SLJIT_SIMD_ELEM_128, targetReg);
+
+    if (arg.arg != targetReg) {
+        ASSERT(SLJIT_IS_REG(arg.arg));
+        sljit_emit_simd_mov(compiler, mov_type, targetReg, arg.arg, arg.argw);
+    }
+
     sljit_set_label(jump, sljit_emit_label(compiler));
 
     if (SLJIT_IS_MEM(target.arg)) {

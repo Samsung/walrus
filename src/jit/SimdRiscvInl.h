@@ -764,6 +764,12 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
         if (nextInstr->opcode() == ByteCode::SelectOpcode) {
             sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, dst, 0, SLJIT_IMM, 0);
+
+            if ((operands[1] != VARIABLE_SET_PTR(nullptr))) {
+                args[1].set(operands + 1);
+                sljit_emit_op_flags(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, type);
+            }
+
             emitSelect(compiler, nextInstr, type);
             return true;
         }

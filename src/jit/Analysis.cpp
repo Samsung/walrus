@@ -795,27 +795,36 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             continue;
         }
 
-        ASSERT(instr->next() != nullptr);
-
-        VariableRef ref = *instr->getResult(0);
-        VariableList::Variable& variable = m_variableList->variables[ref];
-
-        if (variable.u.rangeStart != instr->id() || variable.rangeEnd != instr->id() + 1) {
+        if (!instr->next()->isInstruction()) {
             instr->clearInfo(Instruction::kIsMergeCompare);
             continue;
         }
 
-        ASSERT(instr->next()->isInstruction());
+        VariableRef ref = *instr->getResult(0);
+        VariableList::Variable& variable = m_variableList->variables[ref];
         Instruction* nextInstr = instr->next()->asInstruction();
+        bool dropVariable;
+        Operand refAsVariable = VARIABLE_SET(ref, DependencyGenContext::Variable);
+
+        ASSERT((variable.info & Instruction::TypeMask) == Instruction::Int32Operand);
 
         switch (nextInstr->opcode()) {
         case ByteCode::JumpIfTrueOpcode:
         case ByteCode::JumpIfFalseOpcode:
-            // These instructions has only one argument.
-            ASSERT(*nextInstr->getParam(0) == VARIABLE_SET(ref, DependencyGenContext::Variable));
-            break;
+            // These instructions have only one argument.
+            if (*nextInstr->getParam(0) == refAsVariable) {
+                dropVariable = (variable.u.rangeStart == instr->id() && variable.rangeEnd == instr->id() + 1);
+                break;
+            }
+
+            instr->clearInfo(Instruction::kIsMergeCompare);
+            continue;
         case ByteCode::SelectOpcode:
-            if (*nextInstr->getParam(2) == VARIABLE_SET(ref, DependencyGenContext::Variable)) {
+            if (*nextInstr->getParam(2) == refAsVariable) {
+                dropVariable = (variable.u.rangeStart == instr->id()
+                                && variable.rangeEnd == instr->id() + 1
+                                && *nextInstr->getParam(0) != refAsVariable
+                                && *nextInstr->getParam(1) != refAsVariable);
                 break;
             }
             FALLTHROUGH;
@@ -824,8 +833,10 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             continue;
         }
 
-        variable.info |= VariableList::kIsImmediate;
-        variable.value = VARIABLE_SET_PTR(nullptr);
+        if (dropVariable) {
+            variable.info |= VariableList::kIsImmediate;
+            variable.value = VARIABLE_SET_PTR(nullptr);
+        }
 
         if (instr->group() == Instruction::Binary) {
             instr->convertBinaryToCompare();

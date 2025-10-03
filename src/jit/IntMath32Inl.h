@@ -1079,6 +1079,11 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
             sljit_set_current_flags(compiler, (opcode - SLJIT_SUB) | SLJIT_CURRENT_FLAGS_SUB);
         }
 
+        if (*operand != VARIABLE_SET_PTR(nullptr)) {
+            JITArg result(operand);
+            sljit_emit_op_flags(compiler, SLJIT_MOV32, result.arg, result.argw, type);
+        }
+
         if (nextInstr != nullptr) {
             if (!isBranch) {
                 emitSelect(compiler, nextInstr, type);
@@ -1094,8 +1099,6 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
             return true;
         }
 
-        JITArg result(operand);
-        sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
         return false;
     }
 
@@ -1118,10 +1121,16 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 
         sljit_jump* jump;
 
-        if (instr->opcode() != ByteCode::I32AndOpcode) {
+        if (instr->opcode() != ByteCode::I32AndOpcode && (*operand == VARIABLE_SET_PTR(nullptr))) {
             jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
         } else {
             sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+
+            if (*operand != VARIABLE_SET_PTR(nullptr)) {
+                JITArg result(operand);
+                sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
+            }
+
             jump = sljit_emit_jump(compiler, type);
         }
 
@@ -1131,13 +1140,16 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 
     sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
 
+    if (*operand != VARIABLE_SET_PTR(nullptr)) {
+        JITArg result(operand);
+        sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
+    }
+
     if (nextInstr != nullptr) {
         emitSelect(compiler, nextInstr, type);
         return true;
     }
 
-    JITArg result(operand);
-    sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
     return false;
 }
 
