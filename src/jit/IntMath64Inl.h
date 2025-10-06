@@ -523,21 +523,17 @@ static void emitConvert(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64ExtendI32SOpcode:
         if (SLJIT_IS_IMM(args[0].arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, args[0].arg, static_cast<sljit_s32>(args[0].argw));
-        } else if (SLJIT_IS_MEM(args[0].arg)) {
+        } else {
             sljit_emit_op1(compiler, SLJIT_MOV_S32, SLJIT_TMP_DEST_REG, 0, args[0].arg, args[0].argw);
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_TMP_DEST_REG, 0);
-        } else {
-            sljit_emit_op1(compiler, SLJIT_MOV_S32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
         }
         return;
     case ByteCode::I64ExtendI32UOpcode:
         if (SLJIT_IS_IMM(args[0].arg)) {
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, args[0].arg, static_cast<sljit_u32>(args[0].argw));
-        } else if (SLJIT_IS_MEM(args[0].arg)) {
+        } else {
             sljit_emit_op1(compiler, SLJIT_MOV_U32, SLJIT_TMP_DEST_REG, 0, args[0].arg, args[0].argw);
             sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_TMP_DEST_REG, 0);
-        } else {
-            sljit_emit_op1(compiler, SLJIT_MOV_U32, args[1].arg, args[1].argw, args[0].arg, args[0].argw);
         }
         return;
     default:
