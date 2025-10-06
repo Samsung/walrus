@@ -133,7 +133,7 @@
 	local.get 2
 	i32.eqz
 	drop
-	
+
 	local.get 1
 	i64x2.add
 )
@@ -159,11 +159,26 @@
 	local.get 2
 	i32.eqz
 	drop
-	
+
 	local.get 0
 	local.get 1
 	f32x4.add
 )
+
+(func (export "br_if_v128_any_true") (param v128) (result i32)
+	(local i32)
+	block
+		local.get 0
+		v128.any_true
+		local.set 1
+		local.get 1
+		br_if 0
+		local.get 1
+		return
+	end
+	i32.const -4
+)
+
 )
 
 (assert_return (invoke "select_i32_eqz" (i32.const 0) (i32.const 1)) (i32.const 1))
@@ -176,3 +191,5 @@
 (assert_return (invoke "br_if_f64_le" (f64.const 1) (f64.const 0)) (i32.const 0))
 (assert_return (invoke "select_v128_any_true" (v128.const i64x2 1 1) (v128.const i64x2 0 0)) (v128.const i64x2 1 1))
 (assert_return (invoke "br_if_v128_all_true" (v128.const f32x4 1 1 1 1) (v128.const f32x4 1 1 1 1)) (v128.const f32x4 2 2 2 2))
+(assert_return (invoke "br_if_v128_any_true" (v128.const i32x4 0 0 1 0)) (i32.const -4))
+(assert_return (invoke "br_if_v128_any_true" (v128.const i32x4 0 0 0 0)) (i32.const 0))
