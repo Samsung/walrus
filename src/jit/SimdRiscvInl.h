@@ -739,7 +739,7 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
 
     sljit_s32 dst = SLJIT_TMP_DEST_REG;
 
-    if (!(instr->info() & Instruction::kIsMergeCompare)) {
+    if (operands[1] != VARIABLE_SET_PTR(nullptr)) {
         args[1].set(operands + 1);
         dst = GET_TARGET_REG(args[1].arg, SLJIT_TMP_DEST_REG);
     }
@@ -762,14 +762,15 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
     if (instr->info() & Instruction::kIsMergeCompare) {
         Instruction* nextInstr = instr->next()->asInstruction();
 
-        if (nextInstr->opcode() == ByteCode::SelectOpcode) {
+        if (nextInstr->opcode() == ByteCode::SelectOpcode || operands[1] != VARIABLE_SET_PTR(nullptr)) {
             sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, dst, 0, SLJIT_IMM, 0);
+        }
 
-            if ((operands[1] != VARIABLE_SET_PTR(nullptr))) {
-                args[1].set(operands + 1);
-                sljit_emit_op_flags(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, type);
-            }
+        if (operands[1] != VARIABLE_SET_PTR(nullptr)) {
+            sljit_emit_op_flags(compiler, SLJIT_MOV32, args[1].arg, args[1].argw, type);
+        }
 
+        if (nextInstr->opcode() == ByteCode::SelectOpcode) {
             emitSelect(compiler, nextInstr, type);
             return true;
         }
@@ -780,10 +781,16 @@ static bool emitUnaryCondSIMD(sljit_compiler* compiler, Instruction* instr)
             type ^= 0x1;
         }
 
+        if (operands[1] != VARIABLE_SET_PTR(nullptr)) {
+            nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_jump(compiler, type));
+            return true;
+        }
+
         nextInstr->asExtended()->value().targetLabel->jumpFrom(sljit_emit_cmp(compiler, type, dst, 0, SLJIT_IMM, 0));
         return true;
     }
 
+    ASSERT(operands[1] != VARIABLE_SET_PTR(nullptr));
     sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, dst, 0, SLJIT_IMM, 0);
     sljit_emit_op_flags(compiler, SLJIT_MOV32, dst, 0, type);
 
