@@ -155,6 +155,8 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL1(OTGetPTR, /* S */ PTR)                                                         \
     OL1(OTPutI32, /* D */ I32)                                                         \
     OL1(OTPutI64, /* D */ I64)                                                         \
+    OL1(OTPutF32, /* D */ F32)                                                         \
+    OL1(OTPutF64, /* D */ F64)                                                         \
     OL1(OTPutV128, /* D */ V128)                                                       \
     OL1(OTPutPTR, /* D */ PTR)                                                         \
     OL2(OTMoveF32, /* SD */ F32 | NOTMP, F32 | S0)                                     \
@@ -2839,8 +2841,17 @@ static void compileFunction(JITCompiler* compiler)
 const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
 {
     uint32_t requiredInit = OTNone;
+    size_t operandIdx = 1;
 
     switch (instr->opcode()) {
+    case ByteCode::Const32Opcode:
+        operandIdx = 0;
+        requiredInit = OTPutF32;
+        break;
+    case ByteCode::Const64Opcode:
+        operandIdx = 0;
+        requiredInit = OTPutF64;
+        break;
     case ByteCode::Load32Opcode:
         requiredInit = OTLoadF32;
         break;
@@ -2854,16 +2865,14 @@ const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
         requiredInit = OTStoreF64;
         break;
     default:
-        break;
+        return instr->getOperandDescriptor();
     }
 
-    if (requiredInit != OTNone) {
-        ASSERT((instr->paramCount() + instr->resultCount()) == 2);
-        VariableList::Variable& variable = variables[*instr->getParam(1)];
+    ASSERT(operandIdx == 1 ? (instr->paramCount() + instr->resultCount()) == 2 : (instr->paramCount() == 0 && instr->resultCount() == 1));
+    VariableList::Variable& variable = variables[*instr->getParam(operandIdx)];
 
-        if (variable.info & Instruction::FloatOperandMarker) {
-            return Instruction::getOperandDescriptorByOffset(requiredInit);
-        }
+    if (variable.info & Instruction::FloatOperandMarker) {
+        return Instruction::getOperandDescriptorByOffset(requiredInit);
     }
 
     return instr->getOperandDescriptor();
