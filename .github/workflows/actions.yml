@@ -350,6 +350,70 @@ jobs:
         run: |
           $RUNNER --engine="$GITHUB_WORKSPACE/out/extended/walrus" ${{ matrix.switch }} wasm-test-extended
 
+  build-test-no-gc-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug]
+        arch: [x64]
+        switch: [--jit, ""]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+      - name: Build ${{ matrix.arch}}
+        env:
+          BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_HOST=linux -DWALRUS_MODE=${{ matrix.mode }} -DWALRUS_OUTPUT=shell -DWALRUS_GC=OFF -GNinja
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/nogc $BUILD_OPTIONS
+          ninja -Cout/nogc
+      - name: "Remove GC tests"
+        run: |
+          rm -rf ./test/extended/gc
+      - name: Run Tests
+        run: |
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/nogc/walrus" ${{ matrix.switch }}
+
+  build-test-no-gc-on-macos-arm64:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [debug]
+        switch: [--jit, ""]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          brew update
+          brew install ninja
+      - name: Build arm64
+        env:
+          BUILD_OPTIONS: -DWALRUS_MODE=${{ matrix.mode }} -DWALRUS_OUTPUT=shell -DWALRUS_GC=OFF -GNinja
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/mac $BUILD_OPTIONS
+          ninja -Cout/mac
+      - name: "Remove 2 test files due to stack overflow occurred by recursion calls in debug mode build by clang"
+        if: matrix.mode == 'debug'
+        run: |
+          rm ./test/wasm-spec/core/call.wast
+          rm ./test/wasm-spec/core/call_indirect.wast
+          rm ./test/extended/gc/call_ref.wast
+      - name: "Remove GC tests"
+        run: |
+          rm -rf ./test/extended/gc
+      - name: Run Tests
+        run: |
+          #FIXME try-catch is unstable in macos build
+          $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus" ${{ matrix.switch }}
+
   build-test-performance-x64_x86:
     strategy:
       fail-fast: false
