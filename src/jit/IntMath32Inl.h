@@ -980,73 +980,6 @@ void emitSelect(sljit_compiler* compiler, Instruction* instr, sljit_s32 type)
 static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
 {
     Operand* operand = instr->operands();
-    sljit_s32 opcode, type;
-
-    switch (instr->opcode()) {
-    case ByteCode::I32EqzOpcode:
-    case ByteCode::I64EqzOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_Z;
-        type = SLJIT_EQUAL;
-        break;
-    case ByteCode::I32EqOpcode:
-    case ByteCode::I64EqOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_Z;
-        type = SLJIT_EQUAL;
-        break;
-    case ByteCode::I32NeOpcode:
-    case ByteCode::I64NeOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_Z;
-        type = SLJIT_NOT_EQUAL;
-        break;
-    case ByteCode::I32LtSOpcode:
-    case ByteCode::I64LtSOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_SIG_LESS;
-        type = SLJIT_SIG_LESS;
-        break;
-    case ByteCode::I32LtUOpcode:
-    case ByteCode::I64LtUOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_LESS;
-        type = SLJIT_LESS;
-        break;
-    case ByteCode::I32GtSOpcode:
-    case ByteCode::I64GtSOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_SIG_GREATER;
-        type = SLJIT_SIG_GREATER;
-        break;
-    case ByteCode::I32GtUOpcode:
-    case ByteCode::I64GtUOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_GREATER;
-        type = SLJIT_GREATER;
-        break;
-    case ByteCode::I32LeSOpcode:
-    case ByteCode::I64LeSOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_SIG_LESS_EQUAL;
-        type = SLJIT_SIG_LESS_EQUAL;
-        break;
-    case ByteCode::I32LeUOpcode:
-    case ByteCode::I64LeUOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_LESS_EQUAL;
-        type = SLJIT_LESS_EQUAL;
-        break;
-    case ByteCode::I32GeSOpcode:
-    case ByteCode::I64GeSOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_SIG_GREATER_EQUAL;
-        type = SLJIT_SIG_GREATER_EQUAL;
-        break;
-    case ByteCode::I32GeUOpcode:
-    case ByteCode::I64GeUOpcode:
-        opcode = SLJIT_SUB | SLJIT_SET_GREATER_EQUAL;
-        type = SLJIT_GREATER_EQUAL;
-        break;
-    case ByteCode::I32AndOpcode:
-        opcode = SLJIT_AND | SLJIT_SET_Z;
-        type = SLJIT_NOT_ZERO;
-        break;
-    default:
-        RELEASE_ASSERT_NOT_REACHED();
-        break;
-    }
-
     Instruction* nextInstr = nullptr;
     bool isBranch = false;
 
@@ -1061,92 +994,246 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
         isBranch = (nextInstr->opcode() != ByteCode::SelectOpcode);
     }
 
-    if (!(instr->info() & Instruction::kIs32Bit)) {
-        JITArgPair params[2];
+    if (instr->info() & Instruction::kIs32Bit) {
+        sljit_s32 opcode, type;
+
+        switch (instr->opcode()) {
+        case ByteCode::I32EqzOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_Z;
+            type = SLJIT_EQUAL;
+            break;
+        case ByteCode::I32EqOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_Z;
+            type = SLJIT_EQUAL;
+            break;
+        case ByteCode::I32NeOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_Z;
+            type = SLJIT_NOT_EQUAL;
+            break;
+        case ByteCode::I32LtSOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_SIG_LESS;
+            type = SLJIT_SIG_LESS;
+            break;
+        case ByteCode::I32LtUOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_LESS;
+            type = SLJIT_LESS;
+            break;
+        case ByteCode::I32GtSOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_SIG_GREATER;
+            type = SLJIT_SIG_GREATER;
+            break;
+        case ByteCode::I32GtUOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_GREATER;
+            type = SLJIT_GREATER;
+            break;
+        case ByteCode::I32LeSOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_SIG_LESS_EQUAL;
+            type = SLJIT_SIG_LESS_EQUAL;
+            break;
+        case ByteCode::I32LeUOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_LESS_EQUAL;
+            type = SLJIT_LESS_EQUAL;
+            break;
+        case ByteCode::I32GeSOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_SIG_GREATER_EQUAL;
+            type = SLJIT_SIG_GREATER_EQUAL;
+            break;
+        case ByteCode::I32GeUOpcode:
+            opcode = SLJIT_SUB | SLJIT_SET_GREATER_EQUAL;
+            type = SLJIT_GREATER_EQUAL;
+            break;
+        case ByteCode::I32AndOpcode:
+            opcode = SLJIT_AND | SLJIT_SET_Z;
+            type = SLJIT_NOT_ZERO;
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            break;
+        }
+
+        JITArg params[2];
 
         for (uint32_t i = 0; i < instr->paramCount(); ++i) {
             params[i].set(operand);
             operand++;
         }
 
-        if (instr->opcode() == ByteCode::I64EqzOpcode) {
-            sljit_emit_op2u(compiler, SLJIT_OR | SLJIT_SET_Z, params[0].arg1, params[0].arg1w, params[0].arg2, params[0].arg2w);
-        } else {
-            sljit_emit_op2u(compiler, opcode | SLJIT_SET_Z, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
-            sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_NOT_ZERO);
-            sljit_emit_op2u(compiler, opcode, params[0].arg1, params[0].arg1w, params[1].arg1, params[1].arg1w);
-            sljit_set_label(jump, sljit_emit_label(compiler));
-            sljit_set_current_flags(compiler, (opcode - SLJIT_SUB) | SLJIT_CURRENT_FLAGS_SUB);
+        if (instr->opcode() == ByteCode::I32EqzOpcode) {
+            params[1].arg = SLJIT_IMM;
+            params[1].argw = 0;
         }
 
-        if (*operand != VARIABLE_SET_PTR(nullptr)) {
-            JITArg result(operand);
-            sljit_emit_op_flags(compiler, SLJIT_MOV32, result.arg, result.argw, type);
-        }
-
-        if (nextInstr != nullptr) {
-            if (!isBranch) {
-                emitSelect(compiler, nextInstr, type);
-                return true;
-            }
-
+        if (isBranch) {
             if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
                 type ^= 0x1;
             }
 
-            sljit_jump* jump = sljit_emit_jump(compiler, type);
+            sljit_jump* jump;
+
+            if (instr->opcode() != ByteCode::I32AndOpcode && (*operand == VARIABLE_SET_PTR(nullptr))) {
+                jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+            } else {
+                sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+
+                if (*operand != VARIABLE_SET_PTR(nullptr)) {
+                    JITArg result(operand);
+                    sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
+                }
+
+                jump = sljit_emit_jump(compiler, type);
+            }
+
             nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
+            return true;
+        }
+
+        sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
+
+        if (*operand != VARIABLE_SET_PTR(nullptr)) {
+            JITArg result(operand);
+            sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
+        }
+
+        if (nextInstr != nullptr) {
+            emitSelect(compiler, nextInstr, type);
             return true;
         }
 
         return false;
     }
 
-    JITArg params[2];
+    sljit_s32 type = SLJIT_EQUAL;
+    sljit_s32 firstIndex = 0;
+#ifdef SLJIT_SHARED_COMPARISON_FLAGS
+    sljit_s32 signedCompare = 0;
+    sljit_s32 unsignedCompare = 0;
+#endif /* SLJIT_SHARED_COMPARISON_FLAGS */
 
-    for (uint32_t i = 0; i < instr->paramCount(); ++i) {
-        params[i].set(operand);
+    switch (instr->opcode()) {
+    case ByteCode::I64EqzOpcode:
+    case ByteCode::I64EqOpcode:
+        break;
+    case ByteCode::I64NeOpcode:
+        type = SLJIT_NOT_EQUAL;
+        break;
+    case ByteCode::I64LtSOpcode:
+#ifdef SLJIT_SHARED_COMPARISON_FLAGS
+        signedCompare = SLJIT_SUB | SLJIT_SET_SIG_LESS;
+        unsignedCompare = SLJIT_SUB | SLJIT_SET_LESS;
+#endif /* SLJIT_SHARED_COMPARISON_FLAGS */
+        type = SLJIT_SIG_LESS;
+        break;
+    case ByteCode::I64LtUOpcode:
+        type = SLJIT_CARRY;
+        break;
+    case ByteCode::I64GtSOpcode:
+#ifdef SLJIT_SHARED_COMPARISON_FLAGS
+        signedCompare = SLJIT_SUB | SLJIT_SET_SIG_LESS;
+        unsignedCompare = SLJIT_SUB | SLJIT_SET_LESS;
+#endif /* SLJIT_SHARED_COMPARISON_FLAGS */
+        type = SLJIT_SIG_LESS;
+        firstIndex = 1;
+        break;
+    case ByteCode::I64GtUOpcode:
+        type = SLJIT_CARRY;
+        firstIndex = 1;
+        break;
+    case ByteCode::I64LeSOpcode:
+#ifdef SLJIT_SHARED_COMPARISON_FLAGS
+        signedCompare = SLJIT_SUB | SLJIT_SET_SIG_GREATER_EQUAL;
+        unsignedCompare = SLJIT_SUB | SLJIT_SET_GREATER_EQUAL;
+#endif /* SLJIT_SHARED_COMPARISON_FLAGS */
+        type = SLJIT_SIG_GREATER_EQUAL;
+        firstIndex = 1;
+        break;
+    case ByteCode::I64LeUOpcode:
+        type = SLJIT_NOT_CARRY;
+        firstIndex = 1;
+        break;
+    case ByteCode::I64GeSOpcode:
+#ifdef SLJIT_SHARED_COMPARISON_FLAGS
+        signedCompare = SLJIT_SUB | SLJIT_SET_SIG_GREATER_EQUAL;
+        unsignedCompare = SLJIT_SUB | SLJIT_SET_GREATER_EQUAL;
+#endif /* SLJIT_SHARED_COMPARISON_FLAGS */
+        type = SLJIT_SIG_GREATER_EQUAL;
+        break;
+    case ByteCode::I64GeUOpcode:
+        type = SLJIT_NOT_CARRY;
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    }
+
+    JITArgPair params[2];
+
+    if (instr->opcode() == ByteCode::I64EqzOpcode) {
+        ASSERT(type == SLJIT_EQUAL);
+        params[0].set(operand);
         operand++;
+        sljit_emit_op2u(compiler, SLJIT_OR | SLJIT_SET_Z, params[0].arg1, params[0].arg1w, params[0].arg2, params[0].arg2w);
+    } else if (instr->opcode() == ByteCode::I64EqOpcode || instr->opcode() == ByteCode::I64NeOpcode) {
+        params[0].set(operand);
+        params[1].set(operand + 1);
+        operand += 2;
+
+        ASSERT(type == SLJIT_EQUAL || type == SLJIT_NOT_EQUAL);
+
+        sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
+        sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_NOT_ZERO);
+        sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, params[0].arg1, params[0].arg1w, params[1].arg1, params[1].arg1w);
+        sljit_set_label(jump, sljit_emit_label(compiler));
+        sljit_set_current_flags(compiler, SLJIT_SET_Z | SLJIT_CURRENT_FLAGS_SUB | SLJIT_CURRENT_FLAGS_COMPARE);
+    } else {
+        params[firstIndex].set(operand);
+        params[1 - firstIndex].set(operand + 1);
+        operand += 2;
+
+        ASSERT(type == SLJIT_SIG_LESS || type == SLJIT_SIG_GREATER_EQUAL
+               || type == SLJIT_CARRY || type == SLJIT_NOT_CARRY);
+
+#ifdef SLJIT_SUBC_SETS_SIGNED
+        sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_CARRY, params[0].arg1, params[0].arg1w, params[1].arg1, params[1].arg1w);
+        sljit_emit_op2u(compiler, SLJIT_SUBC | SLJIT_SET_CARRY, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
+
+        if (type == SLJIT_SIG_LESS || type == SLJIT_SIG_GREATER_EQUAL) {
+            sljit_set_current_flags(compiler, SLJIT_SET_SIG_LESS | SLJIT_CURRENT_FLAGS_SUB);
+        }
+#elif (defined SLJIT_SHARED_COMPARISON_FLAGS)
+        if (type < SLJIT_CARRY) {
+            sljit_emit_op2u(compiler, signedCompare | SLJIT_SET_Z, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
+            sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_NOT_ZERO);
+            sljit_emit_op2u(compiler, unsignedCompare, params[0].arg1, params[0].arg1w, params[1].arg1, params[1].arg1w);
+            sljit_set_label(jump, sljit_emit_label(compiler));
+            sljit_set_current_flags(compiler, (signedCompare - SLJIT_SUB) | SLJIT_CURRENT_FLAGS_SUB);
+        } else {
+            ASSERT(type == SLJIT_CARRY || type == SLJIT_NOT_CARRY);
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_CARRY, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
+            sljit_emit_op2u(compiler, SLJIT_SUBC | SLJIT_SET_CARRY, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
+        }
+#else
+#error "Implementation required"
+#endif
     }
 
-    if (instr->opcode() == ByteCode::I32EqzOpcode) {
-        params[1].arg = SLJIT_IMM;
-        params[1].argw = 0;
+    ASSERT(operand == instr->operands() + instr->paramCount());
+    if (*operand != VARIABLE_SET_PTR(nullptr)) {
+        JITArg result(operand);
+        sljit_emit_op_flags(compiler, SLJIT_MOV32, result.arg, result.argw, type);
     }
 
-    if (isBranch) {
+    if (nextInstr != nullptr) {
+        if (!isBranch) {
+            emitSelect(compiler, nextInstr, type);
+            return true;
+        }
+
         if (nextInstr->opcode() == ByteCode::JumpIfFalseOpcode) {
             type ^= 0x1;
         }
 
-        sljit_jump* jump;
-
-        if (instr->opcode() != ByteCode::I32AndOpcode && (*operand == VARIABLE_SET_PTR(nullptr))) {
-            jump = sljit_emit_cmp(compiler, type, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
-        } else {
-            sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
-
-            if (*operand != VARIABLE_SET_PTR(nullptr)) {
-                JITArg result(operand);
-                sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
-            }
-
-            jump = sljit_emit_jump(compiler, type);
-        }
-
+        sljit_jump* jump = sljit_emit_jump(compiler, type);
         nextInstr->asExtended()->value().targetLabel->jumpFrom(jump);
-        return true;
-    }
-
-    sljit_emit_op2u(compiler, opcode, params[0].arg, params[0].argw, params[1].arg, params[1].argw);
-
-    if (*operand != VARIABLE_SET_PTR(nullptr)) {
-        JITArg result(operand);
-        sljit_emit_op_flags(compiler, SLJIT_MOV, result.arg, result.argw, type);
-    }
-
-    if (nextInstr != nullptr) {
-        emitSelect(compiler, nextInstr, type);
         return true;
     }
 

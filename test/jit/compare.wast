@@ -31,6 +31,13 @@
 
   (; 0, 0, 1, 3 ;)
 )
+
+(func (export "test2") (param i64 i64) (result i32)
+   local.get 0
+   local.get 1
+   i64.lt_s
+)
 )
 
 (assert_return (invoke "test1") (i32.const 0) (i32.const 0) (i32.const 1) (i32.const 3))
+(assert_return (invoke "test2" (i64.const 0x7fffffff) (i64.const 0x80000000)) (i32.const 1))
