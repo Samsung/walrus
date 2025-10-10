@@ -18,6 +18,8 @@
 
 #include "Walrus.h"
 #include "jit/Compiler.h"
+#include "runtime/GCArray.h"
+
 #include <set>
 
 namespace Walrus {
@@ -704,8 +706,33 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     }
                     break;
                 }
-                case ByteCode::ArrayNewFixedOpcode: {
-                    Value::Type type = reinterpret_cast<ArrayNewFixed*>(instr->byteCode())->typeInfo()->field().type();
+                case ByteCode::ArrayNewFixedOpcode:
+                case ByteCode::ArrayFillOpcode:
+                case ByteCode::ArrayCopyOpcode: {
+                    Value::Type type;
+                    if (instr->opcode() == ByteCode::ArrayNewFixedOpcode) {
+                        type = reinterpret_cast<ArrayNewFixed*>(instr->byteCode())->typeInfo()->field().type();
+                    } else if (instr->opcode() == ByteCode::ArrayFillOpcode) {
+                        type = reinterpret_cast<ArrayFill*>(instr->byteCode())->type();
+                    } else {
+                        uint8_t log2Size = reinterpret_cast<ArrayCopy*>(instr->byteCode())->log2Size();
+                        switch (log2Size) {
+                        case 0:
+                            type = Value::I8;
+                            break;
+                        case 1:
+                            type = Value::I16;
+                            break;
+                        case 2:
+                            type = Value::I32;
+                            break;
+                        case 3:
+                            type = Value::I64;
+                            break;
+                        default:
+                            ASSERT_NOT_REACHED();
+                        }
+                    }
                     uint32_t info = Instruction::valueTypeToOperandType(Value::unpackType(type));
                     end = param + instr->paramCount();
 
