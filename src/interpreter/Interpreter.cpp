@@ -1951,6 +1951,77 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(ArrayFill)
+        :
+    {
+        ArrayFill* code = (ArrayFill*)programCounter;
+
+        GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
+        if (UNLIKELY(Value::isNull(array))) {
+            Trap::throwException(state, "null array reference");
+        }
+        uint32_t log2Size = GCArray::getLog2Size(code->type());
+        uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t size = readValue<uint32_t>(bp, code->src3Offset());
+        void* value_p = bp + code->src2Offset();
+
+        if (array->length() < dst_offset || (array->length() - dst_offset) < size) {
+            Trap::throwException(state, "out of bounds array access");
+        }
+
+        uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
+        uint8_t* dst = reinterpret_cast<uint8_t*>(array) + ((sizeof(GCArray) + mask) & ~mask) + dst_offset;
+
+        switch (log2Size) {
+        case 0:
+            std::fill_n(dst, size, *(reinterpret_cast<uint8_t*>(value_p)));
+            break;
+        case 1:
+            std::fill_n(dst, size, *(reinterpret_cast<uint16_t*>(value_p)));
+            break;
+        case 2:
+            std::fill_n(dst, size, *(reinterpret_cast<uint32_t*>(value_p)));
+            break;
+        case 3:
+            std::fill_n(dst, size, *(reinterpret_cast<uint64_t*>(value_p)));
+            break;
+        default:
+            ASSERT_NOT_REACHED();
+        }
+
+        ADD_PROGRAM_COUNTER(ArrayFill);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ArrayCopy)
+        :
+    {
+        ArrayCopy* code = (ArrayCopy*)programCounter;
+
+        GCArray* dstArray = readValue<GCArray*>(bp, code->src0Offset());
+        GCArray* srcArray = readValue<GCArray*>(bp, code->src2Offset());
+        if (UNLIKELY(Value::isNull(dstArray) || Value::isNull(srcArray))) {
+            Trap::throwException(state, "null array reference");
+        }
+        uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
+        uint32_t src_offset = readValue<uint32_t>(bp, code->src3Offset());
+        uint32_t size = readValue<uint32_t>(bp, code->src4Offset());
+        uint8_t log2Size = code->log2Size();
+
+        if (dst_offset + size > dstArray->length() || src_offset + size > srcArray->length()) {
+            Trap::throwException(state, "out of bounds array access");
+        }
+
+        uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
+        uint8_t* dst = reinterpret_cast<uint8_t*>(dstArray) + dst_offset + ((sizeof(GCArray) + mask) & ~mask);
+        uint8_t* src = reinterpret_cast<uint8_t*>(srcArray) + src_offset + ((sizeof(GCArray) + mask) & ~mask);
+
+        memmove(dst, src, size);
+
+        ADD_PROGRAM_COUNTER(ArrayCopy);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(ArrayInitData)
         :
     {
