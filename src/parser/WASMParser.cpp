@@ -1912,7 +1912,7 @@ public:
     void generateFunctionReturnCode(bool shouldClearVMStack = false)
     {
         for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-            ASSERT((m_vmStack.rbegin() + i)->valueType() == m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]);
+            ASSERT(toDebugType((m_vmStack.rbegin() + i)->valueType()) == toDebugType(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
         }
         generateEndCode();
         if (shouldClearVMStack) {

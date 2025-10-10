@@ -87,6 +87,7 @@ static Features getFeatures(const uint32_t featureFlags) {
     // TODO: should use command line flag for this (--enable-relaxed-simd)
     features.enable_relaxed_simd();
     if (featureFlags & FeatureFlagValue::enableWebAssembly3) {
+        features.enable_tail_call();
         features.enable_gc();
         features.enable_multi_memory();
     }
@@ -923,7 +924,9 @@ public:
         // will change the type stack.
         CHECK_RESULT(m_validator.OnReturnCall(GetLocation(), Var(func_index, GetLocation())));
 
-        abort();
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnCallExpr(func_index);
+        m_externalDelegate->OnReturnExpr();
         return Result::Ok;
     }
     Result OnReturnCallIndirectExpr(Index sig_index, Index table_index) override {
@@ -938,7 +941,19 @@ public:
         // The validator must be run after we get the drop/keep counts, since it
         // changes the type stack.
         CHECK_RESULT(m_validator.OnReturnCallIndirect(GetLocation(), Var(sig_index, GetLocation()), Var(table_index, GetLocation())));
-        abort();
+
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnCallIndirectExpr(sig_index, table_index);
+        m_externalDelegate->OnReturnExpr();
+        return Result::Ok;
+    }
+    Result OnReturnCallRefExpr(Type sig_type) override
+    {
+        CHECK_RESULT(m_validator.OnReturnCallRef(GetLocation(), Var(sig_type, GetLocation())));
+
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnCallRefExpr(sig_type);
+        m_externalDelegate->OnReturnExpr();
         return Result::Ok;
     }
     Result OnReturnExpr() override {
@@ -1517,11 +1532,6 @@ public:
         CHECK_RESULT(m_validator.OnRefTest(GetLocation(), Var(type, GetLocation())));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnRefTestExpr(type);
-        return Result::Ok;
-    }
-    Result OnReturnCallRefExpr(Type sig_type) override
-    {
-        abort();
         return Result::Ok;
     }
     Result OnStructGetExpr(Opcode opcode, Index type_index, Index field_index) override
