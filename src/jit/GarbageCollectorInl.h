@@ -752,6 +752,127 @@ static void emitGCArrayNew(sljit_compiler* compiler, Instruction* instr)
     }
 }
 
+static sljit_sw fillArray(GCArray* array, uint32_t offset, uint32_t size, GCArrayFillArguments* args)
+{
+    if (offset + size > array->length()) {
+        return ExecutionContext::OutOfBoundsArrayAccessError;
+    }
+
+    uintptr_t mask = (static_cast<uintptr_t>(1) << args->log2Size) - 1;
+    uint8_t* dst = reinterpret_cast<uint8_t*>(array) + ((sizeof(GCArray) + mask) & ~mask) + offset;
+
+    switch (args->log2Size) {
+    case 0:
+        std::fill_n(dst, size, args->value.u8);
+        break;
+    case 1:
+        std::fill_n(dst, size, args->value.u16);
+        break;
+    case 2:
+        std::fill_n(dst, size, args->value.u32);
+        break;
+    case 3:
+        std::fill_n(dst, size, args->value.u64);
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+    }
+    return ExecutionContext::NoError;
+}
+
+static sljit_sw copyArray(GCArray* dstArray, uint32_t dstOffset, GCArray* srcArray, GCArrayCopyArguments* args)
+{
+    if (dstOffset + args->size > dstArray->length() || args->srcOffset + args->size > srcArray->length()) {
+        return ExecutionContext::OutOfBoundsArrayAccessError;
+    }
+
+    uintptr_t mask = (static_cast<uintptr_t>(1) << args->log2Size) - 1;
+    uint8_t* dstAddr = reinterpret_cast<uint8_t*>(dstArray) + dstOffset + ((sizeof(GCArray) + mask) & ~mask);
+    uint8_t* srcAddr = reinterpret_cast<uint8_t*>(srcArray) + args->srcOffset + ((sizeof(GCArray) + mask) & ~mask);
+
+    memmove(dstAddr, srcAddr, args->size);
+
+    return ExecutionContext::NoError;
+}
+
+static void emitGCArrayOp(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+
+    switch (instr->opcode()) {
+    case ByteCode::ArrayFillOpcode: {
+        sljit_sw stackTmpStart = context->stackTmpStart;
+        ArrayFill* arrayFill = reinterpret_cast<ArrayFill*>(instr->byteCode());
+        JITArg value(instr->getParam(2));
+        uint8_t log2Size = GCArray::getLog2Size(arrayFill->type());
+        sljit_sw value_mov_op;
+
+        switch (log2Size) {
+        case 0:
+            value_mov_op = SLJIT_MOV_U8;
+            break;
+        case 1:
+            value_mov_op = SLJIT_MOV_U16;
+            break;
+        case 2:
+            value_mov_op = SLJIT_MOV_U32;
+            break;
+        case 3:
+            value_mov_op = SLJIT_MOV;
+            break;
+        default:
+            ASSERT_NOT_REACHED();
+        }
+
+        sljit_emit_op1(compiler, SLJIT_MOV_U8, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayFillArguments, log2Size), SLJIT_IMM, log2Size);
+        sljit_emit_op1(compiler, value_mov_op, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayFillArguments, value), value.arg, value.argw);
+
+        Operand args[] = { instr->operands()[0], instr->operands()[1], instr->operands()[3] };
+        emitInitR0R1R2(compiler, SLJIT_MOV_P, SLJIT_MOV32, SLJIT_MOV32, args);
+
+        if (arrayFill->isNullable()) {
+            CompileContext::get(compiler)->appendTrapJump(ExecutionContext::NullArrayReferenceError,
+                                                          sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, 0));
+        }
+        sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
+
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, 32, 32, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, fillArray));
+        sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
+        context->appendTrapJump(ExecutionContext::OutOfBoundsArrayAccessError, cmp);
+        break;
+    }
+    case ByteCode::ArrayCopyOpcode: {
+        sljit_sw stackTmpStart = context->stackTmpStart;
+        ArrayCopy* arrayCopy = reinterpret_cast<ArrayCopy*>(instr->byteCode());
+        JITArg srcOffset(instr->getParam(3));
+        JITArg size(instr->getParam(4));
+
+        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayCopyArguments, srcOffset), srcOffset.arg, srcOffset.argw);
+        sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayCopyArguments, size), size.arg, size.argw);
+        sljit_emit_op1(compiler, SLJIT_MOV_U8, SLJIT_MEM1(SLJIT_SP), OffsetOfStackTmp(GCArrayCopyArguments, log2Size), SLJIT_IMM, arrayCopy->log2Size());
+
+        emitInitR0R1R2(compiler, SLJIT_MOV_P, SLJIT_MOV32, SLJIT_MOV_P, instr->operands());
+
+        if (arrayCopy->dstIsNullable()) {
+            CompileContext::get(compiler)->appendTrapJump(ExecutionContext::NullArrayReferenceError,
+                                                          sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, 0));
+        }
+        if (arrayCopy->srcIsNullable()) {
+            CompileContext::get(compiler)->appendTrapJump(ExecutionContext::NullArrayReferenceError,
+                                                          sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R2, 0, SLJIT_IMM, 0));
+        }
+        sljit_get_local_base(compiler, SLJIT_R3, 0, stackTmpStart);
+
+        sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, 32, P, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, copyArray));
+        sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
+        context->appendTrapJump(ExecutionContext::OutOfBoundsArrayAccessError, cmp);
+        break;
+    }
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
 static sljit_sw initArrayFromData(GCArray* array, uint32_t dst_offset, uint32_t src_offset, GCArrayInitFromExtArguments* args)
 {
     DataSegment* data = reinterpret_cast<DataSegment*>(args->ptr);
