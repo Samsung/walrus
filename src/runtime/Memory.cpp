@@ -103,8 +103,42 @@ bool Memory::grow(uint64_t growSizeInByte)
                 return false;
             }
             mprotect(newBuffer, newSizeInByte, (PROT_READ | PROT_WRITE));
-            memcpy(newBuffer, m_buffer, m_sizeInByte);
-            munmap(m_buffer, m_reservedSizeInByte);
+
+            // Slower copy than memcpy, but reduces the memory peak increase.
+            uint64_t* bufferEnd = reinterpret_cast<uint64_t*>(m_buffer + m_sizeInByte);
+            uint64_t* src = reinterpret_cast<uint64_t*>(m_buffer);
+            uint64_t* dst = reinterpret_cast<uint64_t*>(newBuffer);
+
+            while (true) {
+                // Copy 1MByte segments.
+                uint64_t* end = src + ((1024 * 1024) / sizeof(uint64_t));
+
+                if (end >= bufferEnd) {
+                    break;
+                }
+
+                uint64_t* start = src;
+                do {
+                    // Avoid writing zero pages, which forces allocating memory.
+                    if (*src != 0)
+                        *dst = *src;
+                    src++;
+                    dst++;
+                } while (src < end);
+
+                // Unmap the segment.
+                munmap(start, 1024 * 1024);
+            }
+
+            uint8_t* start = reinterpret_cast<uint8_t*>(src);
+            while (src < bufferEnd) {
+                if (*src != 0)
+                    *dst = *src;
+                src++;
+                dst++;
+            }
+            munmap(start, reinterpret_cast<uint8_t*>(bufferEnd) - start);
+
             m_buffer = newBuffer;
             m_sizeInByte = newSizeInByte;
             m_reservedSizeInByte = newReservedSizeInByte;
