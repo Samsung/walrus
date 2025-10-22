@@ -177,6 +177,8 @@ public:
     virtual void OnArrayNewFixedExpr(Index type_index, Index count) = 0;
     virtual void OnArrayNewDataExpr(Index type_index, Index data_index) = 0;
     virtual void OnArrayNewElemExpr(Index type_index, Index elem_index) = 0;
+    virtual void OnArrayFillExpr(Index type_index) = 0;
+    virtual void OnArrayCopyExpr(Index dst_type_index, Index src_type_index) = 0;
     virtual void OnArrayInitDataExpr(Index type_index, Index data_index) = 0;
     virtual void OnArrayInitElemExpr(Index type_index, Index elem_index) = 0;
     virtual void OnArrayGetExpr(Opcode opcode, Index type_index) = 0;

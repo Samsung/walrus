@@ -103,6 +103,8 @@ class FunctionType;
     F(ArrayNewFixed)            \
     F(ArrayNewData)             \
     F(ArrayNewElem)             \
+    F(ArrayFill)                \
+    F(ArrayCopy)                \
     F(ArrayInitData)            \
     F(ArrayInitElem)            \
     F(ArrayGet)                 \
@@ -3699,6 +3701,100 @@ public:
         : ArrayNewFrom(Opcode::ArrayNewElemOpcode, typeInfo, index, src0Offset, src1Offset, dstOffset)
     {
     }
+};
+
+class ArrayFill : public ByteCode {
+public:
+    ArrayFill(Value::Type type, bool isNullable,
+              ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset src3Offset)
+        : ByteCode(Opcode::ArrayFillOpcode)
+        , m_type(type)
+        , m_isNullable(isNullable ? 1 : 0)
+        , m_src0Offset(src0Offset)
+        , m_src1Offset(src1Offset)
+        , m_src2Offset(src2Offset)
+        , m_src3Offset(src3Offset)
+    {
+    }
+
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    ByteCodeStackOffset src3Offset() const { return m_src3Offset; }
+    Value::Type type() const { return m_type; }
+    bool isNullable() const { return m_isNullable != 0; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ArrayFill ");
+        printf("type: %" PRIu8 " ", m_type);
+        printf("isNullable: %" PRIu8 " ", m_isNullable);
+        DUMP_BYTECODE_OFFSET(src0Offset);
+        DUMP_BYTECODE_OFFSET(src1Offset);
+        DUMP_BYTECODE_OFFSET(src2Offset);
+        DUMP_BYTECODE_OFFSET(src3Offset);
+    }
+#endif
+
+private:
+    Value::Type m_type;
+    uint8_t m_isNullable;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_src2Offset;
+    ByteCodeStackOffset m_src3Offset;
+};
+
+class ArrayCopy : public ByteCode {
+public:
+    ArrayCopy(uint8_t log2Size, bool dstIsNullable, bool srcIsNullable,
+              ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset src3Offset, ByteCodeStackOffset src4Offset)
+        : ByteCode(Opcode::ArrayCopyOpcode)
+        , m_log2Size(log2Size)
+        , m_dstIsNullable(dstIsNullable ? 1 : 0)
+        , m_srcIsNullable(srcIsNullable ? 1 : 0)
+        , m_src0Offset(src0Offset)
+        , m_src1Offset(src1Offset)
+        , m_src2Offset(src2Offset)
+        , m_src3Offset(src3Offset)
+        , m_src4Offset(src4Offset)
+    {
+    }
+
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    ByteCodeStackOffset src3Offset() const { return m_src3Offset; }
+    ByteCodeStackOffset src4Offset() const { return m_src4Offset; }
+    uint8_t log2Size() const { return m_log2Size; }
+    bool dstIsNullable() const { return m_dstIsNullable != 0; }
+    bool srcIsNullable() const { return m_srcIsNullable != 0; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("ArrayCopy ");
+        printf("log2Size: %" PRIu32 " ", m_log2Size);
+        printf("dstIsNullable: %" PRIu32 " ", m_dstIsNullable);
+        printf("srcIsNullable: %" PRIu32 " ", m_srcIsNullable);
+        DUMP_BYTECODE_OFFSET(src0Offset);
+        DUMP_BYTECODE_OFFSET(src1Offset);
+        DUMP_BYTECODE_OFFSET(src2Offset);
+        DUMP_BYTECODE_OFFSET(src3Offset);
+        DUMP_BYTECODE_OFFSET(src4Offset);
+    }
+#endif
+
+private:
+    uint8_t m_log2Size;
+    uint8_t m_dstIsNullable;
+    uint8_t m_srcIsNullable;
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_src2Offset;
+    ByteCodeStackOffset m_src3Offset;
+    ByteCodeStackOffset m_src4Offset;
 };
 
 class ArrayInitFrom : public ByteCode {

@@ -1428,12 +1428,16 @@ public:
     }
     Result OnArrayCopyExpr(Index dst_type_index, Index src_type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayCopy(GetLocation(), Var(dst_type_index, GetLocation()), Var(src_type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayCopyExpr(dst_type_index, src_type_index);
         return Result::Ok;
     }
     Result OnArrayFillExpr(Index type_index) override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnArrayFill(GetLocation(), Var(type_index, GetLocation())));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnArrayFillExpr(type_index);
         return Result::Ok;
     }
     Result OnArrayGetExpr(Opcode opcode, Index type_index) override

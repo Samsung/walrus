@@ -121,6 +121,8 @@ public:
         GCCastDefined,
         // Garbage Collector array creation (e.g. ArrayNew)
         GCArrayNew,
+        // Garbage Collector array operations (e.g. ArrayFill)
+        GCArrayOp,
         // Garbage Collector array init from data/elem
         GCArrayInitFromExt,
         // Garbage Collector array getter/setter operators
@@ -423,7 +425,7 @@ protected:
         : Instruction(byteCode, group, opcode, paramCount, new Operand[operandCount])
     {
         assert(operandCount >= paramCount && operandCount > 4);
-        assert(opcode == ByteCode::EndOpcode);
+        assert(opcode == ByteCode::EndOpcode || opcode == ByteCode::ArrayCopyOpcode);
     }
 };
 
@@ -599,6 +601,17 @@ struct TableCopyArguments {
 
 struct GCArrayInitFromExtArguments {
     void* ptr;
+    uint32_t size;
+    uint8_t log2Size;
+};
+
+struct GCArrayFillArguments {
+    void* value;
+    uint8_t log2Size;
+};
+
+struct GCArrayCopyArguments {
+    uint32_t srcOffset;
     uint32_t size;
     uint8_t log2Size;
 };

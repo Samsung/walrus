@@ -2835,6 +2835,41 @@ public:
         pushByteCode(Walrus::ArrayInitElem(log2Size, elem_index, isNullable, src0, src1, src2, src3), WASMOpcode::ArrayInitElemOpcode);
     }
 
+    virtual void OnArrayFillExpr(Index type_index) override
+    {
+        const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src3 = popVMStack();
+        auto src2 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
+        bool isNullable = Walrus::Value::isNullableRefType(peekVMStackValueType());
+        auto src0 = popVMStack();
+        pushByteCode(Walrus::ArrayFill(typeInfo->field().type(), isNullable, src0, src1, src2, src3), WASMOpcode::ArrayFillOpcode);
+    }
+
+    virtual void OnArrayCopyExpr(Index dst_type_index, Index src_type_index) override
+    {
+        const Walrus::ArrayType* dstTypeInfo = m_result.m_compositeTypes[dst_type_index]->asArray();
+        const Walrus::ArrayType* srcTypeInfo = m_result.m_compositeTypes[src_type_index]->asArray();
+        ASSERT(dstTypeInfo->field().type() == srcTypeInfo->field().type());
+        const uint8_t log2Size = Walrus::GCArray::getLog2Size(dstTypeInfo->field().type());
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src4 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src3 = popVMStack();
+        ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
+        bool srcIsNullable = Walrus::Value::isNullableRefType(peekVMStackValueType());
+        auto src2 = popVMStack();
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        auto src1 = popVMStack();
+        ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
+        bool dstIsNullable = Walrus::Value::isNullableRefType(peekVMStackValueType());
+        auto src0 = popVMStack();
+        pushByteCode(Walrus::ArrayCopy(log2Size, dstIsNullable, srcIsNullable, src0, src1, src2, src3, src4), WASMOpcode::ArrayCopyOpcode);
+    }
+
     virtual void OnArrayGetExpr(Opcode opcode, Index type_index) override
     {
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
