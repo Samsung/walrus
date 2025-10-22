@@ -18,6 +18,8 @@
 
 #include "Walrus.h"
 #include "jit/Compiler.h"
+#include "runtime/GCArray.h"
+
 #include <set>
 
 namespace Walrus {
@@ -713,6 +715,32 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                         VariableList::Variable& variable = m_variableList->variables[*param++];
                         variable.info |= info;
                     }
+                    break;
+                }
+                case ByteCode::ArrayCopyOpcode: {
+                    ASSERT(instr->paramCount() == 5);
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+                    uint8_t refSize = Instruction::Int32Operand;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+                    uint8_t refSize = Instruction::Int64Operand;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+                    m_variableList->variables[param[0]].info |= refSize;
+                    m_variableList->variables[param[1]].info |= Instruction::Int32Operand;
+                    m_variableList->variables[param[2]].info |= refSize;
+                    m_variableList->variables[param[3]].info |= Instruction::Int32Operand;
+                    m_variableList->variables[param[4]].info |= Instruction::Int32Operand;
+                    break;
+                }
+                case ByteCode::ArrayFillOpcode: {
+                    ASSERT(instr->paramCount() == 4);
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+                    m_variableList->variables[param[0]].info |= Instruction::Int32Operand;
+#else /* !SLJIT_32BIT_ARCHITECTURE */
+                    m_variableList->variables[param[0]].info |= Instruction::Int64Operand;
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+                    m_variableList->variables[param[1]].info |= Instruction::Int32Operand;
+                    m_variableList->variables[param[2]].info |= Instruction::valueTypeToOperandType(Value::unpackType(reinterpret_cast<ArrayFill*>(instr->byteCode())->type()));
+                    m_variableList->variables[param[3]].info |= Instruction::Int32Operand;
                     break;
                 }
                 case ByteCode::ArrayInitDataOpcode:

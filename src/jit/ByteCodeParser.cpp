@@ -1936,6 +1936,33 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(arrayNewFrom->dstOffset());
             break;
         }
+        case ByteCode::ArrayFillOpcode: {
+            ArrayFill* arrayFill = reinterpret_cast<ArrayFill*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayOp, opcode, 4, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            compiler->increaseStackTmpSize(sizeof(GCArrayFillArguments));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayFill->src0Offset());
+            operands[1] = STACK_OFFSET(arrayFill->src1Offset());
+            operands[2] = STACK_OFFSET(arrayFill->src2Offset());
+            operands[3] = STACK_OFFSET(arrayFill->src3Offset());
+            break;
+        }
+        case ByteCode::ArrayCopyOpcode: {
+            ArrayCopy* arrayCopy = reinterpret_cast<ArrayCopy*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::GCArrayOp, opcode, 5, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            compiler->increaseStackTmpSize(sizeof(GCArrayCopyArguments));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(arrayCopy->src0Offset());
+            operands[1] = STACK_OFFSET(arrayCopy->src1Offset());
+            operands[2] = STACK_OFFSET(arrayCopy->src2Offset());
+            operands[3] = STACK_OFFSET(arrayCopy->src3Offset());
+            operands[4] = STACK_OFFSET(arrayCopy->src4Offset());
+            break;
+        }
         case ByteCode::ArrayInitDataOpcode:
         case ByteCode::ArrayInitElemOpcode: {
             ArrayInitFrom* arrayInitFrom = reinterpret_cast<ArrayInitFrom*>(byteCode);
