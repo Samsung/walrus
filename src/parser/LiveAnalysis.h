@@ -36,6 +36,9 @@ public:
         bool needsInit;
         std::vector<Walrus::ByteCodeStackOffset> sets;
         std::vector<Walrus::ByteCodeStackOffset> reads;
+#if !defined(NDEBUG)
+        bool isConstant;
+#endif
 
         VariableRange(Walrus::ByteCodeStackOffset o, Walrus::Value value)
             : value(value)
@@ -45,6 +48,9 @@ public:
             , newOffset(UINT16_MAX)
             , isParam(false)
             , needsInit(false)
+#if !defined(NDEBUG)
+            , isConstant(false)
+#endif
         {
         }
     };

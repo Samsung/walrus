@@ -651,7 +651,7 @@ static void compileFunction(JITCompiler* compiler)
             paramType = ParamTypes::ParamSrc2Dst;
             info = Instruction::kIs32Bit;
             if (opcode == ByteCode::I32AndOpcode) {
-                info |= Instruction::kIsMergeCompare;
+                // info |= Instruction::kIsMergeCompare;
             }
             requiredInit = OTOp2I32;
             break;
@@ -2926,6 +2926,8 @@ const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
     return instr->getOperandDescriptor();
 }
 
+size_t counter = 0;
+
 void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, uint32_t JITFlags)
 {
     JITCompiler compiler(this, JITFlags);
@@ -2934,6 +2936,7 @@ void Module::jitCompile(ModuleFunction** functions, size_t functionsLength, uint
         size_t functionCount = m_functions.size();
 
         for (size_t i = 0; i < functionCount; i++) {
+            counter++;
             if (m_functions[i]->jitFunction() == nullptr) {
                 if (JITFlags & JITFlagValue::JITVerbose) {
                     printf("[[[[[[[  Function %3d  ]]]]]]]\n", static_cast<int>(i));

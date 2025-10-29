@@ -259,6 +259,11 @@ public:
     {
         m_localDebugData.push_back(o);
     }
+
+    void pushConstDebugData(Walrus::Value value, Walrus::ByteCodeStackOffset o)
+    {
+        m_constantDebugData.push_back(std::pair<Walrus::Value, size_t>(value, o));
+    }
 #endif
 
 private:

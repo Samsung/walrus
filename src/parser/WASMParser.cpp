@@ -31,6 +31,8 @@
 
 namespace wabt {
 
+static size_t counter = 0;
+
 enum class WASMOpcode : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
                     text, decomp)                                            \
@@ -1398,48 +1400,55 @@ public:
         m_functionStackSizeSoFar = m_initialFunctionStackSize;
         m_currentFunction->m_requiredStackSize = std::max(m_currentFunction->m_requiredStackSize, m_functionStackSizeSoFar);
 
-        // Explicit init local variable if needs
-        for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
-            // if (m_preprocessData.m_localVariableInfo[i].m_needsExplicitInitOnStartup) {
-            //     auto localPos = m_localInfo[i].m_position;
-            //     auto size = Walrus::valueSize(m_localInfo[i].m_valueType);
-            //     if (size == 4) {
-            //         pushByteCode(Walrus::Const32(localPos, 0), WASMOpcode::I32ConstOpcode);
-            //     } else if (size == 8) {
-            //         pushByteCode(Walrus::Const64(localPos, 0), WASMOpcode::I64ConstOpcode);
-            //     } else {
-            //         ASSERT(size == 16);
-            //         uint8_t empty[16] = {
-            //             0,
-            //         };
-            //         pushByteCode(Walrus::Const128(localPos, empty), WASMOpcode::V128ConstOpcode);
-            //     }
-            // }
-#if !defined(NDEBUG)
-            m_currentFunction->m_localDebugData.push_back(m_localInfo[i].m_position);
+        if (false) {
+            // Explicit init local variable if needs
+            for (size_t i = m_currentFunctionType->param().size(); i < m_localInfo.size(); i++) {
+                if (m_preprocessData.m_localVariableInfo[i].m_needsExplicitInitOnStartup) {
+#if false
+                        auto localPos = m_localInfo[i].m_position;
+                        auto size = Walrus::valueSize(m_localInfo[i].m_valueType);
+                        if (size == 4) {
+                            pushByteCode(Walrus::Const32(localPos, 0), WASMOpcode::I32ConstOpcode);
+                        } else if (size == 8) {
+                            pushByteCode(Walrus::Const64(localPos, 0), WASMOpcode::I64ConstOpcode);
+                        } else {
+                            ASSERT(size == 16);
+                            uint8_t empty[16] = {
+                                0,
+                            };
+                            pushByteCode(Walrus::Const128(localPos, empty), WASMOpcode::V128ConstOpcode);
+                        }
+                    }
 #endif
-        }
+                    // #if !defined(NDEBUG)
+                    //                     m_currentFunction->m_localDebugData.push_back(m_localInfo[i].m_position);
+                    // #endif
+                }
 
-        // init constant space
-        for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
-            const auto& constValue = m_preprocessData.m_constantData[i].first;
-            auto constType = m_preprocessData.m_constantData[i].first.type();
-            auto constPos = m_preprocessData.m_constantData[i].second;
-            size_t constSize = Walrus::valueSize(constType);
+                // init constant space
+                for (size_t i = 0; i < m_preprocessData.m_constantData.size(); i++) {
+#if false
+                    const auto& constValue = m_preprocessData.m_constantData[i].first;
+                    auto constType = m_preprocessData.m_constantData[i].first.type();
+                    auto constPos = m_preprocessData.m_constantData[i].second;
+                    size_t constSize = Walrus::valueSize(constType);
 
-            uint8_t constantBuffer[16];
-            constValue.writeToMemory(constantBuffer);
-            // if (constSize == 4) {
-            //     pushByteCode(Walrus::Const32(constPos, *reinterpret_cast<uint32_t*>(constantBuffer)), WASMOpcode::I32ConstOpcode);
-            // } else if (constSize == 8) {
-            //     pushByteCode(Walrus::Const64(constPos, *reinterpret_cast<uint64_t*>(constantBuffer)), WASMOpcode::I64ConstOpcode);
-            // } else {
-            //     ASSERT(constSize == 16);
-            //     pushByteCode(Walrus::Const128(constPos, constantBuffer), WASMOpcode::V128ConstOpcode);
-            // }
-#if !defined(NDEBUG)
-            m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i]);
+                    uint8_t constantBuffer[16];
+                    constValue.writeToMemory(constantBuffer);
+                    if (constSize == 4) {
+                        pushByteCode(Walrus::Const32(constPos, *reinterpret_cast<uint32_t*>(constantBuffer)), WASMOpcode::I32ConstOpcode);
+                    } else if (constSize == 8) {
+                        pushByteCode(Walrus::Const64(constPos, *reinterpret_cast<uint64_t*>(constantBuffer)), WASMOpcode::I64ConstOpcode);
+                    } else {
+                        ASSERT(constSize == 16);
+                        pushByteCode(Walrus::Const128(constPos, constantBuffer), WASMOpcode::V128ConstOpcode);
+                    }
 #endif
+                    // #if !defined(NDEBUG)
+                    //                     m_currentFunction->m_constantDebugData.pushBack(m_preprocessData.m_constantData[i]);
+                    // #endif
+                }
+            }
         }
     }
 
@@ -3209,9 +3218,11 @@ public:
             locals.push_back(std::make_pair(constant.second, constant.first));
         }
 
+        m_currentFunction->m_localDebugData.clear();
+        m_currentFunction->m_constantDebugData.clear();
+
         LiveAnalysis analysis;
         analysis.optimizeLocals(m_currentFunction, locals, m_localInfo.size());
-
 
 #if !defined(NDEBUG)
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
@@ -3225,6 +3236,7 @@ public:
         }
 #endif
 
+        counter++;
         endFunction();
     }
 

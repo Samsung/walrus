@@ -12,7 +12,6 @@
   )
   
   local.get 0
-
 )
 
 (func (export "f2") (result i32)

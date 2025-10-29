@@ -19,6 +19,7 @@
 
 #include "runtime/Module.h"
 #include "Walrus.h"
+#include <cstdint>
 
 #if !defined(NDEBUG)
 #include <cinttypes>
@@ -1044,6 +1045,7 @@ public:
     void setStackOffset(ByteCodeStackOffset o) { m_stackOffset = o; }
     uint32_t uint32Value() const { return m_value; }
     int32_t int32Value() const { return static_cast<int32_t>(m_value); }
+    void addValue(uint32_t add) { m_value += add; }
 
 protected:
     ByteCodeStackOffset m_stackOffset;
@@ -1134,9 +1136,13 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_stackOffset1; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_stackOffset1 = o; }
     ByteCodeStackOffset src1Offset() const { return m_stackOffset2; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_stackOffset2 = o; }
     ByteCodeStackOffset src2Offset() const { return m_stackOffset3; }
+    void setSrc2Offset(ByteCodeStackOffset o) { m_stackOffset3 = o; }
     ByteCodeStackOffset dstOffset() const { return m_stackOffset4; }
+    void setDstOffset(ByteCodeStackOffset o) { m_stackOffset4 = o; }
     uint32_t offset() const { return m_value; }
 
 protected:
@@ -1549,8 +1555,6 @@ public:
     void setStackOffset(size_t index, ByteCodeStackOffset o)
     {
         (reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallIndirect)))[index] = o;
-
-        // *(reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call) + index * sizeof(ByteCodeStackOffset))) = o;
     }
 
     uint16_t parameterOffsetsSize() const
@@ -1606,10 +1610,15 @@ public:
     }
 
     ByteCodeStackOffset calleeOffset() const { return m_calleeOffset; }
+    void setCalleeOffset(ByteCodeStackOffset o) { m_calleeOffset = o; }
     FunctionType* functionType() const { return m_functionType; }
     ByteCodeStackOffset* stackOffsets() const
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallRef));
+    }
+    void setStackOffset(size_t index, ByteCodeStackOffset o)
+    {
+        (reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallRef)))[index] = o;
     }
 
     uint16_t parameterOffsetsSize() const
@@ -1737,6 +1746,7 @@ public:
     }
 
     int32_t offset() const { return m_offset; }
+    void addOffset(uint32_t add) { m_offset += add; }
     void setOffset(int32_t offset)
     {
         m_offset = offset;
@@ -2771,8 +2781,11 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -2957,8 +2970,11 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = 0; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = 0; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = 0; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -2988,8 +3004,11 @@ public:
 
     uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = 0; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = 0; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = 0; }
     uint16_t memIndex() const { return m_memIndex; }
     uint16_t alignment() const { return m_alignment; }
 
@@ -3265,7 +3284,9 @@ public:
     }
 
     const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }
+    void setSrcOffset(uint32_t index, ByteCodeStackOffset o) { m_srcOffsets[index] = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
     const uint8_t* value() const { return m_value; }
 
 #if !defined(NDEBUG)
@@ -3337,8 +3358,11 @@ public:
 
     uint32_t tableIndex() const { return m_tableIndex; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -3430,6 +3454,8 @@ public:
     {
         return m_srcOffsets;
     }
+    void setSrcOffset(uint32_t index, ByteCodeStackOffset o) { m_srcOffsets[index] = o; }
+
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
@@ -3537,6 +3563,7 @@ public:
     }
 
     ByteCodeStackOffset stackOffset() const { return m_stackOffset; }
+    void setStackOffset(ByteCodeStackOffset o) { m_stackOffset = o; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -3561,6 +3588,7 @@ public:
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset offset) { m_srcOffset = offset; }
     Value::Type typeInfo() const { return m_typeInfo; }
     uint8_t srcInfo() const { return m_srcInfo; }
 
@@ -3592,6 +3620,7 @@ public:
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset offset) { m_srcOffset = offset; }
     const CompositeType** typeInfo() const { return m_typeInfo; }
     uint8_t srcInfo() const { return m_srcInfo; }
 
@@ -3622,7 +3651,9 @@ public:
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset offset) { m_srcOffset = offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     Value::Type typeInfo() const { return m_typeInfo; }
     uint8_t srcInfo() const { return m_srcInfo; }
 
@@ -3655,7 +3686,9 @@ public:
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset offset) { m_srcOffset = offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     const CompositeType** typeInfo() const { return m_typeInfo; }
     uint8_t srcInfo() const { return m_srcInfo; }
 
@@ -3727,8 +3760,11 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset offset) { m_src0Offset = offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset offset) { m_src1Offset = offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     const ArrayType* typeInfo() const { return m_typeInfo; }
 
 #if !defined(NDEBUG)
@@ -3759,7 +3795,9 @@ public:
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset offset) { m_srcOffset = offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     const ArrayType* typeInfo() const { return m_typeInfo; }
 
 #if !defined(NDEBUG)
@@ -3837,8 +3875,11 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset offset) { m_src0Offset = offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset offset) { m_src1Offset = offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     const ArrayType* typeInfo() const { return m_typeInfo; }
     uint32_t index() { return m_index; }
 
@@ -3894,9 +3935,13 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
     ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    void setSrc2Offset(ByteCodeStackOffset o) { m_src2Offset = o; }
     ByteCodeStackOffset src3Offset() const { return m_src3Offset; }
+    void setSrc3Offset(ByteCodeStackOffset o) { m_src3Offset = o; }
     Value::Type type() const { return m_type; }
     bool isNullable() const { return m_isNullable != 0; }
 
@@ -3938,10 +3983,15 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset o) { m_src0Offset = o; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset o) { m_src1Offset = o; }
     ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    void setSrc2Offset(ByteCodeStackOffset o) { m_src2Offset = o; }
     ByteCodeStackOffset src3Offset() const { return m_src3Offset; }
+    void setSrc3Offset(ByteCodeStackOffset o) { m_src3Offset = o; }
     ByteCodeStackOffset src4Offset() const { return m_src4Offset; }
+    void setSrc4Offset(ByteCodeStackOffset o) { m_src4Offset = o; }
     uint8_t log2Size() const { return m_log2Size; }
     bool dstIsNullable() const { return (m_isNullable & DstIsNullable) != 0; }
     bool srcIsNullable() const { return (m_isNullable & SrcIsNullable) != 0; }
@@ -3989,9 +4039,13 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset offset) { m_src0Offset = offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset offset) { m_src1Offset = offset; }
     ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    void setSrc2Offset(ByteCodeStackOffset offset) { m_src2Offset = offset; }
     ByteCodeStackOffset src3Offset() const { return m_src3Offset; }
+    void setSrc3Offset(ByteCodeStackOffset offset) { m_src3Offset = offset; }
     uint8_t log2Size() const { return m_log2Size; }
     bool isNullable() const { return m_isNullable; }
     uint32_t index() { return m_index; }
@@ -4055,8 +4109,11 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset offset) { m_src0Offset = offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset offset) { m_src1Offset = offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     Value::Type type() const { return m_type; }
     bool isSigned() const { return (m_info & IsSigned) != 0; }
     bool isNullable() const { return (m_info & IsNullable) != 0; }
@@ -4093,8 +4150,11 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset offset) { m_src0Offset = offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset offset) { m_src1Offset = offset; }
     ByteCodeStackOffset src2Offset() const { return m_src2Offset; }
+    void setSrc2Offset(ByteCodeStackOffset offset) { m_src2Offset = offset; }
     Value::Type type() const { return m_type; }
     bool isNullable() const { return (m_info & ArrayGet::IsNullable) != 0; }
 
@@ -4155,6 +4215,10 @@ public:
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(StructNew));
     }
+    void setDataOffset(ByteCodeStackOffset o, uint32_t index)
+    {
+        reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(StructNew))[index] = o;
+    }
 
     uint32_t offsetsSize() const
     {
@@ -4190,6 +4254,7 @@ public:
     }
 
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     const StructType* typeInfo() const { return m_typeInfo; }
 
 #if !defined(NDEBUG)
@@ -4222,7 +4287,9 @@ public:
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset offset) { m_srcOffset = offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset offset) { m_dstOffset = offset; }
     uint32_t memberOffset() const { return m_memberOffset; }
     Value::Type type() const { return m_type; }
     bool isSigned() const { return (m_info & IsSigned) != 0; }
@@ -4259,7 +4326,9 @@ public:
     }
 
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    void setSrc0Offset(ByteCodeStackOffset offset) { m_src0Offset = offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
+    void setSrc1Offset(ByteCodeStackOffset offset) { m_src1Offset = offset; }
     uint32_t memberOffset() const { return m_memberOffset; }
     Value::Type type() const { return m_type; }
     bool isNullable() const { return (m_info & StructGet::IsNullable) != 0; }
