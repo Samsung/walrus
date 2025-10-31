@@ -1208,7 +1208,7 @@ static bool emitCompare(sljit_compiler* compiler, Instruction* instr)
             sljit_set_current_flags(compiler, (signedCompare - SLJIT_SUB) | SLJIT_CURRENT_FLAGS_SUB);
         } else {
             ASSERT(type == SLJIT_CARRY || type == SLJIT_NOT_CARRY);
-            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_CARRY, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_CARRY, params[0].arg1, params[0].arg1w, params[1].arg1, params[1].arg1w);
             sljit_emit_op2u(compiler, SLJIT_SUBC | SLJIT_SET_CARRY, params[0].arg2, params[0].arg2w, params[1].arg2, params[1].arg2w);
         }
 #else
