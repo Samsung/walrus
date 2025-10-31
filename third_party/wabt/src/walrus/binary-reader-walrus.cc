@@ -915,10 +915,8 @@ public:
     Result OnReturnCallExpr(Index func_index) override {
         CHECK_RESULT(m_validator.OnReturnCall(GetLocation(), Var(func_index, GetLocation())));
 
-        SimpleFuncType &func_type = m_functionTypes[func_index];
-
         Index drop_count, keep_count, catch_drop_count;
-        CHECK_RESULT(GetReturnCallDropKeepCount(func_type, 0, &drop_count, &keep_count));
+        CHECK_RESULT(GetReturnDropKeepCount(&drop_count, &keep_count));
         CHECK_RESULT(m_validator.GetCatchCount(m_labelStack.size() - 1, &catch_drop_count));
         // The validator must be run after we get the drop/keep counts, since it
         // will change the type stack.
@@ -932,11 +930,8 @@ public:
     Result OnReturnCallIndirectExpr(Index sig_index, Index table_index) override {
         CHECK_RESULT(m_validator.OnReturnCallIndirect(GetLocation(), Var(sig_index, GetLocation()), Var(table_index, GetLocation())));
 
-        SimpleFuncType &func_type = m_functionTypes[sig_index];
-
         Index drop_count, keep_count, catch_drop_count;
-        // +1 to include the index of the function.
-        CHECK_RESULT(GetReturnCallDropKeepCount(func_type, +1, &drop_count, &keep_count));
+        CHECK_RESULT(GetReturnDropKeepCount(&drop_count, &keep_count));
         CHECK_RESULT(m_validator.GetCatchCount(m_labelStack.size() - 1, &catch_drop_count));
         // The validator must be run after we get the drop/keep counts, since it
         // changes the type stack.
@@ -949,6 +944,13 @@ public:
     }
     Result OnReturnCallRefExpr(Type sig_type) override
     {
+        CHECK_RESULT(m_validator.OnReturnCallRef(GetLocation(), Var(sig_type, GetLocation())));
+
+        Index drop_count, keep_count, catch_drop_count;
+        CHECK_RESULT(GetReturnDropKeepCount(&drop_count, &keep_count));
+        CHECK_RESULT(m_validator.GetCatchCount(m_labelStack.size() - 1, &catch_drop_count));
+        // The validator must be run after we get the drop/keep counts, since it
+        // changes the type stack.
         CHECK_RESULT(m_validator.OnReturnCallRef(GetLocation(), Var(sig_type, GetLocation())));
 
         SHOULD_GENERATE_BYTECODE;
