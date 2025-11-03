@@ -3752,8 +3752,7 @@ public:
               ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset src3Offset, ByteCodeStackOffset src4Offset)
         : ByteCode(Opcode::ArrayCopyOpcode)
         , m_log2Size(log2Size)
-        , m_dstIsNullable(dstIsNullable ? 1 : 0)
-        , m_srcIsNullable(srcIsNullable ? 1 : 0)
+        , m_isNullable((dstIsNullable ? DstIsNullable : 0) | (srcIsNullable ? SrcIsNullable : 0))
         , m_src0Offset(src0Offset)
         , m_src1Offset(src1Offset)
         , m_src2Offset(src2Offset)
@@ -3768,16 +3767,14 @@ public:
     ByteCodeStackOffset src3Offset() const { return m_src3Offset; }
     ByteCodeStackOffset src4Offset() const { return m_src4Offset; }
     uint8_t log2Size() const { return m_log2Size; }
-    bool dstIsNullable() const { return m_dstIsNullable != 0; }
-    bool srcIsNullable() const { return m_srcIsNullable != 0; }
+    bool dstIsNullable() const { return (m_isNullable & DstIsNullable) != 0; }
+    bool srcIsNullable() const { return (m_isNullable & SrcIsNullable) != 0; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("ArrayCopy ");
         printf("log2Size: %" PRIu32 " ", m_log2Size);
-        printf("dstIsNullable: %" PRIu32 " ", m_dstIsNullable);
-        printf("srcIsNullable: %" PRIu32 " ", m_srcIsNullable);
         DUMP_BYTECODE_OFFSET(src0Offset);
         DUMP_BYTECODE_OFFSET(src1Offset);
         DUMP_BYTECODE_OFFSET(src2Offset);
@@ -3787,9 +3784,11 @@ public:
 #endif
 
 private:
+    static constexpr uint8_t DstIsNullable = 0x1;
+    static constexpr uint8_t SrcIsNullable = 0x2;
+
     uint8_t m_log2Size;
-    uint8_t m_dstIsNullable;
-    uint8_t m_srcIsNullable;
+    uint8_t m_isNullable;
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_src2Offset;

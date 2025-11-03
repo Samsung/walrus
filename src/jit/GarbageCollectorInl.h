@@ -790,12 +790,12 @@ static sljit_sw copyArray(GCArray* dstArray, const uint32_t dstOffset, GCArray* 
         return ExecutionContext::OutOfBoundsArrayAccessError;
     }
 
-    const uint8_t itemSize = static_cast<uintptr_t>(1) << args->log2Size;
-    const uintptr_t mask = itemSize - 1;
-    uint8_t* dstAddr = reinterpret_cast<uint8_t*>(dstArray) + ((sizeof(GCArray) + mask) & ~mask) + (itemSize * dstOffset);
-    uint8_t* srcAddr = reinterpret_cast<uint8_t*>(srcArray) + ((sizeof(GCArray) + mask) & ~mask) + (itemSize * args->srcOffset);
+    const uint8_t log2Size = args->log2Size;
+    const uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
+    uint8_t* dstAddr = reinterpret_cast<uint8_t*>(dstArray) + ((sizeof(GCArray) + mask) & ~mask) + (static_cast<uintptr_t>(dstOffset) << log2Size);
+    uint8_t* srcAddr = reinterpret_cast<uint8_t*>(srcArray) + ((sizeof(GCArray) + mask) & ~mask) + (static_cast<uintptr_t>(args->srcOffset) << log2Size);
 
-    memmove(dstAddr, srcAddr, args->size * itemSize);
+    memmove(dstAddr, srcAddr, static_cast<size_t>(args->size) << log2Size);
 
     return ExecutionContext::NoError;
 }

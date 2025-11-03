@@ -2011,12 +2011,12 @@ NextInstruction:
             Trap::throwException(state, "out of bounds array access");
         }
 
-        const uint8_t itemSize = static_cast<uintptr_t>(1) << code->log2Size();
-        const uintptr_t mask = itemSize - 1;
-        uint8_t* dst = reinterpret_cast<uint8_t*>(dstArray) + ((sizeof(GCArray) + mask) & ~mask) + (itemSize * dst_offset);
-        uint8_t* src = reinterpret_cast<uint8_t*>(srcArray) + ((sizeof(GCArray) + mask) & ~mask) + (itemSize * src_offset);
+        const uint8_t log2Size = code->log2Size();
+        const uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
+        uint8_t* dst = reinterpret_cast<uint8_t*>(dstArray) + ((sizeof(GCArray) + mask) & ~mask) + (static_cast<uintptr_t>(dst_offset) << log2Size);
+        uint8_t* src = reinterpret_cast<uint8_t*>(srcArray) + ((sizeof(GCArray) + mask) & ~mask) + (static_cast<uintptr_t>(src_offset) << log2Size);
 
-        memmove(dst, src, size * itemSize);
+        memmove(dst, src, static_cast<size_t>(size) << log2Size);
 
         ADD_PROGRAM_COUNTER(ArrayCopy);
         NEXT_INSTRUCTION();
