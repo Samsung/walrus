@@ -1626,7 +1626,7 @@ void JITCompiler::clear()
             }
         }
 
-        delete item;
+        item->deleteObject();
         item = next;
     }
 
