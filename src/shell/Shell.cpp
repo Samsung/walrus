@@ -1310,6 +1310,9 @@ int main(int argc, const char* argv[])
     // finalize
     delete store;
     delete engine;
+    for (auto it : externalValues) {
+        delete it;
+    }
 
 #if defined(WALRUS_GOOGLE_PERF)
     ProfilerStop();

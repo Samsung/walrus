@@ -25,6 +25,47 @@
 
 namespace Walrus {
 
+void InstructionListItem::deleteObject()
+{
+    if (isLabel()) {
+        delete reinterpret_cast<Label*>(this);
+        return;
+    }
+
+    Operand* buffer = reinterpret_cast<Operand*>(this);
+
+    if ((info() & Instruction::kIsExtended) != 0) {
+        buffer--;
+    }
+
+    static_cast<Instruction*>(this)->~Instruction();
+    free(buffer);
+}
+
+Instruction* Instruction::create(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, size_t slots, bool isExtended)
+{
+    ASSERT_STATIC((sizeof(Instruction) % sizeof(void*)) == 0 && sizeof(Operand) == sizeof(void*) && sizeof(InstructionValue) == sizeof(void*),
+                  "Expected pointer alignment and pointer slot size");
+
+    if (isExtended) {
+        slots++;
+    }
+
+    Operand* buffer = reinterpret_cast<Operand*>(malloc(sizeof(Instruction) + slots * sizeof(Operand)));
+
+    if (isExtended) {
+        buffer++;
+    }
+
+    Instruction* inst = reinterpret_cast<Instruction*>(buffer);
+    new (inst) Instruction(byteCode, group, opcode, paramCount);
+
+    if (isExtended) {
+        inst->addInfo(kIsExtended);
+    }
+    return inst;
+}
+
 uint32_t Instruction::resultCount()
 {
     if (group() != Instruction::Call) {
@@ -55,28 +96,6 @@ uint32_t Instruction::valueTypeToOperandType(Value::Type type)
         return Instruction::Int64Operand;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     }
-}
-
-ComplexInstruction::~ComplexInstruction()
-{
-    delete[] params();
-}
-
-ComplexExtendedInstruction::~ComplexExtendedInstruction()
-{
-    delete[] params();
-}
-
-BrTableInstruction::~BrTableInstruction()
-{
-    delete[] m_targetLabels;
-}
-
-BrTableInstruction::BrTableInstruction(ByteCode* byteCode, size_t targetLabelCount)
-    : Instruction(byteCode, Instruction::BrTable, ByteCode::BrTableOpcode, 1, &m_inlineParam)
-    , m_targetLabelCount(targetLabelCount)
-{
-    m_targetLabels = new Label*[targetLabelCount];
 }
 
 void Label::append(Instruction* instr)
@@ -153,29 +172,7 @@ VariableRef VariableList::getMergeHeadSlowCase(VariableRef ref)
 
 Instruction* JITCompiler::append(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount)
 {
-    Instruction* instr;
-    uint32_t operandCount = paramCount + resultCount;
-
-    switch (operandCount) {
-    case 0:
-        instr = new Instruction(byteCode, group, opcode, 0, nullptr);
-        break;
-    case 1:
-        instr = new SimpleInstruction<1>(byteCode, group, opcode, paramCount);
-        break;
-    case 2:
-        instr = new SimpleInstruction<2>(byteCode, group, opcode, paramCount);
-        break;
-    case 3:
-        instr = new SimpleInstruction<3>(byteCode, group, opcode, paramCount);
-        break;
-    case 4:
-        instr = new SimpleInstruction<4>(byteCode, group, opcode, paramCount);
-        break;
-    default:
-        instr = new ComplexInstruction(byteCode, group, opcode, paramCount, operandCount);
-        break;
-    }
+    Instruction* instr = Instruction::create(byteCode, group, opcode, paramCount, paramCount + resultCount, false);
 
     ASSERT(resultCount <= 1);
     instr->m_resultCount = static_cast<uint8_t>(resultCount);
@@ -186,34 +183,11 @@ Instruction* JITCompiler::append(ByteCode* byteCode, Instruction::Group group, B
 
 ExtendedInstruction* JITCompiler::appendExtended(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount)
 {
-    ExtendedInstruction* instr;
-    uint32_t operandCount = paramCount + resultCount;
-
+    ExtendedInstruction* instr = ExtendedInstruction::create(byteCode, group, opcode, paramCount, paramCount + resultCount);
     ASSERT(group == Instruction::Call);
 
-    switch (operandCount) {
-    case 0:
-        instr = new ExtendedInstruction(byteCode, group, opcode, 0, nullptr);
-        break;
-    case 1:
-        instr = new SimpleExtendedInstruction<1>(byteCode, group, opcode, paramCount);
-        break;
-    case 2:
-        instr = new SimpleExtendedInstruction<2>(byteCode, group, opcode, paramCount);
-        break;
-    case 3:
-        instr = new SimpleExtendedInstruction<3>(byteCode, group, opcode, paramCount);
-        break;
-    case 4:
-        instr = new SimpleExtendedInstruction<4>(byteCode, group, opcode, paramCount);
-        break;
-    default:
-        instr = new ComplexExtendedInstruction(byteCode, group, opcode, paramCount, operandCount);
-        break;
-    }
-
     instr->m_resultCount = resultCount > 0 ? 1 : 0;
-    instr->m_value.resultCount = resultCount;
+    instr->value().resultCount = resultCount;
 
     append(instr);
     return instr;
@@ -226,12 +200,11 @@ Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opco
            || opcode == ByteCode::JumpIfCastGenericOpcode || opcode == ByteCode::JumpIfCastDefinedOpcode);
     ASSERT(label != nullptr);
 
-    ExtendedInstruction* branch;
+    uint32_t paramCount = opcode == ByteCode::JumpOpcode ? 0 : 1;
 
-    if (opcode == ByteCode::JumpOpcode) {
-        branch = new ExtendedInstruction(byteCode, Instruction::DirectBranch, ByteCode::JumpOpcode, 0, nullptr);
-    } else {
-        branch = new SimpleExtendedInstruction<1>(byteCode, Instruction::DirectBranch, opcode, 1);
+    ExtendedInstruction* branch = ExtendedInstruction::create(byteCode, Instruction::DirectBranch, opcode, paramCount, paramCount);
+
+    if (opcode != ByteCode::JumpOpcode) {
         *branch->operands() = offset;
     }
 
@@ -243,7 +216,7 @@ Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opco
 
 BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset)
 {
-    BrTableInstruction* branch = new BrTableInstruction(byteCode, numTargets + 1);
+    BrTableInstruction* branch = BrTableInstruction::create(byteCode, numTargets + 1);
     *branch->operands() = offset;
 
     append(branch);
@@ -276,7 +249,7 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
 
     ASSERT(!(variable.info & (VariableList::kIsMerged | VariableList::kIsImmediate)));
 
-    ExtendedInstruction* instr = new SimpleExtendedInstruction<1>(nullptr, Instruction::StackInit, opcode, 0);
+    ExtendedInstruction* instr = ExtendedInstruction::create(nullptr, Instruction::StackInit, opcode, 0, 1);
     instr->m_resultCount = 1;
     instr->value().offset = variable.value;
     *instr->operands() = ref;

@@ -139,8 +139,6 @@ public:
         AtomicNotify,
     };
 
-    virtual ~InstructionListItem() {}
-
     InstructionListItem* next() { return m_next; }
 
     size_t id() { return m_id; }
@@ -184,6 +182,8 @@ protected:
     }
 
     uint8_t internalResultCount() { return m_resultCount; }
+
+    void deleteObject();
 
 private:
     InstructionListItem* m_next;
@@ -248,16 +248,17 @@ public:
     static const uint32_t TemporaryTypeMask = 0xf;
 
     // Various info bits. Depends on type.
-    static const uint16_t kIs32Bit = 1 << 0;
-    static const uint16_t kIsCallback = 1 << 1;
-    static const uint16_t kDestroysR0R1 = 1 << 2;
-    static const uint16_t kHasFloatOperand = 1 << 3;
-    static const uint16_t kIsShift = 1 << 4;
-    static const uint16_t kIsMergeCompare = 1 << 5;
-    static const uint16_t kFreeUnusedEarly = 1 << 6;
-    static const uint16_t kKeepInstruction = 1 << 7;
+    static const uint16_t kIsExtended = 1 << 0;
+    static const uint16_t kIs32Bit = 1 << 1;
+    static const uint16_t kIsCallback = 1 << 2;
+    static const uint16_t kDestroysR0R1 = 1 << 3;
+    static const uint16_t kHasFloatOperand = 1 << 4;
+    static const uint16_t kIsShift = 1 << 5;
+    static const uint16_t kIsMergeCompare = 1 << 6;
+    static const uint16_t kFreeUnusedEarly = 1 << 7;
+    static const uint16_t kKeepInstruction = 1 << 8;
     static const uint16_t kEarlyReturn = kKeepInstruction;
-    static const uint16_t kMultiMemory = 1 << 8;
+    static const uint16_t kMultiMemory = 1 << 9;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -265,20 +266,20 @@ public:
 
     // Params and results are stored in the same operands
     // array, where params come first followed by results.
-    Operand* operands() { return m_operands; }
+    Operand* operands() { return reinterpret_cast<Operand*>(this + 1); }
     uint32_t paramCount() { return m_paramCount; }
-    Operand* getParam(size_t i) { return m_operands + i; }
-    Operand* params() { return m_operands; }
+    Operand* getParam(size_t i) { return operands() + i; }
+    Operand* params() { return operands(); }
     uint32_t resultCount();
     Operand* getResult(size_t i)
     {
         ASSERT(hasResult());
-        return m_operands + m_paramCount + i;
+        return operands() + m_paramCount + i;
     }
     Operand* results()
     {
         ASSERT(hasResult());
-        return m_operands + m_paramCount;
+        return operands() + m_paramCount;
     }
 
     ExtendedInstruction* asExtended()
@@ -323,31 +324,21 @@ public:
     static uint32_t valueTypeToOperandType(Value::Type type);
 
 protected:
-    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands)
+    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount)
         : InstructionListItem(group)
         , m_byteCode(byteCode)
-        , m_operands(operands)
         , m_opcode(opcode)
         , m_paramCount(paramCount)
     {
         u.m_requiredRegsDescriptor = 0;
     }
 
-    explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode)
-        : InstructionListItem(group)
-        , m_byteCode(byteCode)
-        , m_operands(nullptr)
-        , m_opcode(opcode)
-        , m_paramCount(0)
-    {
-        u.m_requiredRegsDescriptor = 0;
-    }
+    static Instruction* create(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, size_t slots, bool isExtended);
 
 private:
     static const uint8_t m_operandDescriptors[];
 
     ByteCode* m_byteCode;
-    Operand* m_operands;
     ByteCode::Opcode m_opcode;
     uint32_t m_paramCount;
     union {
@@ -363,101 +354,47 @@ union InstructionValue {
     uint32_t resultCount;
     // For StackInit group.
     VariableRef offset;
+    // For BrTable instruction.
+    size_t targetLabelCount;
 };
 
 class ExtendedInstruction : public Instruction {
     friend class JITCompiler;
 
 public:
-    InstructionValue& value() { return m_value; }
-
-protected:
-    explicit ExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, Operand* operands)
-        : Instruction(byteCode, group, opcode, paramCount, operands)
+    InstructionValue& value()
     {
-        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackInit
-               || opcode == ByteCode::JumpIfCastGenericOpcode || opcode == ByteCode::JumpIfCastDefinedOpcode);
-        m_value.targetLabel = nullptr;
+        ASSERT((info() & kIsExtended) != 0);
+        return reinterpret_cast<InstructionValue*>(this)[-1];
     }
 
-private:
-    InstructionValue m_value;
-};
-
-template <int n>
-class SimpleInstruction : public Instruction {
-    friend class JITCompiler;
-
 protected:
-    explicit SimpleInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount)
-        : Instruction(byteCode, group, opcode, paramCount, m_inlineOperands)
+    static ExtendedInstruction* create(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, size_t slots)
     {
-        ASSERT(paramCount == n || paramCount + 1 == n);
-    }
+        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackInit);
 
-private:
-    Operand m_inlineOperands[n];
+        return reinterpret_cast<ExtendedInstruction*>(Instruction::create(byteCode, group, opcode, paramCount, slots, true));
+    }
 };
 
-template <int n>
-class SimpleExtendedInstruction : public ExtendedInstruction {
-    friend class JITCompiler;
-
-protected:
-    explicit SimpleExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount)
-        : ExtendedInstruction(byteCode, group, opcode, paramCount, m_inlineOperands)
-    {
-        ASSERT(paramCount <= n);
-    }
-
-private:
-    Operand m_inlineOperands[n];
-};
-
-class ComplexInstruction : public Instruction {
+class BrTableInstruction : public ExtendedInstruction {
     friend class JITCompiler;
 
 public:
-    ~ComplexInstruction() override;
+    Label** targetLabels() { return reinterpret_cast<Label**>(operands() + TargetLabelsIndex); }
+    size_t targetLabelCount() { return value().targetLabelCount; }
 
 protected:
-    explicit ComplexInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount)
-        : Instruction(byteCode, group, opcode, paramCount, new Operand[operandCount])
+    static BrTableInstruction* create(ByteCode* byteCode, size_t targetLabelCount)
     {
-        assert(operandCount >= paramCount && operandCount > 4);
-        assert(opcode == ByteCode::EndOpcode || opcode == ByteCode::ArrayCopyOpcode);
+        BrTableInstruction* brTable = reinterpret_cast<BrTableInstruction*>(Instruction::create(byteCode, Instruction::BrTable, ByteCode::BrTableOpcode, 1, TargetLabelsIndex + targetLabelCount, true));
+        brTable->value().targetLabelCount = targetLabelCount;
+        return brTable;
     }
-};
-
-class ComplexExtendedInstruction : public ExtendedInstruction {
-    friend class JITCompiler;
-
-public:
-    ~ComplexExtendedInstruction() override;
-
-protected:
-    explicit ComplexExtendedInstruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t operandCount)
-        : ExtendedInstruction(byteCode, group, opcode, paramCount, new Operand[operandCount])
-    {
-        assert(operandCount >= paramCount && operandCount > 4);
-    }
-};
-
-class BrTableInstruction : public Instruction {
-    friend class JITCompiler;
-
-public:
-    ~BrTableInstruction() override;
-
-    Label** targetLabels() { return m_targetLabels; }
-    size_t targetLabelCount() { return m_targetLabelCount; }
-
-protected:
-    BrTableInstruction(ByteCode* byteCode, size_t targetLabelCount);
 
 private:
-    Operand m_inlineParam;
-    size_t m_targetLabelCount;
+    static const uint32_t TargetLabelsIndex = 1;
+
     Label** m_targetLabels;
 };
 
