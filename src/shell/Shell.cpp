@@ -348,12 +348,12 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     auto fn = instance->function(exp->itemIndex());
                     FunctionType* fnType = fn->asDefinedFunction()->moduleFunction()->functionType();
 
-                    if (!fnType->param().empty()) {
+                    if (fnType->param().size() != 0) {
                         printf("warning: function %s has params, but params are not supported\n", exp->name().c_str());
                         return;
                     }
 
-                    if (!fnType->result().empty()) {
+                    if (fnType->result().size() != 0) {
                         printf("warning: function %s has results, but results are not supported\n", exp->name().c_str());
                         return;
                     }
@@ -1080,7 +1080,7 @@ static void runExports(Store* store, const std::string& filename, const std::vec
                 auto fn = instance->function(exp->itemIndex());
                 FunctionType* fnType = fn->asDefinedFunction()->moduleFunction()->functionType();
 
-                if (!fnType->param().empty()) {
+                if (fnType->param().size() != 0) {
                     printf("warning: function %s has params, but params are not supported\n", exp->name().c_str());
                     return;
                 }

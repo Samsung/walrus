@@ -25,28 +25,35 @@ namespace Walrus {
 class CompositeType;
 
 class Type {
+    friend class MutableType;
+
 public:
     Type()
-        : m_type(static_cast<uintptr_t>(Value::Void))
+        : m_type(Value::Void)
+        , m_isMutable(false)
         , m_ref(nullptr)
     {
     }
 
     Type(Value::Type kind)
-        : m_type(static_cast<uintptr_t>(kind))
+        : m_type(kind)
+        , m_isMutable(false)
         , m_ref(nullptr)
     {
+        ASSERT(!isConcreteType());
     }
 
-    Type(Value::Type kind, CompositeType* ref)
-        : m_type(static_cast<uintptr_t>(kind))
+    Type(Value::Type kind, const CompositeType* ref)
+        : m_type(kind)
+        , m_isMutable(false)
         , m_ref(ref)
     {
+        ASSERT(isConcreteType() || ref == nullptr);
     }
 
     Value::Type type() const
     {
-        return static_cast<Value::Type>(m_type);
+        return m_type;
     }
 
     // Storage type on the WebAssembly stack.
@@ -55,7 +62,7 @@ public:
         if (isPacked()) {
             return Value::I32;
         }
-        return static_cast<Value::Type>(m_type);
+        return m_type;
     }
 
     operator Value::Type() const
@@ -64,8 +71,9 @@ public:
         return type();
     }
 
-    CompositeType* ref() const
+    const CompositeType* ref() const
     {
+        ASSERT(isConcreteType() || m_ref == nullptr);
         return m_ref;
     }
 
@@ -84,45 +92,173 @@ public:
         return Value::isPackedType(type());
     }
 
+    bool isConcreteType() const
+    {
+        return type() == Value::DefinedRef || type() == Value::NullDefinedRef;
+    }
+
     bool isSubType(const Type& expected) const;
 
 private:
-    // Type is uintptr_t to support memcmp comparison
-    uintptr_t m_type;
-    CompositeType* m_ref;
+    Value::Type m_type;
+    // Only used by MutableType.
+    // Stored here to reduce MutableType size.
+    bool m_isMutable;
+    const CompositeType* m_ref;
 };
 
 class MutableType : public Type {
 public:
     MutableType()
         : Type()
-        , m_isMutable(false)
     {
+        m_isMutable = 0;
     }
 
     MutableType(Value::Type kind, bool isMutable)
         : Type(kind)
-        , m_isMutable(isMutable)
     {
+        m_isMutable = isMutable;
     }
 
-    MutableType(Value::Type kind, CompositeType* ref, bool isMutable)
+    MutableType(Value::Type kind, const CompositeType* ref, bool isMutable)
         : Type(kind, ref)
-        , m_isMutable(isMutable)
     {
+        m_isMutable = isMutable;
     }
 
     bool isMutable() const
     {
         return m_isMutable;
     }
-
-private:
-    bool m_isMutable;
 };
 
-typedef Vector<Type, std::allocator<Type>> TypeVector;
-typedef Vector<MutableType, std::allocator<MutableType>> MutableTypeVector;
+class TypeVector {
+    friend class WASMBinaryReader;
+
+public:
+    typedef VectorWithFixedSize<Value::Type, std::allocator<Value::Type>> Types;
+    typedef VectorWithFixedSize<const CompositeType*, std::allocator<const CompositeType*>> Refs;
+
+    TypeVector(size_t typesCount, size_t refsCount)
+    {
+        m_types.reserve(typesCount);
+        m_refs.reserve(refsCount);
+    }
+
+    const Types& types() const
+    {
+        return m_types;
+    }
+
+    const Refs& refs() const
+    {
+        return m_refs;
+    }
+
+    size_t size() const
+    {
+        return types().size();
+    }
+
+    // Setters should only be used by the parser.
+    void setType(size_t idx, Value::Type type)
+    {
+        m_types[idx] = type;
+    }
+
+    void setRef(size_t idx, const CompositeType* ref)
+    {
+        m_refs[idx] = ref;
+    }
+
+private:
+    Types m_types;
+    Refs m_refs;
+};
+
+class MutableTypeVector {
+    friend class WASMBinaryReader;
+
+public:
+    class TypeData {
+    public:
+        TypeData(Value::Type kind, bool isMutable)
+            : m_type(static_cast<uint8_t>((kind << TypeShift) | (isMutable ? IsMutable : 0)))
+        {
+            ASSERT(type() == kind);
+        }
+
+        Value::Type type() const
+        {
+            return static_cast<Value::Type>(m_type >> TypeShift);
+        }
+
+        bool isMutable() const
+        {
+            return (m_type & IsMutable) != 0;
+        }
+
+        // Used by hashing.
+        size_t rawValue()
+        {
+            return m_type;
+        }
+
+        // Storage type on the WebAssembly stack.
+        Value::Type stackType() const
+        {
+            if (Value::isPackedType(type())) {
+                return Value::I32;
+            }
+            return type();
+        }
+
+    private:
+        static constexpr int TypeShift = 1;
+        static constexpr uint8_t IsMutable = 0x1;
+
+        uint8_t m_type;
+    };
+
+    typedef VectorWithFixedSize<TypeData, std::allocator<TypeData>> Types;
+
+    MutableTypeVector(size_t typesCount, size_t refsCount)
+    {
+        m_types.reserve(typesCount);
+        m_refs.reserve(refsCount);
+    }
+
+    const Types& types() const
+    {
+        return m_types;
+    }
+
+    const TypeVector::Refs& refs() const
+    {
+        return m_refs;
+    }
+
+    size_t size() const
+    {
+        return types().size();
+    }
+
+    // Setters should only be used by the parser.
+    void setType(size_t idx, TypeData type)
+    {
+        m_types[idx] = type;
+    }
+
+    void setRef(size_t idx, const CompositeType* ref)
+    {
+        m_refs[idx] = ref;
+    }
+
+private:
+    Types m_types;
+    TypeVector::Refs m_refs;
+};
 
 } // namespace Walrus
 

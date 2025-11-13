@@ -93,7 +93,7 @@ static void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std:
 
 static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 {
-    Value::Type type = module->globalType(globalIndex)->type();
+    Value::Type type = module->globalType(globalIndex)->type().type();
 
     return type == Value::F32 || type == Value::F64;
 }
@@ -1146,7 +1146,7 @@ static void compileFunction(JITCompiler* compiler)
             Operand* operand = instr->operands();
             instr->addInfo(Instruction::kIsCallback | Instruction::kFreeUnusedEarly);
 
-            for (auto it : functionType->param()) {
+            for (auto it : functionType->param().types()) {
                 *operand++ = STACK_OFFSET(*stackOffset);
                 stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
@@ -1157,7 +1157,7 @@ static void compileFunction(JITCompiler* compiler)
                 *operand++ = STACK_OFFSET(reinterpret_cast<CallRef*>(byteCode)->calleeOffset());
             }
 
-            for (auto it : functionType->result()) {
+            for (auto it : functionType->result().types()) {
                 *operand++ = STACK_OFFSET(*stackOffset);
                 stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
@@ -2066,7 +2066,7 @@ static void compileFunction(JITCompiler* compiler)
             Operand* param = instr->params();
             ByteCodeStackOffset* offsets = reinterpret_cast<End*>(byteCode)->resultOffsets();
 
-            for (auto it : result) {
+            for (auto it : result.types()) {
                 *param++ = STACK_OFFSET(*offsets);
                 offsets += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }

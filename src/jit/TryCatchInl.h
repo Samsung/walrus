@@ -232,7 +232,7 @@ static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* contex
     userExceptionData.resizeWithUninitializedValues(sz);
 
     uint8_t* ptr = userExceptionData.data();
-    auto& param = tag->functionType()->param();
+    auto& param = tag->functionType()->param().types();
     for (size_t i = 0; i < param.size(); i++) {
         auto sz = valueStackAllocatedSize(param[i]);
         memcpy(ptr, bp + throwTag->dataOffsets()[i], sz);

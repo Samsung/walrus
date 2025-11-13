@@ -97,7 +97,7 @@ void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excl
            && (dependencyStart % size) == 0
            && maxDistance[dependencyStart / size] <= id);
 
-    for (auto it : param) {
+    for (auto it : param.types()) {
         if (variableList != nullptr) {
             // Construct new variables.
             VariableRef ref = variableList->variables.size();
@@ -520,7 +520,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
         size_t id = instr->id();
 
-        for (auto it : functionType->result()) {
+        for (auto it : functionType->result().types()) {
             VariableRef ref = VARIABLE_SET(m_variableList->variables.size(), DependencyGenContext::Variable);
             uint32_t typeInfo = Instruction::valueTypeToOperandType(it);
 
@@ -700,7 +700,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             } else {
                 switch (instr->opcode()) {
                 case ByteCode::StructNewOpcode: {
-                    for (auto it : reinterpret_cast<StructNew*>(instr->byteCode())->typeInfo()->fields()) {
+                    for (auto it : reinterpret_cast<StructNew*>(instr->byteCode())->typeInfo()->fields().types()) {
                         VariableList::Variable& variable = m_variableList->variables[*param++];
                         variable.info |= Instruction::valueTypeToOperandType(Value::unpackType(it.type()));
                     }
@@ -790,7 +790,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     }
                     }
 
-                    for (auto it : *types) {
+                    for (auto it : types->types()) {
                         VariableList::Variable& variable = m_variableList->variables[*param++];
                         variable.info |= Instruction::valueTypeToOperandType(it);
                     }

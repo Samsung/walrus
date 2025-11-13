@@ -171,6 +171,28 @@ static Walrus::Type toValueKind(Type type, Walrus::WASMParsingResult* result)
     }
 }
 
+static size_t getRefCountOfTypes(Type* types, Index count)
+{
+    size_t result = 0;
+    for (Index i = 0; i < count; i++) {
+        if (types[i] == Type::Ref || types[i] == Type::RefNull) {
+            result++;
+        }
+    }
+    return result;
+}
+
+static size_t getRefCountOfMutTypes(TypeMut* types, Index count)
+{
+    size_t result = 0;
+    for (Index i = 0; i < count; i++) {
+        if (types[i].type == Type::Ref || types[i].type == Type::RefNull) {
+            result++;
+        }
+    }
+    return result;
+}
+
 static const Walrus::CompositeType** toSubType(GCTypeExtension* gcExt)
 {
     if (gcExt->sub_type_count == 0) {
@@ -682,8 +704,9 @@ private:
         m_localInfo.clear();
         m_localInfo.reserve(m_currentFunctionType->param().size());
         size_t pos = 0;
-        for (size_t i = 0; i < m_currentFunctionType->param().size(); i++) {
-            m_localInfo.push_back(LocalInfo(m_currentFunctionType->param()[i], pos));
+        const Walrus::TypeVector::Types& param = m_currentFunctionType->param().types();
+        for (size_t i = 0; i < param.size(); i++) {
+            m_localInfo.push_back(LocalInfo(param[i], pos));
             pos += Walrus::valueStackAllocatedSize(m_localInfo[i].m_valueType);
         }
         m_initialFunctionStackSize = m_functionStackSizeSoFar = m_currentFunctionType->paramStackSize();
@@ -839,14 +862,23 @@ public:
                             Type* resultTypes,
                             GCTypeExtension* gcExt) override
     {
-        Walrus::TypeVector* param = new Walrus::TypeVector();
-        param->reserve(paramCount);
+        Walrus::TypeVector* param = new Walrus::TypeVector(paramCount, getRefCountOfTypes(paramTypes, paramCount));
+        size_t refIdx = 0;
         for (size_t i = 0; i < paramCount; i++) {
-            param->push_back(toValueKind(paramTypes[i], nullptr));
+            Walrus::Type type = toValueKind(paramTypes[i], nullptr);
+            param->setType(i, type.type());
+            if (type.isConcreteType()) {
+                param->setRef(refIdx++, type.ref());
+            }
         }
-        Walrus::TypeVector* result = new Walrus::TypeVector();
+        Walrus::TypeVector* result = new Walrus::TypeVector(resultCount, getRefCountOfTypes(resultTypes, resultCount));
+        refIdx = 0;
         for (size_t i = 0; i < resultCount; i++) {
-            result->push_back(toValueKind(resultTypes[i], nullptr));
+            Walrus::Type type = toValueKind(resultTypes[i], nullptr);
+            result->setType(i, type.type());
+            if (type.isConcreteType()) {
+                result->setRef(refIdx++, type.ref());
+            }
         }
         ASSERT(index == m_result.m_compositeTypes.size());
         m_result.m_compositeTypes.push_back(new Walrus::FunctionType(param, result, gcExt->is_final_sub_type, toSubType(gcExt)));
@@ -860,11 +892,14 @@ public:
                               TypeMut* fieldTypes,
                               GCTypeExtension* gcExt) override
     {
-        Walrus::MutableTypeVector* fields = new Walrus::MutableTypeVector();
-        fields->reserve(fieldCount);
+        Walrus::MutableTypeVector* fields = new Walrus::MutableTypeVector(fieldCount, getRefCountOfMutTypes(fieldTypes, fieldCount));
+        size_t refIdx = 0;
         for (size_t i = 0; i < fieldCount; i++) {
             Walrus::Type type = toValueKind(fieldTypes[i].type, nullptr);
-            fields->push_back(Walrus::MutableType(type.type(), type.ref(), fieldTypes[i].mutable_));
+            fields->setType(i, Walrus::MutableTypeVector::TypeData(type.type(), fieldTypes[i].mutable_));
+            if (type.isConcreteType()) {
+                fields->setRef(refIdx++, type.ref());
+            }
         }
 
         ASSERT(index == m_result.m_compositeTypes.size());
@@ -1340,7 +1375,7 @@ public:
     uint16_t computeFunctionParameterOrResultOffsetCount(const Walrus::TypeVector& types)
     {
         uint16_t result = 0;
-        for (auto t : types) {
+        for (auto t : types.types()) {
             result += valueFunctionCopyCount(t);
         }
         return result;
@@ -1351,12 +1386,13 @@ public:
                           Walrus::FunctionType* functionType)
     {
         size_t offsetIndex = 0;
-        size_t siz = functionType->param().size();
+        const Walrus::TypeVector::Types& param = functionType->param().types();
+        size_t siz = param.size();
 
         for (size_t i = 0; i < siz; i++) {
-            ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(functionType->param()[siz - i - 1]));
+            ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(param[siz - i - 1]));
             size_t sourcePos = popVMStack();
-            auto type = functionType->param()[siz - i - 1];
+            auto type = param[siz - i - 1];
             size_t s = Walrus::valueSize(type);
             size_t offsetSubCount = 0;
             size_t subIndexCount = valueFunctionCopyCount(type);
@@ -1366,10 +1402,11 @@ public:
             offsetIndex += subIndexCount;
         }
 
-        siz = functionType->result().size();
+        const Walrus::TypeVector::Types& result = functionType->result().types();
+        siz = result.size();
         for (size_t i = 0; i < siz; i++) {
-            size_t dstPos = pushVMStack(functionType->result()[i]);
-            size_t itemSize = Walrus::valueSize(functionType->result()[i]);
+            size_t dstPos = pushVMStack(result[i]);
+            size_t itemSize = Walrus::valueSize(result[i]);
             for (size_t j = 0; j < itemSize; j += sizeof(size_t)) {
                 code->stackOffsets()[offsetIndex++] = dstPos + j;
             }
@@ -1676,7 +1713,7 @@ public:
             if (!blockInfo.m_byteCodeGenerationStopped) {
                 if (blockInfo.m_returnValueType.IsIndex()) {
                     auto ft = getFunctionType(blockInfo.m_returnValueType);
-                    const auto& result = ft->result();
+                    const auto& result = ft->result().types();
                     for (size_t i = 0; i < result.size(); i++) {
                         ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(result[result.size() - i - 1]));
                         auto info = peekVMStackInfo();
@@ -1779,7 +1816,7 @@ public:
                 } else {
                     if (iter->m_returnValueType.IsIndex()) {
                         auto ft = getFunctionType(iter->m_returnValueType);
-                        const auto& result = ft->result();
+                        const auto& result = ft->result().types();
                         for (size_t i = 0; i < result.size(); i++) {
                             parameterSize += Walrus::valueStackAllocatedSize(result[i]);
                         }
@@ -1885,7 +1922,7 @@ public:
         auto offsetCount = computeFunctionParameterOrResultOffsetCount(m_currentFunctionType->result());
         pushByteCode(Walrus::End(offsetCount), WASMOpcode::EndOpcode);
 
-        auto& result = m_currentFunctionType->result();
+        auto& result = m_currentFunctionType->result().types();
         m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * offsetCount));
         ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
         Walrus::End* end = m_currentFunction->peekByteCode<Walrus::End>(pos);
@@ -1900,7 +1937,7 @@ public:
             }
             offsetIndex += subIndexCount;
         }
-        ASSERT(offsetIndex == computeFunctionParameterOrResultOffsetCount(result));
+        ASSERT(offsetIndex == computeFunctionParameterOrResultOffsetCount(m_currentFunctionType->result()));
 
         if (shouldClearVMStack) {
             for (size_t i = 0; i < result.size(); i++) {
@@ -1911,9 +1948,11 @@ public:
 
     void generateFunctionReturnCode(bool shouldClearVMStack = false)
     {
+#if !defined(NDEBUG)
         for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-            ASSERT(toDebugType((m_vmStack.rbegin() + i)->valueType()) == toDebugType(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+            ASSERT(toDebugType((m_vmStack.rbegin() + i)->valueType()) == toDebugType(m_currentFunctionType->result().types()[m_currentFunctionType->result().size() - i - 1]));
         }
+#endif
         generateEndCode();
         if (shouldClearVMStack) {
             auto dropSize = dropStackValuesBeforeBrIfNeeds(m_blockInfo.size()).first;
@@ -1952,7 +1991,7 @@ public:
             size_t pos = m_currentFunction->currentByteCodeSize();
 
             auto ft = getFunctionType(blockInfo.m_returnValueType);
-            const auto& param = ft->param();
+            const auto& param = ft->param().types();
             for (size_t i = 0; i < param.size(); i++) {
                 ASSERT((m_vmStack.rbegin() + i)->valueType() == param[param.size() - i - 1]);
                 auto info = m_vmStack.rbegin() + i;
@@ -1977,7 +2016,7 @@ public:
             size_t pos = m_currentFunction->currentByteCodeSize();
             pushByteCode(JumpTypeInverted(stackPos, sizeof(JumpTypeInverted) + sizeof(Walrus::End) + sizeof(Walrus::ByteCodeStackOffset) * m_currentFunctionType->result().size()), opcode);
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-                ASSERT(toDebugType((m_vmStack.rbegin() + i)->valueType()) == toDebugType(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+                ASSERT(toDebugType((m_vmStack.rbegin() + i)->valueType()) == toDebugType(m_currentFunctionType->result().types()[m_currentFunctionType->result().size() - i - 1]));
             }
             generateEndCode();
             m_currentFunction->peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
@@ -2005,7 +2044,7 @@ public:
             size_t pos = m_currentFunction->currentByteCodeSize();
             pushByteCode(JumpTypeInverted(stackPos), opcode);
             auto ft = getFunctionType(blockInfo.m_returnValueType);
-            const auto& param = ft->param();
+            const auto& param = ft->param().types();
             for (size_t i = 0; i < param.size(); i++) {
                 ASSERT(toDebugType((m_vmStack.rbegin() + i)->valueType()) == toDebugType(param[param.size() - i - 1]));
                 auto info = m_vmStack.rbegin() + i;
@@ -2081,7 +2120,7 @@ public:
             // this case acts like return
 #if !defined(NDEBUG)
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
-                ASSERT((m_vmStack.rbegin() + i)->valueType() == m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]);
+                ASSERT((m_vmStack.rbegin() + i)->valueType() == m_currentFunctionType->result().types()[m_currentFunctionType->result().size() - i - 1]);
             }
 #endif
             *(int32_t*)(m_currentFunction->peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
@@ -2161,7 +2200,7 @@ public:
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = getFunctionType(m_result.m_tagTypes[tagIndex]->sigIndex());
-            auto& param = functionType->param();
+            auto& param = functionType->param().types();
             m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * param.size()));
             ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
             Walrus::Throw* code = m_currentFunction->peekByteCode<Walrus::Throw>(pos);
@@ -2207,8 +2246,9 @@ public:
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = getFunctionType(m_result.m_tagTypes[tagIndex]->sigIndex());
-            for (size_t i = 0; i < functionType->param().size(); i++) {
-                pushVMStack(functionType->param()[i]);
+            auto& param = functionType->param().types();
+            for (size_t i = 0; i < param.size(); i++) {
+                pushVMStack(param[i]);
             }
         }
     }
@@ -2589,7 +2629,7 @@ public:
             srcInfo |= Walrus::JumpIfCastGeneric::IsSrcTagged;
         }
 
-        targetType = Walrus::Value::toNonNullableRefType(targetType);
+        targetType = Walrus::Type(Walrus::Value::toNonNullableRefType(targetType), targetType.ref());
 
         switch (targetType) {
         case Walrus::Value::I31Ref:
@@ -2922,7 +2962,7 @@ public:
         ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
         Walrus::StructNew* code = m_currentFunction->peekByteCode<Walrus::StructNew>(pos);
         for (size_t i = 0; i < fields.size(); i++) {
-            ASSERT(peekVMStackValueType() == toDebugType(fields[fields.size() - i - 1].stackType()));
+            ASSERT(peekVMStackValueType() == toDebugType(fields.types()[fields.size() - i - 1].stackType()));
             code->dataOffsets()[fields.size() - i - 1] = popVMStack();
         }
 
@@ -2949,7 +2989,7 @@ public:
         }
 
         const Walrus::StructType* typeInfo = m_result.m_compositeTypes[type_index]->asStruct();
-        Walrus::Value::Type type = typeInfo->fields()[field_index].type();
+        Walrus::Value::Type type = typeInfo->fields().types()[field_index].type();
         uint32_t memberOffset = typeInfo->fieldOffsets()[field_index];
 
         auto src = popVMStack();
@@ -2967,7 +3007,7 @@ public:
         }
 
         const Walrus::StructType* typeInfo = m_result.m_compositeTypes[type_index]->asStruct();
-        Walrus::Value::Type type = typeInfo->fields()[field_index].type();
+        Walrus::Value::Type type = typeInfo->fields().types()[field_index].type();
         uint32_t memberOffset = typeInfo->fieldOffsets()[field_index];
 
         auto src0 = popVMStack();
@@ -3032,13 +3072,13 @@ public:
                 restoreVMStackBy(blockInfo);
                 if (blockInfo.m_returnValueType.IsIndex()) {
                     auto ft = getFunctionType(blockInfo.m_returnValueType);
-                    const auto& param = ft->param();
+                    const auto& param = ft->param().types();
                     for (size_t i = 0; i < param.size(); i++) {
                         ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(param[param.size() - i - 1]));
                         popVMStack();
                     }
 
-                    const auto& result = ft->result();
+                    const auto& result = ft->result().types();
                     for (size_t i = 0; i < result.size(); i++) {
                         pushVMStack(result[i]);
                     }
@@ -3090,7 +3130,7 @@ public:
         }
         if (m_shouldContinueToGenerateByteCode) {
             for (size_t i = 0; i < m_currentFunctionType->result().size() && m_vmStack.size(); i++) {
-                ASSERT(toDebugType(popVMStackInfo().valueType()) == toDebugType(m_currentFunctionType->result()[m_currentFunctionType->result().size() - i - 1]));
+                ASSERT(toDebugType(popVMStackInfo().valueType()) == toDebugType(m_currentFunctionType->result().types()[m_currentFunctionType->result().size() - i - 1]));
             }
             ASSERT(m_vmStack.empty());
         }

@@ -81,10 +81,13 @@ void Store::finalize()
 #endif
 }
 
-#define ALLOCATE_DEFAULT_TYPE(type)                                                                                                  \
-    case Value::Type::type:                                                                                                          \
-        g_defaultFunctionTypes[Value::Type::type] = new FunctionType(new TypeVector(), new TypeVector({ Type(Value::Type::type) })); \
-        break;
+#define ALLOCATE_DEFAULT_TYPE(type)                                                                 \
+    case Value::Type::type: {                                                                       \
+        TypeVector* result = new TypeVector(1, 0);                                                  \
+        result->setType(0, Value::Type::type);                                                      \
+        g_defaultFunctionTypes[Value::Type::type] = new FunctionType(new TypeVector(0, 0), result); \
+        break;                                                                                      \
+    }
 
 FunctionType* Store::getDefaultFunctionType(Value::Type type)
 {

@@ -44,7 +44,7 @@ GCStruct* GCStruct::structNew(const StructType* type, ByteCodeStackOffset* offse
     // Placement new to initialize the common part.
     new (result) GCStruct(type);
 
-    const MutableTypeVector& fields = type->fields();
+    const MutableTypeVector::Types& fields = type->fields().types();
     const VectorWithFixedSize<uint32_t, std::allocator<uint32_t>>& fieldOffsets = type->fieldOffsets();
     size_t size = fields.size();
 

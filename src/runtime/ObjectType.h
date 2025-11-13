@@ -177,9 +177,11 @@ private:
 
     static size_t computeStackSize(const TypeVector& v)
     {
+        const TypeVector::Types& types = v.types();
+
         size_t s = 0;
-        for (size_t i = 0; i < v.size(); i++) {
-            s += valueStackAllocatedSize(v[i]);
+        for (size_t i = 0; i < types.size(); i++) {
+            s += valueStackAllocatedSize(types[i]);
         }
         return s;
     }
