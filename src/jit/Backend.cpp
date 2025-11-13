@@ -703,7 +703,7 @@ static void emitImmediate(sljit_compiler* compiler, Instruction* instr)
 
 static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand* param, ByteCodeStackOffset* stackOffset, const TypeVector& types, bool isWordOffsets)
 {
-    for (auto it : types) {
+    for (auto it : types.types()) {
         Operand dst = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
 
         switch (VARIABLE_TYPE(*param)) {

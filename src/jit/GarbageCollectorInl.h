@@ -1022,7 +1022,7 @@ static void emitGCStructNew(sljit_compiler* compiler, Instruction* instr)
     ByteCodeStackOffset* stackOffset = structNew->dataOffsets();
     Operand* param = instr->params();
 
-    for (auto it : structNew->typeInfo()->fields()) {
+    for (auto it : structNew->typeInfo()->fields().types()) {
         emitGCStore(compiler, *stackOffset++, param++, it.type());
     }
 

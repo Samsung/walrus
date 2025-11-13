@@ -182,7 +182,7 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
 
     sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
 
-    for (auto it : functionType->result()) {
+    for (auto it : functionType->result().types()) {
         ASSERT(VARIABLE_TYPE(*operand) != Instruction::ConstPtr);
 
         if (VARIABLE_TYPE(*operand) == Instruction::Register) {

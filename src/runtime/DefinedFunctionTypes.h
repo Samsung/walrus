@@ -61,204 +61,204 @@ public:
 
         {
             // NONE
-            param = new TypeVector();
-            result = new TypeVector();
+            param = new TypeVector(0, 0);
+            result = new TypeVector(0, 0);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32R
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
+            param = new TypeVector(1, 0);
+            result = new TypeVector(0, 0);
+            param->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(1, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(2, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I64I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(3, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I64);
+            param->setType(2, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(3, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32I32I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(4, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I64I32I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(4, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I64);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I64I64I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(4, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I64);
+            param->setType(2, Value::Type::I64);
+            param->setType(3, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32I32I32I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(5, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I32);
+            param->setType(4, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32I32I64I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(5, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I64);
+            param->setType(4, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32I32I32I32I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(6, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I32);
+            param->setType(4, Value::Type::I32);
+            param->setType(5, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32I32I32I32I64I64I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(7, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I32);
+            param->setType(4, Value::Type::I64);
+            param->setType(5, Value::Type::I64);
+            param->setType(6, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32I32I32I32I32I64I64I32I32_RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I64);
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::I32);
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(9, 0);
+            result = new TypeVector(1, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I32);
+            param->setType(4, Value::Type::I32);
+            param->setType(5, Value::Type::I64);
+            param->setType(6, Value::Type::I64);
+            param->setType(7, Value::Type::I32);
+            param->setType(8, Value::Type::I32);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // RI32
-            param = new TypeVector();
-            result = new TypeVector();
-            result->push_back(Value::Type::I32);
+            param = new TypeVector(0, 0);
+            result = new TypeVector(1, 0);
+            result->setType(0, Value::Type::I32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I64
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I64);
+            param = new TypeVector(1, 0);
+            result = new TypeVector(0, 0);
+            param->setType(0, Value::Type::I64);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // F32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::F32);
+            param = new TypeVector(1, 0);
+            result = new TypeVector(0, 0);
+            param->setType(0, Value::Type::F32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // F64
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::F64);
+            param = new TypeVector(1, 0);
+            result = new TypeVector(0, 0);
+            param->setType(0, Value::Type::F64);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // I32F32
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::I32);
-            param->push_back(Value::Type::F32);
+            param = new TypeVector(2, 0);
+            result = new TypeVector(0, 0);
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::F32);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // F64F64
-            param = new TypeVector();
-            result = new TypeVector();
-            param->push_back(Value::Type::F64);
-            param->push_back(Value::Type::F64);
+            param = new TypeVector(2, 0);
+            result = new TypeVector(0, 0);
+            param->setType(0, Value::Type::F64);
+            param->setType(1, Value::Type::F64);
             m_vector[index++] = new FunctionType(param, result);
         }
         {
             // INVALID
-            param = new TypeVector();
-            result = new TypeVector();
+            param = new TypeVector(1, 0);
+            result = new TypeVector(0, 0);
             // Temporary types cannot be used as params
-            param->push_back(Value::Type::Void);
+            param->setType(0, Value::Type::Void);
             m_vector[index++] = new FunctionType(param, result);
         }
 

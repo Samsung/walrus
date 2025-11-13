@@ -505,7 +505,7 @@ static void FromWalrusValueTypes(const TypeVector& types, wasm_valtype_vec_t* ou
 {
     wasm_valtype_vec_new_uninitialized(out, types.size());
     for (size_t i = 0; i < types.size(); i++) {
-        out->data[i] = wasm_valtype_new(FromWalrusValueType(types[i]));
+        out->data[i] = wasm_valtype_new(FromWalrusValueType(types.types()[i]));
     }
 }
 
@@ -903,16 +903,14 @@ own wasm_module_t* wasm_module_deserialize(wasm_store_t*, const wasm_byte_vec_t*
 // Function Instances
 static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
 {
-    TypeVector* params = new TypeVector();
-    TypeVector* results = new TypeVector();
-    params->reserve(ft->params.size);
-    results->reserve(ft->results.size);
+    TypeVector* params = new TypeVector(ft->params.size, 0);
+    TypeVector* results = new TypeVector(ft->results.size, 0);
 
     for (uint32_t i = 0; i < ft->params.size; i++) {
-        params->push_back(ft->params.data[i]->type);
+        params->setType(i, ft->params.data[i]->type);
     }
     for (uint32_t i = 0; i < ft->results.size; i++) {
-        results->push_back(ft->results.data[i]->type);
+        results->setType(i, ft->results.data[i]->type);
     }
 
     return new FunctionType(params, results);

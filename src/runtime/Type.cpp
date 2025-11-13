@@ -20,7 +20,7 @@
 
 namespace Walrus {
 
-static Value::Type toGenericType(CompositeType* ref)
+static Value::Type toGenericType(const CompositeType* ref)
 {
     switch (ref->kind()) {
     case ObjectType::FunctionKind:

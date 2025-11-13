@@ -47,19 +47,27 @@ bool FunctionType::equals(const FunctionType* other, bool isSubType) const
         return false;
     }
 
-    if (m_paramTypes->size() != other->param().size()) {
+    size_t typesSize = m_paramTypes->size();
+    size_t refsSize = m_paramTypes->refs().size();
+    if (typesSize != other->param().size()
+        || refsSize != other->param().refs().size()) {
         return false;
     }
 
-    if (memcmp(m_paramTypes->data(), other->param().data(), sizeof(Type) * other->param().size())) {
+    if (memcmp(m_paramTypes->types().data(), other->param().types().data(), sizeof(Value::Type) * typesSize)
+        || memcmp(m_paramTypes->refs().data(), other->param().refs().data(), sizeof(CompositeType*) * refsSize)) {
         return false;
     }
 
-    if (m_resultTypes->size() != other->result().size()) {
+    typesSize = m_resultTypes->size();
+    refsSize = m_resultTypes->refs().size();
+    if (typesSize != other->result().size()
+        || refsSize != other->result().refs().size()) {
         return false;
     }
 
-    if (memcmp(m_resultTypes->data(), other->result().data(), sizeof(Type) * other->result().size())) {
+    if (memcmp(m_resultTypes->types().data(), other->result().types().data(), sizeof(Value::Type) * typesSize)
+        || memcmp(m_resultTypes->refs().data(), other->result().refs().data(), sizeof(CompositeType*) * refsSize)) {
         return false;
     }
 
@@ -74,8 +82,9 @@ bool StructType::initialize()
     uint32_t offset = sizeof(GCStruct);
     uint32_t align = sizeof(void*);
 
+    const MutableTypeVector::Types& fieldTypes = fields().types();
     for (size_t i = 0; i < fieldCount; i++) {
-        Value::Type type = fields()[i].type();
+        Value::Type type = fieldTypes[i].type();
         uint32_t size;
 
         if (type == Value::I8) {
@@ -83,7 +92,7 @@ bool StructType::initialize()
         } else if (type == Value::I16) {
             size = 2;
         } else {
-            size = static_cast<uint32_t>(valueSize(fields()[i]));
+            size = static_cast<uint32_t>(valueSize(fieldTypes[i].type()));
         }
 
         if (align < size) {

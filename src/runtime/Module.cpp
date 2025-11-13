@@ -534,9 +534,10 @@ void ModuleFunction::dumpByteCode()
     printf("required stack size: %u bytes\n", m_requiredStackSize);
     printf("stack: [");
     size_t pos = 0;
-    for (size_t i = 0; i < m_functionType->param().size(); i++) {
-        printf("(parameter %zu, %s, pos %zu) ", i, typeName(m_functionType->param()[i]), pos);
-        pos += valueStackAllocatedSize(m_functionType->param()[i]);
+    const TypeVector::Types& param = m_functionType->param().types();
+    for (size_t i = 0; i < param.size(); i++) {
+        printf("(parameter %zu, %s, pos %zu) ", i, typeName(param[i]), pos);
+        pos += valueStackAllocatedSize(param[i]);
     }
     for (size_t i = 0; i < m_local.size(); i++) {
         printf("(local %zu, %s, pos %zu) ", i, typeName(m_local[i]), m_localDebugData[i]);
