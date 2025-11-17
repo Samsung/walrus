@@ -2,8 +2,7 @@ SET (WALRUS_INCDIRS
     ${WALRUS_INCDIRS}
     ${WALRUS_ROOT}/src/
     ${SLJIT_ROOT}/sljit_src/
-    ${GCUTIL_ROOT}/
-    ${GCUTIL_ROOT}/bdwgc/include/
+    ${GCUTIL_ROOT}/include/
 )
 
 IF (${WALRUS_MODE} STREQUAL "debug")
