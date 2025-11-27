@@ -3175,7 +3175,8 @@ public:
         m_lastI32EqzPos = s_noI32Eqz;
 
         ASSERT(m_currentFunction == m_result.m_functions[index]);
-        std::vector<std::pair<size_t, Walrus::Value>> locals;
+        std::vector<std::pair<uint64_t, Walrus::Value>> locals;
+        locals.reserve(m_localInfo.size() + m_preprocessData.m_constantData.size());
         for (uint32_t i = 0; i < m_localInfo.size(); i++) {
             locals.push_back(std::make_pair(m_localInfo[i].m_position, Walrus::Value(m_localInfo[i].m_valueType)));
         }

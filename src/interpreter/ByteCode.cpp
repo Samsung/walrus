@@ -540,7 +540,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         for (uint32_t i = 0; i < call->functionType()->param().size(); i++) {
             offsets.push_back(call->stackOffsets()[offsetCounter]);
 
-            if (call->functionType()->param()[i] == Walrus::Value::Type::V128) {
+            if (call->functionType()->param().types()[i] == Walrus::Value::Type::V128) {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
                 offsetCounter++;
             }
@@ -551,7 +551,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
             offsets.push_back(call->stackOffsets()[offsetCounter]);
             offsetCounter++;
 
-            if (call->functionType()->result()[i] == Walrus::Value::Type::V128) {
+            if (call->functionType()->result().types()[i] == Walrus::Value::Type::V128) {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
                 offsetCounter++;
             }
@@ -561,7 +561,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
             offsets.push_back(call->stackOffsets()[offsetCounter]);
             offsetCounter++;
 
-            switch (call->functionType()->param()[i]) {
+            switch (call->functionType()->param().types()[i]) {
             case Walrus::Value::Type::I64:
             case Walrus::Value::Type::F64: {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
@@ -586,7 +586,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
             offsets.push_back(call->stackOffsets()[offsetCounter]);
             offsetCounter++;
 
-            switch (call->functionType()->result()[i]) {
+            switch (call->functionType()->result().types()[i]) {
             case Walrus::Value::Type::I64:
             case Walrus::Value::Type::F64: {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
