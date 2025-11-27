@@ -24,7 +24,7 @@
 
 #include <map>
 
-#if defined(COMPILER_MSVC)
+#if defined(COMPILER_MSVC) && !defined(ssize_t)
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #endif

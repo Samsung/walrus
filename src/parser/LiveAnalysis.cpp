@@ -18,16 +18,26 @@
 #include "interpreter/ByteCode.h"
 #include "runtime/Module.h"
 #include "runtime/Value.h"
-#include <cstdint>
 #include "parser/LiveAnalysis.h"
+#include "util/Vector.h"
 
 namespace wabt {
-void LiveAnalysis::assignBasicBlocks(Walrus::ByteCode* code, std::vector<LiveAnalysis::BasicBlock>& basicBlocks, size_t byteCodeOffset)
+void LiveAnalysis::pushByteCodeToFront(const Walrus::ByteCode& code)
+{
+    m_byteCode.reserve(m_byteCode.size() + code.getSize());
+    char* first = (char*)&code;
+    for (size_t i = 0; i < code.getSize(); i++) {
+        m_byteCode.insert(i, *first);
+        first++;
+    }
+}
+
+void LiveAnalysis::assignBasicBlocks(Walrus::ByteCode* code, std::vector<LiveAnalysis::BasicBlock*>& basicBlocks, uint64_t byteCodeOffset)
 {
     switch (code->opcode()) {
     case Walrus::ByteCode::JumpOpcode: {
         Walrus::Jump* jump = reinterpret_cast<Walrus::Jump*>(code);
-        basicBlocks.push_back(LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + jump->offset()));
+        basicBlocks.push_back(new LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + jump->offset()));
         break;
     }
     case Walrus::ByteCode::JumpIfTrueOpcode:
@@ -37,15 +47,15 @@ void LiveAnalysis::assignBasicBlocks(Walrus::ByteCode* code, std::vector<LiveAna
     case Walrus::ByteCode::JumpIfCastGenericOpcode:
     case Walrus::ByteCode::JumpIfCastDefinedOpcode: {
         Walrus::ByteCodeOffsetValue* jumpIf = reinterpret_cast<Walrus::ByteCodeOffsetValue*>(code);
-        basicBlocks.push_back(LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + jumpIf->int32Value()));
+        basicBlocks.push_back(new LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + jumpIf->int32Value()));
         break;
     }
     case Walrus::ByteCode::BrTableOpcode: {
         Walrus::BrTable* table = reinterpret_cast<Walrus::BrTable*>(code);
-        basicBlocks.push_back(LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + table->defaultOffset()));
+        basicBlocks.push_back(new LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + table->defaultOffset()));
         for (size_t i = 0; i < table->tableSize(); i++) {
             if (byteCodeOffset + table->jumpOffsets()[i]) {
-                basicBlocks.push_back(LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + table->jumpOffsets()[i]));
+                basicBlocks.push_back(new LiveAnalysis::BasicBlock(byteCodeOffset, byteCodeOffset + table->jumpOffsets()[i]));
             }
         }
         break;
@@ -56,49 +66,54 @@ void LiveAnalysis::assignBasicBlocks(Walrus::ByteCode* code, std::vector<LiveAna
     }
 }
 
-void LiveAnalysis::orderInsAndOuts(std::vector<LiveAnalysis::BasicBlock>& basicBlocks, std::vector<VariableRange>& ranges, size_t end, size_t position)
+void LiveAnalysis::orderInsAndOuts(std::vector<LiveAnalysis::BasicBlock*>& basicBlocks, VariableRange* ranges, uint64_t rangesSize, uint64_t end, uint64_t position)
 {
     size_t currentBlockIdx = 0;
     while (position < end && currentBlockIdx < basicBlocks.size()) {
-        uint16_t blockStart = basicBlocks[currentBlockIdx].from < basicBlocks[currentBlockIdx].to ? basicBlocks[currentBlockIdx].from : basicBlocks[currentBlockIdx].to;
-        uint16_t blockEnd = basicBlocks[currentBlockIdx].from < basicBlocks[currentBlockIdx].to ? basicBlocks[currentBlockIdx].to : basicBlocks[currentBlockIdx].from;
+        uint16_t blockStart = basicBlocks[currentBlockIdx]->from < basicBlocks[currentBlockIdx]->to ? basicBlocks[currentBlockIdx]->from : basicBlocks[currentBlockIdx]->to;
+        uint16_t blockEnd = basicBlocks[currentBlockIdx]->from < basicBlocks[currentBlockIdx]->to ? basicBlocks[currentBlockIdx]->to : basicBlocks[currentBlockIdx]->from;
 
-        for (LiveAnalysis::VariableRange range : ranges) {
-            if (blockStart < range.start && range.end < blockEnd) {
+        for (uint64_t i = 0; i < rangesSize; i++) {
+            if ((blockStart < ranges[i].start && ranges[i].end < blockEnd)) {
+                // || (ranges[i].start < blockStart && blockStart < ranges[i].end)
+                // || (ranges[i].start < blockEnd && blockEnd < ranges[i].end)) {
+                basicBlocks[currentBlockIdx]->containedVariables.push_back(&ranges[i]);
                 continue;
             }
 
             // Forward jump case
-            if (basicBlocks[currentBlockIdx].from < basicBlocks[currentBlockIdx].to) {
-                if (range.start < basicBlocks[currentBlockIdx].from) {
-                    basicBlocks[currentBlockIdx].in.push_back(range);
+            if (basicBlocks[currentBlockIdx]->from < basicBlocks[currentBlockIdx]->to) {
+                if (ranges[i].start < basicBlocks[currentBlockIdx]->from) {
+                    if (std::find(basicBlocks[currentBlockIdx]->in.begin(),
+                                  basicBlocks[currentBlockIdx]->in.end(), &ranges[i])
+                        == basicBlocks[currentBlockIdx]->in.end()) {
+                        basicBlocks[currentBlockIdx]->in.push_back(&ranges[i]);
+                    }
                 }
-                if (range.end > basicBlocks[currentBlockIdx].to) {
-                    basicBlocks[currentBlockIdx].out.push_back(range);
+                if (ranges[i].end > basicBlocks[currentBlockIdx]->to) {
+                    if (std::find(basicBlocks[currentBlockIdx]->out.begin(),
+                                  basicBlocks[currentBlockIdx]->out.end(), &ranges[i])
+                        == basicBlocks[currentBlockIdx]->out.end()) {
+                        basicBlocks[currentBlockIdx]->out.push_back(&ranges[i]);
+                    }
                 }
                 // Backward jump case.
             } else {
-                if (range.start < basicBlocks[currentBlockIdx].to) {
-                    basicBlocks[currentBlockIdx].in.push_back(range);
+                if (ranges[i].start < basicBlocks[currentBlockIdx]->to) {
+                    if (std::find(basicBlocks[currentBlockIdx]->in.begin(),
+                                  basicBlocks[currentBlockIdx]->in.end(), &ranges[i])
+                        == basicBlocks[currentBlockIdx]->in.end()) {
+                        basicBlocks[currentBlockIdx]->in.push_back(&ranges[i]);
+                    }
                 }
-                if (range.end > basicBlocks[currentBlockIdx].from) {
-                    basicBlocks[currentBlockIdx].out.push_back(range);
+                if (ranges[i].end > basicBlocks[currentBlockIdx]->from) {
+                    if (std::find(basicBlocks[currentBlockIdx]->out.begin(),
+                                  basicBlocks[currentBlockIdx]->out.end(), &ranges[i])
+                        == basicBlocks[currentBlockIdx]->out.end()) {
+                        basicBlocks[currentBlockIdx]->out.push_back(&ranges[i]);
+                    }
                 }
             }
-        }
-
-        std::vector<LiveAnalysis::BasicBlock> insideBlocks;
-        for (BasicBlock& block : basicBlocks) {
-            uint16_t insideBlockStart = block.from < block.to ? block.from : block.to;
-            uint16_t insideBlockEnd = block.from < block.to ? block.to : block.from;
-
-            if (blockStart < insideBlockStart && insideBlockEnd < blockEnd) {
-                insideBlocks.push_back(block);
-            }
-        }
-
-        if (!insideBlocks.empty()) {
-            orderInsAndOuts(insideBlocks, ranges, blockStart, blockEnd);
         }
 
         currentBlockIdx++;
@@ -106,199 +121,180 @@ void LiveAnalysis::orderInsAndOuts(std::vector<LiveAnalysis::BasicBlock>& basicB
     }
 }
 
-/*
-void LiveAnalysis::orderInsAndOuts(std::vector<LiveAnalysis::BasicBlock>& basicBlocks, std::vector<VariableRange>& ranges, size_t end, size_t position)
+void LiveAnalysis::extendNaiveRange(std::vector<LiveAnalysis::BasicBlock*>& basicBlocks, VariableRange* ranges, uint64_t rangesSize)
 {
-    while (position < end) {
-        auto block = std::lower_bound(basicBlocks.begin(),
-                                      basicBlocks.end(),
-                                      position,
-                                      [](LiveAnalysis::BasicBlock& block, size_t position) {
-                                          return block.from <= position;
-                                      });
+    for (BasicBlock* block : basicBlocks) {
+        if (block->to < block->from) {
+            for (VariableRange* in : block->in) {
+                if (in->end < block->from) {
+                    in->end = block->from;
+                }
+            }
 
-        if (block == basicBlocks.end()) {
-            break;
+            for (VariableRange*& out : block->out) {
+                if (block->to < out->start) {
+                    out->start = block->to;
+                }
+            }
+        } else { // block->from < block->to
+            for (VariableRange* in : block->in) {
+                if (in->end < block->to) {
+                    in->end = block->to;
+                }
+            }
+
+            for (VariableRange* out : block->out) {
+                if (block->from < out->start) {
+                    out->start = block->from;
+                }
+            }
         }
 
-        for (LiveAnalysis::VariableRange range : ranges) {
-            // Forward jump case.
+        for (VariableRange* range : block->containedVariables) {
+            if (range->isConstant || range->isParam) {
+                continue;
+            }
+
             if (block->from < block->to) {
-                if (range.start < block->from) {
-                    block->in.push_back(range);
+                if (block->from < range->start) {
+                    range->start = block->from;
                 }
-                if (range.end > block->to) {
-                    block->out.push_back(range);
+                if (range->end < block->to) {
+                    range->end = block->to;
                 }
-                // Backward jump case.
             } else {
-                if (range.start < block->to) {
-                    block->in.push_back(range);
+                if (block->to < range->start) {
+                    range->start = block->to;
                 }
-                if (range.end > block->from) {
-                    block->out.push_back(range);
+                if (range->end < block->from) {
+                    range->end = block->from;
                 }
-            }
-        }
-
-        auto insideBlock = std::lower_bound(basicBlocks.begin(),
-                                            basicBlocks.end(),
-                                            block->from,
-                                            [](LiveAnalysis::BasicBlock& block, size_t position) {
-                                                return block.from <= position;
-                                            });
-
-        if (insideBlock != basicBlocks.end()) {
-            orderInsAndOuts(basicBlocks, ranges, block->to, block->from);
-        }
-
-        if (block->from < block->to) {
-            position = block->to;
-        } else {
-            position = block->from;
-        }
-    }
-}
-*/
-
-void LiveAnalysis::extendNaiveRange(std::vector<LiveAnalysis::BasicBlock>& basicBlocks, std::vector<VariableRange>& ranges)
-{
-    for (BasicBlock block : basicBlocks) {
-        if (block.from > block.to) {
-            for (VariableRange in : block.in) {
-                if (in.end < block.from) {
-                    in.end = block.from;
-                }
-            }
-
-            for (VariableRange out : block.out) {
-                if (out.start < block.to) {
-                    out.start = block.to;
-                }
-            }
-        } else {
-            for (VariableRange in : block.in) {
-                if (in.end < block.to) {
-                    in.end = block.to;
-                }
-            }
-
-            for (VariableRange out : block.out) {
-                if (out.start < block.from) {
-                    out.start = block.from;
-                }
-            }
-        }
-
-        for (VariableRange& range : ranges) {
-            bool allSetsInBlocks = true;
-            for (Walrus::ByteCodeStackOffset set : range.sets) {
-                if (!(block.from < set && block.to > set)
-                    && !(block.from > set && block.to < set)) {
-                    allSetsInBlocks = false;
-                }
-            }
-
-            if (allSetsInBlocks) {
-                range.needsInit = true;
             }
         }
     }
 
-    for (VariableRange& range : ranges) {
-        if (!range.value.isZeroValue()) {
-            range.needsInit = true;
-            range.start = 0;
+    for (uint64_t i = 0; i < rangesSize; i++) {
+        if (ranges[i].isConstant) {
+            ranges[i].start = 0;
+            ranges[i].needsInit = true;
         }
 
-        if (range.reads.empty() && range.sets.empty()) {
+        if (ranges[i].reads.empty() && ranges[i].sets.empty()) {
             continue;
         }
 
-        if (range.sets.empty() && !range.reads.empty()) {
-            range.needsInit = true;
+        if (ranges[i].sets.empty() && !ranges[i].reads.empty()) {
+            ranges[i].start = 0;
+            ranges[i].needsInit = true;
             continue;
         }
 
-        if ((!range.sets.empty() && !range.reads.empty()) && (range.reads.front() <= range.sets.front())) {
-            range.needsInit = true;
-            range.start = 0;
+        uint64_t setsMin = 0;
+        uint64_t readsMin = 0;
+        if (!ranges[i].sets.empty()) {
+            setsMin = *std::min_element(ranges[i].sets.begin(), ranges[i].sets.end());
+        }
+
+        if (!ranges[i].reads.empty()) {
+            readsMin = *std::min_element(ranges[i].reads.begin(), ranges[i].reads.end());
+        }
+
+        if ((!ranges[i].sets.empty() && !ranges[i].reads.empty()) && (readsMin <= setsMin)) {
+            ranges[i].needsInit = true;
+            ranges[i].start = 0;
+        }
+
+        if (!ranges[i].reads.empty() && !basicBlocks.empty()) {
+            bool insertedValue = false;
+            std::vector<bool> setInBlock;
+            for (Walrus::ByteCodeStackOffset set : ranges[i].sets) {
+                if (set <= readsMin) {
+                    for (BasicBlock* block : basicBlocks) {
+                        if ((block->from <= set && set <= block->to) || (block->to <= set && set <= block->from)) {
+                            setInBlock.push_back(true);
+                            insertedValue = true;
+                            break;
+                        }
+                    }
+
+                    if (!insertedValue) {
+                        setInBlock.push_back(false);
+                    }
+                }
+            }
+
+            if (std::find(setInBlock.begin(), setInBlock.end(), false) == setInBlock.end()) {
+                ranges[i].start = 0;
+                ranges[i].needsInit = true;
+            }
         }
     }
 }
 
-void LiveAnalysis::pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func)
+void LiveAnalysis::pushVariableInits(VariableRange* ranges, uint64_t rangesSize, Walrus::ModuleFunction* func)
 {
     uint32_t constSize = 0;
     if (!UnusedReads.elements.empty()) {
         if (UnusedReads.valueSize == 4) {
-            func->pushByteCodeToFront(Walrus::Const32(UnusedReads.pos, 0));
+            pushByteCodeToFront(Walrus::Const32(UnusedReads.pos, 0));
             constSize += sizeof(Walrus::Const32);
         } else if (UnusedReads.valueSize == 8) {
-            func->pushByteCodeToFront(Walrus::Const64(UnusedReads.pos, 0));
+            pushByteCodeToFront(Walrus::Const64(UnusedReads.pos, 0));
             constSize += sizeof(Walrus::Const64);
         } else if (UnusedReads.valueSize == 16) {
             uint8_t empty[16] = { 0 };
-            func->pushByteCodeToFront(Walrus::Const128(UnusedReads.pos, empty));
+            pushByteCodeToFront(Walrus::Const128(UnusedReads.pos, empty));
             constSize += sizeof(Walrus::Const128);
         } else {
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
 
-    for (auto& range : ranges) {
-        if (range.isParam || !range.needsInit || (range.sets.empty() && range.reads.empty())) {
+    for (uint64_t i = 0; i < rangesSize; i++) {
+        if (ranges[i].isParam || !ranges[i].needsInit || (ranges[i].sets.empty() && ranges[i].reads.empty())) {
             continue;
         }
 
-        if (range.newOffset != UINT16_MAX && (range.newOffset == UnusedReads.pos || range.newOffset == UnusedWrites.pos)) {
+        if (ranges[i].newOffset != UINT16_MAX && (ranges[i].newOffset == UnusedReads.pos || ranges[i].newOffset == UnusedWrites.pos)) {
             continue;
         }
 
-        switch (range.value.type()) {
-#if defined(WALRUS_32)
-        case Walrus::Value::ExternRef:
-        case Walrus::Value::FuncRef:
-#endif
+        switch (ranges[i].value.type()) {
         case Walrus::Value::I32: {
+            pushByteCodeToFront(Walrus::Const32(ranges[i].newOffset, ranges[i].value.asI32()));
             constSize += sizeof(Walrus::Const32);
-            func->pushByteCodeToFront(Walrus::Const32(range.newOffset, range.value.asI32()));
             break;
         }
         case Walrus::Value::F32: {
-            constSize += sizeof(Walrus::Const32);
-
             uint8_t constantBuffer[4];
-            range.value.writeToMemory(constantBuffer);
-
-            func->pushByteCodeToFront(Walrus::Const32(range.newOffset, *reinterpret_cast<uint32_t*>(constantBuffer)));
+            ranges[i].value.writeToMemory(constantBuffer);
+            pushByteCodeToFront(Walrus::Const32(ranges[i].newOffset, *reinterpret_cast<uint32_t*>(constantBuffer)));
+            constSize += sizeof(Walrus::Const32);
             break;
         }
-#if defined(WALRUS_64)
-        case Walrus::Value::ExternRef:
-        case Walrus::Value::FuncRef:
-#endif
         case Walrus::Value::I64: {
+            pushByteCodeToFront(Walrus::Const64(ranges[i].newOffset, ranges[i].value.asI64()));
             constSize += sizeof(Walrus::Const64);
-            func->pushByteCodeToFront(Walrus::Const64(range.newOffset, range.value.asI64()));
             break;
         }
         case Walrus::Value::F64: {
-            constSize += sizeof(Walrus::Const64);
-
             uint8_t constantBuffer[8];
-            range.value.writeToMemory(constantBuffer);
-
-            func->pushByteCodeToFront(Walrus::Const64(range.newOffset, *reinterpret_cast<uint64_t*>(constantBuffer)));
+            ranges[i].value.writeToMemory(constantBuffer);
+            pushByteCodeToFront(Walrus::Const64(ranges[i].newOffset, *reinterpret_cast<uint64_t*>(constantBuffer)));
+            constSize += sizeof(Walrus::Const64);
             break;
         }
         case Walrus::Value::V128: {
-            constSize += sizeof(Walrus::Const128);
-
             uint8_t constantBuffer[16];
-            range.value.writeToMemory(constantBuffer);
-
-            func->pushByteCodeToFront(Walrus::Const128(range.newOffset, constantBuffer));
+            ranges[i].value.writeToMemory(constantBuffer);
+            pushByteCodeToFront(Walrus::Const128(ranges[i].newOffset, constantBuffer));
+            constSize += sizeof(Walrus::Const128);
+            break;
+        }
+        case Walrus::Value::ExternRef:
+        case Walrus::Value::FuncRef: {
+            pushByteCodeToFront(Walrus::RefFunc(0, ranges[i].newOffset));
+            constSize += sizeof(Walrus::Const64);
             break;
         }
         default: {
@@ -314,27 +310,30 @@ void LiveAnalysis::pushVariableInits(std::vector<LiveAnalysis::VariableRange>& r
     }
 }
 
-void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<VariableRange>& ranges, uint16_t stackStart, uint16_t stackEnd)
+void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, VariableRange* ranges, uint64_t rangesSize, uint16_t stackStart)
 {
-    std::vector<std::pair<size_t, size_t>> freeSpaces = { std::make_pair(stackStart, stackEnd) };
+    std::vector<std::pair<Walrus::ByteCodeStackOffset, Walrus::ByteCodeStackOffset>> freeSpaces = { std::make_pair(stackStart, UINT16_MAX) };
 
-    for (VariableRange& range : ranges) {
-        if ((range.reads.empty() && range.sets.empty()) || !range.value.isZeroValue() || range.isParam) {
+    for (uint64_t i = 0; i < rangesSize; i++) {
+        if ((ranges[i].reads.empty() && ranges[i].sets.empty()) || ranges[i].isParam || ranges[i].isConstant) {
             continue;
         }
 
-        // if (range.sets.empty() && !range.reads.empty() && !range.needsInit) {
-        if (range.sets.empty() && !range.reads.empty()) {
-            UnusedReads.elements.push_back(&range);
+        if (ranges[i].sets.empty() && !ranges[i].reads.empty() && !ranges[i].isResult) {
+            UnusedReads.elements.push_back(&ranges[i]);
 
-            if (UnusedReads.valueSize < Walrus::valueSize(range.value.type())) {
-                UnusedReads.valueSize = Walrus::valueSize(range.value.type());
+            if (UnusedReads.valueSize < Walrus::valueSize(ranges[i].value.type())) {
+                // if (UnusedReads.valueSize < Walrus::valueStackAllocatedSize(ranges[i].value.type())) {
+                UnusedReads.valueSize = Walrus::valueSize(ranges[i].value.type());
+                // UnusedReads.valueSize = Walrus::valueStackAllocatedSize(ranges[i].value.type());
             }
-        } else if (!range.sets.empty() && range.reads.empty()) {
-            UnusedWrites.elements.push_back(&range);
+        } else if (!ranges[i].sets.empty() && ranges[i].reads.empty()) {
+            UnusedWrites.elements.push_back(&ranges[i]);
 
-            if (UnusedWrites.valueSize < Walrus::valueSize(range.value.type())) {
-                UnusedWrites.valueSize = Walrus::valueSize(range.value.type());
+            if (UnusedWrites.valueSize < Walrus::valueSize(ranges[i].value.type())) {
+                // if (UnusedWrites.valueSize < Walrus::valueStackAllocatedSize(ranges[i].value.type())) {
+                UnusedWrites.valueSize = Walrus::valueSize(ranges[i].value.type());
+                // UnusedWrites.valueSize = Walrus::valueStackAllocatedSize(ranges[i].value.type());
             }
         }
     }
@@ -345,6 +344,7 @@ void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<Variable
 
         for (VariableRange* range : UnusedWrites.elements) {
             range->newOffset = UnusedWrites.pos;
+            range->end = UINT64_MAX;
         }
     }
 
@@ -354,63 +354,71 @@ void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<Variable
 
         for (VariableRange* range : UnusedReads.elements) {
             range->newOffset = UnusedReads.pos;
+            range->end = UINT64_MAX;
         }
     }
 
-    size_t byteCodeOffset = 0;
-    while (byteCodeOffset < func->currentByteCodeSize()) {
-        Walrus::ByteCode* code = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(func->byteCode() + byteCodeOffset));
+    uint64_t byteCodeOffset = 0;
+    // while (byteCodeOffset < func->currentByteCodeSize()) {
+    while (byteCodeOffset < m_byteCode.size()) {
+        Walrus::ByteCode* code = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(m_byteCode.data() + byteCodeOffset));
 
         std::vector<Walrus::ByteCodeStackOffset> offsets = code->getByteCodeStackOffsets(func->functionType());
         std::vector<bool> writtenOffsets(offsets.size(), false);
-        for (VariableRange& range : ranges) {
-            if (range.start == UINT16_MAX && range.end == 0) {
+        for (uint64_t i = 0; i < rangesSize; i++) {
+            if (ranges[i].start == UINT64_MAX && ranges[i].end == 0) {
                 continue;
             }
 
             ASSERT(!freeSpaces.empty());
-            bool isUnusedRead = std::find(UnusedReads.elements.begin(), UnusedReads.elements.end(), &range) != UnusedReads.elements.end();
-            bool isUnusedWrite = std::find(UnusedWrites.elements.begin(), UnusedWrites.elements.end(), &range) != UnusedWrites.elements.end();
+            bool isUnusedRead = std::find(UnusedReads.elements.begin(), UnusedReads.elements.end(), &ranges[i]) != UnusedReads.elements.end();
+            bool isUnusedWrite = std::find(UnusedWrites.elements.begin(), UnusedWrites.elements.end(), &ranges[i]) != UnusedWrites.elements.end();
 
-            if (range.start == byteCodeOffset && !range.isParam && !(isUnusedRead || isUnusedWrite)) {
-                for (size_t i = 0; i < freeSpaces.size(); i++) {
-                    if ((freeSpaces[i].second - freeSpaces[i].first) >= Walrus::valueSize(range.value.type())) {
-                        range.newOffset = freeSpaces[i].first;
+            if (ranges[i].start == byteCodeOffset && !ranges[i].isParam && !(isUnusedRead || isUnusedWrite)) {
+                for (size_t j = freeSpaces.size() - 1; 0 <= j; j--) {
+                    if ((freeSpaces[j].second - freeSpaces[j].first) >= (Walrus::ByteCodeStackOffset)Walrus::valueSize(ranges[i].value.type())) {
+                        // if ((freeSpaces[j].second - freeSpaces[j].first) >= (Walrus::ByteCodeStackOffset)Walrus::valueStackAllocatedSize(ranges[i].value.type())) {
+                        ranges[i].newOffset = freeSpaces[j].first;
 
-                        if (freeSpaces[i].second - freeSpaces[i].first == 0) {
+                        if (freeSpaces[j].second - freeSpaces[j].first == 0) {
                             freeSpaces.erase(freeSpaces.begin() + i);
                         } else {
-                            freeSpaces[i].first += Walrus::valueSize(range.value.type());
+                            freeSpaces[j].first += Walrus::valueSize(ranges[i].value.type());
+                            // freeSpaces[j].first += Walrus::valueStackAllocatedSize(ranges[i].value.type());
                         }
                         break;
                     }
                 }
             }
 
-            if (range.end == byteCodeOffset && range.newOffset != UINT16_MAX && !(isUnusedRead || isUnusedWrite) && !range.isParam) {
+            if (ranges[i].end == byteCodeOffset && ranges[i].newOffset != UINT16_MAX && !(isUnusedRead || isUnusedWrite) && !ranges[i].isParam && !ranges[i].isConstant) {
                 bool insertedSpace = false;
                 for (auto& space : freeSpaces) {
-                    if (space.first - Walrus::valueSize(range.value.type()) == range.newOffset) {
-                        space.first -= Walrus::valueSize(range.value.type());
+                    if (space.first - Walrus::valueSize(ranges[i].value.type()) == ranges[i].newOffset) {
+                        // if (space.first - Walrus::valueStackAllocatedSize(ranges[i].value.type()) == ranges[i].newOffset) {
+                        space.first -= Walrus::valueSize(ranges[i].value.type());
+                        // space.first -= Walrus::valueStackAllocatedSize(ranges[i].value.type());
                         insertedSpace = true;
                         break;
-                    } else if (space.second == range.newOffset) {
-                        space.second += Walrus::valueSize(range.value.type());
+                    } else if (space.second == ranges[i].newOffset) {
+                        space.second += Walrus::valueSize(ranges[i].value.type());
+                        // space.second += Walrus::valueStackAllocatedSize(ranges[i].value.type());
                         insertedSpace = true;
                         break;
                     }
                 }
 
                 if (!insertedSpace) {
-                    freeSpaces.push_back(std::make_pair(range.newOffset, range.newOffset + Walrus::valueSize(range.value.type())));
+                    freeSpaces.push_back(std::make_pair(ranges[i].newOffset, ranges[i].newOffset + Walrus::valueSize(ranges[i].value.type())));
+                    // freeSpaces.push_back(std::make_pair(ranges[i].newOffset, ranges[i].newOffset + Walrus::valueStackAllocatedSize(ranges[i].value.type())));
                 }
             }
 
-            if (range.start <= byteCodeOffset && range.end >= byteCodeOffset) {
-                for (size_t i = 0; i < offsets.size(); i++) {
-                    if (range.originalOffset == offsets[i] && !writtenOffsets[i]) {
-                        code->setByteCodeOffset(i, range.newOffset, range.originalOffset);
-                        writtenOffsets[i] = true;
+            if (ranges[i].start <= byteCodeOffset && ranges[i].end >= byteCodeOffset) {
+                for (uint8_t j = 0; j < offsets.size(); j++) {
+                    if (ranges[i].originalOffset == offsets[j] && !writtenOffsets[j]) {
+                        code->setByteCodeOffset(j, ranges[i].newOffset, ranges[i].originalOffset);
+                        writtenOffsets[j] = true;
 
                         switch (code->opcode()) {
                         case Walrus::ByteCode::EndOpcode:
@@ -418,32 +426,32 @@ void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<Variable
                         case Walrus::ByteCode::CallIndirectOpcode:
                         case Walrus::ByteCode::CallRefOpcode:
 #if defined(WALRUS_64)
-                            if (range.value.type() == Walrus::Value::V128) {
-                                code->setByteCodeOffset(i + 1, range.newOffset + 8, range.originalOffset);
-                                writtenOffsets[i + 1] = true;
-                                i++;
+                            if (ranges[i].value.type() == Walrus::Value::V128) {
+                                code->setByteCodeOffset(j + 1, ranges[i].newOffset + 8, ranges[i].originalOffset);
+                                writtenOffsets[j + 1] = true;
+                                j++;
                             }
 #elif defined(WALRUS_32)
-                            switch (range.value.type()) {
+                            switch (ranges[i].value.type()) {
                             case Walrus::Value::Type::I64:
                             case Walrus::Value::Type::F64: {
-                                code->setByteCodeOffset(i + 1, range.newOffset + 4, range.originalOffset);
-                                writtenOffsets[i + 1] = true;
-                                i++;
+                                code->setByteCodeOffset(j + 1, ranges[i].newOffset + 4, ranges[i].originalOffset);
+                                writtenOffsets[j + 1] = true;
+                                j++;
                                 break;
                             }
                             case Walrus::Value::Type::V128: {
-                                code->setByteCodeOffset(i + 1, range.newOffset + 4, range.originalOffset);
-                                writtenOffsets[i + 1] = true;
-                                i++;
+                                code->setByteCodeOffset(j + 1, ranges[i].newOffset + 4, ranges[i].originalOffset);
+                                writtenOffsets[j + 1] = true;
+                                j++;
 
-                                code->setByteCodeOffset(i + 1, range.newOffset + 8, range.originalOffset);
-                                writtenOffsets[i + 1] = true;
-                                i++;
+                                code->setByteCodeOffset(j + 1, ranges[i].newOffset + 8, ranges[i].originalOffset);
+                                writtenOffsets[j + 1] = true;
+                                j++;
 
-                                code->setByteCodeOffset(i + 1, range.newOffset + 12, range.originalOffset);
-                                writtenOffsets[i + 1] = true;
-                                i++;
+                                code->setByteCodeOffset(j + 1, ranges[i].newOffset + 12, ranges[i].originalOffset);
+                                writtenOffsets[j + 1] = true;
+                                j++;
                                 break;
                             }
                             default: {
@@ -463,30 +471,92 @@ void LiveAnalysis::orderStack(Walrus::ModuleFunction* func, std::vector<Variable
         byteCodeOffset += code->getSize();
     }
 
+    Walrus::ByteCodeStackOffset highestNewOffset = 0;
+    Walrus::ByteCodeStackOffset highestOldOffset = 0;
+    for (uint64_t i = 0; i < rangesSize; i++) {
+        if (ranges[i].newOffset != UINT16_MAX && highestNewOffset <= ranges[i].newOffset) {
+            highestNewOffset = ranges[i].newOffset + Walrus::valueSize(ranges[i].value.type());
+        }
+        if (highestOldOffset <= ranges[i].originalOffset) {
+            highestOldOffset = ranges[i].originalOffset + Walrus::valueSize(ranges[i].value.type());
+        }
+    }
+
+    if (UnusedReads.pos != UINT16_MAX && highestNewOffset <= UnusedReads.pos) {
+        highestNewOffset = UnusedReads.pos + UnusedReads.valueSize;
+    }
+
+    if (UnusedWrites.pos != UINT16_MAX && highestNewOffset <= UnusedWrites.pos) {
+        highestNewOffset = UnusedWrites.pos + UnusedWrites.valueSize;
+    }
+
+    Walrus::ByteCodeStackOffset offsetDiff = highestOldOffset - highestNewOffset;
+    if (0 < offsetDiff && !func->hasTryCatch()) {
+        uint64_t byteCodeOffset = 0;
+        // while (byteCodeOffset < func->currentByteCodeSize()) {
+        while (byteCodeOffset < m_byteCode.size()) {
+            Walrus::ByteCode* code = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(m_byteCode.data() + byteCodeOffset));
+            std::vector<Walrus::ByteCodeStackOffset> offsets = code->getByteCodeStackOffsets(func->functionType());
+
+            for (uint8_t i = 0; i < offsets.size(); i++) {
+                bool local = false;
+                for (uint64_t j = 0; j < rangesSize; j++) {
+                    if (offsets[i] == ranges[j].newOffset || (Walrus::valueSize(ranges[j].value.type()) == 8 && offsets[i] == ranges[j].newOffset + 4)) {
+                        local = true;
+
+                        switch (code->opcode()) {
+                        case Walrus::ByteCode::CallOpcode:
+                        case Walrus::ByteCode::EndOpcode: {
+                            if (ranges[i].value.type() == Walrus::Value::V128) {
+                                i++;
+                            }
+                        }
+                        default: {
+                            break;
+                        }
+                        }
+
+                        break;
+                    }
+                }
+
+                if (!local && 0 <= reinterpret_cast<int>(offsets[i] - offsetDiff)) {
+                    code->setByteCodeOffset(i, offsets[i] - offsetDiff, offsets[i]);
+                }
+            }
+
+            byteCodeOffset += code->getSize();
+        }
+
+        func->setStackSize(func->requiredStackSize() - offsetDiff);
+    }
+
 #if !defined(NDEBUG)
-    for (auto range : ranges) {
-        if (range.isConstant) {
-            func->pushConstDebugData(range.value, range.newOffset);
-        } else {
-            func->pushLocalDebugData(range.newOffset);
+    for (uint64_t i = 0; i < rangesSize; i++) {
+        if (ranges[i].isConstant) {
+            func->pushConstDebugData(ranges[i].value, ranges[i].newOffset);
+        } else if (!ranges[i].isParam) {
+            func->pushLocalDebugData(ranges[i].newOffset);
         }
     }
 #endif
 
-    pushVariableInits(ranges, func);
-
-    // func->setStackSize(func->requiredStackSize() + constSize);
+    pushVariableInits(ranges, rangesSize, func);
 }
 
-void LiveAnalysis::orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunction* func, std::vector<VariableRange>& ranges, Walrus::ByteCodeStackOffset byteCodeOffset)
+void LiveAnalysis::orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunction* func, VariableRange* ranges, uint64_t rangesSize, uint64_t byteCodeOffset)
 {
     std::vector<Walrus::ByteCodeStackOffset> offsets = code->getByteCodeStackOffsets(func->functionType());
-    for (size_t i = 0; i < offsets.size(); i++) {
-        auto elem = std::find_if(
-            ranges.begin(),
-            ranges.end(),
-            [&, offsets, i](VariableRange& elem) { return elem.originalOffset == offsets[i]; });
-        if (elem != ranges.end()) {
+    for (uint8_t i = 0; i < offsets.size(); i++) {
+        VariableRange* elem = nullptr;
+
+        for (uint64_t j = 0; j < rangesSize; j++) {
+            if (ranges[j].originalOffset == offsets[i]) {
+                elem = &ranges[j];
+            }
+        }
+
+        if (elem != nullptr) {
             if (elem->end < byteCodeOffset) {
                 elem->end = byteCodeOffset;
             }
@@ -496,6 +566,10 @@ void LiveAnalysis::orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunctio
 
             // Calls and End opcode need special cases.
             switch (code->opcode()) {
+            case Walrus::ByteCode::EndOpcode: {
+                elem->isResult = true;
+                FALLTHROUGH;
+            }
             case Walrus::ByteCode::I32StoreOpcode:
             case Walrus::ByteCode::I32Store16Opcode:
             case Walrus::ByteCode::I32Store8Opcode:
@@ -530,9 +604,9 @@ void LiveAnalysis::orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunctio
             case Walrus::ByteCode::TableFillOpcode:
             case Walrus::ByteCode::MemoryFillOpcode:
             case Walrus::ByteCode::MemoryInitOpcode:
+            case Walrus::ByteCode::MemoryCopyOpcode:
             case Walrus::ByteCode::ThrowOpcode:
             case Walrus::ByteCode::BrTableOpcode:
-            case Walrus::ByteCode::EndOpcode:
             case Walrus::ByteCode::GlobalSet32Opcode:
             case Walrus::ByteCode::GlobalSet64Opcode:
             case Walrus::ByteCode::GlobalSet128Opcode:
@@ -574,15 +648,17 @@ void LiveAnalysis::orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunctio
                 }
 
                 size_t resultStart = 0;
-                for (auto& type : call->functionType()->param()) {
+                const Walrus::TypeVector& types = call->functionType()->param();
+                // for (auto& type : call->functionType()->param()) {
+                for (uint32_t j = 0; j < types.size(); j++) {
                     resultStart++;
 
 #if defined(WALRUS_64)
-                    if (type == Walrus::Value::Type::V128) {
+                    if (types.types()[j] == Walrus::Value::Type::V128) {
                         resultStart++;
                     }
 #elif defined(WALRUS_32)
-                    switch (type) {
+                    switch (types.types()[j]) {
                     case Walrus::Value::Type::I64:
                     case Walrus::Value::Type::F64: {
                         resultStart++;
@@ -633,16 +709,14 @@ void LiveAnalysis::orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunctio
     }
 }
 
-void LiveAnalysis::optimizeLocals(Walrus::ModuleFunction* func, std::vector<std::pair<size_t, Walrus::Value>>& locals, size_t constantStart)
+void LiveAnalysis::optimizeLocals(Walrus::ModuleFunction* func, std::vector<std::pair<uint64_t, Walrus::Value>>& locals, uint64_t constantStart)
 {
-    std::vector<VariableRange> ranges;
+    uint64_t rangesSize = locals.size();
+    VariableRange* ranges = new VariableRange[rangesSize];
     std::vector<Walrus::ByteCodeStackOffset> offsets;
 
-    ranges.reserve(locals.size());
-    size_t byteCodeOffset = 0;
-
     for (uint32_t i = 0; i < locals.size(); i++) {
-        ranges.push_back(VariableRange(locals[i].first, locals[i].second));
+        ranges[i] = VariableRange(locals[i].first, locals[i].second);
 
         if (i < func->functionType()->param().size()) {
             ranges[i].isParam = true;
@@ -651,53 +725,45 @@ void LiveAnalysis::optimizeLocals(Walrus::ModuleFunction* func, std::vector<std:
 
         if (i >= constantStart) {
             ranges[i].start = 0;
-            ranges[i].end = UINT16_MAX;
-#if !defined(NDEBUG)
+            ranges[i].end = UINT64_MAX;
             ranges[i].isConstant = true;
-#endif
         }
     }
 
-    std::vector<LiveAnalysis::BasicBlock> basicBlocks;
+    uint64_t byteCodeOffset = 0;
+    std::vector<LiveAnalysis::BasicBlock*> basicBlocks;
+    while (byteCodeOffset < m_byteCode.size()) {
+        Walrus::ByteCode* code = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(m_byteCode.data() + byteCodeOffset));
 
-    while (byteCodeOffset < func->currentByteCodeSize()) {
-        Walrus::ByteCode* code = reinterpret_cast<Walrus::ByteCode*>(const_cast<uint8_t*>(func->byteCode() + byteCodeOffset));
-        offsets = code->getByteCodeStackOffsets(func->functionType());
-
-        orderNaiveRange(code, func, ranges, byteCodeOffset);
+        orderNaiveRange(code, func, ranges, rangesSize, byteCodeOffset);
         assignBasicBlocks(code, basicBlocks, byteCodeOffset);
 
         byteCodeOffset += code->getSize();
     }
 
     uint16_t stackStart = UINT16_MAX;
-    uint16_t stackEnd = 0;
     if (!basicBlocks.empty()) {
-        orderInsAndOuts(basicBlocks, ranges, func->currentByteCodeSize());
+        orderInsAndOuts(basicBlocks, ranges, rangesSize, m_byteCode.size());
     }
-    extendNaiveRange(basicBlocks, ranges);
+    extendNaiveRange(basicBlocks, ranges, rangesSize);
 
-    for (VariableRange& range : ranges) {
-        if (range.isParam) {
+    for (uint64_t i = 0; i < rangesSize; i++) {
+        if (ranges[i].isParam) {
             continue;
         }
 
-        if (range.originalOffset < stackStart) {
-            stackStart = range.originalOffset;
-        }
-
-        if (stackEnd < range.originalOffset + Walrus::valueSize(range.value.type())) {
-            stackEnd = range.originalOffset + Walrus::valueSize(range.value.type());
-        }
-
-        if (range.sets.empty() || range.reads.empty()) {
-            continue;
-        }
-
-        if ((range.reads.front() < range.sets.front())) {
-            range.start = 0;
+        if (ranges[i].originalOffset < stackStart) {
+            stackStart = ranges[i].originalOffset;
         }
     }
-    orderStack(func, ranges, stackStart, stackEnd);
+
+    orderStack(func, ranges, rangesSize, stackStart);
+
+    for (uint32_t i = 0; i < basicBlocks.size(); i++) {
+        basicBlocks[i]->containedVariables.clear();
+        delete basicBlocks[i];
+    }
+    delete[] ranges;
 }
+
 } // namespace wabt

@@ -31,8 +31,6 @@
 
 namespace wabt {
 
-static size_t counter = 0;
-
 enum class WASMOpcode : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
                     text, decomp)                                            \
@@ -3209,7 +3207,8 @@ public:
         m_lastI32EqzPos = s_noI32Eqz;
 
         ASSERT(m_currentFunction == m_result.m_functions[index]);
-        std::vector<std::pair<size_t, Walrus::Value>> locals;
+        std::vector<std::pair<uint64_t, Walrus::Value>> locals;
+        locals.reserve(m_localInfo.size() + m_preprocessData.m_constantData.size());
         for (uint32_t i = 0; i < m_localInfo.size(); i++) {
             locals.push_back(std::make_pair(m_localInfo[i].m_position, Walrus::Value(m_localInfo[i].m_valueType)));
         }
@@ -3218,10 +3217,12 @@ public:
             locals.push_back(std::make_pair(constant.second, constant.first));
         }
 
+#if !defined(NDEBUG)
         m_currentFunction->m_localDebugData.clear();
         m_currentFunction->m_constantDebugData.clear();
+#endif
 
-        LiveAnalysis analysis;
+        LiveAnalysis analysis(m_currentByteCode);
         analysis.optimizeLocals(m_currentFunction, locals, m_localInfo.size());
 
 #if !defined(NDEBUG)
@@ -3236,7 +3237,6 @@ public:
         }
 #endif
 
-        counter++;
         endFunction();
     }
 

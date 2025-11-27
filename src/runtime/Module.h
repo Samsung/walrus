@@ -216,6 +216,7 @@ public:
     FunctionType* functionType() const { return m_functionType; }
 
     const uint8_t* byteCode() const { return m_byteCode.data(); }
+    VectorWithFixedSize<uint8_t, std::allocator<uint8_t>> byteCodeVector() { return m_byteCode; }
 
     size_t byteCodeSize() const
     {

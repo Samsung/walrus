@@ -26,19 +26,39 @@ namespace wabt {
 
 class LiveAnalysis {
 public:
+    LiveAnalysis(Walrus::Vector<uint8_t, std::allocator<uint8_t>>& byteCode)
+        : m_byteCode(byteCode)
+    {
+    }
+
     struct VariableRange {
         Walrus::Value value;
-        Walrus::ByteCodeStackOffset start;
-        Walrus::ByteCodeStackOffset end;
+        uint64_t start;
+        uint64_t end;
         Walrus::ByteCodeStackOffset originalOffset;
         Walrus::ByteCodeStackOffset newOffset;
         bool isParam;
         bool needsInit;
-        std::vector<Walrus::ByteCodeStackOffset> sets;
-        std::vector<Walrus::ByteCodeStackOffset> reads;
-#if !defined(NDEBUG)
+        std::vector<uint64_t> sets;
+        std::vector<uint64_t> reads;
+        // #if !defined(NDEBUG)
         bool isConstant;
-#endif
+        bool isResult;
+        // #endif
+
+        VariableRange()
+            : value(0)
+            , start(UINT64_MAX)
+            , end(0)
+            , originalOffset(0)
+            , newOffset(UINT16_MAX)
+            , isParam(false)
+            , needsInit(false)
+            // #if !defined(NDEBUG)
+            , isConstant(false)
+        // #endif
+        {
+        }
 
         VariableRange(Walrus::ByteCodeStackOffset o, Walrus::Value value)
             : value(value)
@@ -48,18 +68,20 @@ public:
             , newOffset(UINT16_MAX)
             , isParam(false)
             , needsInit(false)
-#if !defined(NDEBUG)
+            // #if !defined(NDEBUG)
             , isConstant(false)
-#endif
+            , isResult(false)
+        // #endif
         {
         }
     };
 
     struct BasicBlock {
-        size_t from;
-        size_t to;
-        std::vector<VariableRange> in;
-        std::vector<VariableRange> out;
+        uint64_t from;
+        uint64_t to;
+        std::vector<VariableRange*> in;
+        std::vector<VariableRange*> out;
+        std::vector<VariableRange*> containedVariables;
 
         BasicBlock(size_t from, size_t to)
             : from(from)
@@ -80,16 +102,17 @@ public:
         }
     };
 
-    void orderStack(Walrus::ModuleFunction* func, std::vector<VariableRange>& ranges, uint16_t stackStart, uint16_t stackEnd);
-    void extendNaiveRange(std::vector<BasicBlock>& basicBlocks, std::vector<VariableRange>& ranges);
-    void orderInsAndOuts(std::vector<BasicBlock>& basicBlocks, std::vector<VariableRange>& ranges, size_t end, size_t position = 0);
-    void assignBasicBlocks(Walrus::ByteCode* code, std::vector<BasicBlock>& basicBlocks, size_t byteCodeOffset);
-    void optimizeLocals(Walrus::ModuleFunction* func, std::vector<std::pair<size_t, Walrus::Value>>& locals, size_t constantStart);
-    void orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunction* func, std::vector<VariableRange>& ranges, Walrus::ByteCodeStackOffset byteCodeOffset);
-    // void pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func, bool neverUsedElementExists, Walrus::ByteCodeStackOffset neverUsedElementPos, uint8_t neverUsedElementSize);
-    void pushVariableInits(std::vector<LiveAnalysis::VariableRange>& ranges, Walrus::ModuleFunction* func);
+    void orderStack(Walrus::ModuleFunction* func, VariableRange* ranges, uint64_t rangesSize, uint16_t stackStart);
+    void extendNaiveRange(std::vector<BasicBlock*>& basicBlocks, VariableRange* ranges, uint64_t rangesSize);
+    void orderInsAndOuts(std::vector<BasicBlock*>& basicBlocks, VariableRange* ranges, uint64_t rangesSize, uint64_t end, uint64_t position = 0);
+    void assignBasicBlocks(Walrus::ByteCode* code, std::vector<BasicBlock*>& basicBlocks, uint64_t byteCodeOffset);
+    void optimizeLocals(Walrus::ModuleFunction* func, std::vector<std::pair<uint64_t, Walrus::Value>>& locals, uint64_t constantStart);
+    void orderNaiveRange(Walrus::ByteCode* code, Walrus::ModuleFunction* func, VariableRange* ranges, uint64_t rangesSize, uint64_t byteCodeOffset);
+    void pushVariableInits(LiveAnalysis::VariableRange* ranges, uint64_t rangesSize, Walrus::ModuleFunction* func);
+    void pushByteCodeToFront(const Walrus::ByteCode& code);
 
     StackElement UnusedReads;
     StackElement UnusedWrites;
+    Walrus::Vector<uint8_t, std::allocator<uint8_t>>& m_byteCode;
 };
 } // namespace wabt

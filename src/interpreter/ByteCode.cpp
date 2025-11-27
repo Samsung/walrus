@@ -125,14 +125,8 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
         FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
 #undef GENERATE_UNARY_CODE_CASE
-    case Walrus::ByteCode::I64ReinterpretF64Opcode:
-    case Walrus::ByteCode::F32ReinterpretI32Opcode:
-    case Walrus::ByteCode::F64ReinterpretI64Opcode:
-    case Walrus::ByteCode::I32ReinterpretF32Opcode:
     case Walrus::ByteCode::MoveI32Opcode:
-    case Walrus::ByteCode::MoveF32Opcode:
     case Walrus::ByteCode::MoveI64Opcode:
-    case Walrus::ByteCode::MoveF64Opcode:
     case Walrus::ByteCode::MoveV128Opcode:
     case Walrus::ByteCode::MemoryGrowOpcode:
     case Walrus::ByteCode::RefI31Opcode:
@@ -143,6 +137,13 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         ByteCodeOffset2 *unOp = reinterpret_cast<Walrus::ByteCodeOffset2 *>(const_cast<ByteCode *>(this));
         offsets.push_back(unOp->stackOffset1());
         offsets.push_back(unOp->stackOffset2());
+        break;
+    }
+    case Walrus::ByteCode::MoveF32Opcode:
+    case Walrus::ByteCode::MoveF64Opcode: {
+        MoveFloat *move = reinterpret_cast<Walrus::MoveFloat *>(const_cast<ByteCode *>(this));
+        offsets.push_back(move->srcOffset());
+        offsets.push_back(move->dstOffset());
         break;
     }
 #define GENERATE_TERNARY_CODE_CASE(name, ...) case Walrus::ByteCode::name##Opcode:
@@ -157,9 +158,21 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
             offsets.push_back(ternary->dstOffset());
             break;
         }
+    case Walrus::ByteCode::F32LoadOpcode:
+    case Walrus::ByteCode::F64LoadOpcode: {
+        offsets.push_back(reinterpret_cast<Walrus::MemoryLoadFloat *>(const_cast<ByteCode *>(this))->srcOffset());
+        offsets.push_back(reinterpret_cast<Walrus::MemoryLoadFloat *>(const_cast<ByteCode *>(this))->dstOffset());
+        break;
+    }
+    case Walrus::ByteCode::F32StoreOpcode:
+    case Walrus::ByteCode::F64StoreOpcode: {
+        offsets.push_back(reinterpret_cast<Walrus::MemoryStoreFloat *>(const_cast<ByteCode *>(this))->valueOffset());
+        offsets.push_back(reinterpret_cast<Walrus::MemoryStoreFloat *>(const_cast<ByteCode *>(this))->dstOffset());
+        break;
+    }
 #define GENERATE_MEMORY_LOAD_CODE_CASE(name, ...) \
     case Walrus::ByteCode::name##Opcode:
-        FOR_EACH_BYTECODE_LOAD_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
+        FOR_EACH_BYTECODE_LOAD_INT_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_SIMD_ETC_MEMIDX_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
@@ -184,12 +197,12 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         }
 #define GENERATE_MEMORY_STORE_CODE_CASE(name, ...) \
     case Walrus::ByteCode::name##Opcode:
-        FOR_EACH_BYTECODE_STORE_OP(GENERATE_MEMORY_STORE_CODE_CASE)
+        FOR_EACH_BYTECODE_STORE_INT_OP(GENERATE_MEMORY_STORE_CODE_CASE)
         FOR_EACH_BYTECODE_ATOMIC_STORE_OP(GENERATE_MEMORY_STORE_CODE_CASE)
 #undef GENERATE_MEMORY_STORE_CODE_CASE
         {
-            offsets.push_back(reinterpret_cast<Walrus::MemoryStore *>(const_cast<ByteCode *>(this))->src0Offset());
-            offsets.push_back(reinterpret_cast<Walrus::MemoryStore *>(const_cast<ByteCode *>(this))->src1Offset());
+            offsets.push_back(reinterpret_cast<Walrus::MemoryStore *>(const_cast<ByteCode *>(this))->valueOffset());
+            offsets.push_back(reinterpret_cast<Walrus::MemoryStore *>(const_cast<ByteCode *>(this))->dstOffset());
             break;
         }
 #define GENERATE_BYTECODE_OFFSET2VALUE_MEMIDX_CASE(name, ...) \
@@ -540,7 +553,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
         for (uint32_t i = 0; i < call->functionType()->param().size(); i++) {
             offsets.push_back(call->stackOffsets()[offsetCounter]);
 
-            if (call->functionType()->param()[i] == Walrus::Value::Type::V128) {
+            if (call->functionType()->param().types()[i] == Walrus::Value::Type::V128) {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
                 offsetCounter++;
             }
@@ -551,7 +564,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
             offsets.push_back(call->stackOffsets()[offsetCounter]);
             offsetCounter++;
 
-            if (call->functionType()->result()[i] == Walrus::Value::Type::V128) {
+            if (call->functionType()->result().types()[i] == Walrus::Value::Type::V128) {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
                 offsetCounter++;
             }
@@ -561,7 +574,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
             offsets.push_back(call->stackOffsets()[offsetCounter]);
             offsetCounter++;
 
-            switch (call->functionType()->param()[i]) {
+            switch (call->functionType()->param().types()[i]) {
             case Walrus::Value::Type::I64:
             case Walrus::Value::Type::F64: {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
@@ -586,7 +599,7 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
             offsets.push_back(call->stackOffsets()[offsetCounter]);
             offsetCounter++;
 
-            switch (call->functionType()->result()[i]) {
+            switch (call->functionType()->result().types()[i]) {
             case Walrus::Value::Type::I64:
             case Walrus::Value::Type::F64: {
                 offsets.push_back(call->stackOffsets()[offsetCounter]);
@@ -632,7 +645,9 @@ std::vector<Walrus::ByteCodeStackOffset> ByteCode::getByteCodeStackOffsets(Funct
     case Walrus::ByteCode::ElemDropOpcode:
     case Walrus::ByteCode::DataDropOpcode:
     case Walrus::ByteCode::JumpOpcode:
+#if !defined(NDEBUG)
     case Walrus::ByteCode::NopOpcode:
+#endif
     case Walrus::ByteCode::UnreachableOpcode:
     case Walrus::ByteCode::AtomicFenceOpcode: {
         break;
@@ -671,14 +686,8 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
         FOR_EACH_BYTECODE_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
         FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
 #undef GENERATE_UNARY_CODE_CASE
-    case Walrus::ByteCode::I64ReinterpretF64Opcode:
-    case Walrus::ByteCode::F32ReinterpretI32Opcode:
-    case Walrus::ByteCode::F64ReinterpretI64Opcode:
-    case Walrus::ByteCode::I32ReinterpretF32Opcode:
     case Walrus::ByteCode::MoveI32Opcode:
-    case Walrus::ByteCode::MoveF32Opcode:
     case Walrus::ByteCode::MoveI64Opcode:
-    case Walrus::ByteCode::MoveF64Opcode:
     case Walrus::ByteCode::MoveV128Opcode:
     case Walrus::ByteCode::MemoryGrowOpcode:
     case Walrus::ByteCode::Load32Opcode:
@@ -695,6 +704,16 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
 
         break;
     }
+    case Walrus::ByteCode::MoveF32Opcode:
+    case Walrus::ByteCode::MoveF64Opcode: {
+        MoveFloat *code = reinterpret_cast<MoveFloat *>(this);
+        if (index == 0) {
+            code->setSrcOffset(offset);
+        } else {
+            code->setDstOffset(offset);
+        }
+        break;
+    }
 #define GENERATE_TERNARY_CODE_CASE(name, ...) case Walrus::ByteCode::name##Opcode:
         FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OP(GENERATE_TERNARY_CODE_CASE)
         FOR_EACH_BYTECODE_RELAXED_SIMD_TERNARY_OTHER(GENERATE_TERNARY_CODE_CASE)
@@ -704,18 +723,56 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
             ternary->setStackOffset(index, offset);
             break;
         }
+    case Walrus::ByteCode::F32StoreOpcode:
+    case Walrus::ByteCode::F64StoreOpcode: {
+        MemoryStoreFloat *store = reinterpret_cast<Walrus::MemoryStoreFloat *>(const_cast<ByteCode *>(this));
+        if (index == 0) {
+            store->setStackOffset1(offset);
+        } else {
+            store->setStackOffset2(offset);
+        }
+        break;
+    }
+    case Walrus::ByteCode::F32LoadOpcode:
+    case Walrus::ByteCode::F64LoadOpcode: {
+        MemoryLoadFloat *store = reinterpret_cast<Walrus::MemoryLoadFloat *>(this);
+        if (index == 0) {
+            store->setStackOffset2(offset);
+        } else {
+            store->setStackOffset1(offset);
+        }
+        break;
+    }
 #define GENERATE_MEMORY_LOAD_CODE_CASE(name, ...) \
     case Walrus::ByteCode::name##Opcode:
-        FOR_EACH_BYTECODE_LOAD_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
+        FOR_EACH_BYTECODE_LOAD_INT_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
         FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(GENERATE_MEMORY_LOAD_CODE_CASE)
 #undef GENERATE_MEMORY_LOAD_CODE_CASE
+        {
+            MemoryLoad *load = reinterpret_cast<MemoryLoad *>(this);
+            if (index == 0) {
+                load->setStackOffset1(offset);
+            } else {
+                load->setStackOffset2(offset);
+            }
+            break;
+        }
 #define GENERATE_MEMORY_STORE_CODE_CASE(name, ...) \
     case Walrus::ByteCode::name##Opcode:
-        FOR_EACH_BYTECODE_STORE_OP(GENERATE_MEMORY_STORE_CODE_CASE)
+        FOR_EACH_BYTECODE_STORE_INT_OP(GENERATE_MEMORY_STORE_CODE_CASE)
         FOR_EACH_BYTECODE_ATOMIC_STORE_OP(GENERATE_MEMORY_STORE_CODE_CASE)
 #undef GENERATE_MEMORY_STORE_CODE_CASE
+        {
+            MemoryStore *store = reinterpret_cast<MemoryStore *>(this);
+            if (index == 0) {
+                store->setStackOffset2(offset);
+            } else {
+                store->setStackOffset1(offset);
+            }
+            break;
+        }
     case Walrus::ByteCode::TableGetOpcode:
     case Walrus::ByteCode::TableSetOpcode:
     case Walrus::ByteCode::I31GetSOpcode:
@@ -1341,7 +1398,9 @@ void ByteCode::setByteCodeOffset(size_t index, Walrus::ByteCodeStackOffset offse
     case Walrus::ByteCode::ElemDropOpcode:
     case Walrus::ByteCode::DataDropOpcode:
     case Walrus::ByteCode::JumpOpcode:
+#if !defined(NDEBUG)
     case Walrus::ByteCode::NopOpcode:
+#endif
     case Walrus::ByteCode::UnreachableOpcode:
     case Walrus::ByteCode::AtomicFenceOpcode: {
         break;

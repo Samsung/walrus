@@ -1436,7 +1436,9 @@ public:
     }
 
     ByteCodeStackOffset srcOffset() const { return m_srcOffset; }
+    void setSrcOffset(ByteCodeStackOffset o) { m_srcOffset = o; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
 
 protected:
     // The field list is intentionally reserved, to avoid
