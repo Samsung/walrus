@@ -408,7 +408,7 @@ private:
             }
 
             m_vmStack = binaryReader.m_vmStack;
-            m_position = binaryReader.m_currentFunction->currentByteCodeSize();
+            m_position = binaryReader.m_currentByteCode.size();
         }
 
         bool returnValueIsIndex() const
@@ -602,6 +602,7 @@ private:
     bool m_inInitExpr;
     Walrus::ModuleFunction* m_currentFunction;
     Walrus::FunctionType* m_currentFunctionType;
+    Walrus::Vector<uint8_t, std::allocator<uint8_t>> m_currentByteCode;
     uint32_t m_initialFunctionStackSize;
     uint16_t m_functionStackSizeSoFar;
     Index m_recursiveTypeStart;
@@ -760,28 +761,55 @@ private:
 
     void endFunction()
     {
+        // Copy the final byte code.
+        m_currentFunction->m_byteCode.reserve(m_currentByteCode.size());
+        memcpy(m_currentFunction->m_byteCode.data(), m_currentByteCode.data(), m_currentByteCode.size());
         m_currentFunction = nullptr;
         m_currentFunctionType = nullptr;
+        m_currentByteCode.clear();
         m_vmStack.clear();
         m_shouldContinueToGenerateByteCode = true;
     }
 
     template <typename CodeType>
-    void pushByteCode(const CodeType& code, WASMOpcode opcode)
+    CodeType* peekByteCode(size_t position)
     {
-        m_currentFunction->pushByteCode(code);
+        return reinterpret_cast<CodeType*>(&m_currentByteCode[position]);
+    }
+
+    void expandByteCode(size_t s)
+    {
+        m_currentByteCode.resizeWithUninitializedValues(m_currentByteCode.size() + s);
+    }
+
+    void resizeByteCode(size_t newSize)
+    {
+        m_currentByteCode.resizeWithUninitializedValues(newSize);
     }
 
     template <typename CodeType>
     void pushByteCode(const CodeType& code)
     {
-        m_currentFunction->pushByteCode(code);
+        char* first = (char*)&code;
+        size_t start = m_currentByteCode.size();
+
+        m_currentByteCode.resizeWithUninitializedValues(m_currentByteCode.size() + sizeof(CodeType));
+        for (size_t i = 0; i < sizeof(CodeType); i++) {
+            m_currentByteCode[start++] = *first;
+            first++;
+        }
+    }
+
+    template <typename CodeType>
+    void pushByteCode(const CodeType& code, WASMOpcode opcode)
+    {
+        pushByteCode(code);
     }
 
     void pushByteCode(const Walrus::I32Eqz& code, WASMOpcode opcode)
     {
-        m_lastI32EqzPos = m_currentFunction->currentByteCodeSize();
-        m_currentFunction->pushByteCode(code);
+        m_lastI32EqzPos = m_currentByteCode.size();
+        pushByteCode(code);
     }
 
     inline bool canBeInverted(size_t stackPos)
@@ -790,11 +818,11 @@ private:
          * m_lastI32EqzPos + sizeof(Walrus::I32Eqz) == m_currentFunction->currentByteCodeSize()
          * checks if last byteCode is I32Eqz
          *
-         * m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos
+         * peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos
          * checks if the output of I32Eqz is the input of JumpIfTrue/JumpIfFalse
          */
-        return (m_lastI32EqzPos + sizeof(Walrus::I32Eqz) == m_currentFunction->currentByteCodeSize())
-            && (m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos);
+        return (m_lastI32EqzPos + sizeof(Walrus::I32Eqz) == m_currentByteCode.size())
+            && (peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->dstOffset() == stackPos);
     }
 
     Walrus::Optional<uint8_t> lookaheadUnsigned8(size_t offset = 0)
@@ -1295,7 +1323,7 @@ public:
         m_recursiveTypeEnd = 0;
         setResumeGenerateByteCodeAfterNBlockEnd(0);
 
-        m_currentFunction->m_byteCode.clear();
+        m_currentByteCode.clear();
         m_currentFunction->m_catchInfo.clear();
         m_blockInfo.clear();
         m_catchInfo.clear();
@@ -1454,14 +1482,14 @@ public:
     virtual void OnCallExpr(uint32_t index) override
     {
         auto functionType = m_result.m_functions[index]->functionType();
-        auto callPos = m_currentFunction->currentByteCodeSize();
+        auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
         pushByteCode(Walrus::Call(index, parameterCount, resultCount), WASMOpcode::CallOpcode);
 
-        m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
-        auto code = m_currentFunction->peekByteCode<Walrus::Call>(callPos);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        auto code = peekByteCode<Walrus::Call>(callPos);
 
         generateCallExpr(code, parameterCount, resultCount, functionType);
     }
@@ -1470,15 +1498,15 @@ public:
     {
         ASSERT(peekVMStackValueType() == Walrus::Value::I32);
         auto functionType = getFunctionType(sigIndex);
-        auto callPos = m_currentFunction->currentByteCodeSize();
+        auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
         pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType, parameterCount, resultCount),
                      WASMOpcode::CallIndirectOpcode);
-        m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
 
-        auto code = m_currentFunction->peekByteCode<Walrus::CallIndirect>(callPos);
+        auto code = peekByteCode<Walrus::CallIndirect>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
     }
 
@@ -1486,14 +1514,14 @@ public:
     {
         ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
         auto functionType = getFunctionType(sig_type.GetReferenceIndex());
-        auto callPos = m_currentFunction->currentByteCodeSize();
+        auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
         pushByteCode(Walrus::CallRef(popVMStack(), functionType, parameterCount, resultCount), WASMOpcode::CallRefOpcode);
-        m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
 
-        auto code = m_currentFunction->peekByteCode<Walrus::CallRef>(callPos);
+        auto code = peekByteCode<Walrus::CallRef>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
     }
 
@@ -1708,8 +1736,8 @@ public:
 
         bool isInverted = canBeInverted(stackPos);
         if (UNLIKELY(isInverted)) {
-            stackPos = m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->srcOffset();
-            m_currentFunction->resizeByteCode(m_lastI32EqzPos);
+            stackPos = peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->srcOffset();
+            resizeByteCode(m_lastI32EqzPos);
             m_lastI32EqzPos = s_noI32Eqz;
         }
 
@@ -1779,14 +1807,14 @@ public:
         blockInfo.m_jumpToEndBrInfo.erase(blockInfo.m_jumpToEndBrInfo.begin());
 
         if (!blockInfo.byteCodeGenerationStopped()) {
-            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
             pushByteCode(Walrus::Jump(), WASMOpcode::ElseOpcode);
         }
 
         blockInfo.clearByteCodeGenerationStopped();
         restoreVMStackBy(blockInfo);
-        m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
-            ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_position);
+        peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_position)
+            ->setOffset(m_currentByteCode.size() - blockInfo.m_position);
     }
 
     virtual void OnLoopExpr(Type sigType) override
@@ -1954,14 +1982,14 @@ public:
             // error case of global init expr
             return;
         }
-        auto pos = m_currentFunction->currentByteCodeSize();
+        auto pos = m_currentByteCode.size();
         auto offsetCount = computeFunctionParameterOrResultOffsetCount(m_currentFunctionType->result());
         pushByteCode(Walrus::End(offsetCount), WASMOpcode::EndOpcode);
 
         auto& result = m_currentFunctionType->result().types();
-        m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * offsetCount));
-        ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
-        Walrus::End* end = m_currentFunction->peekByteCode<Walrus::End>(pos);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * offsetCount));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        Walrus::End* end = peekByteCode<Walrus::End>(pos);
         size_t offsetIndex = 0;
         for (size_t i = 0; i < result.size(); i++) {
             auto type = result[result.size() - 1 - i];
@@ -2019,12 +2047,12 @@ public:
             return;
         }
         auto& blockInfo = findBlockInfoInBr(depth);
-        auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+        auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentByteCode.size();
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
         if (dropSize.second) {
             generateMoveValuesCodeRegardToDrop(dropSize);
         } else if (blockInfo.m_blockType == BlockInfo::Loop && blockInfo.returnValueIsIndex() && getFunctionType(blockInfo.m_returnValueIndex)->param().size()) {
-            size_t pos = m_currentFunction->currentByteCodeSize();
+            size_t pos = m_currentByteCode.size();
 
             auto ft = getFunctionType(blockInfo.m_returnValueIndex);
             const auto& param = ft->param().types();
@@ -2037,7 +2065,7 @@ public:
         }
         if (blockInfo.m_blockType != BlockInfo::Loop) {
             ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
-            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
         }
         pushByteCode(Walrus::Jump(offset), WASMOpcode::BrOpcode);
 
@@ -2049,35 +2077,35 @@ public:
     {
         if (m_blockInfo.size() == depth) {
             // this case acts like return
-            size_t pos = m_currentFunction->currentByteCodeSize();
+            size_t pos = m_currentByteCode.size();
             pushByteCode(JumpTypeInverted(stackPos, sizeof(JumpTypeInverted) + sizeof(Walrus::End) + sizeof(Walrus::ByteCodeStackOffset) * m_currentFunctionType->result().size()), opcode);
             for (size_t i = 0; i < m_currentFunctionType->result().size(); i++) {
                 ASSERT(toDebugType((m_vmStack.rbegin() + i)->valueType()) == toDebugType(m_currentFunctionType->result().types()[m_currentFunctionType->result().size() - i - 1]));
             }
             generateEndCode();
-            m_currentFunction->peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
+            peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
             return pos;
         }
 
         auto& blockInfo = findBlockInfoInBr(depth);
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
         if (dropSize.second) {
-            size_t pos = m_currentFunction->currentByteCodeSize();
+            size_t pos = m_currentByteCode.size();
             pushByteCode(JumpTypeInverted(stackPos), opcode);
             generateMoveValuesCodeRegardToDrop(dropSize);
 
-            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentByteCode.size();
             if (blockInfo.m_blockType != BlockInfo::Loop) {
                 ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
-                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
+                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
-            m_currentFunction->peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
+            peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
             return pos;
         }
 
         if (blockInfo.m_blockType == BlockInfo::Loop && blockInfo.returnValueIsIndex() && getFunctionType(blockInfo.m_returnValueIndex)->param().size()) {
-            size_t pos = m_currentFunction->currentByteCodeSize();
+            size_t pos = m_currentByteCode.size();
             pushByteCode(JumpTypeInverted(stackPos), opcode);
             auto ft = getFunctionType(blockInfo.m_returnValueIndex);
             const auto& param = ft->param().types();
@@ -2088,23 +2116,23 @@ public:
                 info->setPosition(info->nonOptimizedPosition());
             }
 
-            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+            auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentByteCode.size();
             if (blockInfo.m_blockType != BlockInfo::Loop) {
                 ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
-                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
+                blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
-            m_currentFunction->peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentFunction->currentByteCodeSize() - pos);
+            peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
             return pos;
         }
 
-        auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentFunction->currentByteCodeSize();
+        auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentByteCode.size();
         if (blockInfo.m_blockType != BlockInfo::Loop) {
             ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
-            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentFunction->currentByteCodeSize() });
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentByteCode.size() });
         }
 
-        size_t pos = m_currentFunction->currentByteCodeSize();
+        size_t pos = m_currentByteCode.size();
         pushByteCode(JumpType(stackPos, offset), opcode);
         return pos;
     }
@@ -2117,8 +2145,8 @@ public:
         bool isInverted = canBeInverted(stackPos);
 
         if (UNLIKELY(isInverted)) {
-            stackPos = m_currentFunction->peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->srcOffset();
-            m_currentFunction->resizeByteCode(m_lastI32EqzPos);
+            stackPos = peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->srcOffset();
+            resizeByteCode(m_lastI32EqzPos);
             m_lastI32EqzPos = s_noI32Eqz;
             GenerateConditionalBranch<Walrus::JumpIfFalse, Walrus::JumpIfTrue, WASMOpcode::BrIfOpcode>(depth, stackPos);
         } else {
@@ -2150,7 +2178,7 @@ public:
 
     void emitBrTableCase(size_t brTableCode, Index depth, size_t jumpOffset)
     {
-        int32_t offset = (int32_t)(m_currentFunction->currentByteCodeSize() - brTableCode);
+        int32_t offset = (int32_t)(m_currentByteCode.size() - brTableCode);
 
         if (m_blockInfo.size() == depth) {
             // this case acts like return
@@ -2159,7 +2187,7 @@ public:
                 ASSERT((m_vmStack.rbegin() + i)->valueType() == m_currentFunctionType->result().types()[m_currentFunctionType->result().size() - i - 1]);
             }
 #endif
-            *(int32_t*)(m_currentFunction->peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
+            *(int32_t*)(peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
             generateEndCode();
             return;
         }
@@ -2167,7 +2195,7 @@ public:
         auto dropSize = dropStackValuesBeforeBrIfNeeds(depth);
 
         if (UNLIKELY(dropSize.second)) {
-            *(int32_t*)(m_currentFunction->peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
+            *(int32_t*)(peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
             OnBrExpr(depth);
             return;
         }
@@ -2182,7 +2210,7 @@ public:
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsBrTable, brTableCode + jumpOffset });
         }
 
-        *(int32_t*)(m_currentFunction->peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
+        *(int32_t*)(peekByteCode<uint8_t>(brTableCode) + jumpOffset) = offset;
     }
 
     virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
@@ -2191,12 +2219,12 @@ public:
         ASSERT(peekVMStackValueType() == Walrus::Value::I32);
         auto stackPos = popVMStack();
 
-        size_t brTableCode = m_currentFunction->currentByteCodeSize();
+        size_t brTableCode = m_currentByteCode.size();
         pushByteCode(Walrus::BrTable(stackPos, numTargets), WASMOpcode::BrTableOpcode);
 
         if (numTargets) {
-            m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(int32_t) * numTargets));
-            ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
+            expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(int32_t) * numTargets));
+            ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
 
             for (Index i = 0; i < numTargets; i++) {
                 emitBrTableCase(brTableCode, targetDepths[i], sizeof(Walrus::BrTable) + i * sizeof(int32_t));
@@ -2225,7 +2253,7 @@ public:
     virtual void OnThrowExpr(Index tagIndex) override
     {
         m_preprocessData.seenBranch();
-        auto pos = m_currentFunction->currentByteCodeSize();
+        auto pos = m_currentByteCode.size();
         uint32_t offsetsSize = 0;
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
@@ -2237,9 +2265,9 @@ public:
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = getFunctionType(m_result.m_tagTypes[tagIndex]->sigIndex());
             auto& param = functionType->param().types();
-            m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * param.size()));
-            ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
-            Walrus::Throw* code = m_currentFunction->peekByteCode<Walrus::Throw>(pos);
+            expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * param.size()));
+            ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+            Walrus::Throw* code = peekByteCode<Walrus::Throw>(pos);
             for (size_t i = 0; i < param.size(); i++) {
                 ASSERT(peekVMStackValueType() == param[functionType->param().size() - i - 1]);
                 code->dataOffsets()[param.size() - i - 1] = popVMStack();
@@ -2265,20 +2293,20 @@ public:
         keepBlockResultsIfNeeds(blockInfo);
         restoreVMStackBy(blockInfo);
 
-        size_t tryEnd = m_currentFunction->currentByteCodeSize();
+        size_t tryEnd = m_currentByteCode.size();
         if (m_catchInfo.size() && m_catchInfo.back().m_tryCatchBlockDepth == m_blockInfo.size()) {
             // not first catch
             tryEnd = m_catchInfo.back().m_tryEnd;
         }
 
         if (!blockInfo.byteCodeGenerationStopped()) {
-            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentFunction->currentByteCodeSize() });
+            blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
             pushByteCode(Walrus::Jump(), WASMOpcode::CatchOpcode);
         }
 
         blockInfo.clearByteCodeGenerationStopped();
 
-        m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentFunction->currentByteCodeSize(), tagIndex });
+        m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentByteCode.size(), tagIndex });
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = getFunctionType(m_result.m_tagTypes[tagIndex]->sigIndex());
@@ -2757,10 +2785,10 @@ public:
         if (type.IsReferenceWithIndex()) {
             size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastDefined, JumpIfCastFailDefined, WASMOpcode::BrOnCastOpcode>(depth, info.position());
             const Walrus::CompositeType** typeInfo = m_result.m_compositeTypes[type.GetReferenceIndex()]->subTypeList();
-            m_currentFunction->peekByteCode<Walrus::JumpIfCastDefined>(pos)->init(typeInfo, srcInfo);
+            peekByteCode<Walrus::JumpIfCastDefined>(pos)->init(typeInfo, srcInfo);
         } else {
             size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastGeneric, JumpIfCastFailGeneric, WASMOpcode::BrOnCastOpcode>(depth, info.position());
-            m_currentFunction->peekByteCode<Walrus::JumpIfCastGeneric>(pos)->init(targetType, srcInfo);
+            peekByteCode<Walrus::JumpIfCastGeneric>(pos)->init(targetType, srcInfo);
         }
 
         if (opcode == Opcode::BrOnCastFail) {
@@ -2842,13 +2870,13 @@ public:
     virtual void OnArrayNewFixedExpr(Index type_index, Index count) override
     {
         const Walrus::ArrayType* typeInfo = m_result.m_compositeTypes[type_index]->asArray();
-        auto pos = m_currentFunction->currentByteCodeSize();
+        auto pos = m_currentByteCode.size();
 
         pushByteCode(Walrus::ArrayNewFixed(typeInfo, count), WASMOpcode::ArrayNewFixedOpcode);
 
-        m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * count));
-        ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
-        Walrus::ArrayNewFixed* code = m_currentFunction->peekByteCode<Walrus::ArrayNewFixed>(pos);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * count));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        Walrus::ArrayNewFixed* code = peekByteCode<Walrus::ArrayNewFixed>(pos);
         for (size_t i = 0; i < count; i++) {
             ASSERT(peekVMStackValueType() == toDebugType(typeInfo->field().stackType()));
             code->dataOffsets()[count - i - 1] = popVMStack();
@@ -2989,14 +3017,14 @@ public:
     virtual void OnStructNewExpr(Index type_index) override
     {
         const Walrus::StructType* typeInfo = m_result.m_compositeTypes[type_index]->asStruct();
-        auto pos = m_currentFunction->currentByteCodeSize();
+        auto pos = m_currentByteCode.size();
 
         pushByteCode(Walrus::StructNew(typeInfo), WASMOpcode::StructNewOpcode);
 
         const Walrus::MutableTypeVector& fields = typeInfo->fields();
-        m_currentFunction->expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * fields.size()));
-        ASSERT(m_currentFunction->currentByteCodeSize() % sizeof(void*) == 0);
-        Walrus::StructNew* code = m_currentFunction->peekByteCode<Walrus::StructNew>(pos);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * fields.size()));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        Walrus::StructNew* code = peekByteCode<Walrus::StructNew>(pos);
         for (size_t i = 0; i < fields.size(); i++) {
             ASSERT(peekVMStackValueType() == toDebugType(fields.types()[fields.size() - i - 1].stackType()));
             code->dataOffsets()[fields.size() - i - 1] = popVMStack();
@@ -3126,17 +3154,17 @@ public:
             for (size_t i = 0; i < blockInfo.m_jumpToEndBrInfo.size(); i++) {
                 switch (blockInfo.m_jumpToEndBrInfo[i].m_type) {
                 case BlockInfo::JumpToEndBrInfo::IsJump:
-                    m_currentFunction->peekByteCode<Walrus::Jump>(blockInfo.m_jumpToEndBrInfo[i].m_position)->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
+                    peekByteCode<Walrus::Jump>(blockInfo.m_jumpToEndBrInfo[i].m_position)->setOffset(m_currentByteCode.size() - blockInfo.m_jumpToEndBrInfo[i].m_position);
                     break;
                 case BlockInfo::JumpToEndBrInfo::IsJumpIf:
-                    m_currentFunction->peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_jumpToEndBrInfo[i].m_position)
-                        ->setOffset(m_currentFunction->currentByteCodeSize() - blockInfo.m_jumpToEndBrInfo[i].m_position);
+                    peekByteCode<Walrus::JumpIfFalse>(blockInfo.m_jumpToEndBrInfo[i].m_position)
+                        ->setOffset(m_currentByteCode.size() - blockInfo.m_jumpToEndBrInfo[i].m_position);
                     break;
                 default:
                     ASSERT(blockInfo.m_jumpToEndBrInfo[i].m_type == BlockInfo::JumpToEndBrInfo::IsBrTable);
 
-                    int32_t* offset = m_currentFunction->peekByteCode<int32_t>(blockInfo.m_jumpToEndBrInfo[i].m_position);
-                    *offset = m_currentFunction->currentByteCodeSize() + (size_t)*offset - blockInfo.m_jumpToEndBrInfo[i].m_position;
+                    int32_t* offset = peekByteCode<int32_t>(blockInfo.m_jumpToEndBrInfo[i].m_position);
+                    *offset = m_currentByteCode.size() + (size_t)*offset - blockInfo.m_jumpToEndBrInfo[i].m_position;
                     break;
                 }
             }
@@ -3162,7 +3190,7 @@ public:
         m_lastI32EqzPos = s_noI32Eqz;
 #if !defined(NDEBUG)
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
-            m_currentFunction->dumpByteCode();
+            m_currentFunction->dumpByteCode(m_currentByteCode);
         }
         if (m_shouldContinueToGenerateByteCode) {
             for (size_t i = 0; i < m_currentFunctionType->result().size() && m_vmStack.size(); i++) {

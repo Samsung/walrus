@@ -212,43 +212,21 @@ public:
     uint16_t requiredStackSize() const { return m_requiredStackSize; }
     FunctionType* functionType() const { return m_functionType; }
 
-    template <typename CodeType>
-    void pushByteCode(const CodeType& code)
-    {
-        char* first = (char*)&code;
-        size_t start = m_byteCode.size();
+    const uint8_t* byteCode() const { return m_byteCode.data(); }
 
-        m_byteCode.resizeWithUninitializedValues(m_byteCode.size() + sizeof(CodeType));
-        for (size_t i = 0; i < sizeof(CodeType); i++) {
-            m_byteCode[start++] = *first;
-            first++;
-        }
-    }
-
-    template <typename CodeType>
-    CodeType* peekByteCode(size_t position)
-    {
-        return reinterpret_cast<CodeType*>(&m_byteCode[position]);
-    }
-
-    void expandByteCode(size_t s)
-    {
-        m_byteCode.resizeWithUninitializedValues(m_byteCode.size() + s);
-    }
-
-    void resizeByteCode(size_t newSize)
-    {
-        m_byteCode.resizeWithUninitializedValues(newSize);
-    }
-
-    size_t currentByteCodeSize() const
+    size_t byteCodeSize() const
     {
         return m_byteCode.size();
     }
 
-    const uint8_t* byteCode() const { return m_byteCode.data(); }
+    template <typename CodeType>
+    CodeType* getByteCode(size_t position)
+    {
+        return reinterpret_cast<CodeType*>(&m_byteCode[position]);
+    }
+
 #if !defined(NDEBUG)
-    void dumpByteCode();
+    void dumpByteCode(Walrus::Vector<uint8_t, std::allocator<uint8_t>>& byteCode);
 #endif
 
     const Vector<CatchInfo, std::allocator<CatchInfo>>& catchInfo() const
@@ -274,7 +252,7 @@ private:
     uint16_t m_requiredStackSize;
     FunctionType* m_functionType;
     ValueTypeVector m_local;
-    Vector<uint8_t, std::allocator<uint8_t>> m_byteCode;
+    VectorWithFixedSize<uint8_t, std::allocator<uint8_t>> m_byteCode;
 #if !defined(NDEBUG)
     Vector<size_t, std::allocator<size_t>> m_localDebugData;
     Vector<std::pair<Value, size_t>, std::allocator<std::pair<Value, size_t>>> m_constantDebugData;
