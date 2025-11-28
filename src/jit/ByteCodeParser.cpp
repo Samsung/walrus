@@ -544,7 +544,7 @@ static void compileFunction(JITCompiler* compiler)
 {
     size_t idx = 0;
     ModuleFunction* function = compiler->moduleFunction();
-    size_t endIdx = function->currentByteCodeSize();
+    size_t endIdx = function->byteCodeSize();
 
     if (endIdx == 0) {
         // If a function has no End opcode, it is an imported function.
@@ -555,7 +555,7 @@ static void compileFunction(JITCompiler* compiler)
 
     // Construct labels first
     while (idx < endIdx) {
-        ByteCode* byteCode = function->peekByteCode<ByteCode>(idx);
+        ByteCode* byteCode = function->getByteCode<ByteCode>(idx);
         ByteCode::Opcode opcode = byteCode->opcode();
 
         switch (opcode) {
@@ -630,7 +630,7 @@ static void compileFunction(JITCompiler* compiler)
             }
         }
 
-        ByteCode* byteCode = function->peekByteCode<ByteCode>(idx);
+        ByteCode* byteCode = function->getByteCode<ByteCode>(idx);
         ByteCode::Opcode opcode = byteCode->opcode();
         Instruction::Group group = Instruction::Any;
         uint8_t paramType = ParamTypes::NoParam;

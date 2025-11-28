@@ -382,7 +382,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         Walrus::Trap trap;
         auto result = trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
-            if (data->init->moduleFunction()->currentByteCodeSize()) {
+            if (data->init->moduleFunction()->byteCodeSize()) {
                 DefinedFunctionWithTryCatch fakeFunction(data->instance,
                                                          data->init->moduleFunction());
                 Value offset;
@@ -528,7 +528,7 @@ static void dumpValue(Value v)
     printf(", %s", typeName(v.type()));
 }
 
-void ModuleFunction::dumpByteCode()
+void ModuleFunction::dumpByteCode(Walrus::Vector<uint8_t, std::allocator<uint8_t>>& byteCode)
 {
     printf("\n");
     printf("required stack size: %u bytes\n", m_requiredStackSize);
@@ -549,12 +549,12 @@ void ModuleFunction::dumpByteCode()
     }
     printf("....]\n");
 
-    printf("bytecode size: %zu bytes\n", m_byteCode.size());
+    printf("bytecode size: %zu bytes\n", byteCode.size());
     printf("\n");
 
     size_t idx = 0;
-    while (idx < m_byteCode.size()) {
-        ByteCode* code = reinterpret_cast<ByteCode*>(&m_byteCode[idx]);
+    while (idx < byteCode.size()) {
+        ByteCode* code = reinterpret_cast<ByteCode*>(&byteCode[idx]);
         printf("%6zu ", idx);
 
         switch (code->opcode()) {
