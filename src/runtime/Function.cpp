@@ -74,7 +74,9 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
         ASSERT(Value::isRefType(paramTypeInfo[i]) ? argv[i].isRef() : argv[i].type() == paramTypeInfo[i]);
         argv[i].writeToMemory(paramBuffer);
         size_t stackAllocatedSize = valueStackAllocatedSize(paramTypeInfo[i]);
+        // size_t stackAllocatedSize = valueSize(paramTypeInfo[i]);
         for (size_t j = 0; j < stackAllocatedSize; j += sizeof(size_t)) {
+            // for (size_t j = 0; j < stackAllocatedSize; j += stackAllocatedSize) {
             offsetBuffer[offsetIndex++] = reinterpret_cast<size_t>(paramBuffer) - reinterpret_cast<size_t>(valueBuffer) + j;
         }
         paramBuffer += stackAllocatedSize;
@@ -84,7 +86,9 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
     size_t resultOffset = 0;
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {
         size_t stackAllocatedSize = valueStackAllocatedSize(resultTypeInfo[i]);
+        // size_t stackAllocatedSize = valueSize(resultTypeInfo[i]);
         for (size_t j = 0; j < stackAllocatedSize; j += sizeof(size_t)) {
+            // for (size_t j = 0; j < stackAllocatedSize; j += stackAllocatedSize) {
             offsetBuffer[offsetIndex++] = resultOffset + j;
         }
         resultOffset += stackAllocatedSize;
@@ -96,7 +100,12 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {
         result[i] = Value(resultTypeInfo[i], valueBuffer + offsetBuffer[resultOffsetIndex + parameterOffsetSize]);
         size_t stackAllocatedSize = valueStackAllocatedSize(resultTypeInfo[i]);
+        // size_t stackAllocatedSize = valueSize(resultTypeInfo[i]);
         resultOffsetIndex += stackAllocatedSize / sizeof(size_t);
+        // if (stackAllocatedSize > sizeof(uint64_t)) {
+        //     resultOffsetIndex++;
+        // }
+        // resultOffsetIndex++;
     }
 }
 

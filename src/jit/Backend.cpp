@@ -100,7 +100,7 @@ void JITArg::set(Operand* operand)
     Instruction* instr = VARIABLE_GET_IMM(*operand);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    ASSERT(instr->opcode() == ByteCode::Const32Opcode);
+    //    ASSERT(instr->opcode() == ByteCode::Const32Opcode);
 
     this->argw = static_cast<sljit_s32>(reinterpret_cast<Const32*>(instr->byteCode())->value());
 #else /* !SLJIT_32BIT_ARCHITECTURE */

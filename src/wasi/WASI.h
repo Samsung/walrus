@@ -169,6 +169,20 @@ public:
 
     static void initialize(uvwasi_t* uvwasi);
     static WasiFuncInfo* find(const std::string& funcName);
+    static uvwasi_t* getUvwasi()
+    {
+        return g_uvwasi;
+    }
+    static std::vector<std::pair<std::string, uint32_t>>& getPreopen()
+    {
+        return preopens;
+    }
+
+    static void setPreopen(std::vector<std::pair<std::string, uint32_t>> pre)
+    {
+        WASI::preopens = pre;
+    }
+
 
 private:
     // wasi functions
@@ -178,6 +192,7 @@ private:
 
     static uvwasi_t* g_uvwasi;
     static WasiFuncInfo g_wasiFunctions[FuncEnd];
+    static std::vector<std::pair<std::string, uint32_t>> preopens;
 };
 
 } // namespace Walrus

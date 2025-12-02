@@ -2226,6 +2226,7 @@ NextInstruction:
         auto& param = tag->functionType()->param().types();
         for (size_t i = 0; i < param.size(); i++) {
             auto sz = valueStackAllocatedSize(param[i]);
+            // auto sz = valueSize(param[i]);
             memcpy(ptr, bp + code->dataOffsets()[i], sz);
             ptr += sz;
         }
