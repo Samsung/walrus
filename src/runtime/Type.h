@@ -133,16 +133,90 @@ public:
     }
 };
 
+template <typename Allocator = std::allocator<Value::Type>>
+class TypeVectorTypes {
+    friend class TypeVector;
+
+public:
+    ~TypeVectorTypes()
+    {
+        if (m_size > sizeof(Value::Type*)) {
+            Allocator().deallocate(u.m_buffer, m_size);
+        }
+    }
+
+    size_t size() const { return m_size; }
+    const Value::Type* data() const
+    {
+        if (m_size <= sizeof(Value::Type*)) {
+            return reinterpret_cast<const Value::Type*>(u.m_inlineBuffer);
+        }
+        return u.m_buffer;
+    }
+
+    Value::Type operator[](const size_t idx) const
+    {
+        return data()[idx];
+    }
+
+    using iterator = const Value::Type*;
+    constexpr iterator begin() const { return data(); }
+    constexpr iterator end() const { return data() + m_size; }
+
+    void* operator new[](size_t size) = delete;
+
+protected:
+    TypeVectorTypes()
+        : m_size(0)
+    {
+        u.m_buffer = nullptr;
+    }
+
+    TypeVectorTypes(Value::Type type)
+        : m_size(1)
+    {
+        ASSERT(!Value::isPackedType(type) && type != Value::Void);
+        u.m_inlineBuffer[0] = static_cast<uint8_t>(type);
+    }
+
+    TypeVectorTypes(size_t size)
+        : m_size(size)
+    {
+        u.m_buffer = nullptr;
+        if (size > sizeof(Value::Type*)) {
+            u.m_buffer = Allocator().allocate(size);
+        }
+    }
+
+    union {
+        Value::Type* m_buffer;
+        uint8_t m_inlineBuffer[sizeof(Value::Type*)];
+    } u;
+    size_t m_size;
+};
+
 class TypeVector {
     friend class WASMBinaryReader;
 
 public:
-    typedef VectorWithFixedSize<Value::Type, std::allocator<Value::Type>> Types;
+    typedef TypeVectorTypes<std::allocator<Value::Type>> Types;
     typedef VectorWithFixedSize<const CompositeType*, std::allocator<const CompositeType*>> Refs;
 
-    TypeVector(size_t typesCount, size_t refsCount)
+    TypeVector()
     {
-        m_types.reserve(typesCount);
+    }
+
+    TypeVector(size_t typesCount, size_t refsCount)
+        : m_types(typesCount)
+    {
+        ASSERT(refsCount <= typesCount);
+        m_refs.reserve(refsCount);
+    }
+
+    TypeVector(Value::Type type, size_t refsCount)
+        : m_types(type)
+    {
+        ASSERT(refsCount <= 1);
         m_refs.reserve(refsCount);
     }
 
@@ -164,7 +238,12 @@ public:
     // Setters should only be used by the parser.
     void setType(size_t idx, Value::Type type)
     {
-        m_types[idx] = type;
+        ASSERT(idx < m_types.size());
+        if (m_types.size() > sizeof(Value::Type*)) {
+            m_types.u.m_buffer[idx] = type;
+        } else {
+            m_types.u.m_inlineBuffer[idx] = static_cast<uint8_t>(type);
+        }
     }
 
     void setRef(size_t idx, const CompositeType* ref)

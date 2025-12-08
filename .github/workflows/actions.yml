@@ -30,7 +30,7 @@ jobs:
       matrix:
         mode: [debug, release]
         switch: [--jit, --jit-no-reg-alloc, ""]
-    runs-on: macos-13
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:

@@ -47,27 +47,27 @@ bool FunctionType::equals(const FunctionType* other, bool isSubType) const
         return false;
     }
 
-    size_t typesSize = m_paramTypes->size();
-    size_t refsSize = m_paramTypes->refs().size();
+    size_t typesSize = m_paramTypes.size();
+    size_t refsSize = m_paramTypes.refs().size();
     if (typesSize != other->param().size()
         || refsSize != other->param().refs().size()) {
         return false;
     }
 
-    if (memcmp(m_paramTypes->types().data(), other->param().types().data(), sizeof(Value::Type) * typesSize)
-        || memcmp(m_paramTypes->refs().data(), other->param().refs().data(), sizeof(CompositeType*) * refsSize)) {
+    if (memcmp(m_paramTypes.types().data(), other->param().types().data(), sizeof(Value::Type) * typesSize)
+        || memcmp(m_paramTypes.refs().data(), other->param().refs().data(), sizeof(CompositeType*) * refsSize)) {
         return false;
     }
 
-    typesSize = m_resultTypes->size();
-    refsSize = m_resultTypes->refs().size();
+    typesSize = m_resultTypes.size();
+    refsSize = m_resultTypes.refs().size();
     if (typesSize != other->result().size()
         || refsSize != other->result().refs().size()) {
         return false;
     }
 
-    if (memcmp(m_resultTypes->types().data(), other->result().types().data(), sizeof(Value::Type) * typesSize)
-        || memcmp(m_resultTypes->refs().data(), other->result().refs().data(), sizeof(CompositeType*) * refsSize)) {
+    if (memcmp(m_resultTypes.types().data(), other->result().types().data(), sizeof(Value::Type) * typesSize)
+        || memcmp(m_resultTypes.refs().data(), other->result().refs().data(), sizeof(CompositeType*) * refsSize)) {
         return false;
     }
 

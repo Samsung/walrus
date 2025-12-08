@@ -89,6 +89,50 @@ size_t stackAllocatedSize()
     }
 }
 
+// Notes:
+// - The any, extern, and eq groups represent the same objects in Walrus.
+//   WebAssembly allows defining internal (so called host) types, and
+//   these types might need special handling, but in Walrus, the internal
+//   types follows the same rules as WebAssembly defined types. This
+//   model simplifies operations, improves performance, and has no
+//   disadvantages. For example, any.convert_extern and extern.convert_any
+//   are no operations.
+
+// - The order of references are important. They are grouped together to
+//   improve type comparison speed.
+//   See: isRefType / isTaggedRefType / isNullableRefType.
+
+// - NoAnyRef is (ref none), but this name follows the other No... naming conventions
+
+#define FOR_EACH_VALUE_TYPE(F) \
+    F(I32)                     \
+    F(I64)                     \
+    F(F32)                     \
+    F(F64)                     \
+    F(V128)                    \
+    F(ExternRef)               \
+    F(NoExternRef)             \
+    F(AnyRef)                  \
+    F(NoAnyRef)                \
+    F(EqRef)                   \
+    F(I31Ref)                  \
+    F(StructRef)               \
+    F(ArrayRef)                \
+    F(FuncRef)                 \
+    F(NoFuncRef)               \
+    F(DefinedRef)              \
+    F(NullExternRef)           \
+    F(NullNoExternRef)         \
+    F(NullAnyRef)              \
+    F(NullNoAnyRef)            \
+    F(NullEqRef)               \
+    F(NullI31Ref)              \
+    F(NullStructRef)           \
+    F(NullArrayRef)            \
+    F(NullFuncRef)             \
+    F(NullNoFuncRef)           \
+    F(NullDefinedRef)
+
 class Value {
     friend class JITFieldAccessor;
 
@@ -104,48 +148,13 @@ public:
 
     // Some tpyes (such as Void, GenericRef) are pseudo types, not used by WebAssembly
     enum Type : uint8_t {
-        I32,
-        I64,
-        F32,
-        F64,
-        V128,
+#define DEFINE_VALUE_TYPE(name) name,
+        FOR_EACH_VALUE_TYPE(DEFINE_VALUE_TYPE)
+#undef DEFINE_VALUE_TYPE
+
         // I8/I16 packed types are only used by structs/arrays
         I8,
         I16,
-        // The any, extern, and eq groups represent the same objects in Walrus.
-        // WebAssembly allows defining internal (so called host) types, and
-        // these types might need special handling, but in Walrus, the internal
-        // types follows the same rules as WebAssembly defined types. This
-        // model simplifies operations, improves performance, and has no
-        // disadvantages. For example, any.convert_extern and extern.convert_any
-        // are no operations.
-
-        // The order of references are important. They are grouped together to
-        // improve type comparison speed.
-        // See: isRefType / isTaggedRefType / isNullableRefType.
-        ExternRef,
-        NoExternRef,
-        AnyRef,
-        // NoAnyRef is (ref none), but this name follows the other No... naming conventions
-        NoAnyRef,
-        EqRef,
-        I31Ref,
-        StructRef,
-        ArrayRef,
-        FuncRef,
-        NoFuncRef,
-        DefinedRef,
-        NullExternRef,
-        NullNoExternRef,
-        NullAnyRef,
-        NullNoAnyRef,
-        NullEqRef,
-        NullI31Ref,
-        NullStructRef,
-        NullArrayRef,
-        NullFuncRef,
-        NullNoFuncRef,
-        NullDefinedRef,
         Void, // Void type should be located at end
         NUM = Void
     };
