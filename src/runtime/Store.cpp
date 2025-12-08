@@ -29,7 +29,12 @@ namespace Walrus {
 #ifndef NDEBUG
 size_t Extern::g_externCount;
 #endif
-FunctionType* Store::g_defaultFunctionTypes[Value::Type::NUM];
+
+static const FunctionType g_defaultFunctionTypes[] = {
+#define DEFINE_RESULT_TYPE(name) FunctionType(Value::name),
+    FOR_EACH_VALUE_TYPE(DEFINE_RESULT_TYPE)
+#undef DEFINE_RESULT_TYPE
+};
 
 Store::Store(Engine* engine)
     : m_engine(engine)
@@ -69,63 +74,15 @@ Store::~Store()
 
 void Store::finalize()
 {
-    for (size_t i = 0; i < Value::Type::NUM; i++) {
-        if (g_defaultFunctionTypes[i]) {
-            delete g_defaultFunctionTypes[i];
-        }
-    }
-
 #ifndef NDEBUG
     // check if all Extern objects has been deallocated
     ASSERT(Extern::g_externCount == 0);
 #endif
 }
 
-#define ALLOCATE_DEFAULT_TYPE(type)                                                                 \
-    case Value::Type::type: {                                                                       \
-        TypeVector* result = new TypeVector(1, 0);                                                  \
-        result->setType(0, Value::Type::type);                                                      \
-        g_defaultFunctionTypes[Value::Type::type] = new FunctionType(new TypeVector(0, 0), result); \
-        break;                                                                                      \
-    }
-
 FunctionType* Store::getDefaultFunctionType(Value::Type type)
 {
-    if (!g_defaultFunctionTypes[type]) {
-        switch (type) {
-            ALLOCATE_DEFAULT_TYPE(I32)
-            ALLOCATE_DEFAULT_TYPE(I64)
-            ALLOCATE_DEFAULT_TYPE(F32)
-            ALLOCATE_DEFAULT_TYPE(F64)
-            ALLOCATE_DEFAULT_TYPE(V128)
-            ALLOCATE_DEFAULT_TYPE(AnyRef)
-            ALLOCATE_DEFAULT_TYPE(NoAnyRef)
-            ALLOCATE_DEFAULT_TYPE(EqRef)
-            ALLOCATE_DEFAULT_TYPE(I31Ref)
-            ALLOCATE_DEFAULT_TYPE(StructRef)
-            ALLOCATE_DEFAULT_TYPE(ArrayRef)
-            ALLOCATE_DEFAULT_TYPE(ExternRef)
-            ALLOCATE_DEFAULT_TYPE(NoExternRef)
-            ALLOCATE_DEFAULT_TYPE(FuncRef)
-            ALLOCATE_DEFAULT_TYPE(DefinedRef)
-            ALLOCATE_DEFAULT_TYPE(NoFuncRef)
-            ALLOCATE_DEFAULT_TYPE(NullAnyRef)
-            ALLOCATE_DEFAULT_TYPE(NullNoAnyRef)
-            ALLOCATE_DEFAULT_TYPE(NullEqRef)
-            ALLOCATE_DEFAULT_TYPE(NullI31Ref)
-            ALLOCATE_DEFAULT_TYPE(NullStructRef)
-            ALLOCATE_DEFAULT_TYPE(NullArrayRef)
-            ALLOCATE_DEFAULT_TYPE(NullExternRef)
-            ALLOCATE_DEFAULT_TYPE(NullNoExternRef)
-            ALLOCATE_DEFAULT_TYPE(NullFuncRef)
-            ALLOCATE_DEFAULT_TYPE(NullNoFuncRef)
-            ALLOCATE_DEFAULT_TYPE(NullDefinedRef)
-        default:
-            RELEASE_ASSERT_NOT_REACHED();
-        }
-    }
-
-    return g_defaultFunctionTypes[type];
+    return const_cast<FunctionType*>(g_defaultFunctionTypes + static_cast<size_t>(type));
 }
 
 Waiter* Store::getWaiter(void* address)
