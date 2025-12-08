@@ -903,8 +903,9 @@ own wasm_module_t* wasm_module_deserialize(wasm_store_t*, const wasm_byte_vec_t*
 // Function Instances
 static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
 {
-    TypeVector* params = new TypeVector(ft->params.size, 0);
-    TypeVector* results = new TypeVector(ft->results.size, 0);
+    FunctionType* functionType = new FunctionType(ft->params.size, 0, ft->results.size, 0);
+    TypeVector* params = functionType->initParam();
+    TypeVector* results = functionType->initResult();
 
     for (uint32_t i = 0; i < ft->params.size; i++) {
         params->setType(i, ft->params.data[i]->type);
@@ -913,7 +914,8 @@ static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
         results->setType(i, ft->results.data[i]->type);
     }
 
-    return new FunctionType(params, results);
+    functionType->initDone();
+    return functionType;
 }
 
 own wasm_func_t* wasm_func_new(

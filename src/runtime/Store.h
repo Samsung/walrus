@@ -97,8 +97,6 @@ private:
     Vector<Instance*> m_instances;
     Vector<Extern*> m_externs;
 
-    // default FunctionTypes used for initialization of Data, Element and Global
-    static FunctionType* g_defaultFunctionTypes[Value::Type::NUM];
     std::mutex m_waiterListLock;
     std::vector<Waiter*> m_waiterList;
 };
