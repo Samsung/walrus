@@ -605,7 +605,7 @@ static void simdEmitNarrowUnsigned(sljit_compiler* compiler, sljit_s32 rd, sljit
 static void simdEmitDot(sljit_compiler* compiler, uint32_t type, sljit_s32 rd, sljit_s32 rn, sljit_s32 rm)
 {
     // The rd can be tmpReg1
-#ifdef __ARM_FEATURE_DOTPROD
+#if (defined __ARM_FEATURE_DOTPROD) && !defined(TARGET_OS_MAC)
     simdEmitOp(compiler, SimdOp::sdot | type, rd, rn, rm);
 #else
     sljit_s32 tmpReg1 = SLJIT_TMP_FR0;

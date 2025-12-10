@@ -927,7 +927,11 @@ public:
                             Type* resultTypes,
                             GCTypeExtension* gcExt) override
     {
-        Walrus::TypeVector* param = new Walrus::TypeVector(paramCount, getRefCountOfTypes(paramTypes, paramCount));
+        Walrus::FunctionType* functionType = new Walrus::FunctionType(paramCount, getRefCountOfTypes(paramTypes, paramCount),
+                                                                      resultCount, getRefCountOfTypes(resultTypes, resultCount),
+                                                                      gcExt->is_final_sub_type, toSubType(gcExt));
+
+        Walrus::TypeVector* param = functionType->initParam();
         size_t refIdx = 0;
         for (size_t i = 0; i < paramCount; i++) {
             Walrus::Type type = toValueKind(paramTypes[i], nullptr);
@@ -936,7 +940,7 @@ public:
                 param->setRef(refIdx++, type.ref());
             }
         }
-        Walrus::TypeVector* result = new Walrus::TypeVector(resultCount, getRefCountOfTypes(resultTypes, resultCount));
+        Walrus::TypeVector* result = functionType->initResult();
         refIdx = 0;
         for (size_t i = 0; i < resultCount; i++) {
             Walrus::Type type = toValueKind(resultTypes[i], nullptr);
@@ -946,7 +950,9 @@ public:
             }
         }
         ASSERT(index == m_result.m_compositeTypes.size());
-        m_result.m_compositeTypes.push_back(new Walrus::FunctionType(param, result, gcExt->is_final_sub_type, toSubType(gcExt)));
+
+        functionType->initDone();
+        m_result.m_compositeTypes.push_back(functionType);
         if (index < m_recursiveTypeEnd && index > m_recursiveTypeStart) {
             Walrus::TypeStore::ConnectTypes(m_result.m_compositeTypes, index);
         }

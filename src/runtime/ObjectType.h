@@ -134,44 +134,60 @@ class FunctionType : public CompositeType {
 public:
     friend class TypeStore;
 
-    FunctionType(TypeVector* param,
-                 TypeVector* result,
+    FunctionType(size_t paramTypesCount, size_t paramRefsCount,
+                 size_t resultTypesCount, size_t resultRefsCount,
                  bool isFinal,
                  const CompositeType** subTypeList)
         : CompositeType(ObjectType::FunctionKind, isFinal, subTypeList)
-        , m_paramTypes(param)
-        , m_resultTypes(result)
-        , m_paramStackSize(computeStackSize(*m_paramTypes))
-        , m_resultStackSize(computeStackSize(*m_resultTypes))
+        , m_paramTypes(paramTypesCount, paramRefsCount)
+        , m_resultTypes(resultTypesCount, resultRefsCount)
+        , m_paramStackSize(0)
+        , m_resultStackSize(0)
     {
     }
 
-    FunctionType(TypeVector* param,
-                 TypeVector* result)
+    FunctionType(size_t paramTypesCount, size_t paramRefsCount,
+                 size_t resultTypesCount, size_t resultRefsCount)
         : CompositeType(ObjectType::FunctionKind, false, nullptr)
-        , m_paramTypes(param)
-        , m_resultTypes(result)
-        , m_paramStackSize(computeStackSize(*m_paramTypes))
-        , m_resultStackSize(computeStackSize(*m_resultTypes))
+        , m_paramTypes(paramTypesCount, paramRefsCount)
+        , m_resultTypes(resultTypesCount, resultRefsCount)
+        , m_paramStackSize(0)
+        , m_resultStackSize(0)
     {
+    }
+
+    FunctionType(Value::Type type)
+        : CompositeType(ObjectType::FunctionKind, false, nullptr)
+        , m_paramTypes(0, 0)
+        , m_resultTypes(1, 0)
+        , m_paramStackSize(0)
+        , m_resultStackSize(valueStackAllocatedSize(type))
+    {
+        m_resultTypes.setType(0, type);
     }
 
     ~FunctionType()
     {
-        delete m_paramTypes;
-        delete m_resultTypes;
     }
 
-    const TypeVector& param() const { return *m_paramTypes; }
-    const TypeVector& result() const { return *m_resultTypes; }
+    const TypeVector& param() const { return m_paramTypes; }
+    const TypeVector& result() const { return m_resultTypes; }
     size_t paramStackSize() const { return m_paramStackSize; }
     size_t resultStackSize() const { return m_resultStackSize; }
+    TypeVector* initParam() { return &m_paramTypes; }
+    TypeVector* initResult() { return &m_resultTypes; }
+
+    void initDone()
+    {
+        m_paramStackSize = computeStackSize(m_paramTypes);
+        m_resultStackSize = computeStackSize(m_resultTypes);
+    }
 
     bool equals(const FunctionType* other, bool isSubType = false) const;
 
 private:
-    TypeVector* m_paramTypes;
-    TypeVector* m_resultTypes;
+    TypeVector m_paramTypes;
+    TypeVector m_resultTypes;
     size_t m_paramStackSize;
     size_t m_resultStackSize;
 
