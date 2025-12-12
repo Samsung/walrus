@@ -230,20 +230,20 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
 
     switch (type) {
     case Instruction::Int32Operand:
-        opcode = ByteCode::MoveI32Opcode;
+        opcode = ByteCode::I32LoadOpcode;
         break;
     case Instruction::Int64Operand:
-        opcode = ByteCode::MoveI64Opcode;
+        opcode = ByteCode::I64LoadOpcode;
         break;
     case Instruction::Float32Operand:
-        opcode = ByteCode::MoveF32Opcode;
+        opcode = ByteCode::F32LoadOpcode;
         break;
     case Instruction::Float64Operand:
-        opcode = ByteCode::MoveF64Opcode;
+        opcode = ByteCode::F64LoadOpcode;
         break;
     default:
         ASSERT(type == Instruction::V128Operand);
-        opcode = ByteCode::MoveV128Opcode;
+        opcode = ByteCode::V128LoadOpcode;
         break;
     }
 
