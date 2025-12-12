@@ -551,8 +551,8 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
             offset = loadMemIdxOperation->offset();
             memIndex = loadMemIdxOperation->memIndex();
         } else {
-            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(instr->byteCode());
-            offset = loadOperation->offset();
+            ByteCodeOffset2Value* loadOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
+            offset = loadOperation->uint32Value();
         }
     }
 
@@ -902,8 +902,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
                 offset = storeMemIdxOperation->offset();
                 memIndex = storeMemIdxOperation->memIndex();
             } else {
-                MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(instr->byteCode());
-                offset = storeOperation->offset();
+                ByteCodeOffset2Value* storeOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
+                offset = storeOperation->uint32Value();
             }
 #ifdef HAS_SIMD
         } else {

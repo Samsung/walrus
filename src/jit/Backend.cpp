@@ -839,7 +839,7 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
     Operand* src = instr->operands();
     Operand* dst = src + 1;
 
-    bool fromFloat = (instr->opcode() == ByteCode::I32ReinterpretF32Opcode) || (instr->opcode() == ByteCode::I64ReinterpretF64Opcode);
+    bool fromFloat = (instr->opcode() == ByteCode::MoveI32Opcode) || (instr->opcode() == ByteCode::MoveI64Opcode);
 
     if (VARIABLE_TYPE(*src) == Instruction::ConstPtr) {
         emitStoreImmediate(compiler, dst, VARIABLE_GET_IMM(*src), !fromFloat);
@@ -851,9 +851,9 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
     if (VARIABLE_TYPE(*src) != Instruction::Register) {
         // Source is memory.
         if (fromFloat) {
-            type = instr->opcode() == ByteCode::I32ReinterpretF32Opcode ? Instruction::Int32Operand : Instruction::Int64Operand;
+            type = instr->opcode() == ByteCode::MoveI32Opcode ? Instruction::Int32Operand : Instruction::Int64Operand;
         } else {
-            type = instr->opcode() == ByteCode::F32ReinterpretI32Opcode ? Instruction::Float32Operand : Instruction::Float64Operand;
+            type = instr->opcode() == ByteCode::MoveF32Opcode ? Instruction::Float32Operand : Instruction::Float64Operand;
         }
 
         emitMove(compiler, type, src, dst);
@@ -863,9 +863,9 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
     if (VARIABLE_TYPE(*dst) != Instruction::Register) {
         // Destination is memory.
         if (fromFloat) {
-            type = instr->opcode() == ByteCode::I32ReinterpretF32Opcode ? Instruction::Float32Operand : Instruction::Float64Operand;
+            type = instr->opcode() == ByteCode::MoveI32Opcode ? Instruction::Float32Operand : Instruction::Float64Operand;
         } else {
-            type = instr->opcode() == ByteCode::F32ReinterpretI32Opcode ? Instruction::Int32Operand : Instruction::Int64Operand;
+            type = instr->opcode() == ByteCode::MoveF32Opcode ? Instruction::Int32Operand : Instruction::Int64Operand;
         }
         emitMove(compiler, type, src, dst);
         return;
@@ -879,12 +879,12 @@ static void emitReinterpretOperation(sljit_compiler* compiler, Instruction* inst
         floatReg = VARIABLE_GET_REF(*src);
         intReg = VARIABLE_GET_REF(*dst);
 
-        op = (instr->opcode() == ByteCode::I32ReinterpretF32Opcode) ? SLJIT_COPY32_FROM_F32 : SLJIT_COPY_FROM_F64;
+        op = (instr->opcode() == ByteCode::MoveI32Opcode) ? SLJIT_COPY32_FROM_F32 : SLJIT_COPY_FROM_F64;
     } else {
         floatReg = VARIABLE_GET_REF(*dst);
         intReg = VARIABLE_GET_REF(*src);
 
-        op = (instr->opcode() == ByteCode::F32ReinterpretI32Opcode) ? SLJIT_COPY32_TO_F32 : SLJIT_COPY_TO_F64;
+        op = (instr->opcode() == ByteCode::MoveF32Opcode) ? SLJIT_COPY32_TO_F32 : SLJIT_COPY_TO_F64;
     }
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -970,20 +970,20 @@ static void emitStackInit(sljit_compiler* compiler, Instruction* instr)
     uint32_t type;
 
     switch (instr->opcode()) {
-    case ByteCode::MoveI32Opcode:
+    case ByteCode::I32LoadOpcode:
         type = Instruction::Int32Operand;
         break;
-    case ByteCode::MoveI64Opcode:
+    case ByteCode::I64LoadOpcode:
         type = Instruction::Int64Operand;
         break;
-    case ByteCode::MoveF32Opcode:
+    case ByteCode::F32LoadOpcode:
         type = Instruction::Float32Operand;
         break;
-    case ByteCode::MoveF64Opcode:
+    case ByteCode::F64LoadOpcode:
         type = Instruction::Float64Operand;
         break;
     default:
-        ASSERT(instr->opcode() == ByteCode::MoveV128Opcode);
+        ASSERT(instr->opcode() == ByteCode::V128LoadOpcode);
         type = Instruction::V128Operand;
         break;
     }
@@ -1223,14 +1223,18 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         case Instruction::Move: {
             switch (item->asInstruction()->opcode()) {
             case ByteCode::MoveI32Opcode:
+                if (item->asInstruction()->info() & Instruction::kHasFloatOperand) {
+                    emitReinterpretOperation(m_compiler, item->asInstruction());
+                    break;
+                }
                 emitMoveI32(m_compiler, item->asInstruction());
                 break;
             case ByteCode::MoveI64Opcode:
+                if (item->asInstruction()->info() & Instruction::kHasFloatOperand) {
+                    emitReinterpretOperation(m_compiler, item->asInstruction());
+                    break;
+                }
                 emitMoveI64(m_compiler, item->asInstruction());
-                break;
-            case ByteCode::MoveF32Opcode:
-            case ByteCode::MoveF64Opcode:
-                emitMoveFloat(m_compiler, item->asInstruction());
                 break;
 #ifdef HAS_SIMD
             case ByteCode::MoveV128Opcode:
@@ -1238,10 +1242,12 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
                 break;
 #endif /* HAS_SIMD */
             default:
-                ASSERT(item->asInstruction()->opcode() == ByteCode::I32ReinterpretF32Opcode
-                       || item->asInstruction()->opcode() == ByteCode::I64ReinterpretF64Opcode
-                       || item->asInstruction()->opcode() == ByteCode::F32ReinterpretI32Opcode
-                       || item->asInstruction()->opcode() == ByteCode::F64ReinterpretI64Opcode);
+                ASSERT(item->asInstruction()->opcode() == ByteCode::MoveF32Opcode
+                       || item->asInstruction()->opcode() == ByteCode::MoveF64Opcode);
+                if (item->asInstruction()->info() & Instruction::kHasFloatOperand) {
+                    emitMoveFloat(m_compiler, item->asInstruction());
+                    break;
+                }
                 emitReinterpretOperation(m_compiler, item->asInstruction());
                 break;
             }

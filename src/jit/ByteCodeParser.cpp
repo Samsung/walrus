@@ -1252,8 +1252,6 @@ static void compileFunction(JITCompiler* compiler)
             info |= Instruction::kMultiMemory;
             FALLTHROUGH;
         }
-        case ByteCode::F32LoadOpcode:
-        case ByteCode::F64LoadOpcode:
         case ByteCode::V128LoadOpcode:
         case ByteCode::V128Load8SplatOpcode:
         case ByteCode::V128Load16SplatOpcode:
@@ -1270,12 +1268,23 @@ static void compileFunction(JITCompiler* compiler)
             group = Instruction::Load;
             paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrcDstValueMemIdx : ParamTypes::ParamSrcDstValue);
 
-            if (opcode == ByteCode::F32LoadOpcode || opcode == ByteCode::F32LoadMemIdxOpcode)
+            if (opcode == ByteCode::F32LoadMemIdxOpcode)
                 requiredInit = OTLoadF32;
-            else if (opcode == ByteCode::F64LoadOpcode || opcode == ByteCode::F64LoadMemIdxOpcode)
+            else if (opcode == ByteCode::F64LoadMemIdxOpcode)
                 requiredInit = OTLoadF64;
             else
                 requiredInit = OTLoadV128;
+            break;
+        }
+        case ByteCode::F32LoadOpcode:
+        case ByteCode::F64LoadOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::F32LoadOpcode ? OTLoadF32 : OTLoadF64);
+            Operand* operands = instr->operands();
+
+            MemoryLoadFloat* loadFloatOperation = reinterpret_cast<MemoryLoadFloat*>(byteCode);
+            operands[0] = STACK_OFFSET(loadFloatOperation->srcOffset());
+            operands[1] = STACK_OFFSET(loadFloatOperation->dstOffset());
             break;
         }
         case ByteCode::V128Load8LaneMemIdxOpcode:
@@ -1361,18 +1370,27 @@ static void compileFunction(JITCompiler* compiler)
             info |= Instruction::kMultiMemory;
             FALLTHROUGH;
         }
-        case ByteCode::F32StoreOpcode:
-        case ByteCode::F64StoreOpcode:
         case ByteCode::V128StoreOpcode: {
             group = Instruction::Store;
             paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
 
-            if (opcode == ByteCode::F32StoreOpcode || opcode == ByteCode::F32StoreMemIdxOpcode)
+            if (opcode == ByteCode::F32StoreMemIdxOpcode)
                 requiredInit = OTStoreF32;
-            else if (opcode == ByteCode::F64StoreOpcode || opcode == ByteCode::F64StoreMemIdxOpcode)
+            else if (opcode == ByteCode::F64StoreMemIdxOpcode)
                 requiredInit = OTStoreF64;
             else
                 requiredInit = OTStoreV128;
+            break;
+        }
+        case ByteCode::F32StoreOpcode:
+        case ByteCode::F64StoreOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::F32StoreOpcode ? OTStoreF32 : OTStoreF64);
+            Operand* operands = instr->operands();
+
+            MemoryStoreFloat* storeFloatOperation = reinterpret_cast<MemoryStoreFloat*>(byteCode);
+            operands[0] = STACK_OFFSET(storeFloatOperation->dstOffset());
+            operands[1] = STACK_OFFSET(storeFloatOperation->valueOffset());
             break;
         }
         case ByteCode::V128Store8LaneMemIdxOpcode:
@@ -1708,14 +1726,8 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
         case ByteCode::MoveI32Opcode:
-        case ByteCode::MoveF32Opcode:
         case ByteCode::MoveI64Opcode:
-        case ByteCode::MoveF64Opcode:
-        case ByteCode::MoveV128Opcode:
-        case ByteCode::I32ReinterpretF32Opcode:
-        case ByteCode::I64ReinterpretF64Opcode:
-        case ByteCode::F32ReinterpretI32Opcode:
-        case ByteCode::F64ReinterpretI64Opcode: {
+        case ByteCode::MoveV128Opcode: {
             group = Instruction::Move;
             paramType = ParamTypes::ParamSrcDst;
 
@@ -1723,31 +1735,24 @@ static void compileFunction(JITCompiler* compiler)
             case ByteCode::MoveI32Opcode:
                 requiredInit = OTOp1I32;
                 break;
-            case ByteCode::MoveF32Opcode:
-                requiredInit = OTMoveF32;
-                break;
             case ByteCode::MoveI64Opcode:
                 requiredInit = OTOp1I64;
                 break;
-            case ByteCode::MoveF64Opcode:
-                requiredInit = OTMoveF64;
-                break;
-            case ByteCode::MoveV128Opcode:
+            default:
                 requiredInit = OTMoveV128;
                 break;
-            case ByteCode::I32ReinterpretF32Opcode:
-                requiredInit = OTI32ReinterpretF32;
-                break;
-            case ByteCode::I64ReinterpretF64Opcode:
-                requiredInit = OTI64ReinterpretF64;
-                break;
-            case ByteCode::F32ReinterpretI32Opcode:
-                requiredInit = OTF32ReinterpretI32;
-                break;
-            default:
-                requiredInit = OTF64ReinterpretI64;
-                break;
             }
+            break;
+        }
+        case ByteCode::MoveF32Opcode:
+        case ByteCode::MoveF64Opcode: {
+            MoveFloat* moveFloat = reinterpret_cast<MoveFloat*>(byteCode);
+            Instruction* instr = compiler->append(byteCode, Instruction::Move, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::MoveF32Opcode ? OTF32ReinterpretI32 : OTF64ReinterpretI64);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(moveFloat->srcOffset());
+            operands[1] = STACK_OFFSET(moveFloat->dstOffset());
             break;
         }
         case ByteCode::GlobalGet32Opcode: {
@@ -2879,6 +2884,22 @@ const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
         operandIdx = 0;
         requiredInit = OTPutF64;
         break;
+    case ByteCode::MoveI32Opcode:
+        operandIdx = 0;
+        requiredInit = OTI32ReinterpretF32;
+        break;
+    case ByteCode::MoveI64Opcode:
+        operandIdx = 0;
+        requiredInit = OTI64ReinterpretF64;
+        break;
+    case ByteCode::MoveF32Opcode:
+        operandIdx = 0;
+        requiredInit = OTMoveF32;
+        break;
+    case ByteCode::MoveF64Opcode:
+        operandIdx = 0;
+        requiredInit = OTMoveF64;
+        break;
     case ByteCode::Load32Opcode:
         requiredInit = OTLoadF32;
         break;
@@ -2895,7 +2916,7 @@ const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
         return instr->getOperandDescriptor();
     }
 
-    ASSERT(operandIdx == 1 ? (instr->paramCount() + instr->resultCount()) == 2 : (instr->paramCount() == 0 && instr->resultCount() == 1));
+    ASSERT(operandIdx == 1 ? (instr->paramCount() + instr->resultCount()) == 2 : (instr->paramCount() <= 1 && instr->resultCount() == 1));
     VariableList::Variable& variable = variables[*instr->getParam(operandIdx)];
 
     if (variable.info & Instruction::FloatOperandMarker) {

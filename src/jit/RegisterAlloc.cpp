@@ -1152,13 +1152,27 @@ void JITCompiler::freeVariables()
         Operand* end = operand + instr->paramCount() + instr->resultCount();
         uint16_t info = 0;
 
-        while (operand < end) {
-            VariableList::Variable& variable = m_variableList->variables[*operand];
+        if (instr->opcode() == ByteCode::MoveF32Opcode || instr->opcode() == ByteCode::MoveF64Opcode) {
+            ASSERT(end - operand == 2);
 
-            ASSERT((variable.info & Instruction::TypeMask) > 0);
-            info |= variable.info;
+            VariableList::Variable& src = m_variableList->variables[*operand];
+            ASSERT((src.info & Instruction::TypeMask) > 0);
+            info = src.info;
+            *operand++ = src.value;
 
-            *operand++ = variable.value;
+            VariableList::Variable& dst = m_variableList->variables[*operand];
+            ASSERT((dst.info & Instruction::TypeMask) == Instruction::Float32Operand
+                   || (dst.info & Instruction::TypeMask) == Instruction::Float64Operand);
+            *operand = dst.value;
+        } else {
+            while (operand < end) {
+                VariableList::Variable& variable = m_variableList->variables[*operand];
+
+                ASSERT((variable.info & Instruction::TypeMask) > 0);
+                info |= variable.info;
+
+                *operand++ = variable.value;
+            }
         }
 
         if (info & Instruction::FloatOperandMarker) {

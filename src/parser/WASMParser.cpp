@@ -3389,16 +3389,16 @@ public:
             FOR_EACH_BYTECODE_RELAXED_SIMD_UNARY_OTHER(GENERATE_UNARY_CODE_CASE)
 #undef GENERATE_UNARY_CODE_CASE
         case WASMOpcode::I32ReinterpretF32Opcode:
-            pushByteCode(Walrus::I32ReinterpretF32(src, dst), code);
+            pushByteCode(Walrus::MoveI32(src, dst), code);
             break;
         case WASMOpcode::I64ReinterpretF64Opcode:
-            pushByteCode(Walrus::I64ReinterpretF64(src, dst), code);
+            pushByteCode(Walrus::MoveI64(src, dst), code);
             break;
         case WASMOpcode::F32ReinterpretI32Opcode:
-            pushByteCode(Walrus::F32ReinterpretI32(src, dst), code);
+            pushByteCode(Walrus::MoveF32(src, dst), code);
             break;
         case WASMOpcode::F64ReinterpretI64Opcode:
-            pushByteCode(Walrus::F64ReinterpretI64(src, dst), code);
+            pushByteCode(Walrus::MoveF64(src, dst), code);
             break;
         default:
             ASSERT_NOT_REACHED();
