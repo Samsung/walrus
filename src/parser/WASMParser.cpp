@@ -3447,6 +3447,20 @@ public:
     }
             FOR_EACH_BYTECODE_STORE_OP(GENERATE_STORE_CODE_CASE)
 #undef GENERATE_STORE_CODE_CASE
+        case WASMOpcode::F32StoreOpcode:
+            if (memidx == 0) {
+                pushByteCode(Walrus::I32Store(offset, src0, src1), code);
+            } else {
+                pushByteCode(Walrus::I32StoreMemIdx(memidx, alignmentLog2, offset, src0, src1));
+            }
+            break;
+        case WASMOpcode::F64StoreOpcode:
+            if (memidx == 0) {
+                pushByteCode(Walrus::I64Store(offset, src0, src1), code);
+            } else {
+                pushByteCode(Walrus::I64StoreMemIdx(memidx, alignmentLog2, offset, src0, src1));
+            }
+            break;
         default:
             ASSERT_NOT_REACHED();
             break;

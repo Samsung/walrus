@@ -288,12 +288,12 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
     } else {
         ASSERT(instr->opcode() == ByteCode::I64AtomicStoreOpcode || instr->opcode() == ByteCode::I64AtomicStoreMemIdxOpcode);
         if (instr->info() & Instruction::kMultiMemory) {
-            MemoryStoreMemIdx* storeMemIdxOperation = reinterpret_cast<MemoryStoreMemIdx*>(instr->byteCode());
-            offset = storeMemIdxOperation->offset();
+            ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
+            offset = storeMemIdxOperation->uint32Value();
             memIndex = storeMemIdxOperation->memIndex();
         } else {
-            MemoryStore* storeOperation = reinterpret_cast<MemoryStore*>(instr->byteCode());
-            offset = storeOperation->offset();
+            ByteCodeOffset2Value* storeOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
+            offset = storeOperation->uint32Value();
         }
     }
 
@@ -547,8 +547,8 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
     if (instr->opcode() != ByteCode::Load32Opcode && instr->opcode() != ByteCode::Load64Opcode) {
         if (instr->info() & Instruction::kMultiMemory) {
-            MemoryLoadMemIdx* loadMemIdxOperation = reinterpret_cast<MemoryLoadMemIdx*>(instr->byteCode());
-            offset = loadMemIdxOperation->offset();
+            ByteCodeOffset2ValueMemIdx* loadMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
+            offset = loadMemIdxOperation->uint32Value();
             memIndex = loadMemIdxOperation->memIndex();
         } else {
             ByteCodeOffset2Value* loadOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
@@ -773,7 +773,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
 
     switch (instr->opcode()) {
-    case ByteCode::Store32Opcode:
+    default:
+        ASSERT(instr->opcode() == ByteCode::Store32Opcode);
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F32 : SLJIT_MOV32;
         size = 4;
         break;
@@ -787,7 +788,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         FALLTHROUGH;
     case ByteCode::I32StoreMemIdxOpcode:
     case ByteCode::I32StoreOpcode:
-        opcode = SLJIT_MOV32;
+        opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F32 : SLJIT_MOV32;
         size = 4;
         break;
     case ByteCode::I32AtomicStore8MemIdxOpcode:
@@ -817,7 +818,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         FALLTHROUGH;
     case ByteCode::I64StoreMemIdxOpcode:
     case ByteCode::I64StoreOpcode:
-        opcode = SLJIT_MOV;
+        opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
     case ByteCode::I64AtomicStore8MemIdxOpcode:
@@ -844,11 +845,6 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     case ByteCode::I64Store32MemIdxOpcode:
     case ByteCode::I64Store32Opcode:
         opcode = SLJIT_MOV_U32;
-        size = 4;
-        break;
-    case ByteCode::F32StoreMemIdxOpcode:
-    case ByteCode::F32StoreOpcode:
-        opcode = SLJIT_MOV_F32;
         size = 4;
         break;
 #ifdef HAS_SIMD
@@ -886,11 +882,6 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         size = 8;
         break;
 #endif /* HAS_SIMD */
-    default:
-        ASSERT(instr->opcode() == ByteCode::F64StoreOpcode || instr->opcode() == ByteCode::F64StoreMemIdxOpcode);
-        opcode = SLJIT_MOV_F64;
-        size = 8;
-        break;
     }
 
     if (instr->opcode() != ByteCode::Store32Opcode && instr->opcode() != ByteCode::Store64Opcode) {
@@ -898,8 +889,8 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         if (opcode != 0 || size == 16) {
 #endif /* HAS_SIMD */
             if (instr->info() & Instruction::kMultiMemory) {
-                MemoryStoreMemIdx* storeMemIdxOperation = reinterpret_cast<MemoryStoreMemIdx*>(instr->byteCode());
-                offset = storeMemIdxOperation->offset();
+                ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
+                offset = storeMemIdxOperation->uint32Value();
                 memIndex = storeMemIdxOperation->memIndex();
             } else {
                 ByteCodeOffset2Value* storeOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
