@@ -673,7 +673,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                           \
     }
 
-#define MEMORY_LOAD_MEMIDX_OPERATION(opcodeName, readType, writeType)            \
+#define MEMORY_LOAD_INT_MEMIDX_OPERATION(opcodeName, readType, writeType)        \
     DEFINE_OPCODE(opcodeName)                                                    \
         :                                                                        \
     {                                                                            \
@@ -686,39 +686,64 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                      \
     }
 
-#define MEMORY_STORE_INT_OPERATION(opcodeName, readType, writeType)     \
-    DEFINE_OPCODE(opcodeName)                                           \
-        :                                                               \
-    {                                                                   \
-        MemoryStore* code = (MemoryStore*)programCounter;               \
-        writeType value = readValue<readType>(bp, code->valueOffset()); \
-        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());   \
-        memories[0]->store(state, offset, code->offset(), value);       \
-        ADD_PROGRAM_COUNTER(MemoryStore);                               \
-        NEXT_INSTRUCTION();                                             \
-    }
-
-#define MEMORY_STORE_FLOAT_OPERATION(opcodeName, readType, writeType)   \
-    DEFINE_OPCODE(opcodeName)                                           \
-        :                                                               \
-    {                                                                   \
-        MemoryStoreFloat* code = (MemoryStoreFloat*)programCounter;     \
-        writeType value = readValue<readType>(bp, code->valueOffset()); \
-        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());   \
-        memories[0]->store(state, offset, code->offset(), value);       \
-        ADD_PROGRAM_COUNTER(MemoryStore);                               \
-        NEXT_INSTRUCTION();                                             \
-    }
-
-#define MEMORY_STORE_MEMIDX_OPERATION(opcodeName, readType, writeType)           \
+#define MEMORY_LOAD_FLOAT_MEMIDX_OPERATION(opcodeName, readType, writeType)      \
     DEFINE_OPCODE(opcodeName)                                                    \
         :                                                                        \
     {                                                                            \
-        MemoryStoreMemIdx* code = (MemoryStoreMemIdx*)programCounter;            \
-        writeType value = readValue<readType>(bp, code->src1Offset());           \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());           \
+        MemoryLoadFloatMemIdx* code = (MemoryLoadFloatMemIdx*)programCounter;    \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());            \
+        readType value;                                                          \
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value); \
+        writeValue<writeType>(bp, code->dstOffset(), value);                     \
+        ADD_PROGRAM_COUNTER(MemoryLoadMemIdx);                                   \
+        NEXT_INSTRUCTION();                                                      \
+    }
+
+#define MEMORY_STORE_32_OPERATION(opcodeName, readType, writeType)      \
+    DEFINE_OPCODE(opcodeName)                                           \
+        :                                                               \
+    {                                                                   \
+        MemoryStore32* code = (MemoryStore32*)programCounter;           \
+        writeType value = readValue<readType>(bp, code->valueOffset()); \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());   \
+        memories[0]->store(state, offset, code->offset(), value);       \
+        ADD_PROGRAM_COUNTER(MemoryStore32);                             \
+        NEXT_INSTRUCTION();                                             \
+    }
+
+#define MEMORY_STORE_64_OPERATION(opcodeName, readType, writeType)      \
+    DEFINE_OPCODE(opcodeName)                                           \
+        :                                                               \
+    {                                                                   \
+        MemoryStore64* code = (MemoryStore64*)programCounter;           \
+        writeType value = readValue<readType>(bp, code->valueOffset()); \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());   \
+        memories[0]->store(state, offset, code->offset(), value);       \
+        ADD_PROGRAM_COUNTER(MemoryStore64);                             \
+        NEXT_INSTRUCTION();                                             \
+    }
+
+#define MEMORY_STORE_MEMIDX_32_OPERATION(opcodeName, readType, writeType)        \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        MemoryStoreMemIdx32* code = (MemoryStoreMemIdx32*)programCounter;        \
+        writeType value = readValue<readType>(bp, code->valueOffset());          \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());            \
         memories[code->memIndex()]->store(state, offset, code->offset(), value); \
-        ADD_PROGRAM_COUNTER(MemoryStoreMemIdx);                                  \
+        ADD_PROGRAM_COUNTER(MemoryStoreMemIdx32);                                \
+        NEXT_INSTRUCTION();                                                      \
+    }
+
+#define MEMORY_STORE_MEMIDX_64_OPERATION(opcodeName, readType, writeType)        \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        MemoryStoreMemIdx64* code = (MemoryStoreMemIdx64*)programCounter;        \
+        writeType value = readValue<readType>(bp, code->valueOffset());          \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());            \
+        memories[code->memIndex()]->store(state, offset, code->offset(), value); \
+        ADD_PROGRAM_COUNTER(MemoryStoreMemIdx64);                                \
         NEXT_INSTRUCTION();                                                      \
     }
 
@@ -902,27 +927,51 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                            \
     }
 
-#define ATOMIC_MEMORY_STORE_OPERATION(opcodeName, readType, writeType)  \
-    DEFINE_OPCODE(opcodeName)                                           \
-        :                                                               \
-    {                                                                   \
-        MemoryStore* code = (MemoryStore*)programCounter;               \
-        writeType value = readValue<readType>(bp, code->valueOffset()); \
-        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());   \
-        memories[0]->atomicStore(state, offset, code->offset(), value); \
-        ADD_PROGRAM_COUNTER(MemoryStore);                               \
-        NEXT_INSTRUCTION();                                             \
+#define ATOMIC_MEMORY_STORE_32_OPERATION(opcodeName, readType, writeType) \
+    DEFINE_OPCODE(opcodeName)                                             \
+        :                                                                 \
+    {                                                                     \
+        MemoryStore32* code = (MemoryStore32*)programCounter;             \
+        writeType value = readValue<readType>(bp, code->valueOffset());   \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());     \
+        memories[0]->atomicStore(state, offset, code->offset(), value);   \
+        ADD_PROGRAM_COUNTER(MemoryStore32);                               \
+        NEXT_INSTRUCTION();                                               \
     }
 
-#define ATOMIC_MEMORY_STORE_MEMIDX_OPERATION(opcodeName, readType, writeType)          \
+#define ATOMIC_MEMORY_STORE_64_OPERATION(opcodeName, readType, writeType) \
+    DEFINE_OPCODE(opcodeName)                                             \
+        :                                                                 \
+    {                                                                     \
+        MemoryStore64* code = (MemoryStore64*)programCounter;             \
+        writeType value = readValue<readType>(bp, code->valueOffset());   \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());     \
+        memories[0]->atomicStore(state, offset, code->offset(), value);   \
+        ADD_PROGRAM_COUNTER(MemoryStore64);                               \
+        NEXT_INSTRUCTION();                                               \
+    }
+
+#define ATOMIC_MEMORY_STORE_MEMIDX_32_OPERATION(opcodeName, readType, writeType)       \
     DEFINE_OPCODE(opcodeName)                                                          \
         :                                                                              \
     {                                                                                  \
-        MemoryStoreMemIdx* code = (MemoryStoreMemIdx*)programCounter;                  \
-        writeType value = readValue<readType>(bp, code->src1Offset());                 \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                 \
+        MemoryStoreMemIdx32* code = (MemoryStoreMemIdx32*)programCounter;              \
+        writeType value = readValue<readType>(bp, code->valueOffset());                \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());                  \
         memories[code->memIndex()]->atomicStore(state, offset, code->offset(), value); \
-        ADD_PROGRAM_COUNTER(MemoryStoreMemIdx);                                        \
+        ADD_PROGRAM_COUNTER(MemoryStoreMemIdx32);                                      \
+        NEXT_INSTRUCTION();                                                            \
+    }
+
+#define ATOMIC_MEMORY_STORE_MEMIDX_64_OPERATION(opcodeName, readType, writeType)       \
+    DEFINE_OPCODE(opcodeName)                                                          \
+        :                                                                              \
+    {                                                                                  \
+        MemoryStoreMemIdx64* code = (MemoryStoreMemIdx64*)programCounter;              \
+        writeType value = readValue<readType>(bp, code->valueOffset());                \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());                  \
+        memories[code->memIndex()]->atomicStore(state, offset, code->offset(), value); \
+        ADD_PROGRAM_COUNTER(MemoryStoreMemIdx64);                                      \
         NEXT_INSTRUCTION();                                                            \
     }
 
@@ -1346,10 +1395,12 @@ NextInstruction:
 
     FOR_EACH_BYTECODE_LOAD_INT_OP(MEMORY_LOAD_INT_OPERATION)
     FOR_EACH_BYTECODE_LOAD_FLOAT_OP(MEMORY_LOAD_FLOAT_OPERATION)
-    FOR_EACH_BYTECODE_LOAD_MEMIDX_OP(MEMORY_LOAD_MEMIDX_OPERATION)
-    FOR_EACH_BYTECODE_STORE_INT_OP(MEMORY_STORE_INT_OPERATION)
-    FOR_EACH_BYTECODE_STORE_FLOAT_OP(MEMORY_STORE_FLOAT_OPERATION)
-    FOR_EACH_BYTECODE_STORE_MEMIDX_OP(MEMORY_STORE_MEMIDX_OPERATION)
+    FOR_EACH_BYTECODE_LOAD_INT_MEMIDX_OP(MEMORY_LOAD_INT_MEMIDX_OPERATION)
+    FOR_EACH_BYTECODE_LOAD_FLOAT_MEMIDX_OP(MEMORY_LOAD_FLOAT_MEMIDX_OPERATION)
+    FOR_EACH_BYTECODE_STORE_32_OP(MEMORY_STORE_32_OPERATION)
+    FOR_EACH_BYTECODE_STORE_64_OP(MEMORY_STORE_64_OPERATION)
+    FOR_EACH_BYTECODE_STORE_MEMIDX_32_OP(MEMORY_STORE_MEMIDX_32_OPERATION)
+    FOR_EACH_BYTECODE_STORE_MEMIDX_64_OP(MEMORY_STORE_MEMIDX_64_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(SIMD_MEMORY_LOAD_SPLAT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_MEMIDX_OP(SIMD_MEMORY_LOAD_SPLAT_MEMIDX_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(SIMD_MEMORY_LOAD_EXTEND_OPERATION)
@@ -1362,8 +1413,10 @@ NextInstruction:
     FOR_EACH_BYTECODE_SIMD_REPLACE_LANE_OP(SIMD_REPLACE_LANE_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(ATOMIC_MEMORY_LOAD_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_LOAD_MEMIDX_OP(ATOMIC_MEMORY_LOAD_MEMIDX_OPERATION)
-    FOR_EACH_BYTECODE_ATOMIC_STORE_OP(ATOMIC_MEMORY_STORE_OPERATION)
-    FOR_EACH_BYTECODE_ATOMIC_STORE_MEMIDX_OP(ATOMIC_MEMORY_STORE_MEMIDX_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_STORE_32_OP(ATOMIC_MEMORY_STORE_32_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_STORE_64_OP(ATOMIC_MEMORY_STORE_64_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_STORE_MEMIDX_32_OP(ATOMIC_MEMORY_STORE_MEMIDX_32_OPERATION)
+    FOR_EACH_BYTECODE_ATOMIC_STORE_MEMIDX_64_OP(ATOMIC_MEMORY_STORE_MEMIDX_64_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_RMW_OP(ATOMIC_MEMORY_RMW_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_RMW_MEMIDX_OP(ATOMIC_MEMORY_RMW_MEMIDX_OPERATION)
     FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(ATOMIC_MEMORY_RMW_CMPXCHG_OPERATION)

@@ -926,10 +926,14 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::I64ExtendI32SOpcode:
         case ByteCode::I64ExtendI32UOpcode: {
-            group = Instruction::Convert;
-            paramType = ParamTypes::ParamSrcDst;
-            info = Instruction::kFreeUnusedEarly;
-            requiredInit = OTConvertInt64FromInt32;
+            Instruction* instr = compiler->append(byteCode, Instruction::Convert, opcode, 1, 1);
+            instr->addInfo(Instruction::kFreeUnusedEarly);
+            instr->setRequiredRegsDescriptor(OTConvertInt64FromInt32);
+            Operand* operands = instr->operands();
+
+            UnaryReversedOperation* unaryReversedOperation = reinterpret_cast<UnaryReversedOperation*>(byteCode);
+            operands[0] = STACK_OFFSET(unaryReversedOperation->srcOffset());
+            operands[1] = STACK_OFFSET(unaryReversedOperation->dstOffset());
             break;
         }
         case ByteCode::I32TruncF32SOpcode:
@@ -1234,8 +1238,6 @@ static void compileFunction(JITCompiler* compiler)
             }
             break;
         }
-        case ByteCode::F32LoadMemIdxOpcode:
-        case ByteCode::F64LoadMemIdxOpcode:
         case ByteCode::V128LoadMemIdxOpcode:
         case ByteCode::V128Load8SplatMemIdxOpcode:
         case ByteCode::V128Load16SplatMemIdxOpcode:
@@ -1267,13 +1269,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::V128Load64ZeroOpcode: {
             group = Instruction::Load;
             paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrcDstValueMemIdx : ParamTypes::ParamSrcDstValue);
-
-            if (opcode == ByteCode::F32LoadMemIdxOpcode)
-                requiredInit = OTLoadF32;
-            else if (opcode == ByteCode::F64LoadMemIdxOpcode)
-                requiredInit = OTLoadF64;
-            else
-                requiredInit = OTLoadV128;
+            requiredInit = OTLoadV128;
             break;
         }
         case ByteCode::F32LoadOpcode:
@@ -1285,6 +1281,18 @@ static void compileFunction(JITCompiler* compiler)
             MemoryLoadFloat* loadFloatOperation = reinterpret_cast<MemoryLoadFloat*>(byteCode);
             operands[0] = STACK_OFFSET(loadFloatOperation->srcOffset());
             operands[1] = STACK_OFFSET(loadFloatOperation->dstOffset());
+            break;
+        }
+        case ByteCode::F32LoadMemIdxOpcode:
+        case ByteCode::F64LoadMemIdxOpcode: {
+            Instruction* instr = compiler->append(byteCode, Instruction::Load, opcode, 1, 1);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::F32LoadMemIdxOpcode ? OTLoadF32 : OTLoadF64);
+            instr->addInfo(Instruction::kMultiMemory);
+            Operand* operands = instr->operands();
+
+            MemoryLoadFloatMemIdx* loadFloatMemIdxOperation = reinterpret_cast<MemoryLoadFloatMemIdx*>(byteCode);
+            operands[0] = STACK_OFFSET(loadFloatMemIdxOperation->srcOffset());
+            operands[1] = STACK_OFFSET(loadFloatMemIdxOperation->dstOffset());
             break;
         }
         case ByteCode::V128Load8LaneMemIdxOpcode:
@@ -1331,20 +1339,24 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32StoreMemIdxOpcode:
         case ByteCode::I32Store8MemIdxOpcode:
         case ByteCode::I32Store16MemIdxOpcode: {
-            info |= Instruction::kMultiMemory;
+            info = Instruction::kMultiMemory;
             FALLTHROUGH;
         }
         case ByteCode::I32StoreOpcode:
         case ByteCode::I32Store8Opcode:
-        case ByteCode::I32Store16Opcode:
+        case ByteCode::I32Store16Opcode: {
+            group = Instruction::Store;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
+            info |= Instruction::kIs32Bit;
             requiredInit = OTStoreI32;
-            FALLTHROUGH;
+            break;
+        }
         case ByteCode::I64Store8MemIdxOpcode:
         case ByteCode::I64Store16MemIdxOpcode:
         case ByteCode::I64Store32MemIdxOpcode:
         case ByteCode::I64StoreMemIdxOpcode: {
             if (requiredInit == OTNone) {
-                info |= Instruction::kMultiMemory;
+                info = Instruction::kMultiMemory;
             }
             FALLTHROUGH;
         }
@@ -1357,15 +1369,22 @@ static void compileFunction(JITCompiler* compiler)
             FALLTHROUGH;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
         case ByteCode::I64StoreOpcode: {
-            group = Instruction::Store;
-            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
-            if (requiredInit == OTNone) {
-                requiredInit = OTStoreI64;
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(requiredInit != OTNone ? requiredInit : OTStoreI64);
+            Operand* operands = instr->operands();
+
+            if (info & Instruction::kMultiMemory) {
+                MemoryStoreMemIdx64* memoryStoreMemIdx64 = reinterpret_cast<MemoryStoreMemIdx64*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryStoreMemIdx64->dstOffset());
+                operands[1] = STACK_OFFSET(memoryStoreMemIdx64->valueOffset());
+            } else {
+                MemoryStore64* memoryStore64 = reinterpret_cast<MemoryStore64*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryStore64->dstOffset());
+                operands[1] = STACK_OFFSET(memoryStore64->valueOffset());
             }
             break;
         }
-        case ByteCode::F32StoreMemIdxOpcode:
-        case ByteCode::F64StoreMemIdxOpcode:
         case ByteCode::V128StoreMemIdxOpcode: {
             info |= Instruction::kMultiMemory;
             FALLTHROUGH;
@@ -1373,24 +1392,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::V128StoreOpcode: {
             group = Instruction::Store;
             paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
-
-            if (opcode == ByteCode::F32StoreMemIdxOpcode)
-                requiredInit = OTStoreF32;
-            else if (opcode == ByteCode::F64StoreMemIdxOpcode)
-                requiredInit = OTStoreF64;
-            else
-                requiredInit = OTStoreV128;
-            break;
-        }
-        case ByteCode::F32StoreOpcode:
-        case ByteCode::F64StoreOpcode: {
-            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
-            instr->setRequiredRegsDescriptor(opcode == ByteCode::F32StoreOpcode ? OTStoreF32 : OTStoreF64);
-            Operand* operands = instr->operands();
-
-            MemoryStoreFloat* storeFloatOperation = reinterpret_cast<MemoryStoreFloat*>(byteCode);
-            operands[0] = STACK_OFFSET(storeFloatOperation->dstOffset());
-            operands[1] = STACK_OFFSET(storeFloatOperation->valueOffset());
+            requiredInit = OTStoreV128;
             break;
         }
         case ByteCode::V128Store8LaneMemIdxOpcode:
@@ -2455,22 +2457,24 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I32AtomicStoreMemIdxOpcode:
         case ByteCode::I32AtomicStore8MemIdxOpcode:
         case ByteCode::I32AtomicStore16MemIdxOpcode: {
-            info |= Instruction::kMultiMemory;
+            info = Instruction::kMultiMemory;
             FALLTHROUGH;
         }
         case ByteCode::I32AtomicStoreOpcode:
         case ByteCode::I32AtomicStore8Opcode:
         case ByteCode::I32AtomicStore16Opcode: {
-            info = Instruction::kIs32Bit;
+            group = Instruction::Store;
+            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
+            info |= Instruction::kIs32Bit;
             requiredInit = OTStoreI32;
-            FALLTHROUGH;
+            break;
         }
         case ByteCode::I64AtomicStoreMemIdxOpcode:
         case ByteCode::I64AtomicStore8MemIdxOpcode:
         case ByteCode::I64AtomicStore16MemIdxOpcode:
         case ByteCode::I64AtomicStore32MemIdxOpcode: {
             if (requiredInit == OTNone) {
-                info |= Instruction::kMultiMemory;
+                info = Instruction::kMultiMemory;
             }
             FALLTHROUGH;
         }
@@ -2478,16 +2482,26 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::I64AtomicStore8Opcode:
         case ByteCode::I64AtomicStore16Opcode:
         case ByteCode::I64AtomicStore32Opcode: {
-            group = Instruction::Store;
-            paramType = (info & Instruction::kMultiMemory ? ParamTypes::ParamSrc2ValueMemIdx : ParamTypes::ParamSrc2Value);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (opcode == ByteCode::I64AtomicStoreOpcode || opcode == ByteCode::I64AtomicStoreMemIdxOpcode) {
-                info = Instruction::kIsCallback;
+                info |= Instruction::kIsCallback;
                 compiler->increaseStackTmpSize(8);
             }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
-            if (requiredInit == OTNone) {
-                requiredInit = OTStoreI64;
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Store, opcode, 2, 0);
+            instr->addInfo(info);
+            instr->setRequiredRegsDescriptor(OTStoreI64);
+            Operand* operands = instr->operands();
+
+            if (info & Instruction::kMultiMemory) {
+                MemoryStoreMemIdx64* memoryStoreMemIdx64 = reinterpret_cast<MemoryStoreMemIdx64*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryStoreMemIdx64->dstOffset());
+                operands[1] = STACK_OFFSET(memoryStoreMemIdx64->valueOffset());
+            } else {
+                MemoryStore64* memoryStore64 = reinterpret_cast<MemoryStore64*>(byteCode);
+                operands[0] = STACK_OFFSET(memoryStore64->dstOffset());
+                operands[1] = STACK_OFFSET(memoryStore64->valueOffset());
             }
             break;
         }
@@ -2910,6 +2924,14 @@ const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
         requiredInit = OTStoreF32;
         break;
     case ByteCode::Store64Opcode:
+        requiredInit = OTStoreF64;
+        break;
+    case ByteCode::I32StoreOpcode:
+    case ByteCode::I32StoreMemIdxOpcode:
+        requiredInit = OTStoreF32;
+        break;
+    case ByteCode::I64StoreOpcode:
+    case ByteCode::I64StoreMemIdxOpcode:
         requiredInit = OTStoreF64;
         break;
     default:
