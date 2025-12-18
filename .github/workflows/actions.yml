@@ -57,6 +57,7 @@ jobs:
       - name: Run Tests
         run: |
           #FIXME try-catch is unstable in macos build
+          $GITHUB_WORKSPACE/out/mac/walrus --enable-web-assembly3 --jit --jit-verbose-color $GITHUB_WORKSPACE/test/web-assembly3/multi-memory/align0.wast
           $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus" ${{ matrix.switch }}
 
   build-on-macos-arm64:

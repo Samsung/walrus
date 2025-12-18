@@ -673,7 +673,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                           \
     }
 
-#define MEMORY_LOAD_MEMIDX_OPERATION(opcodeName, readType, writeType)            \
+#define MEMORY_LOAD_INT_MEMIDX_OPERATION(opcodeName, readType, writeType)        \
     DEFINE_OPCODE(opcodeName)                                                    \
         :                                                                        \
     {                                                                            \
@@ -686,23 +686,24 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                      \
     }
 
-#define MEMORY_STORE_INT_OPERATION(opcodeName, readType, writeType)     \
+#define MEMORY_LOAD_FLOAT_MEMIDX_OPERATION(opcodeName, readType, writeType)      \
+    DEFINE_OPCODE(opcodeName)                                                    \
+        :                                                                        \
+    {                                                                            \
+        MemoryLoadFloatMemIdx* code = (MemoryLoadFloatMemIdx*)programCounter;    \
+        uint32_t offset = readValue<uint32_t>(bp, code->srcOffset());            \
+        readType value;                                                          \
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value); \
+        writeValue<writeType>(bp, code->dstOffset(), value);                     \
+        ADD_PROGRAM_COUNTER(MemoryLoadMemIdx);                                   \
+        NEXT_INSTRUCTION();                                                      \
+    }
+
+#define MEMORY_STORE_OPERATION(opcodeName, readType, writeType)         \
     DEFINE_OPCODE(opcodeName)                                           \
         :                                                               \
     {                                                                   \
         MemoryStore* code = (MemoryStore*)programCounter;               \
-        writeType value = readValue<readType>(bp, code->valueOffset()); \
-        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());   \
-        memories[0]->store(state, offset, code->offset(), value);       \
-        ADD_PROGRAM_COUNTER(MemoryStore);                               \
-        NEXT_INSTRUCTION();                                             \
-    }
-
-#define MEMORY_STORE_FLOAT_OPERATION(opcodeName, readType, writeType)   \
-    DEFINE_OPCODE(opcodeName)                                           \
-        :                                                               \
-    {                                                                   \
-        MemoryStoreFloat* code = (MemoryStoreFloat*)programCounter;     \
         writeType value = readValue<readType>(bp, code->valueOffset()); \
         uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());   \
         memories[0]->store(state, offset, code->offset(), value);       \
@@ -715,8 +716,8 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         :                                                                        \
     {                                                                            \
         MemoryStoreMemIdx* code = (MemoryStoreMemIdx*)programCounter;            \
-        writeType value = readValue<readType>(bp, code->src1Offset());           \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());           \
+        writeType value = readValue<readType>(bp, code->valueOffset());          \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());            \
         memories[code->memIndex()]->store(state, offset, code->offset(), value); \
         ADD_PROGRAM_COUNTER(MemoryStoreMemIdx);                                  \
         NEXT_INSTRUCTION();                                                      \
@@ -919,8 +920,8 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         :                                                                              \
     {                                                                                  \
         MemoryStoreMemIdx* code = (MemoryStoreMemIdx*)programCounter;                  \
-        writeType value = readValue<readType>(bp, code->src1Offset());                 \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                 \
+        writeType value = readValue<readType>(bp, code->valueOffset());                \
+        uint32_t offset = readValue<uint32_t>(bp, code->dstOffset());                  \
         memories[code->memIndex()]->atomicStore(state, offset, code->offset(), value); \
         ADD_PROGRAM_COUNTER(MemoryStoreMemIdx);                                        \
         NEXT_INSTRUCTION();                                                            \
@@ -1346,9 +1347,9 @@ NextInstruction:
 
     FOR_EACH_BYTECODE_LOAD_INT_OP(MEMORY_LOAD_INT_OPERATION)
     FOR_EACH_BYTECODE_LOAD_FLOAT_OP(MEMORY_LOAD_FLOAT_OPERATION)
-    FOR_EACH_BYTECODE_LOAD_MEMIDX_OP(MEMORY_LOAD_MEMIDX_OPERATION)
-    FOR_EACH_BYTECODE_STORE_INT_OP(MEMORY_STORE_INT_OPERATION)
-    FOR_EACH_BYTECODE_STORE_FLOAT_OP(MEMORY_STORE_FLOAT_OPERATION)
+    FOR_EACH_BYTECODE_LOAD_INT_MEMIDX_OP(MEMORY_LOAD_INT_MEMIDX_OPERATION)
+    FOR_EACH_BYTECODE_LOAD_FLOAT_MEMIDX_OP(MEMORY_LOAD_FLOAT_MEMIDX_OPERATION)
+    FOR_EACH_BYTECODE_STORE_OP(MEMORY_STORE_OPERATION)
     FOR_EACH_BYTECODE_STORE_MEMIDX_OP(MEMORY_STORE_MEMIDX_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(SIMD_MEMORY_LOAD_SPLAT_OPERATION)
     FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_MEMIDX_OP(SIMD_MEMORY_LOAD_SPLAT_MEMIDX_OPERATION)

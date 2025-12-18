@@ -339,6 +339,14 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         dependencyCtx.currentOptions[i] = 0;
     }
 
+    const TypeVector::Types& paramTypeInfo = moduleFunction()->functionType()->param().types();
+    size_t argc = paramTypeInfo.size();
+    size_t offsetIndex = 0;
+    for (size_t i = 0; i < argc; i++) {
+        m_variableList->variables[offsetIndex].info |= Instruction::valueTypeToOperandType(paramTypeInfo[i]);
+        offsetIndex += STACK_OFFSET(valueStackAllocatedSize(paramTypeInfo[i]));
+    }
+
     // Phase 1: the direct dependencies are computed for instructions
     // and labels (only labels can have multiple dependencies).
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
