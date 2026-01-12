@@ -90,6 +90,7 @@ static Features getFeatures(const uint32_t featureFlags) {
         features.enable_tail_call();
         features.enable_gc();
         features.enable_multi_memory();
+        features.enable_memory64();
     }
     return features;
 }
@@ -264,7 +265,7 @@ public:
     Result OnImportMemory(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index memory_index, const Limits *page_limits, uint32_t page_size) override {
         CHECK_RESULT(m_validator.OnMemory(GetLocation(), *page_limits, page_size));
         m_externalDelegate->OnImportMemory(import_index, std::string(module_name), std::string(field_name), memory_index, page_limits->initial,
-            page_limits->has_max ? page_limits->max : page_size - 1, page_limits->is_shared);
+            page_limits->has_max ? page_limits->max : page_size - 1, page_limits->is_shared, page_limits->is_64);
         return Result::Ok;
     }
     Result OnImportGlobal(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index global_index, Type type, bool mutable_) override {
@@ -348,7 +349,8 @@ public:
     }
     Result OnMemory(Index index, const Limits *limits, uint32_t page_size) override {
         CHECK_RESULT(m_validator.OnMemory(GetLocation(), *limits, page_size));
-        m_externalDelegate->OnMemory(index, limits->initial, limits->has_max ? limits->max : page_size - 1, limits->is_shared);
+        m_externalDelegate->OnMemory(index, limits->initial, limits->has_max ? limits->max : page_size - 1,
+                                     limits->is_shared, limits->is_64);
         return Result::Ok;
     }
     Result EndMemorySection() override {

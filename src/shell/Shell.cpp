@@ -268,7 +268,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName() == "table") {
                 importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20));
             } else if (import->fieldName() == "memory") {
-                importValues.push_back(Memory::createMemory(store, 1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize, false));
+                importValues.push_back(Memory::createMemory(store, 1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize, false, false));
             } else {
                 // import wrong value for test
                 auto ft = functionTypes[DefinedFunctionTypes::INVALID];
