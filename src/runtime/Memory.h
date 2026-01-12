@@ -54,7 +54,8 @@ public:
         uint64_t sizeInByte;
     };
 
-    static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared);
+    static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte,
+                                bool isShared, bool is64);
 
     ~Memory();
 
@@ -88,6 +89,11 @@ public:
         return m_isShared;
     }
 
+    bool is64() const
+    {
+        return m_is64;
+    }
+
     bool grow(uint64_t growSizeInByte);
 
     template <typename T>
@@ -96,6 +102,14 @@ public:
         checkAccess(state, offset, sizeof(T), addend);
 
         memcpyEndianAware(out, m_buffer, sizeof(T), m_sizeInByte, 0, offset + addend, sizeof(T));
+    }
+
+    template <typename T>
+    void loadM64(ExecutionState& state, uint64_t offset, uint64_t addend, T* out) const
+    {
+        checkAccessM64(state, offset, sizeof(T), addend);
+
+        memcpyEndianAware(out, m_buffer, sizeof(T), m_sizeInByte, 0, static_cast<size_t>(offset + addend), sizeof(T));
     }
 
     template <typename T>
@@ -109,14 +123,31 @@ public:
 #endif
     }
 
+    template <typename T>
+    void loadM64(ExecutionState& state, uint64_t offset, T* out) const
+    {
+        checkAccessM64(state, offset, sizeof(T));
+#if defined(WALRUS_BIG_ENDIAN)
+        *out = *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset]));
+#else
+        *out = *(reinterpret_cast<T*>(&m_buffer[offset]));
+#endif
+    }
+
 #ifdef CPU_ARM32
 
-#define defineUnalignedLoad(TYPE)                                                              \
-    template <typename T = TYPE>                                                               \
-    void load(ExecutionState& state, uint32_t offset, TYPE* out) const                         \
-    {                                                                                          \
-        checkAccess(state, offset, sizeof(TYPE));                                              \
-        memcpyEndianAware(out, m_buffer, sizeof(TYPE), m_sizeInByte, 0, offset, sizeof(TYPE)); \
+#define defineUnalignedLoad(TYPE)                                                                                   \
+    template <typename T = TYPE>                                                                                    \
+    void load(ExecutionState& state, uint32_t offset, TYPE* out) const                                              \
+    {                                                                                                               \
+        checkAccess(state, offset, sizeof(TYPE));                                                                   \
+        memcpyEndianAware(out, m_buffer, sizeof(TYPE), m_sizeInByte, 0, offset, sizeof(TYPE));                      \
+    }                                                                                                               \
+    template <typename T = TYPE>                                                                                    \
+    void loadM64(ExecutionState& state, uint64_t offset, TYPE* out) const                                           \
+    {                                                                                                               \
+        checkAccessM64(state, offset, sizeof(TYPE));                                                                \
+        memcpyEndianAware(out, m_buffer, sizeof(TYPE), m_sizeInByte, 0, static_cast<size_t>(offset), sizeof(TYPE)); \
     }
     defineUnalignedLoad(uint64_t);
     defineUnalignedLoad(int64_t);
@@ -134,9 +165,28 @@ public:
     }
 
     template <typename T>
+    void storeM64(ExecutionState& state, uint64_t offset, uint64_t addend, const T& val) const
+    {
+        checkAccessM64(state, offset, sizeof(T), addend);
+
+        memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(T), static_cast<size_t>(offset + addend), 0, sizeof(T));
+    }
+
+    template <typename T>
     void store(ExecutionState& state, uint32_t offset, const T& val) const
     {
         checkAccess(state, offset, sizeof(T));
+#if defined(WALRUS_BIG_ENDIAN)
+        *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset])) = val;
+#else
+        *(reinterpret_cast<T*>(&m_buffer[offset])) = val;
+#endif
+    }
+
+    template <typename T>
+    void storeM64(ExecutionState& state, uint64_t offset, const T& val) const
+    {
+        checkAccessM64(state, offset, sizeof(T));
 #if defined(WALRUS_BIG_ENDIAN)
         *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset])) = val;
 #else
@@ -162,9 +212,25 @@ public:
     }
 
     template <typename T>
+    void atomicLoadM64(ExecutionState& state, uint64_t offset, uint64_t addend, T* out) const
+    {
+        checkAtomicAccessM64(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        *out = shared->load(std::memory_order_relaxed);
+    }
+
+    template <typename T>
     void atomicStore(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
     {
         checkAtomicAccess(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        shared->store(val);
+    }
+
+    template <typename T>
+    void atomicStoreM64(ExecutionState& state, uint64_t offset, uint64_t addend, const T& val) const
+    {
+        checkAtomicAccessM64(state, offset, sizeof(T), addend);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         shared->store(val);
     }
@@ -174,26 +240,15 @@ public:
     {
         checkAtomicAccess(state, offset, sizeof(T), addend);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
-        switch (operation) {
-        case Add:
-            *out = shared->fetch_add(val);
-            break;
-        case Sub:
-            *out = shared->fetch_sub(val);
-            break;
-        case And:
-            *out = shared->fetch_and(val);
-            break;
-        case Or:
-            *out = shared->fetch_or(val);
-            break;
-        case Xor:
-            *out = shared->fetch_xor(val);
-            break;
-        case Xchg:
-            *out = shared->exchange(val);
-            break;
-        }
+        doAtomicRmw(shared, val, out, operation);
+    }
+
+    template <typename T>
+    void atomicRmwM64(ExecutionState& state, uint64_t offset, uint64_t addend, const T& val, T* out, AtomicRmwOp operation) const
+    {
+        checkAtomicAccessM64(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        doAtomicRmw(shared, val, out, operation);
     }
 
     template <typename T>
@@ -206,9 +261,29 @@ public:
     }
 
     template <typename T>
+    void atomicRmwCmpxchgM64(ExecutionState& state, uint64_t offset, uint64_t addend, T expect, const T& replace, T* out) const
+    {
+        checkAtomicAccessM64(state, offset, sizeof(T), addend);
+        std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
+        shared->compare_exchange_weak(expect, replace);
+        *out = expect;
+    }
+
+    template <typename T>
     void atomicWait(ExecutionState& state, Store* store, uint32_t offset, uint32_t addend, const T& expect, int64_t timeOut, uint32_t* out) const
     {
         checkAtomicAccess(state, offset, sizeof(T), addend);
+        if (UNLIKELY(!m_isShared)) {
+            throwUnsharedMemoryException(state);
+        }
+
+        atomicWait(state, store, m_buffer + (offset + addend), expect, timeOut, out);
+    }
+
+    template <typename T>
+    void atomicWaitM64(ExecutionState& state, Store* store, uint64_t offset, uint64_t addend, const T& expect, int64_t timeOut, uint32_t* out) const
+    {
+        checkAtomicAccessM64(state, offset, sizeof(T), addend);
         if (UNLIKELY(!m_isShared)) {
             throwUnsharedMemoryException(state);
         }
@@ -270,6 +345,17 @@ public:
         atomicNotify(store, m_buffer + (offset + addend), count, out);
     }
 
+    void atomicNotifyM64(ExecutionState& state, Store* store, uint64_t offset, uint64_t addend, const uint32_t& count, uint32_t* out) const
+    {
+        checkAtomicAccessM64(state, offset, 4, addend);
+        if (UNLIKELY(!m_isShared)) {
+            *out = 0;
+            return;
+        }
+
+        atomicNotify(store, m_buffer + (offset + addend), count, out);
+    }
+
     void atomicNotify(Store* store, uint8_t* absoluteAddress, const uint32_t& count, uint32_t* out) const
     {
         Waiter* waiter = store->getWaiter(static_cast<void*>(absoluteAddress));
@@ -287,12 +373,18 @@ public:
 
 #ifdef CPU_ARM32
 
-#define defineUnalignedStore(TYPE)                                                              \
-    template <typename T = TYPE>                                                                \
-    void store(ExecutionState& state, uint32_t offset, const TYPE& val) const                   \
-    {                                                                                           \
-        checkAccess(state, offset, sizeof(TYPE));                                               \
-        memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(TYPE), offset, 0, sizeof(TYPE)); \
+#define defineUnalignedStore(TYPE)                                                                                   \
+    template <typename T = TYPE>                                                                                     \
+    void store(ExecutionState& state, uint32_t offset, const TYPE& val) const                                        \
+    {                                                                                                                \
+        checkAccess(state, offset, sizeof(TYPE));                                                                    \
+        memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(TYPE), offset, 0, sizeof(TYPE));                      \
+    }                                                                                                                \
+    template <typename T = TYPE>                                                                                     \
+    void storeM64(ExecutionState& state, uint64_t offset, const TYPE& val) const                                     \
+    {                                                                                                                \
+        checkAccessM64(state, offset, sizeof(TYPE));                                                                 \
+        memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(TYPE), static_cast<size_t>(offset), 0, sizeof(TYPE)); \
     }
     defineUnalignedStore(uint64_t);
     defineUnalignedStore(int64_t);
@@ -307,10 +399,21 @@ public:
 
     inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0, Memory* dstMem = nullptr) const
     {
+        ASSERT(!is64());
         if (dstMem == nullptr) {
             return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
         } else {
             return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= dstMem->m_sizeInByte));
+        }
+    }
+
+    inline bool checkAccessM64(uint64_t offset, uint64_t size, uint64_t addend = 0, Memory* dstMem = nullptr) const
+    {
+        ASSERT(is64());
+        if (dstMem == nullptr) {
+            return !UNLIKELY(!(offset + addend + size <= m_sizeInByte));
+        } else {
+            return !UNLIKELY(!(offset + addend + size <= dstMem->m_sizeInByte));
         }
     }
 
@@ -320,7 +423,7 @@ public:
     void fillMemory(uint32_t start, uint8_t value, uint32_t size);
 
 private:
-    Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared);
+    Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared, bool is64);
 
     void throwRangeException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
 
@@ -331,7 +434,40 @@ private:
         }
     }
 
+    inline void checkAccessM64(ExecutionState& state, uint64_t offset, uint64_t size, uint64_t addend = 0, Memory* dstMem = nullptr) const
+    {
+        if (!this->checkAccessM64(offset, size, addend, dstMem)) {
+            throwRangeException(state, offset, addend, size);
+        }
+    }
+
+    template <typename T>
+    void doAtomicRmw(std::atomic<T>* shared, const T& val, T* out, AtomicRmwOp operation) const
+    {
+        switch (operation) {
+        case Add:
+            *out = shared->fetch_add(val);
+            break;
+        case Sub:
+            *out = shared->fetch_sub(val);
+            break;
+        case And:
+            *out = shared->fetch_and(val);
+            break;
+        case Or:
+            *out = shared->fetch_or(val);
+            break;
+        case Xor:
+            *out = shared->fetch_xor(val);
+            break;
+        case Xchg:
+            *out = shared->exchange(val);
+            break;
+        }
+    }
+
     void checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const;
+    void checkAtomicAccessM64(ExecutionState& state, uint64_t offset, uint64_t size, uint64_t addend = 0) const;
     void throwUnsharedMemoryException(ExecutionState& state) const;
 
     uint64_t m_sizeInByte;
@@ -340,6 +476,7 @@ private:
     uint8_t* m_buffer;
     TargetBuffer* m_targetBuffers;
     bool m_isShared;
+    bool m_is64;
 };
 
 } // namespace Walrus

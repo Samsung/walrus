@@ -24,6 +24,8 @@
 
 namespace Walrus {
 
+// The memcpyEndianAware uses size_t arguments,
+// which makes 32/64 bit variants unnecessary.
 #if defined(WALRUS_BIG_ENDIAN)
 inline void memcpyEndianAware(void* dst,
                               const void* src,

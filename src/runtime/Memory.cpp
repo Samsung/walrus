@@ -30,14 +30,14 @@ namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(memoryTypeInfo, MemoryKind);
 
-Memory* Memory::createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared)
+Memory* Memory::createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared, bool is64)
 {
-    Memory* mem = new Memory(initialSizeInByte, maximumSizeInByte, isShared);
+    Memory* mem = new Memory(initialSizeInByte, maximumSizeInByte, isShared, is64);
     store->appendExtern(mem);
     return mem;
 }
 
-Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared)
+Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared, bool is64)
     : Extern(GET_GLOBAL_TYPE_INFO(memoryTypeInfo))
     , m_sizeInByte(initialSizeInByte)
     , m_reservedSizeInByte(0)
@@ -45,6 +45,7 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isSh
     , m_buffer(nullptr)
     , m_targetBuffers(nullptr)
     , m_isShared(isShared)
+    , m_is64(is64)
 {
     RELEASE_ASSERT(initialSizeInByte <= std::numeric_limits<size_t>::max());
 #if defined(WALRUS_USE_MMAP)
@@ -308,6 +309,14 @@ void Memory::TargetBuffer::deque(Memory* memory)
 void Memory::checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend) const
 {
     checkAccess(state, offset, size, addend);
+    if (UNLIKELY((offset + addend) % size != 0)) {
+        Trap::throwException(state, "unaligned atomic");
+    }
+}
+
+void Memory::checkAtomicAccessM64(ExecutionState& state, uint64_t offset, uint64_t size, uint64_t addend) const
+{
+    checkAccessM64(state, offset, size, addend);
     if (UNLIKELY((offset + addend) % size != 0)) {
         Trap::throwException(state, "unaligned atomic");
     }
