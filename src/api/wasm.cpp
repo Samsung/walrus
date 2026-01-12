@@ -1146,13 +1146,13 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
 // Memory Instances
 own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
-    Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, false);
+    Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, false, false);
     return new wasm_memory_t(mem, mt->clone());
 }
 
 own wasm_memory_t* wasm_shared_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
-    Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, true);
+    Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, true, false);
     return new wasm_memory_t(mem, mt->clone());
 }
 

@@ -59,14 +59,14 @@ public:
     virtual void OnImportFunc(Index importIndex, std::string moduleName, std::string fieldName, Index funcIndex, Index sigIndex) = 0;
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) = 0;
     virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, size_t initialSize, size_t maximumSize) = 0;
-    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool isShared) = 0;
+    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool isShared, bool is64) = 0;
     virtual void OnImportTag(Index importIndex, std::string moduleName, std::string fieldName, Index tagIndex, Index sigIndex) = 0;
 
     virtual void OnExportCount(Index count) = 0;
     virtual void OnExport(int kind, Index exportIndex, std::string name, Index itemIndex) = 0;
 
     virtual void OnMemoryCount(Index count) = 0;
-    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool isShared) = 0;
+    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool isShared, bool is64) = 0;
 
     virtual void OnDataSegmentCount(Index count) = 0;
     virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) = 0;

@@ -1050,11 +1050,11 @@ public:
             moduleName, fieldName, m_result.m_tableTypes[tableIndex]));
     }
 
-    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool isShared) override
+    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool isShared, bool is64) override
     {
         ASSERT(memoryIndex == m_result.m_memoryTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
-        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, isShared));
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, isShared, is64));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Memory,
             moduleName, fieldName, m_result.m_memoryTypes[memoryIndex]));
@@ -1171,10 +1171,10 @@ public:
         m_result.m_memoryTypes.reserve(count);
     }
 
-    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool isShared) override
+    virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool isShared, bool is64) override
     {
         ASSERT(index == m_result.m_memoryTypes.size());
-        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, isShared));
+        m_result.m_memoryTypes.push_back(new Walrus::MemoryType(initialSize, maximumSize, isShared, is64));
     }
 
     virtual void OnDataSegmentCount(Index count) override
@@ -2462,16 +2462,26 @@ public:
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        if ((opcode == (int)WASMOpcode::I32LoadOpcode || opcode == (int)WASMOpcode::F32LoadOpcode) && offset == 0 && memidx == 0) {
-            pushByteCode(Walrus::Load32(src, dst), code);
-        } else if ((opcode == (int)WASMOpcode::I64LoadOpcode || opcode == (int)WASMOpcode::F64LoadOpcode) && offset == 0 && memidx == 0) {
-            pushByteCode(Walrus::Load64(src, dst), code);
 
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            if ((opcode == (int)WASMOpcode::I32LoadOpcode || opcode == (int)WASMOpcode::F32LoadOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Load32(src, dst), code);
+            } else if ((opcode == (int)WASMOpcode::I64LoadOpcode || opcode == (int)WASMOpcode::F64LoadOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Load64(src, dst), code);
+            } else {
+                generateMemoryLoadCode(code, memidx, alignmentLog2, offset, src, dst);
+            }
         } else {
-            generateMemoryLoadCode(code, memidx, alignmentLog2, offset, src, dst);
+            if ((opcode == (int)WASMOpcode::I32LoadOpcode || opcode == (int)WASMOpcode::F32LoadOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Load32M64(src, dst), code);
+            } else if ((opcode == (int)WASMOpcode::I64LoadOpcode || opcode == (int)WASMOpcode::F64LoadOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Load64M64(src, dst), code);
+            } else {
+                generateMemoryLoadCodeM64(code, memidx, alignmentLog2, offset, src, dst);
+            }
         }
     }
 
@@ -2480,14 +2490,25 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
         auto src1 = popVMStack();
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
-        if ((opcode == (int)WASMOpcode::I32StoreOpcode || opcode == (int)WASMOpcode::F32StoreOpcode) && offset == 0 && memidx == 0) {
-            pushByteCode(Walrus::Store32(src0, src1), code);
-        } else if ((opcode == (int)WASMOpcode::I64StoreOpcode || opcode == (int)WASMOpcode::F64StoreOpcode) && offset == 0 && memidx == 0) {
-            pushByteCode(Walrus::Store64(src0, src1), code);
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            if ((opcode == (int)WASMOpcode::I32StoreOpcode || opcode == (int)WASMOpcode::F32StoreOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Store32(src0, src1), code);
+            } else if ((opcode == (int)WASMOpcode::I64StoreOpcode || opcode == (int)WASMOpcode::F64StoreOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Store64(src0, src1), code);
+            } else {
+                generateMemoryStoreCode(code, memidx, alignmentLog2, offset, src0, src1);
+            }
         } else {
-            generateMemoryStoreCode(code, memidx, alignmentLog2, offset, src0, src1);
+            if ((opcode == (int)WASMOpcode::I32StoreOpcode || opcode == (int)WASMOpcode::F32StoreOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Store32M64(src0, src1), code);
+            } else if ((opcode == (int)WASMOpcode::I64StoreOpcode || opcode == (int)WASMOpcode::F64StoreOpcode) && offset == 0 && memidx == 0) {
+                pushByteCode(Walrus::Store64M64(src0, src1), code);
+            } else {
+                generateMemoryStoreCodeM64(code, memidx, alignmentLog2, offset, src0, src1);
+            }
         }
     }
 
@@ -2495,10 +2516,12 @@ public:
     virtual void OnAtomicLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
 #define GENERATE_LOAD_CODE_CASE(name, ...)                                               \
     case WASMOpcode::name##Opcode: {                                                     \
         if (memidx == 0) {                                                               \
@@ -2509,10 +2532,28 @@ public:
         break;                                                                           \
     }
 
-            FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+                FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(GENERATE_LOAD_CODE_CASE)
 #undef GENERATE_LOAD_CODE_CASE
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, ...)                                                  \
+    case WASMOpcode::name##Opcode: {                                                        \
+        if (memidx == 0) {                                                                  \
+            pushByteCode(Walrus::name##M64(offset, src, dst), code);                        \
+        } else {                                                                            \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src, dst)); \
+        }                                                                                   \
+        break;                                                                              \
+    }
+
+                FOR_EACH_BYTECODE_ATOMIC_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
@@ -2521,9 +2562,11 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
         auto src1 = popVMStack();
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
-        switch (code) {
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
 #define GENERATE_STORE_CODE_CASE(name, readType, writeType)                                \
     case WASMOpcode::name##Opcode: {                                                       \
         if (memidx == 0) {                                                                 \
@@ -2534,10 +2577,28 @@ public:
         break;                                                                             \
     }
 
-            FOR_EACH_BYTECODE_ATOMIC_STORE_OP(GENERATE_STORE_CODE_CASE)
+                FOR_EACH_BYTECODE_ATOMIC_STORE_OP(GENERATE_STORE_CODE_CASE)
 #undef GENERATE_STORE_CODE_CASE
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+#define GENERATE_STORE_CODE_CASE(name, readType, writeType)                                   \
+    case WASMOpcode::name##Opcode: {                                                          \
+        if (memidx == 0) {                                                                    \
+            pushByteCode(Walrus::name##M64(offset, src0, src1), code);                        \
+        } else {                                                                              \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src0, src1)); \
+        }                                                                                     \
+        break;                                                                                \
+    }
+
+                FOR_EACH_BYTECODE_ATOMIC_STORE_OP(GENERATE_STORE_CODE_CASE)
+#undef GENERATE_STORE_CODE_CASE
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
@@ -2546,10 +2607,12 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
         auto src1 = popVMStack();
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
 #define GENERATE_RMW_CODE_CASE(name, ...)                                                       \
     case WASMOpcode::name##Opcode: {                                                            \
         if (memidx == 0) {                                                                      \
@@ -2560,10 +2623,28 @@ public:
         break;                                                                                  \
     }
 
-            FOR_EACH_BYTECODE_ATOMIC_RMW_OP(GENERATE_RMW_CODE_CASE)
+                FOR_EACH_BYTECODE_ATOMIC_RMW_OP(GENERATE_RMW_CODE_CASE)
 #undef GENERATE_RMW_CODE_CASE
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+#define GENERATE_RMW_CODE_CASE(name, ...)                                                          \
+    case WASMOpcode::name##Opcode: {                                                               \
+        if (memidx == 0) {                                                                         \
+            pushByteCode(Walrus::name##M64(offset, src0, src1, dst), code);                        \
+        } else {                                                                                   \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src0, src1, dst)); \
+        }                                                                                          \
+        break;                                                                                     \
+    }
+
+                FOR_EACH_BYTECODE_ATOMIC_RMW_OP(GENERATE_RMW_CODE_CASE)
+#undef GENERATE_RMW_CODE_CASE
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
@@ -2574,10 +2655,12 @@ public:
         auto src2 = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
         auto src1 = popVMStack();
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
 #define GENERATE_RMW_CMPXCHG_CODE_CASE(name, ...)                                                     \
     case WASMOpcode::name##Opcode: {                                                                  \
         if (memidx == 0) {                                                                            \
@@ -2588,10 +2671,28 @@ public:
         break;                                                                                        \
     }
 
-            FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(GENERATE_RMW_CMPXCHG_CODE_CASE)
+                FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(GENERATE_RMW_CMPXCHG_CODE_CASE)
 #undef GENERATE_RMW_CMPXCHG_CODE_CASE
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+#define GENERATE_RMW_CMPXCHG_CODE_CASE(name, ...)                                                        \
+    case WASMOpcode::name##Opcode: {                                                                     \
+        if (memidx == 0) {                                                                               \
+            pushByteCode(Walrus::name##M64(offset, src0, src1, src2, dst), code);                        \
+        } else {                                                                                         \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src0, src1, src2, dst)); \
+        }                                                                                                \
+        break;                                                                                           \
+    }
+
+                FOR_EACH_BYTECODE_ATOMIC_RMW_CMPXCHG_OP(GENERATE_RMW_CMPXCHG_CODE_CASE)
+#undef GENERATE_RMW_CMPXCHG_CODE_CASE
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
@@ -2602,28 +2703,52 @@ public:
         auto src2 = popVMStack();
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
         auto src1 = popVMStack();
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
-        case WASMOpcode::MemoryAtomicWait32Opcode: {
-            if (memidx == 0) {
-                pushByteCode(Walrus::MemoryAtomicWait32(offset, src0, src1, src2, dst), code);
-            } else {
-                pushByteCode(Walrus::MemoryAtomicWait32MemIdx(memidx, alignmentLog2, offset, src0, src1, src2, dst));
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
+            case WASMOpcode::MemoryAtomicWait32Opcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::MemoryAtomicWait32(offset, src0, src1, src2, dst), code);
+                } else {
+                    pushByteCode(Walrus::MemoryAtomicWait32MemIdx(memidx, alignmentLog2, offset, src0, src1, src2, dst));
+                }
+                break;
             }
-            break;
-        }
-        case WASMOpcode::MemoryAtomicWait64Opcode: {
-            if (memidx == 0) {
-                pushByteCode(Walrus::MemoryAtomicWait64(offset, src0, src1, src2, dst), code);
-            } else {
-                pushByteCode(Walrus::MemoryAtomicWait64MemIdx(memidx, alignmentLog2, offset, src0, src1, src2, dst));
+            case WASMOpcode::MemoryAtomicWait64Opcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::MemoryAtomicWait64(offset, src0, src1, src2, dst), code);
+                } else {
+                    pushByteCode(Walrus::MemoryAtomicWait64MemIdx(memidx, alignmentLog2, offset, src0, src1, src2, dst));
+                }
+                break;
             }
-            break;
-        }
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+            case WASMOpcode::MemoryAtomicWait32Opcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::MemoryAtomicWait32M64(offset, src0, src1, src2, dst), code);
+                } else {
+                    pushByteCode(Walrus::MemoryAtomicWait32MemIdxM64(memidx, alignmentLog2, offset, src0, src1, src2, dst));
+                }
+                break;
+            }
+            case WASMOpcode::MemoryAtomicWait64Opcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::MemoryAtomicWait64M64(offset, src0, src1, src2, dst), code);
+                } else {
+                    pushByteCode(Walrus::MemoryAtomicWait64MemIdxM64(memidx, alignmentLog2, offset, src0, src1, src2, dst));
+                }
+                break;
+            }
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
@@ -2638,13 +2763,22 @@ public:
         ASSERT(code == WASMOpcode::MemoryAtomicNotifyOpcode);
         ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[1]) == peekVMStackValueType());
         auto src1 = popVMStack();
-        ASSERT(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_paramTypes[0]) == peekVMStackValueType());
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        if (memidx == 0) {
-            pushByteCode(Walrus::MemoryAtomicNotify(offset, src0, src1, dst), code);
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            if (memidx == 0) {
+                pushByteCode(Walrus::MemoryAtomicNotify(offset, src0, src1, dst), code);
+            } else {
+                pushByteCode(Walrus::MemoryAtomicNotifyMemIdx(memidx, alignmentLog2, offset, src0, src1, dst));
+            }
         } else {
-            pushByteCode(Walrus::MemoryAtomicNotifyMemIdx(memidx, alignmentLog2, offset, src0, src1, dst));
+            if (memidx == 0) {
+                pushByteCode(Walrus::MemoryAtomicNotifyM64(offset, src0, src1, dst), code);
+            } else {
+                pushByteCode(Walrus::MemoryAtomicNotifyMemIdxM64(memidx, alignmentLog2, offset, src0, src1, dst));
+            }
         }
     }
 
@@ -3214,10 +3348,12 @@ public:
     virtual void OnLoadSplatExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
 #define GENERATE_LOAD_CODE_CASE(name, ...)                                               \
     case WASMOpcode::name##Opcode: {                                                     \
         if (memidx == 0) {                                                               \
@@ -3228,39 +3364,82 @@ public:
         break;                                                                           \
     }
 
-            FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_LOAD_CODE_CASE)
+                FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_LOAD_CODE_CASE)
 #undef GENERATE_LOAD_CODE_CASE
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, ...)                                                  \
+    case WASMOpcode::name##Opcode: {                                                        \
+        if (memidx == 0) {                                                                  \
+            pushByteCode(Walrus::name##M64(offset, src, dst), code);                        \
+        } else {                                                                            \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src, dst)); \
+        }                                                                                   \
+        break;                                                                              \
+    }
+
+                FOR_EACH_BYTECODE_SIMD_LOAD_SPLAT_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
     virtual void OnLoadZeroExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override
     {
         auto code = static_cast<WASMOpcode>(opcode);
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
-        case WASMOpcode::V128Load32ZeroOpcode: {
-            if (memidx == 0) {
-                pushByteCode(Walrus::V128Load32Zero(offset, src, dst), code);
-            } else {
-                pushByteCode(Walrus::V128Load32ZeroMemIdx(memidx, alignmentLog2, offset, src, dst));
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
+            case WASMOpcode::V128Load32ZeroOpcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::V128Load32Zero(offset, src, dst), code);
+                } else {
+                    pushByteCode(Walrus::V128Load32ZeroMemIdx(memidx, alignmentLog2, offset, src, dst));
+                }
+                break;
             }
-            break;
-        }
-        case WASMOpcode::V128Load64ZeroOpcode: {
-            if (memidx == 0) {
-                pushByteCode(Walrus::V128Load64Zero(offset, src, dst), code);
-            } else {
-                pushByteCode(Walrus::V128Load64ZeroMemIdx(memidx, alignmentLog2, offset, src, dst));
+            case WASMOpcode::V128Load64ZeroOpcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::V128Load64Zero(offset, src, dst), code);
+                } else {
+                    pushByteCode(Walrus::V128Load64ZeroMemIdx(memidx, alignmentLog2, offset, src, dst));
+                }
+                break;
             }
-            break;
-        }
-        default:
-            ASSERT_NOT_REACHED();
-            break;
+            default:
+                ASSERT_NOT_REACHED();
+                break;
+            }
+        } else {
+            switch (code) {
+            case WASMOpcode::V128Load32ZeroOpcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::V128Load32ZeroM64(offset, src, dst), code);
+                } else {
+                    pushByteCode(Walrus::V128Load32ZeroMemIdxM64(memidx, alignmentLog2, offset, src, dst));
+                }
+                break;
+            }
+            case WASMOpcode::V128Load64ZeroOpcode: {
+                if (memidx == 0) {
+                    pushByteCode(Walrus::V128Load64ZeroM64(offset, src, dst), code);
+                } else {
+                    pushByteCode(Walrus::V128Load64ZeroMemIdxM64(memidx, alignmentLog2, offset, src, dst));
+                }
+                break;
+            }
+            default:
+                ASSERT_NOT_REACHED();
+                break;
+            }
         }
     }
 
@@ -3303,10 +3482,12 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::V128);
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(WASMCodeInfo::codeTypeToValueType(g_wasmCodeInfo[opcode].m_resultType));
-        switch (code) {
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
 #define GENERATE_LOAD_CODE_CASE(name, opType)                                                                                                    \
     case WASMOpcode::name##Opcode: {                                                                                                             \
         if (memidx == 0) {                                                                                                                       \
@@ -3316,10 +3497,27 @@ public:
         }                                                                                                                                        \
         break;                                                                                                                                   \
     }
-            FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(GENERATE_LOAD_CODE_CASE)
+                FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(GENERATE_LOAD_CODE_CASE)
 #undef GENERATE_LOAD_CODE_CASE
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, opType)                                                                                                       \
+    case WASMOpcode::name##Opcode: {                                                                                                                \
+        if (memidx == 0) {                                                                                                                          \
+            pushByteCode(Walrus::name##M64(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value), dst), code);                        \
+        } else {                                                                                                                                    \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value), dst)); \
+        }                                                                                                                                           \
+        break;                                                                                                                                      \
+    }
+                FOR_EACH_BYTECODE_SIMD_LOAD_LANE_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
@@ -3328,9 +3526,11 @@ public:
         auto code = static_cast<WASMOpcode>(opcode);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::V128);
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memidx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
-        switch (code) {
+
+        if (!m_result.m_memoryTypes[memidx]->is64()) {
+            switch (code) {
 #define GENERATE_STORE_CODE_CASE(name, opType)                                                                                              \
     case WASMOpcode::name##Opcode: {                                                                                                        \
         if (memidx == 0) {                                                                                                                  \
@@ -3340,10 +3540,27 @@ public:
         }                                                                                                                                   \
         break;                                                                                                                              \
     }
-            FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_STORE_CODE_CASE)
+                FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_STORE_CODE_CASE)
 #undef GENERATE_STORE_CODE_CASE
-        default:
-            ASSERT_NOT_REACHED();
+            default:
+                ASSERT_NOT_REACHED();
+            }
+        } else {
+            switch (code) {
+#define GENERATE_STORE_CODE_CASE(name, opType)                                                                                                 \
+    case WASMOpcode::name##Opcode: {                                                                                                           \
+        if (memidx == 0) {                                                                                                                     \
+            pushByteCode(Walrus::name##M64(offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value)), code);                        \
+        } else {                                                                                                                               \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src0, src1, static_cast<Walrus::ByteCodeStackOffset>(value))); \
+        }                                                                                                                                      \
+        break;                                                                                                                                 \
+    }
+                FOR_EACH_BYTECODE_SIMD_STORE_LANE_OP(GENERATE_STORE_CODE_CASE)
+#undef GENERATE_STORE_CODE_CASE
+            default:
+                ASSERT_NOT_REACHED();
+            }
         }
     }
 
@@ -3412,7 +3629,7 @@ public:
         }
     }
 
-    void generateMemoryLoadCode(WASMOpcode code, Index memidx, Address alignmentLog2, size_t offset, size_t src, size_t dst)
+    void generateMemoryLoadCode(WASMOpcode code, Index memidx, Address alignmentLog2, uint32_t offset, size_t src, size_t dst)
     {
         switch (code) {
 #define GENERATE_LOAD_CODE_CASE(name, readType, writeType)                               \
@@ -3433,7 +3650,28 @@ public:
         }
     }
 
-    void generateMemoryStoreCode(WASMOpcode code, Index memidx, Address alignmentLog2, size_t offset, size_t src0, size_t src1)
+    void generateMemoryLoadCodeM64(WASMOpcode code, Index memidx, Address alignmentLog2, uint64_t offset, size_t src, size_t dst)
+    {
+        switch (code) {
+#define GENERATE_LOAD_CODE_CASE(name, readType, writeType)                                  \
+    case WASMOpcode::name##Opcode: {                                                        \
+        if (memidx == 0) {                                                                  \
+            pushByteCode(Walrus::name##M64(offset, src, dst), code);                        \
+        } else {                                                                            \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src, dst)); \
+        }                                                                                   \
+        break;                                                                              \
+    }
+            FOR_EACH_BYTECODE_LOAD_OP(GENERATE_LOAD_CODE_CASE)
+            FOR_EACH_BYTECODE_SIMD_LOAD_EXTEND_OP(GENERATE_LOAD_CODE_CASE)
+#undef GENERATE_LOAD_CODE_CASE
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+
+    void generateMemoryStoreCode(WASMOpcode code, Index memidx, Address alignmentLog2, uint32_t offset, size_t src0, size_t src1)
     {
         switch (code) {
 #define GENERATE_STORE_CODE_CASE(name, readType, writeType)                                \
@@ -3459,6 +3697,40 @@ public:
                 pushByteCode(Walrus::I64Store(offset, src0, src1), code);
             } else {
                 pushByteCode(Walrus::I64StoreMemIdx(memidx, alignmentLog2, offset, src0, src1));
+            }
+            break;
+        default:
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+
+    void generateMemoryStoreCodeM64(WASMOpcode code, Index memidx, Address alignmentLog2, uint64_t offset, size_t src0, size_t src1)
+    {
+        switch (code) {
+#define GENERATE_STORE_CODE_CASE(name, readType, writeType)                                   \
+    case WASMOpcode::name##Opcode: {                                                          \
+        if (memidx == 0) {                                                                    \
+            pushByteCode(Walrus::name##M64(offset, src0, src1), code);                        \
+        } else {                                                                              \
+            pushByteCode(Walrus::name##MemIdxM64(memidx, alignmentLog2, offset, src0, src1)); \
+        }                                                                                     \
+        break;                                                                                \
+    }
+            FOR_EACH_BYTECODE_STORE_OP(GENERATE_STORE_CODE_CASE)
+#undef GENERATE_STORE_CODE_CASE
+        case WASMOpcode::F32StoreOpcode:
+            if (memidx == 0) {
+                pushByteCode(Walrus::I32StoreM64(offset, src0, src1), code);
+            } else {
+                pushByteCode(Walrus::I32StoreMemIdxM64(memidx, alignmentLog2, offset, src0, src1));
+            }
+            break;
+        case WASMOpcode::F64StoreOpcode:
+            if (memidx == 0) {
+                pushByteCode(Walrus::I64StoreM64(offset, src0, src1), code);
+            } else {
+                pushByteCode(Walrus::I64StoreMemIdxM64(memidx, alignmentLog2, offset, src0, src1));
             }
             break;
         default:

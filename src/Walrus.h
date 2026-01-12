@@ -399,7 +399,7 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 
 #ifndef STACK_LIMIT_FROM_BASE
 // FIXME reduce stack limit to 3MB
-#define STACK_LIMIT_FROM_BASE (1024 * 1024 * 5) // 5MB
+#define STACK_LIMIT_FROM_BASE (1024 * 1024 * 7) // 7MB
 #endif
 
 #include "util/Optional.h"
