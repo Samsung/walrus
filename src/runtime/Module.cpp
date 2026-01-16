@@ -267,7 +267,8 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
     // init memory
     while (memIndex < m_memoryTypes.size()) {
-        instance->m_memories[memIndex] = Memory::createMemory(m_store, m_memoryTypes[memIndex]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[memIndex]->maximumSize() * Memory::s_memoryPageSize, m_memoryTypes[memIndex]->isShared());
+        instance->m_memories[memIndex] = Memory::createMemory(m_store, m_memoryTypes[memIndex]->initialSize() * Memory::s_memoryPageSize, m_memoryTypes[memIndex]->maximumSize() * Memory::s_memoryPageSize,
+                                                              m_memoryTypes[memIndex]->isShared(), m_memoryTypes[memIndex]->is64());
         memIndex++;
     }
 
