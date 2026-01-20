@@ -30,6 +30,8 @@ struct MemAddress {
         CheckNaturalAlignment = 1 << 5,
         // Limits the resulting addressing mode to a base register with no offset.
         AbsoluteAddress = 1 << 6,
+        NoOffset = 1 << 7,
+        Memory64 = 1 << 8,
     };
 
     MemAddress(uint32_t options, uint8_t baseReg, uint8_t offsetReg, uint8_t sourceReg)
@@ -40,7 +42,7 @@ struct MemAddress {
     {
     }
 
-    void check(sljit_compiler* compiler, Operand* params, sljit_uw offset, sljit_u32 size, sljit_u16 memIndex);
+    void check(sljit_compiler* compiler, Operand* params, uint64_t offset64, sljit_u32 size, sljit_u16 memIndex);
     void load(sljit_compiler* compiler);
 
     uint32_t options;
@@ -52,7 +54,7 @@ struct MemAddress {
     JITArg loadArg;
 };
 
-void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_uw offset, sljit_u32 size, sljit_u16 memIndex)
+void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_t offset64, sljit_u32 size, sljit_u16 memIndex)
 {
     CompileContext* context = CompileContext::get(compiler);
 
@@ -76,23 +78,58 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
         return;
     }
 
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
     JITArg offsetArg(offsetOperand);
 
-    if (SLJIT_IS_IMM(offsetArg.arg)) {
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        offset += static_cast<sljit_u32>(offsetArg.argw);
+    if ((options & MemAddress::Memory64) && SLJIT_IS_IMM(offsetArg.arg) && (~static_cast<uint64_t>(0) - offset64) < static_cast<uint64_t>(offsetArg.argw)) {
+        // This memory load is never successful.
+        context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
+        memArg.arg = 0;
+        return;
+    }
 #else /* !SLJIT_64BIT_ARCHITECTURE */
-        sljit_uw offsetArgw = static_cast<sljit_uw>(offsetArg.argw);
+    JITArg offsetArg;
 
-        if (offset + offsetArgw < (offset | offsetArgw)) {
+    if (options & MemAddress::Memory64) {
+        if (offset64 >= (static_cast<uint64_t>(1) << 32)) {
             // This memory load is never successful.
             context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
             memArg.arg = 0;
             return;
         }
 
-        offset += offsetArgw;
+        JITArgPair offsetArgPair(offsetOperand);
+
+        if (SLJIT_IS_IMM(offsetArgPair.arg1)) {
+            if (offsetArgPair.arg2w != 0 || (offset64 + static_cast<sljit_u32>(offsetArgPair.arg1w)) >= (static_cast<uint64_t>(1) << 32)) {
+                // This memory load is never successful.
+                context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
+                memArg.arg = 0;
+                return;
+            }
+        } else {
+            context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError,
+                                    sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, offsetArgPair.arg2, offsetArgPair.arg2w, SLJIT_IMM, 0));
+        }
+
+        offsetArg.arg = offsetArgPair.arg1;
+        offsetArg.argw = offsetArgPair.arg1w;
+    } else {
+        offsetArg.set(offsetOperand);
+
+        if (SLJIT_IS_IMM(offsetArg.arg) && (offset64 + static_cast<sljit_u32>(offsetArg.argw)) >= (static_cast<uint64_t>(1) << 32)) {
+            // This memory load is never successful.
+            context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_JUMP));
+            memArg.arg = 0;
+            return;
+        }
+    }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
+
+    sljit_uw offset = static_cast<sljit_uw>(offset64);
+
+    if (SLJIT_IS_IMM(offsetArg.arg)) {
+        offset += static_cast<sljit_uw>(offsetArg.argw);
 
         if (UNLIKELY(offset > maximumMemorySize - size)) {
             // This memory load is never successful.
@@ -155,7 +192,11 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
     }
 
     ASSERT(baseReg != 0 && offsetReg != 0);
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+    sljit_emit_op1(compiler, (options & MemAddress::Memory64) ? SLJIT_MOV : SLJIT_MOV_U32, offsetReg, 0, offsetArg.arg, offsetArg.argw);
+#else /* !SLJIT_64BIT_ARCHITECTURE */
     sljit_emit_op1(compiler, SLJIT_MOV_U32, offsetReg, 0, offsetArg.arg, offsetArg.argw);
+#endif /* SLJIT_64BIT_ARCHITECTURE */
 
     if (initialMemorySize != maximumMemorySize) {
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
@@ -171,10 +212,14 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, sljit_u
 
     if (offset > 0) {
 #if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-        sljit_emit_op2(compiler, SLJIT_ADD, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
-#else /* !SLJIT_64BIT_ARCHITECTURE */
-        sljit_emit_op2(compiler, SLJIT_ADD | SLJIT_SET_CARRY, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
-        context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_CARRY));
+        if (!(options & MemAddress::Memory64)) {
+            sljit_emit_op2(compiler, SLJIT_ADD, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
+        } else {
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+            sljit_emit_op2(compiler, SLJIT_ADD | SLJIT_SET_CARRY, offsetReg, 0, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset));
+            context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, sljit_emit_jump(compiler, SLJIT_CARRY));
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        }
 #endif /* SLJIT_64BIT_ARCHITECTURE */
     }
 
@@ -270,33 +315,59 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
 {
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
     uint32_t size = 8;
-    sljit_u32 offset;
+    uint64_t offset;
     sljit_u16 memIndex = 0;
+    bool isLoad = true;
 
     Operand* operands = instr->operands();
-    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
 
-    if (instr->opcode() == ByteCode::I64AtomicLoadOpcode) {
-        if (instr->info() & Instruction::kMultiMemory) {
-            MemoryLoadMemIdx* loadMemIdxOperation = reinterpret_cast<MemoryLoadMemIdx*>(instr->byteCode());
-            offset = loadMemIdxOperation->offset();
-            memIndex = loadMemIdxOperation->memIndex();
+    if (!(instr->info() & Instruction::kMemory64)) {
+        if (instr->opcode() == ByteCode::I64AtomicLoadOpcode || instr->opcode() == ByteCode::I64AtomicLoadMemIdxOpcode) {
+            if (instr->info() & Instruction::kMultiMemory) {
+                MemoryLoadMemIdx* loadMemIdxOperation = reinterpret_cast<MemoryLoadMemIdx*>(instr->byteCode());
+                offset = loadMemIdxOperation->offset();
+                memIndex = loadMemIdxOperation->memIndex();
+            } else {
+                offset = reinterpret_cast<MemoryLoad*>(instr->byteCode())->offset();
+            }
         } else {
-            MemoryLoad* loadOperation = reinterpret_cast<MemoryLoad*>(instr->byteCode());
-            offset = loadOperation->offset();
+            ASSERT(instr->opcode() == ByteCode::I64AtomicStoreOpcode || instr->opcode() == ByteCode::I64AtomicStoreMemIdxOpcode);
+            isLoad = false;
+
+            if (instr->info() & Instruction::kMultiMemory) {
+                ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
+                offset = storeMemIdxOperation->uint32Value();
+                memIndex = storeMemIdxOperation->memIndex();
+            } else {
+                offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uint32Value();
+            }
         }
     } else {
-        ASSERT(instr->opcode() == ByteCode::I64AtomicStoreOpcode || instr->opcode() == ByteCode::I64AtomicStoreMemIdxOpcode);
-        if (instr->info() & Instruction::kMultiMemory) {
-            ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
-            offset = storeMemIdxOperation->uint32Value();
-            memIndex = storeMemIdxOperation->memIndex();
+        options |= MemAddress::Memory64;
+
+        if (instr->opcode() == ByteCode::I64AtomicLoadM64Opcode || instr->opcode() == ByteCode::I64AtomicLoadMemIdxM64Opcode) {
+            if (instr->info() & Instruction::kMultiMemory) {
+                MemoryLoadMemIdxM64* loadMemIdxM64Operation = reinterpret_cast<MemoryLoadMemIdxM64*>(instr->byteCode());
+                offset = loadMemIdxM64Operation->offset();
+                memIndex = loadMemIdxM64Operation->memIndex();
+            } else {
+                offset = reinterpret_cast<MemoryLoadM64*>(instr->byteCode())->offset();
+            }
         } else {
-            ByteCodeOffset2Value* storeOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
-            offset = storeOperation->uint32Value();
+            ASSERT(instr->opcode() == ByteCode::I64AtomicStoreM64Opcode || instr->opcode() == ByteCode::I64AtomicStoreMemIdxM64Opcode);
+            isLoad = false;
+
+            if (instr->info() & Instruction::kMultiMemory) {
+                ByteCodeOffset2Value64MemIdx* storeMemIdxM64Operation = reinterpret_cast<ByteCodeOffset2Value64MemIdx*>(instr->byteCode());
+                offset = storeMemIdxM64Operation->uint64Value();
+                memIndex = storeMemIdxM64Operation->memIndex();
+            } else {
+                offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uint64Value();
+            }
         }
     }
 
+    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, size, memIndex);
 
     if (addr.memArg.arg == 0) {
@@ -308,10 +379,15 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 type = SLJIT_ARGS2V(P, P);
     sljit_s32 faddr;
 
-    if (instr->opcode() == ByteCode::I64AtomicLoadOpcode) {
+    if (isLoad) {
+        ASSERT(instr->opcode() == ByteCode::I64AtomicLoadOpcode || instr->opcode() == ByteCode::I64AtomicLoadMemIdxOpcode
+               || instr->opcode() == ByteCode::I64AtomicLoadM64Opcode || instr->opcode() == ByteCode::I64AtomicLoadMemIdxM64Opcode);
+
         faddr = GET_FUNC_ADDR(sljit_sw, atomicRmwLoad64);
     } else {
-        ASSERT(instr->opcode() == ByteCode::I64AtomicStoreOpcode);
+        ASSERT(instr->opcode() == ByteCode::I64AtomicStoreOpcode || instr->opcode() == ByteCode::I64AtomicStoreMemIdxOpcode
+               || instr->opcode() == ByteCode::I64AtomicStoreM64Opcode || instr->opcode() == ByteCode::I64AtomicStoreMemIdxM64Opcode);
+
         faddr = GET_FUNC_ADDR(sljit_sw, atomicRmwStore64);
 
         if (valueArgPair.arg1 != SLJIT_MEM1(kFrameReg)) {
@@ -320,6 +396,9 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
         }
     }
 
+    sljit_s32 srcReg = GET_SOURCE_REG(addr.memArg.arg, instr->requiredReg(0));
+    MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, srcReg, 0);
+
     if (valueArgPair.arg1 == SLJIT_MEM1(kFrameReg)) {
         sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_R1, 0, kFrameReg, 0, SLJIT_IMM, valueArgPair.arg1w - WORD_LOW_OFFSET);
     } else {
@@ -327,10 +406,9 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
         sljit_get_local_base(compiler, SLJIT_R1, 0, stackTmpStart);
     }
 
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, GET_SOURCE_REG(addr.memArg.arg, instr->requiredReg(0)), 0);
     sljit_emit_icall(compiler, SLJIT_CALL, type, SLJIT_IMM, faddr);
 
-    if ((instr->opcode() == ByteCode::I64AtomicLoadOpcode) && (valueArgPair.arg1 != SLJIT_MEM1(kFrameReg))) {
+    if (isLoad && (valueArgPair.arg1 != SLJIT_MEM1(kFrameReg))) {
         sljit_emit_op1(compiler, SLJIT_MOV, valueArgPair.arg1, valueArgPair.arg1w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
         sljit_emit_op1(compiler, SLJIT_MOV, valueArgPair.arg2, valueArgPair.arg2w, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET);
     }
@@ -341,7 +419,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 {
     sljit_s32 opcode;
     sljit_u32 size;
-    sljit_u32 offset = 0;
+    uint64_t offset = 0;
     uint32_t options = 0;
     sljit_u16 memIndex = 0;
 #ifdef HAS_SIMD
@@ -350,51 +428,72 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::Load32Opcode:
+    case ByteCode::Load32M64Opcode:
+        options |= MemAddress::NoOffset;
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F32 : SLJIT_MOV32;
         size = 4;
         break;
     case ByteCode::Load64Opcode:
+    case ByteCode::Load64M64Opcode:
+        options |= MemAddress::NoOffset;
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
     case ByteCode::I32AtomicLoadMemIdxOpcode:
+    case ByteCode::I32AtomicLoadMemIdxM64Opcode:
     case ByteCode::I32AtomicLoadOpcode:
+    case ByteCode::I32AtomicLoadM64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I32LoadMemIdxOpcode:
+    case ByteCode::I32LoadMemIdxM64Opcode:
     case ByteCode::I32LoadOpcode:
+    case ByteCode::I32LoadM64Opcode:
         opcode = SLJIT_MOV32;
         size = 4;
         break;
     case ByteCode::I32Load8SMemIdxOpcode:
+    case ByteCode::I32Load8SMemIdxM64Opcode:
     case ByteCode::I32Load8SOpcode:
+    case ByteCode::I32Load8SM64Opcode:
         opcode = SLJIT_MOV32_S8;
         size = 1;
         break;
     case ByteCode::I32AtomicLoad8UMemIdxOpcode:
+    case ByteCode::I32AtomicLoad8UMemIdxM64Opcode:
     case ByteCode::I32AtomicLoad8UOpcode:
-        FALLTHROUGH;
+    case ByteCode::I32AtomicLoad8UM64Opcode:
     case ByteCode::I32Load8UMemIdxOpcode:
+    case ByteCode::I32Load8UMemIdxM64Opcode:
     case ByteCode::I32Load8UOpcode:
+    case ByteCode::I32Load8UM64Opcode:
         opcode = SLJIT_MOV32_U8;
         size = 1;
         break;
     case ByteCode::I32Load16SMemIdxOpcode:
+    case ByteCode::I32Load16SMemIdxM64Opcode:
     case ByteCode::I32Load16SOpcode:
+    case ByteCode::I32Load16SM64Opcode:
         opcode = SLJIT_MOV32_S16;
         size = 2;
         break;
     case ByteCode::I32AtomicLoad16UMemIdxOpcode:
+    case ByteCode::I32AtomicLoad16UMemIdxM64Opcode:
     case ByteCode::I32AtomicLoad16UOpcode:
+    case ByteCode::I32AtomicLoad16UM64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I32Load16UMemIdxOpcode:
+    case ByteCode::I32Load16UMemIdxM64Opcode:
     case ByteCode::I32Load16UOpcode:
+    case ByteCode::I32Load16UM64Opcode:
         opcode = SLJIT_MOV32_U16;
         size = 2;
         break;
     case ByteCode::I64AtomicLoadMemIdxOpcode:
+    case ByteCode::I64AtomicLoadMemIdxM64Opcode:
     case ByteCode::I64AtomicLoadOpcode:
+    case ByteCode::I64AtomicLoadM64Opcode:
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         emitAtomicLoadStore64(compiler, instr);
         return;
@@ -402,83 +501,114 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I64LoadMemIdxOpcode:
+    case ByteCode::I64LoadMemIdxM64Opcode:
     case ByteCode::I64LoadOpcode:
+    case ByteCode::I64LoadM64Opcode:
         opcode = SLJIT_MOV;
         size = 8;
         break;
     case ByteCode::I64Load8SMemIdxOpcode:
+    case ByteCode::I64Load8SMemIdxM64Opcode:
     case ByteCode::I64Load8SOpcode:
+    case ByteCode::I64Load8SM64Opcode:
         opcode = SLJIT_MOV_S8;
         size = 1;
         break;
     case ByteCode::I64AtomicLoad8UMemIdxOpcode:
+    case ByteCode::I64AtomicLoad8UMemIdxM64Opcode:
     case ByteCode::I64AtomicLoad8UOpcode:
-        FALLTHROUGH;
+    case ByteCode::I64AtomicLoad8UM64Opcode:
     case ByteCode::I64Load8UMemIdxOpcode:
+    case ByteCode::I64Load8UMemIdxM64Opcode:
     case ByteCode::I64Load8UOpcode:
+    case ByteCode::I64Load8UM64Opcode:
         opcode = SLJIT_MOV_U8;
         size = 1;
         break;
     case ByteCode::I64Load16SMemIdxOpcode:
+    case ByteCode::I64Load16SMemIdxM64Opcode:
     case ByteCode::I64Load16SOpcode:
+    case ByteCode::I64Load16SM64Opcode:
         opcode = SLJIT_MOV_S16;
         size = 2;
         break;
     case ByteCode::I64AtomicLoad16UMemIdxOpcode:
+    case ByteCode::I64AtomicLoad16UMemIdxM64Opcode:
     case ByteCode::I64AtomicLoad16UOpcode:
+    case ByteCode::I64AtomicLoad16UM64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I64Load16UMemIdxOpcode:
+    case ByteCode::I64Load16UMemIdxM64Opcode:
     case ByteCode::I64Load16UOpcode:
+    case ByteCode::I64Load16UM64Opcode:
         opcode = SLJIT_MOV_U16;
         size = 2;
         break;
     case ByteCode::I64Load32SMemIdxOpcode:
+    case ByteCode::I64Load32SMemIdxM64Opcode:
     case ByteCode::I64Load32SOpcode:
+    case ByteCode::I64Load32SM64Opcode:
         opcode = SLJIT_MOV_S32;
         size = 4;
         break;
     case ByteCode::I64AtomicLoad32UMemIdxOpcode:
+    case ByteCode::I64AtomicLoad32UMemIdxM64Opcode:
     case ByteCode::I64AtomicLoad32UOpcode:
+    case ByteCode::I64AtomicLoad32UM64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I64Load32UMemIdxOpcode:
+    case ByteCode::I64Load32UMemIdxM64Opcode:
     case ByteCode::I64Load32UOpcode:
+    case ByteCode::I64Load32UM64Opcode:
         opcode = SLJIT_MOV_U32;
         size = 4;
         break;
     case ByteCode::F32LoadMemIdxOpcode:
+    case ByteCode::F32LoadMemIdxM64Opcode:
     case ByteCode::F32LoadOpcode:
+    case ByteCode::F32LoadM64Opcode:
         opcode = SLJIT_MOV_F32;
         size = 4;
         break;
 #ifdef HAS_SIMD
     case ByteCode::V128LoadMemIdxOpcode:
+    case ByteCode::V128LoadMemIdxM64Opcode:
     case ByteCode::V128LoadOpcode:
+    case ByteCode::V128LoadM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128;
         size = 16;
         break;
     case ByteCode::V128Load8SplatMemIdxOpcode:
+    case ByteCode::V128Load8SplatMemIdxM64Opcode:
     case ByteCode::V128Load8SplatOpcode:
+    case ByteCode::V128Load8SplatM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
         size = 1;
         break;
     case ByteCode::V128Load16SplatMemIdxOpcode:
+    case ByteCode::V128Load16SplatMemIdxM64Opcode:
     case ByteCode::V128Load16SplatOpcode:
+    case ByteCode::V128Load16SplatM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16;
         size = 2;
         break;
     case ByteCode::V128Load32SplatMemIdxOpcode:
+    case ByteCode::V128Load32SplatMemIdxM64Opcode:
     case ByteCode::V128Load32SplatOpcode:
+    case ByteCode::V128Load32SplatM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
         size = 4;
         break;
     case ByteCode::V128Load64SplatMemIdxOpcode:
+    case ByteCode::V128Load64SplatMemIdxM64Opcode:
     case ByteCode::V128Load64SplatOpcode:
+    case ByteCode::V128Load64SplatM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -487,49 +617,65 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         size = 8;
         break;
     case ByteCode::V128Load8X8SMemIdxOpcode:
+    case ByteCode::V128Load8X8SMemIdxM64Opcode:
     case ByteCode::V128Load8X8SOpcode:
+    case ByteCode::V128Load8X8SM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_EXTEND_SIGNED | SLJIT_SIMD_EXTEND_16;
         size = 8;
         break;
     case ByteCode::V128Load8X8UMemIdxOpcode:
+    case ByteCode::V128Load8X8UMemIdxM64Opcode:
     case ByteCode::V128Load8X8UOpcode:
+    case ByteCode::V128Load8X8UM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8 | SLJIT_SIMD_EXTEND_16;
         size = 8;
         break;
     case ByteCode::V128Load16X4SMemIdxOpcode:
+    case ByteCode::V128Load16X4SMemIdxM64Opcode:
     case ByteCode::V128Load16X4SOpcode:
+    case ByteCode::V128Load16X4SM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16 | SLJIT_SIMD_EXTEND_SIGNED | SLJIT_SIMD_EXTEND_32;
         size = 8;
         break;
     case ByteCode::V128Load16X4UMemIdxOpcode:
+    case ByteCode::V128Load16X4UMemIdxM64Opcode:
     case ByteCode::V128Load16X4UOpcode:
+    case ByteCode::V128Load16X4UM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16 | SLJIT_SIMD_EXTEND_32;
         size = 8;
         break;
     case ByteCode::V128Load32X2SMemIdxOpcode:
+    case ByteCode::V128Load32X2SMemIdxM64Opcode:
     case ByteCode::V128Load32X2SOpcode:
+    case ByteCode::V128Load32X2SM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_EXTEND_SIGNED | SLJIT_SIMD_EXTEND_64;
         size = 8;
         break;
     case ByteCode::V128Load32X2UMemIdxOpcode:
+    case ByteCode::V128Load32X2UMemIdxM64Opcode:
     case ByteCode::V128Load32X2UOpcode:
+    case ByteCode::V128Load32X2UM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_EXTEND_64;
         size = 8;
         break;
     case ByteCode::V128Load32ZeroMemIdxOpcode:
+    case ByteCode::V128Load32ZeroMemIdxM64Opcode:
     case ByteCode::V128Load32ZeroOpcode:
+    case ByteCode::V128Load32ZeroM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32 | SLJIT_SIMD_LANE_ZERO;
         size = 4;
         break;
     case ByteCode::V128Load64ZeroMemIdxOpcode:
+    case ByteCode::V128Load64ZeroMemIdxM64Opcode:
     case ByteCode::V128Load64ZeroOpcode:
+    case ByteCode::V128Load64ZeroM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_LOAD | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_LANE_ZERO;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -539,20 +685,32 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         break;
 #endif /* HAS_SIMD */
     default:
-        ASSERT(instr->opcode() == ByteCode::F64LoadOpcode || instr->opcode() == ByteCode::F64LoadMemIdxOpcode);
+        ASSERT(instr->opcode() == ByteCode::F64LoadOpcode || instr->opcode() == ByteCode::F64LoadMemIdxOpcode
+               || instr->opcode() == ByteCode::F64LoadM64Opcode || instr->opcode() == ByteCode::F64LoadMemIdxM64Opcode);
         opcode = SLJIT_MOV_F64;
         size = 8;
         break;
     }
 
-    if (instr->opcode() != ByteCode::Load32Opcode && instr->opcode() != ByteCode::Load64Opcode) {
-        if (instr->info() & Instruction::kMultiMemory) {
-            ByteCodeOffset2ValueMemIdx* loadMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
-            offset = loadMemIdxOperation->uint32Value();
-            memIndex = loadMemIdxOperation->memIndex();
+    if (instr->info() & Instruction::kMemory64) {
+        options |= MemAddress::Memory64;
+    }
+
+    if (!(options & MemAddress::NoOffset)) {
+        if (!(options & MemAddress::Memory64)) {
+            if (instr->info() & Instruction::kMultiMemory) {
+                ByteCodeOffset2ValueMemIdx* loadMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
+                offset = loadMemIdxOperation->uint32Value();
+                memIndex = loadMemIdxOperation->memIndex();
+            } else {
+                offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uint32Value();
+            }
+        } else if (instr->info() & Instruction::kMultiMemory) {
+            ByteCodeOffset2Value64MemIdx* loadMemIdxM64Operation = reinterpret_cast<ByteCodeOffset2Value64MemIdx*>(instr->byteCode());
+            offset = loadMemIdxM64Operation->uint64Value();
+            memIndex = loadMemIdxM64Operation->memIndex();
         } else {
-            ByteCodeOffset2Value* loadOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
-            offset = loadOperation->uint32Value();
+            offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uint64Value();
         }
     }
 
@@ -684,29 +842,36 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
 {
     sljit_u32 size;
     sljit_s32 simdType = 0;
-    sljit_u32 offset = 0;
+    uint64_t offset = 0;
     sljit_u32 options = 0;
     sljit_u16 memIndex = 0;
     sljit_s32 laneIndex = 0;
 
     switch (instr->opcode()) {
     case ByteCode::V128Load8LaneMemIdxOpcode:
+    case ByteCode::V128Load8LaneMemIdxM64Opcode:
     case ByteCode::V128Load8LaneOpcode:
+    case ByteCode::V128Load8LaneM64Opcode:
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
         size = 1;
         break;
     case ByteCode::V128Load16LaneMemIdxOpcode:
+    case ByteCode::V128Load16LaneMemIdxM64Opcode:
     case ByteCode::V128Load16LaneOpcode:
+    case ByteCode::V128Load16LaneM64Opcode:
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16;
         size = 2;
         break;
     case ByteCode::V128Load32LaneMemIdxOpcode:
+    case ByteCode::V128Load32LaneMemIdxM64Opcode:
     case ByteCode::V128Load32LaneOpcode:
+    case ByteCode::V128Load32LaneM64Opcode:
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
         size = 4;
         break;
     default:
-        ASSERT(instr->opcode() == ByteCode::V128Load64LaneOpcode || instr->opcode() == ByteCode::V128Load64LaneMemIdxOpcode);
+        ASSERT(instr->opcode() == ByteCode::V128Load64LaneOpcode || instr->opcode() == ByteCode::V128Load64LaneMemIdxOpcode
+               || instr->opcode() == ByteCode::V128Load64LaneM64Opcode || instr->opcode() == ByteCode::V128Load64LaneMemIdxM64Opcode);
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE) \
     && !(defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
         simdType = SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64 | SLJIT_SIMD_FLOAT;
@@ -717,15 +882,30 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
         break;
     }
 
-    if (instr->info() & Instruction::kMultiMemory) {
-        SIMDMemoryLoadMemIdx* loadMemIdxOperation = reinterpret_cast<SIMDMemoryLoadMemIdx*>(instr->byteCode());
-        offset = loadMemIdxOperation->offset();
-        laneIndex = loadMemIdxOperation->index();
-        memIndex = loadMemIdxOperation->memIndex();
+    if (!(instr->info() & Instruction::kMemory64)) {
+        if (instr->info() & Instruction::kMultiMemory) {
+            SIMDMemoryLoadMemIdx* loadMemIdxOperation = reinterpret_cast<SIMDMemoryLoadMemIdx*>(instr->byteCode());
+            offset = loadMemIdxOperation->offset();
+            laneIndex = loadMemIdxOperation->index();
+            memIndex = loadMemIdxOperation->memIndex();
+        } else {
+            SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(instr->byteCode());
+            offset = loadOperation->offset();
+            laneIndex = loadOperation->index();
+        }
     } else {
-        SIMDMemoryLoad* loadOperation = reinterpret_cast<SIMDMemoryLoad*>(instr->byteCode());
-        offset = loadOperation->offset();
-        laneIndex = loadOperation->index();
+        options |= MemAddress::Memory64;
+
+        if (instr->info() & Instruction::kMultiMemory) {
+            SIMDMemoryLoadMemIdxM64* loadMemIdxM64Operation = reinterpret_cast<SIMDMemoryLoadMemIdxM64*>(instr->byteCode());
+            offset = loadMemIdxM64Operation->offset();
+            laneIndex = loadMemIdxM64Operation->index();
+            memIndex = loadMemIdxM64Operation->memIndex();
+        } else {
+            SIMDMemoryLoadM64* loadM64Operation = reinterpret_cast<SIMDMemoryLoadM64*>(instr->byteCode());
+            offset = loadM64Operation->offset();
+            laneIndex = loadM64Operation->index();
+        }
     }
 
     Operand* operands = instr->operands();
@@ -764,7 +944,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 {
     sljit_s32 opcode;
     sljit_u32 size;
-    sljit_u32 offset = 0;
+    uint64_t offset = 0;
     sljit_u32 options = 0;
     sljit_u16 memIndex = 0;
 #ifdef HAS_SIMD
@@ -774,42 +954,58 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     default:
-        ASSERT(instr->opcode() == ByteCode::Store32Opcode);
+        ASSERT(instr->opcode() == ByteCode::Store32Opcode || instr->opcode() == ByteCode::Store32M64Opcode);
+        options |= MemAddress::NoOffset;
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F32 : SLJIT_MOV32;
         size = 4;
         break;
     case ByteCode::Store64Opcode:
+    case ByteCode::Store64M64Opcode:
+        options |= MemAddress::NoOffset;
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
     case ByteCode::I32AtomicStoreMemIdxOpcode:
+    case ByteCode::I32AtomicStoreMemIdxM64Opcode:
     case ByteCode::I32AtomicStoreOpcode:
+    case ByteCode::I32AtomicStoreM64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I32StoreMemIdxOpcode:
+    case ByteCode::I32StoreMemIdxM64Opcode:
     case ByteCode::I32StoreOpcode:
+    case ByteCode::I32StoreM64Opcode:
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F32 : SLJIT_MOV32;
         size = 4;
         break;
     case ByteCode::I32AtomicStore8MemIdxOpcode:
+    case ByteCode::I32AtomicStore8MemIdxM64Opcode:
     case ByteCode::I32AtomicStore8Opcode:
-        FALLTHROUGH;
+    case ByteCode::I32AtomicStore8M64Opcode:
     case ByteCode::I32Store8MemIdxOpcode:
+    case ByteCode::I32Store8MemIdxM64Opcode:
     case ByteCode::I32Store8Opcode:
+    case ByteCode::I32Store8M64Opcode:
         opcode = SLJIT_MOV32_U8;
         size = 1;
         break;
     case ByteCode::I32AtomicStore16MemIdxOpcode:
+    case ByteCode::I32AtomicStore16MemIdxM64Opcode:
     case ByteCode::I32AtomicStore16Opcode:
+    case ByteCode::I32AtomicStore16M64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I32Store16MemIdxOpcode:
+    case ByteCode::I32Store16MemIdxM64Opcode:
     case ByteCode::I32Store16Opcode:
+    case ByteCode::I32Store16M64Opcode:
         opcode = SLJIT_MOV32_U16;
         size = 2;
         break;
     case ByteCode::I64AtomicStoreMemIdxOpcode:
+    case ByteCode::I64AtomicStoreMemIdxM64Opcode:
     case ByteCode::I64AtomicStoreOpcode:
+    case ByteCode::I64AtomicStoreM64Opcode:
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         emitAtomicLoadStore64(compiler, instr);
         return;
@@ -817,63 +1013,87 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I64StoreMemIdxOpcode:
+    case ByteCode::I64StoreMemIdxM64Opcode:
     case ByteCode::I64StoreOpcode:
+    case ByteCode::I64StoreM64Opcode:
         opcode = (instr->info() & Instruction::kHasFloatOperand) ? SLJIT_MOV_F64 : SLJIT_MOV;
         size = 8;
         break;
     case ByteCode::I64AtomicStore8MemIdxOpcode:
+    case ByteCode::I64AtomicStore8MemIdxM64Opcode:
     case ByteCode::I64AtomicStore8Opcode:
+    case ByteCode::I64AtomicStore8M64Opcode:
         FALLTHROUGH;
     case ByteCode::I64Store8MemIdxOpcode:
+    case ByteCode::I64Store8MemIdxM64Opcode:
     case ByteCode::I64Store8Opcode:
+    case ByteCode::I64Store8M64Opcode:
         opcode = SLJIT_MOV_U8;
         size = 1;
         break;
     case ByteCode::I64AtomicStore16MemIdxOpcode:
+    case ByteCode::I64AtomicStore16MemIdxM64Opcode:
     case ByteCode::I64AtomicStore16Opcode:
+    case ByteCode::I64AtomicStore16M64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I64Store16MemIdxOpcode:
+    case ByteCode::I64Store16MemIdxM64Opcode:
     case ByteCode::I64Store16Opcode:
+    case ByteCode::I64Store16M64Opcode:
         opcode = SLJIT_MOV_U16;
         size = 2;
         break;
     case ByteCode::I64AtomicStore32MemIdxOpcode:
+    case ByteCode::I64AtomicStore32MemIdxM64Opcode:
     case ByteCode::I64AtomicStore32Opcode:
+    case ByteCode::I64AtomicStore32M64Opcode:
         options |= MemAddress::CheckNaturalAlignment;
         FALLTHROUGH;
     case ByteCode::I64Store32MemIdxOpcode:
+    case ByteCode::I64Store32MemIdxM64Opcode:
     case ByteCode::I64Store32Opcode:
+    case ByteCode::I64Store32M64Opcode:
         opcode = SLJIT_MOV_U32;
         size = 4;
         break;
 #ifdef HAS_SIMD
     case ByteCode::V128StoreMemIdxOpcode:
+    case ByteCode::V128StoreMemIdxM64Opcode:
     case ByteCode::V128StoreOpcode:
+    case ByteCode::V128StoreM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128;
         size = 16;
         break;
     case ByteCode::V128Store8LaneMemIdxOpcode:
+    case ByteCode::V128Store8LaneMemIdxM64Opcode:
     case ByteCode::V128Store8LaneOpcode:
+    case ByteCode::V128Store8LaneM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_8;
         size = 1;
         break;
     case ByteCode::V128Store16LaneMemIdxOpcode:
+    case ByteCode::V128Store16LaneMemIdxM64Opcode:
     case ByteCode::V128Store16LaneOpcode:
+    case ByteCode::V128Store16LaneM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_16;
         size = 2;
         break;
     case ByteCode::V128Store32LaneMemIdxOpcode:
+    case ByteCode::V128Store32LaneMemIdxM64Opcode:
     case ByteCode::V128Store32LaneOpcode:
+    case ByteCode::V128Store32LaneM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_32;
         size = 4;
         break;
     case ByteCode::V128Store64LaneMemIdxOpcode:
+    case ByteCode::V128Store64LaneMemIdxM64Opcode:
     case ByteCode::V128Store64LaneOpcode:
+    case ByteCode::V128Store64LaneM64Opcode:
         opcode = 0;
         simdType = SLJIT_SIMD_STORE | SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_64;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -884,32 +1104,62 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
     }
 
-    if (instr->opcode() != ByteCode::Store32Opcode && instr->opcode() != ByteCode::Store64Opcode) {
+    if (instr->info() & Instruction::kMemory64) {
+        options |= MemAddress::Memory64;
+    }
+
+    if (!(options & MemAddress::NoOffset)) {
+        if (!(options & MemAddress::Memory64)) {
 #ifdef HAS_SIMD
-        if (opcode != 0 || size == 16) {
+            if (opcode != 0 || size == 16) {
 #endif /* HAS_SIMD */
-            if (instr->info() & Instruction::kMultiMemory) {
-                ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
-                offset = storeMemIdxOperation->uint32Value();
-                memIndex = storeMemIdxOperation->memIndex();
-            } else {
-                ByteCodeOffset2Value* storeOperation = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode());
-                offset = storeOperation->uint32Value();
-            }
+                if (instr->info() & Instruction::kMultiMemory) {
+                    ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
+                    offset = storeMemIdxOperation->uint32Value();
+                    memIndex = storeMemIdxOperation->memIndex();
+                } else {
+                    offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uint32Value();
+                }
 #ifdef HAS_SIMD
+            } else {
+                if (instr->info() & Instruction::kMultiMemory) {
+                    SIMDMemoryStoreMemIdx* storeMemIdxOperation = reinterpret_cast<SIMDMemoryStoreMemIdx*>(instr->byteCode());
+                    offset = storeMemIdxOperation->offset();
+                    laneIndex = storeMemIdxOperation->index();
+                    memIndex = storeMemIdxOperation->memIndex();
+                } else {
+                    SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(instr->byteCode());
+                    offset = storeOperation->offset();
+                    laneIndex = storeOperation->index();
+                }
+            }
+#endif /* HAS_SIMD */
         } else {
-            if (instr->info() & Instruction::kMultiMemory) {
-                SIMDMemoryStoreMemIdx* storeMemIdxOperation = reinterpret_cast<SIMDMemoryStoreMemIdx*>(instr->byteCode());
-                offset = storeMemIdxOperation->offset();
-                laneIndex = storeMemIdxOperation->index();
-                memIndex = storeMemIdxOperation->memIndex();
-            } else {
-                SIMDMemoryStore* storeOperation = reinterpret_cast<SIMDMemoryStore*>(instr->byteCode());
-                offset = storeOperation->offset();
-                laneIndex = storeOperation->index();
-            }
-        }
+#ifdef HAS_SIMD
+            if (opcode != 0 || size == 16) {
 #endif /* HAS_SIMD */
+                if (instr->info() & Instruction::kMultiMemory) {
+                    ByteCodeOffset2Value64MemIdx* storeMemIdxM64Operation = reinterpret_cast<ByteCodeOffset2Value64MemIdx*>(instr->byteCode());
+                    offset = storeMemIdxM64Operation->uint64Value();
+                    memIndex = storeMemIdxM64Operation->memIndex();
+                } else {
+                    offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uint64Value();
+                }
+#ifdef HAS_SIMD
+            } else {
+                if (instr->info() & Instruction::kMultiMemory) {
+                    SIMDMemoryStoreMemIdxM64* storeMemIdxM64Operation = reinterpret_cast<SIMDMemoryStoreMemIdxM64*>(instr->byteCode());
+                    offset = storeMemIdxM64Operation->offset();
+                    laneIndex = storeMemIdxM64Operation->index();
+                    memIndex = storeMemIdxM64Operation->memIndex();
+                } else {
+                    SIMDMemoryStoreM64* storeM64Operation = reinterpret_cast<SIMDMemoryStoreM64*>(instr->byteCode());
+                    offset = storeM64Operation->offset();
+                    laneIndex = storeM64Operation->index();
+                }
+            }
+#endif /* HAS_SIMD */
+        }
     }
 
     sljit_s32 start = 0;
@@ -1109,21 +1359,32 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
 {
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
     uint32_t size = 8;
-    sljit_u32 offset;
+    uint64_t offset;
     sljit_u16 memIndex = 0;
 
     Operand* operands = instr->operands();
-    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
 
-    if (instr->info() & Instruction::kMultiMemory) {
-        AtomicRmwMemIdx* rmwMemIdxOperation = reinterpret_cast<AtomicRmwMemIdx*>(instr->byteCode());
-        offset = rmwMemIdxOperation->offset();
-        memIndex = rmwMemIdxOperation->memIndex();
+    if (!(instr->info() & Instruction::kMemory64)) {
+        if (instr->info() & Instruction::kMultiMemory) {
+            AtomicRmwMemIdx* rmwMemIdxOperation = reinterpret_cast<AtomicRmwMemIdx*>(instr->byteCode());
+            offset = rmwMemIdxOperation->offset();
+            memIndex = rmwMemIdxOperation->memIndex();
+        } else {
+            offset = reinterpret_cast<AtomicRmw*>(instr->byteCode())->offset();
+        }
     } else {
-        AtomicRmw* rmwOperation = reinterpret_cast<AtomicRmw*>(instr->byteCode());
-        offset = rmwOperation->offset();
+        options |= MemAddress::Memory64;
+
+        if (instr->info() & Instruction::kMultiMemory) {
+            AtomicRmwMemIdxM64* rmwMemIdxM64Operation = reinterpret_cast<AtomicRmwMemIdxM64*>(instr->byteCode());
+            offset = rmwMemIdxM64Operation->offset();
+            memIndex = rmwMemIdxM64Operation->memIndex();
+        } else {
+            offset = reinterpret_cast<AtomicRmwM64*>(instr->byteCode())->offset();
+        }
     }
 
+    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, size, memIndex);
 
     if (addr.memArg.arg == 0) {
@@ -1137,32 +1398,44 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I64AtomicRmwAddMemIdxOpcode:
-    case ByteCode::I64AtomicRmwAddOpcode: {
+    case ByteCode::I64AtomicRmwAddMemIdxM64Opcode:
+    case ByteCode::I64AtomicRmwAddOpcode:
+    case ByteCode::I64AtomicRmwAddM64Opcode: {
         functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwAdd64);
         break;
     }
     case ByteCode::I64AtomicRmwSubMemIdxOpcode:
-    case ByteCode::I64AtomicRmwSubOpcode: {
+    case ByteCode::I64AtomicRmwSubMemIdxM64Opcode:
+    case ByteCode::I64AtomicRmwSubOpcode:
+    case ByteCode::I64AtomicRmwSubM64Opcode: {
         functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwSub64);
         break;
     }
     case ByteCode::I64AtomicRmwAndMemIdxOpcode:
-    case ByteCode::I64AtomicRmwAndOpcode: {
+    case ByteCode::I64AtomicRmwAndMemIdxM64Opcode:
+    case ByteCode::I64AtomicRmwAndOpcode:
+    case ByteCode::I64AtomicRmwAndM64Opcode: {
         functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwAnd64);
         break;
     }
     case ByteCode::I64AtomicRmwOrMemIdxOpcode:
-    case ByteCode::I64AtomicRmwOrOpcode: {
+    case ByteCode::I64AtomicRmwOrMemIdxM64Opcode:
+    case ByteCode::I64AtomicRmwOrOpcode:
+    case ByteCode::I64AtomicRmwOrM64Opcode: {
         functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwOr64);
         break;
     }
     case ByteCode::I64AtomicRmwXorMemIdxOpcode:
-    case ByteCode::I64AtomicRmwXorOpcode: {
+    case ByteCode::I64AtomicRmwXorMemIdxM64Opcode:
+    case ByteCode::I64AtomicRmwXorOpcode:
+    case ByteCode::I64AtomicRmwXorM64Opcode: {
         functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwXor64);
         break;
     }
     case ByteCode::I64AtomicRmwXchgMemIdxOpcode:
-    case ByteCode::I64AtomicRmwXchgOpcode: {
+    case ByteCode::I64AtomicRmwXchgMemIdxM64Opcode:
+    case ByteCode::I64AtomicRmwXchgOpcode:
+    case ByteCode::I64AtomicRmwXchgM64Opcode: {
         functionAddr = GET_FUNC_ADDR(sljit_sw, atomicRmwXchg64);
         break;
     }
@@ -1205,21 +1478,32 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
 {
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
     uint32_t size = 8;
-    sljit_u32 offset;
+    uint64_t offset;
     sljit_u16 memIndex = 0;
 
     Operand* operands = instr->operands();
-    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
 
-    if (instr->info() & Instruction::kMultiMemory) {
-        AtomicRmwCmpxchgMemIdx* rmwCmpxchgMemIdxOperation = reinterpret_cast<AtomicRmwCmpxchgMemIdx*>(instr->byteCode());
-        offset = rmwCmpxchgMemIdxOperation->offset();
-        memIndex = rmwCmpxchgMemIdxOperation->memIndex();
+    if (!(instr->info() & Instruction::kMemory64)) {
+        if (instr->info() & Instruction::kMultiMemory) {
+            AtomicRmwCmpxchgMemIdx* rmwCmpxchgMemIdxOperation = reinterpret_cast<AtomicRmwCmpxchgMemIdx*>(instr->byteCode());
+            offset = rmwCmpxchgMemIdxOperation->offset();
+            memIndex = rmwCmpxchgMemIdxOperation->memIndex();
+        } else {
+            offset = reinterpret_cast<AtomicRmwCmpxchg*>(instr->byteCode())->offset();
+        }
     } else {
-        AtomicRmwCmpxchg* rmwCmpxchgOperation = reinterpret_cast<AtomicRmwCmpxchg*>(instr->byteCode());
-        offset = rmwCmpxchgOperation->offset();
+        options |= MemAddress::Memory64;
+
+        if (instr->info() & Instruction::kMultiMemory) {
+            AtomicRmwCmpxchgMemIdxM64* rmwCmpxchgMemIdxM64Operation = reinterpret_cast<AtomicRmwCmpxchgMemIdxM64*>(instr->byteCode());
+            offset = rmwCmpxchgMemIdxM64Operation->offset();
+            memIndex = rmwCmpxchgMemIdxM64Operation->memIndex();
+        } else {
+            offset = reinterpret_cast<AtomicRmwCmpxchgM64*>(instr->byteCode())->offset();
+        }
     }
 
+    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
     addr.check(compiler, operands, offset, size, memIndex);
 
     if (addr.memArg.arg == 0) {
@@ -1283,14 +1567,16 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     bool noShortAtomic = !(context->compiler->options() & JITCompiler::kHasShortAtomic);
     sljit_s32 operationSize = SLJIT_MOV;
     sljit_s32 size = 0;
-    sljit_s32 offset = 0;
+    uint64_t offset = 0;
     sljit_u16 memIndex = 0;
     sljit_s32 operation;
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
 
     switch (instr->opcode()) {
     case ByteCode::I64AtomicRmwCmpxchgMemIdxOpcode:
-    case ByteCode::I64AtomicRmwCmpxchgOpcode: {
+    case ByteCode::I64AtomicRmwCmpxchgMemIdxM64Opcode:
+    case ByteCode::I64AtomicRmwCmpxchgOpcode:
+    case ByteCode::I64AtomicRmwCmpxchgM64Opcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         emitAtomicRmwCmpxchg64(compiler, instr);
         return;
@@ -1301,17 +1587,29 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     }
     case ByteCode::I64AtomicRmwAddMemIdxOpcode:
+    case ByteCode::I64AtomicRmwAddMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwSubMemIdxOpcode:
+    case ByteCode::I64AtomicRmwSubMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwAndMemIdxOpcode:
+    case ByteCode::I64AtomicRmwAndMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwOrMemIdxOpcode:
+    case ByteCode::I64AtomicRmwOrMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwXorMemIdxOpcode:
+    case ByteCode::I64AtomicRmwXorMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwXchgMemIdxOpcode:
+    case ByteCode::I64AtomicRmwXchgMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwAddOpcode:
+    case ByteCode::I64AtomicRmwAddM64Opcode:
     case ByteCode::I64AtomicRmwSubOpcode:
+    case ByteCode::I64AtomicRmwSubM64Opcode:
     case ByteCode::I64AtomicRmwAndOpcode:
+    case ByteCode::I64AtomicRmwAndM64Opcode:
     case ByteCode::I64AtomicRmwOrOpcode:
+    case ByteCode::I64AtomicRmwOrM64Opcode:
     case ByteCode::I64AtomicRmwXorOpcode:
-    case ByteCode::I64AtomicRmwXchgOpcode: {
+    case ByteCode::I64AtomicRmwXorM64Opcode:
+    case ByteCode::I64AtomicRmwXchgOpcode:
+    case ByteCode::I64AtomicRmwXchgM64Opcode: {
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
         emitAtomicRmw64(compiler, instr);
         return;
@@ -1322,37 +1620,65 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
     }
     case ByteCode::I32AtomicRmwAddMemIdxOpcode:
+    case ByteCode::I32AtomicRmwAddMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwSubMemIdxOpcode:
+    case ByteCode::I32AtomicRmwSubMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwAndMemIdxOpcode:
+    case ByteCode::I32AtomicRmwAndMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwOrMemIdxOpcode:
+    case ByteCode::I32AtomicRmwOrMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwXorMemIdxOpcode:
+    case ByteCode::I32AtomicRmwXorMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwXchgMemIdxOpcode:
+    case ByteCode::I32AtomicRmwXchgMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwCmpxchgMemIdxOpcode:
+    case ByteCode::I32AtomicRmwCmpxchgMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwAddOpcode:
+    case ByteCode::I32AtomicRmwAddM64Opcode:
     case ByteCode::I32AtomicRmwSubOpcode:
+    case ByteCode::I32AtomicRmwSubM64Opcode:
     case ByteCode::I32AtomicRmwAndOpcode:
+    case ByteCode::I32AtomicRmwAndM64Opcode:
     case ByteCode::I32AtomicRmwOrOpcode:
+    case ByteCode::I32AtomicRmwOrM64Opcode:
     case ByteCode::I32AtomicRmwXorOpcode:
+    case ByteCode::I32AtomicRmwXorM64Opcode:
     case ByteCode::I32AtomicRmwXchgOpcode:
-    case ByteCode::I32AtomicRmwCmpxchgOpcode: {
+    case ByteCode::I32AtomicRmwXchgM64Opcode:
+    case ByteCode::I32AtomicRmwCmpxchgOpcode:
+    case ByteCode::I32AtomicRmwCmpxchgM64Opcode: {
         operationSize = SLJIT_MOV32;
         size = 4;
         break;
     }
     case ByteCode::I64AtomicRmw32AddUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32AddUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32SubUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32SubUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32AndUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32AndUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32OrUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32OrUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32XorUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32XorUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32XchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32XchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32CmpxchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32AddUOpcode:
+    case ByteCode::I64AtomicRmw32AddUM64Opcode:
     case ByteCode::I64AtomicRmw32SubUOpcode:
+    case ByteCode::I64AtomicRmw32SubUM64Opcode:
     case ByteCode::I64AtomicRmw32AndUOpcode:
+    case ByteCode::I64AtomicRmw32AndUM64Opcode:
     case ByteCode::I64AtomicRmw32OrUOpcode:
+    case ByteCode::I64AtomicRmw32OrUM64Opcode:
     case ByteCode::I64AtomicRmw32XorUOpcode:
+    case ByteCode::I64AtomicRmw32XorUM64Opcode:
     case ByteCode::I64AtomicRmw32XchgUOpcode:
-    case ByteCode::I64AtomicRmw32CmpxchgUOpcode: {
+    case ByteCode::I64AtomicRmw32XchgUM64Opcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUM64Opcode: {
 #if defined(SLJIT_CONFIG_RISCV) && SLJIT_CONFIG_RISCV
         operationSize = SLJIT_MOV_S32;
 #else /* !SLJIT_CONFIG_RISCV */
@@ -1362,75 +1688,131 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
         break;
     }
     case ByteCode::I32AtomicRmw8AddUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8AddUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8SubUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8SubUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8AndUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8AndUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8OrUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8OrUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8XorUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8XorUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8XchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8XchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8CmpxchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8CmpxchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8AddUOpcode:
+    case ByteCode::I32AtomicRmw8AddUM64Opcode:
     case ByteCode::I32AtomicRmw8SubUOpcode:
+    case ByteCode::I32AtomicRmw8SubUM64Opcode:
     case ByteCode::I32AtomicRmw8AndUOpcode:
+    case ByteCode::I32AtomicRmw8AndUM64Opcode:
     case ByteCode::I32AtomicRmw8OrUOpcode:
+    case ByteCode::I32AtomicRmw8OrUM64Opcode:
     case ByteCode::I32AtomicRmw8XorUOpcode:
+    case ByteCode::I32AtomicRmw8XorUM64Opcode:
     case ByteCode::I32AtomicRmw8XchgUOpcode:
-    case ByteCode::I32AtomicRmw8CmpxchgUOpcode: {
+    case ByteCode::I32AtomicRmw8XchgUM64Opcode:
+    case ByteCode::I32AtomicRmw8CmpxchgUOpcode:
+    case ByteCode::I32AtomicRmw8CmpxchgUM64Opcode: {
         operationSize = SLJIT_MOV32_U8;
         size = 1;
         options &= ~MemAddress::CheckNaturalAlignment;
         break;
     }
     case ByteCode::I64AtomicRmw8OrUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8OrUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8AddUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8AddUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8SubUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8SubUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8AndUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8AndUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8XorUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8XorUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8XchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8XchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8CmpxchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8CmpxchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8OrUOpcode:
+    case ByteCode::I64AtomicRmw8OrUM64Opcode:
     case ByteCode::I64AtomicRmw8AddUOpcode:
+    case ByteCode::I64AtomicRmw8AddUM64Opcode:
     case ByteCode::I64AtomicRmw8SubUOpcode:
+    case ByteCode::I64AtomicRmw8SubUM64Opcode:
     case ByteCode::I64AtomicRmw8AndUOpcode:
+    case ByteCode::I64AtomicRmw8AndUM64Opcode:
     case ByteCode::I64AtomicRmw8XorUOpcode:
+    case ByteCode::I64AtomicRmw8XorUM64Opcode:
     case ByteCode::I64AtomicRmw8XchgUOpcode:
-    case ByteCode::I64AtomicRmw8CmpxchgUOpcode: {
+    case ByteCode::I64AtomicRmw8XchgUM64Opcode:
+    case ByteCode::I64AtomicRmw8CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmw8CmpxchgUM64Opcode: {
         operationSize = SLJIT_MOV_U8;
         size = 1;
         options &= ~MemAddress::CheckNaturalAlignment;
         break;
     }
     case ByteCode::I32AtomicRmw16AddUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16AddUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16SubUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16SubUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16AndUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16AndUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16OrUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16OrUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16XorUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16XorUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16XchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16XchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16CmpxchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16CmpxchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16AddUOpcode:
+    case ByteCode::I32AtomicRmw16AddUM64Opcode:
     case ByteCode::I32AtomicRmw16SubUOpcode:
+    case ByteCode::I32AtomicRmw16SubUM64Opcode:
     case ByteCode::I32AtomicRmw16AndUOpcode:
+    case ByteCode::I32AtomicRmw16AndUM64Opcode:
     case ByteCode::I32AtomicRmw16OrUOpcode:
+    case ByteCode::I32AtomicRmw16OrUM64Opcode:
     case ByteCode::I32AtomicRmw16XorUOpcode:
+    case ByteCode::I32AtomicRmw16XorUM64Opcode:
     case ByteCode::I32AtomicRmw16XchgUOpcode:
-    case ByteCode::I32AtomicRmw16CmpxchgUOpcode: {
+    case ByteCode::I32AtomicRmw16XchgUM64Opcode:
+    case ByteCode::I32AtomicRmw16CmpxchgUOpcode:
+    case ByteCode::I32AtomicRmw16CmpxchgUM64Opcode: {
         operationSize = SLJIT_MOV32_U16;
         size = 2;
         break;
     }
     case ByteCode::I64AtomicRmw16AddUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16AddUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16SubUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16SubUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16AndUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16AndUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16OrUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16OrUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16XorUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16XorUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16XchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16XchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16CmpxchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16CmpxchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16AddUOpcode:
+    case ByteCode::I64AtomicRmw16AddUM64Opcode:
     case ByteCode::I64AtomicRmw16SubUOpcode:
+    case ByteCode::I64AtomicRmw16SubUM64Opcode:
     case ByteCode::I64AtomicRmw16AndUOpcode:
+    case ByteCode::I64AtomicRmw16AndUM64Opcode:
     case ByteCode::I64AtomicRmw16OrUOpcode:
+    case ByteCode::I64AtomicRmw16OrUM64Opcode:
     case ByteCode::I64AtomicRmw16XorUOpcode:
+    case ByteCode::I64AtomicRmw16XorUM64Opcode:
     case ByteCode::I64AtomicRmw16XchgUOpcode:
-    case ByteCode::I64AtomicRmw16CmpxchgUOpcode: {
+    case ByteCode::I64AtomicRmw16XchgUM64Opcode:
+    case ByteCode::I64AtomicRmw16CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmw16CmpxchgUM64Opcode: {
         operationSize = SLJIT_MOV_U16;
         size = 2;
         break;
@@ -1443,127 +1825,229 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::I32AtomicRmwAddMemIdxOpcode:
+    case ByteCode::I32AtomicRmwAddMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8AddUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8AddUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16AddUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16AddUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwAddMemIdxOpcode:
+    case ByteCode::I64AtomicRmwAddMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8AddUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8AddUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16AddUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16AddUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32AddUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32AddUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwAddOpcode:
+    case ByteCode::I32AtomicRmwAddM64Opcode:
     case ByteCode::I32AtomicRmw8AddUOpcode:
+    case ByteCode::I32AtomicRmw8AddUM64Opcode:
     case ByteCode::I32AtomicRmw16AddUOpcode:
+    case ByteCode::I32AtomicRmw16AddUM64Opcode:
     case ByteCode::I64AtomicRmwAddOpcode:
+    case ByteCode::I64AtomicRmwAddM64Opcode:
     case ByteCode::I64AtomicRmw8AddUOpcode:
+    case ByteCode::I64AtomicRmw8AddUM64Opcode:
     case ByteCode::I64AtomicRmw16AddUOpcode:
-    case ByteCode::I64AtomicRmw32AddUOpcode: {
+    case ByteCode::I64AtomicRmw16AddUM64Opcode:
+    case ByteCode::I64AtomicRmw32AddUOpcode:
+    case ByteCode::I64AtomicRmw32AddUM64Opcode: {
         operation = SLJIT_ADD;
         break;
     }
     case ByteCode::I32AtomicRmwSubMemIdxOpcode:
+    case ByteCode::I32AtomicRmwSubMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8SubUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8SubUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16SubUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16SubUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwSubMemIdxOpcode:
+    case ByteCode::I64AtomicRmwSubMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8SubUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8SubUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16SubUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16SubUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32SubUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32SubUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwSubOpcode:
+    case ByteCode::I32AtomicRmwSubM64Opcode:
     case ByteCode::I32AtomicRmw8SubUOpcode:
+    case ByteCode::I32AtomicRmw8SubUM64Opcode:
     case ByteCode::I32AtomicRmw16SubUOpcode:
+    case ByteCode::I32AtomicRmw16SubUM64Opcode:
     case ByteCode::I64AtomicRmwSubOpcode:
+    case ByteCode::I64AtomicRmwSubM64Opcode:
     case ByteCode::I64AtomicRmw8SubUOpcode:
+    case ByteCode::I64AtomicRmw8SubUM64Opcode:
     case ByteCode::I64AtomicRmw16SubUOpcode:
-    case ByteCode::I64AtomicRmw32SubUOpcode: {
+    case ByteCode::I64AtomicRmw16SubUM64Opcode:
+    case ByteCode::I64AtomicRmw32SubUOpcode:
+    case ByteCode::I64AtomicRmw32SubUM64Opcode: {
         operation = SLJIT_SUB;
         break;
     }
     case ByteCode::I32AtomicRmwAndMemIdxOpcode:
+    case ByteCode::I32AtomicRmwAndMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8AndUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8AndUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16AndUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16AndUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwAndMemIdxOpcode:
+    case ByteCode::I64AtomicRmwAndMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8AndUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8AndUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16AndUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16AndUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32AndUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32AndUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwAndOpcode:
+    case ByteCode::I32AtomicRmwAndM64Opcode:
     case ByteCode::I32AtomicRmw8AndUOpcode:
+    case ByteCode::I32AtomicRmw8AndUM64Opcode:
     case ByteCode::I32AtomicRmw16AndUOpcode:
+    case ByteCode::I32AtomicRmw16AndUM64Opcode:
     case ByteCode::I64AtomicRmwAndOpcode:
+    case ByteCode::I64AtomicRmwAndM64Opcode:
     case ByteCode::I64AtomicRmw8AndUOpcode:
+    case ByteCode::I64AtomicRmw8AndUM64Opcode:
     case ByteCode::I64AtomicRmw16AndUOpcode:
-    case ByteCode::I64AtomicRmw32AndUOpcode: {
+    case ByteCode::I64AtomicRmw16AndUM64Opcode:
+    case ByteCode::I64AtomicRmw32AndUOpcode:
+    case ByteCode::I64AtomicRmw32AndUM64Opcode: {
         operation = SLJIT_AND;
         break;
     }
     case ByteCode::I32AtomicRmwOrMemIdxOpcode:
+    case ByteCode::I32AtomicRmwOrMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8OrUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8OrUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16OrUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16OrUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwOrMemIdxOpcode:
+    case ByteCode::I64AtomicRmwOrMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8OrUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8OrUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16OrUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16OrUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32OrUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32OrUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwOrOpcode:
+    case ByteCode::I32AtomicRmwOrM64Opcode:
     case ByteCode::I32AtomicRmw8OrUOpcode:
+    case ByteCode::I32AtomicRmw8OrUM64Opcode:
     case ByteCode::I32AtomicRmw16OrUOpcode:
+    case ByteCode::I32AtomicRmw16OrUM64Opcode:
     case ByteCode::I64AtomicRmwOrOpcode:
+    case ByteCode::I64AtomicRmwOrM64Opcode:
     case ByteCode::I64AtomicRmw8OrUOpcode:
+    case ByteCode::I64AtomicRmw8OrUM64Opcode:
     case ByteCode::I64AtomicRmw16OrUOpcode:
-    case ByteCode::I64AtomicRmw32OrUOpcode: {
+    case ByteCode::I64AtomicRmw16OrUM64Opcode:
+    case ByteCode::I64AtomicRmw32OrUOpcode:
+    case ByteCode::I64AtomicRmw32OrUM64Opcode: {
         operation = SLJIT_OR;
         break;
     }
     case ByteCode::I32AtomicRmwXorMemIdxOpcode:
+    case ByteCode::I32AtomicRmwXorMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8XorUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8XorUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16XorUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16XorUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwXorMemIdxOpcode:
+    case ByteCode::I64AtomicRmwXorMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8XorUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8XorUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16XorUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16XorUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32XorUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32XorUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwXorOpcode:
+    case ByteCode::I32AtomicRmwXorM64Opcode:
     case ByteCode::I32AtomicRmw8XorUOpcode:
+    case ByteCode::I32AtomicRmw8XorUM64Opcode:
     case ByteCode::I32AtomicRmw16XorUOpcode:
+    case ByteCode::I32AtomicRmw16XorUM64Opcode:
     case ByteCode::I64AtomicRmwXorOpcode:
+    case ByteCode::I64AtomicRmwXorM64Opcode:
     case ByteCode::I64AtomicRmw8XorUOpcode:
+    case ByteCode::I64AtomicRmw8XorUM64Opcode:
     case ByteCode::I64AtomicRmw16XorUOpcode:
-    case ByteCode::I64AtomicRmw32XorUOpcode: {
+    case ByteCode::I64AtomicRmw16XorUM64Opcode:
+    case ByteCode::I64AtomicRmw32XorUOpcode:
+    case ByteCode::I64AtomicRmw32XorUM64Opcode: {
         operation = SLJIT_XOR;
         break;
     }
     case ByteCode::I32AtomicRmwXchgMemIdxOpcode:
+    case ByteCode::I32AtomicRmwXchgMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8XchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8XchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16XchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16XchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwXchgMemIdxOpcode:
+    case ByteCode::I64AtomicRmwXchgMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8XchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8XchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16XchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16XchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32XchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32XchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwXchgOpcode:
+    case ByteCode::I32AtomicRmwXchgM64Opcode:
     case ByteCode::I32AtomicRmw8XchgUOpcode:
+    case ByteCode::I32AtomicRmw8XchgUM64Opcode:
     case ByteCode::I32AtomicRmw16XchgUOpcode:
+    case ByteCode::I32AtomicRmw16XchgUM64Opcode:
     case ByteCode::I64AtomicRmwXchgOpcode:
+    case ByteCode::I64AtomicRmwXchgM64Opcode:
     case ByteCode::I64AtomicRmw8XchgUOpcode:
+    case ByteCode::I64AtomicRmw8XchgUM64Opcode:
     case ByteCode::I64AtomicRmw16XchgUOpcode:
-    case ByteCode::I64AtomicRmw32XchgUOpcode: {
+    case ByteCode::I64AtomicRmw16XchgUM64Opcode:
+    case ByteCode::I64AtomicRmw32XchgUOpcode:
+    case ByteCode::I64AtomicRmw32XchgUM64Opcode: {
         operation = OP_XCHG;
         break;
     }
     case ByteCode::I32AtomicRmwCmpxchgMemIdxOpcode:
+    case ByteCode::I32AtomicRmwCmpxchgMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw8CmpxchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw8CmpxchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmw16CmpxchgUMemIdxOpcode:
+    case ByteCode::I32AtomicRmw16CmpxchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmwCmpxchgMemIdxOpcode:
+    case ByteCode::I64AtomicRmwCmpxchgMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw8CmpxchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw8CmpxchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw16CmpxchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw16CmpxchgUMemIdxM64Opcode:
     case ByteCode::I64AtomicRmw32CmpxchgUMemIdxOpcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUMemIdxM64Opcode:
     case ByteCode::I32AtomicRmwCmpxchgOpcode:
+    case ByteCode::I32AtomicRmwCmpxchgM64Opcode:
     case ByteCode::I32AtomicRmw8CmpxchgUOpcode:
+    case ByteCode::I32AtomicRmw8CmpxchgUM64Opcode:
     case ByteCode::I32AtomicRmw16CmpxchgUOpcode:
+    case ByteCode::I32AtomicRmw16CmpxchgUM64Opcode:
     case ByteCode::I64AtomicRmwCmpxchgOpcode:
+    case ByteCode::I64AtomicRmwCmpxchgM64Opcode:
     case ByteCode::I64AtomicRmw8CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmw8CmpxchgUM64Opcode:
     case ByteCode::I64AtomicRmw16CmpxchgUOpcode:
-    case ByteCode::I64AtomicRmw32CmpxchgUOpcode: {
+    case ByteCode::I64AtomicRmw16CmpxchgUM64Opcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUOpcode:
+    case ByteCode::I64AtomicRmw32CmpxchgUM64Opcode: {
         operation = OP_CMPXCHG;
         break;
     }
     default:
         RELEASE_ASSERT_NOT_REACHED();
         break;
+    }
+
+    if (instr->info() & Instruction::kMemory64) {
+        options |= MemAddress::Memory64;
     }
 
     Operand* operands = instr->operands();
@@ -1596,14 +2080,27 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
     if (operation != OP_CMPXCHG) {
-        if (instr->info() & Instruction::kMultiMemory) {
-            AtomicRmwMemIdx* atomicRmwMemIdxOperation = reinterpret_cast<AtomicRmwMemIdx*>(instr->byteCode());
-            memIndex = atomicRmwMemIdxOperation->memIndex();
-            offset = atomicRmwMemIdxOperation->offset();
+        if (!(options & MemAddress::Memory64)) {
+            if (instr->info() & Instruction::kMultiMemory) {
+                AtomicRmwMemIdx* atomicRmwMemIdxOperation = reinterpret_cast<AtomicRmwMemIdx*>(instr->byteCode());
+                memIndex = atomicRmwMemIdxOperation->memIndex();
+                offset = atomicRmwMemIdxOperation->offset();
+            } else {
+                offset = reinterpret_cast<AtomicRmw*>(instr->byteCode())->offset();
+            }
+        } else if (instr->info() & Instruction::kMultiMemory) {
+            AtomicRmwMemIdxM64* atomicRmwMemIdxM64Operation = reinterpret_cast<AtomicRmwMemIdxM64*>(instr->byteCode());
+            memIndex = atomicRmwMemIdxM64Operation->memIndex();
+            offset = atomicRmwMemIdxM64Operation->offset();
         } else {
-            offset = reinterpret_cast<AtomicRmw*>(instr->byteCode())->offset();
+            offset = reinterpret_cast<AtomicRmwM64*>(instr->byteCode())->offset();
         }
+
         addr.check(compiler, operands, offset, size, memIndex);
+
+        if (addr.memArg.arg == 0) {
+            return;
+        }
 
         JITArg dst;
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
@@ -1723,14 +2220,27 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    if (instr->info() & Instruction::kMultiMemory) {
-        AtomicRmwCmpxchgMemIdx* atomicRmwCmpxchgMemIdxOperation = reinterpret_cast<AtomicRmwCmpxchgMemIdx*>(instr->byteCode());
-        memIndex = atomicRmwCmpxchgMemIdxOperation->memIndex();
-        offset = atomicRmwCmpxchgMemIdxOperation->offset();
+    if (!(options & MemAddress::Memory64)) {
+        if (instr->info() & Instruction::kMultiMemory) {
+            AtomicRmwCmpxchgMemIdx* atomicRmwCmpxchgMemIdxOperation = reinterpret_cast<AtomicRmwCmpxchgMemIdx*>(instr->byteCode());
+            memIndex = atomicRmwCmpxchgMemIdxOperation->memIndex();
+            offset = atomicRmwCmpxchgMemIdxOperation->offset();
+        } else {
+            offset = reinterpret_cast<AtomicRmwCmpxchg*>(instr->byteCode())->offset();
+        }
+    } else if (instr->info() & Instruction::kMultiMemory) {
+        AtomicRmwCmpxchgMemIdxM64* atomicRmwCmpxchgMemIdxM64Operation = reinterpret_cast<AtomicRmwCmpxchgMemIdxM64*>(instr->byteCode());
+        memIndex = atomicRmwCmpxchgMemIdxM64Operation->memIndex();
+        offset = atomicRmwCmpxchgMemIdxM64Operation->offset();
     } else {
-        offset = reinterpret_cast<AtomicRmwCmpxchg*>(instr->byteCode())->offset();
+        offset = reinterpret_cast<AtomicRmwCmpxchgM64*>(instr->byteCode())->offset();
     }
+
     addr.check(compiler, operands, offset, size, memIndex);
+
+    if (addr.memArg.arg == 0) {
+        return;
+    }
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     JITArg srcExpected, srcValue, dst;
@@ -1994,7 +2504,7 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
 {
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
     sljit_s32 size = 0;
-    sljit_s32 offset = 0;
+    uint64_t offset = 0;
     sljit_u16 memIndex = 0;
 
     CompileContext* context = CompileContext::get(compiler);
@@ -2002,12 +2512,16 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::MemoryAtomicWait64MemIdxOpcode:
-    case ByteCode::MemoryAtomicWait64Opcode: {
+    case ByteCode::MemoryAtomicWait64MemIdxM64Opcode:
+    case ByteCode::MemoryAtomicWait64Opcode:
+    case ByteCode::MemoryAtomicWait64M64Opcode: {
         size = 8;
         break;
     }
     case ByteCode::MemoryAtomicWait32MemIdxOpcode:
-    case ByteCode::MemoryAtomicWait32Opcode: {
+    case ByteCode::MemoryAtomicWait32MemIdxM64Opcode:
+    case ByteCode::MemoryAtomicWait32Opcode:
+    case ByteCode::MemoryAtomicWait32M64Opcode: {
         size = 4;
         break;
     }
@@ -2017,18 +2531,33 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     }
     }
 
-    if (instr->info() & Instruction::kMultiMemory) {
-        ByteCodeOffset4ValueMemIdx* atomicWaitMemIdxOperation = reinterpret_cast<ByteCodeOffset4ValueMemIdx*>(instr->byteCode());
-        offset = atomicWaitMemIdxOperation->offset();
-        memIndex = atomicWaitMemIdxOperation->memIndex();
+    if (!(instr->info() & Instruction::kMemory64)) {
+        if (instr->info() & Instruction::kMultiMemory) {
+            ByteCodeOffset4ValueMemIdx* atomicWaitMemIdxOperation = reinterpret_cast<ByteCodeOffset4ValueMemIdx*>(instr->byteCode());
+            offset = atomicWaitMemIdxOperation->offset();
+            memIndex = atomicWaitMemIdxOperation->memIndex();
+        } else {
+            offset = reinterpret_cast<ByteCodeOffset4Value*>(instr->byteCode())->offset();
+        }
     } else {
-        ByteCodeOffset4Value* atomicWaitOperation = reinterpret_cast<ByteCodeOffset4Value*>(instr->byteCode());
-        offset = atomicWaitOperation->offset();
+        options |= MemAddress::Memory64;
+
+        if (instr->info() & Instruction::kMultiMemory) {
+            ByteCodeOffset4Value64MemIdx* atomicWaitMemIdxM64Operation = reinterpret_cast<ByteCodeOffset4Value64MemIdx*>(instr->byteCode());
+            offset = atomicWaitMemIdxM64Operation->offset();
+            memIndex = atomicWaitMemIdxM64Operation->memIndex();
+        } else {
+            offset = reinterpret_cast<ByteCodeOffset4Value64*>(instr->byteCode())->offset();
+        }
     }
 
     Operand* operands = instr->operands();
     MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, size, memIndex);
+
+    if (addr.memArg.arg == 0) {
+        return;
+    }
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     JITArgPair expectedPair;
@@ -2036,7 +2565,7 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     JITArg expected;
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    if (instr->opcode() == ByteCode::MemoryAtomicWait64Opcode || instr->opcode() == ByteCode::MemoryAtomicWait64MemIdxOpcode) {
+    if (size == 8) {
         expectedPair = JITArgPair(operands + 1);
     } else {
         expected = JITArg(operands + 1);
@@ -2051,7 +2580,7 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     struct sljit_jump* memoryShared;
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    if (instr->opcode() == ByteCode::MemoryAtomicWait64Opcode || instr->opcode() == ByteCode::MemoryAtomicWait64MemIdxOpcode) {
+    if (size == 8) {
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET, expectedPair.arg1, expectedPair.arg1w);
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_HIGH_OFFSET, expectedPair.arg2, expectedPair.arg2w);
     } else {
@@ -2092,21 +2621,36 @@ static sljit_s32 atomicNotifyCallback(Instance* instance, uint8_t* address, int3
 static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
 {
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
-    sljit_s32 offset = 0;
+    uint64_t offset = 0;
     sljit_u16 memIndex = 0;
 
-    if (instr->opcode() == ByteCode::MemoryAtomicNotifyMemIdxOpcode) {
-        MemoryAtomicNotifyMemIdx* atomicNotifyMemIdxOperation = reinterpret_cast<MemoryAtomicNotifyMemIdx*>(instr->byteCode());
-        offset = atomicNotifyMemIdxOperation->offset();
-        memIndex = atomicNotifyMemIdxOperation->memIndex();
+    if (!(instr->info() & Instruction::kMemory64)) {
+        if (instr->opcode() == ByteCode::MemoryAtomicNotifyMemIdxOpcode) {
+            MemoryAtomicNotifyMemIdx* atomicNotifyMemIdxOperation = reinterpret_cast<MemoryAtomicNotifyMemIdx*>(instr->byteCode());
+            offset = atomicNotifyMemIdxOperation->offset();
+            memIndex = atomicNotifyMemIdxOperation->memIndex();
+        } else {
+            offset = reinterpret_cast<MemoryAtomicNotify*>(instr->byteCode())->offset();
+        }
     } else {
-        MemoryAtomicNotify* atomicNotifyOperation = reinterpret_cast<MemoryAtomicNotify*>(instr->byteCode());
-        offset = atomicNotifyOperation->offset();
+        options |= MemAddress::Memory64;
+
+        if (instr->opcode() == ByteCode::MemoryAtomicNotifyMemIdxOpcode) {
+            MemoryAtomicNotifyMemIdxM64* atomicNotifyMemIdxM64Operation = reinterpret_cast<MemoryAtomicNotifyMemIdxM64*>(instr->byteCode());
+            offset = atomicNotifyMemIdxM64Operation->offset();
+            memIndex = atomicNotifyMemIdxM64Operation->memIndex();
+        } else {
+            offset = reinterpret_cast<MemoryAtomicNotifyM64*>(instr->byteCode())->offset();
+        }
     }
 
     Operand* operands = instr->operands();
     MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, 4, memIndex);
+
+    if (addr.memArg.arg == 0) {
+        return;
+    }
 
     JITArg count(operands + 1);
     JITArg dst(operands + 2);

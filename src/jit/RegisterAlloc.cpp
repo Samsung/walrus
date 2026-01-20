@@ -605,7 +605,7 @@ bool RegisterFile::reuseResult(uint8_t type, VariableList::Variable** reusableRe
     }
 #endif
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-    bool isInt64 = (type & Instruction::TypeMask) == Instruction::Int64Operand;
+    bool isInt64 = (type & Instruction::TypeMask) == Instruction::Int64Operand || (type & Instruction::TypeMask) == Instruction::Int64LowOperand;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
     for (uint32_t i = 0; i < 3; i++) {
@@ -623,8 +623,12 @@ bool RegisterFile::reuseResult(uint8_t type, VariableList::Variable** reusableRe
             registers->updateVariable(resultVariable->reg1, resultVariable);
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-            resultVariable->reg2 = variable->reg2;
-            registers->updateVariable(resultVariable->reg2, resultVariable);
+            resultVariable->reg2 = variable->reg1;
+            if (isInt64) {
+                ASSERT(variable->reg1 != variable->reg2);
+                resultVariable->reg2 = variable->reg2;
+                registers->updateVariable(resultVariable->reg2, resultVariable);
+            }
 #endif /* SLJIT_32BIT_ARCHITECTURE */
             return true;
         }

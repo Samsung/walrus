@@ -4126,10 +4126,10 @@ public:
 #endif
 };
 
-class MemoryAtomicWait32MemIdx : public ByteCodeOffset4Value {
+class MemoryAtomicWait32MemIdx : public ByteCodeOffset4ValueMemIdx {
 public:
     MemoryAtomicWait32MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait32MemIdxOpcode, src0, src1, src2, dst, offset)
+        : ByteCodeOffset4ValueMemIdx(index, alignment, Opcode::MemoryAtomicWait32MemIdxOpcode, src0, src1, src2, dst, offset)
         , m_memIndex(index)
         , m_alignment(alignment)
     {
@@ -4153,10 +4153,10 @@ protected:
     uint16_t m_alignment;
 };
 
-class MemoryAtomicWait32MemIdxM64 : public ByteCodeOffset4Value64 {
+class MemoryAtomicWait32MemIdxM64 : public ByteCodeOffset4Value64MemIdx {
 public:
     MemoryAtomicWait32MemIdxM64(uint32_t index, uint32_t alignment, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64(Opcode::MemoryAtomicWait32MemIdxM64Opcode, src0, src1, src2, dst, offset)
+        : ByteCodeOffset4Value64MemIdx(index, alignment, Opcode::MemoryAtomicWait32MemIdxM64Opcode, src0, src1, src2, dst, offset)
         , m_memIndex(index)
         , m_alignment(alignment)
     {
@@ -4210,10 +4210,10 @@ public:
 #endif
 };
 
-class MemoryAtomicWait64MemIdx : public ByteCodeOffset4Value {
+class MemoryAtomicWait64MemIdx : public ByteCodeOffset4ValueMemIdx {
 public:
     MemoryAtomicWait64MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait64MemIdxOpcode, src0, src1, src2, dst, offset)
+        : ByteCodeOffset4ValueMemIdx(index, alignment, Opcode::MemoryAtomicWait64MemIdxOpcode, src0, src1, src2, dst, offset)
         , m_memIndex(index)
         , m_alignment(alignment)
     {
@@ -4238,10 +4238,10 @@ protected:
     uint16_t m_alignment;
 };
 
-class MemoryAtomicWait64MemIdxM64 : public ByteCodeOffset4Value64 {
+class MemoryAtomicWait64MemIdxM64 : public ByteCodeOffset4Value64MemIdx {
 public:
     MemoryAtomicWait64MemIdxM64(uint32_t index, uint32_t alignment, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64(Opcode::MemoryAtomicWait64MemIdxM64Opcode, src0, src1, src2, dst, offset)
+        : ByteCodeOffset4Value64MemIdx(index, alignment, Opcode::MemoryAtomicWait64MemIdxM64Opcode, src0, src1, src2, dst, offset)
         , m_memIndex(index)
         , m_alignment(alignment)
     {
