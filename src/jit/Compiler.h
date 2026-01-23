@@ -258,7 +258,9 @@ public:
     static const uint16_t kFreeUnusedEarly = 1 << 7;
     static const uint16_t kKeepInstruction = 1 << 8;
     static const uint16_t kEarlyReturn = kKeepInstruction;
+    // These two are only used by memory load/store instructions
     static const uint16_t kMultiMemory = 1 << 9;
+    static const uint16_t kMemory64 = 1 << 10;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
