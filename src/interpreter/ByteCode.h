@@ -47,11 +47,18 @@ class FunctionType;
     F(CallRef)                  \
     F(Select)                   \
     F(MemorySize)               \
+    F(MemorySizeM64)            \
     F(MemoryGrow)               \
+    F(MemoryGrowM64)            \
     F(MemoryInit)               \
+    F(MemoryInitM64)            \
     F(DataDrop)                 \
     F(MemoryCopy)               \
+    F(MemoryCopyM64)            \
+    F(MemoryCopyM64M32)         \
+    F(MemoryCopyM32M64)         \
     F(MemoryFill)               \
+    F(MemoryFillM64)            \
     F(TableInit)                \
     F(ElemDrop)                 \
     F(TableCopy)                \
@@ -2658,36 +2665,66 @@ protected:
     uint32_t m_tableSize;
 };
 
-class MemorySize : public ByteCode {
+class ByteCodeOffsetMemIndex : public ByteCode {
 public:
-    MemorySize(uint32_t index, ByteCodeStackOffset dstOffset)
-        : ByteCode(Opcode::MemorySizeOpcode)
-        , m_dstOffset(dstOffset)
+    ByteCodeOffsetMemIndex(Opcode opcode, uint32_t index, ByteCodeStackOffset dstOffset)
+        : ByteCode(opcode)
+        , m_stackOffset(dstOffset)
         , m_memIndex(index)
     {
     }
 
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+    ByteCodeStackOffset stackOffset1() const { return m_stackOffset; }
     uint16_t memIndex() const { return m_memIndex; }
+
+
+protected:
+    ByteCodeStackOffset m_stackOffset;
+    uint16_t m_memIndex;
+};
+
+class MemorySize : public ByteCodeOffsetMemIndex {
+public:
+    MemorySize(uint32_t index, ByteCodeStackOffset dstOffset)
+        : ByteCodeOffsetMemIndex(Opcode::MemorySizeOpcode, index, dstOffset)
+    {
+    }
+
+    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("memory.size ");
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("memIndex: %" PRIu16, m_memIndex);
+        printf("MemorySize ");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("memIndex: %" PRIu16, memIndex());
     }
 #endif
-
-protected:
-    ByteCodeStackOffset m_dstOffset;
-    uint16_t m_memIndex;
 };
 
-class MemoryInit : public ByteCode {
+class MemorySizeM64 : public ByteCodeOffsetMemIndex {
 public:
-    MemoryInit(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCode(Opcode::MemoryInitOpcode)
+    MemorySizeM64(uint32_t index, ByteCodeStackOffset dstOffset)
+        : ByteCodeOffsetMemIndex(Opcode::MemorySizeM64Opcode, index, dstOffset)
+    {
+    }
+
+    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemorySizeM64 ");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("memIndex: %" PRIu16, memIndex());
+    }
+#endif
+};
+
+class ByteCodeOffset3MemIndexSegmentIndex : public ByteCode {
+public:
+    ByteCodeOffset3MemIndexSegmentIndex(Opcode opcode, uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCode(opcode)
         , m_segmentIndex(segmentIndex)
         , m_memIndex(index)
         , m_srcOffsets{ src0, src1, src2 }
@@ -2706,86 +2743,287 @@ public:
 
     uint16_t memIndex() const { return m_memIndex; }
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("memory.init ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("segmentIndex: %" PRIu32, m_segmentIndex);
-        printf("memIndex: %" PRIu16, m_memIndex);
-    }
-#endif
-
 protected:
     uint32_t m_segmentIndex;
     uint16_t m_memIndex;
     ByteCodeStackOffset m_srcOffsets[3];
 };
 
-class MemoryCopy : public ByteCodeOffset3 {
+class MemoryInit : public ByteCodeOffset3MemIndexSegmentIndex {
 public:
-    MemoryCopy(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3(Opcode::MemoryCopyOpcode, src0, src1, src2)
-        , m_srcMemIndex(srcIndex)
-        , m_dstMemIndex(dstIndex)
+    MemoryInit(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndexSegmentIndex(Opcode::MemoryInitOpcode, index, segmentIndex, src0, src1, src2)
     {
     }
-
-    const ByteCodeStackOffset* srcOffsets() const
-    {
-        return stackOffsets();
-    }
-
-    uint16_t srcMemIndex() const { return m_srcMemIndex; }
-    uint16_t dstMemIndex() const { return m_dstMemIndex; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("memory.copy ");
-        DUMP_BYTECODE_OFFSET(stackOffsets[0]);
-        DUMP_BYTECODE_OFFSET(stackOffsets[1]);
-        DUMP_BYTECODE_OFFSET(stackOffsets[2]);
-        printf("srcMemIndex: %" PRIu16, m_srcMemIndex);
-        printf("dstMemIndex: %" PRIu16, m_dstMemIndex);
+        printf("MemoryInit ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        printf("segmentIndex: %" PRIu32, segmentIndex());
+        printf("memIndex: %" PRIu16, memIndex());
     }
 #endif
-
-protected:
-    uint16_t m_srcMemIndex;
-    uint16_t m_dstMemIndex;
 };
 
-class MemoryFill : public ByteCodeOffset3 {
+class MemoryInitM64 : public ByteCodeOffset3MemIndexSegmentIndex {
 public:
-    MemoryFill(uint32_t memIdx, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3(Opcode::MemoryFillOpcode, src0, src1, src2)
-        , m_memIndex(memIdx)
+    MemoryInitM64(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndexSegmentIndex(Opcode::MemoryInitM64Opcode, index, segmentIndex, src0, src1, src2)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryInitM64 ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        printf("segmentIndex: %" PRIu32, segmentIndex());
+        printf("memIndex: %" PRIu16, memIndex());
+    }
+#endif
+};
+
+class ByteCodeOffset3MemIndex2 : public ByteCode {
+public:
+    ByteCodeOffset3MemIndex2(Opcode opcode, uint32_t memIndex1, uint32_t memIndex2, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCode(opcode)
+        , m_memIndex1(memIndex1)
+        , m_memIndex2(memIndex2)
+        , m_srcOffsets{ src0, src1, src2 }
     {
     }
 
     const ByteCodeStackOffset* srcOffsets() const
     {
-        return stackOffsets();
+        return m_srcOffsets;
+    }
+
+    uint16_t memIndex1() const { return m_memIndex1; }
+    uint16_t memIndex2() const { return m_memIndex2; }
+
+protected:
+    uint16_t m_memIndex1;
+    uint16_t m_memIndex2;
+    ByteCodeStackOffset m_srcOffsets[3];
+};
+
+class MemoryCopy : public ByteCodeOffset3MemIndex2 {
+public:
+    MemoryCopy(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyOpcode, srcIndex, dstIndex, src0, src1, src2)
+    {
+    }
+
+    uint16_t srcMemIndex() const { return memIndex1(); }
+    uint16_t dstMemIndex() const { return memIndex2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryCopy ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        printf("srcMemIndex: %" PRIu16, srcMemIndex());
+        printf("dstMemIndex: %" PRIu16, dstMemIndex());
+    }
+#endif
+};
+
+class MemoryCopyM64 : public ByteCodeOffset3MemIndex2 {
+public:
+    MemoryCopyM64(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyM64Opcode, srcIndex, dstIndex, src0, src1, src2)
+    {
+    }
+
+    uint16_t srcMemIndex() const { return memIndex1(); }
+    uint16_t dstMemIndex() const { return memIndex2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryCopyM64 ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        printf("srcMemIndex: %" PRIu16, srcMemIndex());
+        printf("dstMemIndex: %" PRIu16, dstMemIndex());
+    }
+#endif
+};
+
+class MemoryCopyM32M64 : public ByteCodeOffset3MemIndex2 {
+public:
+    MemoryCopyM32M64(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyM32M64Opcode, srcIndex, dstIndex, src0, src1, src2)
+    {
+    }
+
+    uint16_t srcMemIndex() const { return memIndex1(); }
+    uint16_t dstMemIndex() const { return memIndex2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryCopyM32M64 ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        printf("srcMemIndex: %" PRIu16, srcMemIndex());
+        printf("dstMemIndex: %" PRIu16, dstMemIndex());
+    }
+#endif
+};
+
+class MemoryCopyM64M32 : public ByteCodeOffset3MemIndex2 {
+public:
+    MemoryCopyM64M32(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyM64M32Opcode, srcIndex, dstIndex, src0, src1, src2)
+    {
+    }
+
+    uint16_t srcMemIndex() const { return memIndex1(); }
+    uint16_t dstMemIndex() const { return memIndex2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryCopyM64M32 ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        printf("srcMemIndex: %" PRIu16, srcMemIndex());
+        printf("dstMemIndex: %" PRIu16, dstMemIndex());
+    }
+#endif
+};
+
+class ByteCodeOffset3MemIndex : public ByteCode {
+public:
+    ByteCodeOffset3MemIndex(Opcode opcode, uint32_t memIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCode(opcode)
+        , m_memIndex(memIndex)
+        , m_srcOffsets{ src0, src1, src2 }
+    {
+    }
+
+    const ByteCodeStackOffset* srcOffsets() const
+    {
+        return m_srcOffsets;
     }
 
     uint16_t memIndex() const { return m_memIndex; }
 
+protected:
+    uint16_t m_memIndex;
+    ByteCodeStackOffset m_srcOffsets[3];
+};
+
+class MemoryFill : public ByteCodeOffset3MemIndex {
+public:
+    MemoryFill(uint32_t memIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndex(Opcode::MemoryFillOpcode, memIndex, src0, src1, src2)
+    {
+    }
+
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
-        printf("memory.fill ");
-        DUMP_BYTECODE_OFFSET(stackOffsets[0]);
-        DUMP_BYTECODE_OFFSET(stackOffsets[1]);
-        DUMP_BYTECODE_OFFSET(stackOffsets[2]);
+        printf("MemoryFill ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
         printf("memIndex: %" PRIu16, m_memIndex);
     }
 #endif
+};
+
+class MemoryFillM64 : public ByteCodeOffset3MemIndex {
+public:
+    MemoryFillM64(uint32_t memIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
+        : ByteCodeOffset3MemIndex(Opcode::MemoryFillM64Opcode, memIndex, src0, src1, src2)
+    {
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryFillM64 ");
+        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
+        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
+        printf("memIndex: %" PRIu16, memIndex());
+    }
+#endif
+};
+
+class ByteCodeOffset2MemIndex : public ByteCode {
+public:
+    ByteCodeOffset2MemIndex(Opcode opcode, uint32_t memIndex, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2)
+        : ByteCode(opcode)
+        , m_memIndex(memIndex)
+        , m_stackOffset1(stackOffset1)
+        , m_stackOffset2(stackOffset2)
+    {
+    }
+
+    ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
+    ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
+    uint16_t memIndex() const { return m_memIndex; }
 
 protected:
     uint16_t m_memIndex;
+    ByteCodeStackOffset m_stackOffset1;
+    ByteCodeStackOffset m_stackOffset2;
+};
+
+class MemoryGrow : public ByteCodeOffset2MemIndex {
+public:
+    MemoryGrow(uint32_t memIndex, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : ByteCodeOffset2MemIndex(Opcode::MemoryGrowOpcode, memIndex, srcOffset, dstOffset)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryGrow ");
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
+        printf("memIndex: %" PRIu16, memIndex());
+    }
+#endif
+};
+
+class MemoryGrowM64 : public ByteCodeOffset2MemIndex {
+public:
+    MemoryGrowM64(uint32_t memIndex, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
+        : ByteCodeOffset2MemIndex(Opcode::MemoryGrowM64Opcode, memIndex, srcOffset, dstOffset)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
+    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("MemoryGrowM64 ");
+        DUMP_BYTECODE_OFFSET(stackOffset1);
+        DUMP_BYTECODE_OFFSET(stackOffset2);
+        printf("memIndex: %" PRIu16, memIndex());
+    }
+#endif
 };
 
 class DataDrop : public ByteCode {
@@ -2811,32 +3049,6 @@ public:
 
 protected:
     uint32_t m_segmentIndex;
-};
-
-class MemoryGrow : public ByteCodeOffset2 {
-public:
-    MemoryGrow(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2(Opcode::MemoryGrowOpcode, srcOffset, dstOffset)
-        , m_memIndex(index)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    uint16_t memIndex() const { return m_memIndex; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("memory.grow ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-        printf("memIndex: %" PRIu16, m_memIndex);
-    }
-#endif
-
-protected:
-    uint16_t m_memIndex;
 };
 
 // dummy ByteCode for memory load operation
