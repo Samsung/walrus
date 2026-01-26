@@ -194,7 +194,11 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL4(OTStoreF64M64, /* SSTT */ I64, F64 | NOTMP, PTR, I32 | S0)                        \
     OL4(OTStoreV128, /* SSTT */ I32, V128 | TMP, PTR, I32 | S0)                           \
     OL4(OTStoreV128M64, /* SSTT */ I64, V128 | TMP, PTR, I32 | S0)                        \
-    OL3(OTCallback3Arg, /* SSS */ I32, I32, I32)                                          \
+    OL3(OTCallbackI32I32I32, /* SSS */ I32, I32, I32)                                     \
+    OL3(OTCallbackI64I64I64, /* SSS */ I64, I64, I64)                                     \
+    OL3(OTCallbackI64I32I32, /* SSS */ I64, I32, I32)                                     \
+    OL3(OTCallbackI32I64I32, /* SSS */ I32, I64, I32)                                     \
+    OL3(OTCallbackI64I32I64, /* SSS */ I64, I32, I64)                                     \
     OL3(OTTableGrow, /* SSD */ PTR, I32, I32 | S0 | S1)                                   \
     OL3(OTTableFill, /* SSS */ I32, PTR, I32)                                             \
     OL4(OTTableSet, /* SSTT */ I32, PTR, I32 | S0, PTR)                                   \
@@ -1812,7 +1816,7 @@ static void compileFunction(JITCompiler* compiler)
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            instr->setRequiredRegsDescriptor(OTCallbackI32I32I32);
             compiler->increaseStackTmpSize(sizeof(TableInitArguments));
 
             Operand* operands = instr->operands();
@@ -1832,7 +1836,7 @@ static void compileFunction(JITCompiler* compiler)
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            instr->setRequiredRegsDescriptor(OTCallbackI32I32I32);
             compiler->increaseStackTmpSize(sizeof(TableCopyArguments));
 
             Operand* operands = instr->operands();
@@ -1879,21 +1883,23 @@ static void compileFunction(JITCompiler* compiler)
             requiredInit = OTTableGet;
             break;
         }
-        case ByteCode::MemorySizeOpcode: {
-            MemorySize* memorySize = reinterpret_cast<MemorySize*>(byteCode);
+        case ByteCode::MemorySizeOpcode:
+        case ByteCode::MemorySizeM64Opcode: {
+            ByteCodeOffsetMemIndex* memorySize = reinterpret_cast<ByteCodeOffsetMemIndex*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 0, 1);
-            instr->setRequiredRegsDescriptor(OTPutI32);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::MemorySizeOpcode ? OTPutI32 : OTPutI64);
 
-            *instr->operands() = STACK_OFFSET(memorySize->dstOffset());
+            *instr->operands() = STACK_OFFSET(memorySize->stackOffset1());
             break;
         }
-        case ByteCode::MemoryInitOpcode: {
-            MemoryInit* memoryInit = reinterpret_cast<MemoryInit*>(byteCode);
+        case ByteCode::MemoryInitOpcode:
+        case ByteCode::MemoryInitM64Opcode: {
+            ByteCodeOffset3MemIndexSegmentIndex* memoryInit = reinterpret_cast<ByteCodeOffset3MemIndexSegmentIndex*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTCallback3Arg);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::MemoryInitOpcode ? OTCallbackI32I32I32 : OTCallbackI64I32I32);
             compiler->increaseStackTmpSize(sizeof(MemoryInitArguments));
 
             Operand* operands = instr->operands();
@@ -1902,22 +1908,64 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(memoryInit->srcOffsets()[2]);
             break;
         }
-        case ByteCode::MemoryCopyOpcode:
-        case ByteCode::MemoryFillOpcode: {
-            group = Instruction::Memory;
-            paramType = ParamTypes::ParamSrc3;
-            info = Instruction::kIsCallback;
-            requiredInit = OTCallback3Arg;
-            if (opcode == ByteCode::MemoryCopyOpcode) {
-                compiler->increaseStackTmpSize(sizeof(MemoryCopyArguments));
-            }
+        case ByteCode::MemoryFillOpcode:
+        case ByteCode::MemoryFillM64Opcode: {
+            ByteCodeOffset3MemIndex* memoryFill = reinterpret_cast<ByteCodeOffset3MemIndex*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::MemoryFillOpcode ? OTCallbackI32I32I32 : OTCallbackI64I32I64);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(memoryFill->srcOffsets()[0]);
+            operands[1] = STACK_OFFSET(memoryFill->srcOffsets()[1]);
+            operands[2] = STACK_OFFSET(memoryFill->srcOffsets()[2]);
             break;
         }
-        case ByteCode::MemoryGrowOpcode: {
-            group = Instruction::Memory;
-            paramType = ParamTypes::ParamSrcDst;
-            info = Instruction::kIsCallback;
-            requiredInit = OTOp1I32;
+        case ByteCode::MemoryCopyOpcode:
+        case ByteCode::MemoryCopyM64Opcode:
+        case ByteCode::MemoryCopyM64M32Opcode:
+        case ByteCode::MemoryCopyM32M64Opcode: {
+            ByteCodeOffset3MemIndex2* memoryCopy = reinterpret_cast<ByteCodeOffset3MemIndex2*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
+
+            switch (opcode) {
+            case ByteCode::MemoryCopyM64Opcode:
+                requiredInit = OTCallbackI64I64I64;
+                break;
+            case ByteCode::MemoryCopyM64M32Opcode:
+                requiredInit = OTCallbackI64I32I32;
+                break;
+            case ByteCode::MemoryCopyM32M64Opcode:
+                requiredInit = OTCallbackI32I64I32;
+                break;
+            default:
+                requiredInit = OTCallbackI32I32I32;
+                break;
+            }
+
+            instr->setRequiredRegsDescriptor(requiredInit);
+            compiler->increaseStackTmpSize(sizeof(MemoryCopyArguments));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(memoryCopy->srcOffsets()[0]);
+            operands[1] = STACK_OFFSET(memoryCopy->srcOffsets()[1]);
+            operands[2] = STACK_OFFSET(memoryCopy->srcOffsets()[2]);
+            break;
+        }
+        case ByteCode::MemoryGrowOpcode:
+        case ByteCode::MemoryGrowM64Opcode: {
+            ByteCodeOffset2MemIndex* memoryGrow = reinterpret_cast<ByteCodeOffset2MemIndex*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Memory, opcode, 1, 1);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(opcode == ByteCode::MemoryGrowOpcode ? OTOp1I32 : OTOp1I64);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(memoryGrow->stackOffset1());
+            operands[1] = STACK_OFFSET(memoryGrow->stackOffset2());
             break;
         }
         case ByteCode::DataDropOpcode: {

@@ -1,0 +1,52 @@
+(module
+    (memory i64 1)
+    (memory 1)
+    (data "\01\02\03\04\05\06\07\08")
+
+    (func (export "memory.size") (result i64) memory.size)
+    (func (export "memory.init") (param i64 i32 i32) (memory.init 0 (local.get 0) (local.get 1) (local.get 2)))
+    (func (export "memory.initS") (param i32 i64 i32) (memory.init 0 (local.get 1) (local.get 2) (local.get 0)))
+    (func (export "memory.fill") (param i64 i32 i64) (memory.fill (local.get 0) (local.get 1) (local.get 2)))
+    (func (export "memory.fillS") (param i64 i64 i32) (memory.fill (local.get 1) (local.get 2) (local.get 0)))
+    (func (export "memory.copy") (param i64 i64 i64) (memory.copy (local.get 0) (local.get 1) (local.get 2)))
+    (func (export "memory.copyS") (param i64 i64 i64) (memory.copy (local.get 1) (local.get 2) (local.get 0)))
+    (func (export "memory.cross_copy1") (param i64 i32 i32) (memory.copy 0 1 (local.get 0) (local.get 1) (local.get 2)))
+    (func (export "memory.cross_copy2") (param i32 i64 i32) (memory.copy 1 0 (local.get 0) (local.get 1) (local.get 2)))
+    (func (export "memory.cross_copy2S") (param i32 i32 i64) (memory.copy 1 0 (local.get 1) (local.get 2) (local.get 0)))
+    (func (export "memory.grow") (param i64) (result i64) (memory.grow (local.get 0)))
+)
+
+(assert_return (invoke "memory.size") (i64.const 1))
+
+(assert_return (invoke "memory.init" (i64.const 0xffff) (i32.const 0) (i32.const 1)))
+(assert_return (invoke "memory.init" (i64.const 0xffff) (i32.const 0) (i32.const 0)))
+(assert_trap (invoke "memory.init" (i64.const 0x100000000) (i32.const 0) (i32.const 5)) "out of bounds memory access")
+(assert_trap (invoke "memory.init" (i64.const 0x100000000) (i32.const 0) (i32.const 0)) "out of bounds memory access")
+(assert_trap (invoke "memory.initS" (i32.const 5) (i64.const 0x100000000) (i32.const 0)) "out of bounds memory access")
+
+(assert_return (invoke "memory.fill" (i64.const 0xffff) (i32.const 0) (i64.const 1)))
+(assert_return (invoke "memory.fill" (i64.const 0xffff) (i32.const 0) (i64.const 0)))
+(assert_trap (invoke "memory.fill" (i64.const 0xffff) (i32.const 0) (i64.const 2)) "out of bounds memory access")
+(assert_trap (invoke "memory.fill" (i64.const 0x10000) (i32.const 0) (i64.const 1)) "out of bounds memory access")
+(assert_trap (invoke "memory.fill" (i64.const 0x100000000) (i32.const 0) (i64.const 0)) "out of bounds memory access")
+(assert_trap (invoke "memory.fill" (i64.const 0x0) (i32.const 0) (i64.const 0x100000000)) "out of bounds memory access")
+(assert_trap (invoke "memory.fillS" (i64.const 0x100000000) (i64.const 0x0) (i32.const 0) ) "out of bounds memory access")
+(assert_trap (invoke "memory.fillS" (i64.const 0x0) (i64.const 0x100000000) (i32.const 0) ) "out of bounds memory access")
+
+(assert_return (invoke "memory.copy" (i64.const 0xffff) (i64.const 0xfffe) (i64.const 1)))
+(assert_return (invoke "memory.copy" (i64.const 0xffff) (i64.const 0xfffe) (i64.const 0)))
+(assert_trap (invoke "memory.copy" (i64.const 0x10000) (i64.const 0xffff) (i64.const 1)) "out of bounds memory access")
+(assert_trap (invoke "memory.copy" (i64.const 0x100000000) (i64.const 0x0) (i64.const 0)) "out of bounds memory access")
+(assert_trap (invoke "memory.copy" (i64.const 0) (i64.const 0x100000000) (i64.const 0)) "out of bounds memory access")
+(assert_trap (invoke "memory.copyS" (i64.const 1) (i64.const 0x100000000) (i64.const 0)) "out of bounds memory access")
+(assert_trap (invoke "memory.copyS" (i64.const 0x100000000) (i64.const 0) (i64.const 0)) "out of bounds memory access")
+(assert_trap (invoke "memory.copyS" (i64.const 1) (i64.const 0) (i64.const 0x100000000)) "out of bounds memory access")
+
+(assert_return (invoke "memory.cross_copy1" (i64.const 0xffff) (i32.const 0xfffe) (i32.const 1)))
+(assert_trap (invoke "memory.cross_copy1" (i64.const 0x100000000) (i32.const 0xfffe) (i32.const 1)) "out of bounds memory access")
+
+(assert_return (invoke "memory.cross_copy2" (i32.const 0xffff) (i64.const 0xfffe) (i32.const 1)))
+(assert_trap (invoke "memory.cross_copy2" (i32.const 0xffff) (i64.const 0x100000000) (i32.const 1)) "out of bounds memory access")
+(assert_trap (invoke "memory.cross_copy2S" (i32.const 1) (i32.const 0xffff) (i64.const 0x100000000)) "out of bounds memory access")
+
+(assert_return (invoke "memory.grow" (i64.const 1)) (i64.const 1))

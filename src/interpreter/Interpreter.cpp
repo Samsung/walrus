@@ -2190,8 +2190,17 @@ NextInstruction:
         :
     {
         MemorySize* code = (MemorySize*)programCounter;
-        writeValue<int32_t>(bp, code->dstOffset(), memories[code->memIndex()]->sizeInPageSize());
+        writeValue<uint32_t>(bp, code->dstOffset(), memories[code->memIndex()]->sizeInPageSize());
         ADD_PROGRAM_COUNTER(MemorySize);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemorySizeM64)
+        :
+    {
+        MemorySizeM64* code = (MemorySizeM64*)programCounter;
+        writeValue<uint64_t>(bp, code->dstOffset(), memories[code->memIndex()]->sizeInPageSize());
+        ADD_PROGRAM_COUNTER(MemorySizeM64);
         NEXT_INSTRUCTION();
     }
 
@@ -2201,12 +2210,28 @@ NextInstruction:
         MemoryGrow* code = (MemoryGrow*)programCounter;
         Memory* m = memories[code->memIndex()];
         auto oldSize = m->sizeInPageSize();
-        if (m->grow(readValue<int32_t>(bp, code->srcOffset()) * (uint64_t)Memory::s_memoryPageSize)) {
-            writeValue<int32_t>(bp, code->dstOffset(), oldSize);
+        if (m->grow(readValue<uint32_t>(bp, code->srcOffset()) * (uint64_t)Memory::s_memoryPageSize)) {
+            writeValue<uint32_t>(bp, code->dstOffset(), oldSize);
         } else {
-            writeValue<int32_t>(bp, code->dstOffset(), -1);
+            writeValue<uint32_t>(bp, code->dstOffset(), -1);
         }
         ADD_PROGRAM_COUNTER(MemoryGrow);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryGrowM64)
+        :
+    {
+        MemoryGrowM64* code = (MemoryGrowM64*)programCounter;
+        Memory* m = memories[code->memIndex()];
+        auto oldSize = m->sizeInPageSize();
+        uint64_t value = readValue<uint64_t>(bp, code->srcOffset());
+        if (value < Memory::s_maxMemory64Grow && m->grow(value * (uint64_t)Memory::s_memoryPageSize)) {
+            writeValue<uint64_t>(bp, code->dstOffset(), oldSize);
+        } else {
+            writeValue<uint64_t>(bp, code->dstOffset(), -1);
+        }
+        ADD_PROGRAM_COUNTER(MemoryGrowM64);
         NEXT_INSTRUCTION();
     }
 
@@ -2216,11 +2241,25 @@ NextInstruction:
         MemoryInit* code = (MemoryInit*)programCounter;
         Memory* m = memories[code->memIndex()];
         DataSegment* sg = instance->dataSegment(code->segmentIndex());
-        auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
-        auto srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
-        auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
+        auto dstStart = readValue<uint32_t>(bp, code->srcOffsets()[0]);
+        auto srcStart = readValue<uint32_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint32_t>(bp, code->srcOffsets()[2]);
         m->init(state, sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(MemoryInit);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryInitM64)
+        :
+    {
+        MemoryInitM64* code = (MemoryInitM64*)programCounter;
+        Memory* m = memories[code->memIndex()];
+        DataSegment* sg = instance->dataSegment(code->segmentIndex());
+        auto dstStart = readValue<uint64_t>(bp, code->srcOffsets()[0]);
+        auto srcStart = readValue<uint32_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint32_t>(bp, code->srcOffsets()[2]);
+        m->init(state, sg, dstStart, srcStart, size);
+        ADD_PROGRAM_COUNTER(MemoryInitM64);
         NEXT_INSTRUCTION();
     }
 
@@ -2230,11 +2269,53 @@ NextInstruction:
         MemoryCopy* code = (MemoryCopy*)programCounter;
         Memory* srcMem = memories[code->srcMemIndex()];
         Memory* dstMem = memories[code->dstMemIndex()];
-        auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
-        auto srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
-        auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
+        auto dstStart = readValue<uint32_t>(bp, code->srcOffsets()[0]);
+        auto srcStart = readValue<uint32_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint32_t>(bp, code->srcOffsets()[2]);
         srcMem->copy(state, dstStart, srcStart, size, dstMem);
         ADD_PROGRAM_COUNTER(MemoryCopy);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryCopyM64)
+        :
+    {
+        MemoryCopyM64* code = (MemoryCopyM64*)programCounter;
+        Memory* srcMem = memories[code->srcMemIndex()];
+        Memory* dstMem = memories[code->dstMemIndex()];
+        auto dstStart = readValue<uint64_t>(bp, code->srcOffsets()[0]);
+        auto srcStart = readValue<uint64_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint64_t>(bp, code->srcOffsets()[2]);
+        srcMem->copy(state, dstStart, srcStart, size, dstMem);
+        ADD_PROGRAM_COUNTER(MemoryCopyM64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryCopyM64M32)
+        :
+    {
+        MemoryCopyM64M32* code = (MemoryCopyM64M32*)programCounter;
+        Memory* srcMem = memories[code->srcMemIndex()];
+        Memory* dstMem = memories[code->dstMemIndex()];
+        auto dstStart = readValue<uint64_t>(bp, code->srcOffsets()[0]);
+        auto srcStart = readValue<uint32_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint32_t>(bp, code->srcOffsets()[2]);
+        srcMem->copy(state, dstStart, srcStart, size, dstMem);
+        ADD_PROGRAM_COUNTER(MemoryCopyM64M32);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryCopyM32M64)
+        :
+    {
+        MemoryCopyM32M64* code = (MemoryCopyM32M64*)programCounter;
+        Memory* srcMem = memories[code->srcMemIndex()];
+        Memory* dstMem = memories[code->dstMemIndex()];
+        auto dstStart = readValue<uint32_t>(bp, code->srcOffsets()[0]);
+        auto srcStart = readValue<uint64_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint32_t>(bp, code->srcOffsets()[2]);
+        srcMem->copy(state, dstStart, srcStart, size, dstMem);
+        ADD_PROGRAM_COUNTER(MemoryCopyM32M64);
         NEXT_INSTRUCTION();
     }
 
@@ -2243,11 +2324,24 @@ NextInstruction:
     {
         MemoryFill* code = (MemoryFill*)programCounter;
         Memory* m = memories[code->memIndex()];
-        auto dstStart = readValue<int32_t>(bp, code->srcOffsets()[0]);
-        auto value = readValue<int32_t>(bp, code->srcOffsets()[1]);
-        auto size = readValue<int32_t>(bp, code->srcOffsets()[2]);
+        auto dstStart = readValue<uint32_t>(bp, code->srcOffsets()[0]);
+        auto value = readValue<uint32_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint32_t>(bp, code->srcOffsets()[2]);
         m->fill(state, dstStart, value, size);
         ADD_PROGRAM_COUNTER(MemoryFill);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(MemoryFillM64)
+        :
+    {
+        MemoryFillM64* code = (MemoryFillM64*)programCounter;
+        Memory* m = memories[code->memIndex()];
+        auto dstStart = readValue<uint64_t>(bp, code->srcOffsets()[0]);
+        auto value = readValue<uint32_t>(bp, code->srcOffsets()[1]);
+        auto size = readValue<uint64_t>(bp, code->srcOffsets()[2]);
+        m->fill(state, dstStart, value, size);
+        ADD_PROGRAM_COUNTER(MemoryFillM64);
         NEXT_INSTRUCTION();
     }
 

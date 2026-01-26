@@ -207,9 +207,13 @@ private:
     T* _ptr;
 };
 
-void Memory::init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Memory::init(ExecutionState& state, DataSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
-    checkAccess(state, dstStart, srcSize);
+    if (!is64()) {
+        checkAccess(state, dstStart, srcSize);
+    } else {
+        checkAccessM64(state, dstStart, srcSize);
+    }
 
     if (srcStart >= source->sizeInByte() || srcStart + srcSize > source->sizeInByte()) {
         throwRangeException(state, srcStart, srcStart + srcSize, srcSize);
@@ -218,22 +222,41 @@ void Memory::init(ExecutionState& state, DataSegment* source, uint32_t dstStart,
     this->initMemory(source, dstStart, srcStart, srcSize);
 }
 
-void Memory::copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size, Memory* dstMem)
+void Memory::copy(ExecutionState& state, uint64_t dstStart, uint64_t srcStart, uint64_t size, Memory* dstMem)
 {
-    checkAccess(state, srcStart, size);
-    checkAccess(state, dstStart, size, 0, dstMem);
+    if (!is64()) {
+        checkAccess(state, srcStart, size);
+    } else {
+        checkAccessM64(state, srcStart, size);
+    }
+
+    if (dstMem == nullptr) {
+        if (!is64()) {
+            checkAccess(state, dstStart, size);
+        } else {
+            checkAccessM64(state, dstStart, size);
+        }
+    } else if (!dstMem->is64()) {
+        dstMem->checkAccess(state, dstStart, size);
+    } else {
+        dstMem->checkAccessM64(state, dstStart, size);
+    }
 
     this->copyMemory(dstMem, dstStart, srcStart, size);
 }
 
-void Memory::fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size)
+void Memory::fill(ExecutionState& state, uint64_t start, uint8_t value, uint64_t size)
 {
-    checkAccess(state, start, size);
+    if (!is64()) {
+        checkAccess(state, start, size);
+    } else {
+        checkAccessM64(state, start, size);
+    }
 
     this->fillMemory(start, value, size);
 }
 
-void Memory::initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Memory::initMemory(DataSegment* source, size_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
     auto data = source->data();
     std::copy(data + srcStart, data + srcStart + srcSize,
@@ -244,7 +267,7 @@ void Memory::initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStar
 #endif
 }
 
-void Memory::copyMemory(Memory* dstMemory, uint32_t dstStart, uint32_t srcStart, uint32_t size)
+void Memory::copyMemory(Memory* dstMemory, size_t dstStart, size_t srcStart, size_t size)
 {
 #if defined(WALRUS_BIG_ENDIAN)
     auto srcBegin = m_buffer + m_sizeInByte + srcStart - size;
@@ -262,7 +285,7 @@ void Memory::copyMemory(Memory* dstMemory, uint32_t dstStart, uint32_t srcStart,
     }
 }
 
-void Memory::fillMemory(uint32_t start, uint8_t value, uint32_t size)
+void Memory::fillMemory(size_t start, uint8_t value, size_t size)
 {
 #if defined(WALRUS_BIG_ENDIAN)
     std::fill(m_buffer + m_sizeInByte - start - size, m_buffer + m_sizeInByte - start, value);

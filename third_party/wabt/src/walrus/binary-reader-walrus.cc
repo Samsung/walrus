@@ -799,7 +799,7 @@ public:
         return Result::Ok;
     }
     Result OnMemoryCopyExpr(Index destmemidx, Index srcmemidx) override {
-        CHECK_RESULT(m_validator.OnMemoryCopy(GetLocation(), Var(srcmemidx, GetLocation()), Var(destmemidx, GetLocation())));
+        CHECK_RESULT(m_validator.OnMemoryCopy(GetLocation(), Var(destmemidx, GetLocation()), Var(srcmemidx, GetLocation())));
         SHOULD_GENERATE_BYTECODE;
         m_externalDelegate->OnMemoryCopyExpr(srcmemidx, destmemidx);
         return Result::Ok;

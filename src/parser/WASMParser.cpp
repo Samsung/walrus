@@ -2333,40 +2333,58 @@ public:
         processCatchExpr(std::numeric_limits<Index>::max());
     }
 
-    virtual void OnMemoryInitExpr(Index segmentIndex, Index memidx) override
+    virtual void OnMemoryInitExpr(Index segmentIndex, Index memIdx) override
     {
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src2 = popVMStack();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memIdx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
 
-        pushByteCode(Walrus::MemoryInit(memidx, segmentIndex, src0, src1, src2), WASMOpcode::MemoryInitOpcode);
+        if (!m_result.m_memoryTypes[memIdx]->is64()) {
+            pushByteCode(Walrus::MemoryInit(memIdx, segmentIndex, src0, src1, src2), WASMOpcode::MemoryInitOpcode);
+        } else {
+            pushByteCode(Walrus::MemoryInitM64(memIdx, segmentIndex, src0, src1, src2), WASMOpcode::MemoryInitOpcode);
+        }
     }
 
     virtual void OnMemoryCopyExpr(Index srcMemIndex, Index dstMemIndex) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[srcMemIndex]->is64() && m_result.m_memoryTypes[dstMemIndex]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src2 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[srcMemIndex]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[dstMemIndex]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
 
-        pushByteCode(Walrus::MemoryCopy(srcMemIndex, dstMemIndex, src0, src1, src2), WASMOpcode::MemoryCopyOpcode);
+        if (!m_result.m_memoryTypes[srcMemIndex]->is64()) {
+            if (!m_result.m_memoryTypes[dstMemIndex]->is64()) {
+                pushByteCode(Walrus::MemoryCopy(srcMemIndex, dstMemIndex, src0, src1, src2), WASMOpcode::MemoryCopyOpcode);
+            } else {
+                pushByteCode(Walrus::MemoryCopyM64M32(srcMemIndex, dstMemIndex, src0, src1, src2), WASMOpcode::MemoryCopyOpcode);
+            }
+        } else if (m_result.m_memoryTypes[dstMemIndex]->is64()) {
+            pushByteCode(Walrus::MemoryCopyM64(srcMemIndex, dstMemIndex, src0, src1, src2), WASMOpcode::MemoryCopyOpcode);
+        } else {
+            pushByteCode(Walrus::MemoryCopyM32M64(srcMemIndex, dstMemIndex, src0, src1, src2), WASMOpcode::MemoryCopyOpcode);
+        }
     }
 
-    virtual void OnMemoryFillExpr(Index memidx) override
+    virtual void OnMemoryFillExpr(Index memIdx) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memIdx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src2 = popVMStack();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memIdx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src0 = popVMStack();
 
-        pushByteCode(Walrus::MemoryFill(memidx, src0, src1, src2), WASMOpcode::MemoryFillOpcode);
+        if (!m_result.m_memoryTypes[memIdx]->is64()) {
+            pushByteCode(Walrus::MemoryFill(memIdx, src0, src1, src2), WASMOpcode::MemoryFillOpcode);
+        } else {
+            pushByteCode(Walrus::MemoryFillM64(memIdx, src0, src1, src2), WASMOpcode::MemoryFillOpcode);
+        }
     }
 
     virtual void OnDataDropExpr(Index segmentIndex) override
@@ -2374,18 +2392,28 @@ public:
         pushByteCode(Walrus::DataDrop(segmentIndex), WASMOpcode::DataDropOpcode);
     }
 
-    virtual void OnMemoryGrowExpr(Index memidx) override
+    virtual void OnMemoryGrowExpr(Index memIdx) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT((m_result.m_memoryTypes[memIdx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src = popVMStack();
         auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
-        pushByteCode(Walrus::MemoryGrow(memidx, src, dst), WASMOpcode::MemoryGrowOpcode);
+
+        if (!m_result.m_memoryTypes[memIdx]->is64()) {
+            pushByteCode(Walrus::MemoryGrow(memIdx, src, dst), WASMOpcode::MemoryGrowOpcode);
+        } else {
+            pushByteCode(Walrus::MemoryGrowM64(memIdx, src, dst), WASMOpcode::MemoryGrowOpcode);
+        }
     }
 
-    virtual void OnMemorySizeExpr(Index memidx) override
+    virtual void OnMemorySizeExpr(Index memIdx) override
     {
-        auto stackPos = computeExprResultPosition(Walrus::Value::Type::I32);
-        pushByteCode(Walrus::MemorySize(memidx, stackPos), WASMOpcode::MemorySizeOpcode);
+        if (!m_result.m_memoryTypes[memIdx]->is64()) {
+            auto stackPos = computeExprResultPosition(Walrus::Value::Type::I32);
+            pushByteCode(Walrus::MemorySize(memIdx, stackPos), WASMOpcode::MemorySizeOpcode);
+        } else {
+            auto stackPos = computeExprResultPosition(Walrus::Value::Type::I64);
+            pushByteCode(Walrus::MemorySizeM64(memIdx, stackPos), WASMOpcode::MemorySizeOpcode);
+        }
     }
 
     virtual void OnTableGetExpr(Index tableIndex) override

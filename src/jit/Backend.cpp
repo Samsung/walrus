@@ -320,9 +320,8 @@ static void emitInitR0R1(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32 m
     sljit_emit_op1(compiler, movOp2, SLJIT_R1, 0, SLJIT_TMP_DEST_REG, 0);
 }
 
-static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32 movOp2, sljit_s32 movOp3, Operand* params)
+static void emitInitR0R1R2Args(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32 movOp2, sljit_s32 movOp3, JITArg src[3])
 {
-    JITArg src[3] = { params, params + 1, params + 2 };
     int i = 0;
 
     if (src[1].arg == SLJIT_R0 || src[2].arg == SLJIT_R0) {
@@ -377,6 +376,12 @@ static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32
         sljit_emit_op1(compiler, movOps[other1], sljit_r1, 0, sljit_r2, 0);
         sljit_emit_op1(compiler, movOps[other2], sljit_r2, 0, SLJIT_TMP_DEST_REG, 0);
     }
+}
+
+static void emitInitR0R1R2(sljit_compiler* compiler, sljit_s32 movOp1, sljit_s32 movOp2, sljit_s32 movOp3, Operand* params)
+{
+    JITArg src[3] = { params, params + 1, params + 2 };
+    emitInitR0R1R2Args(compiler, movOp1, movOp2, movOp3, src);
 }
 
 static void emitSelect128(sljit_compiler*, Instruction*, sljit_s32);

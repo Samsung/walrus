@@ -147,12 +147,12 @@ public:
     virtual void OnTryExpr(Type sigType) = 0;
     virtual void OnCatchExpr(Index tagIndex) = 0;
     virtual void OnCatchAllExpr() = 0;
-    virtual void OnMemoryGrowExpr(Index memidx) = 0;
-    virtual void OnMemoryInitExpr(Index segmentIndex, Index memidx) = 0;
+    virtual void OnMemoryGrowExpr(Index memIdx) = 0;
+    virtual void OnMemoryInitExpr(Index segmentIndex, Index memIdx) = 0;
     virtual void OnMemoryCopyExpr(Index srcMemIndex, Index dstMemIndex) = 0;
-    virtual void OnMemoryFillExpr(Index memidx) = 0;
+    virtual void OnMemoryFillExpr(Index memIdx) = 0;
     virtual void OnDataDropExpr(Index segmentIndex) = 0;
-    virtual void OnMemorySizeExpr(Index memidx) = 0;
+    virtual void OnMemorySizeExpr(Index memIdx) = 0;
     virtual void OnTableGetExpr(Index table_index) = 0;
     virtual void OnTableSetExpr(Index table_index) = 0;
     virtual void OnTableGrowExpr(Index table_index) = 0;

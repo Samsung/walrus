@@ -33,6 +33,7 @@ class Memory : public Extern {
 
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
+    static const uint64_t s_maxMemory64Grow = ~static_cast<uint64_t>(0) / s_memoryPageSize;
 
     // Caching memory target for fast access.
     struct TargetBuffer {
@@ -393,50 +394,48 @@ public:
 
 #endif
 
-    void init(ExecutionState& state, DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
-    void copy(ExecutionState& state, uint32_t dstStart, uint32_t srcStart, uint32_t size, Memory* dstMem = nullptr);
-    void fill(ExecutionState& state, uint32_t start, uint8_t value, uint32_t size);
+    void init(ExecutionState& state, DataSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copy(ExecutionState& state, uint64_t dstStart, uint64_t srcStart, uint64_t size, Memory* dstMem = nullptr);
+    void fill(ExecutionState& state, uint64_t start, uint8_t value, uint64_t size);
 
-    inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0, Memory* dstMem = nullptr) const
+    inline bool checkAccess(uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
         ASSERT(!is64());
-        if (dstMem == nullptr) {
-            return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
-        } else {
-            return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= dstMem->m_sizeInByte));
-        }
+        return !UNLIKELY(!((uint64_t)offset + (uint64_t)addend + (uint64_t)size <= m_sizeInByte));
     }
 
-    inline bool checkAccessM64(uint64_t offset, uint64_t size, uint64_t addend = 0, Memory* dstMem = nullptr) const
+    inline bool checkAccessM64(uint64_t offset, uint64_t size) const
     {
         ASSERT(is64());
-        if (dstMem == nullptr) {
-            return !UNLIKELY(!(offset + addend + size <= m_sizeInByte));
-        } else {
-            return !UNLIKELY(!(offset + addend + size <= dstMem->m_sizeInByte));
-        }
+        return !UNLIKELY(offset > m_sizeInByte || size > m_sizeInByte - offset);
     }
 
-    void initMemory(DataSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
-    void copyMemory(uint32_t dstStart, uint32_t srcStart, uint32_t size);
-    void copyMemory(Memory* dstMemory, uint32_t dstStart, uint32_t srcStart, uint32_t size);
-    void fillMemory(uint32_t start, uint8_t value, uint32_t size);
+    inline bool checkAccessM64(uint64_t offset, uint64_t size, uint64_t addend) const
+    {
+        ASSERT(is64());
+        return !UNLIKELY(offset > m_sizeInByte || addend > m_sizeInByte - offset || size > m_sizeInByte - offset - addend);
+    }
+
+    void initMemory(DataSegment* source, size_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copyMemory(size_t dstStart, size_t srcStart, size_t size);
+    void copyMemory(Memory* dstMemory, size_t dstStart, size_t srcStart, size_t size);
+    void fillMemory(size_t start, uint8_t value, size_t size);
 
 private:
     Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared, bool is64);
 
     void throwRangeException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
 
-    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0, Memory* dstMem = nullptr) const
+    inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
-        if (!this->checkAccess(offset, size, addend, dstMem)) {
+        if (!this->checkAccess(offset, size, addend)) {
             throwRangeException(state, offset, addend, size);
         }
     }
 
-    inline void checkAccessM64(ExecutionState& state, uint64_t offset, uint64_t size, uint64_t addend = 0, Memory* dstMem = nullptr) const
+    inline void checkAccessM64(ExecutionState& state, uint64_t offset, uint64_t size, uint64_t addend = 0) const
     {
-        if (!this->checkAccessM64(offset, size, addend, dstMem)) {
+        if (!this->checkAccessM64(offset, size, addend)) {
             throwRangeException(state, offset, addend, size);
         }
     }
