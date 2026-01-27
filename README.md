@@ -55,3 +55,13 @@ You'll need [Perf](https://perf.wiki.kernel.org/index.php/Main_Page).
     It'll generate many shared object files, and `perf.data.jitted`
 
 4. View the report with `perf report -i perf.data.jitted`
+
+## Wasi Neural Network
+
+Walrus uses [NNtrainer](https://github.com/nntrainer/nntrainer) as it's neural network engine.
+
+To compile with wasi-nn support use `-DWALRUS_WASI_NN=ON` and `-DWASI_NN_BACKEND="nntrainer"`
+
+Documentation on how to build nntrainer for Walrus is found inside the `third_party/nntrainer` directory.
+
+After building nntrainer simply compile with ninja.

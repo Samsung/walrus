@@ -355,6 +355,11 @@ public:
         ResourceWasiFileKind,
         ResourceWasiDirectoryKind,
 #endif /* ENABLE_WASI */
+#ifdef ENABLE_WASI_NN
+        ResourceWasiNNTensor,
+        ResourceWasiNNGraph,
+        ResourceWasiNNGraphExecContext,
+#endif /* ENABLE_WASI_NN */
     };
 
     virtual ~ComponentHandle() {}

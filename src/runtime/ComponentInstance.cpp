@@ -1002,6 +1002,14 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
 
                 if (expectedFunc->params()[i].type.ref() != nullptr) {
                     if (expectedFunc->params()[i].type.ref()->kind() != providedFunc->params()[i].type.ref()->kind()) {
+                        if ((expectedFunc->params()[i].type.ref()->kind() == ComponentRefCounted::OwnKind
+                             || expectedFunc->params()[i].type.ref()->kind() == ComponentRefCounted::BorrowKind)
+                            == (providedFunc->params()[i].type.ref()->kind() == ComponentRefCounted::BorrowKind
+                                || providedFunc->params()[i].type.ref()->kind() == ComponentRefCounted::OwnKind)) {
+                            elems.push_back(TypeComparisonItem{ expectedFunc->params()[i].type.ref(), providedFunc->params()[i].type.ref(), curr.name });
+                            continue;
+                        }
+
                         componentName = curr.name;
                         return false;
                     }
