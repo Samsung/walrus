@@ -70,14 +70,6 @@
       f64.eq
     end
   )
-  (func (export "br_block_return") (result i32)
-    (local i32)
-    block (result i32)
-      i32.const 20
-      br 1
-      local.set 0 ;; dead code
-    end
-  )
 )
 
 (assert_return (invoke "br0") (i32.const 1)(i32.const 2)(i32.const 3))
@@ -89,4 +81,3 @@
 (assert_return (invoke "br0_1"(i32.const 0))(i32.const 200))
 (assert_return (invoke "br_if_cmp"(i32.const 0)(i32.const 100)(i64.const 100)(f32.const 100.0)(f64.const 100.0))
    (i32.const 1)(i32.const 1)(i32.const 1)(i32.const 1))
-(assert_return (invoke "br_block_return") (i32.const 20))

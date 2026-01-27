@@ -21,6 +21,8 @@
 #include "util/BitOperation.h"
 #include "runtime/ExecutionState.h"
 #include "runtime/Exception.h"
+#include <cmath>
+#include <limits>
 
 namespace Walrus {
 
@@ -208,7 +210,7 @@ public:
     }
 
     Value(Type type)
-        : m_i64(0)
+        : m_v128()
         , m_type(type)
     {
     }
@@ -470,6 +472,31 @@ public:
     {
         ASSERT(isNullableRef());
         return isNull(m_ref);
+    }
+
+    bool isZeroValue()
+    {
+        switch (m_type) {
+        case I32:
+            return m_i32 == 0;
+        case F32:
+            return m_f32 == 0.0f && !std::signbit(m_f32);
+        case I64:
+            return m_i64 == 0;
+        case F64:
+            return m_f64 == +0.0 && !std::signbit(m_f64);
+        case V128: {
+            for (uint8_t i = 0; i < 16; i++) {
+                if (m_v128.m_data[i] != 0) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        default:
+            ASSERT(isRef());
+            return m_ref == nullptr;
+        }
     }
 
     static bool isNull(void* ptr)

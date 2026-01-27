@@ -137,6 +137,25 @@ def run_core_tests(engine):
         raise Exception("wasm-test-core failed")
 
 
+@runner('wasm-test-core-simd', default=True)
+def run_core_simd_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasm-spec', 'core', 'simd')
+
+    print('Running wasm-test-core tests:')
+    xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass_result = _run_wast_tests(engine, xpass, False)
+
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("wasm-test-core failed")
+
+
+
 @runner('wasi', default=True)
 def run_wasi_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi')

@@ -17,8 +17,11 @@
 #ifndef __WalrusModule__
 #define __WalrusModule__
 
+#include "Walrus.h"
 #include "runtime/ObjectType.h"
 #include "runtime/Object.h"
+#include "wabt/ir.h"
+#include <cstdint>
 
 namespace wabt {
 class WASMBinaryReader;
@@ -213,6 +216,7 @@ public:
     FunctionType* functionType() const { return m_functionType; }
 
     const uint8_t* byteCode() const { return m_byteCode.data(); }
+    VectorWithFixedSize<uint8_t, std::allocator<uint8_t>> byteCodeVector() { return m_byteCode; }
 
     size_t byteCodeSize() const
     {
@@ -244,6 +248,22 @@ public:
     JITFunction* jitFunction()
     {
         return m_jitFunction;
+    }
+#endif
+    void setStackSize(uint16_t size)
+    {
+        m_requiredStackSize = size;
+    }
+
+#if !defined(NDEBUG)
+    void pushLocalDebugData(Walrus::ByteCodeStackOffset o)
+    {
+        m_localDebugData.push_back(o);
+    }
+
+    void pushConstDebugData(Walrus::Value value, Walrus::ByteCodeStackOffset o)
+    {
+        m_constantDebugData.push_back(std::pair<Walrus::Value, size_t>(value, o));
     }
 #endif
 
