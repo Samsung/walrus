@@ -94,6 +94,8 @@ enum WasiNamedInstances : size_t {
     InstanceClockWall02,
     InstanceFileSystemTypes02,
     InstanceFileSystemPreOpens02,
+    InstanceSocketsUdp02,
+    InstanceSocketsTcp02,
     InstanceWasiNNTensor02,
     InstanceWasiNNErrors02,
     InstanceWasiNNInference02,
@@ -180,6 +182,10 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
         addResourceExport(instance, "error"); /* 0 */
+        ComponentTypeFunc* errorToString = new ComponentTypeFunc(ComponentType::FuncKind);
+        errorToString->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0)) });
+        errorToString->result() = ComponentTypeRef(ComponentTypeRef::String);
+        addFuncExport(instance, "[method]error.to-debug-string", LiftedWasiFunction::ioErrorToDebugString02, errorToString);
         return instance;
     }
     case InstanceIoPoll02: {
@@ -222,6 +228,8 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         variant->addRef();
         streamRead->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef(ComponentTypeRef::U8))), ComponentTypeRef(variant));
         addFuncExport(instance, "[method]input-stream.read", LiftedWasiFunction::ioInputStreamRead02, streamRead);
+        streamRead->addRef();
+        addFuncExport(instance, "[method]input-stream.blocking-read", LiftedWasiFunction::ioInputStreamRead02, streamRead);
         ComponentTypeFunc* intputStreamSubscribe = new ComponentTypeFunc(ComponentType::FuncKind);
         intputStreamSubscribe->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream)) });
         intputStreamSubscribe->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(3));
@@ -518,6 +526,15 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->type()->getType(4)->addRef();
         stat->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(9)), ComponentTypeRef(instance->type()->getType(4)));
         addFuncExport(instance, "[method]descriptor.stat", LiftedWasiFunction::fileSystemDescriptorStat02, stat);
+        ComponentTypeFunc* statAt = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        statAt->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(10)->addRef();
+        statAt->params().push_back(ComponentTypeFunc::Param{ "path-flags", ComponentTypeRef(instance->type()->getType(10)) });
+        statAt->params().push_back(ComponentTypeFunc::Param{ "path", ComponentTypeRef(ComponentTypeRef::String) });
+        instance->type()->getType(9)->addRef();
+        instance->type()->getType(4)->addRef();
+        statAt->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(9)), ComponentTypeRef(instance->type()->getType(4)));
+        addFuncExport(instance, "[method]descriptor.stat-at", LiftedWasiFunction::fileSystemDescriptorStatAt02, statAt);
         ComponentTypeFunc* openAt = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
         openAt->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
         instance->type()->getType(10)->addRef();
@@ -536,6 +553,31 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->type()->getType(4)->addRef();
         metadataHash->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(12)), ComponentTypeRef(instance->type()->getType(4)));
         addFuncExport(instance, "[method]descriptor.metadata-hash", LiftedWasiFunction::fileSystemDescriptorMetadataHash02, metadataHash);
+        ComponentTypeFunc* metadataHashAt = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        metadataHashAt->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(10)->addRef();
+        metadataHashAt->params().push_back(ComponentTypeFunc::Param{ "path-flags", ComponentTypeRef(instance->type()->getType(10)) });
+        metadataHashAt->params().push_back(ComponentTypeFunc::Param{ "path", ComponentTypeRef(ComponentTypeRef::String) });
+        instance->type()->getType(12)->addRef();
+        instance->type()->getType(4)->addRef();
+        metadataHashAt->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(12)), ComponentTypeRef(instance->type()->getType(4)));
+        addFuncExport(instance, "[method]descriptor.metadata-hash-at", LiftedWasiFunction::fileSystemDescriptorMetadataHash02, metadataHashAt);
+        addResourceExport(instance, "directory-entry-stream"); /* 13 */
+        ComponentTypeFunc* getType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        getType->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(6)->addRef();
+        instance->type()->getType(4)->addRef();
+        getType->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(6)), ComponentTypeRef(instance->type()->getType(4)));
+        addFuncExport(instance, "[method]descriptor.get-type", LiftedWasiFunction::fileSystemDescriptorGetType02, getType);
+        ComponentTypeFunc* fsErrorCode = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        ComponentInstance* errorInstance = loadInstance(InstanceIoError02);
+        instance->m_instances.push_back(streamsIntance);
+        aliasTypeExport(instance, "error", errorInstance->type()->getType(0)); /* 14 */
+        fsErrorCode->params().push_back(ComponentTypeFunc::Param{ "err", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(14))) });
+        instance->type()->getType(4)->addRef();
+        fsErrorCode->result() = new ComponentValueTypeRef(ComponentType::OptionKind, instance->type()->getType(4));
+        addFuncExport(instance, "filesystem-error-code", LiftedWasiFunction::fileSystemErrorCode02, fsErrorCode);
+        addResourceExport(instance, "directory-entry-stream"); /* 15 */
         return instance;
     }
     case InstanceFileSystemPreOpens02: {
@@ -552,6 +594,21 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         addFuncExport(instance, "get-directories", LiftedWasiFunction::fileSystemGetDirectories02, getDirectories);
         return instance;
     }
+    case InstanceSocketsUdp02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "udp-socket");
+        addResourceExport(instance, "incoming-datagram-stream");
+        addResourceExport(instance, "outgoing-datagram-stream");
+        return instance;
+    }
+    case InstanceSocketsTcp02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "tcp-socket");
+        return instance;
+    }
+#if defined(ENABLE_WASI_NN)
     case InstanceWasiNNTensor02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
@@ -578,12 +635,33 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         tensorConstructorType->params().push_back(ComponentTypeFunc::Param{ "data", ComponentTypeRef(tensorData) });
         tensorConstructorType->result() = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, (instance->type()->getType(3))));
         addFuncExport(instance, "[constructor]tensor", LiftedWasiFunction::neuralNetworkTensorConstructor02, tensorConstructorType); /* 4 */
+        ComponentTypeFunc* tensorDataFunc = new ComponentTypeFunc(ComponentType::FuncKind);
+        tensorDataFunc->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::BorrowKind, (instance->type()->getType(3)))) });
+        tensorData->addRef();
+        tensorDataFunc->result() = tensorData;
+        addFuncExport(instance, "[method]tensor.data", LiftedWasiFunction::neuralNetworkTensorData02, tensorDataFunc);
         return instance;
     }
     case InstanceWasiNNErrors02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-        addResourceExport(instance, "error"); /* 0 */
+        ComponentRefCounted* error = addResourceExport(instance, "error"); /* 0 */
+        ComponentTypeLabels* errorCode = new ComponentTypeLabels(ComponentType::EnumKind);
+        errorCode->labels().push_back("invalid-argument");
+        errorCode->labels().push_back("invalid-encoding");
+        errorCode->labels().push_back("timeout");
+        errorCode->labels().push_back("runtime-error");
+        errorCode->labels().push_back("unsupported-operation");
+        errorCode->labels().push_back("too-large");
+        errorCode->labels().push_back("not-found");
+        errorCode->labels().push_back("security");
+        errorCode->labels().push_back("unknown");
+        aliasTypeExport(instance, "error-code", errorCode); /* 1 */
+        ComponentTypeFunc* errorMethod = new ComponentTypeFunc(ComponentType::FuncKind);
+        errorMethod->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::BorrowKind, error)) });
+        errorCode->addRef();
+        errorMethod->result() = errorCode;
+        addFuncExport(instance, "[method]error.code", LiftedWasiFunction::neuralNetworkErrorCode02, errorMethod); /* 2 */
         return instance;
     }
     case InstanceWasiNNInference02: {
@@ -610,7 +688,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         ComponentTypeRef resultOk = ComponentTypeRef(new ComponentValueTypeRef(ComponentRefCounted::ListKind, namedTensorTuple));
         ComponentTypeRef resultErr = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, wasiNNErrorType));
         computeType->result() = new ComponentTypeResult(resultOk, resultErr);
-        addFuncExport(instance, "[method]graph-execution-context.compute", LiftedWasiFunction::neuralNetworkInferenceGraphExecutionContextCompute, computeType);
+        addFuncExport(instance, "[method]graph-execution-context.compute", LiftedWasiFunction::neuralNetworkInferenceGraphExecutionContextCompute02, computeType);
         return instance;
     }
     case InstanceWasiNNGraph02: {
@@ -656,8 +734,15 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         resultErr = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(2)));
         load->result() = new ComponentTypeResult(resultOk, resultErr);
         addFuncExport(instance, "load", LiftedWasiFunction::neuralNetworkGraphLoad02, load);
+        ComponentTypeFunc* loadByName = new ComponentTypeFunc(ComponentType::FuncKind);
+        loadByName->params().push_back(ComponentTypeFunc::Param{ "name", ComponentTypeRef(ComponentTypeRef::String) });
+        resultOk = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(0)));
+        resultErr = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(2)));
+        loadByName->result() = new ComponentTypeResult(resultOk, resultErr);
+        addFuncExport(instance, "load-by-name", LiftedWasiFunction::neuralNetworkGraphLoadByName02, loadByName);
         return instance;
     }
+#endif
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return nullptr;
@@ -756,7 +841,18 @@ ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
         } else if (compareName(charData, length, "preopens")) {
             instanceId = InstanceFileSystemPreOpens02;
         }
-    } else if (length > 9 && memcmp(charData, "wasi:nn/", 8) == 0) {
+    } else if (length > 9 && memcmp(charData, "wasi:sockets/", 13) == 0) {
+        charData += 13;
+        length -= 13;
+
+        if (compareName(charData, length, "udp")) {
+            instanceId = InstanceFileSystemTypes02;
+        } else if (compareName(charData, length, "tcp")) {
+            instanceId = InstanceFileSystemPreOpens02;
+        }
+    }
+#if ENABLE_WASI_NN
+    else if (length > 9 && memcmp(charData, "wasi:nn/", 8) == 0) {
         charData += 8;
         length -= 8;
 
@@ -770,6 +866,7 @@ ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
             instanceId = InstanceWasiNNGraph02;
         }
     }
+#endif
 
     if (instanceId == InstanceUnknown) {
         return nullptr;
