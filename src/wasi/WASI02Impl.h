@@ -461,11 +461,14 @@ public:
         fileSystemDescriptorMetadataHashAt02,
         fileSystemDescriptorGetType02,
         fileSystemGetDirectories02,
-        neuralNetworkTensorConstructor02,
-        neuralNetworkInferenceGraphExecutionContextCompute,
+        fileSystemErrorCode02,
+        neuralNetworkErrorCode02,
         neuralNetworkGraphInitExectionContext02,
         neuralNetworkGraphLoad02,
-        fileSystemErrorCode02,
+        neuralNetworkGraphLoadByName02,
+        neuralNetworkInferenceGraphExecutionContextCompute02,
+        neuralNetworkTensorConstructor02,
+        neuralNetworkTensorData02,
     };
 
     LiftedWasiFunction(Type type, ComponentInstance* instance, FunctionType* functionType)

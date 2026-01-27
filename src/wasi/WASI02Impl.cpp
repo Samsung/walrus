@@ -21,6 +21,10 @@
 #include "wasi/WASI02Impl.h"
 #include "runtime/Memory.h"
 
+#if ENABLE_WASI_NN
+#include "wasi/WasiNN.h"
+#endif
+
 namespace Walrus {
 
 static void throwNoMemory(ExecutionState& state)
@@ -481,6 +485,8 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             ComponentInstance::throwInvalidHandle(state, descriptorIndex);
         }
 
+        ComponentResourceWasiFile* file = asFile(handle);
+
         options->memoryCheckRange32(state, 8, offset, 96);
 
         uv_fs_t req;
@@ -825,6 +831,33 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         }
         break;
     }
+#if ENABLE_WASI_NN
+    case LiftedWasiFunction::neuralNetworkGraphInitExectionContext02: {
+        WasiNN::InitExecutionContext(state, argv, result, instance, options);
+        break;
+    }
+    case LiftedWasiFunction::neuralNetworkGraphLoad02: {
+        Trap::throwException("implement neuralNetworkGraphLoad02");
+        WasiNN::Load(state, argv, result, instance, options);
+        break;
+    }
+    case LiftedWasiFunction::neuralNetworkGraphLoadByName02: {
+        WasiNN::LoadByName(state, argv, result, instance, options);
+        break;
+    }
+    case LiftedWasiFunction::neuralNetworkTensorConstructor02: {
+        WasiNN::TensorConstructor(state, argv, result, instance, options);
+        break;
+    }
+    case LiftedWasiFunction::neuralNetworkInferenceGraphExecutionContextCompute02: {
+        WasiNN::Compute(state, argv, result, instance, options);
+        break;
+    }
+    case Walrus::LiftedWasiFunction::neuralNetworkTensorData02: {
+        WasiNN::TensorData(state, argv, result, instance, options);
+        break;
+    }
+#endif
     default:
         std::string message = "unimplemented wasi function";
         Trap::throwException(state, message);
@@ -847,6 +880,13 @@ bool dropWasiResource(ExecutionState& state, ComponentHandle* handle)
     case ComponentHandle::ResourceWasiFileKind:
     case ComponentHandle::ResourceWasiDirectoryKind:
         break;
+#if ENABLE_WASI_NN
+    case Walrus::ComponentHandle::ResourceWasiNNGraph:
+    case Walrus::ComponentHandle::ResourceWasiNNGraphExecContext:
+    case Walrus::ComponentHandle::ResourceWasiNNTensor:
+        break;
+#endif
+
     default:
         return false;
     }
