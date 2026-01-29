@@ -69,7 +69,7 @@ public:
     virtual void OnMemory(Index index, uint64_t initialSize, uint64_t maximumSize, bool isShared, bool is64) = 0;
 
     virtual void OnDataSegmentCount(Index count) = 0;
-    virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) = 0;
+    virtual bool BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) = 0;
     virtual void BeginDataSegmentInitExpr(Index index) = 0;
     virtual void EndDataSegmentInitExpr(Index index) = 0;
     virtual void OnDataSegmentData(Index index, const void *data, Address size) = 0;

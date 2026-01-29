@@ -134,13 +134,13 @@ static sljit_s32 growMemory(uint32_t newSize, Instance* instance, uint16_t memIn
     return -1;
 }
 
-static sljit_uw growMemoryM64(sljit_uw newSize, Instance* instance, uint16_t memIndex)
+static sljit_sw growMemoryM64(sljit_uw newSize, Instance* instance, uint16_t memIndex)
 {
     Memory* memory = instance->memory(memIndex);
-    uint32_t oldSize = memory->sizeInPageSize();
+    sljit_sw oldSize = static_cast<sljit_sw>(memory->sizeInPageSize());
 
     if (static_cast<uint64_t>(newSize) < Memory::s_maxMemory64Grow && memory->grow(static_cast<uint64_t>(newSize) * Memory::s_memoryPageSize)) {
-        return static_cast<sljit_s32>(oldSize);
+        return oldSize;
     }
 
     return -1;
@@ -371,8 +371,13 @@ static void emitMemory(sljit_compiler* compiler, Instruction* instr)
             MOVE_FROM_REG(compiler, SLJIT_MOV, arg.arg, arg.argw, SLJIT_R0);
         } else {
             JITArgPair argPair(params + 1);
+
+            sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, SLJIT_R0, 0, SLJIT_IMM, -1);
+            sljit_emit_op_flags(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_NOT_ZERO);
+
             MOVE_FROM_REG(compiler, SLJIT_MOV, argPair.arg1, argPair.arg1w, SLJIT_R0);
-            sljit_emit_op1(compiler, SLJIT_MOV, argPair.arg2, argPair.arg2w, SLJIT_IMM, 0);
+            sljit_emit_op2(compiler, SLJIT_SUB, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 1);
+            sljit_emit_op1(compiler, SLJIT_MOV, argPair.arg2, argPair.arg2w, SLJIT_TMP_DEST_REG, 0);
         }
 #else /* !SLJIT_32BIT_ARCHITECTURE */
         arg.set(params + 1);

@@ -1242,12 +1242,14 @@ public:
         m_result.m_datas.reserve(count);
     }
 
-    virtual void BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
+    virtual bool BeginDataSegment(Index index, Index memoryIndex, uint8_t flags) override
     {
         ASSERT(index == m_result.m_datas.size());
         ASSERT(m_dataSegmentMemIndex == static_cast<size_t>(-1));
         m_dataSegmentMemIndex = memoryIndex;
-        beginNewFunction(Walrus::Value::I32, true);
+        bool is64 = memoryIndex < m_result.m_memoryTypes.size() && m_result.m_memoryTypes[memoryIndex]->is64();
+        beginNewFunction(is64 ? Walrus::Value::I64 : Walrus::Value::I32, true);
+        return is64;
     }
 
     virtual void BeginDataSegmentInitExpr(Index index) override

@@ -397,8 +397,10 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
                 Memory* m = data->instance->memory(data->init->memIndex());
                 const auto& initData = data->init->initData();
-                if (m->sizeInByte() >= initData.size() && (offset.asI32() + initData.size()) <= m->sizeInByte() && offset.asI32() >= 0) {
-                    memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offset.asI32(), 0, initData.size());
+                uint64_t offsetValue = (offset.type() == Value::I32) ? static_cast<uint32_t>(offset.asI32()) : static_cast<uint64_t>(offset.asI64());
+
+                if (m->sizeInByte() >= initData.size() && m->sizeInByte() - initData.size() >= offsetValue) {
+                    memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offsetValue, 0, initData.size());
                 } else {
                     Trap::throwException(state, "out of bounds memory access");
                 }
