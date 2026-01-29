@@ -389,7 +389,7 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         sljit_jump* nonZero = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, arg64.arg2, arg64.arg2w, SLJIT_IMM, 0);
         context->appendTrapJump(ExecutionContext::OutOfBoundsTableAccessError, nonZero);
 
-        args[0].set(operands + 1);
+        args[0].set(operands);
         args[1].arg = arg64.arg1;
         args[1].argw = arg64.arg1w;
         args[2].set(operands + 2);
@@ -497,11 +497,11 @@ static void emitTable(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, kInstanceReg, 0);
         sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, W, 32, P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, growTable));
 
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 0);
         sljit_emit_op2u(compiler, SLJIT_SUB | SLJIT_SET_Z, SLJIT_R0, 0, SLJIT_IMM, -1);
-        sljit_emit_select(compiler, SLJIT_ZERO, SLJIT_TMP_DEST_REG, SLJIT_R0, 0, SLJIT_TMP_DEST_REG);
+        sljit_emit_op_flags(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_NOT_ZERO);
 
         MOVE_FROM_REG(compiler, SLJIT_MOV, sizes[1].arg1, sizes[1].arg1w, SLJIT_R0);
+        sljit_emit_op2(compiler, SLJIT_SUB, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 1);
         sljit_emit_op1(compiler, SLJIT_MOV, sizes[1].arg2, sizes[1].arg2w, SLJIT_TMP_DEST_REG, 0);
 #endif /* SLJIT_64BIT_ARCHITECTURE */
         break;

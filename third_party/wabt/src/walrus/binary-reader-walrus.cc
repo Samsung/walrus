@@ -1149,8 +1149,7 @@ public:
     Result BeginDataSegment(Index index, Index memory_index, uint8_t flags) override {
         auto mode = ToSegmentMode(flags);
         CHECK_RESULT(m_validator.OnDataSegment(GetLocation(), Var(memory_index, GetLocation()), mode));
-        m_externalDelegate->BeginDataSegment(index, memory_index, flags);
-        m_lastInitType = Type::I32;
+        m_lastInitType = m_externalDelegate->BeginDataSegment(index, memory_index, flags) ? Type::I64 : Type::I32;
         return Result::Ok;
     }
     Result BeginDataSegmentInitExpr(Index index) override {
