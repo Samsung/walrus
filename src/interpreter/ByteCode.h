@@ -32,8 +32,10 @@ class FunctionType;
 
 #if defined(NDEBUG)
 #define F_NOP(F)
+#define IF_DEBUG_ENABLED(x)
 #else /* !NDEBUG */
 #define F_NOP(F) F(Nop)
+#define IF_DEBUG_ENABLED(x) x
 #endif /* NDEBUG */
 
 #define FOR_EACH_BYTECODE_OP(F) \
@@ -1504,101 +1506,64 @@ protected:
     uint32_t m_value;
 };
 
-class ByteCodeOffset2Value : public ByteCode {
+class ByteCodeOffset2ValueBase : public ByteCode {
 public:
-    ByteCodeOffset2Value(Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, uint32_t value)
+    ByteCodeOffset2ValueBase(Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2)
         : ByteCode(opcode)
         , m_stackOffset1(stackOffset1)
         , m_stackOffset2(stackOffset2)
-        , m_value(value)
     {
     }
 
     ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
     ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
-    uint32_t uint32Value() const { return m_value; }
-    int32_t int32Value() const { return static_cast<int32_t>(m_value); }
 
 protected:
     ByteCodeStackOffset m_stackOffset1;
     ByteCodeStackOffset m_stackOffset2;
-    uint32_t m_value;
 };
 
-class ByteCodeOffset2Value64 : public ByteCode {
-public:
-    ByteCodeOffset2Value64(Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, uint64_t value)
-        : ByteCode(opcode)
-        , m_stackOffset1(stackOffset1)
-        , m_stackOffset2(stackOffset2)
-        , m_value(value)
-    {
-    }
+#define BYTE_CODE_OFFSET_2_VALUE(className, valueType, signedValueType)                                               \
+    class className : public ByteCodeOffset2ValueBase {                                                               \
+    public:                                                                                                           \
+        className(Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, valueType value) \
+            : ByteCodeOffset2ValueBase(opcode, stackOffset1, stackOffset2)                                            \
+            , m_value(value)                                                                                          \
+        {                                                                                                             \
+        }                                                                                                             \
+        valueType uintValue() const { return m_value; }                                                               \
+        signedValueType intValue() const { return static_cast<signedValueType>(m_value); }                            \
+                                                                                                                      \
+    protected:                                                                                                        \
+        valueType m_value;                                                                                            \
+    };
 
-    ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
-    ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
-    uint64_t uint64Value() const { return m_value; }
-    int64_t int64Value() const { return static_cast<int64_t>(m_value); }
+BYTE_CODE_OFFSET_2_VALUE(ByteCodeOffset2Value, uint32_t, int32_t);
+BYTE_CODE_OFFSET_2_VALUE(ByteCodeOffset2Value64, uint64_t, int64_t);
 
-protected:
-    ByteCodeStackOffset m_stackOffset1;
-    ByteCodeStackOffset m_stackOffset2;
-    uint64_t m_value;
-};
+#define BYTE_CODE_OFFSET_2_VALUE_MEM_IDX(className, valueType, signedValueType)                                                                           \
+    class className : public ByteCodeOffset2ValueBase {                                                                                                   \
+    public:                                                                                                                                               \
+        className(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, valueType value) \
+            : ByteCodeOffset2ValueBase(opcode, stackOffset1, stackOffset2)                                                                                \
+            , m_value(value)                                                                                                                              \
+            , m_memIndex(index)                                                                                                                           \
+            , m_alignment(alignment)                                                                                                                      \
+        {                                                                                                                                                 \
+        }                                                                                                                                                 \
+        uint16_t memIndex() const { return m_memIndex; }                                                                                                  \
+        uint16_t alignment() const { return m_alignment; }                                                                                                \
+        valueType uintValue() const { return m_value; }                                                                                                   \
+        signedValueType intValue() const { return static_cast<signedValueType>(m_value); }                                                                \
+                                                                                                                                                          \
+    protected:                                                                                                                                            \
+        valueType m_value;                                                                                                                                \
+        uint16_t m_memIndex;                                                                                                                              \
+        uint16_t m_alignment;                                                                                                                             \
+    };
 
-class ByteCodeOffset2ValueMemIdx : public ByteCode {
-public:
-    ByteCodeOffset2ValueMemIdx(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, uint32_t value)
-        : ByteCode(opcode)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-        , m_stackOffset1(stackOffset1)
-        , m_stackOffset2(stackOffset2)
-        , m_value(value)
-    {
-    }
-
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-    ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
-    ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
-    uint32_t uint32Value() const { return m_value; }
-    int32_t int32Value() const { return static_cast<int32_t>(m_value); }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-    ByteCodeStackOffset m_stackOffset1;
-    ByteCodeStackOffset m_stackOffset2;
-    uint32_t m_value;
-};
-
-class ByteCodeOffset2Value64MemIdx : public ByteCode {
-public:
-    ByteCodeOffset2Value64MemIdx(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset stackOffset1, ByteCodeStackOffset stackOffset2, uint64_t value)
-        : ByteCode(opcode)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-        , m_stackOffset1(stackOffset1)
-        , m_stackOffset2(stackOffset2)
-        , m_value(value)
-    {
-    }
-
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-    ByteCodeStackOffset stackOffset1() const { return m_stackOffset1; }
-    ByteCodeStackOffset stackOffset2() const { return m_stackOffset2; }
-    uint64_t uint64Value() const { return m_value; }
-    int64_t int64Value() const { return static_cast<int64_t>(m_value); }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-    ByteCodeStackOffset m_stackOffset1;
-    ByteCodeStackOffset m_stackOffset2;
-    uint64_t m_value;
-};
+BYTE_CODE_OFFSET_2_VALUE_MEM_IDX(ByteCodeOffset2ValueMemIdx, uint32_t, int32_t);
+BYTE_CODE_OFFSET_2_VALUE_MEM_IDX(ByteCodeOffset2Value64MemIdx, uint64_t, int64_t);
 
 class ByteCodeOffset4 : public ByteCode {
 public:
@@ -1618,15 +1583,14 @@ protected:
     ByteCodeStackOffset m_stackOffsets[4];
 };
 
-class ByteCodeOffset4Value : public ByteCode {
+class ByteCodeOffset4ValueBase : public ByteCode {
 public:
-    ByteCodeOffset4Value(Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, uint32_t value)
+    ByteCodeOffset4ValueBase(Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset)
         : ByteCode(opcode)
         , m_stackOffset1(src0Offset)
         , m_stackOffset2(src1Offset)
         , m_stackOffset3(src2Offset)
         , m_stackOffset4(dstOffset)
-        , m_value(value)
     {
     }
 
@@ -1634,105 +1598,53 @@ public:
     ByteCodeStackOffset src1Offset() const { return m_stackOffset2; }
     ByteCodeStackOffset src2Offset() const { return m_stackOffset3; }
     ByteCodeStackOffset dstOffset() const { return m_stackOffset4; }
-    uint32_t offset() const { return m_value; }
 
 protected:
     ByteCodeStackOffset m_stackOffset1;
     ByteCodeStackOffset m_stackOffset2;
     ByteCodeStackOffset m_stackOffset3;
     ByteCodeStackOffset m_stackOffset4;
-    uint32_t m_value;
 };
 
-class ByteCodeOffset4Value64 : public ByteCode {
-public:
-    ByteCodeOffset4Value64(Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, uint64_t value)
-        : ByteCode(opcode)
-        , m_stackOffset1(src0Offset)
-        , m_stackOffset2(src1Offset)
-        , m_stackOffset3(src2Offset)
-        , m_stackOffset4(dstOffset)
-        , m_value(value)
-    {
-    }
+#define BYTE_CODE_OFFSET_4_VALUE(className, valueType)                                                                                                                           \
+    class className : public ByteCodeOffset4ValueBase {                                                                                                                          \
+    public:                                                                                                                                                                      \
+        className(Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, valueType value) \
+            : ByteCodeOffset4ValueBase(opcode, src0Offset, src1Offset, src2Offset, dstOffset)                                                                                    \
+            , m_value(value)                                                                                                                                                     \
+        {                                                                                                                                                                        \
+        }                                                                                                                                                                        \
+        valueType offset() const { return m_value; }                                                                                                                             \
+                                                                                                                                                                                 \
+    protected:                                                                                                                                                                   \
+        valueType m_value;                                                                                                                                                       \
+    };
 
-    ByteCodeStackOffset src0Offset() const { return m_stackOffset1; }
-    ByteCodeStackOffset src1Offset() const { return m_stackOffset2; }
-    ByteCodeStackOffset src2Offset() const { return m_stackOffset3; }
-    ByteCodeStackOffset dstOffset() const { return m_stackOffset4; }
-    uint64_t offset() const { return m_value; }
+BYTE_CODE_OFFSET_4_VALUE(ByteCodeOffset4Value, uint32_t);
+BYTE_CODE_OFFSET_4_VALUE(ByteCodeOffset4Value64, uint64_t);
 
-protected:
-    ByteCodeStackOffset m_stackOffset1;
-    ByteCodeStackOffset m_stackOffset2;
-    ByteCodeStackOffset m_stackOffset3;
-    ByteCodeStackOffset m_stackOffset4;
-    uint64_t m_value;
-};
+#define BYTE_CODE_OFFSET_4_VALUE_MEM_IDX(className, valueType)                                                                                                                                                       \
+    class className : public ByteCodeOffset4ValueBase {                                                                                                                                                              \
+    public:                                                                                                                                                                                                          \
+        className(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, valueType value) \
+            : ByteCodeOffset4ValueBase(opcode, src0Offset, src1Offset, src2Offset, dstOffset)                                                                                                                        \
+            , m_memIndex(index)                                                                                                                                                                                      \
+            , m_alignment(alignment)                                                                                                                                                                                 \
+            , m_value(value)                                                                                                                                                                                         \
+        {                                                                                                                                                                                                            \
+        }                                                                                                                                                                                                            \
+        valueType offset() const { return m_value; }                                                                                                                                                                 \
+        uint16_t memIndex() const { return m_memIndex; }                                                                                                                                                             \
+        uint16_t alignment() const { return m_alignment; }                                                                                                                                                           \
+                                                                                                                                                                                                                     \
+    protected:                                                                                                                                                                                                       \
+        uint16_t m_memIndex;                                                                                                                                                                                         \
+        uint16_t m_alignment;                                                                                                                                                                                        \
+        valueType m_value;                                                                                                                                                                                           \
+    };
 
-class ByteCodeOffset4ValueMemIdx : public ByteCode {
-public:
-    ByteCodeOffset4ValueMemIdx(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, uint32_t value)
-        : ByteCode(opcode)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-        , m_stackOffset1(src0Offset)
-        , m_stackOffset2(src1Offset)
-        , m_stackOffset3(src2Offset)
-        , m_stackOffset4(dstOffset)
-        , m_value(value)
-    {
-    }
-
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-    ByteCodeStackOffset src0Offset() const { return m_stackOffset1; }
-    ByteCodeStackOffset src1Offset() const { return m_stackOffset2; }
-    ByteCodeStackOffset src2Offset() const { return m_stackOffset3; }
-    ByteCodeStackOffset dstOffset() const { return m_stackOffset4; }
-    uint32_t offset() const { return m_value; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-    ByteCodeStackOffset m_stackOffset1;
-    ByteCodeStackOffset m_stackOffset2;
-    ByteCodeStackOffset m_stackOffset3;
-    ByteCodeStackOffset m_stackOffset4;
-    uint32_t m_value;
-};
-
-class ByteCodeOffset4Value64MemIdx : public ByteCode {
-public:
-    ByteCodeOffset4Value64MemIdx(uint32_t index, uint32_t alignment, Opcode opcode, ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset, ByteCodeStackOffset src2Offset, ByteCodeStackOffset dstOffset, uint64_t value)
-        : ByteCode(opcode)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-        , m_stackOffset1(src0Offset)
-        , m_stackOffset2(src1Offset)
-        , m_stackOffset3(src2Offset)
-        , m_stackOffset4(dstOffset)
-        , m_value(value)
-    {
-    }
-
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-    ByteCodeStackOffset src0Offset() const { return m_stackOffset1; }
-    ByteCodeStackOffset src1Offset() const { return m_stackOffset2; }
-    ByteCodeStackOffset src2Offset() const { return m_stackOffset3; }
-    ByteCodeStackOffset dstOffset() const { return m_stackOffset4; }
-    uint64_t offset() const { return m_value; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-    ByteCodeStackOffset m_stackOffset1;
-    ByteCodeStackOffset m_stackOffset2;
-    ByteCodeStackOffset m_stackOffset3;
-    ByteCodeStackOffset m_stackOffset4;
-    uint64_t m_value;
-};
+BYTE_CODE_OFFSET_4_VALUE_MEM_IDX(ByteCodeOffset4ValueMemIdx, uint32_t);
+BYTE_CODE_OFFSET_4_VALUE_MEM_IDX(ByteCodeOffset4Value64MemIdx, uint64_t);
 
 class ByteCodeTable {
 public:
@@ -2216,165 +2128,49 @@ protected:
     uint16_t m_resultOffsetsSize;
 };
 
-class Load32 : public ByteCodeOffset2 {
-public:
-    Load32(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2(Load32Opcode, srcOffset, dstOffset)
-    {
-    }
+#define DEFINE_LOAD_OP(className, opcodeType, opStr)                            \
+    class className : public ByteCodeOffset2 {                                  \
+    public:                                                                     \
+        className(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : ByteCodeOffset2(opcodeType, srcOffset, dstOffset)                 \
+        {                                                                       \
+        }                                                                       \
+        ByteCodeStackOffset srcOffset() const { return stackOffset1(); }        \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }        \
+        IF_DEBUG_ENABLED(                                                          \
+            void dump(size_t pos) {                                             \
+                printf("load%s ", opStr);                                       \
+                DUMP_BYTECODE_OFFSET(stackOffset1);                             \
+                DUMP_BYTECODE_OFFSET(stackOffset2);                             \
+            });                                                                 \
+    };
 
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+DEFINE_LOAD_OP(Load32, Load32Opcode, "32");
+DEFINE_LOAD_OP(Load32M64, Load32M64Opcode, "32M64");
+DEFINE_LOAD_OP(Load64, Load64Opcode, "64");
+DEFINE_LOAD_OP(Load64M64, Load64M64Opcode, "64M64");
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("load32 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
+#define DEFINE_STORE_OP(className, opcodeType, opStr)                             \
+    class className : public ByteCodeOffset2 {                                    \
+    public:                                                                       \
+        className(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset) \
+            : ByteCodeOffset2(opcodeType, src0Offset, src1Offset)                 \
+        {                                                                         \
+        }                                                                         \
+        ByteCodeStackOffset src0Offset() const { return stackOffset1(); }         \
+        ByteCodeStackOffset src1Offset() const { return stackOffset2(); }         \
+        IF_DEBUG_ENABLED(                                                            \
+            void dump(size_t pos) {                                               \
+                printf("store%s ", opStr);                                        \
+                DUMP_BYTECODE_OFFSET(stackOffset1);                               \
+                DUMP_BYTECODE_OFFSET(stackOffset2);                               \
+            });                                                                   \
+    };
 
-class Load32M64 : public ByteCodeOffset2 {
-public:
-    Load32M64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2(Load32M64Opcode, srcOffset, dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("load32M64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
-
-class Load64 : public ByteCodeOffset2 {
-public:
-    Load64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2(Load64Opcode, srcOffset, dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("load64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
-
-class Load64M64 : public ByteCodeOffset2 {
-public:
-    Load64M64(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2(Load64M64Opcode, srcOffset, dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("load64M64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
-
-class Store32 : public ByteCodeOffset2 {
-public:
-    Store32(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset)
-        : ByteCodeOffset2(Store32Opcode, src0Offset, src1Offset)
-    {
-    }
-
-    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
-    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("store32 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
-
-class Store32M64 : public ByteCodeOffset2 {
-public:
-    Store32M64(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset)
-        : ByteCodeOffset2(Store32M64Opcode, src0Offset, src1Offset)
-    {
-    }
-
-    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
-    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("store32M64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
-
-class Store64 : public ByteCodeOffset2 {
-public:
-    Store64(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset)
-        : ByteCodeOffset2(Store64Opcode, src0Offset, src1Offset)
-    {
-    }
-
-    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
-    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("store64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
-
-class Store64M64 : public ByteCodeOffset2 {
-public:
-    Store64M64(ByteCodeStackOffset src0Offset, ByteCodeStackOffset src1Offset)
-        : ByteCodeOffset2(Store64M64Opcode, src0Offset, src1Offset)
-    {
-    }
-
-    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
-    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("store64M64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-    }
-#endif
-};
+DEFINE_STORE_OP(Store32, Store32Opcode, "32");
+DEFINE_STORE_OP(Store32M64, Store32M64Opcode, "32M64");
+DEFINE_STORE_OP(Store64, Store64Opcode, "64");
+DEFINE_STORE_OP(Store64M64, Store64M64Opcode, "64M64");
 
 class Jump : public ByteCode {
 public:
@@ -2683,43 +2479,24 @@ protected:
     uint16_t m_memIndex;
 };
 
-class MemorySize : public ByteCodeOffsetMemIndex {
-public:
-    MemorySize(uint32_t index, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffsetMemIndex(Opcode::MemorySizeOpcode, index, dstOffset)
-    {
-    }
+#define DEFINE_MEMORY_SIZE(className, opcodeType, opStr)                   \
+    class className : public ByteCodeOffsetMemIndex {                      \
+    public:                                                                \
+        className(uint32_t index, ByteCodeStackOffset dstOffset)           \
+            : ByteCodeOffsetMemIndex(Opcode::opcodeType, index, dstOffset) \
+        {                                                                  \
+        }                                                                  \
+        ByteCodeStackOffset dstOffset() const { return stackOffset1(); }   \
+        IF_DEBUG_ENABLED(                                                     \
+            void dump(size_t pos) {                                        \
+                printf("MemorySize%s ", opStr);                            \
+                DUMP_BYTECODE_OFFSET(stackOffset);                         \
+                printf("memIndex: %" PRIu16, memIndex());                  \
+            });                                                            \
+    };
 
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemorySize ");
-        DUMP_BYTECODE_OFFSET(stackOffset);
-        printf("memIndex: %" PRIu16, memIndex());
-    }
-#endif
-};
-
-class MemorySizeM64 : public ByteCodeOffsetMemIndex {
-public:
-    MemorySizeM64(uint32_t index, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffsetMemIndex(Opcode::MemorySizeM64Opcode, index, dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemorySizeM64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset);
-        printf("memIndex: %" PRIu16, memIndex());
-    }
-#endif
-};
+DEFINE_MEMORY_SIZE(MemorySize, MemorySizeOpcode, "");
+DEFINE_MEMORY_SIZE(MemorySizeM64, MemorySizeM64Opcode, "M64");
 
 class ByteCodeOffset3MemIndexSegmentIndex : public ByteCode {
 public:
@@ -2749,45 +2526,26 @@ protected:
     ByteCodeStackOffset m_srcOffsets[3];
 };
 
-class MemoryInit : public ByteCodeOffset3MemIndexSegmentIndex {
-public:
-    MemoryInit(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndexSegmentIndex(Opcode::MemoryInitOpcode, index, segmentIndex, src0, src1, src2)
-    {
-    }
+#define DEFINE_MEMORY_INIT(className, opcodeType, opStr)                                                                               \
+    class className : public ByteCodeOffset3MemIndexSegmentIndex {                                                                     \
+    public:                                                                                                                            \
+        className(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2) \
+            : ByteCodeOffset3MemIndexSegmentIndex(Opcode::opcodeType, index, segmentIndex, src0, src1, src2)                           \
+        {                                                                                                                              \
+        }                                                                                                                              \
+        IF_DEBUG_ENABLED(                                                                                                                 \
+            void dump(size_t pos) {                                                                                                    \
+                printf("MemoryInit%s ", opStr);                                                                                        \
+                DUMP_BYTECODE_OFFSET(srcOffsets[0]);                                                                                   \
+                DUMP_BYTECODE_OFFSET(srcOffsets[1]);                                                                                   \
+                DUMP_BYTECODE_OFFSET(srcOffsets[2]);                                                                                   \
+                printf("segmentIndex: %" PRIu32, segmentIndex());                                                                      \
+                printf("memIndex: %" PRIu16, memIndex());                                                                              \
+            });                                                                                                                        \
+    };
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryInit ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("segmentIndex: %" PRIu32, segmentIndex());
-        printf("memIndex: %" PRIu16, memIndex());
-    }
-#endif
-};
-
-class MemoryInitM64 : public ByteCodeOffset3MemIndexSegmentIndex {
-public:
-    MemoryInitM64(uint32_t index, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndexSegmentIndex(Opcode::MemoryInitM64Opcode, index, segmentIndex, src0, src1, src2)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryInitM64 ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("segmentIndex: %" PRIu32, segmentIndex());
-        printf("memIndex: %" PRIu16, memIndex());
-    }
-#endif
-};
+DEFINE_MEMORY_INIT(MemoryInit, MemoryInitOpcode, "");
+DEFINE_MEMORY_INIT(MemoryInitM64, MemoryInitM64Opcode, "M64");
 
 class ByteCodeOffset3MemIndex2 : public ByteCode {
 public:
@@ -2813,97 +2571,30 @@ protected:
     ByteCodeStackOffset m_srcOffsets[3];
 };
 
-class MemoryCopy : public ByteCodeOffset3MemIndex2 {
-public:
-    MemoryCopy(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyOpcode, srcIndex, dstIndex, src0, src1, src2)
-    {
-    }
+#define DEFINE_MEMORY_COPY(className, opcodeType, opStr)                                                                              \
+    class className : public ByteCodeOffset3MemIndex2 {                                                                               \
+    public:                                                                                                                           \
+        className(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2) \
+            : ByteCodeOffset3MemIndex2(Opcode::opcodeType, srcIndex, dstIndex, src0, src1, src2)                                      \
+        {                                                                                                                             \
+        }                                                                                                                             \
+        uint16_t srcMemIndex() const { return memIndex1(); }                                                                          \
+        uint16_t dstMemIndex() const { return memIndex2(); }                                                                          \
+        IF_DEBUG_ENABLED(                                                                                                                \
+            void dump(size_t pos) {                                                                                                   \
+                printf("MemoryCopy%s ", opStr);                                                                                       \
+                DUMP_BYTECODE_OFFSET(srcOffsets[0]);                                                                                  \
+                DUMP_BYTECODE_OFFSET(srcOffsets[1]);                                                                                  \
+                DUMP_BYTECODE_OFFSET(srcOffsets[2]);                                                                                  \
+                printf("srcMemIndex: %" PRIu16, srcMemIndex());                                                                       \
+                printf("dstMemIndex: %" PRIu16, dstMemIndex());                                                                       \
+            });                                                                                                                       \
+    };
 
-    uint16_t srcMemIndex() const { return memIndex1(); }
-    uint16_t dstMemIndex() const { return memIndex2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryCopy ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("srcMemIndex: %" PRIu16, srcMemIndex());
-        printf("dstMemIndex: %" PRIu16, dstMemIndex());
-    }
-#endif
-};
-
-class MemoryCopyM64 : public ByteCodeOffset3MemIndex2 {
-public:
-    MemoryCopyM64(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyM64Opcode, srcIndex, dstIndex, src0, src1, src2)
-    {
-    }
-
-    uint16_t srcMemIndex() const { return memIndex1(); }
-    uint16_t dstMemIndex() const { return memIndex2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryCopyM64 ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("srcMemIndex: %" PRIu16, srcMemIndex());
-        printf("dstMemIndex: %" PRIu16, dstMemIndex());
-    }
-#endif
-};
-
-class MemoryCopyM32M64 : public ByteCodeOffset3MemIndex2 {
-public:
-    MemoryCopyM32M64(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyM32M64Opcode, srcIndex, dstIndex, src0, src1, src2)
-    {
-    }
-
-    uint16_t srcMemIndex() const { return memIndex1(); }
-    uint16_t dstMemIndex() const { return memIndex2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryCopyM32M64 ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("srcMemIndex: %" PRIu16, srcMemIndex());
-        printf("dstMemIndex: %" PRIu16, dstMemIndex());
-    }
-#endif
-};
-
-class MemoryCopyM64M32 : public ByteCodeOffset3MemIndex2 {
-public:
-    MemoryCopyM64M32(uint32_t srcIndex, uint32_t dstIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndex2(Opcode::MemoryCopyM64M32Opcode, srcIndex, dstIndex, src0, src1, src2)
-    {
-    }
-
-    uint16_t srcMemIndex() const { return memIndex1(); }
-    uint16_t dstMemIndex() const { return memIndex2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryCopyM64M32 ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("srcMemIndex: %" PRIu16, srcMemIndex());
-        printf("dstMemIndex: %" PRIu16, dstMemIndex());
-    }
-#endif
-};
+DEFINE_MEMORY_COPY(MemoryCopy, MemoryCopyOpcode, "");
+DEFINE_MEMORY_COPY(MemoryCopyM64, MemoryCopyM64Opcode, "M64");
+DEFINE_MEMORY_COPY(MemoryCopyM32M64, MemoryCopyM32M64Opcode, "M32M64");
+DEFINE_MEMORY_COPY(MemoryCopyM64M32, MemoryCopyM64M32Opcode, "M64M32");
 
 class ByteCodeOffset3MemIndex : public ByteCode {
 public:
@@ -2926,43 +2617,25 @@ protected:
     ByteCodeStackOffset m_srcOffsets[3];
 };
 
-class MemoryFill : public ByteCodeOffset3MemIndex {
-public:
-    MemoryFill(uint32_t memIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndex(Opcode::MemoryFillOpcode, memIndex, src0, src1, src2)
-    {
-    }
+#define DEFINE_MEMORY_FILL(className, opcodeType, opStr)                                                           \
+    class className : public ByteCodeOffset3MemIndex {                                                             \
+    public:                                                                                                        \
+        className(uint32_t memIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2) \
+            : ByteCodeOffset3MemIndex(Opcode::opcodeType, memIndex, src0, src1, src2)                              \
+        {                                                                                                          \
+        }                                                                                                          \
+        IF_DEBUG_ENABLED(                                                                                             \
+            void dump(size_t pos) {                                                                                \
+                printf("MemoryFill%s ", opStr);                                                                    \
+                DUMP_BYTECODE_OFFSET(srcOffsets[0]);                                                               \
+                DUMP_BYTECODE_OFFSET(srcOffsets[1]);                                                               \
+                DUMP_BYTECODE_OFFSET(srcOffsets[2]);                                                               \
+                printf("memIndex: %" PRIu16, m_memIndex);                                                          \
+            });                                                                                                    \
+    };
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryFill ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("memIndex: %" PRIu16, m_memIndex);
-    }
-#endif
-};
-
-class MemoryFillM64 : public ByteCodeOffset3MemIndex {
-public:
-    MemoryFillM64(uint32_t memIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCodeOffset3MemIndex(Opcode::MemoryFillM64Opcode, memIndex, src0, src1, src2)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryFillM64 ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("memIndex: %" PRIu16, memIndex());
-    }
-#endif
-};
+DEFINE_MEMORY_FILL(MemoryFill, MemoryFillOpcode, "");
+DEFINE_MEMORY_FILL(MemoryFillM64, MemoryFillM64Opcode, "M64");
 
 class ByteCodeOffset2MemIndex : public ByteCode {
 public:
@@ -2984,47 +2657,26 @@ protected:
     ByteCodeStackOffset m_stackOffset2;
 };
 
-class MemoryGrow : public ByteCodeOffset2MemIndex {
-public:
-    MemoryGrow(uint32_t memIndex, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2MemIndex(Opcode::MemoryGrowOpcode, memIndex, srcOffset, dstOffset)
-    {
-    }
+#define DEFINE_MEMORY_GROW(className, opcodeType, opStr)                                           \
+    class className : public ByteCodeOffset2MemIndex {                                             \
+    public:                                                                                        \
+        className(uint32_t memIndex, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : ByteCodeOffset2MemIndex(Opcode::opcodeType, memIndex, srcOffset, dstOffset)          \
+        {                                                                                          \
+        }                                                                                          \
+        ByteCodeStackOffset srcOffset() const { return stackOffset1(); }                           \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }                           \
+        IF_DEBUG_ENABLED(                                                                             \
+            void dump(size_t pos) {                                                                \
+                printf("MemoryGrow%s ", opStr);                                                    \
+                DUMP_BYTECODE_OFFSET(stackOffset1);                                                \
+                DUMP_BYTECODE_OFFSET(stackOffset2);                                                \
+                printf("memIndex: %" PRIu16, memIndex());                                          \
+            });                                                                                    \
+    };
 
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryGrow ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-        printf("memIndex: %" PRIu16, memIndex());
-    }
-#endif
-};
-
-class MemoryGrowM64 : public ByteCodeOffset2MemIndex {
-public:
-    MemoryGrowM64(uint32_t memIndex, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2MemIndex(Opcode::MemoryGrowM64Opcode, memIndex, srcOffset, dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryGrowM64 ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-        printf("memIndex: %" PRIu16, memIndex());
-    }
-#endif
-};
+DEFINE_MEMORY_GROW(MemoryGrow, MemoryGrowOpcode, "");
+DEFINE_MEMORY_GROW(MemoryGrowM64, MemoryGrowM64Opcode, "M64");
 
 class DataDrop : public ByteCode {
 public:
@@ -3052,157 +2704,80 @@ protected:
 };
 
 // dummy ByteCode for memory load operation
-class MemoryLoad : public ByteCodeOffset2Value {
-public:
-    MemoryLoad(Opcode code, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2Value(code, srcOffset, dstOffset, offset)
-    {
-    }
+#define DEFINE_MEMORY_LOAD(className, parentClassName, valueType)                                              \
+    class className : public parentClassName {                                                                 \
+    public:                                                                                                    \
+        className(Opcode code, valueType offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : parentClassName(code, srcOffset, dstOffset, offset)                                              \
+        {                                                                                                      \
+        }                                                                                                      \
+        valueType offset() const { return uintValue(); }                                                       \
+        ByteCodeStackOffset srcOffset() const { return stackOffset1(); }                                       \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }                                       \
+        IF_DEBUG_ENABLED(                                                                                         \
+            void dump(size_t pos){});                                                                          \
+    };
 
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+DEFINE_MEMORY_LOAD(MemoryLoad, ByteCodeOffset2Value, uint32_t);
+DEFINE_MEMORY_LOAD(MemoryLoadM64, ByteCodeOffset2Value64, uint64_t);
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
+#define DEFINE_MEMORY_LOAD_FLOAT(className, parentClassName, valueType)                                        \
+    class className : public parentClassName {                                                                 \
+    public:                                                                                                    \
+        className(Opcode code, valueType offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : parentClassName(code, dstOffset, srcOffset, offset)                                              \
+        {                                                                                                      \
+        }                                                                                                      \
+        valueType offset() const { return uintValue(); }                                                       \
+        ByteCodeStackOffset srcOffset() const { return stackOffset2(); }                                       \
+        ByteCodeStackOffset dstOffset() const { return stackOffset1(); }                                       \
+        IF_DEBUG_ENABLED(                                                                                         \
+            void dump(size_t pos){});                                                                          \
+    };
 
-class MemoryLoadM64 : public ByteCodeOffset2Value64 {
-public:
-    MemoryLoadM64(Opcode code, uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2Value64(code, srcOffset, dstOffset, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryLoadFloat : public ByteCodeOffset2Value {
-public:
-    MemoryLoadFloat(Opcode code, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2Value(code, dstOffset, srcOffset, offset)
-    {
-    }
-
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryLoadFloatM64 : public ByteCodeOffset2Value64 {
-public:
-    MemoryLoadFloatM64(Opcode code, uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2Value64(code, dstOffset, srcOffset, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
+DEFINE_MEMORY_LOAD_FLOAT(MemoryLoadFloat, ByteCodeOffset2Value, uint32_t);
+DEFINE_MEMORY_LOAD_FLOAT(MemoryLoadFloatM64, ByteCodeOffset2Value64, uint64_t);
 
 // dummy ByteCode for multi memory load operation
-class MemoryLoadMemIdx : public ByteCodeOffset2ValueMemIdx {
-public:
-    MemoryLoadMemIdx(uint32_t index, uint32_t alignment, Opcode code, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2ValueMemIdx(index, alignment, code, srcOffset, dstOffset, offset)
-    {
-    }
+#define DEFINE_MEMORY_LOAD_MEM_IDX(className, parentClassName, valueType)                                                                          \
+    class className : public parentClassName {                                                                                                     \
+    public:                                                                                                                                        \
+        className(uint32_t index, uint32_t alignment, Opcode code, valueType offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : parentClassName(index, alignment, code, srcOffset, dstOffset, offset)                                                                \
+        {                                                                                                                                          \
+        }                                                                                                                                          \
+        valueType offset() const { return uintValue(); }                                                                                           \
+        ByteCodeStackOffset srcOffset() const { return stackOffset1(); }                                                                           \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }                                                                           \
+        IF_DEBUG_ENABLED(                                                                                                                             \
+            void dump(size_t pos){});                                                                                                              \
+    };
 
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
+DEFINE_MEMORY_LOAD_MEM_IDX(MemoryLoadMemIdx, ByteCodeOffset2ValueMemIdx, uint32_t);
+DEFINE_MEMORY_LOAD_MEM_IDX(MemoryLoadMemIdxM64, ByteCodeOffset2Value64MemIdx, uint64_t);
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
+#define DEFINE_MEMORY_LOAD_MEM_IDX_FLOAT(className, parentClassName, valueType)                                                                    \
+    class className : public parentClassName {                                                                                                     \
+    public:                                                                                                                                        \
+        className(uint32_t index, uint32_t alignment, Opcode code, valueType offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : parentClassName(index, alignment, code, dstOffset, srcOffset, offset)                                                                \
+        {                                                                                                                                          \
+        }                                                                                                                                          \
+        valueType offset() const { return uintValue(); }                                                                                           \
+        ByteCodeStackOffset srcOffset() const { return stackOffset2(); }                                                                           \
+        ByteCodeStackOffset dstOffset() const { return stackOffset1(); }                                                                           \
+        IF_DEBUG_ENABLED(                                                                                                                             \
+            void dump(size_t pos){});                                                                                                              \
+    };
 
-class MemoryLoadMemIdxM64 : public ByteCodeOffset2Value64MemIdx {
-public:
-    MemoryLoadMemIdxM64(uint32_t index, uint32_t alignment, Opcode code, uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2Value64MemIdx(index, alignment, code, srcOffset, dstOffset, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryLoadFloatMemIdx : public ByteCodeOffset2ValueMemIdx {
-public:
-    MemoryLoadFloatMemIdx(uint32_t index, uint32_t alignment, Opcode code, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2ValueMemIdx(index, alignment, code, dstOffset, srcOffset, offset)
-    {
-    }
-
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryLoadFloatMemIdxM64 : public ByteCodeOffset2Value64MemIdx {
-public:
-    MemoryLoadFloatMemIdxM64(uint32_t index, uint32_t alignment, Opcode code, uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2Value64MemIdx(index, alignment, code, dstOffset, srcOffset, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset srcOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
+DEFINE_MEMORY_LOAD_MEM_IDX_FLOAT(MemoryLoadFloatMemIdx, ByteCodeOffset2ValueMemIdx, uint32_t);
+DEFINE_MEMORY_LOAD_MEM_IDX_FLOAT(MemoryLoadFloatMemIdxM64, ByteCodeOffset2Value64MemIdx, uint64_t);
 
 // dummy ByteCode for simd memory load operation
-class SIMDMemoryLoad : public ByteCode {
+class SIMDMemoryLoadBase : public ByteCode {
 public:
-    SIMDMemoryLoad(Opcode code, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
+    SIMDMemoryLoadBase(Opcode code, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
         : ByteCode(code)
-        , m_offset(offset)
         , m_src0Offset(src0)
         , m_src1Offset(src1)
         , m_index(index)
@@ -3210,130 +2785,62 @@ public:
     {
     }
 
-    uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset index() const { return m_index; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
 protected:
-    uint32_t m_offset;
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_index;
     ByteCodeStackOffset m_dstOffset;
 };
 
-class SIMDMemoryLoadM64 : public ByteCode {
-public:
-    SIMDMemoryLoadM64(Opcode code, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
-        : ByteCode(code)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_index(index)
-        , m_dstOffset(dst)
-    {
-    }
+#define DEFINE_SIMD_MEMORY_LOAD(className, valueType)                                                                                                    \
+    class className : public SIMDMemoryLoadBase {                                                                                                        \
+    public:                                                                                                                                              \
+        className(Opcode code, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst) \
+            : SIMDMemoryLoadBase(code, src0, src1, index, dst)                                                                                           \
+            , m_offset(offset)                                                                                                                           \
+        {                                                                                                                                                \
+        }                                                                                                                                                \
+        valueType offset() const { return m_offset; }                                                                                                    \
+        IF_DEBUG_ENABLED(                                                                                                                                   \
+            void dump(size_t pos){});                                                                                                                    \
+                                                                                                                                                         \
+    protected:                                                                                                                                           \
+        valueType m_offset;                                                                                                                              \
+    };
 
-    uint64_t offset() const { return m_offset; }
-    ByteCodeStackOffset index() const { return m_index; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-protected:
-    uint64_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_index;
-    ByteCodeStackOffset m_dstOffset;
-};
+DEFINE_SIMD_MEMORY_LOAD(SIMDMemoryLoad, uint32_t);
+DEFINE_SIMD_MEMORY_LOAD(SIMDMemoryLoadM64, uint64_t);
 
 // dummy ByteCode for simd multi memory load operation
-class SIMDMemoryLoadMemIdx : public ByteCode {
-public:
-    SIMDMemoryLoadMemIdx(uint32_t memIndex, uint32_t alignment, Opcode code, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
-        : ByteCode(code)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_index(index)
-        , m_dstOffset(dst)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
+#define DEFINE_SIMD_MEMORY_LOAD_MEM_IDX(className, valueType)                                                                                                                                   \
+    class className : public SIMDMemoryLoadBase {                                                                                                                                               \
+    public:                                                                                                                                                                                     \
+        className(uint32_t memIndex, uint32_t alignment, Opcode code, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst) \
+            : SIMDMemoryLoadBase(code, src0, src1, index, dst)                                                                                                                                  \
+            , m_offset(offset)                                                                                                                                                                  \
+            , m_memIndex(memIndex)                                                                                                                                                              \
+            , m_alignment(alignment)                                                                                                                                                            \
+        {                                                                                                                                                                                       \
+        }                                                                                                                                                                                       \
+        valueType offset() const { return m_offset; }                                                                                                                                           \
+        uint16_t memIndex() const { return m_memIndex; }                                                                                                                                        \
+        uint16_t alignment() const { return m_alignment; }                                                                                                                                      \
+        IF_DEBUG_ENABLED(                                                                                                                                                                          \
+            void dump(size_t pos){});                                                                                                                                                           \
+                                                                                                                                                                                                \
+    protected:                                                                                                                                                                                  \
+        valueType m_offset;                                                                                                                                                                     \
+        uint16_t m_memIndex;                                                                                                                                                                    \
+        uint16_t m_alignment;                                                                                                                                                                   \
+    };
 
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset index() const { return m_index; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_index;
-    ByteCodeStackOffset m_dstOffset;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class SIMDMemoryLoadMemIdxM64 : public ByteCode {
-public:
-    SIMDMemoryLoadMemIdxM64(uint32_t memIndex, uint32_t alignment, Opcode code, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index, ByteCodeStackOffset dst)
-        : ByteCode(code)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_index(index)
-        , m_dstOffset(dst)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
-
-    uint64_t offset() const { return m_offset; }
-    ByteCodeStackOffset index() const { return m_index; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-protected:
-    uint64_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_index;
-    ByteCodeStackOffset m_dstOffset;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
+DEFINE_SIMD_MEMORY_LOAD_MEM_IDX(SIMDMemoryLoadMemIdx, uint32_t);
+DEFINE_SIMD_MEMORY_LOAD_MEM_IDX(SIMDMemoryLoadMemIdxM64, uint64_t);
 
 #if !defined(NDEBUG)
 #define DEFINE_LOAD_BYTECODE_DUMP(name)                                                                                              \
@@ -3540,276 +3047,140 @@ protected:
     };
 
 // dummy ByteCode for memory store operations
-class MemoryStore32 : public ByteCodeOffset2Value {
-public:
-    MemoryStore32(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2Value(opcode, src0, src1, offset)
-    {
-    }
+#define DEFINE_MEMORY_STORE(className, parentClassName, valueType)                                     \
+    class className : public parentClassName {                                                         \
+    public:                                                                                            \
+        className(Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1) \
+            : parentClassName(opcode, src0, src1, offset)                                              \
+        {                                                                                              \
+        }                                                                                              \
+        valueType offset() const { return uintValue(); }                                               \
+        ByteCodeStackOffset dstOffset() const { return stackOffset1(); }                               \
+        ByteCodeStackOffset valueOffset() const { return stackOffset2(); }                             \
+        IF_DEBUG_ENABLED(                                                                                 \
+            void dump(size_t pos){});                                                                  \
+    };
 
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset2(); }
+DEFINE_MEMORY_STORE(MemoryStore32, ByteCodeOffset2Value, uint32_t);
+DEFINE_MEMORY_STORE(MemoryStore32M64, ByteCodeOffset2Value64, uint64_t);
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
+#define DEFINE_MEMORY_STORE_64(className, parentClassName, valueType)                                  \
+    class className : public parentClassName {                                                         \
+    public:                                                                                            \
+        className(Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1) \
+            : parentClassName(opcode, src1, src0, offset)                                              \
+        {                                                                                              \
+        }                                                                                              \
+        valueType offset() const { return uintValue(); }                                               \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }                               \
+        ByteCodeStackOffset valueOffset() const { return stackOffset1(); }                             \
+        IF_DEBUG_ENABLED(                                                                                 \
+            void dump(size_t pos){});                                                                  \
+    };
 
-class MemoryStore64 : public ByteCodeOffset2Value {
-public:
-    MemoryStore64(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2Value(opcode, src1, src0, offset)
-    {
-    }
-
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryStore32M64 : public ByteCodeOffset2Value64 {
-public:
-    MemoryStore32M64(Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2Value64(opcode, src0, src1, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryStore64M64 : public ByteCodeOffset2Value64 {
-public:
-    MemoryStore64M64(Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2Value64(opcode, src1, src0, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
+DEFINE_MEMORY_STORE_64(MemoryStore64, ByteCodeOffset2Value, uint32_t);
+DEFINE_MEMORY_STORE_64(MemoryStore64M64, ByteCodeOffset2Value64, uint64_t);
 
 // dummy ByteCode for multi memory store operations
-class MemoryStoreMemIdx32 : public ByteCodeOffset2ValueMemIdx {
+#define DEFINE_MEMORY_STORE_MEM_IDX(className, parentClassName, valueType)                                                                    \
+    class className : public parentClassName {                                                                                                \
+    public:                                                                                                                                   \
+        className(uint32_t memIndex, uint32_t alignment, Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1) \
+            : parentClassName(memIndex, alignment, opcode, src0, src1, offset)                                                                \
+        {                                                                                                                                     \
+        }                                                                                                                                     \
+        valueType offset() const { return uintValue(); }                                                                                      \
+        ByteCodeStackOffset dstOffset() const { return stackOffset1(); }                                                                      \
+        ByteCodeStackOffset valueOffset() const { return stackOffset2(); }                                                                    \
+        IF_DEBUG_ENABLED(                                                                                                                        \
+            void dump(size_t pos){});                                                                                                         \
+    };
+
+DEFINE_MEMORY_STORE_MEM_IDX(MemoryStoreMemIdx32, ByteCodeOffset2ValueMemIdx, uint32_t);
+DEFINE_MEMORY_STORE_MEM_IDX(MemoryStoreMemIdx32M64, ByteCodeOffset2Value64MemIdx, uint64_t);
+
+#define DEFINE_MEMORY_STORE_MEM_IDX_64(className, parentClassName, valueType)                                                                 \
+    class className : public parentClassName {                                                                                                \
+    public:                                                                                                                                   \
+        className(uint32_t memIndex, uint32_t alignment, Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1) \
+            : parentClassName(memIndex, alignment, opcode, src1, src0, offset)                                                                \
+        {                                                                                                                                     \
+        }                                                                                                                                     \
+        valueType offset() const { return uintValue(); }                                                                                      \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }                                                                      \
+        ByteCodeStackOffset valueOffset() const { return stackOffset1(); }                                                                    \
+        IF_DEBUG_ENABLED(                                                                                                                        \
+            void dump(size_t pos){});                                                                                                         \
+    };
+
+DEFINE_MEMORY_STORE_MEM_IDX_64(MemoryStoreMemIdx64, ByteCodeOffset2ValueMemIdx, uint32_t);
+DEFINE_MEMORY_STORE_MEM_IDX_64(MemoryStoreMemIdx64M64, ByteCodeOffset2Value64MemIdx, uint64_t);
+
+class SIMDMemoryStoreBase : public ByteCode {
 public:
-    MemoryStoreMemIdx32(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2ValueMemIdx(memIndex, alignment, opcode, src0, src1, offset)
+    SIMDMemoryStoreBase(Opcode opcode, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index)
+        : ByteCode(opcode)
+        , m_src0Offset(src0)
+        , m_src1Offset(src1)
+        , m_index(index)
     {
     }
 
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset2(); }
+    ByteCodeStackOffset index() const { return m_index; }
+    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
+    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryStoreMemIdx64 : public ByteCodeOffset2ValueMemIdx {
-public:
-    MemoryStoreMemIdx64(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2ValueMemIdx(memIndex, alignment, opcode, src1, src0, offset)
-    {
-    }
-
-    uint32_t offset() const { return uint32Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryStoreMemIdx32M64 : public ByteCodeOffset2Value64MemIdx {
-public:
-    MemoryStoreMemIdx32M64(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2Value64MemIdx(memIndex, alignment, opcode, src0, src1, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset2(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class MemoryStoreMemIdx64M64 : public ByteCodeOffset2Value64MemIdx {
-public:
-    MemoryStoreMemIdx64M64(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2Value64MemIdx(memIndex, alignment, opcode, src1, src0, offset)
-    {
-    }
-
-    uint64_t offset() const { return uint64Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    ByteCodeStackOffset valueOffset() const { return stackOffset1(); }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
+protected:
+    ByteCodeStackOffset m_src0Offset;
+    ByteCodeStackOffset m_src1Offset;
+    ByteCodeStackOffset m_index;
 };
 
 // dummy ByteCode for simd memory store operation
-class SIMDMemoryStore : public ByteCode {
-public:
-    SIMDMemoryStore(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_index(index)
-    {
-    }
+#define DEFINE_SIMD_MEMORY_STORE(className, valueType)                                                                            \
+    class className : public SIMDMemoryStoreBase {                                                                                \
+    public:                                                                                                                       \
+        className(Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index) \
+            : SIMDMemoryStoreBase(opcode, src0, src1, index)                                                                      \
+            , m_offset(offset)                                                                                                    \
+        {                                                                                                                         \
+        }                                                                                                                         \
+        valueType offset() const { return m_offset; }                                                                             \
+        IF_DEBUG_ENABLED(                                                                                                            \
+            void dump(size_t pos){});                                                                                             \
+                                                                                                                                  \
+    protected:                                                                                                                    \
+        valueType m_offset;                                                                                                       \
+    };
 
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset index() const { return m_index; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_index;
-};
-
-class SIMDMemoryStoreM64 : public ByteCode {
-public:
-    SIMDMemoryStoreM64(Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_index(index)
-    {
-    }
-
-    uint64_t offset() const { return m_offset; }
-    ByteCodeStackOffset index() const { return m_index; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-protected:
-    uint64_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_index;
-};
+DEFINE_SIMD_MEMORY_STORE(SIMDMemoryStore, uint32_t);
+DEFINE_SIMD_MEMORY_STORE(SIMDMemoryStoreM64, uint64_t);
 
 // dummy ByteCode for simd multi memory store operation
-class SIMDMemoryStoreMemIdx : public ByteCode {
-public:
-    SIMDMemoryStoreMemIdx(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_index(index)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
+#define DEFINE_SIMD_MEMORY_STORE_MEM_IDX(classname, valueType)                                                                                                           \
+    class classname : public SIMDMemoryStoreBase {                                                                                                                       \
+    public:                                                                                                                                                              \
+        classname(uint32_t memIndex, uint32_t alignment, Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index) \
+            : SIMDMemoryStoreBase(opcode, src0, src1, index)                                                                                                             \
+            , m_offset(offset)                                                                                                                                           \
+            , m_memIndex(memIndex)                                                                                                                                       \
+            , m_alignment(alignment)                                                                                                                                     \
+        {                                                                                                                                                                \
+        }                                                                                                                                                                \
+        valueType offset() const { return m_offset; }                                                                                                                    \
+        uint16_t memIndex() const { return m_memIndex; }                                                                                                                 \
+        uint16_t alignment() const { return m_alignment; }                                                                                                               \
+        IF_DEBUG_ENABLED(                                                                                                                                                   \
+            void dump(size_t pos){});                                                                                                                                    \
+                                                                                                                                                                         \
+    protected:                                                                                                                                                           \
+        valueType m_offset;                                                                                                                                              \
+        uint16_t m_memIndex;                                                                                                                                             \
+        uint16_t m_alignment;                                                                                                                                            \
+    };
 
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset index() const { return m_index; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_index;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class SIMDMemoryStoreMemIdxM64 : public ByteCode {
-public:
-    SIMDMemoryStoreMemIdxM64(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset index)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_index(index)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
-
-    uint64_t offset() const { return m_offset; }
-    ByteCodeStackOffset index() const { return m_index; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-protected:
-    uint64_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_index;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
+DEFINE_SIMD_MEMORY_STORE_MEM_IDX(SIMDMemoryStoreMemIdx, uint32_t);
+DEFINE_SIMD_MEMORY_STORE_MEM_IDX(SIMDMemoryStoreMemIdxM64, uint64_t);
 
 // dummy ByteCode for simd extract lane operation
 class SIMDExtractLane : public ByteCode {
@@ -4109,504 +3480,221 @@ protected:
         DEFINE_SIMD_REPLACE_LANE_BYTECODE_DUMP(name)                                                     \
     };
 
-
-class AtomicRmw : public ByteCode {
+class AtomicRmwBase : public ByteCode {
 public:
-    AtomicRmw(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
+    AtomicRmwBase(Opcode opcode, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
         : ByteCode(opcode)
-        , m_offset(offset)
         , m_src0Offset(src0)
         , m_src1Offset(src1)
         , m_dstOffset(dst)
     {
     }
-
-    uint32_t offset() const { return m_offset; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
 protected:
-    uint32_t m_offset;
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_dstOffset;
 };
 
-class AtomicRmwM64 : public ByteCode {
+#define DEFINE_ATOMIC_RMW(className, valueType)                                                                                 \
+    class className : public AtomicRmwBase {                                                                                    \
+    public:                                                                                                                     \
+        className(Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst) \
+            : AtomicRmwBase(opcode, src0, src1, dst)                                                                            \
+            , m_offset(offset)                                                                                                  \
+        {                                                                                                                       \
+        }                                                                                                                       \
+        valueType offset() const { return m_offset; }                                                                           \
+        IF_DEBUG_ENABLED(                                                                                                          \
+            void dump(size_t pos){});                                                                                           \
+                                                                                                                                \
+    protected:                                                                                                                  \
+        valueType m_offset;                                                                                                     \
+    };
+
+DEFINE_ATOMIC_RMW(AtomicRmw, uint32_t);
+DEFINE_ATOMIC_RMW(AtomicRmwM64, uint64_t);
+
+#define DEFINE_ATOMIC_RMW_MEM_IDX(className, valueType)                                                                                                                \
+    class className : public AtomicRmwBase {                                                                                                                           \
+    public:                                                                                                                                                            \
+        className(uint32_t memIndex, uint32_t alignment, Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst) \
+            : AtomicRmwBase(opcode, src0, src1, dst)                                                                                                                   \
+            , m_offset(offset)                                                                                                                                         \
+            , m_memIndex(memIndex)                                                                                                                                     \
+            , m_alignment(alignment)                                                                                                                                   \
+        {                                                                                                                                                              \
+        }                                                                                                                                                              \
+        valueType offset() const { return m_offset; }                                                                                                                  \
+        uint16_t memIndex() const { return m_memIndex; }                                                                                                               \
+        uint16_t alignment() const { return m_alignment; }                                                                                                             \
+        IF_DEBUG_ENABLED(                                                                                                                                                 \
+            void dump(size_t pos){});                                                                                                                                  \
+                                                                                                                                                                       \
+    protected:                                                                                                                                                         \
+        valueType m_offset;                                                                                                                                            \
+        uint16_t m_memIndex;                                                                                                                                           \
+        uint16_t m_alignment;                                                                                                                                          \
+    };
+
+DEFINE_ATOMIC_RMW_MEM_IDX(AtomicRmwMemIdx, uint32_t);
+DEFINE_ATOMIC_RMW_MEM_IDX(AtomicRmwMemIdxM64, uint64_t);
+
+#define DEFINE_ATOMIC_RMW_CMPXCHG(className, parentClassName, valueType)                                                                                  \
+    class className : public parentClassName {                                                                                                            \
+    public:                                                                                                                                               \
+        className(Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst) \
+            : parentClassName(opcode, src0, src1, src2, dst, offset)                                                                                      \
+        {                                                                                                                                                 \
+        }                                                                                                                                                 \
+        IF_DEBUG_ENABLED(                                                                                                                                    \
+            void dump(size_t pos){});                                                                                                                     \
+    };
+
+DEFINE_ATOMIC_RMW_CMPXCHG(AtomicRmwCmpxchg, ByteCodeOffset4Value, uint32_t);
+DEFINE_ATOMIC_RMW_CMPXCHG(AtomicRmwCmpxchgM64, ByteCodeOffset4Value64, uint64_t);
+
+#define DEFINE_ATOMIC_RMW_CMPXCHG_MEM_IDX(className, parentClassName, valueType)                                                                                                                 \
+    class className : public parentClassName {                                                                                                                                                   \
+    public:                                                                                                                                                                                      \
+        className(uint32_t memIndex, uint32_t alignment, Opcode opcode, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst) \
+            : parentClassName(opcode, src0, src1, src2, dst, offset)                                                                                                                             \
+            , m_memIndex(memIndex)                                                                                                                                                               \
+            , m_alignment(alignment)                                                                                                                                                             \
+        {                                                                                                                                                                                        \
+        }                                                                                                                                                                                        \
+        uint16_t memIndex() const { return m_memIndex; }                                                                                                                                         \
+        uint16_t alignment() const { return m_alignment; }                                                                                                                                       \
+        IF_DEBUG_ENABLED(                                                                                                                                                                           \
+            void dump(size_t pos){});                                                                                                                                                            \
+                                                                                                                                                                                                 \
+    protected:                                                                                                                                                                                   \
+        uint16_t m_memIndex;                                                                                                                                                                     \
+        uint16_t m_alignment;                                                                                                                                                                    \
+    };
+
+DEFINE_ATOMIC_RMW_CMPXCHG_MEM_IDX(AtomicRmwCmpxchgMemIdx, ByteCodeOffset4Value, uint32_t);
+DEFINE_ATOMIC_RMW_CMPXCHG_MEM_IDX(AtomicRmwCmpxchgMemIdxM64, ByteCodeOffset4Value64, uint64_t);
+
+#define DEFINE_MEMORY_ATOMIC_WAIT(className, parentClassName, opcodeType, valueType, format)                                                                                                                                                               \
+    class className : public parentClassName {                                                                                                                                                                                                             \
+    public:                                                                                                                                                                                                                                                \
+        className(valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)                                                                                                                 \
+            : parentClassName(Opcode::opcodeType, src0, src1, src2, dst, offset)                                                                                                                                                                           \
+        {                                                                                                                                                                                                                                                  \
+        }                                                                                                                                                                                                                                                  \
+        IF_DEBUG_ENABLED(                                                                                                                                                                                                                                     \
+            void dump(size_t pos) {                                                                                                                                                                                                                        \
+                printf(#className " src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" format, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (valueType)m_value); \
+            });                                                                                                                                                                                                                                            \
+    };
+
+DEFINE_MEMORY_ATOMIC_WAIT(MemoryAtomicWait32, ByteCodeOffset4Value, MemoryAtomicWait32Opcode, uint32_t, PRIu32);
+DEFINE_MEMORY_ATOMIC_WAIT(MemoryAtomicWait32M64, ByteCodeOffset4Value64, MemoryAtomicWait32M64Opcode, uint64_t, PRIu64);
+DEFINE_MEMORY_ATOMIC_WAIT(MemoryAtomicWait64, ByteCodeOffset4Value, MemoryAtomicWait64Opcode, uint32_t, PRIu32);
+DEFINE_MEMORY_ATOMIC_WAIT(MemoryAtomicWait64M64, ByteCodeOffset4Value64, MemoryAtomicWait64M64Opcode, uint64_t, PRIu64);
+
+#define DEFINE_MEMORY_ATOMIC_WAIT_MEM_IDX(className, parentClassName, opcodeType, valueType, format)                                                                                             \
+    class className : public parentClassName {                                                                                                                                                   \
+    public:                                                                                                                                                                                      \
+        className(uint32_t index, uint32_t alignment, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)                   \
+            : parentClassName(index, alignment, Opcode::opcodeType, src0, src1, src2, dst, offset)                                                                                               \
+            , m_memIndex(index)                                                                                                                                                                  \
+            , m_alignment(alignment)                                                                                                                                                             \
+        {                                                                                                                                                                                        \
+        }                                                                                                                                                                                        \
+        IF_DEBUG_ENABLED(                                                                                                                                                                           \
+            void dump(size_t pos) {                                                                                                                                                              \
+                printf(#className " src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" format " memIndex: %" PRIu16 " alignment: %" PRIu16,                       \
+                       (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (valueType)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment); \
+            });                                                                                                                                                                                  \
+        uint16_t memIndex() const                                                                                                                                                                \
+        {                                                                                                                                                                                        \
+            return m_memIndex;                                                                                                                                                                   \
+        }                                                                                                                                                                                        \
+        uint16_t alignment() const { return m_alignment; }                                                                                                                                       \
+                                                                                                                                                                                                 \
+    protected:                                                                                                                                                                                   \
+        uint16_t m_memIndex;                                                                                                                                                                     \
+        uint16_t m_alignment;                                                                                                                                                                    \
+    };
+
+DEFINE_MEMORY_ATOMIC_WAIT_MEM_IDX(MemoryAtomicWait32MemIdx, ByteCodeOffset4ValueMemIdx, MemoryAtomicWait32MemIdxOpcode, uint32_t, PRIu32);
+DEFINE_MEMORY_ATOMIC_WAIT_MEM_IDX(MemoryAtomicWait32MemIdxM64, ByteCodeOffset4Value64MemIdx, MemoryAtomicWait32MemIdxM64Opcode, uint64_t, PRIu64);
+DEFINE_MEMORY_ATOMIC_WAIT_MEM_IDX(MemoryAtomicWait64MemIdx, ByteCodeOffset4ValueMemIdx, MemoryAtomicWait64MemIdxOpcode, uint32_t, PRIu32);
+DEFINE_MEMORY_ATOMIC_WAIT_MEM_IDX(MemoryAtomicWait64MemIdxM64, ByteCodeOffset4Value64MemIdx, MemoryAtomicWait64MemIdxM64Opcode, uint64_t, PRIu64);
+
+class MemoryAtomicNotifyBase : public ByteCode {
 public:
-    AtomicRmwM64(Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
+    MemoryAtomicNotifyBase(Opcode opcode, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
         : ByteCode(opcode)
-        , m_offset(offset)
         , m_src0Offset(src0)
         , m_src1Offset(src1)
         , m_dstOffset(dst)
     {
     }
 
-    uint64_t offset() const { return m_offset; }
     ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
     ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
 protected:
-    uint64_t m_offset;
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_dstOffset;
 };
 
-class AtomicRmwMemIdx : public ByteCode {
-public:
-    AtomicRmwMemIdx(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_dstOffset(dst)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
+#define DEFINE_MEMORY_ATOMIC_NOTIFY(className, opcodeType, valueType, format)                                                                                                                            \
+    class className : public MemoryAtomicNotifyBase {                                                                                                                                                    \
+    public:                                                                                                                                                                                              \
+        className(valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)                                                                                         \
+            : MemoryAtomicNotifyBase(Opcode::opcodeType, src0, src1, dst)                                                                                                                                \
+            , m_offset(offset)                                                                                                                                                                           \
+        {                                                                                                                                                                                                \
+        }                                                                                                                                                                                                \
+        valueType offset() const { return m_offset; }                                                                                                                                                    \
+        IF_DEBUG_ENABLED(                                                                                                                                                                                   \
+            void dump(size_t pos) {                                                                                                                                                                      \
+                printf(#className " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" format, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (valueType)m_offset); \
+            });                                                                                                                                                                                          \
+                                                                                                                                                                                                         \
+    protected:                                                                                                                                                                                           \
+        valueType m_offset;                                                                                                                                                                              \
+    };
 
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
+DEFINE_MEMORY_ATOMIC_NOTIFY(MemoryAtomicNotify, MemoryAtomicNotifyOpcode, uint32_t, PRIu32);
+DEFINE_MEMORY_ATOMIC_NOTIFY(MemoryAtomicNotifyM64, MemoryAtomicNotifyM64Opcode, uint64_t, PRIu64);
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
+#define DEFINE_MEMORY_ATOMIC_NOTIFY_MEM_IDX(className, opcodeType, valueType, format)                                                                            \
+    class className : public MemoryAtomicNotifyBase {                                                                                                            \
+    public:                                                                                                                                                      \
+        className(uint32_t index, uint32_t alignment, valueType offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)             \
+            : MemoryAtomicNotifyBase(Opcode::opcodeType, src0, src1, dst)                                                                                        \
+            , m_offset(offset)                                                                                                                                   \
+            , m_memIndex(index)                                                                                                                                  \
+            , m_alignment(alignment)                                                                                                                             \
+        {                                                                                                                                                        \
+        }                                                                                                                                                        \
+        valueType offset() const { return m_offset; }                                                                                                            \
+        uint16_t memIndex() const { return m_memIndex; }                                                                                                         \
+        uint16_t alignment() const { return m_alignment; }                                                                                                       \
+        IF_DEBUG_ENABLED(                                                                                                                                           \
+            void dump(size_t pos) {                                                                                                                              \
+                printf(#className " src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" format " memIndex: %" PRIu16 " alignment: %" PRIu16,         \
+                       (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (valueType)m_offset, (uint16_t)m_memIndex, (uint16_t)m_alignment); \
+            });                                                                                                                                                  \
+                                                                                                                                                                 \
+    protected:                                                                                                                                                   \
+        valueType m_offset;                                                                                                                                      \
+        uint16_t m_memIndex;                                                                                                                                     \
+        uint16_t m_alignment;                                                                                                                                    \
+    };
 
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_dstOffset;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class AtomicRmwMemIdxM64 : public ByteCode {
-public:
-    AtomicRmwMemIdxM64(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
-        : ByteCode(opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_dstOffset(dst)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
-
-    uint64_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-
-protected:
-    uint64_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_dstOffset;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class AtomicRmwCmpxchg : public ByteCodeOffset4Value {
-public:
-    AtomicRmwCmpxchg(Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value(opcode, src0, src1, src2, dst, offset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class AtomicRmwCmpxchgM64 : public ByteCodeOffset4Value64 {
-public:
-    AtomicRmwCmpxchgM64(Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64(opcode, src0, src1, src2, dst, offset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
-
-class AtomicRmwCmpxchgMemIdx : public ByteCodeOffset4Value {
-public:
-    AtomicRmwCmpxchgMemIdx(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value(opcode, src0, src1, src2, dst, offset)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
-
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class AtomicRmwCmpxchgMemIdxM64 : public ByteCodeOffset4Value64 {
-public:
-    AtomicRmwCmpxchgMemIdxM64(uint32_t memIndex, uint32_t alignment, Opcode opcode, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64(opcode, src0, src1, src2, dst, offset)
-        , m_memIndex(memIndex)
-        , m_alignment(alignment)
-    {
-    }
-
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class MemoryAtomicWait32 : public ByteCodeOffset4Value {
-public:
-    MemoryAtomicWait32(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait32Opcode, src0, src1, src2, dst, offset)
-    {
-    }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait32 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value);
-    }
-#endif
-};
-
-class MemoryAtomicWait32M64 : public ByteCodeOffset4Value64 {
-public:
-    MemoryAtomicWait32M64(uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64(Opcode::MemoryAtomicWait32M64Opcode, src0, src1, src2, dst, offset)
-    {
-    }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait32M64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint64_t)m_value);
-    }
-#endif
-};
-
-class MemoryAtomicWait32MemIdx : public ByteCodeOffset4ValueMemIdx {
-public:
-    MemoryAtomicWait32MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4ValueMemIdx(index, alignment, Opcode::MemoryAtomicWait32MemIdxOpcode, src0, src1, src2, dst, offset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait32MemIdx src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,
-               (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class MemoryAtomicWait32MemIdxM64 : public ByteCodeOffset4Value64MemIdx {
-public:
-    MemoryAtomicWait32MemIdxM64(uint32_t index, uint32_t alignment, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64MemIdx(index, alignment, Opcode::MemoryAtomicWait32MemIdxM64Opcode, src0, src1, src2, dst, offset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait32MemIdxM64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64 " memIndex: %" PRIu16 " alignment: %" PRIu16,
-               (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint64_t)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class MemoryAtomicWait64 : public ByteCodeOffset4Value {
-public:
-    MemoryAtomicWait64(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value(Opcode::MemoryAtomicWait64Opcode, src0, src1, src2, dst, offset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value);
-    }
-#endif
-};
-
-class MemoryAtomicWait64M64 : public ByteCodeOffset4Value64 {
-public:
-    MemoryAtomicWait64M64(uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64(Opcode::MemoryAtomicWait64M64Opcode, src0, src1, src2, dst, offset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait64M64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64, (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint64_t)m_value);
-    }
-#endif
-};
-
-class MemoryAtomicWait64MemIdx : public ByteCodeOffset4ValueMemIdx {
-public:
-    MemoryAtomicWait64MemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4ValueMemIdx(index, alignment, Opcode::MemoryAtomicWait64MemIdxOpcode, src0, src1, src2, dst, offset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait64MemIdx src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,
-               (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint32_t)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class MemoryAtomicWait64MemIdxM64 : public ByteCodeOffset4Value64MemIdx {
-public:
-    MemoryAtomicWait64MemIdxM64(uint32_t index, uint32_t alignment, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2, ByteCodeStackOffset dst)
-        : ByteCodeOffset4Value64MemIdx(index, alignment, Opcode::MemoryAtomicWait64MemIdxM64Opcode, src0, src1, src2, dst, offset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicWait64MemIdxM64 src0: %" PRIu32 " src1: %" PRIu32 " src2: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64 " memIndex: %" PRIu16 " alignment: %" PRIu16,
-               (uint32_t)m_stackOffset1, (uint32_t)m_stackOffset2, (uint32_t)m_stackOffset3, (uint32_t)m_stackOffset4, (uint64_t)m_value, (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class MemoryAtomicNotify : public ByteCode {
-public:
-    MemoryAtomicNotify(uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::MemoryAtomicNotifyOpcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_dstOffset(dst)
-    {
-    }
-
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicNotify src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset);
-    }
-#endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_dstOffset;
-};
-
-class MemoryAtomicNotifyM64 : public ByteCode {
-public:
-    MemoryAtomicNotifyM64(uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::MemoryAtomicNotifyM64Opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_dstOffset(dst)
-    {
-    }
-
-    uint64_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicNotifyM64 src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64, (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint64_t)m_offset);
-    }
-#endif
-protected:
-    uint64_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_dstOffset;
-};
-
-class MemoryAtomicNotifyMemIdx : public ByteCode {
-public:
-    MemoryAtomicNotifyMemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::MemoryAtomicNotifyMemIdxOpcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_dstOffset(dst)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-    uint32_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicNotifyMemIdx src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16,
-               (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint32_t)m_offset, (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-protected:
-    uint32_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_dstOffset;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class MemoryAtomicNotifyMemIdxM64 : public ByteCode {
-public:
-    MemoryAtomicNotifyMemIdxM64(uint32_t index, uint32_t alignment, uint64_t offset, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::MemoryAtomicNotifyMemIdxM64Opcode)
-        , m_offset(offset)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_dstOffset(dst)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-    uint64_t offset() const { return m_offset; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
-    uint16_t memIndex() const { return m_memIndex; }
-    uint16_t alignment() const { return m_alignment; }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("MemoryAtomicNotifyMemIdxM64 src0: %" PRIu32 " src1: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64 " memIndex: %" PRIu16 " alignment: %" PRIu16,
-               (uint32_t)m_src0Offset, (uint32_t)m_src1Offset, (uint32_t)m_dstOffset, (uint64_t)m_offset, (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-protected:
-    uint64_t m_offset;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_dstOffset;
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
+DEFINE_MEMORY_ATOMIC_NOTIFY_MEM_IDX(MemoryAtomicNotifyMemIdx, MemoryAtomicNotifyMemIdxOpcode, uint32_t, PRIu32);
+DEFINE_MEMORY_ATOMIC_NOTIFY_MEM_IDX(MemoryAtomicNotifyMemIdxM64, MemoryAtomicNotifyMemIdxM64Opcode, uint64_t, PRIu64);
 
 class AtomicFence : public ByteCode {
 public:
@@ -4911,173 +3999,52 @@ public:
 #endif
 };
 
-class V128Load32Zero : public MemoryLoad {
-public:
-    V128Load32Zero(uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoad(Opcode::V128Load32ZeroOpcode, offset, srcOffset, dstOffset)
-    {
-    }
+#define DEFINE_V128_LOAD_ZERO(className, parentClassName, opcodeType, valueType, format)                                                          \
+    class className : public parentClassName {                                                                                                    \
+    public:                                                                                                                                       \
+        className(valueType offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)                                                 \
+            : parentClassName(Opcode::opcodeType, offset, srcOffset, dstOffset)                                                                   \
+        {                                                                                                                                         \
+        }                                                                                                                                         \
+        IF_DEBUG_ENABLED(                                                                                                                            \
+            void dump(size_t pos) {                                                                                                               \
+                printf(#className " src: %" PRIu32 " dst: %" PRIu32 " offset: %" format, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset()); \
+            });                                                                                                                                   \
+    };
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load32Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset());
-    }
-#endif
-};
+DEFINE_V128_LOAD_ZERO(V128Load32Zero, MemoryLoad, V128Load32ZeroOpcode, uint32_t, PRIu32);
+DEFINE_V128_LOAD_ZERO(V128Load32ZeroM64, MemoryLoadM64, V128Load32ZeroM64Opcode, uint64_t, PRIu64);
+DEFINE_V128_LOAD_ZERO(V128Load64Zero, MemoryLoad, V128Load64ZeroOpcode, uint32_t, PRIu32);
+DEFINE_V128_LOAD_ZERO(V128Load64ZeroM64, MemoryLoadM64, V128Load64ZeroM64Opcode, uint64_t, PRIu64);
 
-class V128Load32ZeroM64 : public MemoryLoadM64 {
-public:
-    V128Load32ZeroM64(uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoadM64(Opcode::V128Load32ZeroM64Opcode, offset, srcOffset, dstOffset)
-    {
-    }
+#define DEFINE_V128_LOAD_ZERO_MEM_IDX(className, parentClassName, opcodeType, valueType, format)                                                                                                                                            \
+    class className : public parentClassName {                                                                                                                                                                                              \
+    public:                                                                                                                                                                                                                                 \
+        className(uint32_t index, uint32_t alignment, valueType offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)                                                                                                       \
+            : parentClassName(index, alignment, Opcode::opcodeType, offset, srcOffset, dstOffset)                                                                                                                                           \
+            , m_memIndex(index)                                                                                                                                                                                                             \
+            , m_alignment(alignment)                                                                                                                                                                                                        \
+        {                                                                                                                                                                                                                                   \
+        }                                                                                                                                                                                                                                   \
+        IF_DEBUG_ENABLED(                                                                                                                                                                                                                      \
+            void dump(size_t pos) {                                                                                                                                                                                                         \
+                printf(#className " src: %" PRIu32 " dst: %" PRIu32 " offset: %" format " memIndex: %" PRIu16 " alignment: %" PRIu16, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment); \
+            });                                                                                                                                                                                                                             \
+        uint16_t memIndex() const                                                                                                                                                                                                           \
+        {                                                                                                                                                                                                                                   \
+            return m_memIndex;                                                                                                                                                                                                              \
+        }                                                                                                                                                                                                                                   \
+        uint16_t alignment() const { return m_alignment; }                                                                                                                                                                                  \
+                                                                                                                                                                                                                                            \
+    protected:                                                                                                                                                                                                                              \
+        uint16_t m_memIndex;                                                                                                                                                                                                                \
+        uint16_t m_alignment;                                                                                                                                                                                                               \
+    };
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load32ZeroM64 src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset());
-    }
-#endif
-};
-
-class V128Load32ZeroMemIdx : public MemoryLoadMemIdx {
-public:
-    V128Load32ZeroMemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoadMemIdx(index, alignment, Opcode::V128Load32ZeroMemIdxOpcode, offset, srcOffset, dstOffset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load32ZeroMemIdx src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class V128Load32ZeroMemIdxM64 : public MemoryLoadMemIdxM64 {
-public:
-    V128Load32ZeroMemIdxM64(uint32_t index, uint32_t alignment, uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoadMemIdxM64(index, alignment, Opcode::V128Load32ZeroMemIdxM64Opcode, offset, srcOffset, dstOffset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load32ZeroMemIdxM64 src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64 " memIndex: %" PRIu16 " alignment: %" PRIu16, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class V128Load64Zero : public MemoryLoad {
-public:
-    V128Load64Zero(uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoad(Opcode::V128Load64ZeroOpcode, offset, srcOffset, dstOffset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load64Zero src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset());
-    }
-#endif
-};
-
-class V128Load64ZeroM64 : public MemoryLoadM64 {
-public:
-    V128Load64ZeroM64(uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoadM64(Opcode::V128Load64ZeroM64Opcode, offset, srcOffset, dstOffset)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load64ZeroM64 src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset());
-    }
-#endif
-};
-
-class V128Load64ZeroMemIdx : public MemoryLoadMemIdx {
-public:
-    V128Load64ZeroMemIdx(uint32_t index, uint32_t alignment, uint32_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoadMemIdx(index, alignment, Opcode::V128Load64ZeroMemIdxOpcode, offset, srcOffset, dstOffset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load64ZeroMemIdx src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu32 " memIndex: %" PRIu16 " alignment: %" PRIu16, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
-
-class V128Load64ZeroMemIdxM64 : public MemoryLoadMemIdxM64 {
-public:
-    V128Load64ZeroMemIdxM64(uint32_t index, uint32_t alignment, uint64_t offset, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : MemoryLoadMemIdxM64(index, alignment, Opcode::V128Load64ZeroMemIdxM64Opcode, offset, srcOffset, dstOffset)
-        , m_memIndex(index)
-        , m_alignment(alignment)
-    {
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("V128Load64ZeroMemIdxM64 src: %" PRIu32 " dst: %" PRIu32 " offset: %" PRIu64 " memIndex: %" PRIu16 " alignment: %" PRIu16, (uint32_t)srcOffset(), (uint32_t)dstOffset(), offset(), (uint16_t)m_memIndex, (uint16_t)m_alignment);
-    }
-#endif
-
-    uint16_t memIndex() const
-    {
-        return m_memIndex;
-    }
-    uint16_t alignment() const { return m_alignment; }
-
-protected:
-    uint16_t m_memIndex;
-    uint16_t m_alignment;
-};
+DEFINE_V128_LOAD_ZERO_MEM_IDX(V128Load32ZeroMemIdx, MemoryLoadMemIdx, V128Load32ZeroMemIdxOpcode, uint32_t, PRIu32);
+DEFINE_V128_LOAD_ZERO_MEM_IDX(V128Load32ZeroMemIdxM64, MemoryLoadMemIdxM64, V128Load32ZeroMemIdxM64Opcode, uint64_t, PRIu64);
+DEFINE_V128_LOAD_ZERO_MEM_IDX(V128Load64ZeroMemIdx, MemoryLoadMemIdx, V128Load64ZeroMemIdxOpcode, uint32_t, PRIu32);
+DEFINE_V128_LOAD_ZERO_MEM_IDX(V128Load64ZeroMemIdxM64, MemoryLoadMemIdxM64, V128Load64ZeroMemIdxM64Opcode, uint64_t, PRIu64);
 
 class I8X16Shuffle : public ByteCode {
 public:
@@ -5115,7 +4082,7 @@ public:
 
     ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
     ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    uint32_t tableIndex() const { return uint32Value(); }
+    uint32_t tableIndex() const { return uintValue(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -5137,7 +4104,7 @@ public:
 
     ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
     ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
-    uint32_t tableIndex() const { return uint32Value(); }
+    uint32_t tableIndex() const { return uintValue(); }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -5503,7 +4470,7 @@ public:
 
     ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
     ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    bool isNullable() const { return uint32Value() != 0; }
+    bool isNullable() const { return uintValue() != 0; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -5942,7 +4909,7 @@ public:
 
     ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
     ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    bool isNullable() const { return uint32Value() != 0; }
+    bool isNullable() const { return uintValue() != 0; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)

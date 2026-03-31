@@ -336,10 +336,10 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
 
             if (instr->info() & Instruction::kMultiMemory) {
                 ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
-                offset = storeMemIdxOperation->uint32Value();
+                offset = storeMemIdxOperation->uintValue();
                 memIndex = storeMemIdxOperation->memIndex();
             } else {
-                offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uint32Value();
+                offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uintValue();
             }
         }
     } else {
@@ -359,10 +359,10 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
 
             if (instr->info() & Instruction::kMultiMemory) {
                 ByteCodeOffset2Value64MemIdx* storeMemIdxM64Operation = reinterpret_cast<ByteCodeOffset2Value64MemIdx*>(instr->byteCode());
-                offset = storeMemIdxM64Operation->uint64Value();
+                offset = storeMemIdxM64Operation->uintValue();
                 memIndex = storeMemIdxM64Operation->memIndex();
             } else {
-                offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uint64Value();
+                offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uintValue();
             }
         }
     }
@@ -700,17 +700,17 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
         if (!(options & MemAddress::Memory64)) {
             if (instr->info() & Instruction::kMultiMemory) {
                 ByteCodeOffset2ValueMemIdx* loadMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
-                offset = loadMemIdxOperation->uint32Value();
+                offset = loadMemIdxOperation->uintValue();
                 memIndex = loadMemIdxOperation->memIndex();
             } else {
-                offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uint32Value();
+                offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uintValue();
             }
         } else if (instr->info() & Instruction::kMultiMemory) {
             ByteCodeOffset2Value64MemIdx* loadMemIdxM64Operation = reinterpret_cast<ByteCodeOffset2Value64MemIdx*>(instr->byteCode());
-            offset = loadMemIdxM64Operation->uint64Value();
+            offset = loadMemIdxM64Operation->uintValue();
             memIndex = loadMemIdxM64Operation->memIndex();
         } else {
-            offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uint64Value();
+            offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uintValue();
         }
     }
 
@@ -1115,10 +1115,10 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
                 if (instr->info() & Instruction::kMultiMemory) {
                     ByteCodeOffset2ValueMemIdx* storeMemIdxOperation = reinterpret_cast<ByteCodeOffset2ValueMemIdx*>(instr->byteCode());
-                    offset = storeMemIdxOperation->uint32Value();
+                    offset = storeMemIdxOperation->uintValue();
                     memIndex = storeMemIdxOperation->memIndex();
                 } else {
-                    offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uint32Value();
+                    offset = reinterpret_cast<ByteCodeOffset2Value*>(instr->byteCode())->uintValue();
                 }
 #ifdef HAS_SIMD
             } else {
@@ -1140,10 +1140,10 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
                 if (instr->info() & Instruction::kMultiMemory) {
                     ByteCodeOffset2Value64MemIdx* storeMemIdxM64Operation = reinterpret_cast<ByteCodeOffset2Value64MemIdx*>(instr->byteCode());
-                    offset = storeMemIdxM64Operation->uint64Value();
+                    offset = storeMemIdxM64Operation->uintValue();
                     memIndex = storeMemIdxM64Operation->memIndex();
                 } else {
-                    offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uint64Value();
+                    offset = reinterpret_cast<ByteCodeOffset2Value64*>(instr->byteCode())->uintValue();
                 }
 #ifdef HAS_SIMD
             } else {
