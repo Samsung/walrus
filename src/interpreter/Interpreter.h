@@ -24,13 +24,14 @@
 #include "runtime/Module.h"
 #include "runtime/Tag.h"
 #include "interpreter/ByteCode.h"
+#include <utility>
 
 #ifdef ENABLE_GC
 #include "GCUtil.h"
 #endif /* ENABLE_GC */
 
 namespace Walrus {
-
+    
 class Instance;
 class Memory;
 class Table;
@@ -52,10 +53,16 @@ private:
         auto moduleFunction = function->moduleFunction();
         ALLOCA(uint8_t, functionStackBase, moduleFunction->requiredStackSize());
 
-        // init parameter space
-        for (size_t i = 0; i < parameterOffsetCount; i++) {
-            ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
-        }
+        if (state.hasTCO()) {
+            for (size_t i = 0; i < state.tco_paramStore.size(); i++) {
+                ((size_t*)functionStackBase)[i] = state.tco_paramStore[i];
+            }
+            state.destroyTCO();
+        } else {
+            for (size_t i = 0; i < parameterOffsetCount; i++) {
+                ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
+            }
+        }       
 
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
         ByteCodeStackOffset* resultOffsets;
@@ -105,7 +112,15 @@ private:
         } else {
             resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
         }
-
+        
+        if(newState.hasTCO()) {
+            state.tco_paramSize = newState.tco_paramSize;
+            state.tco_paramStore = newState.tco_paramStore;
+            state.tco_functionTarget = newState.tco_functionTarget;
+            
+            return;
+        }
+        
         offsets += parameterOffsetCount;
         for (size_t i = 0; i < resultOffsetCount; i++) {
             *((size_t*)(bp + offsets[i])) = *((size_t*)(functionStackBase + resultOffsets[i]));
@@ -131,6 +146,11 @@ private:
                                  size_t& programCounter,
                                  uint8_t* bp,
                                  Instance* instance);
+                                 
+    static void returnCallOperation(ExecutionState& state,
+                                    size_t& programCounter,
+                                    uint8_t* bp,
+                                    Instance* instance);
 
     static bool testRefGeneric(void* refPtr, Value::Type type);
     static bool testRefDefined(void* refPtr, const CompositeType** typeInfo);

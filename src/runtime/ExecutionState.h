@@ -19,6 +19,8 @@
 
 #include "util/Optional.h"
 #include "util/Util.h"
+#include <cstddef>
+#include <vector>
 
 namespace Walrus {
 
@@ -33,6 +35,8 @@ public:
     ExecutionState(ExecutionState& parent)
         : m_parent(&parent)
         , m_stackLimit(parent.m_stackLimit)
+        , tco_paramSize(0)
+        , tco_functionTarget(nullptr)
     {
     }
 
@@ -40,9 +44,11 @@ public:
         : m_parent(&parent)
         , m_currentFunction(currentFunction)
         , m_stackLimit(parent.m_stackLimit)
+        , tco_paramSize(0)
+        ,tco_functionTarget(nullptr)
     {
     }
-
+    
     Optional<Function*> currentFunction() const
     {
         return m_currentFunction;
@@ -52,7 +58,21 @@ public:
     {
         return m_stackLimit;
     }
-
+    
+    void destroyTCO() {
+        tco_paramStore.clear();
+        tco_paramSize = 0;
+        tco_functionTarget = nullptr;
+        
+    }
+    
+    bool hasTCO() {
+        return tco_functionTarget != nullptr;
+    }
+    
+    std::vector<size_t> tco_paramStore;    
+    size_t tco_paramSize;
+    Function* tco_functionTarget;
 private:
     friend class ByteCodeTable;
     ExecutionState()

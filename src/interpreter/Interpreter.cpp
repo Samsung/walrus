@@ -17,6 +17,7 @@
 
 #include "Walrus.h"
 
+#include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 #include "runtime/Instance.h"
 #include "runtime/Function.h"
@@ -1710,6 +1711,35 @@ NextInstruction:
         callRefOperation(state, programCounter, bp, instance);
         NEXT_INSTRUCTION();
     }
+    
+    DEFINE_OPCODE(ReturnCall)
+        : 
+    {
+        //TODO: it can be raise glitch into PC.
+        //we must destroy the (C++) function stack.
+        //so we just copy value for later call and exit the interpreter to destroy the stack.
+        
+        ReturnCall* code = (ReturnCall*)programCounter;
+        auto target = instance->function(code->index());
+    
+        auto ft = target->functionType();
+        if(!ft->equals(code->functionType())) {
+            Trap::throwException(state, "return call type mismatch");
+        }
+    
+        auto paramSize = code->parameterOffsetsSize();
+        auto offsets = code->stackOffsets();
+        auto& paramTypes = ft->param().types();
+        
+        state.tco_paramStore.resize(paramSize);
+        for (uint16_t i = 0; i < paramSize; i++) {
+            state.tco_paramStore[i] = *((size_t*)(bp + offsets[i]));
+        }
+        
+        state.tco_functionTarget = target;
+                
+        return 0;
+    }
 
     DEFINE_OPCODE(Select)
         :
@@ -3042,6 +3072,12 @@ NEVER_INLINE void Interpreter::callOperation(
     Call* code = (Call*)programCounter;
     Function* target = instance->function(code->index());
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    
+    while (UNLIKELY(state.hasTCO())) {
+        target = state.tco_functionTarget;
+        target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
+    }
+    
     programCounter += ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }

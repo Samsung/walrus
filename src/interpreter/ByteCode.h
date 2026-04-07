@@ -45,6 +45,7 @@ class FunctionType;
     F(Call)                     \
     F(CallIndirect)             \
     F(CallRef)                  \
+    F(ReturnCall)               \
     F(Select)                   \
     F(MemorySize)               \
     F(MemorySizeM64)            \
@@ -2213,6 +2214,62 @@ protected:
     ByteCodeStackOffset m_calleeOffset;
     FunctionType* m_functionType;
     uint16_t m_parameterOffsetsSize;
+    uint16_t m_resultOffsetsSize;
+};
+
+class ReturnCall : public ByteCode {
+public:
+    ReturnCall(uint32_t index, uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize, 
+                FunctionType* functionType)
+        : ByteCode(Opcode::ReturnCallOpcode)
+        , m_index(index)
+        , m_parameterOffsetsSize(parameterOffsetsSize)
+        , m_resultOffsetsSize(resultOffsetsSize)
+        , m_functionType(functionType)
+    {
+    }
+
+    uint32_t index() const { return m_index; }
+    FunctionType* functionType() const { return m_functionType; }
+    ByteCodeStackOffset* stackOffsets() const
+    {
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call));
+    }
+
+    uint16_t parameterOffsetsSize() const
+    {
+        return m_parameterOffsetsSize;
+    }
+
+    uint16_t resultOffsetsSize() const
+    {
+        return m_resultOffsetsSize;
+    }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("return_call ");
+        printf("index: %" PRId32 " ", m_index);
+        size_t c = 0;
+        auto arr = stackOffsets();
+        printf("paramOffsets: ");
+        for (size_t i = 0; i < m_parameterOffsetsSize; i++) {
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
+        }
+        printf(" ");
+
+        printf("resultOffsets: ");
+        for (size_t i = 0; i < m_resultOffsetsSize; i++) {
+            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
+        }
+    }
+#endif
+
+protected:
+    uint32_t m_index;
+    uint16_t m_parameterOffsetsSize;
+    FunctionType* m_functionType;    
     uint16_t m_resultOffsetsSize;
 };
 
