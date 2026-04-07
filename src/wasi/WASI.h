@@ -49,7 +49,8 @@ public:
     F(fd_pread, I32I32I32I64I32_RI32)                      \
     F(fd_readdir, I32I32I32I64I32_RI32)                    \
     F(fd_close, I32_RI32)                                  \
-    F(fd_datasync, I32_RI32)                                \
+    F(fd_datasync, I32_RI32)                               \
+    F(fd_sync, I32_RI32)                                   \
     F(fd_fdstat_get, I32I32_RI32)                          \
     F(fd_fdstat_set_flags, I32I32_RI32)                    \
     F(fd_prestat_get, I32I32_RI32)                         \

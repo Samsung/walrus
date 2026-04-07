@@ -290,7 +290,13 @@ void WASI::fd_datasync(ExecutionState& state, Value* argv, Value* result, Instan
     uint32_t fd = argv[0].asI32();
 
     result[0] = Value(uvwasi_fd_datasync(WASI::g_uvwasi, fd));
-}   
+}
+void WASI::fd_sync(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+
+    result[0] = Value(uvwasi_fd_sync(WASI::g_uvwasi, fd));
+}
 void WASI::fd_fdstat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
