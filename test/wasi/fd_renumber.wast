@@ -29,8 +29,8 @@
     i32.const 300
     i32.const 19
     i32.const 9       ;; oflags: creat|trunc
-    i64.const 8320    ;; fd_write | path_open
-    i64.const 8320
+    i64.const 8256    ;; fd_write | path_open
+    i64.const 8256
     i32.const 0
     local.get $fd_offset
     call $path_open
