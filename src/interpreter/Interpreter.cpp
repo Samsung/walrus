@@ -1723,7 +1723,8 @@ NextInstruction:
         auto target = instance->function(code->index());
     
         auto ft = target->functionType();
-        if(!ft->equals(code->functionType())) {
+        auto clt = state.currentFunction().value()->functionType();
+        if(!ft->equals(clt)) {
             Trap::throwException(state, "return call type mismatch");
         }
     

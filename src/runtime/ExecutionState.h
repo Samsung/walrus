@@ -70,7 +70,7 @@ public:
         return tco_functionTarget != nullptr;
     }
     
-    std::vector<size_t> tco_paramStore;    
+    std::vector<uint32_t> tco_paramStore;    
     size_t tco_paramSize;
     Function* tco_functionTarget;
 private:
