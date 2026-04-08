@@ -33,19 +33,19 @@ public:
     friend class Interpreter;
 
     ExecutionState(ExecutionState& parent)
-        : m_parent(&parent)
-        , m_stackLimit(parent.m_stackLimit)
-        , tco_paramSize(0)
+        : tco_paramSize(0)
         , tco_functionTarget(nullptr)
+        , m_parent(&parent)
+        , m_stackLimit(parent.m_stackLimit)
     {
     }
 
     ExecutionState(ExecutionState& parent, Function* currentFunction)
-        : m_parent(&parent)
+        : tco_paramSize(0)
+        , tco_functionTarget(nullptr)
+        , m_parent(&parent)
         , m_currentFunction(currentFunction)
         , m_stackLimit(parent.m_stackLimit)
-        , tco_paramSize(0)
-        ,tco_functionTarget(nullptr)
     {
     }
     
@@ -70,7 +70,7 @@ public:
         return tco_functionTarget != nullptr;
     }
     
-    std::vector<uint32_t> tco_paramStore;    
+    std::vector<size_t> tco_paramStore;    
     size_t tco_paramSize;
     Function* tco_functionTarget;
 private:

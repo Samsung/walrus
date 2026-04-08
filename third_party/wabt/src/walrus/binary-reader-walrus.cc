@@ -925,8 +925,7 @@ public:
         CHECK_RESULT(m_validator.OnReturnCall(GetLocation(), Var(func_index, GetLocation())));
 
         SHOULD_GENERATE_BYTECODE;
-        m_externalDelegate->OnCallExpr(func_index);
-        m_externalDelegate->OnReturnExpr();
+        m_externalDelegate->OnReturnCallExpr(func_index);
         return Result::Ok;
     }
     Result OnReturnCallIndirectExpr(Index sig_index, Index table_index) override {
@@ -940,8 +939,7 @@ public:
         CHECK_RESULT(m_validator.OnReturnCallIndirect(GetLocation(), Var(sig_index, GetLocation()), Var(table_index, GetLocation())));
 
         SHOULD_GENERATE_BYTECODE;
-        m_externalDelegate->OnCallIndirectExpr(sig_index, table_index);
-        m_externalDelegate->OnReturnExpr();
+        m_externalDelegate->OnReturnCallIndirectExpr(sig_index, table_index);
         return Result::Ok;
     }
     Result OnReturnCallRefExpr(Type sig_type) override
@@ -956,8 +954,7 @@ public:
         CHECK_RESULT(m_validator.OnReturnCallRef(GetLocation(), Var(sig_type, GetLocation())));
 
         SHOULD_GENERATE_BYTECODE;
-        m_externalDelegate->OnCallRefExpr(sig_type);
-        m_externalDelegate->OnReturnExpr();
+        m_externalDelegate->OnReturnCallRefExpr(sig_type);
         return Result::Ok;
     }
     Result OnReturnExpr() override {

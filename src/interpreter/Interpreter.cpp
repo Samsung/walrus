@@ -1721,14 +1721,14 @@ NextInstruction:
         
         ReturnCall* code = (ReturnCall*)programCounter;
         auto target = instance->function(code->index());
-    
+
         auto ft = target->functionType();
-        auto clt = state.currentFunction().value()->functionType();
-        if(!ft->equals(clt)) {
-            Trap::throwException(state, "return call type mismatch");
-        }
-    
-        auto paramSize = code->parameterOffsetsSize();
+        //auto clt = state.currentFunction().value()->functionType();
+        //if (ft->equals(clt)) {
+        //    Trap::throwException(state, "return call type mismatch");
+        //}
+
+        auto paramSize = code->parameterOffsetsSize();        
         auto offsets = code->stackOffsets();
         auto& paramTypes = ft->param().types();
         
@@ -3106,6 +3106,12 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(state.hasTCO())) {
+        target = state.tco_functionTarget;
+        target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
@@ -3128,6 +3134,12 @@ NEVER_INLINE void Interpreter::callRefOperation(
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(state.hasTCO())) {
+        target = state.tco_functionTarget;
+        target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }

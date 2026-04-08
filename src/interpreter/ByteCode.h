@@ -2225,12 +2225,10 @@ public:
         , m_index(index)
         , m_parameterOffsetsSize(parameterOffsetsSize)
         , m_resultOffsetsSize(resultOffsetsSize)
-        , m_functionType(functionType)
     {
     }
 
     uint32_t index() const { return m_index; }
-    FunctionType* functionType() const { return m_functionType; }
     ByteCodeStackOffset* stackOffsets() const
     {
         return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call));
@@ -2269,7 +2267,6 @@ public:
 protected:
     uint32_t m_index;
     uint16_t m_parameterOffsetsSize;
-    FunctionType* m_functionType;    
     uint16_t m_resultOffsetsSize;
 };
 

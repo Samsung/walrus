@@ -1454,7 +1454,7 @@ public:
 
     template <typename CodeType>
     void generateCallExpr(CodeType* code, uint16_t parameterCount, uint16_t resultCount,
-                          Walrus::FunctionType* functionType)
+                          Walrus::FunctionType* functionType, bool isReturnCall = false)
     {
         size_t offsetIndex = 0;
         const Walrus::TypeVector::Types& param = functionType->param().types();
@@ -1471,6 +1471,11 @@ public:
                 code->stackOffsets()[parameterCount - offsetIndex - subIndexCount + offsetSubCount++] = sourcePos + j;
             }
             offsetIndex += subIndexCount;
+        }
+
+        if (isReturnCall) {
+            ASSERT(offsetIndex == code->parameterOffsetsSize());
+            return;
         }
 
         const Walrus::TypeVector::Types& result = functionType->result().types();
@@ -1529,6 +1534,33 @@ public:
 
         auto code = peekByteCode<Walrus::CallRef>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
+    }
+
+    virtual void OnReturnCallExpr(uint32_t index) override
+    {
+        m_preprocessData.seenBranch();
+        auto functionType = m_result.m_functions[index]->functionType();
+        auto callPos = m_currentByteCode.size();
+        auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
+        auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
+        pushByteCode(Walrus::ReturnCall(index, parameterCount, resultCount, functionType), WASMOpcode::ReturnCallOpcode);
+
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        auto code = peekByteCode<Walrus::ReturnCall>(callPos);
+
+        generateCallExpr(code, parameterCount, resultCount, functionType, true);
+        stopToGenerateByteCodeWhileBlockEnd();
+    }
+
+    virtual void OnReturnCallIndirectExpr(Index sigIndex, Index tableIndex) override
+    {
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+
+    virtual void OnReturnCallRefExpr(Type sig_type) override
+    {
+        RELEASE_ASSERT_NOT_REACHED();
     }
 
     bool processConstValue(const Walrus::Value& value)
