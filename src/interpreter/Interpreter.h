@@ -53,8 +53,8 @@ private:
         ALLOCA(uint8_t, functionStackBase, moduleFunction->requiredStackSize());
 
         if (state.hasTCO()) {
-            for (size_t i = 0; i < state.tco_paramStore.size(); i++) {
-                ((size_t*)functionStackBase)[i] = state.tco_paramStore[i];
+            for (size_t i = 0; i < state.m_tcoparamStore.size(); i++) {
+                ((size_t*)functionStackBase)[i] = state.m_tcoparamStore[i];
             }
             state.destroyTCO();
         } else {
@@ -113,9 +113,8 @@ private:
         }
 
         if (newState.hasTCO()) {
-            state.tco_paramSize = newState.tco_paramSize;
-            state.tco_paramStore = newState.tco_paramStore;
-            state.tco_functionTarget = newState.tco_functionTarget;
+            VectorCopier<size_t>::copy(state.m_tcoparamStore.data(), newState.m_tcoparamStore.data(), newState.m_tcoparamStore.size());
+            state.m_tcofunctionTarget = newState.m_tcofunctionTarget;
 
             return;
         }

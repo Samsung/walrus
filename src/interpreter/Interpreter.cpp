@@ -1732,12 +1732,13 @@ NextInstruction:
         auto offsets = code->stackOffsets();
         auto& paramTypes = ft->param().types();
 
-        state.tco_paramStore.resize(paramSize);
+        state.m_tcoparamStore.reserve(paramSize);
+
         for (uint16_t i = 0; i < paramSize; i++) {
-            state.tco_paramStore[i] = *((size_t*)(bp + offsets[i]));
+            state.m_tcoparamStore[i] = *((size_t*)(bp + offsets[i]));
         }
 
-        state.tco_functionTarget = target;
+        state.m_tcofunctionTarget = target;
 
         return 0;
     }
@@ -3075,7 +3076,7 @@ NEVER_INLINE void Interpreter::callOperation(
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
     while (UNLIKELY(state.hasTCO())) {
-        target = state.tco_functionTarget;
+        target = state.m_tcofunctionTarget;
         target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
     }
 
@@ -3108,7 +3109,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
     while (UNLIKELY(state.hasTCO())) {
-        target = state.tco_functionTarget;
+        target = state.m_tcofunctionTarget;
         target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
     }
 
@@ -3136,7 +3137,7 @@ NEVER_INLINE void Interpreter::callRefOperation(
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
     while (UNLIKELY(state.hasTCO())) {
-        target = state.tco_functionTarget;
+        target = state.m_tcofunctionTarget;
         target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
     }
 

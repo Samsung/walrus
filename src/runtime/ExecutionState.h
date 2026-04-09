@@ -19,6 +19,7 @@
 
 #include "util/Optional.h"
 #include "util/Util.h"
+#include "util/Vector.h"
 
 namespace Walrus {
 
@@ -31,19 +32,17 @@ public:
     friend class Interpreter;
 
     ExecutionState(ExecutionState& parent)
-        : tco_paramSize(0)
-        , tco_functionTarget(nullptr)
-        , m_parent(&parent)
+        : m_parent(&parent)
         , m_stackLimit(parent.m_stackLimit)
+        , m_tcofunctionTarget(nullptr)
     {
     }
 
     ExecutionState(ExecutionState& parent, Function* currentFunction)
-        : tco_paramSize(0)
-        , tco_functionTarget(nullptr)
-        , m_parent(&parent)
+        : m_parent(&parent)
         , m_currentFunction(currentFunction)
         , m_stackLimit(parent.m_stackLimit)
+        , m_tcofunctionTarget(nullptr)
     {
     }
 
@@ -59,19 +58,17 @@ public:
 
     void destroyTCO()
     {
-        tco_paramStore.clear();
-        tco_paramSize = 0;
-        tco_functionTarget = nullptr;
+        m_tcoparamStore.clear();
+        m_tcofunctionTarget = nullptr;
     }
 
     bool hasTCO()
     {
-        return tco_functionTarget != nullptr;
+        return m_tcofunctionTarget != nullptr;
     }
 
-    std::vector<size_t> tco_paramStore;
-    size_t tco_paramSize;
-    Function* tco_functionTarget;
+    VectorWithFixedSize<size_t, std::allocator<size_t>> m_tcoparamStore;
+    Function* m_tcofunctionTarget;
 
 private:
     friend class ByteCodeTable;
