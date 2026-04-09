@@ -27,6 +27,8 @@
 
 namespace wabt {
 
+#define PARSER_RESOURCE_LIMIT (uint16_t)16384
+
 enum class WASMOpcode : size_t {
 #define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
                     text, decomp)                                            \
@@ -911,7 +913,11 @@ public:
 
     virtual void OnTypeCount(Index count) override
     {
-        // TODO reserve vector if possible
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many type declarations.");
+        }
+
+        m_result.m_compositeTypes.reserve(count);
     }
 
     virtual void OnRecursiveType(Index firstTypeIndex, Index typeCount) override
@@ -927,6 +933,10 @@ public:
                             Type* resultTypes,
                             GCTypeExtension* gcExt) override
     {
+        if (paramCount > PARSER_RESOURCE_LIMIT || resultCount > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many function params or results.");
+        }
+
         Walrus::FunctionType* functionType = new Walrus::FunctionType(paramCount, getRefCountOfTypes(paramTypes, paramCount),
                                                                       resultCount, getRefCountOfTypes(resultTypes, resultCount),
                                                                       gcExt->is_final_sub_type, toSubType(gcExt));
@@ -1008,6 +1018,10 @@ public:
 
     virtual void OnImportCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many imports.");
+        }
+
         m_result.m_imports.reserve(count);
     }
 
@@ -1072,6 +1086,10 @@ public:
 
     virtual void OnExportCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many exports.");
+        }
+
         m_result.m_exports.reserve(count);
     }
 
@@ -1084,6 +1102,10 @@ public:
     /* Table section */
     virtual void OnTableCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many tables declarations.");
+        }
+
         m_result.m_tableTypes.reserve(count);
     }
 
@@ -1109,6 +1131,10 @@ public:
 
     virtual void OnElemSegmentCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many elem segment declarations.");
+        }
+
         m_result.m_elements.reserve(count);
     }
 
@@ -1168,6 +1194,10 @@ public:
     /* Memory section */
     virtual void OnMemoryCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many memory declarations.");
+        }
+
         m_result.m_memoryTypes.reserve(count);
     }
 
@@ -1179,6 +1209,10 @@ public:
 
     virtual void OnDataSegmentCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many elem segment declarations.");
+        }
+
         m_result.m_datas.reserve(count);
     }
 
@@ -1215,6 +1249,10 @@ public:
     /* Function section */
     virtual void OnFunctionCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many function declarations.");
+        }
+
         m_result.m_functions.reserve(count);
     }
 
@@ -1228,6 +1266,10 @@ public:
 
     virtual void OnGlobalCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many global declarations.");
+        }
+
         m_result.m_globalTypes.reserve(count);
     }
 
@@ -1261,6 +1303,10 @@ public:
 
     virtual void OnTagCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many tags.");
+        }
+
         m_result.m_tagTypes.reserve(count);
     }
 
@@ -1291,6 +1337,11 @@ public:
 
     virtual void OnLocalDecl(Index decl_index, Index count, Type type) override
     {
+        uint64_t totalLocalCount = m_localInfo.size() + count;
+        if (totalLocalCount > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many local declarations.");
+        }
+
         while (count) {
             auto wType = toValueKind(type, &m_result);
             m_currentFunction->m_local.push_back(wType);
