@@ -19,8 +19,6 @@
 
 #include "util/Optional.h"
 #include "util/Util.h"
-#include <cstddef>
-#include <vector>
 
 namespace Walrus {
 

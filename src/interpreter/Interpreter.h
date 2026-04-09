@@ -24,7 +24,6 @@
 #include "runtime/Module.h"
 #include "runtime/Tag.h"
 #include "interpreter/ByteCode.h"
-#include <utility>
 
 #ifdef ENABLE_GC
 #include "GCUtil.h"
