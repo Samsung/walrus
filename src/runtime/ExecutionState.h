@@ -48,7 +48,7 @@ public:
         , m_stackLimit(parent.m_stackLimit)
     {
     }
-    
+
     Optional<Function*> currentFunction() const
     {
         return m_currentFunction;
@@ -58,21 +58,23 @@ public:
     {
         return m_stackLimit;
     }
-    
-    void destroyTCO() {
+
+    void destroyTCO()
+    {
         tco_paramStore.clear();
         tco_paramSize = 0;
         tco_functionTarget = nullptr;
-        
     }
-    
-    bool hasTCO() {
+
+    bool hasTCO()
+    {
         return tco_functionTarget != nullptr;
     }
-    
-    std::vector<size_t> tco_paramStore;    
+
+    std::vector<size_t> tco_paramStore;
     size_t tco_paramSize;
     Function* tco_functionTarget;
+
 private:
     friend class ByteCodeTable;
     ExecutionState()

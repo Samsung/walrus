@@ -31,7 +31,7 @@
 #endif /* ENABLE_GC */
 
 namespace Walrus {
-    
+
 class Instance;
 class Memory;
 class Table;
@@ -62,7 +62,7 @@ private:
             for (size_t i = 0; i < parameterOffsetCount; i++) {
                 ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
             }
-        }       
+        }
 
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
         ByteCodeStackOffset* resultOffsets;
@@ -112,15 +112,15 @@ private:
         } else {
             resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
         }
-        
-        if(newState.hasTCO()) {
+
+        if (newState.hasTCO()) {
             state.tco_paramSize = newState.tco_paramSize;
             state.tco_paramStore = newState.tco_paramStore;
             state.tco_functionTarget = newState.tco_functionTarget;
-            
+
             return;
         }
-        
+
         offsets += parameterOffsetCount;
         for (size_t i = 0; i < resultOffsetCount; i++) {
             *((size_t*)(bp + offsets[i])) = *((size_t*)(functionStackBase + resultOffsets[i]));
@@ -146,7 +146,7 @@ private:
                                  size_t& programCounter,
                                  uint8_t* bp,
                                  Instance* instance);
-                                 
+
     static void returnCallOperation(ExecutionState& state,
                                     size_t& programCounter,
                                     uint8_t* bp,

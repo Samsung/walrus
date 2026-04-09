@@ -2219,8 +2219,8 @@ protected:
 
 class ReturnCall : public ByteCode {
 public:
-    ReturnCall(uint32_t index, uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize, 
-                FunctionType* functionType)
+    ReturnCall(uint32_t index, uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize,
+               FunctionType* functionType)
         : ByteCode(Opcode::ReturnCallOpcode)
         , m_index(index)
         , m_parameterOffsetsSize(parameterOffsetsSize)
