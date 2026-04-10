@@ -2231,7 +2231,7 @@ public:
     uint32_t index() const { return m_index; }
     ByteCodeStackOffset* stackOffsets() const
     {
-        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(Call));
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(ReturnCall));
     }
 
     uint16_t parameterOffsetsSize() const

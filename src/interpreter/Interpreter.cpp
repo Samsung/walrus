@@ -1727,13 +1727,9 @@ NextInstruction:
 
         auto paramSize = code->parameterOffsetsSize();
         auto offsets = code->stackOffsets();
-
+    
         state.m_tcoParamStore.reserve(paramSize);
-
-        for (uint16_t i = 0; i < paramSize; i++) {
-            state.m_tcoParamStore[i] = *((size_t*)(bp + offsets[i]));
-        }
-
+        memcpy(state.m_tcoParamStore.data(), bp + offsets[0], paramSize * sizeof(size_t));
         state.m_tcoFunctionTarget = target;
 
         return nullptr;
