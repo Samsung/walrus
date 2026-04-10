@@ -1727,7 +1727,7 @@ NextInstruction:
 
         auto paramSize = code->parameterOffsetsSize();
         auto offsets = code->stackOffsets();
-    
+
         state.m_tcoParamStore.reserve(paramSize);
         memcpy(state.m_tcoParamStore.data(), bp + offsets[0], paramSize * sizeof(size_t));
         state.m_tcoFunctionTarget = target;
