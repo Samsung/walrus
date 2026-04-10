@@ -271,6 +271,18 @@ jobs:
               target: riscv64-linux-user
               name: qemu-riscv64
             walrus: riscv64
+          - name: riscv32
+            toolchain:
+              url: https://toolchains.bootlin.com/downloads/releases/toolchains/riscv32-ilp32d/tarballs/riscv32-ilp32d--glibc--stable-2024.05-1.tar.xz
+              name: riscv32-ilp32d--glibc--stable-2024.05-1.tar.xz
+              CC: riscv32-buildroot-linux-gnu-gcc-13.3.0.br_real
+              CXX: riscv32-buildroot-linux-gnu-g++.br_real
+              CFLAGS: -march=rv32gv
+              CXXFLAGS: -march=rv32gv
+            qemu:
+              target: riscv32-linux-user
+              name: qemu-riscv32
+            walrus: riscv32
 
     runs-on: ubuntu-latest
     steps:
