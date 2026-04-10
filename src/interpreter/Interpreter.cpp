@@ -17,6 +17,7 @@
 
 #include "Walrus.h"
 
+#include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 #include "runtime/Instance.h"
 #include "runtime/Function.h"
@@ -1711,6 +1712,29 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(ReturnCall)
+        :
+    {
+        ReturnCall* code = (ReturnCall*)programCounter;
+        auto target = instance->function(code->index());
+
+        //TODO: fix typecheck
+        //auto ft = target->functionType();
+        //auto clt = state.currentFunction().value()->functionType();
+        //if (ft->equals(clt)) {
+        //    Trap::throwException(state, "return call type mismatch");
+        //}
+
+        auto paramSize = code->parameterOffsetsSize();
+        auto offsets = code->stackOffsets();
+
+        state.m_tcoParamStore.reserve(paramSize);
+        memcpy(state.m_tcoParamStore.data(), bp + offsets[0], paramSize * sizeof(size_t));
+        state.m_tcoFunctionTarget = target;
+
+        return nullptr;
+    }
+
     DEFINE_OPCODE(Select)
         :
     {
@@ -3042,6 +3066,12 @@ NEVER_INLINE void Interpreter::callOperation(
     Call* code = (Call*)programCounter;
     Function* target = instance->function(code->index());
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(state.hasTCO())) {
+        target = state.m_tcoFunctionTarget;
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
@@ -3069,6 +3099,12 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(state.hasTCO())) {
+        target = state.m_tcoFunctionTarget;
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
@@ -3091,6 +3127,12 @@ NEVER_INLINE void Interpreter::callRefOperation(
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(state.hasTCO())) {
+        target = state.m_tcoFunctionTarget;
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }

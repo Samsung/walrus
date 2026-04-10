@@ -119,6 +119,9 @@ public:
     virtual void OnCallExpr(Index index) = 0;
     virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) = 0;
     virtual void OnCallRefExpr(Type sig_type) = 0;
+    virtual void OnReturnCallExpr(Index index) = 0;
+    virtual void OnReturnCallIndirectExpr(Index sigIndex, Index tableIndex) = 0;
+    virtual void OnReturnCallRefExpr(Type sig_type) = 0;
     virtual void OnI32ConstExpr(uint32_t value) = 0;
     virtual void OnI64ConstExpr(uint64_t value) = 0;
     virtual void OnF32ConstExpr(uint32_t value) = 0;

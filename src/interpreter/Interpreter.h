@@ -52,9 +52,13 @@ private:
         auto moduleFunction = function->moduleFunction();
         ALLOCA(uint8_t, functionStackBase, moduleFunction->requiredStackSize());
 
-        // init parameter space
-        for (size_t i = 0; i < parameterOffsetCount; i++) {
-            ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
+        if (state.hasTCO()) {
+            VectorCopier<size_t>::copy((size_t*)functionStackBase, state.m_tcoParamStore.data(), state.m_tcoParamStore.size());
+            state.destroyTCO();
+        } else {
+            for (size_t i = 0; i < parameterOffsetCount; i++) {
+                ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
+            }
         }
 
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
@@ -106,6 +110,13 @@ private:
             resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
         }
 
+        if (newState.hasTCO()) {
+            state.m_tcoParamStore.reserve(newState.m_tcoParamStore.size());
+            VectorCopier<size_t>::copy(state.m_tcoParamStore.data(), newState.m_tcoParamStore.data(), newState.m_tcoParamStore.size());
+            state.m_tcoFunctionTarget = newState.m_tcoFunctionTarget;
+            return;
+        }
+
         offsets += parameterOffsetCount;
         for (size_t i = 0; i < resultOffsetCount; i++) {
             *((size_t*)(bp + offsets[i])) = *((size_t*)(functionStackBase + resultOffsets[i]));
@@ -131,6 +142,11 @@ private:
                                  size_t& programCounter,
                                  uint8_t* bp,
                                  Instance* instance);
+
+    static void returnCallOperation(ExecutionState& state,
+                                    size_t& programCounter,
+                                    uint8_t* bp,
+                                    Instance* instance);
 
     static bool testRefGeneric(void* refPtr, Value::Type type);
     static bool testRefDefined(void* refPtr, const CompositeType** typeInfo);

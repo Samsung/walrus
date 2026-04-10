@@ -92,6 +92,11 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
     ASSERT(offsetIndex == parameterOffsetSize + resultOffsetSize);
     interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetSize);
 
+    while (UNLIKELY(state.hasTCO())) {
+        auto target = state.m_tcoFunctionTarget;
+        target->interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetSize);
+    }
+
     size_t resultOffsetIndex = 0;
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {
         result[i] = Value(resultTypeInfo[i], valueBuffer + offsetBuffer[resultOffsetIndex + parameterOffsetSize]);
