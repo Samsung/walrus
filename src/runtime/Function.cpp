@@ -94,7 +94,7 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
 
     while (UNLIKELY(state.hasTCO())) {
         auto target = state.m_tcofunctionTarget;
-        target->interpreterCall(state, valueBuffer, offsetBuffer, 0, resultOffsetSize);
+        target->interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetSize);
     }
 
     size_t resultOffsetIndex = 0;

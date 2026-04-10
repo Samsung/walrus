@@ -1715,14 +1715,11 @@ NextInstruction:
     DEFINE_OPCODE(ReturnCall)
         :
     {
-        //TODO: it can be raise glitch into PC.
-        //we must destroy the (C++) function stack.
-        //so we just copy value for later call and exit the interpreter to destroy the stack.
-
         ReturnCall* code = (ReturnCall*)programCounter;
         auto target = instance->function(code->index());
 
-        auto ft = target->functionType();
+        //TODO: fix typecheck        
+        //auto ft = target->functionType();
         //auto clt = state.currentFunction().value()->functionType();
         //if (ft->equals(clt)) {
         //    Trap::throwException(state, "return call type mismatch");
@@ -1730,9 +1727,8 @@ NextInstruction:
 
         auto paramSize = code->parameterOffsetsSize();
         auto offsets = code->stackOffsets();
-        auto& paramTypes = ft->param().types();
-
-        state.m_tcoparamStore.reserve(paramSize);
+        
+        state.m_tcoparamStore.reserve(paramSize);        
 
         for (uint16_t i = 0; i < paramSize; i++) {
             state.m_tcoparamStore[i] = *((size_t*)(bp + offsets[i]));
@@ -1740,7 +1736,7 @@ NextInstruction:
 
         state.m_tcofunctionTarget = target;
 
-        return 0;
+        return nullptr;
     }
 
     DEFINE_OPCODE(Select)
@@ -3077,7 +3073,7 @@ NEVER_INLINE void Interpreter::callOperation(
 
     while (UNLIKELY(state.hasTCO())) {
         target = state.m_tcofunctionTarget;
-        target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
     programCounter += ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
@@ -3110,7 +3106,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
 
     while (UNLIKELY(state.hasTCO())) {
         target = state.m_tcofunctionTarget;
-        target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
@@ -3138,7 +3134,7 @@ NEVER_INLINE void Interpreter::callRefOperation(
 
     while (UNLIKELY(state.hasTCO())) {
         target = state.m_tcofunctionTarget;
-        target->interpreterCall(state, bp, code->stackOffsets(), 0, code->resultOffsetsSize());
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
