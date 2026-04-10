@@ -34,7 +34,7 @@ public:
     ExecutionState(ExecutionState& parent)
         : m_parent(&parent)
         , m_stackLimit(parent.m_stackLimit)
-        , m_tcofunctionTarget(nullptr)
+        , m_tcoFunctionTarget(nullptr)
     {
     }
 
@@ -42,7 +42,7 @@ public:
         : m_parent(&parent)
         , m_currentFunction(currentFunction)
         , m_stackLimit(parent.m_stackLimit)
-        , m_tcofunctionTarget(nullptr)
+        , m_tcoFunctionTarget(nullptr)
     {
     }
 
@@ -58,17 +58,17 @@ public:
 
     void destroyTCO()
     {
-        m_tcoparamStore.clear();
-        m_tcofunctionTarget = nullptr;
+        m_tcoParamStore.clear();
+        m_tcoFunctionTarget = nullptr;
     }
 
     bool hasTCO()
     {
-        return m_tcofunctionTarget != nullptr;
+        return m_tcoFunctionTarget != nullptr;
     }
 
-    VectorWithFixedSize<size_t, std::allocator<size_t>> m_tcoparamStore;
-    Function* m_tcofunctionTarget;
+    VectorWithFixedSize<size_t, std::allocator<size_t>> m_tcoParamStore;
+    Function* m_tcoFunctionTarget;
 
 private:
     friend class ByteCodeTable;

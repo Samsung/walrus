@@ -1718,7 +1718,7 @@ NextInstruction:
         ReturnCall* code = (ReturnCall*)programCounter;
         auto target = instance->function(code->index());
 
-        //TODO: fix typecheck        
+        //TODO: fix typecheck
         //auto ft = target->functionType();
         //auto clt = state.currentFunction().value()->functionType();
         //if (ft->equals(clt)) {
@@ -1727,14 +1727,14 @@ NextInstruction:
 
         auto paramSize = code->parameterOffsetsSize();
         auto offsets = code->stackOffsets();
-        
-        state.m_tcoparamStore.reserve(paramSize);        
+
+        state.m_tcoParamStore.reserve(paramSize);
 
         for (uint16_t i = 0; i < paramSize; i++) {
-            state.m_tcoparamStore[i] = *((size_t*)(bp + offsets[i]));
+            state.m_tcoParamStore[i] = *((size_t*)(bp + offsets[i]));
         }
 
-        state.m_tcofunctionTarget = target;
+        state.m_tcoFunctionTarget = target;
 
         return nullptr;
     }
@@ -3072,7 +3072,7 @@ NEVER_INLINE void Interpreter::callOperation(
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
     while (UNLIKELY(state.hasTCO())) {
-        target = state.m_tcofunctionTarget;
+        target = state.m_tcoFunctionTarget;
         target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
@@ -3105,7 +3105,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
     while (UNLIKELY(state.hasTCO())) {
-        target = state.m_tcofunctionTarget;
+        target = state.m_tcoFunctionTarget;
         target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
@@ -3133,7 +3133,7 @@ NEVER_INLINE void Interpreter::callRefOperation(
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
     while (UNLIKELY(state.hasTCO())) {
-        target = state.m_tcofunctionTarget;
+        target = state.m_tcoFunctionTarget;
         target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
