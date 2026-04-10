@@ -27,6 +27,10 @@ template <typename T>
 struct VectorCopier<T, true> {
     static void copy(T* dst, const T* src, const size_t size)
     {
+        if (UNLIKELY(size <= 0)) {
+            return;
+        }
+
         memcpy(dst, src, sizeof(T) * size);
     }
 };
