@@ -317,6 +317,15 @@ void WASI::fd_filestat_set_times(ExecutionState& state, Value* argv, Value* resu
 
     result[0] = Value(uvwasi_fd_filestat_set_times(WASI::g_uvwasi, fd, st_atim, st_mtim, fst_flags));
 }
+
+void WASI::sock_shutdown(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t sock = argv[0].asI32();
+    uint32_t how = argv[1].asI32();
+
+    result[0] = Value(uvwasi_sock_shutdown(WASI::g_uvwasi, sock, how));
+}
+
 void WASI::fd_fdstat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
