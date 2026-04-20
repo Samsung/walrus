@@ -246,14 +246,15 @@ Result TypeChecker::CheckTypeStackEnd(const char* desc) {
   return result;
 }
 
-uint32_t TypeChecker::UpdateHash(uint32_t hash,
-                                 Index type_index,
-                                 Index rec_start) {
+uint32_t TypeChecker::UpdateHashCode(uint32_t hash_code,
+                                     Index type_index,
+                                     Index rec_start) {
   TypeEntry& entry = type_fields_.type_entries[type_index];
 
-  hash = ComputeHash(hash, entry.kind);
+  hash_code = ComputeHashCode(hash_code, entry.kind);
+  hash_code =
+      ComputeHashCode(hash_code, static_cast<Index>(entry.is_final_sub_type));
 
-  hash = ComputeHash(hash, static_cast<Index>(entry.is_final_sub_type));
   if (entry.first_sub_type != kInvalidIndex) {
     Index first_sub_type = entry.first_sub_type;
     if (first_sub_type >= rec_start) {
@@ -262,31 +263,34 @@ uint32_t TypeChecker::UpdateHash(uint32_t hash,
       first_sub_type =
           type_fields_.type_entries[first_sub_type].canonical_index;
     }
-    hash = ComputeHash(hash, first_sub_type);
+    hash_code = ComputeHashCode(hash_code, first_sub_type);
   }
 
   switch (entry.kind) {
     case Type::FuncRef: {
       FuncType& type = type_fields_.func_types[entry.map_index];
 
-      hash = ComputeHash(hash, static_cast<Index>(type.params.size()));
+      hash_code =
+          ComputeHashCode(hash_code, static_cast<Index>(type.params.size()));
       for (auto it : type.params) {
-        hash = ComputeHash(hash, it, rec_start);
+        hash_code = ComputeHashCode(hash_code, it, rec_start);
       }
 
-      hash = ComputeHash(hash, static_cast<Index>(type.results.size()));
+      hash_code =
+          ComputeHashCode(hash_code, static_cast<Index>(type.results.size()));
       for (auto it : type.results) {
-        hash = ComputeHash(hash, it, rec_start);
+        hash_code = ComputeHashCode(hash_code, it, rec_start);
       }
       break;
     }
     case Type::StructRef: {
       StructType& type = type_fields_.struct_types[entry.map_index];
 
-      hash = ComputeHash(hash, static_cast<Index>(type.fields.size()));
+      hash_code =
+          ComputeHashCode(hash_code, static_cast<Index>(type.fields.size()));
       for (auto it : type.fields) {
-        hash = ComputeHash(hash, it.type, rec_start);
-        hash = ComputeHash(hash, static_cast<Index>(it.mutable_));
+        hash_code = ComputeHashCode(hash_code, it.type, rec_start);
+        hash_code = ComputeHashCode(hash_code, static_cast<Index>(it.mutable_));
       }
       break;
     }
@@ -294,13 +298,14 @@ uint32_t TypeChecker::UpdateHash(uint32_t hash,
       assert(entry.kind == Type::ArrayRef);
       ArrayType& type = type_fields_.array_types[entry.map_index];
 
-      hash = ComputeHash(hash, type.field.type, rec_start);
-      hash = ComputeHash(hash, static_cast<Index>(type.field.mutable_));
+      hash_code = ComputeHashCode(hash_code, type.field.type, rec_start);
+      hash_code =
+          ComputeHashCode(hash_code, static_cast<Index>(type.field.mutable_));
       break;
     }
   }
 
-  return hash;
+  return hash_code;
 }
 
 bool TypeChecker::CheckTypeFields(Index actual,
@@ -406,12 +411,14 @@ bool TypeChecker::CheckTypeFields(Index actual,
   }
 }
 
-uint32_t TypeChecker::ComputeHash(uint32_t hash, Type& type, Index rec_start) {
+uint32_t TypeChecker::ComputeHashCode(uint32_t hash_code,
+                                      Type& type,
+                                      Index rec_start) {
   int32_t code = static_cast<Type::Enum>(type);
   if (type.IsNonTypedRef() && !type.IsNullableNonTypedRef()) {
-    hash ^= 0x80;
+    hash_code ^= 0x80;
   }
-  hash = ComputeHash(hash, static_cast<uint32_t>(code));
+  hash_code = ComputeHashCode(hash_code, static_cast<uint32_t>(code));
   if (type.IsReferenceWithIndex()) {
     Index index = type.GetReferenceIndex();
     if (index >= rec_start) {
@@ -419,9 +426,9 @@ uint32_t TypeChecker::ComputeHash(uint32_t hash, Type& type, Index rec_start) {
     } else {
       index = type_fields_.type_entries[index].canonical_index;
     }
-    hash = ComputeHash(hash, index);
+    hash_code = ComputeHashCode(hash_code, index);
   }
-  return hash;
+  return hash_code;
 }
 
 bool TypeChecker::CompareType(Type actual,
@@ -429,6 +436,11 @@ bool TypeChecker::CompareType(Type actual,
                               Type expected,
                               Index expected_rec_start,
                               bool is_equal) {
+  if (!type_fields_.IsValidType(actual) ||
+      !type_fields_.IsValidType(expected)) {
+    return false;
+  }
+
   if (actual == expected) {
     if (actual.IsReferenceWithIndex()) {
       Index actual_index = actual.GetReferenceIndex();
@@ -612,6 +624,17 @@ Result TypeChecker::PopAndCheckCall(const TypeVector& param_types,
   return result;
 }
 
+Result TypeChecker::PopAndCheckReturnCall(const TypeVector& result_types,
+                                          const char* desc) {
+  Label* func_label;
+  CHECK_RESULT(GetThisFunctionLabel(&func_label));
+  Result result =
+      CheckReturnSignature(result_types, func_label->result_types, desc);
+
+  CHECK_RESULT(SetUnreachable());
+  return result;
+}
+
 Result TypeChecker::PopAndCheck1Type(Type expected, const char* desc) {
   Result result = Result::Ok;
   result |= PeekAndCheckType(0, expected);
@@ -681,7 +704,7 @@ Result TypeChecker::PopAndCheckReference(Type* actual, const char* desc) {
   Result result = PeekType(0, actual);
 
   // Type::Any is a valid value for dead code, and
-  // it is replaced by an unkown reference.
+  // it is changed to an unkown reference.
   if (*actual == Type::Any || !actual->IsRef()) {
     if (*actual != Type::Any) {
       result = Result::Error;
@@ -704,6 +727,7 @@ Result TypeChecker::CheckOpcode1(Opcode opcode, const Limits* limits) {
   Result result = PopAndCheck1Type(
       GetMemoryParam(opcode.GetParamType1(), limits), opcode.GetName());
   PushType(opcode.GetResultType());
+  PushType(opcode.GetResultType2());
   return result;
 }
 
@@ -712,6 +736,7 @@ Result TypeChecker::CheckOpcode2(Opcode opcode, const Limits* limits) {
       PopAndCheck2Types(GetMemoryParam(opcode.GetParamType1(), limits),
                         opcode.GetParamType2(), opcode.GetName());
   PushType(opcode.GetResultType());
+  PushType(opcode.GetResultType2());
   return result;
 }
 
@@ -724,6 +749,22 @@ Result TypeChecker::CheckOpcode3(Opcode opcode,
       GetMemoryParam(opcode.GetParamType2(), limits2),
       GetMemoryParam(opcode.GetParamType3(), limits3), opcode.GetName());
   PushType(opcode.GetResultType());
+  PushType(opcode.GetResultType2());
+  return result;
+}
+
+Result TypeChecker::CheckOpcode4(Opcode opcode,
+                                 const Limits* limits1,
+                                 const Limits* limits2,
+                                 const Limits* limits3,
+                                 const Limits* limits4) {
+  Result result = PopAndCheck4Types(
+      GetMemoryParam(opcode.GetParamType1(), limits1),
+      GetMemoryParam(opcode.GetParamType2(), limits2),
+      GetMemoryParam(opcode.GetParamType2(), limits3),
+      GetMemoryParam(opcode.GetParamType3(), limits4), opcode.GetName());
+  PushType(opcode.GetResultType());
+  PushType(opcode.GetResultType2());
   return result;
 }
 
@@ -960,6 +1001,10 @@ Result TypeChecker::OnBinary(Opcode opcode) {
   return CheckOpcode2(opcode);
 }
 
+Result TypeChecker::OnQuaternary(Opcode opcode) {
+  return CheckOpcode4(opcode);
+}
+
 Result TypeChecker::OnBlock(const TypeVector& param_types,
                             const TypeVector& result_types) {
   Result result = PopAndCheckSignature(param_types, "block");
@@ -1099,19 +1144,18 @@ Result TypeChecker::OnCallIndirect(const TypeVector& param_types,
   return result;
 }
 
-Result TypeChecker::OnCallRef(Type type) {
-  return PopAndCheck1Type(type, "call_ref");
+Result TypeChecker::OnCallRef(Type type,
+                              const TypeVector& param_types,
+                              const TypeVector& result_types) {
+  Result result = PopAndCheck1Type(type, "call_ref");
+  result |= PopAndCheckCall(param_types, result_types, "call_ref");
+  return result;
 }
 
 Result TypeChecker::OnReturnCall(const TypeVector& param_types,
                                  const TypeVector& result_types) {
   Result result = PopAndCheckSignature(param_types, "return_call");
-  Label* func_label;
-  CHECK_RESULT(GetThisFunctionLabel(&func_label));
-  result |= CheckReturnSignature(result_types, func_label->result_types,
-                                 "return_call");
-
-  CHECK_RESULT(SetUnreachable());
+  result |= PopAndCheckReturnCall(result_types, "return_call");
   return result;
 }
 
@@ -1120,17 +1164,18 @@ Result TypeChecker::OnReturnCallIndirect(const TypeVector& param_types,
   Result result = PopAndCheck1Type(Type::I32, "return_call_indirect");
 
   result |= PopAndCheckSignature(param_types, "return_call_indirect");
-  Label* func_label;
-  CHECK_RESULT(GetThisFunctionLabel(&func_label));
-  result |= CheckReturnSignature(result_types, func_label->result_types,
-                                 "return_call_indirect");
-
-  CHECK_RESULT(SetUnreachable());
+  result |= PopAndCheckReturnCall(result_types, "return_call_indirect");
   return result;
 }
 
-Result TypeChecker::OnReturnCallRef(Type type) {
-  return PopAndCheck1Type(type, "return_call_ref");
+Result TypeChecker::OnReturnCallRef(Type type,
+                                    const TypeVector& param_types,
+                                    const TypeVector& result_types) {
+  Result result = PopAndCheck1Type(type, "return_call_ref");
+
+  result |= PopAndCheckSignature(param_types, "return_call_ref");
+  result |= PopAndCheckReturnCall(result_types, "return_call_ref");
+  return result;
 }
 
 Result TypeChecker::OnCompare(Opcode opcode) {
@@ -1546,6 +1591,7 @@ Result TypeChecker::OnSelect(const TypeVector& expected) {
     assert(expected.size() == 1);
     result |= CheckType(type1, expected[0]);
     result |= CheckType(type2, expected[0]);
+    result_type = expected[0];
   }
   PrintStackIfFailed(result, "select", result_type, result_type, Type::I32);
   result |= DropTypes(3);

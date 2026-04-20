@@ -180,7 +180,8 @@ set(WABT_LIBRARY_SRC
   src/binary.cc
   src/binding-hash.cc
   src/common.cc
-  src/config.cc # for window build
+  src/component.cc
+  src/config.cc # for windows build
   src/expr-visitor.cc
   src/feature.cc
   src/leb128.cc

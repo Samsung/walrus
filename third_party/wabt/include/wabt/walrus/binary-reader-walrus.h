@@ -49,10 +49,10 @@ public:
     virtual bool OnFeature(uint8_t prefix, std::string name) = 0;
 
     virtual void OnTypeCount(Index count) = 0;
-    virtual void OnRecursiveType(Index firstTypeIndex, Index typeCount) = 0;
-    virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes, GCTypeExtension* gcExt) = 0;
-    virtual bool OnStructType(Index index, Index fieldCount, TypeMut *fieldTypes, GCTypeExtension* gcExt) = 0;
-    virtual void OnArrayType(Index index, TypeMut fieldType, GCTypeExtension* gcExt) = 0;
+    virtual void OnRecursiveGroup(Index firstTypeIndex, Index typeCount) = 0;
+    virtual void OnFuncType(Index index, Index paramCount, Type *paramTypes, Index resultCount, Type *resultTypes, SupertypesInfo* supertypes) = 0;
+    virtual bool OnStructType(Index index, Index fieldCount, TypeMut *fieldTypes, SupertypesInfo* supertypes) = 0;
+    virtual void OnArrayType(Index index, TypeMut fieldType, SupertypesInfo* supertypes) = 0;
     virtual void EndTypeSection() = 0;
 
     virtual void OnImportCount(Index count) = 0;
@@ -133,6 +133,7 @@ public:
     virtual void OnBinaryExpr(uint32_t opcode) = 0;
     virtual void OnUnaryExpr(uint32_t opcode) = 0;
     virtual void OnTernaryExpr(uint32_t opcode) = 0;
+    virtual void OnQuaternaryExpr(uint32_t opcode) = 0;
     virtual void OnIfExpr(Type sigType) = 0;
     virtual void OnElseExpr() = 0;
     virtual void OnLoopExpr(Type sigType) = 0;

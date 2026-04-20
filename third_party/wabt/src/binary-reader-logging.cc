@@ -99,15 +99,15 @@ void BinaryReaderLogging::LogTypes(TypeVector& types) {
   LogTypes(types.size(), types.data());
 }
 
-void BinaryReaderLogging::LogGCInfo(GCTypeExtension* gc_ext) {
-  if (gc_ext->is_final_sub_type && gc_ext->sub_type_count == 0) {
+void BinaryReaderLogging::LogSupertypesInfo(SupertypesInfo* supertypes) {
+  if (supertypes->is_final_sub_type && supertypes->sub_type_count == 0) {
     return;
   }
 
-  LOGF_NOINDENT("(sub%s", gc_ext->is_final_sub_type ? " final" : "");
+  LOGF_NOINDENT("(sub%s", supertypes->is_final_sub_type ? " final" : "");
 
-  for (Index i = 0; i < gc_ext->sub_type_count; i++) {
-    LOGF_NOINDENT(" %" PRIindex, gc_ext->sub_types[i]);
+  for (Index i = 0; i < supertypes->sub_type_count; i++) {
+    LOGF_NOINDENT(" %" PRIindex, supertypes->sub_types[i]);
   }
   LOGF_NOINDENT("), ");
 }
@@ -157,24 +157,24 @@ Result BinaryReaderLogging::OnFuncType(Index index,
                                        Type* param_types,
                                        Index result_count,
                                        Type* result_types,
-                                       GCTypeExtension* gc_ext) {
+                                       SupertypesInfo* supertypes) {
   LOGF("OnFuncType(index: %" PRIindex ", ", index);
-  LogGCInfo(gc_ext);
+  LogSupertypesInfo(supertypes);
   LOGF_NOINDENT("params: ");
   LogTypes(param_count, param_types);
   LOGF_NOINDENT(", results: ");
   LogTypes(result_count, result_types);
   LOGF_NOINDENT(")\n");
   return reader_->OnFuncType(index, param_count, param_types, result_count,
-                             result_types, gc_ext);
+                             result_types, supertypes);
 }
 
 Result BinaryReaderLogging::OnStructType(Index index,
                                          Index field_count,
                                          TypeMut* fields,
-                                         GCTypeExtension* gc_ext) {
+                                         SupertypesInfo* supertypes) {
   LOGF("OnStructType(index: %" PRIindex ", ", index);
-  LogGCInfo(gc_ext);
+  LogSupertypesInfo(supertypes);
   LOGF_NOINDENT("fields: [");
   for (Index i = 0; i < field_count; ++i) {
     LogField(fields[i]);
@@ -183,18 +183,18 @@ Result BinaryReaderLogging::OnStructType(Index index,
     }
   }
   LOGF_NOINDENT("])\n");
-  return reader_->OnStructType(index, field_count, fields, gc_ext);
+  return reader_->OnStructType(index, field_count, fields, supertypes);
 }
 
 Result BinaryReaderLogging::OnArrayType(Index index,
                                         TypeMut field,
-                                        GCTypeExtension* gc_ext) {
+                                        SupertypesInfo* supertypes) {
   LOGF("OnArrayType(index: %" PRIindex ", ", index);
-  LogGCInfo(gc_ext);
+  LogSupertypesInfo(supertypes);
   LOGF_NOINDENT("field: ");
   LogField(field);
   LOGF_NOINDENT(")\n");
-  return reader_->OnArrayType(index, field, gc_ext);
+  return reader_->OnArrayType(index, field, supertypes);
 }
 
 Result BinaryReaderLogging::OnImport(Index index,
@@ -280,12 +280,12 @@ Result BinaryReaderLogging::OnImportTag(Index import_index,
 Result BinaryReaderLogging::BeginTable(Index index,
                                        Type elem_type,
                                        const Limits* elem_limits,
-                                       bool has_init_expr) {
+                                       TableInitExprStatus init_provided) {
   char buf[100];
   SPrintLimits(buf, sizeof(buf), elem_limits);
   LOGF("OnTable(index: %" PRIindex ", elem_type: %s, %s)\n", index,
        elem_type.GetName().c_str(), buf);
-  return reader_->BeginTable(index, elem_type, elem_limits, has_init_expr);
+  return reader_->BeginTable(index, elem_type, elem_limits, init_provided);
 }
 
 Result BinaryReaderLogging::OnMemory(Index index,
@@ -853,7 +853,7 @@ DEFINE_END(EndCustomSection)
 
 DEFINE_BEGIN(BeginTypeSection)
 DEFINE_INDEX(OnTypeCount)
-DEFINE_INDEX_INDEX(OnRecursiveType, "first_type_index", "type_count")
+DEFINE_INDEX_INDEX(OnRecursiveGroup, "first_type_index", "type_count")
 DEFINE_END(EndTypeSection)
 
 DEFINE_BEGIN(BeginImportSection)
@@ -896,6 +896,12 @@ DEFINE_INDEX(OnFunctionBodyCount)
 DEFINE_INDEX(EndFunctionBody)
 DEFINE_INDEX(OnLocalDeclCount)
 DEFINE0(EndLocalDecls)
+
+DEFINE_OPCODE(OnUnaryExpr)
+DEFINE_OPCODE(OnBinaryExpr)
+DEFINE_OPCODE(OnTernaryExpr)
+DEFINE_OPCODE(OnQuaternaryExpr)
+
 DEFINE_INDEX_INDEX(OnArrayCopyExpr, "dst_type_index", "src_type_index")
 DEFINE_INDEX_DESC(OnArrayFillExpr, "type_index")
 DEFINE_OPCODE_INDEX(OnArrayGetExpr, "type_index")
@@ -914,7 +920,6 @@ DEFINE_LOAD_STORE_OPCODE(OnAtomicStoreExpr);
 DEFINE_LOAD_STORE_OPCODE(OnAtomicWaitExpr);
 DEFINE_INDEX_DESC(OnAtomicFenceExpr, "consistency_model");
 DEFINE_LOAD_STORE_OPCODE(OnAtomicNotifyExpr);
-DEFINE_OPCODE(OnBinaryExpr)
 DEFINE_INDEX_DESC(OnCallExpr, "func_index")
 DEFINE_INDEX_INDEX(OnCallIndirectExpr, "sig_index", "table_index")
 DEFINE_TYPE(OnCallRefExpr)
@@ -969,8 +974,6 @@ DEFINE_INDEX_INDEX(OnStructSetExpr, "type_index", "field_index")
 DEFINE_INDEX_DESC(OnThrowExpr, "tag_index")
 DEFINE0(OnUnreachableExpr)
 DEFINE0(OnThrowRefExpr)
-DEFINE_OPCODE(OnUnaryExpr)
-DEFINE_OPCODE(OnTernaryExpr)
 DEFINE_SIMD_LOAD_STORE_LANE_OPCODE(OnSimdLoadLaneExpr);
 DEFINE_SIMD_LOAD_STORE_LANE_OPCODE(OnSimdStoreLaneExpr);
 DEFINE_END(EndCodeSection)

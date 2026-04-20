@@ -30,8 +30,8 @@ namespace wabt {
 #define PARSER_RESOURCE_LIMIT (uint16_t)16384
 
 enum class WASMOpcode : size_t {
-#define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
-                    text, decomp)                                            \
+#define WABT_OPCODE(rtype1, rtype2, type1, type2, type3, memSize, \
+                    prefix, code, name, text, decomp)             \
     name##Opcode,
 #include "wabt/opcode.def"
 #undef WABT_OPCODE
@@ -102,11 +102,11 @@ struct WASMCodeInfo {
 };
 
 WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
-#define WABT_OPCODE(rtype, type1, type2, type3, memSize, prefix, code, name, \
-                    text, decomp)                                            \
-    { WASMOpcode::name##Opcode,                                              \
-      WASMCodeInfo::rtype,                                                   \
-      { WASMCodeInfo::type1, WASMCodeInfo::type2, WASMCodeInfo::type3 },     \
+#define WABT_OPCODE(rtype1, rtype2, type1, type2, type3, memSize,        \
+                    prefix, code, name, text, decomp)                    \
+    { WASMOpcode::name##Opcode,                                          \
+      WASMCodeInfo::rtype1,                                              \
+      { WASMCodeInfo::type1, WASMCodeInfo::type2, WASMCodeInfo::type3 }, \
       text },
 #include "wabt/opcode.def"
 
@@ -195,12 +195,12 @@ static size_t getRefCountOfMutTypes(TypeMut* types, Index count)
     return result;
 }
 
-static const Walrus::CompositeType** toSubType(GCTypeExtension* gcExt)
+static const Walrus::CompositeType** toSubType(SupertypesInfo* supertypes)
 {
-    if (gcExt->sub_type_count == 0) {
+    if (supertypes->sub_type_count == 0) {
         return reinterpret_cast<const Walrus::CompositeType**>(Walrus::TypeStore::NoIndex);
     }
-    return reinterpret_cast<const Walrus::CompositeType**>(gcExt->sub_types[0]);
+    return reinterpret_cast<const Walrus::CompositeType**>(supertypes->sub_types[0]);
 }
 
 static Walrus::SegmentMode toSegmentMode(uint8_t flags)
@@ -920,7 +920,7 @@ public:
         m_result.m_compositeTypes.reserve(count);
     }
 
-    virtual void OnRecursiveType(Index firstTypeIndex, Index typeCount) override
+    virtual void OnRecursiveGroup(Index firstTypeIndex, Index typeCount) override
     {
         m_recursiveTypeStart = firstTypeIndex;
         m_recursiveTypeEnd = firstTypeIndex + typeCount;
@@ -931,7 +931,7 @@ public:
                             Type* paramTypes,
                             Index resultCount,
                             Type* resultTypes,
-                            GCTypeExtension* gcExt) override
+                            SupertypesInfo* supertypes) override
     {
         if (paramCount > PARSER_RESOURCE_LIMIT || resultCount > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many function params or results.");
@@ -939,7 +939,7 @@ public:
 
         Walrus::FunctionType* functionType = new Walrus::FunctionType(paramCount, getRefCountOfTypes(paramTypes, paramCount),
                                                                       resultCount, getRefCountOfTypes(resultTypes, resultCount),
-                                                                      gcExt->is_final_sub_type, toSubType(gcExt));
+                                                                      supertypes->is_final_sub_type, toSubType(supertypes));
 
         Walrus::TypeVector* param = functionType->initParam();
         size_t refIdx = 0;
@@ -971,7 +971,7 @@ public:
     virtual bool OnStructType(Index index,
                               Index fieldCount,
                               TypeMut* fieldTypes,
-                              GCTypeExtension* gcExt) override
+                              SupertypesInfo* supertypes) override
     {
         Walrus::MutableTypeVector* fields = new Walrus::MutableTypeVector(fieldCount, getRefCountOfMutTypes(fieldTypes, fieldCount));
         size_t refIdx = 0;
@@ -984,7 +984,7 @@ public:
         }
 
         ASSERT(index == m_result.m_compositeTypes.size());
-        Walrus::StructType* type = new Walrus::StructType(fields, gcExt->is_final_sub_type, toSubType(gcExt));
+        Walrus::StructType* type = new Walrus::StructType(fields, supertypes->is_final_sub_type, toSubType(supertypes));
         if (!type->initialize()) {
             delete type;
             return false;
@@ -999,12 +999,12 @@ public:
 
     virtual void OnArrayType(Index index,
                              TypeMut fieldType,
-                             GCTypeExtension* gcExt) override
+                             SupertypesInfo* supertypes) override
     {
         ASSERT(index == m_result.m_compositeTypes.size());
         Walrus::Type type = toValueKind(fieldType.type, nullptr);
         m_result.m_compositeTypes.push_back(new Walrus::ArrayType(Walrus::MutableType(type.type(), type.ref(), fieldType.mutable_),
-                                                                  gcExt->is_final_sub_type, toSubType(gcExt)));
+                                                                  supertypes->is_final_sub_type, toSubType(supertypes)));
         if (index < m_recursiveTypeEnd && index > m_recursiveTypeStart) {
             Walrus::TypeStore::ConnectTypes(m_result.m_compositeTypes, index);
         }
@@ -1784,6 +1784,11 @@ public:
             ASSERT_NOT_REACHED();
             break;
         }
+    }
+
+    virtual void OnQuaternaryExpr(uint32_t opcode) override
+    {
+        RELEASE_ASSERT_NOT_REACHED();
     }
 
     virtual void OnIfExpr(Type sigType) override

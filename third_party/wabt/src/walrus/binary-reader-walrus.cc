@@ -82,6 +82,7 @@ struct Label {
 static Features getFeatures(const uint32_t featureFlags) {
     Features features;
     features.enable_exceptions();
+    features.enable_compact_imports();
     // TODO: should use command line flag for this (--enable-threads)
     features.enable_threads();
     // TODO: should use command line flag for this (--enable-relaxed-simd)
@@ -98,13 +99,11 @@ static Features getFeatures(const uint32_t featureFlags) {
 class BinaryReaderDelegateWalrus: public BinaryReaderDelegate {
 public:
     BinaryReaderDelegateWalrus(WASMBinaryReaderDelegate *delegate, const std::string &filename, const uint32_t featureFlags) :
-        m_externalDelegate(delegate), m_filename(filename), m_validator(&m_errors, ValidateOptions(getFeatures(featureFlags))), m_lastInitType(Type::___), m_currentElementTableIndex(0) {
-
+        m_externalDelegate(delegate), m_validator(&m_errors, filename, ValidateOptions(getFeatures(featureFlags))), m_lastInitType(Type::___), m_currentElementTableIndex(0) {
     }
 
     Location GetLocation() const {
         Location loc;
-        loc.filename = m_filename;
         loc.offset = state->offset;
         return loc;
     }
@@ -214,25 +213,25 @@ public:
         m_externalDelegate->OnTypeCount(count);
         return Result::Ok;
     }
-    Result OnRecursiveType(Index first_type_index, Index type_count) override
+    Result OnRecursiveGroup(Index first_type_index, Index type_count) override
     {
-        CHECK_RESULT(m_validator.OnRecursiveType(first_type_index, type_count));
-        m_externalDelegate->OnRecursiveType(first_type_index, type_count);
+        CHECK_RESULT(m_validator.OnRecursiveGroup(first_type_index, type_count));
+        m_externalDelegate->OnRecursiveGroup(first_type_index, type_count);
         return Result::Ok;
     }
-    Result OnFuncType(Index index, Index param_count, Type *param_types, Index result_count, Type *result_types, GCTypeExtension* gc_ext) override {
-        CHECK_RESULT(m_validator.OnFuncType(GetLocation(), param_count, param_types, result_count, result_types, index, gc_ext));
+    Result OnFuncType(Index index, Index param_count, Type *param_types, Index result_count, Type *result_types, SupertypesInfo* supertypes) override {
+        CHECK_RESULT(m_validator.OnFuncType(GetLocation(), param_count, param_types, result_count, result_types, index, supertypes));
         m_functionTypes.push_back(SimpleFuncType( { ToInterp(param_count, param_types), ToInterp(result_count, result_types) }));
-        m_externalDelegate->OnFuncType(index, param_count, param_types, result_count, result_types, gc_ext);
+        m_externalDelegate->OnFuncType(index, param_count, param_types, result_count, result_types, supertypes);
         return Result::Ok;
     }
-    Result OnStructType(Index index, Index field_count, TypeMut *fields, GCTypeExtension* gc_ext) override {
-        CHECK_RESULT(m_validator.OnStructType(GetLocation(), field_count, fields, gc_ext));
-        return m_externalDelegate->OnStructType(index, field_count, fields, gc_ext) ? Result::Ok : Result::Error;
+    Result OnStructType(Index index, Index field_count, TypeMut *fields, SupertypesInfo* supertypes) override {
+        CHECK_RESULT(m_validator.OnStructType(GetLocation(), field_count, fields, supertypes));
+        return m_externalDelegate->OnStructType(index, field_count, fields, supertypes) ? Result::Ok : Result::Error;
     }
-    Result OnArrayType(Index index, TypeMut field, GCTypeExtension* gc_ext) override {
-        CHECK_RESULT(m_validator.OnArrayType(GetLocation(), field, gc_ext));
-        m_externalDelegate->OnArrayType(index, field, gc_ext);
+    Result OnArrayType(Index index, TypeMut field, SupertypesInfo* supertypes) override {
+        CHECK_RESULT(m_validator.OnArrayType(GetLocation(), field, supertypes));
+        m_externalDelegate->OnArrayType(index, field, supertypes);
         return Result::Ok;
     }
     Result EndTypeSection() override {
@@ -257,7 +256,7 @@ public:
         return Result::Ok;
     }
     Result OnImportTable(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
-        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, true, false));
+        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, wabt::TableImportStatus::TableIsImported, wabt::TableInitExprStatus::TableWithoutInitExpression));
         m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         return Result::Ok;
@@ -307,8 +306,8 @@ public:
         m_externalDelegate->OnTableCount(count);
         return Result::Ok;
     }
-    Result BeginTable(Index index, Type elem_type, const Limits* elem_limits, bool has_init_expr) override {
-        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, false, has_init_expr));
+    Result BeginTable(Index index, Type elem_type, const Limits* elem_limits, TableInitExprStatus init_provided) override {
+        CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, wabt::TableImportStatus::TableIsNotImported, init_provided));
         m_tableTypes.push_back(elem_type);
         m_externalDelegate->OnTable(index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
         assert(m_lastInitType == Type::___);
@@ -1008,6 +1007,12 @@ public:
         m_externalDelegate->OnTernaryExpr(opcode);
         return Result::Ok;
     }
+    Result OnQuaternaryExpr(Opcode opcode) override {
+        CHECK_RESULT(m_validator.OnQuaternary(GetLocation(), opcode));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnQuaternaryExpr(opcode);
+        return Result::Ok;
+    }
     Result OnUnreachableExpr() override {
         CHECK_RESULT(m_validator.OnUnreachable(GetLocation()));
         SHOULD_GENERATE_BYTECODE;
@@ -1582,7 +1587,6 @@ public:
     }
 
     WASMBinaryReaderDelegate *m_externalDelegate;
-    const std::string &m_filename;
     Errors m_errors;
     SharedValidator m_validator;
     std::vector<Label> m_labelStack;

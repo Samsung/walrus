@@ -37,7 +37,6 @@ struct WastParseOptions {
   WastParseOptions(const Features& features) : features(features) {}
 
   Features features;
-  bool debug_parsing = false;
   bool parse_binary_modules = true;
 };
 
@@ -50,6 +49,8 @@ class WastParser {
   void WABT_PRINTF_FORMAT(3, 4) Error(Location, const char* format, ...);
   Result ParseModule(std::unique_ptr<Module>* out_module);
   Result ParseScript(std::unique_ptr<Script>* out_script);
+  Result ParseComponent(std::unique_ptr<Component>* out_component);
+  bool IsComponent();
 
   std::unique_ptr<Script> ReleaseScript();
 
@@ -143,6 +144,9 @@ class WastParser {
   // Returns true if the next two tokens are form reference type - (ref $t)
   bool PeekMatchRefType();
 
+  // Returns true if the next token represents a var.
+  bool PeekMatchVar();
+
   // Returns true if the next token's type is equal to the parameter. If so,
   // then the token is consumed.
   bool Match(TokenType);
@@ -158,6 +162,14 @@ class WastParser {
   // Consume one token and return it.
   Token Consume();
 
+  // Drop tokens.
+  void DropToken() {
+    tokens_.pop_front();
+  }
+  void DropTwoTokens() {
+    tokens_.pop_both();
+  }
+
   // Give the Match() function a clearer name when used to optionally consume a
   // token (used for printing better error messages).
   void ConsumeIfLpar() { Match(TokenType::Lpar); }
@@ -170,9 +182,13 @@ class WastParser {
   // synchronized.
   Result Synchronize(SynchronizeFunc);
 
-  bool ParseBindVarOpt(std::string* name);
+  // Check the maximum allowed declarations.
+  Result CheckIndexRange(Location& loc, size_t size, const char* decl);
+
+  Result ParseVarText(Token& token, std::string* out_text);
+  Result ParseBindVarOpt(std::string* name);
   Result ParseVar(Var* out_var);
-  bool ParseVarOpt(Var* out_var, Var default_var = Var());
+  Result ParseVarOpt(Var* out_var, Var default_var = Var());
   Result ParseOffsetExpr(ExprList* out_expr_list);
   bool ParseOffsetExprOpt(ExprList* out_expr_list);
   Result ParseTextList(std::vector<uint8_t>* out_data);
@@ -180,7 +196,7 @@ class WastParser {
   Result ParseVarList(VarVector* out_var_list);
   bool ParseElemExprOpt(ExprList* out_elem_expr);
   bool ParseElemExprListOpt(ExprListVector* out_list);
-  bool ParseElemExprVarListOpt(ExprListVector* out_list);
+  Result ParseElemExprVarListOpt(ExprListVector* out_list);
   Result ParseRefDeclaration(Var* out_type);
   Result ParseValueType(Var* out_type, bool is_field = false);
   Result ParseValueTypeList(
@@ -282,6 +298,56 @@ class WastParser {
   Result ParseMemoryBinaryExpr(Location, std::unique_ptr<Expr>*);
   Result ParseSimdLane(Location, uint64_t*);
 
+  Result ParseComponentCoreSort(ComponentSort* out_sort);
+  Result ParseComponentSort(ComponentSort* out_sort);
+  Result ParseComponentFindVar(Token&,
+                               Component::StringTable*,
+                               const std::string** out_text);
+  Result ParseComponentAppendVar(Token&,
+                                 Component::StringTable*,
+                                 const std::string** out_text);
+  Result ParseComponentName(ComponentDefList*,
+                            Component::StringTable*,
+                            ComponentSort,
+                            const std::string** out_name);
+  Result ParseComponentIndex(ComponentDefList*,
+                             Component::StringTable*,
+                             ComponentSort,
+                             ComponentIndexLoc* out_index);
+  Result ParseComponentString(Component::StringTable*,
+                              ComponentDef::StringLoc* out_string);
+  Result ParseComponentCanonOpts(ComponentDefList*,
+                                 Component::StringTable*,
+                                 ComponentCanonOpts::OptionVector* out_options);
+  Result ParseComponentAlias(ComponentDefList*, Component::StringTable*);
+  Result ParseComponentExtern(ComponentDefList*, Component::StringTable*);
+  Result ParseComponentDefValType(ComponentDefList*,
+                                  Component::StringTable*,
+                                  ComponentTypeLoc* out_type);
+  Result ParseComponentValType(ComponentDefList*,
+                               Component::StringTable*,
+                               ComponentTypeLoc* out_type);
+  Result ParseComponentFuncType(ComponentDefList*, Component::StringTable*);
+  Result ParseComponentResourceType(ComponentDefList*, Component::StringTable*);
+  Result ParseComponentInstanceType(ComponentDefList*,
+                                    Component::StringTable*);
+  Result ParseComponentType(ComponentDefList*, Component::StringTable*);
+  Result ParseComponentCoreInstance(ComponentData*, Component::StringTable*);
+  Result ParseComponentInlineCoreInstance(const std::string* name,
+                                          ComponentData*,
+                                          Component::StringTable*);
+  Result ParseComponentInlineInstance(const std::string* name,
+                                      ComponentData*,
+                                      Component::StringTable*);
+  Result ParseComponentInstance(bool is_core,
+                                ComponentData*,
+                                Component::StringTable*);
+  Result ParseComponentCoreFunc(ComponentData*,
+                                Component::StringTable*);
+  Result ParseComponentFunc(ComponentData*,
+                            Component::StringTable*);
+  Result ParseComponent(ComponentData*, Component::StringTable*);
+
   Result ParseCommandList(Script*, CommandPtrVector*);
   Result ParseCommand(Script*, CommandPtr*);
   Result ParseAssertExceptionCommand(CommandPtr*);
@@ -351,6 +417,7 @@ class WastParser {
    public:
     void push_back(Token t);
     void pop_front();
+    void pop_both();
     const Token& at(size_t n) const;
     const Token& front() const;
     bool empty() const;
@@ -369,6 +436,14 @@ Result ParseWastScript(WastLexer* lexer,
                        std::unique_ptr<Script>* out_script,
                        Errors*,
                        WastParseOptions* options);
+
+// The out_module is optional. If it is non null, and the input does not
+// starts with "(component", the parsing falls back to module parsing.
+Result ParseWatComponent(WastLexer* lexer,
+                         std::unique_ptr<Component>* out_component,
+                         std::unique_ptr<Module>* out_module,
+                         Errors*,
+                         WastParseOptions* options);
 
 }  // namespace wabt
 
