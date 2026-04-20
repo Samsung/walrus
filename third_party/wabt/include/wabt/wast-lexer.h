@@ -28,9 +28,6 @@
 #include "wabt/opcode.h"
 #include "wabt/token.h"
 
-#include "string-view-lite/string_view.h"
-#include "wabt/make-unique.h"
-
 namespace wabt {
 
 class ErrorHandler;
@@ -51,6 +48,8 @@ class WastLexer {
                                                       Errors*);
 
   Token GetToken();
+
+  nonstd::string_view Filename() const { return filename_; }
 
   // TODO(binji): Move this out of the lexer.
   std::unique_ptr<LexerSourceLineFinder> MakeLineFinder() {
@@ -92,7 +91,7 @@ class WastLexer {
     return ReadReservedChars() == ReservedChars::None;
   }
   void ReadSign();
-  Token GetStringToken();
+  Token GetStringToken(TokenType);
   Token GetNumberToken(TokenType);
   Token GetHexNumberToken(TokenType);
   Token GetInfToken();

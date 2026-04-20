@@ -22,7 +22,6 @@
 #include <vector>
 
 #include "wabt/common.h"
-#include "string-view-lite/string_view.h"
 
 namespace wabt {
 

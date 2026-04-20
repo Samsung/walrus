@@ -44,20 +44,20 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
 
   Result BeginTypeSection(Offset size) override;
   Result OnTypeCount(Index count) override;
-  Result OnRecursiveType(Index first_type_index, Index type_count) override;
+  Result OnRecursiveGroup(Index first_type_index, Index type_count) override;
   Result OnFuncType(Index index,
                     Index param_count,
                     Type* param_types,
                     Index result_count,
                     Type* result_types,
-                    GCTypeExtension* gc_ext) override;
+                    SupertypesInfo* supertypes) override;
   Result OnStructType(Index index,
                       Index field_count,
                       TypeMut* fields,
-                      GCTypeExtension* gc_ext) override;
+                      SupertypesInfo* supertypes) override;
   Result OnArrayType(Index index,
                      TypeMut field,
-                     GCTypeExtension* gc_ext) override;
+                     SupertypesInfo* supertypes) override;
   Result EndTypeSection() override;
 
   Result BeginImportSection(Offset size) override;
@@ -106,7 +106,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result BeginTable(Index index,
                     Type elem_type,
                     const Limits* elem_limits,
-                    bool has_init_expr) override;
+                    TableInitExprStatus init_provided) override;
   Result BeginTableInitExpr(Index index) override;
   Result EndTableInitExpr(Index index) override;
   Result EndTable(Index index) override;
@@ -165,6 +165,12 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result OnOpcodeV128(v128 value) override;
   Result OnOpcodeBlockSig(Type sig_type) override;
   Result OnOpcodeType(Type type) override;
+
+  Result OnUnaryExpr(Opcode opcode) override;
+  Result OnBinaryExpr(Opcode opcode) override;
+  Result OnTernaryExpr(Opcode opcode) override;
+  Result OnQuaternaryExpr(Opcode opcode) override;
+
   Result OnArrayCopyExpr(Index dst_type_index, Index src_type_index) override;
   Result OnArrayFillExpr(Index type_index) override;
   Result OnArrayGetExpr(Opcode opcode, Index type_index) override;
@@ -192,7 +198,6 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
                                 Index memidx,
                                 Address alignment_log2,
                                 Address offset) override;
-  Result OnBinaryExpr(Opcode opcode) override;
   Result OnBlockExpr(Type sig_type) override;
   Result OnBrExpr(Index depth) override;
   Result OnBrIfExpr(Index depth) override;
@@ -275,8 +280,6 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result OnTryExpr(Type sig_type) override;
   Result OnTryTableExpr(Type sig_type,
                         const CatchClauseVector& catches) override;
-  Result OnUnaryExpr(Opcode opcode) override;
-  Result OnTernaryExpr(Opcode opcode) override;
   Result OnUnreachableExpr() override;
   Result OnAtomicWaitExpr(Opcode opcode,
                           Index memidx,
@@ -463,7 +466,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   void LogType(Type type);
   void LogTypes(Index type_count, Type* types);
   void LogTypes(TypeVector& types);
-  void LogGCInfo(GCTypeExtension* gc_ext);
+  void LogSupertypesInfo(SupertypesInfo* supertypes);
   void LogField(TypeMut field);
 
   Stream* stream_;

@@ -44,6 +44,7 @@ const char* ExprTypeName[] = {
     "AtomicFence",
     "AtomicWait",
     "Binary",
+    "Quaternary",
     "Block",
     "Br",
     "BrIf",
@@ -392,17 +393,18 @@ Index Module::GetFuncTypeIndex(const FuncSignature& sig) const {
   size_t range_index = 0;
   size_t range_start = types.size();
 
-  if (range_index < recursive_ranges.size()) {
-    range_start = recursive_ranges[range_index].first_type_index;
+  if (range_index < rec_group_ranges.size()) {
+    range_start = rec_group_ranges[range_index].first_type_index;
   }
 
   for (size_t i = 0; i < types.size(); ++i) {
+    // Functions in recursice groups must never match.
     if (i == range_start) {
-      i += recursive_ranges[range_index].type_count - 1;
+      i += rec_group_ranges[range_index].type_count - 1;
       range_index++;
 
-      if (range_index < recursive_ranges.size()) {
-        range_start = recursive_ranges[range_index].first_type_index;
+      if (range_index < rec_group_ranges.size()) {
+        range_start = rec_group_ranges[range_index].first_type_index;
       }
       continue;
     }
@@ -476,10 +478,6 @@ void Module::AppendField(std::unique_ptr<TypeModuleField> field) {
     type_bindings.emplace(type.name, Binding(field->loc, types.size()));
   }
   types.push_back(&type);
-  fields.push_back(std::move(field));
-}
-
-void Module::AppendField(std::unique_ptr<EmptyRecModuleField> field) {
   fields.push_back(std::move(field));
 }
 
@@ -626,10 +624,6 @@ void Module::AppendField(std::unique_ptr<ModuleField> field) {
     case ModuleFieldType::Tag:
       AppendField(cast<TagModuleField>(std::move(field)));
       break;
-
-    case ModuleFieldType::EmptyRec:
-      AppendField(cast<EmptyRecModuleField>(std::move(field)));
-      break;
   }
 }
 
@@ -773,8 +767,8 @@ void Var::Destroy() {
   }
 }
 
-void TypeEntryGCTypeExtension::InitSubTypes(Index* sub_type_list,
-                                            Index sub_type_count) {
+void TypeEntrySupertypesInfo::InitSubTypes(Index* sub_type_list,
+                                           Index sub_type_count) {
   sub_types.clear();
   sub_types.reserve(sub_type_count);
 
@@ -837,6 +831,106 @@ uint8_t DataSegment::GetFlags(const Module* module) const {
   }
 
   return flags;
+}
+
+const ComponentDef* ComponentDefList::Find(ComponentSort sort,
+                                           const std::string* name,
+                                           Index* out_index) const {
+  if (out_index != nullptr) {
+    *out_index = kInvalidIndex;
+  }
+
+  if (sort == ComponentSort::Type) {
+    size_t size = type_list_.size();
+    for (size_t i = 0; i < size; i++) {
+      const ComponentDef* definition = type_list_[i];
+      if (definition->Name() == name) {
+        if (out_index != nullptr) {
+          *out_index = static_cast<Index>(i);
+        }
+        return definition;
+      }
+    }
+    return nullptr;
+  }
+
+  size_t size = list_.size();
+  Index index = 0;
+  for (size_t i = 0; i < size; i++) {
+    const ComponentDef* definition = list_[i].get();
+    if (definition->sort() == sort) {
+      if (definition->Name() == name) {
+        if (out_index != nullptr) {
+          *out_index = index;
+        }
+        return definition;
+      }
+      index++;
+    }
+  }
+  return nullptr;
+}
+
+const ComponentDef* ComponentDefList::Find(ComponentSort sort,
+                                           Index index) const {
+  if (sort == ComponentSort::Type) {
+    if (type_list_.size() <= index) {
+      return nullptr;
+    }
+    return type_list_[index];
+  }
+
+  size_t size = list_.size();
+  for (size_t i = 0; i < size; i++) {
+    const ComponentDef* definition = list_[i].get();
+    if (definition->sort() == sort) {
+      if (index == 0) {
+        return definition;
+      }
+      index--;
+    }
+  }
+  return nullptr;
+}
+
+Index ComponentDefList::SortSize(ComponentSort sort) const {
+  if (sort == ComponentSort::Type) {
+    return static_cast<Index>(type_list_.size());
+  }
+
+  size_t size = list_.size();
+  Index count = 0;
+  for (size_t i = 0; i < size; i++) {
+    if (list_[i].get()->sort() == sort) {
+      count++;
+    }
+  }
+  return count;
+}
+
+const std::string* Component::StringTable::Find(
+    const nonstd::string_view& name) const {
+  auto str = MakeUnique<std::string>(name);
+
+  std::set<std::string*>::iterator it = string_map_.find(str.get());
+  if (it != string_map_.end()) {
+    return *it;
+  }
+  return nullptr;
+}
+
+const std::string* Component::StringTable::Append(
+    const nonstd::string_view& name) {
+  auto str = MakeUnique<std::string>(name);
+
+  auto it = string_map_.insert(str.get());
+  if (!it.second) {
+    return *it.first;
+  }
+
+  std::string* ref = str.get();
+  string_table_->push_back(std::move(str));
+  return ref;
 }
 
 }  // namespace wabt

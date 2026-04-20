@@ -23,8 +23,6 @@
 
 #include "wabt/common.h"
 
-#include "string-view-lite/string_view.h"
-
 namespace wabt {
 
 enum class ErrorLevel {
@@ -45,11 +43,16 @@ static inline const char* GetErrorLevelName(ErrorLevel error_level) {
 class Error {
  public:
   Error() : error_level(ErrorLevel::Error) {}
-  Error(ErrorLevel error_level, Location loc, nonstd::string_view message)
-      : error_level(error_level), loc(loc), message(message) {}
+  Error(ErrorLevel error_level,
+        Location loc,
+        nonstd::string_view filename,
+        nonstd::string_view message)
+      : error_level(error_level), loc(loc), filename(filename),
+        message(message) {}
 
   ErrorLevel error_level;
   Location loc;
+  nonstd::string_view filename;
   std::string message;
 };
 

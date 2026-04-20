@@ -156,7 +156,8 @@ void WABT_PRINTF_FORMAT(3, 4) NameResolver::PrintError(const Location* loc,
                                                        ...) {
   result_ = Result::Error;
   WABT_SNPRINTF_ALLOCA(buffer, length, format);
-  errors_->emplace_back(ErrorLevel::Error, *loc, buffer);
+  errors_->emplace_back(ErrorLevel::Error, *loc, current_module_->filename,
+                        buffer);
 }
 
 void NameResolver::PushLabel(const std::string& label) {
@@ -723,10 +724,10 @@ void NameResolver::VisitGlobal(Global* global) {
 }
 
 void NameResolver::VisitType(TypeEntry* type) {
-  size_t size = type->gc_ext.sub_types.size();
+  size_t size = type->supertypes.sub_types.size();
 
   for (size_t i = 0; i < size; i++) {
-    ResolveFuncTypeVar(&type->gc_ext.sub_types[i]);
+    ResolveFuncTypeVar(&type->supertypes.sub_types[i]);
   }
 }
 

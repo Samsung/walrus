@@ -164,7 +164,7 @@ class Type {
         return type_index_ == ReferenceOrNull ? "nullexternref" : "(ref noextern)";
       case Type::NullRef:
         if (type_index_ == kBottomRef) {
-          return "(ref something)";
+          return "(ref any)";
         }
         return type_index_ == ReferenceOrNull ? "nullref" : "(ref none)";
       case Type::FuncRef:
@@ -195,7 +195,7 @@ class Type {
       case Type::NullFuncRef:   return "nofunc";
       case Type::NullExternRef: return "noextern";
       case Type::NullRef:
-        return (type_index_ == kBottomRef) ? "something" : "none";
+        return (type_index_ == kBottomRef) ? "any" : "none";
       case Type::FuncRef:       return "func";
       case Type::ExternRef:     return "extern";
       case Type::ExnRef:        return "exn";
@@ -306,13 +306,85 @@ class Type {
   }
 
  private:
-  // Special value representing an unknown reference.
+  // Special value which represents an any reference.
   static const uint32_t kBottomRef = 0x2 | ReferenceNonNull;
 
   Enum enum_;
   // This index is 0 for non-references, so a zeroed
   // memory area represents a valid Type::Any type.
   // It contains an index for references with type index.
+  Index type_index_;
+};
+
+class ComponentType {
+ public:
+  // Matches binary format, do not change.
+  enum Enum : uint8_t {
+    Bool = 0x7f,
+    S8 = 0x7e,
+    U8 = 0x7d,
+    S16 = 0x7c,
+    U16 = 0x7b,
+    S32 = 0x7a,
+    U32 = 0x79,
+    S64 = 0x78,
+    U64 = 0x77,
+    F32 = 0x76,
+    F64 = 0x75,
+    Char = 0x74,
+    String = 0x73,
+    ErrorContext = 0x64,
+
+    TypeIndex = 0,
+    TypeNone = 1,
+  };
+
+  ComponentType()
+      : type_(Enum::TypeNone), type_index_(0) {}
+
+  ComponentType(Enum type)
+      : type_(type), type_index_(0) {
+    assert(type != Enum::TypeIndex && type != Enum::TypeNone);
+  }
+
+  ComponentType(Index index)
+      : type_(Enum::TypeIndex), type_index_(index) {}
+
+  bool IsNone() const {
+    return type_ == Enum::TypeNone;
+  }
+
+  bool IsIndex() const {
+    return type_ == Enum::TypeIndex;
+  }
+
+  Enum GetType() const {
+    return type_;
+  }
+
+  Index GetIndex() const {
+    assert(IsIndex());
+    return type_index_;
+  }
+
+  const char* GetName() const;
+
+  static bool IsPrimitiveType(uint8_t code) {
+    Enum type = static_cast<Enum>(code);
+    return type == Bool || type == S8 || type == U8 || type == S16 ||
+           type == U16 || type == S32 || type == U32 || type == S64 ||
+           type == U64 || type == F32 || type == F64 || type == Char ||
+           type == String || type == ErrorContext;
+  }
+
+  static bool IsPrimitiveTypeS64(int64_t code) {
+    int8_t mask = 0x7f;
+    return (code | mask) == ~static_cast<int64_t>(0) &&
+           IsPrimitiveType(static_cast<uint8_t>(code & mask));
+  }
+
+ private:
+  Enum type_;
   Index type_index_;
 };
 

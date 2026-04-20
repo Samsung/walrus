@@ -16,8 +16,6 @@
 
 #include "wabt/token.h"
 
-#include "string-view-lite/string_view.h"
-
 namespace wabt {
 
 const char* GetTokenTypeName(TokenType token_type) {

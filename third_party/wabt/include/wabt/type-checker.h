@@ -79,13 +79,13 @@ class TypeChecker {
     TypeMut field;
   };
 
-  struct RecursiveRange {
-    RecursiveRange(Index start_index, Index type_count)
-        : start_index(start_index), type_count(type_count), hash(0) {}
+  struct RecGroup {
+    RecGroup(Index start_index, Index type_count)
+        : start_index(start_index), type_count(type_count), hash_code(0) {}
 
     Index start_index;
     Index type_count;
-    uint32_t hash;
+    uint32_t hash_code;
   };
 
   struct TypeFields {
@@ -114,6 +114,11 @@ class TypeChecker {
       array_types.emplace_back(array_type);
     }
 
+    bool IsValidType(Type type) {
+      return !type.IsReferenceWithIndex() ||
+             type.GetReferenceIndex() < type_entries.size();
+    }
+
     Type GetGenericType(Type type) {
       if (type.IsReferenceWithIndex()) {
         return Type(type_entries[type.GetReferenceIndex()].kind,
@@ -128,7 +133,7 @@ class TypeChecker {
     std::vector<FuncType> func_types;
     std::vector<StructType> struct_types;
     std::vector<ArrayType> array_types;
-    std::vector<RecursiveRange> recursive_ranges;
+    std::vector<RecGroup> rec_groups;
   };
 
   struct Label {
@@ -164,6 +169,10 @@ class TypeChecker {
   Result GetCatchCount(Index depth, Index* out_depth);
 
   Result BeginFunction(const TypeVector& sig);
+  Result OnUnary(Opcode);
+  Result OnBinary(Opcode);
+  Result OnQuaternary(Opcode);
+  Result OnTernary(Opcode);
   Result OnArrayCopy(Type dst_ref_type,
                      TypeMut& dst_array_type,
                      Type src_ref_type,
@@ -189,7 +198,6 @@ class TypeChecker {
   Result OnAtomicRmw(Opcode, const Limits& limits);
   Result OnAtomicRmwCmpxchg(Opcode, const Limits& limits);
   Result OnAtomicWait(Opcode, const Limits& limits);
-  Result OnBinary(Opcode);
   Result OnBlock(const TypeVector& param_types, const TypeVector& result_types);
   Result OnBr(Index depth);
   Result OnBrIf(Index depth);
@@ -203,12 +211,16 @@ class TypeChecker {
   Result OnCallIndirect(const TypeVector& param_types,
                         const TypeVector& result_types,
                         const Limits& table_limits);
-  Result OnCallRef(Type);
+  Result OnCallRef(Type type,
+                   const TypeVector& param_types,
+                   const TypeVector& result_types);
   Result OnReturnCall(const TypeVector& param_types,
                       const TypeVector& result_types);
   Result OnReturnCallIndirect(const TypeVector& param_types,
                               const TypeVector& result_types);
-  Result OnReturnCallRef(Type);
+  Result OnReturnCallRef(Type type,
+                         const TypeVector& param_types,
+                         const TypeVector& result_types);
   Result OnCatch(const TypeVector& sig);
   Result OnCompare(Opcode);
   Result OnConst(Type);
@@ -258,7 +270,6 @@ class TypeChecker {
   Result OnStructNew(Type ref_type, const StructType&);
   Result OnStructNewDefault(Type ref_type);
   Result OnStructSet(Type ref_type, const StructType&, Index field);
-  Result OnTernary(Opcode);
   Result OnThrow(const TypeVector& sig);
   Result OnThrowRef();
   Result OnTry(const TypeVector& param_types, const TypeVector& result_types);
@@ -266,14 +277,15 @@ class TypeChecker {
   Result BeginTryTable(const TypeVector& param_types);
   Result EndTryTable(const TypeVector& param_types,
                      const TypeVector& result_types);
-  Result OnUnary(Opcode);
   Result OnUnreachable();
   Result EndFunction();
 
   Result BeginInitExpr(Type type);
   Result EndInitExpr();
 
-  uint32_t UpdateHash(uint32_t hash, Index type_index, Index rec_start);
+  uint32_t UpdateHashCode(uint32_t hash_code,
+                          Index type_index,
+                          Index rec_start);
   bool CheckTypeFields(Index actual,
                        Index actual_rec_start,
                        Index expected,
@@ -310,6 +322,8 @@ class TypeChecker {
   Result PopAndCheckCall(const TypeVector& param_types,
                          const TypeVector& result_types,
                          const char* desc);
+  Result PopAndCheckReturnCall(const TypeVector& result_types,
+                               const char* desc);
   Result PopAndCheck1Type(Type expected, const char* desc);
   Result PopAndCheck2Types(Type expected1, Type expected2, const char* desc);
   Result PopAndCheck3Types(Type expected1,
@@ -334,11 +348,16 @@ class TypeChecker {
                       const Limits* limits1 = nullptr,
                       const Limits* limits2 = nullptr,
                       const Limits* limits3 = nullptr);
+  Result CheckOpcode4(Opcode opcode,
+                      const Limits* limits1 = nullptr,
+                      const Limits* limits2 = nullptr,
+                      const Limits* limits3 = nullptr,
+                      const Limits* limits4 = nullptr);
   Result OnEnd(Label* label, const char* sig_desc, const char* end_desc);
 
-  static uint32_t ComputeHash(uint32_t hash, Index value) {
+  static uint32_t ComputeHashCode(uint32_t hash_code, Index value) {
     // Shift-Add-XOR hash
-    return hash ^ ((hash << 5) + (hash >> 2) + value);
+    return hash_code ^ ((hash_code << 5) + (hash_code >> 2) + value);
   }
 
   static Type ToUnpackedType(Type type) {
@@ -348,7 +367,7 @@ class TypeChecker {
     return type;
   }
 
-  uint32_t ComputeHash(uint32_t hash, Type& type, Index rec_start);
+  uint32_t ComputeHashCode(uint32_t hash_code, Type& type, Index rec_start);
   bool CompareType(Type actual,
                    Index actual_rec_start,
                    Type expected,
@@ -357,6 +376,9 @@ class TypeChecker {
 
   template <typename... Args>
   void PrintStackIfFailed(Result result, const char* desc, Args... args) {
+    // Assert all args are Type or Type::Enum. If it's a TypeVector then
+    // PrintStackIfFailedV() should be used instead.
+    //static_assert((std::is_constructible_v<Type, Args> && ...));
     // Minor optimization, check result before constructing the vector to pass
     // to the other overload of PrintStackIfFailed.
     if (Failed(result)) {

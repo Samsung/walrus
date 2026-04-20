@@ -22,10 +22,9 @@
 #include "wabt/opcode.h"
 #include "wabt/stream.h"
 
-#include "string-view-lite/string_view.h"
-
 namespace wabt {
 
+class Component;
 struct Module;
 struct Script;
 
@@ -47,6 +46,7 @@ struct WriteBinaryOptions {
 };
 
 Result WriteBinaryModule(Stream*, const Module*, const WriteBinaryOptions&);
+Result WriteBinaryComponent(Stream*, const Component*, const WriteBinaryOptions&);
 
 void WriteType(Stream* stream, Type type, const char* desc = nullptr);
 
