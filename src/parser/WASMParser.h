@@ -60,4 +60,4 @@ public:
 
 } // namespace Walrus
 
-#endif // __WalrusParser__
+#endif // __WalrusWASMParser__

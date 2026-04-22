@@ -1615,4 +1615,480 @@ std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, siz
     return std::string();
 }
 
+#undef CHECK_RESULT
+#define CHECK_RESULT(expr)                                           \
+  do {                                                               \
+    if (WABT_UNLIKELY(Failed(expr))) {                               \
+      return ::wabt::Result::Error;                                  \
+    }                                                                \
+  } while (0)
+
+class ComponentBinaryReaderDelegateWalrus: public ComponentBinaryReaderDelegate {
+public:
+    ComponentBinaryReaderDelegateWalrus(WASMComponentBinaryReaderDelegate *delegate, const std::string &filename, const uint32_t featureFlags) :
+        m_externalDelegate(delegate), m_validator(&m_errors, filename, ValidateOptions(getFeatures(featureFlags))) {
+    }
+
+    Location GetLocation() const {
+        Location loc;
+        loc.offset = state->offset;
+        return loc;
+    }
+
+    bool OnError(const Error& err) override {
+        m_errors.push_back(err);
+        return true;
+    }
+
+    Result OnCoreModule(const void* data,
+                        size_t size,
+                        const ReadBinaryOptions& options) override {
+        CHECK_RESULT(m_validator.OnCoreModule());
+        m_externalDelegate->OnCoreModule(data, size, options);
+        return Result::Ok;
+    }
+
+    Result BeginComponent(uint32_t version, size_t depth) override {
+        CHECK_RESULT(m_validator.BeginComponent());
+        m_externalDelegate->BeginComponent(version, depth);
+        return Result::Ok;
+    }
+
+    Result EndComponent() override {
+        CHECK_RESULT(m_validator.EndComponent());
+        m_externalDelegate->EndComponent();
+        return Result::Ok;
+    }
+
+    Result BeginCoreInstanceSection(uint32_t count) override {
+        return Result::Ok;
+    }
+
+    Result EndCoreInstanceSection() override {
+        return Result::Ok;
+    }
+
+    Result BeginCoreInstance(const ComponentIndexLoc& module_index,
+                             uint32_t argument_count) override {
+        CHECK_RESULT(m_validator.OnCoreInstance(module_index, argument_count));
+        m_externalDelegate->BeginCoreInstance(module_index.index, argument_count);
+        return Result::Ok;
+    }
+
+    Result OnCoreInstanceArg(const ComponentStringLoc& name,
+                             ComponentSort sort,
+                             const ComponentIndexLoc& index) override {
+        CHECK_RESULT(m_validator.OnCoreInstanceArg(name, sort, index));
+        m_externalDelegate->OnCoreInstanceArg(name, sort, index.index);
+        return Result::Ok;
+    }
+
+    Result EndCoreInstance() override {
+        m_externalDelegate->EndCoreInstance();
+        return Result::Ok;
+    }
+
+    Result BeginInlineCoreInstance(uint32_t argument_count) override {
+        CHECK_RESULT(m_validator.OnInlineCoreInstance(argument_count));
+        m_externalDelegate->BeginInlineCoreInstance(argument_count);
+        return Result::Ok;
+    }
+
+    Result OnInlineCoreInstanceArg(const ComponentStringLoc& name,
+                                   ComponentSort sort,
+                                   const ComponentIndexLoc& index) override {
+        CHECK_RESULT(m_validator.OnInlineCoreInstanceArg(name, sort, index));
+        m_externalDelegate->OnInlineCoreInstanceArg(name, sort, index.index);
+        return Result::Ok;
+    }
+
+    Result EndInlineCoreInstance() override {
+        m_externalDelegate->EndInlineCoreInstance();
+        return Result::Ok;
+    }
+
+    Result BeginInstanceSection(uint32_t count) override {
+        return Result::Ok;
+    }
+
+    Result EndInstanceSection() override {
+        return Result::Ok;
+    }
+
+    Result BeginInstance(const ComponentIndexLoc& component_index,
+                         uint32_t argument_count) override {
+        CHECK_RESULT(m_validator.OnInstance(component_index, argument_count));
+        m_externalDelegate->BeginInstance(component_index.index, argument_count);
+        return Result::Ok;
+    }
+
+    Result OnInstanceArg(const ComponentStringLoc& name,
+                         ComponentSort sort,
+                         const ComponentIndexLoc& index) override {
+        CHECK_RESULT(m_validator.OnInstanceArg(name, sort, index));
+        m_externalDelegate->OnInstanceArg(name, sort, index.index);
+        return Result::Ok;
+    }
+
+    Result EndInstance() override {
+        m_externalDelegate->EndInstance();
+        return Result::Ok;
+    }
+
+    Result BeginInlineInstance(uint32_t argument_count) override {
+        CHECK_RESULT(m_validator.OnInlineInstance(argument_count));
+        m_externalDelegate->BeginInlineInstance(argument_count);
+        return Result::Ok;
+    }
+
+    Result OnInlineInstanceArg(const ComponentStringLoc& name,
+                               nonstd::string_view* version_suffix,
+                               ComponentSort sort,
+                               const ComponentIndexLoc& index) override {
+        CHECK_RESULT(m_validator.OnInlineInstanceArg(name, version_suffix, sort, index));
+        m_externalDelegate->OnInlineInstanceArg(name, version_suffix, sort, index.index);
+        return Result::Ok;
+    }
+
+    Result EndInlineInstance() override {
+        m_externalDelegate->EndInlineInstance();
+        return Result::Ok;
+    }
+
+    Result BeginAliasSection(uint32_t count) override {
+        return Result::Ok;
+    }
+
+    Result EndAliasSection() override {
+        return Result::Ok;
+    }
+
+    Result OnAliasExport(ComponentSort sort,
+                         const ComponentIndexLoc& instance_index,
+                         const ComponentStringLoc& name) override {
+        CHECK_RESULT(m_validator.OnAliasExport(GetLocation(), sort, instance_index, name));
+        m_externalDelegate->OnAliasExport(sort, instance_index.index, name);
+        return Result::Ok;
+    }
+
+    Result OnAliasCoreExport(ComponentSort sort,
+                             const ComponentIndexLoc& core_instance_index,
+                             const ComponentStringLoc& name) override {
+        CHECK_RESULT(m_validator.OnAliasCoreExport(GetLocation(), sort, core_instance_index, name));
+        m_externalDelegate->OnAliasCoreExport(sort, core_instance_index.index, name);
+        return Result::Ok;
+    }
+
+    Result OnAliasOuter(ComponentSort sort,
+                        uint32_t counter,
+                        uint32_t index) override {
+        CHECK_RESULT(m_validator.OnAliasOuter(GetLocation(), sort, counter, index));
+        m_externalDelegate->OnAliasOuter(sort, counter, index);
+        return Result::Ok;
+    }
+
+    Result BeginTypeSection(uint32_t count) override {
+        return Result::Ok;
+    }
+
+    Result EndTypeSection() override {
+        return Result::Ok;
+    }
+
+    Result OnPrimitiveType(const ComponentType& type) override {
+        CHECK_RESULT(m_validator.OnPrimitiveType(type));
+        m_externalDelegate->OnPrimitiveType(type);
+        return Result::Ok;
+    }
+
+    Result BeginRecordType(uint32_t field_count) override {
+        CHECK_RESULT(m_validator.OnRecordType(GetLocation(), field_count));
+        m_externalDelegate->BeginRecordType(field_count);
+        return Result::Ok;
+    }
+
+    Result OnRecordField(const ComponentStringLoc& field_name,
+                         const ComponentTypeLoc& field_type) override {
+        CHECK_RESULT(m_validator.OnRecordField(field_name, field_type));
+        m_externalDelegate->OnRecordField(field_name, field_type.type);
+        return Result::Ok;
+    }
+
+    Result EndRecordType() override {
+        m_externalDelegate->EndRecordType();
+        return Result::Ok;
+    }
+
+    Result BeginVariantType(uint32_t case_count) override {
+        CHECK_RESULT(m_validator.OnVariantType(GetLocation(), case_count));
+        m_externalDelegate->BeginVariantType(case_count);
+        return Result::Ok;
+    }
+
+    Result OnVariantCase(const ComponentStringLoc& case_name,
+                         const ComponentTypeLoc& case_type) override {
+        CHECK_RESULT(m_validator.OnVariantCase(case_name, case_type));
+        m_externalDelegate->OnVariantCase(case_name, case_type.type);
+        return Result::Ok;
+    }
+
+    Result EndVariantType() override {
+        m_externalDelegate->EndVariantType();
+        return Result::Ok;
+    }
+
+    Result OnListType(const ComponentTypeLoc& type) override {
+        CHECK_RESULT(m_validator.OnListType(type));
+        m_externalDelegate->OnListType(type.type);
+        return Result::Ok;
+    }
+
+    Result OnListFixedType(const ComponentTypeLoc& type,
+                           uint32_t size) override {
+        CHECK_RESULT(m_validator.OnListFixedType(GetLocation(), type, size));
+        m_externalDelegate->OnListFixedType(type.type, size);
+        return Result::Ok;
+    }
+
+    Result BeginTupleType(uint32_t item_count) override {
+        CHECK_RESULT(m_validator.OnTupleType(GetLocation(), item_count));
+        m_externalDelegate->BeginTupleType(item_count);
+        return Result::Ok;
+    }
+
+    Result OnTupleItem(const ComponentTypeLoc& item) override {
+        CHECK_RESULT(m_validator.OnTupleItem(item));
+        m_externalDelegate->OnTupleItem(item.type);
+        return Result::Ok;
+    }
+
+    Result EndTupleType() override {
+        m_externalDelegate->EndTupleType();
+        return Result::Ok;
+    }
+
+    Result BeginFlagsType(uint32_t label_count) override {
+        CHECK_RESULT(m_validator.OnFlagsType(GetLocation(), label_count));
+        m_externalDelegate->BeginFlagsType(label_count);
+        return Result::Ok;
+    }
+
+    Result OnFlagsLabel(const ComponentStringLoc& label) override {
+        CHECK_RESULT(m_validator.OnFlagsLabel(label));
+        m_externalDelegate->OnFlagsLabel(label);
+        return Result::Ok;
+    }
+
+    Result EndFlagsType() override {
+        m_externalDelegate->EndFlagsType();
+        return Result::Ok;
+    }
+
+    Result BeginEnumType(uint32_t label_count) override {
+        CHECK_RESULT(m_validator.OnEnumType(GetLocation(), label_count));
+        m_externalDelegate->BeginEnumType(label_count);
+        return Result::Ok;
+    }
+
+    Result OnEnumLabel(const ComponentStringLoc& label) override {
+        CHECK_RESULT(m_validator.OnEnumLabel(label));
+        m_externalDelegate->OnEnumLabel(label);
+        return Result::Ok;
+    }
+
+    Result EndEnumType() override {
+        m_externalDelegate->EndEnumType();
+        return Result::Ok;
+    }
+
+    Result OnOptionType(const ComponentTypeLoc& type) override {
+        CHECK_RESULT(m_validator.OnOptionType(type));
+        m_externalDelegate->OnOptionType(type.type);
+        return Result::Ok;
+    }
+
+    Result OnResultType(const ComponentTypeLoc& result_type,
+                        const ComponentTypeLoc& error_type) override {
+        CHECK_RESULT(m_validator.OnResultType(result_type, error_type));
+        m_externalDelegate->OnResultType(result_type.type, error_type.type);
+        return Result::Ok;
+    }
+
+    Result OnOwnType(const ComponentIndexLoc& index) override {
+        CHECK_RESULT(m_validator.OnOwnType(index));
+        m_externalDelegate->OnOwnType(index.index);
+        return Result::Ok;
+    }
+
+    Result OnBorrowType(const ComponentIndexLoc& index) override {
+        CHECK_RESULT(m_validator.OnBorrowType(index));
+        m_externalDelegate->OnBorrowType(index.index);
+        return Result::Ok;
+    }
+
+    Result OnStreamType(const ComponentTypeLoc& type) override {
+        CHECK_RESULT(m_validator.OnStreamType(type));
+        m_externalDelegate->OnStreamType(type.type);
+        return Result::Ok;
+    }
+
+    Result OnFutureType(const ComponentTypeLoc& type) override {
+        CHECK_RESULT(m_validator.OnFutureType(type));
+        m_externalDelegate->OnFutureType(type.type);
+        return Result::Ok;
+    }
+
+    Result BeginFuncType(ComponentTypeDef type,
+                         uint32_t param_count) override {
+        CHECK_RESULT(m_validator.OnFuncType(type, param_count));
+        m_externalDelegate->BeginFuncType(type, param_count);
+        return Result::Ok;
+    }
+
+    Result OnFuncParam(const ComponentStringLoc& name,
+                       const ComponentTypeLoc& type) override {
+        CHECK_RESULT(m_validator.OnFuncParam(name, type));
+        m_externalDelegate->OnFuncParam(name, type.type);
+        return Result::Ok;
+    }
+
+    Result OnFuncResult(const ComponentTypeLoc& type) override {
+        CHECK_RESULT(m_validator.OnFuncResult(type));
+        m_externalDelegate->OnFuncResult(type.type);
+        return Result::Ok;
+    }
+
+    Result EndFuncType() override {
+        m_externalDelegate->EndFuncType();
+        return Result::Ok;
+    }
+
+    Result OnResourceType(ComponentResourceRep rep,
+                          const ComponentIndexLoc& dtor) override {
+        CHECK_RESULT(m_validator.OnResourceType(GetLocation(), rep, dtor));
+        m_externalDelegate->OnResourceType(rep, dtor.index);
+        return Result::Ok;
+    }
+
+    Result OnResourceAsyncType(ComponentResourceRep rep,
+                               const ComponentIndexLoc& dtor,
+                               const ComponentIndexLoc& callback) override {
+        CHECK_RESULT(m_validator.OnResourceAsyncType(GetLocation(), rep, dtor, callback));
+        m_externalDelegate->OnResourceAsyncType(rep, dtor.index, callback.index);
+        return Result::Ok;
+    }
+
+    Result BeginInstanceType(uint32_t count) override {
+        CHECK_RESULT(m_validator.BeginInstanceType(count));
+        m_externalDelegate->BeginInstanceType(count);
+        return Result::Ok;
+    }
+
+    Result EndInstanceType() override {
+        CHECK_RESULT(m_validator.EndInstanceType());
+        m_externalDelegate->EndInstanceType();
+        return Result::Ok;
+    }
+
+    Result BeginComponentType(uint32_t count) override {
+        CHECK_RESULT(m_validator.BeginComponentType(count));
+        m_externalDelegate->BeginComponentType(count);
+        return Result::Ok;
+    }
+
+    Result EndComponentType() override {
+        CHECK_RESULT(m_validator.EndComponentType());
+        m_externalDelegate->EndComponentType();
+        return Result::Ok;
+    }
+
+    Result BeginCanonSection(uint32_t count) override {
+        return Result::Ok;
+    }
+
+    Result EndCanonSection() override {
+        return Result::Ok;
+    }
+
+    Result OnCanonLift(const ComponentIndexLoc& core_func_index,
+                       uint32_t option_count,
+                       ComponentCanonOption* options,
+                       const ComponentIndexLoc& type_index) override {
+        CHECK_RESULT(m_validator.OnCanonLift(core_func_index, option_count, options, type_index));
+        m_externalDelegate->OnCanonLift(core_func_index.index, option_count, options, type_index.index);
+        return Result::Ok;
+    }
+
+    Result OnCanonLower(const ComponentIndexLoc& func_index,
+                        uint32_t option_count,
+                        ComponentCanonOption* options) override {
+        CHECK_RESULT(m_validator.OnCanonLower(func_index, option_count, options));
+        m_externalDelegate->OnCanonLower(func_index.index, option_count, options);
+        return Result::Ok;
+    }
+
+    Result OnCanonType(ComponentCanon canon,
+                       const ComponentIndexLoc& type_index) override {
+        CHECK_RESULT(m_validator.OnCanonType(canon, type_index));
+        m_externalDelegate->OnCanonType(canon, type_index.index);
+        return Result::Ok;
+    }
+
+    Result BeginImportSection(uint32_t count) override {
+        return Result::Ok;
+    }
+
+    Result EndImportSection() override {
+        return Result::Ok;
+    }
+
+    Result OnImport(const ComponentStringLoc& name,
+                    nonstd::string_view* version_suffix,
+                    const ComponentExternalInfo& external_info) override {
+        CHECK_RESULT(m_validator.OnImport(name, version_suffix, external_info));
+        m_externalDelegate->OnImport(name, version_suffix, external_info);
+        return Result::Ok;
+    }
+
+    Result BeginExportSection(uint32_t count) override {
+        return Result::Ok;
+    }
+
+    Result EndExportSection() override {
+        return Result::Ok;
+    }
+
+    Result OnExport(const ComponentStringLoc& name,
+                    nonstd::string_view* version_suffix,
+                    ComponentExternalInfo* external_info,
+                    ComponentExportInfo* export_info) override {
+        CHECK_RESULT(m_validator.OnExport(name, version_suffix, external_info, export_info));
+        m_externalDelegate->OnExport(name, version_suffix, external_info, export_info);
+        return Result::Ok;
+    }
+
+    WASMComponentBinaryReaderDelegate *m_externalDelegate;
+    Errors m_errors;
+    SharedComponentValidator m_validator;
+};
+
+std::string ReadWasmComponentBinary(const std::string &filename, const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate *delegate, const uint32_t featureFlags) {
+    const bool kReadDebugNames = false;
+    const bool kStopOnFirstError = true;
+    const bool kFailOnCustomSectionError = true;
+    ReadBinaryOptions options(getFeatures(featureFlags), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
+    ComponentBinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename, featureFlags);
+    Result result = ReadBinaryComponent(data, size, &binaryReaderDelegateWalrus, options);
+
+    if (WABT_UNLIKELY(binaryReaderDelegateWalrus.m_errors.size())) {
+        return std::move(binaryReaderDelegateWalrus.m_errors.begin()->message);
+    }
+
+    if (WABT_UNLIKELY(result != ::wabt::Result::Ok)) {
+        return std::string("read wasm error");
+    }
+
+    return std::string();
+}
+
 }  // namespace wabt

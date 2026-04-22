@@ -442,7 +442,7 @@ private:
     size_t* m_readerOffsetPointer;
     const uint8_t* m_readerDataPointer;
     size_t m_codeEndOffset;
-    Walrus::TypeStore& typeStore;
+    Walrus::TypeStore& m_typeStore;
 
     struct PreprocessData {
         struct LocalVariableInfo {
@@ -864,7 +864,7 @@ public:
         : m_readerOffsetPointer(nullptr)
         , m_readerDataPointer(nullptr)
         , m_codeEndOffset(0)
-        , typeStore(typeStore)
+        , m_typeStore(typeStore)
         , m_inInitExpr(false)
         , m_currentFunction(nullptr)
         , m_currentFunctionType(nullptr)
@@ -1013,7 +1013,7 @@ public:
     virtual void EndTypeSection() override
     {
         m_result.m_typesAddedToStore = true;
-        typeStore.updateTypes(m_result.m_compositeTypes);
+        m_typeStore.updateTypes(m_result.m_compositeTypes);
     }
 
     virtual void OnImportCount(Index count) override

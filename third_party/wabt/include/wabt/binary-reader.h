@@ -581,28 +581,32 @@ class ComponentBinaryReaderDelegate {
 
   virtual Result BeginCoreInstanceSection(uint32_t count) = 0;
   virtual Result EndCoreInstanceSection() = 0;
-  virtual Result OnCoreInstance(const ComponentIndexLoc& module_index,
-                                uint32_t argument_count) = 0;
+  virtual Result BeginCoreInstance(const ComponentIndexLoc& module_index,
+                                   uint32_t argument_count) = 0;
   virtual Result OnCoreInstanceArg(const ComponentStringLoc& name,
                                    ComponentSort sort,
                                    const ComponentIndexLoc& index) = 0;
-  virtual Result OnInlineCoreInstance(uint32_t argument_count) = 0;
+  virtual Result EndCoreInstance() = 0;
+  virtual Result BeginInlineCoreInstance(uint32_t argument_count) = 0;
   virtual Result OnInlineCoreInstanceArg(const ComponentStringLoc& name,
                                          ComponentSort sort,
                                          const ComponentIndexLoc& index) = 0;
+  virtual Result EndInlineCoreInstance() = 0;
 
   virtual Result BeginInstanceSection(uint32_t count) = 0;
   virtual Result EndInstanceSection() = 0;
-  virtual Result OnInstance(const ComponentIndexLoc& component_index,
-                            uint32_t argument_count) = 0;
+  virtual Result BeginInstance(const ComponentIndexLoc& component_index,
+                               uint32_t argument_count) = 0;
   virtual Result OnInstanceArg(const ComponentStringLoc& name,
                                ComponentSort sort,
                                const ComponentIndexLoc& index) = 0;
-  virtual Result OnInlineInstance(uint32_t argument_count) = 0;
+  virtual Result EndInstance() = 0;
+  virtual Result BeginInlineInstance(uint32_t argument_count) = 0;
   virtual Result OnInlineInstanceArg(const ComponentStringLoc& name,
                                      nonstd::string_view* version_suffix,
                                      ComponentSort sort,
                                      const ComponentIndexLoc& index) = 0;
+  virtual Result EndInlineInstance() = 0;
 
   virtual Result BeginAliasSection(uint32_t count) = 0;
   virtual Result EndAliasSection() = 0;
@@ -619,21 +623,26 @@ class ComponentBinaryReaderDelegate {
   virtual Result BeginTypeSection(uint32_t count) = 0;
   virtual Result EndTypeSection() = 0;
   virtual Result OnPrimitiveType(const ComponentType& type) = 0;
-  virtual Result OnRecordType(uint32_t field_count) = 0;
+  virtual Result BeginRecordType(uint32_t field_count) = 0;
   virtual Result OnRecordField(const ComponentStringLoc& field_name,
                                const ComponentTypeLoc& field_type) = 0;
-  virtual Result OnVariantType(uint32_t case_count) = 0;
+  virtual Result EndRecordType() = 0;
+  virtual Result BeginVariantType(uint32_t case_count) = 0;
   virtual Result OnVariantCase(const ComponentStringLoc& case_name,
                                const ComponentTypeLoc& case_type) = 0;
+  virtual Result EndVariantType() = 0;
   virtual Result OnListType(const ComponentTypeLoc& type) = 0;
   virtual Result OnListFixedType(const ComponentTypeLoc& type,
                                  uint32_t size) = 0;
-  virtual Result OnTupleType(uint32_t item_count) = 0;
+  virtual Result BeginTupleType(uint32_t item_count) = 0;
   virtual Result OnTupleItem(const ComponentTypeLoc& item) = 0;
-  virtual Result OnFlagsType(uint32_t label_count) = 0;
+  virtual Result EndTupleType() = 0;
+  virtual Result BeginFlagsType(uint32_t label_count) = 0;
   virtual Result OnFlagsLabel(const ComponentStringLoc& label) = 0;
-  virtual Result OnEnumType(uint32_t label_count) = 0;
+  virtual Result EndFlagsType() = 0;
+  virtual Result BeginEnumType(uint32_t label_count) = 0;
   virtual Result OnEnumLabel(const ComponentStringLoc& label) = 0;
+  virtual Result EndEnumType() = 0;
   virtual Result OnOptionType(const ComponentTypeLoc& type) = 0;
   virtual Result OnResultType(const ComponentTypeLoc& result_type,
                               const ComponentTypeLoc& error_type) = 0;
@@ -641,11 +650,12 @@ class ComponentBinaryReaderDelegate {
   virtual Result OnBorrowType(const ComponentIndexLoc& index) = 0;
   virtual Result OnStreamType(const ComponentTypeLoc& type) = 0;
   virtual Result OnFutureType(const ComponentTypeLoc& type) = 0;
-  virtual Result OnFuncType(ComponentTypeDef type,
-                            uint32_t param_count) = 0;
-  virtual Result OnFuncParam(ComponentStringLoc name,
-                             ComponentTypeLoc type) = 0;
+  virtual Result BeginFuncType(ComponentTypeDef type,
+                               uint32_t param_count) = 0;
+  virtual Result OnFuncParam(const ComponentStringLoc& name,
+                             const ComponentTypeLoc& type) = 0;
   virtual Result OnFuncResult(const ComponentTypeLoc& type) = 0;
+  virtual Result EndFuncType() = 0;
   virtual Result OnResourceType(ComponentResourceRep rep,
                                 const ComponentIndexLoc& dtor) = 0;
   virtual Result OnResourceAsyncType(ComponentResourceRep rep,

@@ -3673,9 +3673,9 @@ Result BinaryReader::ReadComponentCoreInstance() {
   CHECK_RESULT(ReadU32Leb128(&argument_count, "counter"));
 
   if (is_inline) {
-    COMPONENT_CALLBACK(OnInlineCoreInstance, argument_count);
+    COMPONENT_CALLBACK(BeginInlineCoreInstance, argument_count);
   } else {
-    COMPONENT_CALLBACK(OnCoreInstance, from_index, argument_count);
+    COMPONENT_CALLBACK(BeginCoreInstance, from_index, argument_count);
   }
 
   for (uint32_t i = 0; i < argument_count; i++) {
@@ -3702,6 +3702,12 @@ Result BinaryReader::ReadComponentCoreInstance() {
     }
   }
 
+  if (is_inline) {
+    COMPONENT_CALLBACK0(EndInlineCoreInstance);
+  } else {
+    COMPONENT_CALLBACK0(EndCoreInstance);
+  }
+
   return Result::Ok;
 }
 
@@ -3723,7 +3729,7 @@ Result BinaryReader::ReadComponentInstance() {
   uint32_t argument_count;
   CHECK_RESULT(ReadComponentIndex(&from_index, "component index"));
   CHECK_RESULT(ReadU32Leb128(&argument_count, "counter"));
-  COMPONENT_CALLBACK(OnInstance, from_index, argument_count);
+  COMPONENT_CALLBACK(BeginInstance, from_index, argument_count);
 
   for (uint32_t i = 0; i < argument_count; i++) {
     ComponentStringLoc name;
@@ -3736,13 +3742,14 @@ Result BinaryReader::ReadComponentInstance() {
     COMPONENT_CALLBACK(OnInstanceArg, name, sort, index);
   }
 
+  COMPONENT_CALLBACK0(EndInstance);
   return Result::Ok;
 }
 
 Result BinaryReader::ReadComponentInlineInstance() {
   uint32_t argument_count;
   CHECK_RESULT(ReadU32Leb128(&argument_count, "counter"));
-  COMPONENT_CALLBACK(OnInlineInstance, argument_count);
+  COMPONENT_CALLBACK(BeginInlineInstance, argument_count);
 
   for (uint32_t i = 0; i < argument_count; i++) {
     ComponentStringLoc name;
@@ -3773,6 +3780,7 @@ Result BinaryReader::ReadComponentInlineInstance() {
     CHECK_RESULT(ReadComponentIndex(&index, "index"));
     COMPONENT_CALLBACK(OnInlineInstanceArg, name, version_suffix, sort, index);
   }
+  COMPONENT_CALLBACK0(EndInlineInstance);
   return Result::Ok;
 }
 
@@ -3874,7 +3882,7 @@ Result BinaryReader::ReadComponentType() {
         case ComponentTypeDef::Record: {
           uint32_t field_count;
           CHECK_RESULT(ReadU32Leb128(&field_count, "field count"));
-          COMPONENT_CALLBACK(OnRecordType, field_count);
+          COMPONENT_CALLBACK(BeginRecordType, field_count);
 
           for (uint32_t i = 0; i < field_count; i++) {
             ComponentStringLoc name;
@@ -3883,12 +3891,13 @@ Result BinaryReader::ReadComponentType() {
             CHECK_RESULT(ReadComponentValType(&type));
             COMPONENT_CALLBACK(OnRecordField, name, type);
           }
+          COMPONENT_CALLBACK0(EndRecordType);
           break;
         }
         case ComponentTypeDef::Variant: {
           uint32_t case_count;
           CHECK_RESULT(ReadU32Leb128(&case_count, "case count"));
-          COMPONENT_CALLBACK(OnVariantType, case_count);
+          COMPONENT_CALLBACK(BeginVariantType, case_count);
 
           for (uint32_t i = 0; i < case_count; i++) {
             ComponentStringLoc name;
@@ -3900,6 +3909,7 @@ Result BinaryReader::ReadComponentType() {
             ERROR_UNLESS(unused == 0, "only zero value is supported");
             COMPONENT_CALLBACK(OnVariantCase, name, type);
           }
+          COMPONENT_CALLBACK0(EndVariantType);
           break;
         }
         case ComponentTypeDef::List:
@@ -3918,13 +3928,14 @@ Result BinaryReader::ReadComponentType() {
         case ComponentTypeDef::Tuple: {
           uint32_t type_count;
           CHECK_RESULT(ReadU32Leb128(&type_count, "type count"));
-          COMPONENT_CALLBACK(OnTupleType, type_count);
+          COMPONENT_CALLBACK(BeginTupleType, type_count);
 
           for (uint32_t i = 0; i < type_count; i++) {
             ComponentTypeLoc item;
             CHECK_RESULT(ReadComponentValType(&item));
             COMPONENT_CALLBACK(OnTupleItem, item);
           }
+          COMPONENT_CALLBACK0(EndTupleType);
           break;
         }
         case ComponentTypeDef::Flags:
@@ -3932,9 +3943,9 @@ Result BinaryReader::ReadComponentType() {
           uint32_t label_count;
           CHECK_RESULT(ReadU32Leb128(&label_count, "name count"));
           if (def_type == ComponentTypeDef::Flags) {
-            COMPONENT_CALLBACK(OnFlagsType, label_count);
+            COMPONENT_CALLBACK(BeginFlagsType, label_count);
           } else {
-            COMPONENT_CALLBACK(OnEnumType, label_count);
+            COMPONENT_CALLBACK(BeginEnumType, label_count);
           }
 
           for (uint32_t i = 0; i < label_count; i++) {
@@ -3946,6 +3957,12 @@ Result BinaryReader::ReadComponentType() {
             } else {
               COMPONENT_CALLBACK(OnEnumLabel, label);
             }
+          }
+
+          if (def_type == ComponentTypeDef::Flags) {
+            COMPONENT_CALLBACK0(EndFlagsType);
+          } else {
+            COMPONENT_CALLBACK0(EndEnumType);
           }
           break;
         }
@@ -3991,7 +4008,7 @@ Result BinaryReader::ReadComponentType() {
           uint32_t param_count;
           CHECK_RESULT(ReadU32Leb128(&param_count, "param count"));
 
-          COMPONENT_CALLBACK(OnFuncType, def_type, param_count);
+          COMPONENT_CALLBACK(BeginFuncType, def_type, param_count);
 
           for (uint32_t i = 0; i < param_count; i++) {
             ComponentStringLoc name;
@@ -4020,6 +4037,7 @@ Result BinaryReader::ReadComponentType() {
           }
 
           COMPONENT_CALLBACK(OnFuncResult, result);
+          COMPONENT_CALLBACK(EndFuncType);
           break;
         }
         case ComponentTypeDef::Instance:

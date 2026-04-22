@@ -50,7 +50,6 @@ class WastParser {
   Result ParseModule(std::unique_ptr<Module>* out_module);
   Result ParseScript(std::unique_ptr<Script>* out_script);
   Result ParseComponent(std::unique_ptr<Component>* out_component);
-  bool IsComponent();
 
   std::unique_ptr<Script> ReleaseScript();
 
@@ -437,11 +436,8 @@ Result ParseWastScript(WastLexer* lexer,
                        Errors*,
                        WastParseOptions* options);
 
-// The out_module is optional. If it is non null, and the input does not
-// starts with "(component", the parsing falls back to module parsing.
 Result ParseWatComponent(WastLexer* lexer,
                          std::unique_ptr<Component>* out_component,
-                         std::unique_ptr<Module>* out_module,
                          Errors*,
                          WastParseOptions* options);
 
