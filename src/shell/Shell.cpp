@@ -12,6 +12,7 @@
 #include "runtime/Engine.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
+#include "runtime/Component.h"
 #include "runtime/Instance.h"
 #include "runtime/Function.h"
 #include "runtime/Table.h"
@@ -21,6 +22,7 @@
 #include "runtime/Trap.h"
 #include "runtime/DefinedFunctionTypes.h"
 #include "parser/WASMParser.h"
+#include "parser/WASMComponentParser.h"
 
 #include "wabt/wast-lexer.h"
 #include "wabt/wast-parser.h"
@@ -366,6 +368,17 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
 #endif
     },
                     &data);
+}
+
+static wabt::Result executeWASMComponent(Store* store, const std::string& filename, const std::vector<uint8_t>& src)
+{
+    std::pair<Optional<Component*>, std::string> parseResult = WASMComponentParser::parseBinary(store, filename, src.data(), src.size());
+    if (!parseResult.second.empty()) {
+        printf("Cannot run module: %s\n", parseResult.second.c_str());
+        return wabt::Result::Error;
+    }
+
+    return wabt::Result::Ok;
 }
 
 static bool endsWith(const std::string& str, const std::string& suffix)
@@ -801,14 +814,40 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
 static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes)
 {
     wabt::Errors errors;
+    wabt::Features features;
+    features.EnableAll();
+    wabt::WastParseOptions parseWastOptions(features);
     auto lexer = wabt::WastLexer::CreateBufferLexer("test.wabt", src.data(), src.size(), &errors);
     ASSERT(lexer);
 
+    if (lexer->IsComponent()) {
+        std::unique_ptr<wabt::Component> component;
+        auto result = ParseWatComponent(lexer.get(), &component, &errors, &parseWastOptions);
+
+        if (wabt::Succeeded(result)) {
+            wabt::WriteBinaryOptions writeBinaryOptions;
+            writeBinaryOptions.features = features;
+            wabt::MemoryStream stream;
+            result = WriteBinaryComponent(&stream, component.get(), writeBinaryOptions);
+
+            if (wabt::Succeeded(result)) {
+                result = executeWASMComponent(store, filename, stream.output_buffer().data);
+            }
+        }
+
+        if (!wabt::Succeeded(result)) {
+            printf("Syntax error(s):\n");
+            for (auto& e : errors) {
+                printf("  %s\n", e.message.c_str());
+            }
+            printf("\n");
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+        return;
+    }
+
     std::unique_ptr<wabt::Script> script;
-    wabt::Features features;
-    features.EnableAll();
-    wabt::WastParseOptions parse_wast_options(features);
-    auto result = wabt::ParseWastScript(lexer.get(), &script, &errors, &parse_wast_options);
+    auto result = wabt::ParseWastScript(lexer.get(), &script, &errors, &parseWastOptions);
     if (!wabt::Succeeded(result)) {
         printf("Syntax error(s):\n");
         for (auto& e : errors) {
@@ -1233,7 +1272,6 @@ int main(int argc, const char* argv[])
 
     parseArguments(argc, argv, options);
 
-
 #ifdef ENABLE_WASI
     // initialize WASI
     uvwasi_t uvwasi;
@@ -1288,6 +1326,8 @@ int main(int argc, const char* argv[])
             if (endsWith(filePath, "wasm")) {
                 if (!options.exportToRun.empty()) {
                     runExports(store, filePath, buf, options.exportToRun, functionTypes);
+                } else if (wabt::ReadBinaryIsComponent(buf.data(), buf.size())) {
+                    executeWASMComponent(store, filePath, buf);
                 } else {
                     auto trapResult = executeWASM(store, filePath, buf, functionTypes);
                     if (trapResult.exception) {

@@ -444,10 +444,9 @@ class SharedComponentValidator {
   Result OnInstanceArg(const ComponentStringLoc& name,
                        ComponentSort sort,
                        const ComponentIndexLoc& index);
-  Result OnInlineInstance();
+  Result OnInlineInstance(uint32_t argument_count);
   Result OnInlineInstanceArg(const ComponentStringLoc& name,
-                             bool has_version_suffix,
-                             nonstd::string_view version_suffix,
+                             nonstd::string_view* version_suffix,
                              ComponentSort sort,
                              const ComponentIndexLoc& index);
 
@@ -490,8 +489,8 @@ class SharedComponentValidator {
   Result OnFutureType(const ComponentTypeLoc& type);
   Result OnFuncType(ComponentTypeDef type,
                     uint32_t param_count);
-  Result OnFuncParam(ComponentStringLoc name,
-                     ComponentTypeLoc type);
+  Result OnFuncParam(const ComponentStringLoc& name,
+                     const ComponentTypeLoc& type);
   Result OnFuncResult(const ComponentTypeLoc& type);
   Result OnResourceType(const Location& loc,
                         ComponentResourceRep rep,
@@ -780,6 +779,7 @@ class SharedComponentValidator {
 
     // Sorts.
     TypeBaseVector types;
+    TypeBaseVector instances;
   };
 
   struct Component : public TypeDefList {
@@ -792,7 +792,6 @@ class SharedComponentValidator {
     TypeBaseVector core_modules;
     TypeBaseVector funcs;
     TypeBaseVector components;
-    TypeBaseVector instances;
   };
 
   struct CoreModule : public TypeBase {

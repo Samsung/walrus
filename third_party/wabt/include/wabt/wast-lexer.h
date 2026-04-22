@@ -48,6 +48,7 @@ class WastLexer {
                                                       Errors*);
 
   Token GetToken();
+  bool IsComponent();
 
   nonstd::string_view Filename() const { return filename_; }
 

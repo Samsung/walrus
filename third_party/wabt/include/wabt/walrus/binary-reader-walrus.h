@@ -239,11 +239,129 @@ protected:
     size_t m_skipValidationUntil;
 };
 
+class WASMComponentBinaryReaderDelegate {
+public:
+    virtual ~WASMComponentBinaryReaderDelegate() {}
+
+    virtual void OnCoreModule(const void* data,
+                              size_t size,
+                              const ReadBinaryOptions& options) = 0;
+    virtual void BeginComponent(uint32_t version, size_t depth) = 0;
+    virtual void EndComponent() = 0;
+
+    virtual void BeginCoreInstance(Index module_index,
+                                   uint32_t argument_count) = 0;
+    virtual void OnCoreInstanceArg(const ComponentStringLoc& name,
+                                   ComponentSort sort,
+                                   Index index) = 0;
+    virtual void EndCoreInstance() = 0;
+    virtual void BeginInlineCoreInstance(uint32_t argument_count) = 0;
+    virtual void OnInlineCoreInstanceArg(const ComponentStringLoc& name,
+                                         ComponentSort sort,
+                                         Index index) = 0;
+    virtual void EndInlineCoreInstance() = 0;
+
+    virtual void BeginInstance(Index component_index,
+                               uint32_t argument_count) = 0;
+    virtual void OnInstanceArg(const ComponentStringLoc& name,
+                               ComponentSort sort,
+                               Index index) = 0;
+    virtual void EndInstance() = 0;
+    virtual void BeginInlineInstance(uint32_t argument_count) = 0;
+    virtual void OnInlineInstanceArg(const ComponentStringLoc& name,
+                                     nonstd::string_view* version_suffix,
+                                     ComponentSort sort,
+                                     Index index) = 0;
+    virtual void EndInlineInstance() = 0;
+
+    virtual void OnAliasExport(ComponentSort sort,
+                               Index instance_index,
+                               const ComponentStringLoc& name) = 0;
+    virtual void OnAliasCoreExport(ComponentSort sort,
+                                   Index core_instance_index,
+                                   const ComponentStringLoc& name) = 0;
+    virtual void OnAliasOuter(ComponentSort sort,
+                              uint32_t counter,
+                              uint32_t index) = 0;
+
+    virtual void OnPrimitiveType(const ComponentType& type) = 0;
+    virtual void BeginRecordType(uint32_t field_count) = 0;
+    virtual void OnRecordField(const ComponentStringLoc& field_name,
+                               const ComponentType& field_type) = 0;
+    virtual void EndRecordType() = 0;
+    virtual void BeginVariantType(uint32_t case_count) = 0;
+    virtual void OnVariantCase(const ComponentStringLoc& case_name,
+                               const ComponentType& case_type) = 0;
+    virtual void EndVariantType() = 0;
+    virtual void OnListType(const ComponentType& type) = 0;
+    virtual void OnListFixedType(const ComponentType& type,
+                                 uint32_t size) = 0;
+    virtual void BeginTupleType(uint32_t item_count) = 0;
+    virtual void OnTupleItem(const ComponentType& item) = 0;
+    virtual void EndTupleType() = 0;
+    virtual void BeginFlagsType(uint32_t label_count) = 0;
+    virtual void OnFlagsLabel(const ComponentStringLoc& label) = 0;
+    virtual void EndFlagsType() = 0;
+    virtual void BeginEnumType(uint32_t label_count) = 0;
+    virtual void OnEnumLabel(const ComponentStringLoc& label) = 0;
+    virtual void EndEnumType() = 0;
+    virtual void OnOptionType(const ComponentType& type) = 0;
+    virtual void OnResultType(const ComponentType& result_type,
+                              const ComponentType& error_type) = 0;
+    virtual void OnOwnType(Index index) = 0;
+    virtual void OnBorrowType(Index index) = 0;
+    virtual void OnStreamType(const ComponentType& type) = 0;
+    virtual void OnFutureType(const ComponentType& type) = 0;
+    virtual void BeginFuncType(ComponentTypeDef type,
+                               uint32_t param_count) = 0;
+    virtual void OnFuncParam(ComponentStringLoc name,
+                             const ComponentType& type) = 0;
+    virtual void OnFuncResult(const ComponentType& type) = 0;
+    virtual void EndFuncType() = 0;
+    virtual void OnResourceType(ComponentResourceRep rep,
+                                Index dtor) = 0;
+    virtual void OnResourceAsyncType(ComponentResourceRep rep,
+                                     Index dtor,
+                                     Index callback) = 0;
+    virtual void BeginInstanceType(uint32_t count) = 0;
+    virtual void EndInstanceType() = 0;
+    virtual void BeginComponentType(uint32_t count) = 0;
+    virtual void EndComponentType() = 0;
+
+    virtual void OnCanonLift(Index core_func_index,
+                             uint32_t option_count,
+                             ComponentCanonOption* options,
+                             Index type_index) = 0;
+    virtual void OnCanonLower(Index func_index,
+                              uint32_t option_count,
+                              ComponentCanonOption* options) = 0;
+    virtual void OnCanonType(ComponentCanon canon,
+                             Index type_index) = 0;
+
+    virtual void OnImport(const ComponentStringLoc& name,
+                          nonstd::string_view* version_suffix,
+                          const ComponentExternalInfo& external_info) = 0;
+
+    virtual void OnExport(const ComponentStringLoc& name,
+                          nonstd::string_view* version_suffix,
+                          ComponentExternalInfo* external_info,
+                          ComponentExportInfo* export_info) = 0;
+
+    const std::string& WalrusParseError()
+    {
+        return m_walrusParseError;
+    }
+
+protected:
+    std::string m_walrusParseError;
+};
+
 enum FeatureFlagValue : uint32_t {
     enableWebAssembly3 = 1 << 0,
 };
 
 std::string ReadWasmBinary(const std::string& filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate, const uint32_t featureFlags);
+std::string ReadWasmComponentBinary(const std::string& filename, const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate* delegate, const uint32_t featureFlags);
 
 }  // namespace wabt
 

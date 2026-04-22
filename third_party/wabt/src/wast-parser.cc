@@ -1438,10 +1438,6 @@ Result WastParser::ParseComponent(std::unique_ptr<Component>* out_component) {
   }
 }
 
-bool WastParser::IsComponent() {
-  return PeekMatchLpar(TokenType::Component);
-}
-
 Result WastParser::ParseCustomSectionAnnotation(Module* module) {
   WABT_TRACE(ParseCustomSectionAnnotation);
   Location loc = GetLocation();
@@ -4690,6 +4686,9 @@ Result WastParser::ParseComponentDefValType(
     }
 
     switch (Peek(0)) {
+      case TokenType::Bool:
+        type = ComponentType::Bool;
+        break;
       case TokenType::S8:
         type = ComponentType::S8;
         break;
@@ -5978,18 +5977,11 @@ Result ParseWastScript(WastLexer* lexer,
 
 Result ParseWatComponent(WastLexer* lexer,
                          std::unique_ptr<Component>* out_component,
-                         std::unique_ptr<Module>* out_module,
                          Errors* errors,
                          WastParseOptions* options) {
   assert(out_component != nullptr);
   assert(options != nullptr);
   WastParser parser(lexer, errors, options);
-
-  if (out_module != nullptr && !parser.IsComponent()) {
-    CHECK_RESULT(parser.ParseModule(out_module));
-    return Result::Ok;
-  }
-
   CHECK_RESULT(parser.ParseComponent(out_component));
   return Result::Ok;
 }

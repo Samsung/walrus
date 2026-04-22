@@ -2087,7 +2087,7 @@ Result SharedComponentValidator::OnInstanceArg(const ComponentStringLoc& name,
   return Result::Ok;
 }
 
-Result SharedComponentValidator::OnInlineInstance() {
+Result SharedComponentValidator::OnInlineInstance(uint32_t argument_count) {
   auto type_value = MakeUnique<TypeExternalList>(TypeDef::Instance);
   CurrentAsComponent()->instances.push_back(type_value.get());
   objects_.push_back(std::move(type_value));
@@ -2096,8 +2096,7 @@ Result SharedComponentValidator::OnInlineInstance() {
 
 Result SharedComponentValidator::OnInlineInstanceArg(
     const ComponentStringLoc& name,
-    bool has_version_suffix,
-    nonstd::string_view version_suffix,
+    nonstd::string_view* version_suffix,
     ComponentSort sort,
     const ComponentIndexLoc& index) {
   const std::string* export_name = string_table_.Append(name.str);
@@ -2116,9 +2115,10 @@ Result SharedComponentValidator::OnAliasExport(
     ComponentSort sort,
     const ComponentIndexLoc& instance_index,
     const ComponentStringLoc& name) {
-  if (sort != ComponentSort::CoreModule && sort != ComponentSort::Func &&
-      sort != ComponentSort::Value && sort != ComponentSort::Type &&
-      sort != ComponentSort::Component && sort != ComponentSort::Instance) {
+  if (sort != ComponentSort::Type && sort != ComponentSort::Instance &&
+      ((current_->info_bits & IsObject) == 0 ||
+       (sort != ComponentSort::CoreModule && sort != ComponentSort::Func &&
+        sort != ComponentSort::Value && sort != ComponentSort::Component))) {
     return PrintError(loc, "invalid alias export sort (%s)", sort.GetName());
   }
 
@@ -2126,16 +2126,18 @@ Result SharedComponentValidator::OnAliasExport(
   Result result =
       CheckIndex(ComponentSort::Instance, instance_index, &type_base);
 
-  TypeExternalList* instance = type_base->AsTypeExternalList();
-  const std::string* export_name = string_table_.Find(name.str);
   bool found = false;
-  type_base = nullptr;
-  if (export_name != nullptr) {
-    for (auto& item : instance->exports) {
-      if (item.name == export_name) {
-        found = true;
-        type_base = item.type_base;
-        break;
+  if (type_base != nullptr) {
+    TypeExternalList* instance = type_base->AsTypeExternalList();
+    const std::string* export_name = string_table_.Find(name.str);
+    type_base = nullptr;
+    if (export_name != nullptr) {
+      for (auto& item : instance->exports) {
+        if (item.name == export_name) {
+          found = true;
+          type_base = item.type_base;
+          break;
+        }
       }
     }
   }
@@ -2454,8 +2456,8 @@ Result SharedComponentValidator::OnFuncType(ComponentTypeDef type,
   return Result::Ok;
 }
 
-Result SharedComponentValidator::OnFuncParam(ComponentStringLoc name,
-                                             ComponentTypeLoc type) {
+Result SharedComponentValidator::OnFuncParam(const ComponentStringLoc& name,
+                                             const ComponentTypeLoc& type) {
   TypeRef type_ref;
   Result result = CheckType(type, ExcludeLast, &type_ref);
   TypeFunc::Param param{string_table_.Append(name.str), type_ref};
@@ -2635,6 +2637,10 @@ SharedComponentValidator::TypeBaseVector* SharedComponentValidator::GetSort(
     return &def_list->types;
   }
 
+  if (sort == ComponentSort::Instance) {
+    return &def_list->instances;
+  }
+
   if ((def_list->info_bits & IsObject) == 0) {
     return nullptr;
   }
@@ -2652,8 +2658,6 @@ SharedComponentValidator::TypeBaseVector* SharedComponentValidator::GetSort(
       return &component->funcs;
     case ComponentSort::Component:
       return &component->components;
-    case ComponentSort::Instance:
-      return &component->instances;
     default:
       // TODO: implement more checks.
       return nullptr;

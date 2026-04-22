@@ -2310,7 +2310,7 @@ void BinaryWriter::WriteComponentValueType(const ComponentType& type,
   }
 
   if (type.IsIndex()) {
-    WriteU32Leb128(stream_, type.GetIndex(), "type index");
+    WriteS64Leb128(stream_, type.GetIndex(), "type index");
   } else {
     stream_->WriteU8Enum(type.GetType(), "primitive type");
   }

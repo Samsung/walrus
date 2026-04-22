@@ -2062,28 +2062,32 @@ class BinaryReaderComponentIR : public ComponentBinaryReaderDelegate {
 
   Result BeginCoreInstanceSection(uint32_t count) override;
   Result EndCoreInstanceSection() override;
-  Result OnCoreInstance(const ComponentIndexLoc& module_index,
-                        uint32_t argument_count) override;
+  Result BeginCoreInstance(const ComponentIndexLoc& module_index,
+                           uint32_t argument_count) override;
   Result OnCoreInstanceArg(const ComponentStringLoc& name,
                            ComponentSort sort,
                            const ComponentIndexLoc& index) override;
-  Result OnInlineCoreInstance(uint32_t argument_count) override;
+  Result EndCoreInstance() override;
+  Result BeginInlineCoreInstance(uint32_t argument_count) override;
   Result OnInlineCoreInstanceArg(const ComponentStringLoc& name,
                                  ComponentSort sort,
                                  const ComponentIndexLoc& index) override;
+  Result EndInlineCoreInstance() override;
 
   Result BeginInstanceSection(uint32_t count) override;
   Result EndInstanceSection() override;
-  Result OnInstance(const ComponentIndexLoc& component_index,
-                    uint32_t argument_count) override;
+  Result BeginInstance(const ComponentIndexLoc& component_index,
+                       uint32_t argument_count) override;
   Result OnInstanceArg(const ComponentStringLoc& name,
                        ComponentSort sort,
                        const ComponentIndexLoc& index) override;
-  Result OnInlineInstance(uint32_t argument_count) override;
+  Result EndInstance() override;
+  Result BeginInlineInstance(uint32_t argument_count) override;
   Result OnInlineInstanceArg(const ComponentStringLoc& name,
                              nonstd::string_view* version_suffix,
                              ComponentSort sort,
                              const ComponentIndexLoc& index) override;
+  Result EndInlineInstance() override;
 
   Result BeginAliasSection(uint32_t count) override;
   Result EndAliasSection() override;
@@ -2100,20 +2104,25 @@ class BinaryReaderComponentIR : public ComponentBinaryReaderDelegate {
   Result BeginTypeSection(uint32_t count) override;
   Result EndTypeSection() override;
   Result OnPrimitiveType(const ComponentType& type) override;
-  Result OnRecordType(uint32_t field_count) override;
+  Result BeginRecordType(uint32_t field_count) override;
   Result OnRecordField(const ComponentStringLoc& field_name,
                        const ComponentTypeLoc& field_type) override;
-  Result OnVariantType(uint32_t case_count) override;
+  Result EndRecordType() override;
+  Result BeginVariantType(uint32_t case_count) override;
   Result OnVariantCase(const ComponentStringLoc& case_name,
                        const ComponentTypeLoc& case_type) override;
+  Result EndVariantType() override;
   Result OnListType(const ComponentTypeLoc& type) override;
   Result OnListFixedType(const ComponentTypeLoc& type, uint32_t size) override;
-  Result OnTupleType(uint32_t type_count) override;
+  Result BeginTupleType(uint32_t type_count) override;
   Result OnTupleItem(const ComponentTypeLoc& item) override;
-  Result OnFlagsType(uint32_t label_count) override;
+  Result EndTupleType() override;
+  Result BeginFlagsType(uint32_t label_count) override;
   Result OnFlagsLabel(const ComponentStringLoc& label) override;
-  Result OnEnumType(uint32_t label_count) override;
+  Result EndFlagsType() override;
+  Result BeginEnumType(uint32_t label_count) override;
   Result OnEnumLabel(const ComponentStringLoc& label) override;
+  Result EndEnumType() override;
   Result OnOptionType(const ComponentTypeLoc& type) override;
   Result OnResultType(const ComponentTypeLoc& result_type,
                       const ComponentTypeLoc& error_type) override;
@@ -2121,9 +2130,11 @@ class BinaryReaderComponentIR : public ComponentBinaryReaderDelegate {
   Result OnBorrowType(const ComponentIndexLoc& index) override;
   Result OnStreamType(const ComponentTypeLoc& type) override;
   Result OnFutureType(const ComponentTypeLoc& type) override;
-  Result OnFuncType(ComponentTypeDef type, uint32_t param_count) override;
-  Result OnFuncParam(ComponentStringLoc name, ComponentTypeLoc type) override;
+  Result BeginFuncType(ComponentTypeDef type, uint32_t param_count) override;
+  Result OnFuncParam(const ComponentStringLoc& name,
+                     const ComponentTypeLoc& type) override;
   Result OnFuncResult(const ComponentTypeLoc& type) override;
+  Result EndFuncType() override;
   Result OnResourceType(ComponentResourceRep rep,
                         const ComponentIndexLoc& dtor) override;
   Result OnResourceAsyncType(ComponentResourceRep rep,
@@ -2218,7 +2229,7 @@ Result BinaryReaderComponentIR::EndCoreInstanceSection() {
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnCoreInstance(
+Result BinaryReaderComponentIR::BeginCoreInstance(
     const ComponentIndexLoc& module_index,
     uint32_t argument_count) {
   auto value_type =
@@ -2236,7 +2247,12 @@ Result BinaryReaderComponentIR::OnCoreInstanceArg(
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnInlineCoreInstance(uint32_t argument_count) {
+Result BinaryReaderComponentIR::EndCoreInstance() {
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::BeginInlineCoreInstance(
+    uint32_t argument_count) {
   auto instance = MakeUnique<ComponentInstance>(argument_count);
   last_ = instance.get();
   def_list_->Append(std::move(instance));
@@ -2251,6 +2267,10 @@ Result BinaryReaderComponentIR::OnInlineCoreInstanceArg(
   return Result::Ok;
 }
 
+Result BinaryReaderComponentIR::EndInlineCoreInstance() {
+  return Result::Ok;
+}
+
 Result BinaryReaderComponentIR::BeginInstanceSection(uint32_t count) {
   assert(def_list_->IsComponent());
   return Result::Ok;
@@ -2261,7 +2281,7 @@ Result BinaryReaderComponentIR::EndInstanceSection() {
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnInstance(
+Result BinaryReaderComponentIR::BeginInstance(
     const ComponentIndexLoc& component_index,
     uint32_t argument_count) {
   auto instance = MakeUnique<ComponentInstance>(false, component_index,
@@ -2278,7 +2298,11 @@ Result BinaryReaderComponentIR::OnInstanceArg(const ComponentStringLoc& name,
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnInlineInstance(uint32_t argument_count) {
+Result BinaryReaderComponentIR::EndInstance() {
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::BeginInlineInstance(uint32_t argument_count) {
   auto instance = MakeUnique<ComponentInlineInstance>(argument_count);
   last_ = instance.get();
   def_list_->Append(std::move(instance));
@@ -2296,6 +2320,10 @@ Result BinaryReaderComponentIR::OnInlineInstanceArg(
   }
   last_->AsInlineInstance()->Append(string_table_.Append(name), suffix, sort,
                                     index);
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::EndInlineInstance() {
   return Result::Ok;
 }
 
@@ -2384,7 +2412,7 @@ Result BinaryReaderComponentIR::OnPrimitiveType(const ComponentType& type) {
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnRecordType(uint32_t field_count) {
+Result BinaryReaderComponentIR::BeginRecordType(uint32_t field_count) {
   auto value_type = MakeUnique<ComponentTypeItems>(
       ComponentTypeDef::Record, GetLocation());
   last_ = value_type.get();
@@ -2399,7 +2427,11 @@ Result BinaryReaderComponentIR::OnRecordField(
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnVariantType(uint32_t case_count) {
+Result BinaryReaderComponentIR::EndRecordType() {
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::BeginVariantType(uint32_t case_count) {
   auto value_type = MakeUnique<ComponentTypeItems>(
       ComponentTypeDef::Variant, GetLocation());
   last_ = value_type.get();
@@ -2411,6 +2443,10 @@ Result BinaryReaderComponentIR::OnVariantCase(
     const ComponentStringLoc& case_name,
     const ComponentTypeLoc& case_type) {
   last_->AsTypeItems()->Append(string_table_.Append(case_name), case_type);
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::EndVariantType() {
   return Result::Ok;
 }
 
@@ -2429,7 +2465,7 @@ Result BinaryReaderComponentIR::OnListFixedType(const ComponentTypeLoc& type,
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnTupleType(uint32_t type_count) {
+Result BinaryReaderComponentIR::BeginTupleType(uint32_t type_count) {
   auto value_type = MakeUnique<ComponentTypeTuple>(GetLocation());
   last_ = value_type.get();
   def_list_->AppendType(std::move(value_type));
@@ -2441,7 +2477,11 @@ Result BinaryReaderComponentIR::OnTupleItem(const ComponentTypeLoc& item) {
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnFlagsType(uint32_t label_count) {
+Result BinaryReaderComponentIR::EndTupleType() {
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::BeginFlagsType(uint32_t label_count) {
   auto value_type = MakeUnique<ComponentTypeLabels>(
       ComponentTypeDef::Flags, GetLocation());
   last_ = value_type.get();
@@ -2454,7 +2494,11 @@ Result BinaryReaderComponentIR::OnFlagsLabel(const ComponentStringLoc& label) {
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnEnumType(uint32_t enum_count) {
+Result BinaryReaderComponentIR::EndFlagsType() {
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::BeginEnumType(uint32_t enum_count) {
   auto value_type = MakeUnique<ComponentTypeLabels>(
       ComponentTypeDef::Enum, GetLocation());
   last_ = value_type.get();
@@ -2464,6 +2508,10 @@ Result BinaryReaderComponentIR::OnEnumType(uint32_t enum_count) {
 
 Result BinaryReaderComponentIR::OnEnumLabel(const ComponentStringLoc& label) {
   last_->AsTypeLabels()->Append(string_table_.Append(label));
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::EndEnumType() {
   return Result::Ok;
 }
 
@@ -2511,22 +2559,26 @@ Result BinaryReaderComponentIR::OnFutureType(const ComponentTypeLoc& type) {
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnFuncType(ComponentTypeDef type,
-                                           uint32_t param_count) {
+Result BinaryReaderComponentIR::BeginFuncType(ComponentTypeDef type,
+                                              uint32_t param_count) {
   auto value_type = MakeUnique<ComponentTypeFunc>(type);
   last_ = value_type.get();
   def_list_->AppendType(std::move(value_type));
   return Result::Ok;
 }
 
-Result BinaryReaderComponentIR::OnFuncParam(ComponentStringLoc name,
-                                            ComponentTypeLoc type) {
+Result BinaryReaderComponentIR::OnFuncParam(const ComponentStringLoc& name,
+                                            const ComponentTypeLoc& type) {
   last_->AsTypeFunc()->AppendParam(string_table_.Append(name), type);
   return Result::Ok;
 }
 
 Result BinaryReaderComponentIR::OnFuncResult(const ComponentTypeLoc& type) {
   last_->AsTypeFunc()->SetResult(type);
+  return Result::Ok;
+}
+
+Result BinaryReaderComponentIR::EndFuncType() {
   return Result::Ok;
 }
 
