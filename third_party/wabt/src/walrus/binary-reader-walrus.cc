@@ -135,6 +135,10 @@ public:
         m_labelStack.pop_back();
     }
 
+    Result CheckParseError() {
+        return m_externalDelegate->WalrusParseError().empty() ? Result::Ok : Result::Error;
+    }
+
     Result GetDropCount(Index keep_count, size_t type_stack_limit, Index *out_drop_count) {
         assert(m_validator.type_stack_size() >= type_stack_limit);
         Index type_stack_count = m_validator.type_stack_size() - type_stack_limit;
@@ -211,7 +215,7 @@ public:
     }
     Result OnTypeCount(Index count) override {
         m_externalDelegate->OnTypeCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnRecursiveGroup(Index first_type_index, Index type_count) override
     {
@@ -223,7 +227,7 @@ public:
         CHECK_RESULT(m_validator.OnFuncType(GetLocation(), param_count, param_types, result_count, result_types, index, supertypes));
         m_functionTypes.push_back(SimpleFuncType( { ToInterp(param_count, param_types), ToInterp(result_count, result_types) }));
         m_externalDelegate->OnFuncType(index, param_count, param_types, result_count, result_types, supertypes);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnStructType(Index index, Index field_count, TypeMut *fields, SupertypesInfo* supertypes) override {
         CHECK_RESULT(m_validator.OnStructType(GetLocation(), field_count, fields, supertypes));
@@ -245,7 +249,7 @@ public:
     }
     Result OnImportCount(Index count) override {
         m_externalDelegate->OnImportCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnImport(Index index, ExternalKind kind, nonstd::string_view module_name, nonstd::string_view field_name) override {
         return Result::Ok;
@@ -287,7 +291,7 @@ public:
     }
     Result OnFunctionCount(Index count) override {
         m_externalDelegate->OnFunctionCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnFunction(Index index, Index sig_index) override {
         CHECK_RESULT(m_validator.OnFunction(GetLocation(), Var(sig_index, GetLocation())));
@@ -304,7 +308,7 @@ public:
     }
     Result OnTableCount(Index count) override {
         m_externalDelegate->OnTableCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result BeginTable(Index index, Type elem_type, const Limits* elem_limits, TableInitExprStatus init_provided) override {
         CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, wabt::TableImportStatus::TableIsNotImported, init_provided));
@@ -344,7 +348,7 @@ public:
     }
     Result OnMemoryCount(Index count) override {
         m_externalDelegate->OnMemoryCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnMemory(Index index, const Limits *limits, uint32_t page_size) override {
         CHECK_RESULT(m_validator.OnMemory(GetLocation(), *limits, page_size));
@@ -362,7 +366,7 @@ public:
     }
     Result OnGlobalCount(Index count) override {
         m_externalDelegate->OnGlobalCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result BeginGlobal(Index index, Type type, bool mutable_) override {
         CHECK_RESULT(m_validator.BeginGlobal(GetLocation(), type, mutable_));
@@ -401,7 +405,7 @@ public:
     }
     Result OnExportCount(Index count) override {
         m_externalDelegate->OnExportCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnExport(Index index, ExternalKind kind, Index item_index, nonstd::string_view name) override {
         CHECK_RESULT(m_validator.OnExport(GetLocation(), kind, Var(item_index, GetLocation()), name));
@@ -441,12 +445,12 @@ public:
     }
     Result OnLocalDeclCount(Index count) override {
         m_externalDelegate->OnLocalDeclCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnLocalDecl(Index decl_index, Index count, Type type) override {
         CHECK_RESULT(m_validator.OnLocalDecl(GetLocation(), count, type));
         m_externalDelegate->OnLocalDecl(decl_index, count, type);
-        return Result::Ok;
+        return CheckParseError();
     }
 
     Result OnStartReadInstructions(Offset start, Offset end) override {
@@ -1025,7 +1029,7 @@ public:
         CHECK_RESULT(m_validator.EndFunctionBody(GetLocation()));
         EXECUTE_VALIDATOR(PopLabel());
         m_externalDelegate->EndFunctionBody(index);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result EndCodeSection() override {
         return Result::Ok;
@@ -1076,7 +1080,7 @@ public:
     }
     Result OnElemSegmentCount(Index count) override {
         m_externalDelegate->OnElemSegmentCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result BeginElemSegment(Index index, Index table_index, uint8_t flags) override {
         auto mode = ToSegmentMode(flags);
@@ -1138,7 +1142,7 @@ public:
     }
     Result OnDataSegmentCount(Index count) override {
         m_externalDelegate->OnDataSegmentCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result BeginDataSegment(Index index, Index memory_index, uint8_t flags) override {
         auto mode = ToSegmentMode(flags);
@@ -1268,7 +1272,7 @@ public:
     }
     Result OnTagCount(Index count) override {
         m_externalDelegate->OnTagCount(count);
-        return Result::Ok;
+        return CheckParseError();
     }
     Result OnTagType(Index index, Index sig_index) override {
         CHECK_RESULT(m_validator.OnTag(GetLocation(), Var(sig_index, GetLocation())));

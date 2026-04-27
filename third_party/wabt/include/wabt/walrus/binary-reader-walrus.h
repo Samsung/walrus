@@ -233,7 +233,13 @@ public:
         return m_skipValidationUntil;
     }
 
+    const std::string& WalrusParseError()
+    {
+        return m_walrusParseError;
+    }
+
 protected:
+    std::string m_walrusParseError;
     bool m_shouldContinueToGenerateByteCode;
     size_t m_resumeGenerateByteCodeAfterNBlockEnd;
     size_t m_skipValidationUntil;

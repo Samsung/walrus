@@ -641,7 +641,6 @@ private:
     Walrus::SegmentMode m_segmentMode;
 
     Walrus::WASMParsingResult m_result;
-    std::string m_walrusParseError;
 
     PreprocessData m_preprocessData;
 
@@ -892,11 +891,6 @@ public:
     static void* operator new(size_t) = delete;
     static void* operator new[](size_t) = delete;
 
-    std::string WalrusParseError()
-    {
-        return m_walrusParseError;
-    }
-
     virtual void BeginModule(uint32_t version) override
     {
         m_result.m_version = version;
@@ -915,6 +909,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many type declarations.");
+            return;
         }
 
         m_result.m_compositeTypes.reserve(count);
@@ -935,6 +930,7 @@ public:
     {
         if (paramCount > PARSER_RESOURCE_LIMIT || resultCount > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many function params or results.");
+            return;
         }
 
         Walrus::FunctionType* functionType = new Walrus::FunctionType(paramCount, getRefCountOfTypes(paramTypes, paramCount),
@@ -1020,6 +1016,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many imports.");
+            return;
         }
 
         m_result.m_imports.reserve(count);
@@ -1088,6 +1085,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many exports.");
+            return;
         }
 
         m_result.m_exports.reserve(count);
@@ -1104,6 +1102,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many tables declarations.");
+            return;
         }
 
         m_result.m_tableTypes.reserve(count);
@@ -1133,6 +1132,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many elem segment declarations.");
+            return;
         }
 
         m_result.m_elements.reserve(count);
@@ -1196,6 +1196,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many memory declarations.");
+            return;
         }
 
         m_result.m_memoryTypes.reserve(count);
@@ -1211,6 +1212,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many elem segment declarations.");
+            return;
         }
 
         m_result.m_datas.reserve(count);
@@ -1251,6 +1253,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many function declarations.");
+            return;
         }
 
         m_result.m_functions.reserve(count);
@@ -1268,6 +1271,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many global declarations.");
+            return;
         }
 
         m_result.m_globalTypes.reserve(count);
@@ -1305,6 +1309,7 @@ public:
     {
         if (count > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many tags.");
+            return;
         }
 
         m_result.m_tagTypes.reserve(count);
@@ -1331,6 +1336,11 @@ public:
 
     virtual void OnLocalDeclCount(Index count) override
     {
+        if (count > PARSER_RESOURCE_LIMIT) {
+            m_walrusParseError = std::string("Engine limit reached: too many local declarations.");
+            return;
+        }
+
         m_currentFunction->m_local.reserve(count);
         m_localInfo.reserve(count + m_currentFunctionType->param().size());
     }
@@ -1340,6 +1350,7 @@ public:
         uint64_t totalLocalCount = static_cast<uint64_t>(m_localInfo.size()) + count;
         if (totalLocalCount > PARSER_RESOURCE_LIMIT) {
             m_walrusParseError = std::string("Engine limit reached: too many local declarations.");
+            return;
         }
 
         while (count) {
@@ -3409,6 +3420,7 @@ public:
         // FIXME too many stack usage. we could not support this(yet)
         if (m_initialFunctionStackSize > std::numeric_limits<Walrus::ByteCodeStackOffset>::max()) {
             m_walrusParseError = std::string("Function stack usage is larger then supported maxium (65535 bytes).");
+            return;
         }
 
         m_lastI32EqzPos = s_noI32Eqz;
@@ -3901,18 +3913,19 @@ std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, 
     wabt::WASMBinaryReader delegate(store->getTypeStore());
 
     std::string error = ReadWasmBinary(filename, data, len, &delegate, featureFlags);
-    if (error.length()) {
-        if (delegate.parsingResult().m_typesAddedToStore) {
-            store->getTypeStore().releaseTypes(delegate.parsingResult().m_compositeTypes);
-        }
-        return std::make_pair(nullptr, error);
-    }
 
     if (delegate.WalrusParseError().length()) {
         if (delegate.parsingResult().m_typesAddedToStore) {
             store->getTypeStore().releaseTypes(delegate.parsingResult().m_compositeTypes);
         }
         return std::make_pair(nullptr, delegate.WalrusParseError());
+    }
+
+    if (error.length()) {
+        if (delegate.parsingResult().m_typesAddedToStore) {
+            store->getTypeStore().releaseTypes(delegate.parsingResult().m_compositeTypes);
+        }
+        return std::make_pair(nullptr, error);
     }
 
     Module* module = new Module(store, delegate.parsingResult());
