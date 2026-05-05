@@ -27,6 +27,9 @@ class FunctionType;
 class StructType;
 class ArrayType;
 class RecursiveType;
+class GlobalType;
+class TableType;
+class MemoryType;
 
 class ObjectType {
 public:
@@ -44,6 +47,24 @@ public:
     virtual ~ObjectType() {}
 
     Kind kind() const { return m_kind; }
+
+    GlobalType* asGlobalType()
+    {
+        ASSERT(kind() == ObjectType::GlobalKind);
+        return reinterpret_cast<GlobalType*>(this);
+    }
+
+    TableType* asTableType()
+    {
+        ASSERT(kind() == ObjectType::TableKind);
+        return reinterpret_cast<TableType*>(this);
+    }
+
+    MemoryType* asMemoryType()
+    {
+        ASSERT(kind() == ObjectType::MemoryKind);
+        return reinterpret_cast<MemoryType*>(this);
+    }
 
 protected:
     ObjectType(Kind kind)

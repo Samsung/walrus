@@ -2182,6 +2182,9 @@ void BinaryWriter::WriteComponentSort(ComponentSort sort, bool core_only) {
     case ComponentSort::CoreGlobal:
       core_code = ComponentBinaryCoreSort::Global;
       break;
+    case ComponentSort::CoreTag:
+      core_code = ComponentBinaryCoreSort::Tag;
+      break;
     case ComponentSort::CoreType:
       core_code = ComponentBinaryCoreSort::Type;
       break;

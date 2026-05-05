@@ -939,19 +939,15 @@ Result TypeChecker::OnArrayNewFixed(Type ref_type,
   Result result = Result::Ok;
   array_type = ToUnpackedType(array_type);
   for (Index i = 0; i < count; ++i) {
-    result |= PeekAndCheckType(count - i - 1, array_type);
-  }
-
-  if (Failed(result)) {
-    // To improve performance, type vector
-    // conversion is only done on error.
-    TypeVector types;
-    types.reserve(count);
-
-    for (size_t i = 0; i < count; ++i) {
-      types.push_back(array_type);
+    // For a very large count, PrintStackIfFailedV might print too many values.
+    if (Failed(PeekAndCheckType(count - i - 1, array_type))) {
+      Type actual = Type::Any;
+      PeekType(count - i - 1, &actual);
+      PrintError("array.new_fixed expects %s but got %s at depth %" PRIindex,
+                 array_type.GetName().c_str(), actual.GetName().c_str(), i);
+      result = Result::Error;
+      break;
     }
-    PrintStackIfFailedV(result, "array.new_fixed", types, /*is_end=*/false);
   }
 
   result |= DropTypes(count);
@@ -1160,8 +1156,10 @@ Result TypeChecker::OnReturnCall(const TypeVector& param_types,
 }
 
 Result TypeChecker::OnReturnCallIndirect(const TypeVector& param_types,
-                                         const TypeVector& result_types) {
-  Result result = PopAndCheck1Type(Type::I32, "return_call_indirect");
+                                         const TypeVector& result_types,
+                                         const Limits& table_limits) {
+  Result result = PopAndCheck1Type(table_limits.is_64 ? Type::I64 : Type::I32,
+                                   "return_call_indirect");
 
   result |= PopAndCheckSignature(param_types, "return_call_indirect");
   result |= PopAndCheckReturnCall(result_types, "return_call_indirect");

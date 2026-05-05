@@ -1596,8 +1596,8 @@ Result SharedValidator::OnReturnCallIndirect(const Location& loc,
                          "type mismatch: return_call_indirect must reference "
                          "table of funcref type");
   }
-  result |=
-      typechecker_.OnReturnCallIndirect(func_type.params, func_type.results);
+  result |= typechecker_.OnReturnCallIndirect(
+      func_type.params, func_type.results, table_type.limits);
   IgnoreLocalRefs();
   return result;
 }
@@ -1945,9 +1945,13 @@ Result SharedComponentValidator::EndComponent() {
 Result SharedComponentValidator::OnCoreInstance(
     const ComponentIndexLoc& module_index,
     uint32_t argument_count) {
+  TypeBase* type_base = nullptr;
+  Result result =
+      CheckIndex(ComponentSort::CoreModule, module_index, &type_base);
+  CurrentAsComponent()->core_instances.push_back(type_base);
   assert(caseful_names_.empty());
   argument_count_ = argument_count;
-  return Result::Ok;
+  return result;
 }
 
 Result SharedComponentValidator::OnCoreInstanceArg(
@@ -1979,6 +1983,10 @@ Result SharedComponentValidator::OnCoreInstanceArg(
 }
 
 Result SharedComponentValidator::OnInlineCoreInstance(uint32_t argument_count) {
+  Component* component = CurrentAsComponent();
+  auto module = MakeUnique<CoreModule>();
+  component->core_instances.push_back(module.get());
+  objects_.push_back(std::move(module));
   assert(caseful_names_.empty());
   argument_count_ = argument_count;
   return Result::Ok;
@@ -2159,9 +2167,10 @@ Result SharedComponentValidator::OnAliasCoreExport(
     ComponentSort sort,
     const ComponentIndexLoc& core_instance_index,
     const ComponentStringLoc& name) {
-  if (sort != ComponentSort::CoreFunc && sort != ComponentSort::CoreTable &&
-      sort != ComponentSort::CoreMemory && sort != ComponentSort::CoreGlobal &&
-      sort != ComponentSort::CoreType) {
+  if ((current_->info_bits & IsObject) == 0 ||
+      (sort != ComponentSort::CoreFunc && sort != ComponentSort::CoreTable &&
+       sort != ComponentSort::CoreMemory && sort != ComponentSort::CoreGlobal &&
+       sort != ComponentSort::CoreTag)) {
     return PrintError(loc, "invalid alias core export sort (%s)",
                       sort.GetName());
   }
@@ -2170,11 +2179,22 @@ Result SharedComponentValidator::OnAliasCoreExport(
   Result result =
       CheckIndex(ComponentSort::CoreInstance, core_instance_index, &type_base);
 
-  type_base = nullptr;
-
-  TypeBaseVector* type_vector = GetSort(current_, sort);
-  if (type_vector != nullptr) {
-    type_vector->push_back(type_base);
+  switch (sort) {
+    case ComponentSort::CoreTable:
+      CurrentAsComponent()->core_tables++;
+      break;
+    case ComponentSort::CoreGlobal:
+      CurrentAsComponent()->core_globals++;
+      break;
+    case ComponentSort::CoreTag:
+      CurrentAsComponent()->core_tags++;
+      break;
+    default: {
+      type_base = nullptr;
+      TypeBaseVector* type_vector = GetSort(current_, sort);
+      assert(type_vector != nullptr);
+      type_vector->push_back(type_base);
+    }
   }
   return result;
 }
@@ -2483,7 +2503,7 @@ Result SharedComponentValidator::OnResourceType(const Location& loc,
     result |=
         PrintError(loc, "resources can only be defined in concrete components");
   }
-  auto type_value = MakeUnique<TypeBase>(TypeDef::Resource);
+  auto type_value = MakeUnique<TypeResource>(TypeResource::Local);
   type_value->info_bits |= HasResource;
   current_->types.push_back(type_value.get());
   objects_.push_back(std::move(type_value));
@@ -2500,7 +2520,7 @@ Result SharedComponentValidator::OnResourceAsyncType(
     result |=
         PrintError(loc, "resources can only be defined in concrete components");
   }
-  auto type_value = MakeUnique<TypeBase>(TypeDef::ResourceAsync);
+  auto type_value = MakeUnique<TypeResource>(TypeResource::LocalAsync);
   type_value->info_bits |= HasResource;
   current_->types.push_back(type_value.get());
   objects_.push_back(std::move(type_value));
@@ -2572,6 +2592,26 @@ Result SharedComponentValidator::OnCanonLower(
 Result SharedComponentValidator::OnCanonType(
     ComponentCanon canon,
     const ComponentIndexLoc& type_index) {
+  Result result = Result::Ok;
+  switch (canon) {
+    case ComponentCanon::ResourceNew:
+    case ComponentCanon::ResourceDrop:
+    case ComponentCanon::ResourceRep: {
+      TypeBase* type_base = nullptr;
+      result |= CheckIndex(type_index.loc, ComponentSort::Type,
+                           type_index.index, IncludeLast, &type_base);
+      result |= CheckResource(type_index.loc, &type_base);
+      // The type_base is set to nullptr on error.
+      if (canon != ComponentCanon::ResourceDrop && type_base != nullptr &&
+          type_base->AsTypeResource()->type == TypeResource::Imported) {
+        result |=
+            PrintError(type_index.loc, "resource must be defined locally");
+      }
+      break;
+    }
+    default:
+      break;
+  }
   auto type_value = MakeUnique<TypeBase>(TypeDef::CoreFunc);
   CurrentAsComponent()->core_funcs.push_back(type_value.get());
   objects_.push_back(std::move(type_value));
@@ -2652,6 +2692,8 @@ SharedComponentValidator::TypeBaseVector* SharedComponentValidator::GetSort(
       return &component->core_funcs;
     case ComponentSort::CoreMemory:
       return &component->core_memories;
+    case ComponentSort::CoreInstance:
+      return &component->core_instances;
     case ComponentSort::CoreModule:
       return &component->core_modules;
     case ComponentSort::Func:
@@ -2670,14 +2712,33 @@ Result SharedComponentValidator::CheckIndex(const Location& loc,
                                             CheckMode mode,
                                             TypeBase** out_type) {
   std::vector<TypeBase*>* sort_vector = GetSort(current_, sort);
-  if (sort_vector == nullptr) {
-    return Result::Ok;
-  }
+  Index max;
 
-  Index max = static_cast<Index>(sort_vector->size());
-  if (mode == ExcludeLast) {
-    assert(max > 0);
-    max--;
+  if (sort_vector == nullptr) {
+    assert(mode == IncludeLast);
+    Component* component = CurrentAsComponent();
+    switch (sort) {
+      case ComponentSort::CoreTable:
+        max = component->core_tables;
+        break;
+      case ComponentSort::CoreGlobal:
+        max = component->core_globals;
+        break;
+      case ComponentSort::CoreTag:
+        max = component->core_tags;
+        break;
+      case ComponentSort::CoreType:
+        max = component->core_types;
+        break;
+      default:
+        return Result::Ok;
+    }
+  } else {
+    max = static_cast<Index>(sort_vector->size());
+    if (mode == ExcludeLast) {
+      assert(max > 0);
+      max--;
+    }
   }
 
   if (index >= max) {
@@ -2838,7 +2899,7 @@ Result SharedComponentValidator::CheckExternalInfo(
   ComponentSort sort = external_info.sort;
   if (sort == ComponentSort::Type &&
       external_info.external == ComponentExternalDesc::TypeSubRes) {
-    auto type_value = MakeUnique<TypeBase>(TypeDef::Resource);
+    auto type_value = MakeUnique<TypeResource>(TypeResource::Imported);
     *out_type_base = type_value.get();
     objects_.push_back(std::move(type_value));
     return Result::Ok;

@@ -4097,6 +4097,9 @@ Result WastParser::ParseComponentCoreSort(ComponentSort* out_sort) {
     case TokenType::Global:
       *out_sort = ComponentSort::CoreGlobal;
       break;
+    case TokenType::Tag:
+      *out_sort = ComponentSort::CoreTag;
+      break;
     case TokenType::Type:
       *out_sort = ComponentSort::CoreType;
       break;

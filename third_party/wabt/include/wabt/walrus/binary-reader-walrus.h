@@ -249,6 +249,9 @@ class WASMComponentBinaryReaderDelegate {
 public:
     virtual ~WASMComponentBinaryReaderDelegate() {}
 
+    virtual const std::string& filename() = 0;
+    virtual uint32_t featureFlags() = 0;
+
     virtual void OnCoreModule(const void* data,
                               size_t size,
                               const ReadBinaryOptions& options) = 0;
@@ -367,7 +370,7 @@ enum FeatureFlagValue : uint32_t {
 };
 
 std::string ReadWasmBinary(const std::string& filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate, const uint32_t featureFlags);
-std::string ReadWasmComponentBinary(const std::string& filename, const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate* delegate, const uint32_t featureFlags);
+std::string ReadWasmComponentBinary(const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate* delegate);
 
 }  // namespace wabt
 

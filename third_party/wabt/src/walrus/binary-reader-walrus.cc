@@ -1629,8 +1629,8 @@ std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, siz
 
 class ComponentBinaryReaderDelegateWalrus: public ComponentBinaryReaderDelegate {
 public:
-    ComponentBinaryReaderDelegateWalrus(WASMComponentBinaryReaderDelegate *delegate, const std::string &filename, const uint32_t featureFlags) :
-        m_externalDelegate(delegate), m_validator(&m_errors, filename, ValidateOptions(getFeatures(featureFlags))) {
+    ComponentBinaryReaderDelegateWalrus(WASMComponentBinaryReaderDelegate *delegate) :
+        m_externalDelegate(delegate), m_validator(&m_errors, delegate->filename(), ValidateOptions(getFeatures(delegate->featureFlags()))) {
     }
 
     Location GetLocation() const {
@@ -1644,12 +1644,16 @@ public:
         return true;
     }
 
+    Result CheckParseError() {
+        return m_externalDelegate->WalrusParseError().empty() ? Result::Ok : Result::Error;
+    }
+
     Result OnCoreModule(const void* data,
                         size_t size,
                         const ReadBinaryOptions& options) override {
         CHECK_RESULT(m_validator.OnCoreModule());
         m_externalDelegate->OnCoreModule(data, size, options);
-        return Result::Ok;
+        return CheckParseError();
     }
 
     Result BeginComponent(uint32_t version, size_t depth) override {
@@ -1780,7 +1784,7 @@ public:
                              const ComponentStringLoc& name) override {
         CHECK_RESULT(m_validator.OnAliasCoreExport(GetLocation(), sort, core_instance_index, name));
         m_externalDelegate->OnAliasCoreExport(sort, core_instance_index.index, name);
-        return Result::Ok;
+        return CheckParseError();
     }
 
     Result OnAliasOuter(ComponentSort sort,
@@ -2076,12 +2080,12 @@ public:
     SharedComponentValidator m_validator;
 };
 
-std::string ReadWasmComponentBinary(const std::string &filename, const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate *delegate, const uint32_t featureFlags) {
+std::string ReadWasmComponentBinary(const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate *delegate) {
     const bool kReadDebugNames = false;
     const bool kStopOnFirstError = true;
     const bool kFailOnCustomSectionError = true;
-    ReadBinaryOptions options(getFeatures(featureFlags), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
-    ComponentBinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename, featureFlags);
+    ReadBinaryOptions options(getFeatures(delegate->featureFlags()), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
+    ComponentBinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate);
     Result result = ReadBinaryComponent(data, size, &binaryReaderDelegateWalrus, options);
 
     if (WABT_UNLIKELY(binaryReaderDelegateWalrus.m_errors.size())) {

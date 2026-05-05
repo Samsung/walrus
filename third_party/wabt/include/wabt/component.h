@@ -44,6 +44,7 @@ class ComponentSort {
     CoreTable,
     CoreMemory,
     CoreGlobal,
+    CoreTag,
     CoreType,
     CoreModule,
     CoreInstance,
