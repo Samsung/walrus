@@ -548,7 +548,6 @@ class SharedComponentValidator {
     Component,
     Func,
     Resource,
-    ResourceAsync,
   };
 
   // Checks may ignore the last (partly created) item of a sort.
@@ -570,6 +569,7 @@ class SharedComponentValidator {
   struct TypeItems;
   struct TypeTuple;
   struct TypeLabels;
+  struct TypeResource;
   struct TypeFunc;
   struct TypeExternalList;
 
@@ -595,7 +595,7 @@ class SharedComponentValidator {
     }
 
     bool IsValueTypePair() const {
-      return type_def == TypeDef::Result || type_def == TypeDef::ResourceAsync;
+      return type_def == TypeDef::Result;
     }
 
     ValueTypePair* AsValueTypePair() {
@@ -624,6 +624,11 @@ class SharedComponentValidator {
     TypeLabels* AsTypeLabels() {
       assert(IsTypeLabels());
       return reinterpret_cast<TypeLabels*>(this);
+    }
+
+    TypeResource* AsTypeResource() {
+      assert(type_def == TypeDef::Resource);
+      return reinterpret_cast<TypeResource*>(this);
     }
 
     bool IsTypeFunc() const {
@@ -734,6 +739,19 @@ class SharedComponentValidator {
     std::vector<const std::string*> items;
   };
 
+  struct TypeResource : public TypeBase {
+    enum Type : uint8_t {
+      Local,
+      LocalAsync,
+      Imported,
+    };
+
+    TypeResource(Type type)
+        : TypeBase(TypeDef::Resource), type(type) {}
+
+    Type type;
+  };
+
   struct TypeFunc : public TypeBase {
     struct Param {
       const std::string* name;
@@ -788,7 +806,12 @@ class SharedComponentValidator {
 
     // Sorts.
     TypeBaseVector core_funcs;
+    uint32_t core_tables = 0;
     TypeBaseVector core_memories;
+    uint32_t core_globals = 0;
+    uint32_t core_tags = 0;
+    uint32_t core_types = 0;
+    TypeBaseVector core_instances;
     TypeBaseVector core_modules;
     TypeBaseVector funcs;
     TypeBaseVector components;

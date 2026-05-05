@@ -63,6 +63,8 @@ const char* ComponentSort::GetName() const {
       return "core memory";
     case CoreGlobal:
       return "core global";
+    case CoreTag:
+      return "core tag";
     case CoreType:
       return "core type";
     case CoreModule:
@@ -94,6 +96,8 @@ const char* ComponentSort::GetCoreName() const {
       return "memory";
     case CoreGlobal:
       return "global";
+    case CoreTag:
+      return "tag";
     case CoreType:
       return "type";
     case CoreModule:

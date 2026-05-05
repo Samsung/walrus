@@ -589,6 +589,9 @@ private:
     uint32_t m_callbackIndex;
 };
 
+class ComponentCoreModule;
+class ComponentCoreInstantiate;
+class ComponentCoreInstantiateInline;
 class ComponentInstantiate;
 class ComponentInstantiateInline;
 class ComponentCanonLift;
@@ -598,7 +601,9 @@ class ComponentCanonType;
 class ComponentDeclaration {
 public:
     enum Kind : uint8_t {
-        ComponentKind,
+        CoreModuleKind,
+        CoreInstantiateKind,
+        CoreInstantiateInlineKind,
         InstantiateKind,
         InstantiateInlineKind,
         CanonLiftKind,
@@ -607,6 +612,7 @@ public:
         CanonResourceDrop,
         CanonResourceRep,
         ImportKind,
+        ComponentKind,
     };
 
     ComponentDeclaration(Kind kind)
@@ -619,6 +625,24 @@ public:
     Kind kind() const
     {
         return m_kind;
+    }
+
+    ComponentCoreModule* asCoreModule()
+    {
+        ASSERT(kind() == CoreModuleKind);
+        return reinterpret_cast<ComponentCoreModule*>(this);
+    }
+
+    ComponentCoreInstantiate* asCoreInstantiate()
+    {
+        ASSERT(kind() == CoreInstantiateKind);
+        return reinterpret_cast<ComponentCoreInstantiate*>(this);
+    }
+
+    ComponentCoreInstantiateInline* asCoreInstantiateInline()
+    {
+        ASSERT(kind() == CoreInstantiateInlineKind);
+        return reinterpret_cast<ComponentCoreInstantiateInline*>(this);
     }
 
     ComponentInstantiate* asInstantiate()
@@ -658,6 +682,84 @@ public:
 
 private:
     Kind m_kind;
+};
+
+class ComponentCoreModule : public ComponentDeclaration {
+public:
+    ComponentCoreModule(Module* module)
+        : ComponentDeclaration(CoreModuleKind)
+        , m_module(module)
+    {
+    }
+
+    Module* module()
+    {
+        return m_module;
+    }
+
+private:
+    Module* m_module;
+};
+
+class ComponentCoreInstantiate : public ComponentDeclaration {
+public:
+    struct Argument {
+        std::string name;
+        uint32_t index;
+    };
+
+    ComponentCoreInstantiate(uint32_t moduleIndex)
+        : ComponentDeclaration(CoreInstantiateKind)
+        , m_moduleIndex(moduleIndex)
+    {
+    }
+
+    uint32_t moduleIndex()
+    {
+        return m_moduleIndex;
+    }
+
+    std::vector<Argument>& arguments()
+    {
+        return m_arguments;
+    }
+
+private:
+    uint32_t m_moduleIndex;
+    std::vector<Argument> m_arguments;
+};
+
+class ComponentCoreInstantiateInline : public ComponentDeclaration {
+public:
+    struct Argument {
+        ComponentSort sort;
+        uint32_t index;
+    };
+
+    ComponentCoreInstantiateInline()
+        : ComponentDeclaration(CoreInstantiateInlineKind)
+        , m_module(nullptr)
+    {
+    }
+
+    Module* module()
+    {
+        return m_module;
+    }
+
+    void setModule(Module* module)
+    {
+        m_module = module;
+    }
+
+    std::vector<Argument>& arguments()
+    {
+        return m_arguments;
+    }
+
+private:
+    Module* m_module;
+    std::vector<Argument> m_arguments;
 };
 
 class ComponentInstantiate : public ComponentDeclaration {

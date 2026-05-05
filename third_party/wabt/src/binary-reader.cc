@@ -215,7 +215,7 @@ class BinaryReader {
   [[nodiscard]] Result ReadComponentCoreInstance();
   [[nodiscard]] Result ReadComponentInstance();
   [[nodiscard]] Result ReadComponentInlineInstance();
-  [[nodiscard]] Result ReadComponentAlias(bool is_component);
+  [[nodiscard]] Result ReadComponentAlias();
   [[nodiscard]] Result ReadComponentValType(ComponentTypeLoc* out_type);
   [[nodiscard]] Result ReadComponentValTypeOpt(ComponentTypeLoc* out_type);
   [[nodiscard]] Result ReadComponentType();
@@ -2938,6 +2938,10 @@ Result BinaryReader::ReadTypeSection(Offset section_size) {
         supertypes.is_final_sub_type = (form == Type::SubFinal);
         CHECK_RESULT(
             ReadU32Leb128(&supertypes.sub_type_count, "sub type count"));
+        // Currently validator limits this value to 1.
+        ERROR_UNLESS(supertypes.sub_type_count < 65536,
+                     "too many subtypes (%" PRIindex ")",
+                     supertypes.sub_type_count);
         sub_types_.resize(supertypes.sub_type_count);
 
         for (Index i = 0; i < supertypes.sub_type_count; i++) {
@@ -3604,6 +3608,9 @@ Result BinaryReader::ReadComponentCoreSort(ComponentSort* out_sort) {
     case ComponentBinaryCoreSort::Global:
       *out_sort = ComponentSort::CoreGlobal;
       break;
+    case ComponentBinaryCoreSort::Tag:
+      *out_sort = ComponentSort::CoreTag;
+      break;
     case ComponentBinaryCoreSort::Type:
       *out_sort = ComponentSort::CoreType;
       break;
@@ -3784,7 +3791,7 @@ Result BinaryReader::ReadComponentInlineInstance() {
   return Result::Ok;
 }
 
-Result BinaryReader::ReadComponentAlias(bool is_component) {
+Result BinaryReader::ReadComponentAlias() {
   ComponentSort sort;
   CHECK_RESULT(ReadComponentSort(&sort));
 
@@ -4134,7 +4141,7 @@ Result BinaryReader::ReadComponentType() {
         case ComponentBinaryInterface::Type:
           break;
         case ComponentBinaryInterface::Alias:
-          CHECK_RESULT(ReadComponentAlias(false));
+          CHECK_RESULT(ReadComponentAlias());
           continue;
         case ComponentBinaryInterface::Import:
           CHECK_RESULT(ReadComponentExternal(true, false));
@@ -4409,7 +4416,7 @@ Result BinaryReader::ReadComponent() {
 
           COMPONENT_CALLBACK(BeginAliasSection, count);
           while (count > 0) {
-            CHECK_RESULT(ReadComponentAlias(true));
+            CHECK_RESULT(ReadComponentAlias());
             count--;
           }
           COMPONENT_CALLBACK0(EndAliasSection);

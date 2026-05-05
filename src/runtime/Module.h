@@ -22,7 +22,8 @@
 
 namespace wabt {
 class WASMBinaryReader;
-}
+class WASMComponentBinaryReader;
+} // namespace wabt
 
 namespace Walrus {
 
@@ -344,6 +345,7 @@ private:
 
 class Module : public Object {
     friend class wabt::WASMBinaryReader;
+    friend class wabt::WASMComponentBinaryReader;
     friend class JITCompiler;
     friend class Store;
 
