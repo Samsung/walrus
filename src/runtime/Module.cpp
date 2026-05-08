@@ -210,7 +210,9 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         case ImportType::Memory: {
             if (UNLIKELY(imports[i]->kind() != Object::MemoryKind
                          || m_imports[i]->memoryType()->initialSize() > imports[i]->asMemory()->sizeInPageSize()
-                         || m_imports[i]->memoryType()->maximumSize() < imports[i]->asMemory()->maximumSizeInPageSize())) {
+                         || m_imports[i]->memoryType()->maximumSize() < imports[i]->asMemory()->maximumSizeInPageSize()
+                         || m_imports[i]->memoryType()->isShared() != imports[i]->asMemory()->isShared()
+                         || m_imports[i]->memoryType()->is64() != imports[i]->asMemory()->is64())) {
                 Trap::throwException(state, "incompatible import type");
             }
 
@@ -218,7 +220,8 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             break;
         }
         case ImportType::Tag: {
-            if (UNLIKELY(imports[i]->kind() != Object::TagKind)) {
+            if (UNLIKELY(imports[i]->kind() != Object::TagKind
+                         || !imports[i]->asTag()->functionType()->equals(m_imports[i]->tagType()->functionType(), true))) {
                 Trap::throwException(state, "incompatible import type");
             }
             instance->m_tags[tagIndex++] = imports[i]->asTag();
@@ -274,7 +277,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
 
     // init tag
     while (tagIndex < m_tagTypes.size()) {
-        instance->m_tags[tagIndex] = Tag::createTag(m_store, m_compositeTypes[m_tagTypes[tagIndex]->sigIndex()]->asFunction());
+        instance->m_tags[tagIndex] = Tag::createTag(m_store, m_tagTypes[tagIndex]->functionType());
         tagIndex++;
     }
 

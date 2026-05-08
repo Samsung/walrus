@@ -49,6 +49,9 @@ public:
         MemoryKind,
         TrapKind,
         TagKind,
+        // Component types
+        LiftedFunctionKind,
+        ComponentInstanceKind,
         // Used by the test system
         ExternalValueKind,
         Invalid,

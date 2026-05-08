@@ -112,20 +112,8 @@ void DefinedFunctionWithTryCatch::interpreterCall(ExecutionState& state, uint8_t
     Interpreter::callInterpreter<true>(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
 }
 
-ImportedFunction* ImportedFunction::createImportedFunction(Store* store,
-                                                           FunctionType* functionType,
-                                                           ImportedFunctionCallback callback,
-                                                           void* data)
-{
-    ImportedFunction* func = new ImportedFunction(functionType,
-                                                  callback,
-                                                  data);
-    store->appendExtern(func);
-    return func;
-}
-
-void ImportedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
-                                       uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
+void NativeFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                     uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
     const FunctionType* ft = functionType();
     const TypeVector::Types& paramTypeInfo = ft->param().types();
@@ -148,6 +136,18 @@ void ImportedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteC
         resultVector[i].writeToMemory(bp + offsets[offsetIndex]);
         offsetIndex += valueFunctionCopyCount(resultTypeInfo[i]);
     }
+}
+
+ImportedFunction* ImportedFunction::createImportedFunction(Store* store,
+                                                           FunctionType* functionType,
+                                                           ImportedFunctionCallback callback,
+                                                           void* data)
+{
+    ImportedFunction* func = new ImportedFunction(functionType,
+                                                  callback,
+                                                  data);
+    store->appendExtern(func);
+    return func;
 }
 
 void ImportedFunction::call(ExecutionState& state, Value* argv, Value* result)
@@ -165,32 +165,6 @@ WasiFunction* WasiFunction::createWasiFunction(Store* store,
                                           callback);
     store->appendExtern(func);
     return func;
-}
-
-void WasiFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
-                                   uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
-{
-    const FunctionType* ft = functionType();
-    const TypeVector::Types& paramTypeInfo = ft->param().types();
-    const TypeVector::Types& resultTypeInfo = ft->result().types();
-
-    ALLOCA(Value, paramVector, sizeof(Value) * paramTypeInfo.size());
-    ALLOCA(Value, resultVector, sizeof(Value) * resultTypeInfo.size());
-
-    size_t offsetIndex = 0;
-    size_t size = paramTypeInfo.size();
-    Value* paramVectorStart = paramVector;
-    for (size_t i = 0; i < size; i++) {
-        paramVector[i] = Value(paramTypeInfo[i], bp + offsets[offsetIndex]);
-        offsetIndex += valueFunctionCopyCount(paramTypeInfo[i]);
-    }
-
-    call(state, paramVectorStart, resultVector);
-
-    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
-        resultVector[i].writeToMemory(bp + offsets[offsetIndex]);
-        offsetIndex += valueFunctionCopyCount(resultTypeInfo[i]);
-    }
 }
 
 void WasiFunction::call(ExecutionState& state, Value* argv, Value* result)

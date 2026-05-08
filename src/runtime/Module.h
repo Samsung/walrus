@@ -132,6 +132,12 @@ public:
         return static_cast<const MemoryType*>(m_type);
     }
 
+    const TagType* tagType() const
+    {
+        ASSERT(importType() == Type::Tag);
+        return static_cast<const TagType*>(m_type);
+    }
+
     std::string typeToString()
     {
         switch (m_importType) {

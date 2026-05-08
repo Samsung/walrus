@@ -309,7 +309,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
                         if (it.tagIndex != std::numeric_limits<uint32_t>::max()) {
                             TagType* tagType = module()->tagType(it.tagIndex);
-                            variableCount += module()->functionType(tagType->sigIndex())->param().size();
+                            variableCount += tagType->functionType()->param().size();
                         }
                     }
 
@@ -370,7 +370,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                             dependencyCtx.update(it.u.handler->m_dependencyStart, label->id());
                         } else {
                             TagType* tagType = module()->tagType(it.tagIndex);
-                            const TypeVector& param = module()->functionType(tagType->sigIndex())->param();
+                            const TypeVector& param = tagType->functionType()->param();
                             Label* catchLabel = it.u.handler;
 
                             m_variableList->pushCatchUpdate(catchLabel, param.size());
@@ -454,7 +454,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                         dependencyCtx.update(it.u.handler->m_dependencyStart, instr->id());
                     } else {
                         TagType* tagType = module()->tagType(it.tagIndex);
-                        const TypeVector& param = module()->functionType(tagType->sigIndex())->param();
+                        const TypeVector& param = tagType->functionType()->param();
                         Label* catchLabel = it.u.handler;
 
                         dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
@@ -788,7 +788,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     case ByteCode::ThrowOpcode: {
                         Throw* throwTag = reinterpret_cast<Throw*>(instr->byteCode());
                         TagType* tagType = module()->tagType(throwTag->tagIndex());
-                        types = &module()->functionType(tagType->sigIndex())->param();
+                        types = &tagType->functionType()->param();
                         break;
                     }
                     default: {

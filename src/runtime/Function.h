@@ -43,6 +43,7 @@ class FunctionType;
 class ModuleFunction;
 class DefinedFunction;
 class ImportedFunction;
+class LoweredFunction;
 class WasiFunction;
 
 class Function : public Extern {
@@ -58,6 +59,7 @@ public:
     {
         return false;
     }
+
     virtual bool isImportedFunction() const
     {
         return false;
@@ -74,12 +76,6 @@ public:
         return reinterpret_cast<DefinedFunction*>(this);
     }
 
-    ImportedFunction* asImportedFunction()
-    {
-        ASSERT(isImportedFunction());
-        return reinterpret_cast<ImportedFunction*>(this);
-    }
-
     WasiFunction* asWasiFunction()
     {
         ASSERT(isWasiFunction());
@@ -91,7 +87,6 @@ protected:
 
     const FunctionType* m_functionType;
 };
-
 
 class DefinedFunction : public Function {
     friend class Module;
@@ -137,7 +132,19 @@ protected:
     }
 };
 
-class ImportedFunction : public Function {
+class NativeFunction : public Function {
+public:
+    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
+                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
+
+protected:
+    NativeFunction(FunctionType* functionType)
+        : Function(functionType)
+    {
+    }
+};
+
+class ImportedFunction : public NativeFunction {
 public:
     typedef std::function<void(ExecutionState& state, Value* argv, Value* result, void* data)> ImportedFunctionCallback;
 
@@ -146,19 +153,13 @@ public:
                                                     ImportedFunctionCallback callback,
                                                     void* data);
 
-    virtual bool isImportedFunction() const override
-    {
-        return true;
-    }
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
-    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
-                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
 
 protected:
     ImportedFunction(FunctionType* functionType,
                      ImportedFunctionCallback callback,
                      void* data)
-        : Function(functionType)
+        : NativeFunction(functionType)
         , m_callback(callback)
         , m_data(data)
     {
@@ -168,7 +169,7 @@ protected:
     void* m_data;
 };
 
-class WasiFunction : public Function {
+class WasiFunction : public NativeFunction {
 public:
     typedef std::function<void(ExecutionState& state, Value* argv, Value* result, Instance* instance)> WasiFunctionCallback;
 
@@ -187,13 +188,11 @@ public:
     }
 
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
-    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
-                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
 
 protected:
     WasiFunction(FunctionType* functionType,
                  WasiFunctionCallback callback)
-        : Function(functionType)
+        : NativeFunction(functionType)
         , m_callback(callback)
         , m_runningInstance(nullptr)
     {
