@@ -18,6 +18,8 @@
 #include "runtime/Store.h"
 #include "runtime/Module.h"
 #include "runtime/Instance.h"
+#include "runtime/Component.h"
+#include "runtime/ComponentInstance.h"
 #include "runtime/ObjectType.h"
 
 #ifdef ENABLE_GC
@@ -54,6 +56,14 @@ Store::~Store()
     for (size_t i = 0; i < m_modules.size(); i++) {
         getTypeStore().releaseTypes(m_modules[i]->m_compositeTypes);
         delete m_modules[i];
+    }
+
+    for (size_t i = 0; i < m_componentInstances.size(); i++) {
+        delete m_componentInstances[i];
+    }
+
+    for (size_t i = 0; i < m_components.size(); i++) {
+        delete m_components[i];
     }
 
     for (size_t i = 0; i < m_externs.size(); i++) {

@@ -112,15 +112,35 @@ public:
 
     Module* module() const { return m_module; }
 
-    Function* function(uint32_t index) const { return m_functions[index]; }
+    Function* function(uint32_t index) const
+    {
+        ASSERT(index < module()->numberOfFunctions());
+        return m_functions[index];
+    }
+
+    Table* table(uint32_t index) const
+    {
+        ASSERT(index < module()->numberOfTableTypes());
+        return m_tables[index];
+    }
+
     Memory* memory(uint32_t index) const
     {
         ASSERT(index < module()->numberOfMemoryTypes());
         return m_memories[index];
     }
-    Table* table(uint32_t index) const { return m_tables[index]; }
-    Tag* tag(uint32_t index) const { return m_tags[index]; }
-    Global* global(uint32_t index) const { return m_globals[index]; }
+
+    Global* global(uint32_t index) const
+    {
+        ASSERT(index < module()->numberOfGlobalTypes());
+        return m_globals[index];
+    }
+
+    Tag* tag(uint32_t index) const
+    {
+        ASSERT(index < module()->numberOfTagTypes());
+        return m_tags[index];
+    }
 
     DataSegment* dataSegment(uint32_t index) { return m_dataSegments + index; }
     ElementSegment* elementSegment(uint32_t index) { return m_elementSegments + index; }

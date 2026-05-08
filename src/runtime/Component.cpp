@@ -15,7 +15,8 @@
  */
 #include "Walrus.h"
 
-#include "Component.h"
+#include "runtime/Component.h"
+#include "runtime/Store.h"
 
 namespace Walrus {
 
@@ -81,6 +82,12 @@ void ComponentRefCounted::releaseAllRefs(ComponentRefCounted* ref)
         delete ref;
         ref = nextRef;
     } while (ref != nullptr);
+}
+
+Component::Component(Store* store)
+{
+    m_type = new ComponentType(ComponentRefCounted::ComponentTypeKind);
+    store->appendComponent(this);
 }
 
 Component::~Component()

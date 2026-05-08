@@ -29,6 +29,8 @@ public:
         // The R is meant to represent the results, after R are the result types.
         NONE = 0,
         I32R,
+        I32I32R,
+        I32I32I32I32R,
         I32_RI32,
         I32I32_RI32,
         I32I64I32_RI32,
@@ -71,6 +73,26 @@ public:
             functionType = new FunctionType(1, 0, 0, 0);
             param = functionType->initParam();
             param->setType(0, Value::Type::I32);
+            functionType->initDone();
+            m_vector[index++] = functionType;
+        }
+        {
+            // I32I32R
+            functionType = new FunctionType(2, 0, 0, 0);
+            param = functionType->initParam();
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            functionType->initDone();
+            m_vector[index++] = functionType;
+        }
+        {
+            // I32I32I32I32R
+            functionType = new FunctionType(4, 0, 0, 0);
+            param = functionType->initParam();
+            param->setType(0, Value::Type::I32);
+            param->setType(1, Value::Type::I32);
+            param->setType(2, Value::Type::I32);
+            param->setType(3, Value::Type::I32);
             functionType->initDone();
             m_vector[index++] = functionType;
         }

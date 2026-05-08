@@ -347,16 +347,16 @@ private:
 
 class TagType : public ObjectType {
 public:
-    TagType(uint32_t sigIndex)
+    TagType(const FunctionType* functionType)
         : ObjectType(ObjectType::TagKind)
-        , m_sigIndex(sigIndex)
+        , m_functionType(functionType)
     {
     }
 
-    uint32_t sigIndex() const { return m_sigIndex; }
+    const FunctionType* functionType() const { return m_functionType; }
 
 private:
-    uint32_t m_sigIndex;
+    const FunctionType* m_functionType;
 };
 
 // ObjectType Vectors

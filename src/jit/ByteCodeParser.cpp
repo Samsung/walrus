@@ -1226,7 +1226,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::ThrowOpcode: {
             Throw* throwTag = reinterpret_cast<Throw*>(byteCode);
             TagType* tagType = compiler->module()->tagType(throwTag->tagIndex());
-            uint32_t size = compiler->module()->functionType(tagType->sigIndex())->param().size();
+            uint32_t size = tagType->functionType()->param().size();
 
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, size, 0);
             Operand* param = instr->params();

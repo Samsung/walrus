@@ -26,7 +26,7 @@ class FunctionType;
 
 class Tag : public Extern {
 public:
-    static Tag* createTag(Store* store, FunctionType* functionType)
+    static Tag* createTag(Store* store, const FunctionType* functionType)
     {
         Tag* tag = new Tag(functionType);
         store->appendExtern(tag);
@@ -39,7 +39,7 @@ public:
     }
 
 private:
-    Tag(FunctionType* functionType);
+    Tag(const FunctionType* functionType);
 
     const FunctionType* m_functionType;
 };

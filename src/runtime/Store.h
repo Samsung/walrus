@@ -28,6 +28,8 @@ namespace Walrus {
 class Engine;
 class Module;
 class Instance;
+class Component;
+class ComponentInstance;
 class Extern;
 class FunctionType;
 
@@ -71,6 +73,16 @@ public:
         m_instances.push_back(instance);
     }
 
+    void appendComponent(Component* component)
+    {
+        m_components.push_back(component);
+    }
+
+    void appendComponentInstance(ComponentInstance* instance)
+    {
+        m_componentInstances.push_back(instance);
+    }
+
     void appendExtern(Extern* ext)
     {
         m_externs.push_back(ext);
@@ -95,6 +107,8 @@ private:
 
     Vector<Module*> m_modules;
     Vector<Instance*> m_instances;
+    Vector<Component*> m_components;
+    Vector<ComponentInstance*> m_componentInstances;
     Vector<Extern*> m_externs;
 
     std::mutex m_waiterListLock;

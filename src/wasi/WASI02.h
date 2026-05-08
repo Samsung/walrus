@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-present Samsung Electronics Co., Ltd
+ * Copyright (c) 2023-present Samsung Electronics Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "Walrus.h"
 
-#include "Tag.h"
+#ifndef __WalrusWASI02__
+#define __WalrusWASI02__
+
+#ifdef ENABLE_WASI
+
+#include "Walrus.h"
+#include "runtime/Component.h"
 
 namespace Walrus {
 
-DEFINE_GLOBAL_TYPE_INFO(tagTypeInfo, TagKind);
+class ComponentInstance;
+class DefinedFunctionTypes;
 
-Tag::Tag(const FunctionType* functionType)
-    : Extern(GET_GLOBAL_TYPE_INFO(tagTypeInfo))
-    , m_functionType(functionType)
-{
-}
+ComponentInstance* wasi02LoadInstance(ComponentType::External& external, DefinedFunctionTypes& functionTypes);
 
 } // namespace Walrus
+
+#endif
+
+#endif // __WalrusWASI02__

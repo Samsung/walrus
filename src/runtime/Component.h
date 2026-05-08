@@ -30,6 +30,7 @@ enum class ComponentSort : uint8_t {
     CoreTable,
     CoreMemory,
     CoreGlobal,
+    CoreTag,
     CoreType,
     CoreModule,
     CoreInstance,
@@ -494,6 +495,9 @@ public:
     struct External {
         std::string name;
         ComponentRefCounted* type;
+        ComponentSort sort;
+        // Only needed for concreate components.
+        uint32_t exportIndex;
     };
 
     ComponentType(Kind kind)
@@ -565,6 +569,11 @@ public:
         return m_encoding;
     }
 
+    bool isAsync() const
+    {
+        return m_isAsync;
+    }
+
     uint32_t memoryIndex() const
     {
         return m_memoryIndex;
@@ -589,30 +598,31 @@ private:
     uint32_t m_callbackIndex;
 };
 
-class ComponentCoreModule;
 class ComponentCoreInstantiate;
-class ComponentCoreInstantiateInline;
 class ComponentInstantiate;
 class ComponentInstantiateInline;
+class ComponentAliasExport;
+class ComponentAliasInline;
 class ComponentCanonLift;
 class ComponentCanonLower;
 class ComponentCanonType;
+class ComponentImport;
 
 class ComponentDeclaration {
 public:
     enum Kind : uint8_t {
-        CoreModuleKind,
         CoreInstantiateKind,
-        CoreInstantiateInlineKind,
         InstantiateKind,
         InstantiateInlineKind,
+        AliasExportKind,
+        AliasCoreExportKind,
+        AliasInlineKind,
         CanonLiftKind,
         CanonLowerKind,
         CanonResourceNew,
         CanonResourceDrop,
         CanonResourceRep,
         ImportKind,
-        ComponentKind,
     };
 
     ComponentDeclaration(Kind kind)
@@ -627,22 +637,10 @@ public:
         return m_kind;
     }
 
-    ComponentCoreModule* asCoreModule()
-    {
-        ASSERT(kind() == CoreModuleKind);
-        return reinterpret_cast<ComponentCoreModule*>(this);
-    }
-
     ComponentCoreInstantiate* asCoreInstantiate()
     {
         ASSERT(kind() == CoreInstantiateKind);
         return reinterpret_cast<ComponentCoreInstantiate*>(this);
-    }
-
-    ComponentCoreInstantiateInline* asCoreInstantiateInline()
-    {
-        ASSERT(kind() == CoreInstantiateInlineKind);
-        return reinterpret_cast<ComponentCoreInstantiateInline*>(this);
     }
 
     ComponentInstantiate* asInstantiate()
@@ -655,6 +653,23 @@ public:
     {
         ASSERT(kind() == InstantiateInlineKind);
         return reinterpret_cast<ComponentInstantiateInline*>(this);
+    }
+
+    bool isAliasExport()
+    {
+        return kind() == AliasExportKind || kind() == AliasCoreExportKind;
+    }
+
+    ComponentAliasExport* asAliasExport()
+    {
+        ASSERT(isAliasExport());
+        return reinterpret_cast<ComponentAliasExport*>(this);
+    }
+
+    ComponentAliasInline* asAliasInline()
+    {
+        ASSERT(kind() == AliasInlineKind);
+        return reinterpret_cast<ComponentAliasInline*>(this);
     }
 
     ComponentCanonLift* asCanonLift()
@@ -680,25 +695,14 @@ public:
         return reinterpret_cast<ComponentCanonType*>(this);
     }
 
+    ComponentImport* asComponentImport()
+    {
+        ASSERT(kind() == ImportKind);
+        return reinterpret_cast<ComponentImport*>(this);
+    }
+
 private:
     Kind m_kind;
-};
-
-class ComponentCoreModule : public ComponentDeclaration {
-public:
-    ComponentCoreModule(Module* module)
-        : ComponentDeclaration(CoreModuleKind)
-        , m_module(module)
-    {
-    }
-
-    Module* module()
-    {
-        return m_module;
-    }
-
-private:
-    Module* m_module;
 };
 
 class ComponentCoreInstantiate : public ComponentDeclaration {
@@ -726,39 +730,6 @@ public:
 
 private:
     uint32_t m_moduleIndex;
-    std::vector<Argument> m_arguments;
-};
-
-class ComponentCoreInstantiateInline : public ComponentDeclaration {
-public:
-    struct Argument {
-        ComponentSort sort;
-        uint32_t index;
-    };
-
-    ComponentCoreInstantiateInline()
-        : ComponentDeclaration(CoreInstantiateInlineKind)
-        , m_module(nullptr)
-    {
-    }
-
-    Module* module()
-    {
-        return m_module;
-    }
-
-    void setModule(Module* module)
-    {
-        m_module = module;
-    }
-
-    std::vector<Argument>& arguments()
-    {
-        return m_arguments;
-    }
-
-private:
-    Module* m_module;
     std::vector<Argument> m_arguments;
 };
 
@@ -793,11 +764,6 @@ private:
 
 class ComponentInstantiateInline : public ComponentDeclaration {
 public:
-    struct Argument {
-        ComponentSort sort;
-        uint32_t index;
-    };
-
     ComponentInstantiateInline()
         : ComponentDeclaration(InstantiateInlineKind)
     {
@@ -809,14 +775,70 @@ public:
         return m_type;
     }
 
-    std::vector<Argument>& arguments()
+    std::vector<uint32_t>& arguments()
     {
         return m_arguments;
     }
 
 private:
     ComponentType* m_type;
-    std::vector<Argument> m_arguments;
+    std::vector<uint32_t> m_arguments;
+};
+
+class ComponentAliasExport : public ComponentDeclaration {
+public:
+    ComponentAliasExport(Kind kind, std::string name, ComponentSort sort, uint32_t instanceIndex)
+        : ComponentDeclaration(kind)
+        , m_name(name)
+        , m_sort(sort)
+        , m_instanceIndex(instanceIndex)
+    {
+        ASSERT(isAliasExport());
+    }
+
+    const std::string& name() const
+    {
+        return m_name;
+    }
+
+    ComponentSort sort() const
+    {
+        return m_sort;
+    }
+
+    uint32_t instanceIndex() const
+    {
+        return m_instanceIndex;
+    }
+
+private:
+    std::string m_name;
+    ComponentSort m_sort;
+    uint32_t m_instanceIndex;
+};
+
+class ComponentAliasInline : public ComponentDeclaration {
+public:
+    ComponentAliasInline(ComponentSort sort, uint32_t exportIndex)
+        : ComponentDeclaration(AliasInlineKind)
+        , m_sort(sort)
+        , m_exportIndex(exportIndex)
+    {
+    }
+
+    ComponentSort sort() const
+    {
+        return m_sort;
+    }
+
+    uint32_t exportIndex() const
+    {
+        return m_exportIndex;
+    }
+
+private:
+    ComponentSort m_sort;
+    uint32_t m_exportIndex;
 };
 
 class ComponentCanonLift : public ComponentDeclaration {
@@ -910,19 +932,20 @@ private:
     uint32_t m_importIndex;
 };
 
-class Component : public ComponentDeclaration {
+class Component {
     friend class wabt::WASMComponentBinaryReader;
 
 public:
-    Component()
-        : ComponentDeclaration(ComponentKind)
-    {
-        m_type = new ComponentType(ComponentRefCounted::ComponentTypeKind);
-    }
+    struct InlineExport {
+        std::string name;
+        ComponentSort sort;
+        uint32_t index;
+    };
 
+    Component(Store* store);
     ~Component();
 
-    ComponentType* type()
+    ComponentType* type() const
     {
         return m_type;
     }
@@ -937,10 +960,54 @@ public:
         return m_declarations;
     }
 
+    std::vector<InlineExport>& coreInlineExports()
+    {
+        return m_coreInlineExports;
+    }
+
+    std::vector<size_t>& coreInlineExportsStarts()
+    {
+        return m_coreInlineExportsStarts;
+    }
+
+    size_t coreInlineExportsStart(size_t index)
+    {
+        return m_coreInlineExportsStarts[index];
+    }
+
+    size_t coreInlineExportsEnd(size_t index)
+    {
+        return m_coreInlineExportsStarts[index + 1];
+    }
+
+    void pushModule(Module* module)
+    {
+        m_modules.push_back(module);
+    }
+
+    std::vector<Module*>& modules()
+    {
+        return m_modules;
+    }
+
+    void pushComponent(Component* component)
+    {
+        m_components.push_back(component);
+    }
+
+    std::vector<Component*>& components()
+    {
+        return m_components;
+    }
+
 private:
     // Declarations for instantiation.
     ComponentType* m_type;
     std::vector<ComponentDeclaration*> m_declarations;
+    std::vector<InlineExport> m_coreInlineExports;
+    std::vector<size_t> m_coreInlineExportsStarts;
+    std::vector<Module*> m_modules;
+    std::vector<Component*> m_components;
 };
 
 } // namespace Walrus

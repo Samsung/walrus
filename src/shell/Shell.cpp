@@ -12,7 +12,7 @@
 #include "runtime/Engine.h"
 #include "runtime/Store.h"
 #include "runtime/Module.h"
-#include "runtime/Component.h"
+#include "runtime/ComponentInstance.h"
 #include "runtime/Instance.h"
 #include "runtime/Function.h"
 #include "runtime/Table.h"
@@ -370,15 +370,27 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     &data);
 }
 
-static wabt::Result executeWASMComponent(Store* store, const std::string& filename, const std::vector<uint8_t>& src)
+static Trap::TrapResult executeWASMComponent(Store* store, DefinedFunctionTypes& functionTypes, const std::string& filename, const std::vector<uint8_t>& src)
 {
     std::pair<Optional<Component*>, std::string> parseResult = WASMComponentParser::parseBinary(store, filename, src.data(), src.size());
     if (!parseResult.second.empty()) {
-        printf("Cannot run module: %s\n", parseResult.second.c_str());
-        return wabt::Result::Error;
+        Trap::TrapResult tr;
+        tr.exception = Exception::create(parseResult.second);
+        return tr;
     }
 
-    return wabt::Result::Ok;
+    struct RunData {
+        Component* component;
+        Store* store;
+        DefinedFunctionTypes& functionTypes;
+    } data = { parseResult.first.value(), store, functionTypes };
+
+    Walrus::Trap trap;
+    return trap.run([](ExecutionState& state, void* d) {
+        RunData* data = reinterpret_cast<RunData*>(d);
+        ComponentInstance* instance = ComponentInstance::instantiate(state, data->store, data->functionTypes, data->component);
+    },
+                    &data);
 }
 
 static bool endsWith(const std::string& str, const std::string& suffix)
@@ -831,7 +843,11 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             result = WriteBinaryComponent(&stream, component.get(), writeBinaryOptions);
 
             if (wabt::Succeeded(result)) {
-                result = executeWASMComponent(store, filename, stream.output_buffer().data);
+                auto trapResult = executeWASMComponent(store, functionTypes, filename, stream.output_buffer().data);
+                if (trapResult.exception) {
+                    std::string& errorMessage = trapResult.exception->message();
+                    printf("Error: %s\n", errorMessage.c_str());
+                }
             }
         }
 
@@ -1327,7 +1343,11 @@ int main(int argc, const char* argv[])
                 if (!options.exportToRun.empty()) {
                     runExports(store, filePath, buf, options.exportToRun, functionTypes);
                 } else if (wabt::ReadBinaryIsComponent(buf.data(), buf.size())) {
-                    executeWASMComponent(store, filePath, buf);
+                    auto trapResult = executeWASMComponent(store, functionTypes, filePath, buf);
+                    if (trapResult.exception) {
+                        fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
+                        return -1;
+                    }
                 } else {
                     auto trapResult = executeWASM(store, filePath, buf, functionTypes);
                     if (trapResult.exception) {

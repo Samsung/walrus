@@ -28,23 +28,20 @@ namespace wabt {
 class WASMComponentBinaryReader : public wabt::WASMComponentBinaryReaderDelegate {
 private:
     struct CoreInstanceType {
-        static constexpr size_t NotInline = ~static_cast<size_t>(0);
-
-        CoreInstanceType(Walrus::Module* module)
+        CoreInstanceType(Walrus::Module* module, uint32_t index)
             : module(module)
-            , inlineIndex(NotInline)
+            , index(index)
         {
-            ASSERT(module != nullptr);
         }
 
-        CoreInstanceType(size_t inlineIndex)
+        CoreInstanceType(uint32_t index)
             : module(nullptr)
-            , inlineIndex(inlineIndex)
+            , index(index)
         {
         }
 
         Walrus::Module* module;
-        size_t inlineIndex;
+        uint32_t index;
     };
 
     // Depth data for each component.
@@ -53,15 +50,16 @@ private:
             : parent(parent)
             , parentComponentType(parentComponentType)
             , parentComponent(parentComponent)
+            , coreInstanceCounter(0)
         {
         }
 
         ComponentTypeInfo* parent;
         Walrus::ComponentType* parentComponentType;
         Walrus::Component* parentComponent;
+        uint32_t coreInstanceCounter;
         std::vector<Walrus::FunctionType*> coreFuncTypes;
         std::vector<bool> coreMemories;
-        std::vector<Walrus::Module*> coreModuleTypes;
         std::vector<CoreInstanceType> coreInstanceTypes;
         std::vector<Walrus::ComponentTypeFunc*> funcTypes;
         std::vector<Walrus::ComponentType*> componentTypes;
@@ -286,10 +284,8 @@ public:
         if (!result.second.empty()) {
             m_walrusParseError = result.second;
         }
-        // Module has been already added to store.
-        Walrus::Module* module = result.first.value();
-        m_currentComponent->pushDeclaration(new Walrus::ComponentCoreModule(module));
-        m_currentInfo->coreModuleTypes.push_back(module);
+        // Module has already been added to store.
+        m_currentComponent->pushModule(result.first.value());
     }
 
     void BeginComponent(uint32_t version, size_t depth)
@@ -297,11 +293,11 @@ public:
         ASSERT(m_currentInfo != nullptr || (m_current == nullptr && m_currentComponent == nullptr));
         Walrus::Component* parentComponent = m_currentComponent;
         m_currentInfo = new ComponentTypeInfo(m_currentInfo, m_current, m_currentComponent);
-        m_currentComponent = new Walrus::Component();
+        m_currentComponent = new Walrus::Component(m_store);
         m_current = m_currentComponent->type();
 
         if (parentComponent != nullptr) {
-            parentComponent->pushDeclaration(m_currentComponent);
+            parentComponent->pushComponent(m_currentComponent);
             m_currentInfo->parent->componentTypes.push_back(m_current);
         }
     }
@@ -309,6 +305,10 @@ public:
     void EndComponent()
     {
         ComponentTypeInfo* info = m_currentInfo;
+        if (m_currentComponent->coreInlineExportsStarts().size() > 0) {
+            // Extra value for coreInlineExportsEnd() calls.
+            m_currentComponent->coreInlineExportsStarts().push_back(m_currentComponent->coreInlineExports().size());
+        }
         // Keep the last component.
         if (m_currentInfo->parentComponent != nullptr) {
             m_currentComponent = m_currentInfo->parentComponent;
@@ -322,8 +322,9 @@ public:
     void BeginCoreInstance(Index moduleIndex,
                            uint32_t argumentCount)
     {
-        m_currentInfo->coreInstanceTypes.push_back(CoreInstanceType(m_currentInfo->coreModuleTypes[moduleIndex]));
+        m_currentInfo->coreInstanceTypes.push_back(CoreInstanceType(m_currentComponent->modules()[moduleIndex], m_currentInfo->coreInstanceCounter++));
         m_currentComponent->pushDeclaration(new Walrus::ComponentCoreInstantiate(moduleIndex));
+        ASSERT(~static_cast<uint32_t>(m_currentComponent->coreInlineExportsStarts().size()) >= m_currentInfo->coreInstanceCounter);
     }
 
     void OnCoreInstanceArg(const ComponentStringLoc& name,
@@ -331,7 +332,7 @@ public:
                            Index index)
     {
         Walrus::ComponentCoreInstantiate* instance = m_currentComponent->declarations().back()->asCoreInstantiate();
-        instance->arguments().push_back(Walrus::ComponentCoreInstantiate::Argument{ name.str.to_string(), index });
+        instance->arguments().push_back(Walrus::ComponentCoreInstantiate::Argument{ name.str.to_string(), m_currentInfo->coreInstanceTypes[index].index });
     }
 
     void EndCoreInstance()
@@ -340,59 +341,21 @@ public:
 
     void BeginInlineCoreInstance(uint32_t argumentCount)
     {
-        m_currentInfo->coreInstanceTypes.push_back(CoreInstanceType(m_currentComponent->declarations().size()));
-        m_currentComponent->pushDeclaration(new Walrus::ComponentCoreInstantiateInline());
-        ASSERT(m_names.size() == 0);
+        uint32_t index = static_cast<uint32_t>(m_currentComponent->coreInlineExportsStarts().size());
+        m_currentComponent->coreInlineExportsStarts().push_back(m_currentComponent->coreInlineExports().size());
+        ASSERT(~index > m_currentInfo->coreInstanceCounter);
+        m_currentInfo->coreInstanceTypes.push_back(CoreInstanceType(~index));
     }
 
     void OnInlineCoreInstanceArg(const ComponentStringLoc& name,
                                  ComponentSort sort,
                                  Index index)
     {
-        Walrus::ComponentCoreInstantiateInline* instance = m_currentComponent->declarations().back()->asCoreInstantiateInline();
-        instance->arguments().push_back(Walrus::ComponentCoreInstantiateInline::Argument{ getSort(sort), index });
-        m_names.push_back(name.str.to_string());
+        m_currentComponent->coreInlineExports().push_back(Walrus::Component::InlineExport{ name.str.to_string(), getSort(sort), index });
     }
 
     void EndInlineCoreInstance()
     {
-        Walrus::ComponentCoreInstantiateInline* instance = m_currentComponent->declarations().back()->asCoreInstantiateInline();
-        Walrus::WASMParsingResult result;
-        size_t size = instance->arguments().size();
-        uint32_t funcIndex = 0;
-        uint32_t tableIndex = 0;
-        uint32_t memoryIndex = 0;
-        uint32_t globalIndex = 0;
-        ASSERT(m_names.size() == size);
-
-        for (size_t i = 0; i < size; i++) {
-            Walrus::ExportType::Type exportType;
-            uint32_t index;
-            switch (instance->arguments()[i].sort) {
-            case Walrus::ComponentSort::CoreFunc:
-                index = funcIndex++;
-                exportType = Walrus::ExportType::Function;
-                break;
-            case Walrus::ComponentSort::CoreTable:
-                index = tableIndex++;
-                exportType = Walrus::ExportType::Table;
-                break;
-            case Walrus::ComponentSort::CoreMemory:
-                index = memoryIndex++;
-                exportType = Walrus::ExportType::Memory;
-                break;
-            default:
-                ASSERT(instance->arguments()[i].sort == Walrus::ComponentSort::CoreGlobal);
-                index = globalIndex++;
-                exportType = Walrus::ExportType::Global;
-                break;
-            }
-            result.m_exports.push_back(new Walrus::ExportType(exportType, m_names[i], index));
-        }
-        Walrus::Module* module = new Walrus::Module(m_store, result);
-        m_currentInfo->coreInstanceTypes.back().module = module;
-        instance->setModule(module);
-        m_names.clear();
     }
 
     void BeginInstance(Index componentIndex,
@@ -430,8 +393,8 @@ public:
         }
         type->addRef();
         Walrus::ComponentInstantiateInline* instance = m_currentComponent->declarations().back()->asInstantiateInline();
-        instance->type()->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), type });
-        instance->arguments().push_back(Walrus::ComponentInstantiateInline::Argument{ getSort(sort), index });
+        instance->type()->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), type, getSort(sort), kInvalidIndex });
+        instance->arguments().push_back(index);
     }
 
     void EndInlineInstance()
@@ -442,6 +405,10 @@ public:
                        Index instanceIndex,
                        const ComponentStringLoc& name)
     {
+        if (sort != ComponentSort::Type) {
+            m_currentComponent->pushDeclaration(new Walrus::ComponentAliasExport(Walrus::ComponentDeclaration::AliasExportKind, name.str.to_string(), getSort(sort), instanceIndex));
+        }
+
         for (auto it : m_currentInfo->instanceTypes[instanceIndex]->exports()) {
             if (name.str == it.name) {
                 switch (sort) {
@@ -471,8 +438,44 @@ public:
                            Index coreInstanceIndex,
                            const ComponentStringLoc& name)
     {
-        size_t exportIndex = 0;
         const CoreInstanceType& type = m_currentInfo->coreInstanceTypes[coreInstanceIndex];
+
+        if (type.module == nullptr) {
+            size_t exportIndex = m_currentComponent->coreInlineExportsStart(~type.index);
+            size_t end = m_currentComponent->coreInlineExportsEnd(~type.index);
+            std::vector<Walrus::Component::InlineExport>& exports = m_currentComponent->coreInlineExports();
+
+            while (true) {
+                if (exportIndex >= end) {
+                    m_walrusParseError = "export not found";
+                    return;
+                }
+
+                if (name.str == exports[exportIndex].name) {
+                    break;
+                }
+                exportIndex++;
+            }
+
+            exportIndex = exports[exportIndex].index;
+            switch (sort) {
+            case ComponentSort::CoreFunc:
+                m_currentInfo->coreFuncTypes.push_back(m_currentInfo->coreFuncTypes[exportIndex]);
+                break;
+            case ComponentSort::CoreMemory:
+                m_currentInfo->coreMemories.push_back(m_currentInfo->coreMemories[exportIndex]);
+                break;
+            default:
+                break;
+            }
+
+            if (sort != ComponentSort::CoreType) {
+                m_currentComponent->pushDeclaration(new Walrus::ComponentAliasInline(getSort(sort), exportIndex));
+            }
+            return;
+        }
+
+        size_t exportIndex = 0;
         const Walrus::VectorWithFixedSize<Walrus::ExportType*, std::allocator<Walrus::ExportType*>>& exports = type.module->exports();
 
         while (true) {
@@ -487,22 +490,6 @@ public:
             exportIndex++;
         }
 
-        if (type.inlineIndex != CoreInstanceType::NotInline) {
-            exportIndex = m_currentComponent->declarations()[type.inlineIndex]->asCoreInstantiateInline()->arguments()[exportIndex].index;
-
-            switch (sort) {
-            case ComponentSort::CoreFunc:
-                m_currentInfo->coreFuncTypes.push_back(m_currentInfo->coreFuncTypes[exportIndex]);
-                break;
-            case ComponentSort::CoreMemory:
-                m_currentInfo->coreMemories.push_back(m_currentInfo->coreMemories[exportIndex]);
-                break;
-            default:
-                break;
-            }
-            return;
-        }
-
         uint32_t itemIndex = exports[exportIndex]->itemIndex();
 
         switch (sort) {
@@ -514,6 +501,10 @@ public:
             break;
         default:
             break;
+        }
+
+        if (sort != ComponentSort::CoreType) {
+            m_currentComponent->pushDeclaration(new Walrus::ComponentAliasExport(Walrus::ComponentDeclaration::AliasCoreExportKind, name.str.to_string(), getSort(sort), type.index));
         }
     }
 
@@ -783,7 +774,7 @@ public:
         if (m_currentComponent != nullptr) {
             m_currentComponent->pushDeclaration(new Walrus::ComponentImport(static_cast<uint32_t>(m_current->imports().size())));
         }
-        m_current->imports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(externalInfo) });
+        m_current->imports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(externalInfo), getSort(externalInfo.sort), kInvalidIndex });
     }
 
     void OnExport(const ComponentStringLoc& name,
@@ -792,12 +783,13 @@ public:
                   ComponentExportInfo* exportInfo)
     {
         if (externalInfo != nullptr) {
-            m_current->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(*externalInfo) });
+            uint32_t exportIndex = exportInfo != nullptr ? exportInfo->index.index : kInvalidIndex;
+            m_current->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(*externalInfo), getSort(externalInfo->sort), exportIndex });
             return;
         }
 
         ComponentExternalInfo info{ exportInfo->sort, ComponentExternalDesc::Unused, exportInfo->index };
-        m_current->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(info) });
+        m_current->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(info), getSort(exportInfo->sort), exportInfo->index.index });
     }
 
     Walrus::Component* parsingResult()
@@ -814,7 +806,6 @@ private:
     Walrus::ComponentType* m_current;
     Walrus::Component* m_currentComponent;
     ComponentTypeInfo* m_currentInfo;
-    std::vector<std::string> m_names;
 };
 
 } // namespace wabt
@@ -827,11 +818,13 @@ std::pair<Optional<Component*>, std::string> WASMComponentParser::parseBinary(St
 
     std::string error = ReadWasmComponentBinary(data, len, &delegate);
     if (error.length()) {
+        if (delegate.parsingResult() != nullptr) {
+            delete delegate.parsingResult();
+        }
         return std::make_pair(nullptr, error);
     }
 
-    delete delegate.parsingResult();
-    return std::make_pair(nullptr, std::string());
+    return std::make_pair(delegate.parsingResult(), std::string());
 }
 
 } // namespace Walrus

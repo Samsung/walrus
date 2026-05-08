@@ -1075,7 +1075,7 @@ public:
     {
         ASSERT(tagIndex == m_result.m_tagTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
-        m_result.m_tagTypes.push_back(new Walrus::TagType(sigIndex));
+        m_result.m_tagTypes.push_back(new Walrus::TagType(getFunctionType(sigIndex)));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Tag,
             moduleName, fieldName, m_result.m_tagTypes[tagIndex]));
@@ -1318,7 +1318,7 @@ public:
     virtual void OnTagType(Index index, Index sigIndex) override
     {
         ASSERT(index == m_result.m_tagTypes.size());
-        m_result.m_tagTypes.push_back(new Walrus::TagType(sigIndex));
+        m_result.m_tagTypes.push_back(new Walrus::TagType(getFunctionType(sigIndex)));
     }
 
     virtual void OnStartFunction(Index funcIndex) override
@@ -2330,13 +2330,13 @@ public:
         uint32_t offsetsSize = 0;
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            offsetsSize = getFunctionType(m_result.m_tagTypes[tagIndex]->sigIndex())->param().size();
+            offsetsSize = m_result.m_tagTypes[tagIndex]->functionType()->param().size();
         }
 
         pushByteCode(Walrus::Throw(tagIndex, offsetsSize), WASMOpcode::ThrowOpcode);
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            auto functionType = getFunctionType(m_result.m_tagTypes[tagIndex]->sigIndex());
+            auto functionType = m_result.m_tagTypes[tagIndex]->functionType();
             auto& param = functionType->param().types();
             expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * param.size()));
             ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
@@ -2382,8 +2382,7 @@ public:
         m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentByteCode.size(), tagIndex });
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
-            auto functionType = getFunctionType(m_result.m_tagTypes[tagIndex]->sigIndex());
-            auto& param = functionType->param().types();
+            auto& param = m_result.m_tagTypes[tagIndex]->functionType()->param().types();
             for (size_t i = 0; i < param.size(); i++) {
                 pushVMStack(param[i]);
             }
