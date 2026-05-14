@@ -44,6 +44,32 @@ private:
         uint32_t index;
     };
 
+    struct CanonLess {
+        bool operator()(const Walrus::ComponentCanonOptions* first, const Walrus::ComponentCanonOptions* second) const
+        {
+            ASSERT(first != nullptr && second != nullptr);
+
+            uint8_t firstEncoding = static_cast<uint8_t>(first->encoding());
+            uint8_t secondEncoding = static_cast<uint8_t>(second->encoding());
+            if (firstEncoding != secondEncoding) {
+                return firstEncoding < secondEncoding;
+            }
+            if (first->isAsync() != second->isAsync()) {
+                return second->isAsync();
+            }
+            if (first->memoryIndex() != second->memoryIndex()) {
+                return first->memoryIndex() < second->memoryIndex();
+            }
+            if (first->reallocIndex() != second->reallocIndex()) {
+                return first->reallocIndex() < second->reallocIndex();
+            }
+            if (first->postReturnIndex() != second->postReturnIndex()) {
+                return first->postReturnIndex() < second->postReturnIndex();
+            }
+            return first->callbackIndex() < second->callbackIndex();
+        }
+    };
+
     // Depth data for each component.
     struct ComponentTypeInfo {
         ComponentTypeInfo(ComponentTypeInfo* parent, Walrus::ComponentType* parentComponentType, Walrus::Component* parentComponent)
@@ -51,6 +77,7 @@ private:
             , parentComponentType(parentComponentType)
             , parentComponent(parentComponent)
             , coreInstanceCounter(0)
+            , canonOptionCounter(0)
         {
         }
 
@@ -58,12 +85,14 @@ private:
         Walrus::ComponentType* parentComponentType;
         Walrus::Component* parentComponent;
         uint32_t coreInstanceCounter;
+        uint32_t canonOptionCounter;
         std::vector<Walrus::FunctionType*> coreFuncTypes;
         std::vector<bool> coreMemories;
         std::vector<CoreInstanceType> coreInstanceTypes;
         std::vector<Walrus::ComponentTypeFunc*> funcTypes;
         std::vector<Walrus::ComponentType*> componentTypes;
         std::vector<Walrus::ComponentType*> instanceTypes;
+        std::map<Walrus::ComponentCanonOptions*, uint32_t, CanonLess> m_canonOptions;
     };
 
     Walrus::ComponentTypeRef::Type getValueType(const ComponentType& type)
@@ -151,25 +180,25 @@ private:
         return refType(type);
     }
 
-    Walrus::CanonicalOptions parseCanonOptions(uint32_t optionCount, ComponentCanonOption* options)
+    uint32_t parseCanonOptions(uint32_t optionCount, ComponentCanonOption* options)
     {
-        Walrus::CanonicalOptions::StringEncoding encoding = Walrus::CanonicalOptions::Utf8;
+        Walrus::ComponentCanonOptions::StringEncoding encoding = Walrus::ComponentCanonOptions::Utf8;
         bool isAsync = false;
-        uint32_t memoryIndex = Walrus::CanonicalOptions::NoIndex;
-        uint32_t reallocIndex = Walrus::CanonicalOptions::NoIndex;
-        uint32_t postReturnIndex = Walrus::CanonicalOptions::NoIndex;
-        uint32_t callbackIndex = Walrus::CanonicalOptions::NoIndex;
+        uint32_t memoryIndex = Walrus::ComponentCanonOptions::NotDefined;
+        uint32_t reallocIndex = Walrus::ComponentCanonOptions::NotDefined;
+        uint32_t postReturnIndex = Walrus::ComponentCanonOptions::NotDefined;
+        uint32_t callbackIndex = Walrus::ComponentCanonOptions::NotDefined;
 
         while (optionCount > 0) {
             switch (options->option) {
             case ComponentCanonOption::StrEncUtf8:
-                encoding = Walrus::CanonicalOptions::Utf8;
+                encoding = Walrus::ComponentCanonOptions::Utf8;
                 break;
             case ComponentCanonOption::StrEncUtf16:
-                encoding = Walrus::CanonicalOptions::Utf16;
+                encoding = Walrus::ComponentCanonOptions::Utf16;
                 break;
             case ComponentCanonOption::StrEncLatin1Utf16:
-                encoding = Walrus::CanonicalOptions::Latin1Utf16;
+                encoding = Walrus::ComponentCanonOptions::Latin1Utf16;
                 break;
             case ComponentCanonOption::Memory:
                 memoryIndex = options->index;
@@ -190,7 +219,17 @@ private:
             optionCount--;
             options++;
         }
-        return Walrus::CanonicalOptions(encoding, isAsync, memoryIndex, reallocIndex, postReturnIndex, callbackIndex);
+
+        Walrus::ComponentCanonOptions* canonOptions = new Walrus::ComponentCanonOptions(encoding, isAsync, memoryIndex, reallocIndex, postReturnIndex, callbackIndex);
+
+        auto it = m_currentInfo->m_canonOptions.insert(std::pair<Walrus::ComponentCanonOptions*, uint32_t>(canonOptions, m_currentInfo->canonOptionCounter));
+        if (it.second) {
+            m_currentComponent->pushDeclaration(canonOptions);
+            return m_currentInfo->canonOptionCounter++;
+        }
+
+        delete canonOptions;
+        return it.first->second;
     }
 
     Walrus::ComponentRefCounted* getTypeRef(ComponentSort sort, uint32_t index)
@@ -739,7 +778,7 @@ public:
                      ComponentCanonOption* options,
                      Index typeIndex)
     {
-        Walrus::CanonicalOptions canonOptions = parseCanonOptions(optionCount, options);
+        uint32_t canonOptions = parseCanonOptions(optionCount, options);
         Walrus::ComponentTypeFunc* funcType = m_current->getType(typeIndex)->asTypeFunc();
         m_currentComponent->pushDeclaration(new Walrus::ComponentCanonLift(coreFuncIndex, canonOptions, funcType));
         m_currentInfo->funcTypes.push_back(funcType);
@@ -749,7 +788,7 @@ public:
                       uint32_t optionCount,
                       ComponentCanonOption* options)
     {
-        Walrus::CanonicalOptions canonOptions = parseCanonOptions(optionCount, options);
+        uint32_t canonOptions = parseCanonOptions(optionCount, options);
         m_currentComponent->pushDeclaration(new Walrus::ComponentCanonLower(funcIndex, canonOptions));
     }
 

@@ -543,66 +543,12 @@ private:
     std::vector<External> m_imports;
 };
 
-class CanonicalOptions {
-public:
-    enum StringEncoding {
-        Utf8,
-        Utf16,
-        Latin1Utf16,
-    };
-
-    static constexpr uint32_t NoIndex = ~static_cast<uint32_t>(0);
-
-    CanonicalOptions(StringEncoding encoding, bool isAsync, uint32_t memoryIndex,
-                     uint32_t reallocIndex, uint32_t postReturnIndex, uint32_t callbackIndex)
-        : m_encoding(encoding)
-        , m_isAsync(isAsync)
-        , m_memoryIndex(memoryIndex)
-        , m_reallocIndex(reallocIndex)
-        , m_postReturnIndex(postReturnIndex)
-        , m_callbackIndex(callbackIndex)
-    {
-    }
-
-    StringEncoding encoding() const
-    {
-        return m_encoding;
-    }
-
-    bool isAsync() const
-    {
-        return m_isAsync;
-    }
-
-    uint32_t memoryIndex() const
-    {
-        return m_memoryIndex;
-    }
-
-    uint32_t reallocIndex() const
-    {
-        return m_reallocIndex;
-    }
-
-    uint32_t postReturnIndex() const
-    {
-        return m_postReturnIndex;
-    }
-
-private:
-    StringEncoding m_encoding;
-    bool m_isAsync;
-    uint32_t m_memoryIndex;
-    uint32_t m_reallocIndex;
-    uint32_t m_postReturnIndex;
-    uint32_t m_callbackIndex;
-};
-
 class ComponentCoreInstantiate;
 class ComponentInstantiate;
 class ComponentInstantiateInline;
 class ComponentAliasExport;
 class ComponentAliasInline;
+class ComponentCanonOptions;
 class ComponentCanonLift;
 class ComponentCanonLower;
 class ComponentCanonType;
@@ -617,6 +563,7 @@ public:
         AliasExportKind,
         AliasCoreExportKind,
         AliasInlineKind,
+        CanonOptionsKind,
         CanonLiftKind,
         CanonLowerKind,
         CanonResourceNew,
@@ -670,6 +617,12 @@ public:
     {
         ASSERT(kind() == AliasInlineKind);
         return reinterpret_cast<ComponentAliasInline*>(this);
+    }
+
+    ComponentCanonOptions* asCanonOptions()
+    {
+        ASSERT(kind() == CanonOptionsKind);
+        return reinterpret_cast<ComponentCanonOptions*>(this);
     }
 
     ComponentCanonLift* asCanonLift()
@@ -841,9 +794,70 @@ private:
     uint32_t m_exportIndex;
 };
 
+class ComponentCanonOptions : public ComponentDeclaration {
+public:
+    enum StringEncoding : uint8_t {
+        Utf8,
+        Utf16,
+        Latin1Utf16,
+    };
+
+    static constexpr uint32_t NotDefined = ~static_cast<uint32_t>(0);
+
+    ComponentCanonOptions(StringEncoding encoding, bool isAsync, uint32_t memoryIndex,
+                          uint32_t reallocIndex, uint32_t postReturnIndex, uint32_t callbackIndex)
+        : ComponentDeclaration(CanonOptionsKind)
+        , m_encoding(encoding)
+        , m_isAsync(isAsync)
+        , m_memoryIndex(memoryIndex)
+        , m_reallocIndex(reallocIndex)
+        , m_postReturnIndex(postReturnIndex)
+        , m_callbackIndex(callbackIndex)
+    {
+    }
+
+    StringEncoding encoding() const
+    {
+        return m_encoding;
+    }
+
+    bool isAsync() const
+    {
+        return m_isAsync;
+    }
+
+    uint32_t memoryIndex() const
+    {
+        return m_memoryIndex;
+    }
+
+    uint32_t reallocIndex() const
+    {
+        return m_reallocIndex;
+    }
+
+    uint32_t postReturnIndex() const
+    {
+        return m_postReturnIndex;
+    }
+
+    uint32_t callbackIndex() const
+    {
+        return m_callbackIndex;
+    }
+
+private:
+    StringEncoding m_encoding;
+    bool m_isAsync;
+    uint32_t m_memoryIndex;
+    uint32_t m_reallocIndex;
+    uint32_t m_postReturnIndex;
+    uint32_t m_callbackIndex;
+};
+
 class ComponentCanonLift : public ComponentDeclaration {
 public:
-    ComponentCanonLift(uint32_t coreFuncIndex, const CanonicalOptions& options, ComponentTypeFunc* funcType)
+    ComponentCanonLift(uint32_t coreFuncIndex, uint32_t options, ComponentTypeFunc* funcType)
         : ComponentDeclaration(CanonLiftKind)
         , m_options(options)
         , m_coreFuncIndex(coreFuncIndex)
@@ -851,7 +865,7 @@ public:
     {
     }
 
-    const CanonicalOptions& options() const
+    uint32_t options() const
     {
         return m_options;
     }
@@ -867,21 +881,21 @@ public:
     }
 
 private:
-    CanonicalOptions m_options;
+    uint32_t m_options;
     uint32_t m_coreFuncIndex;
     ComponentTypeFunc* m_funcType;
 };
 
 class ComponentCanonLower : public ComponentDeclaration {
 public:
-    ComponentCanonLower(uint32_t funcIndex, const CanonicalOptions& options)
+    ComponentCanonLower(uint32_t funcIndex, uint32_t options)
         : ComponentDeclaration(CanonLowerKind)
         , m_options(options)
         , m_funcIndex(funcIndex)
     {
     }
 
-    const CanonicalOptions& options() const
+    uint32_t options() const
     {
         return m_options;
     }
@@ -892,7 +906,7 @@ public:
     }
 
 private:
-    CanonicalOptions m_options;
+    uint32_t m_options;
     uint32_t m_funcIndex;
 };
 

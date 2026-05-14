@@ -389,6 +389,32 @@ static Trap::TrapResult executeWASMComponent(Store* store, DefinedFunctionTypes&
     return trap.run([](ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
         ComponentInstance* instance = ComponentInstance::instantiate(state, data->store, data->functionTypes, data->component);
+        for (auto& it : instance->type()->exports()) {
+            if (it.sort == ComponentSort::Instance && it.name == "wasi:cli/run@0.2.6") {
+                instance = instance->getInstance(it.exportIndex);
+                break;
+            }
+        }
+
+        Function* run = nullptr;
+        if (instance != nullptr) {
+            for (auto& it : instance->type()->exports()) {
+                if (it.sort == ComponentSort::Func && it.name == "run") {
+                    LiftedFunction* func = instance->getFunction(it.exportIndex);
+                    if (func->kind() == LiftedFunction::CoreFunctionKind) {
+                        run = func->asLiftedCoreFunction()->function();
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (run != nullptr) {
+            Value resultValue[1];
+            run->call(state, nullptr, resultValue);
+        } else {
+            printf("Note: Cannot execute component, missing run()\n");
+        }
     },
                     &data);
 }

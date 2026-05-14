@@ -22,25 +22,84 @@
 
 namespace Walrus {
 
+class ComponentInstance;
+
+class CanonOptions {
+public:
+    CanonOptions(ComponentInstance* instance, ComponentCanonOptions::StringEncoding encoding, bool isAsync,
+                 Memory* memory, Function* realloc, Function* postReturn, Function* callback)
+        : m_instance(instance)
+        , m_encoding(encoding)
+        , m_isAsync(isAsync)
+        , m_memory(memory)
+        , m_realloc(realloc)
+        , m_postReturn(postReturn)
+        , m_callback(callback)
+    {
+    }
+
+    ComponentInstance* instance() const
+    {
+        return m_instance;
+    }
+
+    ComponentCanonOptions::StringEncoding encoding() const
+    {
+        return m_encoding;
+    }
+
+    bool isAsync() const
+    {
+        return m_isAsync;
+    }
+
+    Memory* memory() const
+    {
+        return m_memory;
+    }
+
+    Function* realloc() const
+    {
+        return m_realloc;
+    }
+
+    Function* postReturn() const
+    {
+        return m_postReturn;
+    }
+
+    Function* callback() const
+    {
+        return m_callback;
+    }
+
+private:
+    ComponentInstance* m_instance;
+    ComponentCanonOptions::StringEncoding m_encoding;
+    bool m_isAsync;
+    Memory* m_memory;
+    Function* m_realloc;
+    Function* m_postReturn;
+    Function* m_callback;
+};
+
+class LiftedCoreFunction;
 #ifdef ENABLE_WASI
 class LiftedWasiFunction;
 #endif /* ENABLE_WASI */
 
 class LiftedFunction {
 public:
-    enum Type {
-        CoreFunction,
+    enum Kind {
+        CoreFunctionKind,
 #ifdef ENABLE_WASI
-        WasiFunction,
+        WasiFunctionKind,
 #endif /* ENABLE_WASI */
     };
 
     virtual ~LiftedFunction() {}
 
-    Type type() const
-    {
-        return m_type;
-    }
+    virtual Kind kind() const = 0;
 
     void addRef()
     {
@@ -55,24 +114,57 @@ public:
         }
     }
 
+    LiftedCoreFunction* asLiftedCoreFunction()
+    {
+        ASSERT(kind() == CoreFunctionKind);
+        return reinterpret_cast<LiftedCoreFunction*>(this);
+    }
+
 #ifdef ENABLE_WASI
     LiftedWasiFunction* asLiftedWasiFunction()
     {
-        ASSERT(type() == WasiFunction);
+        ASSERT(kind() == WasiFunctionKind);
         return reinterpret_cast<LiftedWasiFunction*>(this);
     }
 #endif /* ENABLE_WASI */
 
 protected:
-    LiftedFunction(Type type)
-        : m_type(type)
-        , m_refCount(1)
+    LiftedFunction()
+        : m_refCount(1)
     {
     }
 
 private:
-    Type m_type;
     size_t m_refCount;
+};
+
+class LiftedCoreFunction : public LiftedFunction {
+public:
+    LiftedCoreFunction(Function* function, CanonOptions* options)
+        : LiftedFunction()
+        , m_function(function)
+        , m_options(options)
+    {
+    }
+
+    virtual Kind kind() const override
+    {
+        return CoreFunctionKind;
+    }
+
+    Function* function() const
+    {
+        return m_function;
+    }
+
+    CanonOptions* options() const
+    {
+        return m_options;
+    }
+
+private:
+    Function* m_function;
+    CanonOptions* m_options;
 };
 
 #ifdef ENABLE_WASI
@@ -96,10 +188,15 @@ public:
     };
 
     LiftedWasiFunction(Type type, FunctionType* functionType)
-        : LiftedFunction(WasiFunction)
+        : LiftedFunction()
         , m_type(type)
         , m_functionType(functionType)
     {
+    }
+
+    virtual Kind kind() const override
+    {
+        return WasiFunctionKind;
     }
 
     FunctionType* functionType() const
@@ -116,18 +213,30 @@ private:
 
 class LoweredFunction : public NativeFunction {
 public:
-    static LoweredFunction* createLoweredFunction(Store* store, FunctionType* functionType, LiftedFunction* liftedFunction);
+    static LoweredFunction* createLoweredFunction(Store* store, const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options);
+
+    virtual Kind kind() const override
+    {
+        return LoweredFunctionKind;
+    }
+
+    CanonOptions* options()
+    {
+        return m_options;
+    }
 
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
 
 private:
-    LoweredFunction(FunctionType* functionType, LiftedFunction* liftedFunction)
+    LoweredFunction(const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options)
         : NativeFunction(functionType)
         , m_liftedFunction(liftedFunction)
+        , m_options(options)
     {
     }
 
     LiftedFunction* m_liftedFunction;
+    CanonOptions* m_options;
 };
 
 class CanonFunction : public NativeFunction {
@@ -138,17 +247,22 @@ public:
         ResourceRep,
     };
 
-    static CanonFunction* createCanonFunction(Store* store, FunctionType* functionType, Type type);
+    static CanonFunction* createCanonFunction(Store* store, const FunctionType* functionType, Type type);
 
     Type type() const
     {
         return m_type;
     }
 
+    virtual Kind kind() const override
+    {
+        return CanonFunctionKind;
+    }
+
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
 
 private:
-    CanonFunction(FunctionType* functionType, Type type)
+    CanonFunction(const FunctionType* functionType, Type type)
         : NativeFunction(functionType)
         , m_type(type)
     {
@@ -174,14 +288,42 @@ public:
         return m_type;
     }
 
+    LiftedFunction* getFunction(uint32_t index)
+    {
+        return m_funcs[index];
+    }
+
+    ComponentInstance* getInstance(uint32_t index)
+    {
+        return m_instances[index];
+    }
+
 private:
     ComponentInstance(ComponentType* type);
+
+    class InstantiateContext {
+    public:
+        InstantiateContext(ExecutionState& state, Store* store, DefinedFunctionTypes& functionTypes)
+            : m_state(state)
+            , m_store(store)
+            , m_functionTypes(functionTypes)
+        {
+        }
+
+        ComponentInstance* instantiate(Component* component, ComponentInstance* parent, ComponentInstantiate* arg);
+
+    private:
+        ExecutionState& m_state;
+        Store* m_store;
+        DefinedFunctionTypes& m_functionTypes;
+    };
 
     void coreInstantiate(ExecutionState& state, Store* store, Component* component, ComponentCoreInstantiate* instantiate);
     void aliasExport(ComponentAliasExport* alias);
     void aliasCoreExport(ComponentAliasExport* alias);
     void aliasInline(ComponentAliasInline* alias);
-    void lowerFunction(Store* store, ComponentCanonLower* lower);
+    void liftFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLift* lift);
+    void lowerFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLower* lower);
 
     ComponentType* m_type;
     std::vector<Function*> m_coreFuncs;
@@ -192,6 +334,7 @@ private:
     std::vector<Instance*> m_coreInstances;
     std::vector<LiftedFunction*> m_funcs;
     std::vector<ComponentInstance*> m_instances;
+    std::vector<CanonOptions*> m_canonOptions;
 };
 
 } // namespace Walrus

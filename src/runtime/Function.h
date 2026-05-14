@@ -48,42 +48,42 @@ class WasiFunction;
 
 class Function : public Extern {
 public:
+    enum Kind {
+        DefinedFunctionKind,
+        ImportedFunctionKind,
+        WasiFunctionKind,
+        LoweredFunctionKind,
+        CanonFunctionKind,
+    };
+
     const FunctionType* functionType() const { return m_functionType; }
 
+    virtual Kind kind() const = 0;
     virtual void call(ExecutionState& state, Value* argv, Value* result) = 0;
     virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
                                  uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
         = 0;
 
-    virtual bool isDefinedFunction() const
-    {
-        return false;
-    }
-
-    virtual bool isImportedFunction() const
-    {
-        return false;
-    }
-
-    virtual bool isWasiFunction() const
-    {
-        return false;
-    }
-
     DefinedFunction* asDefinedFunction()
     {
-        ASSERT(isDefinedFunction());
+        ASSERT(kind() == DefinedFunctionKind);
         return reinterpret_cast<DefinedFunction*>(this);
+    }
+
+    LoweredFunction* asLoweredFunction()
+    {
+        ASSERT(kind() == LoweredFunctionKind);
+        return reinterpret_cast<LoweredFunction*>(this);
     }
 
     WasiFunction* asWasiFunction()
     {
-        ASSERT(isWasiFunction());
+        ASSERT(kind() == WasiFunctionKind);
         return reinterpret_cast<WasiFunction*>(this);
     }
 
 protected:
-    Function(FunctionType* functionType);
+    Function(const FunctionType* functionType);
 
     const FunctionType* m_functionType;
 };
@@ -99,10 +99,11 @@ public:
     ModuleFunction* moduleFunction() const { return m_moduleFunction; }
     Instance* instance() const { return m_instance; }
 
-    virtual bool isDefinedFunction() const override
+    virtual Kind kind() const override
     {
-        return true;
+        return DefinedFunctionKind;
     }
+
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
     virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
                                  uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
@@ -138,7 +139,7 @@ public:
                                  uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
 
 protected:
-    NativeFunction(FunctionType* functionType)
+    NativeFunction(const FunctionType* functionType)
         : Function(functionType)
     {
     }
@@ -152,6 +153,11 @@ public:
                                                     FunctionType* functionType,
                                                     ImportedFunctionCallback callback,
                                                     void* data);
+
+    virtual Kind kind() const override
+    {
+        return ImportedFunctionKind;
+    }
 
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
 
@@ -177,9 +183,9 @@ public:
                                             FunctionType* functionType,
                                             WasiFunctionCallback callback);
 
-    virtual bool isWasiFunction() const override
+    virtual Kind kind() const override
     {
-        return true;
+        return WasiFunctionKind;
     }
 
     void setRunningInstance(Instance* instance)

@@ -29,9 +29,9 @@ namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(componentInstanceTypeInfo, ComponentInstanceKind);
 
-LoweredFunction* LoweredFunction::createLoweredFunction(Store* store, FunctionType* functionType, LiftedFunction* liftedFunction)
+LoweredFunction* LoweredFunction::createLoweredFunction(Store* store, const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options)
 {
-    LoweredFunction* func = new LoweredFunction(functionType, liftedFunction);
+    LoweredFunction* func = new LoweredFunction(functionType, liftedFunction, options);
     store->appendExtern(func);
     return func;
 }
@@ -41,7 +41,7 @@ void LoweredFunction::call(ExecutionState& state, Value* argv, Value* result)
     ASSERT(0);
 }
 
-CanonFunction* CanonFunction::createCanonFunction(Store* store, FunctionType* functionType, Type type)
+CanonFunction* CanonFunction::createCanonFunction(Store* store, const FunctionType* functionType, Type type)
 {
     CanonFunction* func = new CanonFunction(functionType, type);
     store->appendExtern(func);
@@ -322,22 +322,40 @@ void ComponentInstance::aliasInline(ComponentAliasInline* alias)
     }
 }
 
-void ComponentInstance::lowerFunction(Store* store, ComponentCanonLower* lower)
+void ComponentInstance::liftFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLift* lift)
 {
-#ifdef ENABLE_WASI
-    LiftedFunction* func = m_funcs[lower->funcIndex()];
-    m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(store, func->asLiftedWasiFunction()->functionType(), func));
-#endif /* ENABLE_WASI */
+    CanonOptions* options = canonOptions[lift->options()];
+    m_funcs.push_back(new LiftedCoreFunction(m_coreFuncs[lift->coreFuncIndex()], options));
 }
 
-ComponentInstance* ComponentInstance::instantiate(ExecutionState& state, Store* store, DefinedFunctionTypes& functionTypes, Component* component)
+void ComponentInstance::lowerFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLower* lower)
+{
+    LiftedFunction* func = m_funcs[lower->funcIndex()];
+    CanonOptions* options = canonOptions[lower->options()];
+
+#ifdef ENABLE_WASI
+    if (func->kind() == LiftedFunction::WasiFunctionKind) {
+        m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(store, func->asLiftedWasiFunction()->functionType(), func, options));
+        return;
+    }
+#endif /* ENABLE_WASI */
+    m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(store, func->asLiftedCoreFunction()->function()->functionType(), func, options));
+}
+
+ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component* component, ComponentInstance* parent, ComponentInstantiate* arg)
 {
     ComponentInstance* instance = new ComponentInstance(component->type());
+    m_store->appendComponentInstance(instance);
 
     for (auto it : component->declarations()) {
         switch (it->kind()) {
         case ComponentDeclaration::CoreInstantiateKind: {
-            instance->coreInstantiate(state, store, component, it->asCoreInstantiate());
+            instance->coreInstantiate(m_state, m_store, component, it->asCoreInstantiate());
+            break;
+        }
+        case ComponentDeclaration::InstantiateKind: {
+            Component* source = component->components()[it->asInstantiate()->componentIndex()];
+            instance->m_instances.push_back(instantiate(source, instance, it->asInstantiate()));
             break;
         }
         case ComponentDeclaration::AliasExportKind: {
@@ -352,12 +370,25 @@ ComponentInstance* ComponentInstance::instantiate(ExecutionState& state, Store* 
             instance->aliasInline(it->asAliasInline());
             break;
         }
+        case ComponentDeclaration::CanonOptionsKind: {
+            ComponentCanonOptions* options = it->asCanonOptions();
+            Memory* memory = options->memoryIndex() == ComponentCanonOptions::NotDefined ? nullptr : instance->m_coreMemories[options->memoryIndex()];
+            Function* realloc = options->reallocIndex() == ComponentCanonOptions::NotDefined ? nullptr : instance->m_coreFuncs[options->reallocIndex()];
+            Function* postReturn = options->postReturnIndex() == ComponentCanonOptions::NotDefined ? nullptr : instance->m_coreFuncs[options->postReturnIndex()];
+            Function* callback = options->callbackIndex() == ComponentCanonOptions::NotDefined ? nullptr : instance->m_coreFuncs[options->callbackIndex()];
+            instance->m_canonOptions.push_back(new CanonOptions(instance, options->encoding(), options->isAsync(), memory, realloc, postReturn, callback));
+            break;
+        }
+        case ComponentDeclaration::CanonLiftKind: {
+            instance->liftFunction(m_store, instance->m_canonOptions, it->asCanonLift());
+            break;
+        }
         case ComponentDeclaration::CanonLowerKind: {
-            instance->lowerFunction(store, it->asCanonLower());
+            instance->lowerFunction(m_store, instance->m_canonOptions, it->asCanonLower());
             break;
         }
         case ComponentDeclaration::CanonResourceDrop: {
-            instance->m_coreFuncs.push_back(CanonFunction::createCanonFunction(store, functionTypes[DefinedFunctionTypes::I32R], CanonFunction::ResourceDrop));
+            instance->m_coreFuncs.push_back(CanonFunction::createCanonFunction(m_store, m_functionTypes[DefinedFunctionTypes::I32R], CanonFunction::ResourceDrop));
             break;
         }
         case ComponentDeclaration::ImportKind: {
@@ -365,39 +396,61 @@ ComponentInstance* ComponentInstance::instantiate(ExecutionState& state, Store* 
             ComponentType::External& external = component->type()->imports()[index];
             bool success = false;
 
-            switch (external.sort) {
-            case ComponentSort::Instance: {
+            if (parent != nullptr) {
+                for (auto& it : arg->arguments()) {
+                    if (it.sort == external.sort && it.name == external.name) {
+                        switch (it.sort) {
+                        case ComponentSort::Func: {
+                            LiftedFunction* func = parent->m_funcs[it.index];
+                            instance->m_funcs.push_back(func);
+                            func->addRef();
+                            break;
+                        }
+                        case ComponentSort::Instance:
+                            instance->m_instances.push_back(parent->m_instances[it.index]);
+                            break;
+                        default:
+                            RELEASE_ASSERT_NOT_REACHED();
+                            break;
+                        }
+                        success = true;
+                        break;
+                    }
+                }
+            }
+
 #ifdef ENABLE_WASI
-                ComponentInstance* importedInstance = wasi02LoadInstance(external, functionTypes);
+            if (!success && external.sort == ComponentSort::Instance) {
+                ComponentInstance* importedInstance = wasi02LoadInstance(external, m_functionTypes);
                 if (importedInstance != nullptr) {
-                    store->appendComponentInstance(importedInstance);
+                    m_store->appendComponentInstance(importedInstance);
                     instance->m_instances.push_back(importedInstance);
                     success = true;
                     break;
                 }
+            }
 #endif /* ENABLE_WASI */
-                break;
-            }
-            default:
-                break;
-            }
 
             if (!success) {
                 std::string message = "Cannot import: ";
                 message.append(external.name);
-                Trap::throwException(state, message);
+                Trap::throwException(m_state, message);
             }
             break;
         }
         default:
-            // TODO: Implement more declarations.
-            store->appendComponentInstance(instance);
+            RELEASE_ASSERT_NOT_REACHED();
             return instance;
         }
     }
 
-    store->appendComponentInstance(instance);
     return instance;
+}
+
+ComponentInstance* ComponentInstance::instantiate(ExecutionState& state, Store* store, DefinedFunctionTypes& functionTypes, Component* component)
+{
+    InstantiateContext context(state, store, functionTypes);
+    return context.instantiate(component, nullptr, nullptr);
 }
 
 ComponentInstance::ComponentInstance(ComponentType* type)
@@ -412,6 +465,9 @@ ComponentInstance::~ComponentInstance()
     m_type->releaseRef();
     for (auto it : m_funcs) {
         it->releaseRef();
+    }
+    for (auto it : m_canonOptions) {
+        delete it;
     }
 }
 
