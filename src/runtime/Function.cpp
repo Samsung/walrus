@@ -28,7 +28,7 @@ namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(functionTypeInfo, FunctionKind);
 
-Function::Function(FunctionType* functionType)
+Function::Function(const FunctionType* functionType)
     : Extern(functionType->subTypeList() != nullptr ? functionType->subTypeList() : GET_GLOBAL_TYPE_INFO(functionTypeInfo))
     , m_functionType(functionType)
 {

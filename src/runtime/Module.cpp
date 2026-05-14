@@ -180,7 +180,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             }
 
             instance->m_functions[funcIndex] = imports[i]->asFunction();
-            if (imports[i]->asFunction()->isWasiFunction()) {
+            if (imports[i]->asFunction()->kind() == Function::WasiFunctionKind) {
                 instance->m_functions[funcIndex]->asWasiFunction()->setRunningInstance(instance);
             }
             funcIndex++;
