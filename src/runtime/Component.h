@@ -50,7 +50,9 @@ class ComponentTypeTuple;
 class ComponentTypeLabels;
 class ComponentTypeResult;
 class ComponentTypeFunc;
+class ComponentTypeSubResource;
 class ComponentTypeResource;
+class ComponentTypeResourceAsync;
 class ComponentTypeResourceRef;
 class ComponentType;
 
@@ -76,6 +78,7 @@ public:
         InstanceTypeKind,
         ComponentTypeKind,
         InstanceKind,
+        SubResourceKind,
         ResourceKind,
         ResourceAsyncKind,
     };
@@ -193,6 +196,17 @@ public:
         return reinterpret_cast<ComponentTypeFunc*>(this);
     }
 
+    bool isTypeSubResource() const
+    {
+        return kind() == SubResourceKind || kind() == ResourceKind || kind() == ResourceAsyncKind;
+    }
+
+    ComponentTypeSubResource* asTypeSubResource()
+    {
+        ASSERT(isTypeSubResource());
+        return reinterpret_cast<ComponentTypeSubResource*>(this);
+    }
+
     bool isTypeResource() const
     {
         return kind() == ResourceKind || kind() == ResourceAsyncKind;
@@ -202,6 +216,12 @@ public:
     {
         ASSERT(isTypeResource());
         return reinterpret_cast<ComponentTypeResource*>(this);
+    }
+
+    ComponentTypeResourceAsync* asTypeResourceAsync()
+    {
+        ASSERT(kind() == ResourceAsyncKind);
+        return reinterpret_cast<ComponentTypeResourceAsync*>(this);
     }
 
     bool isComponentType() const
@@ -453,13 +473,30 @@ private:
     ComponentTypeRef m_result;
 };
 
-class ComponentTypeResource : public ComponentRefCounted {
+class ComponentTypeSubResource : public ComponentRefCounted {
 public:
-    ComponentTypeResource(Kind kind, bool i64)
-        : ComponentRefCounted(kind)
-        , m_i64(i64)
+    ComponentTypeSubResource()
+        : ComponentRefCounted(SubResourceKind)
     {
-        ASSERT(isTypeResource());
+    }
+
+protected:
+    ComponentTypeSubResource(Kind kind)
+        : ComponentRefCounted(kind)
+    {
+        ASSERT(kind == ResourceKind || kind == ResourceAsyncKind);
+    }
+};
+
+class ComponentTypeResource : public ComponentTypeSubResource {
+public:
+    static constexpr uint32_t NotDefined = ~static_cast<uint32_t>(0);
+
+    ComponentTypeResource(bool i64, uint32_t dtorIndex)
+        : ComponentTypeSubResource(ResourceKind)
+        , m_i64(i64)
+        , m_dtorIndex(dtorIndex)
+    {
     }
 
     bool i64() const
@@ -467,26 +504,58 @@ public:
         return m_i64;
     }
 
+    uint32_t dtorIndex() const
+    {
+        return m_dtorIndex;
+    }
+
+protected:
+    ComponentTypeResource(Kind kind, bool i64, uint32_t dtorIndex)
+        : ComponentTypeSubResource(kind)
+        , m_i64(i64)
+        , m_dtorIndex(dtorIndex)
+    {
+        ASSERT(kind == ResourceAsyncKind);
+    }
+
 private:
     bool m_i64;
+    uint32_t m_dtorIndex;
+};
+
+class ComponentTypeResourceAsync : public ComponentTypeResource {
+public:
+    ComponentTypeResourceAsync(bool i64, uint32_t dtorIndex, uint32_t callbackIndex)
+        : ComponentTypeResource(ResourceAsyncKind, i64, dtorIndex)
+        , m_callbackIndex(callbackIndex)
+    {
+    }
+
+    uint32_t callbackIndex() const
+    {
+        return m_callbackIndex;
+    }
+
+private:
+    uint32_t m_callbackIndex;
 };
 
 class ComponentTypeResourceRef : public ComponentRefCounted {
 public:
-    ComponentTypeResourceRef(Kind kind, ComponentTypeResource* ref)
+    ComponentTypeResourceRef(Kind kind, ComponentTypeSubResource* ref)
         : ComponentRefCounted(kind)
         , m_ref(ref)
     {
         ASSERT(isTypeResourceRef());
     }
 
-    ComponentTypeResource* ref() const
+    ComponentTypeSubResource* ref() const
     {
         return m_ref;
     }
 
 private:
-    ComponentTypeResource* m_ref;
+    ComponentTypeSubResource* m_ref;
 };
 
 // Immutable type declarations for components, instances

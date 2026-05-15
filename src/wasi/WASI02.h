@@ -26,8 +26,14 @@ namespace Walrus {
 
 class ComponentInstance;
 class DefinedFunctionTypes;
+class CanonOptions;
+class ComponentHandle;
+class LiftedWasiFunction;
 
-ComponentInstance* wasi02LoadInstance(ComponentType::External& external, DefinedFunctionTypes& functionTypes);
+ComponentInstance* wasi02LoadInstance(Store* store, DefinedFunctionTypes& functionTypes, std::string& name);
+const FunctionType* getWasiFunctionType(LiftedWasiFunction* function);
+void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedWasiFunction* function, CanonOptions* options);
+bool dropWasiResource(ExecutionState& state, ComponentHandle* handle);
 
 } // namespace Walrus
 

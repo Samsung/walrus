@@ -167,50 +167,6 @@ private:
     CanonOptions* m_options;
 };
 
-#ifdef ENABLE_WASI
-
-class LiftedWasiFunction : public LiftedFunction {
-public:
-    enum Type {
-        cliExit026,
-        ioPollableBlock026,
-        ioOutputStreamCheckWrite026,
-        ioOutputStreamWrite026,
-        ioOutputStreamBlockingWriteAndFlush026,
-        ioOutputStreamBlockingFlush026,
-        ioOutputStreamSubscribe026,
-        cliGetStdin026,
-        cliGetStdout026,
-        cliGetStderr026,
-        cliGetTerminalStdin026,
-        cliGetTerminalStdout026,
-        cliGetTerminalStderr026,
-    };
-
-    LiftedWasiFunction(Type type, FunctionType* functionType)
-        : LiftedFunction()
-        , m_type(type)
-        , m_functionType(functionType)
-    {
-    }
-
-    virtual Kind kind() const override
-    {
-        return WasiFunctionKind;
-    }
-
-    FunctionType* functionType() const
-    {
-        return m_functionType;
-    }
-
-private:
-    Type m_type;
-    FunctionType* m_functionType;
-};
-
-#endif /* ENABLE_WASI */
-
 class LoweredFunction : public NativeFunction {
 public:
     static LoweredFunction* createLoweredFunction(Store* store, const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options);
@@ -249,26 +205,130 @@ public:
 
     static CanonFunction* createCanonFunction(Store* store, const FunctionType* functionType, Type type);
 
-    Type type() const
-    {
-        return m_type;
-    }
-
     virtual Kind kind() const override
     {
         return CanonFunctionKind;
     }
 
+    Type type() const
+    {
+        return m_type;
+    }
+
+    Store* store() const
+    {
+        return m_store;
+    }
+
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
 
 private:
-    CanonFunction(const FunctionType* functionType, Type type)
+    CanonFunction(const FunctionType* functionType, Type type, Store* store)
         : NativeFunction(functionType)
         , m_type(type)
+        , m_store(store)
     {
     }
 
     Type m_type;
+    Store* m_store;
+};
+
+class ComponentResourceRep;
+
+class ComponentHandle {
+public:
+    enum Kind {
+        ResourceRepKind,
+#ifdef ENABLE_WASI
+        ResourceWasiStreamKind,
+        ResourceWasiPollableKind,
+        ResourceWasiTerminalKind,
+#endif /* ENABLE_WASI */
+    };
+
+    ~ComponentHandle() {}
+
+    Kind kind()
+    {
+        return m_kind;
+    }
+
+    ComponentResourceRep* asResourceRep()
+    {
+        ASSERT(kind() == ResourceRepKind);
+        return reinterpret_cast<ComponentResourceRep*>(this);
+    }
+
+protected:
+    ComponentHandle(Kind kind)
+        : m_kind(kind)
+    {
+    }
+
+private:
+    Kind m_kind;
+};
+
+class ComponentResource : public ComponentHandle {
+public:
+    ComponentTypeResource* type() const
+    {
+        return m_type;
+    }
+
+protected:
+    ComponentResource(Kind kind, ComponentTypeResource* type)
+        : ComponentHandle(kind)
+        , m_type(type)
+    {
+    }
+
+private:
+    ComponentTypeResource* m_type;
+};
+
+class ComponentResourceRep : public ComponentResource {
+public:
+    ComponentResourceRep(ComponentTypeResource* type, ComponentInstance* instance, uint32_t rep)
+        : ComponentResource(ResourceRepKind, type)
+        , m_instance(instance)
+        , m_rep32(rep)
+    {
+        ASSERT(!type->i64());
+    }
+
+    ComponentResourceRep(ComponentTypeResource* type, ComponentInstance* instance, uint64_t rep)
+        : ComponentResource(ResourceRepKind, type)
+        , m_instance(instance)
+        , m_rep64(rep)
+    {
+        ASSERT(type->i64());
+    }
+
+    ComponentInstance* instance() const
+    {
+        return m_instance;
+    }
+
+    uint32_t rep32() const
+    {
+        ASSERT(!type()->i64());
+        return m_rep32;
+    }
+
+    uint64_t rep64() const
+    {
+        ASSERT(type()->i64());
+        return m_rep64;
+    }
+
+private:
+    ComponentInstance* m_instance;
+    union {
+        uint32_t m_rep32;
+        uint64_t m_rep64;
+    };
 };
 
 class DefinedFunctionTypes;
@@ -298,6 +358,19 @@ public:
         return m_instances[index];
     }
 
+    // Handle 0 cannot be used.
+    uint32_t appendHandle(ExecutionState& state, ComponentHandle* handle);
+    ComponentHandle* getHandle(ExecutionState& state, uint32_t index);
+    void removeHandle(uint32_t index);
+    static void throwInvalidHandle(ExecutionState& state, uint32_t index);
+
+    bool isBorrowedHandle(uint32_t index)
+    {
+        ASSERT(index >= FirstHandleIndex && (index - FirstHandleIndex) < m_handles.size()
+               && (m_handles[index - FirstHandleIndex] & UnusedSlotMask) == 0);
+        return (m_handles[index - FirstHandleIndex] & BorrowedHandleMask) != 0;
+    }
+
 private:
     ComponentInstance(ComponentType* type);
 
@@ -318,6 +391,14 @@ private:
         DefinedFunctionTypes& m_functionTypes;
     };
 
+    static constexpr uint32_t FirstHandleIndex = 1;
+    static constexpr uintptr_t LastHandle = ~static_cast<uintptr_t>(0);
+    static constexpr uintptr_t UnusedSlotMask = 0x1;
+    static constexpr uintptr_t BorrowedHandleMask = 0x2;
+    static constexpr int UnusedSlotShift = 1;
+
+    static ComponentInstance* createInstance(Store* store, ComponentType* type);
+
     void coreInstantiate(ExecutionState& state, Store* store, Component* component, ComponentCoreInstantiate* instantiate);
     void aliasExport(ComponentAliasExport* alias);
     void aliasCoreExport(ComponentAliasExport* alias);
@@ -326,6 +407,7 @@ private:
     void lowerFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLower* lower);
 
     ComponentType* m_type;
+    uintptr_t m_freeResourceHandle;
     std::vector<Function*> m_coreFuncs;
     std::vector<Table*> m_coreTables;
     std::vector<Memory*> m_coreMemories;
@@ -335,6 +417,7 @@ private:
     std::vector<LiftedFunction*> m_funcs;
     std::vector<ComponentInstance*> m_instances;
     std::vector<CanonOptions*> m_canonOptions;
+    std::vector<uintptr_t> m_handles;
 };
 
 } // namespace Walrus

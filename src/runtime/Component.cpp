@@ -74,7 +74,7 @@ void ComponentRefCounted::releaseAllRefs(ComponentRefCounted* ref)
             break;
         }
         default:
-            ASSERT(ref->isValueType() || ref->isTypeLabels() || ref->isTypeResource());
+            ASSERT(ref->isValueType() || ref->isTypeLabels() || ref->isTypeSubResource());
             break;
         }
 
