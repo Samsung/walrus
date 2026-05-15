@@ -262,7 +262,7 @@ private:
             break;
         case ComponentSort::Type:
             if (externalInfo.external == ComponentExternalDesc::TypeSubRes) {
-                type = new Walrus::ComponentTypeResource(Walrus::ComponentRefCounted::ResourceKind, false);
+                type = new Walrus::ComponentTypeSubResource();
             } else {
                 type = m_current->getType(externalInfo.index.index);
                 type->addRef();
@@ -672,14 +672,14 @@ public:
 
     void OnOwnType(Index index)
     {
-        Walrus::ComponentTypeResource* ref = m_current->getType(index)->asTypeResource();
+        Walrus::ComponentTypeSubResource* ref = m_current->getType(index)->asTypeSubResource();
         ref->addRef();
         m_current->pushType(new Walrus::ComponentTypeResourceRef(Walrus::ComponentRefCounted::OwnKind, ref));
     }
 
     void OnBorrowType(Index index)
     {
-        Walrus::ComponentTypeResource* ref = m_current->getType(index)->asTypeResource();
+        Walrus::ComponentTypeSubResource* ref = m_current->getType(index)->asTypeSubResource();
         ref->addRef();
         m_current->pushType(new Walrus::ComponentTypeResourceRef(Walrus::ComponentRefCounted::BorrowKind, ref));
     }
@@ -723,14 +723,14 @@ public:
     void OnResourceType(ComponentResourceRep rep,
                         Index dtor)
     {
-        m_current->pushType(new Walrus::ComponentTypeResource(Walrus::ComponentRefCounted::ResourceKind, rep == ComponentResourceRep::I64));
+        m_current->pushType(new Walrus::ComponentTypeResource(rep == ComponentResourceRep::I64, dtor));
     }
 
     void OnResourceAsyncType(ComponentResourceRep rep,
                              Index dtor,
                              Index callback)
     {
-        m_current->pushType(new Walrus::ComponentTypeResource(Walrus::ComponentRefCounted::ResourceAsyncKind, rep == ComponentResourceRep::I64));
+        m_current->pushType(new Walrus::ComponentTypeResourceAsync(rep == ComponentResourceRep::I64, dtor, callback));
     }
 
     void BeginInstanceType(uint32_t count)

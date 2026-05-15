@@ -38,19 +38,139 @@ LoweredFunction* LoweredFunction::createLoweredFunction(Store* store, const Func
 
 void LoweredFunction::call(ExecutionState& state, Value* argv, Value* result)
 {
+#ifdef ENABLE_WASI
+    if (m_liftedFunction->kind() == LiftedFunction::WasiFunctionKind) {
+        callWasiFunction(state, argv, result, m_liftedFunction->asLiftedWasiFunction(), m_options);
+        return;
+    }
+#endif
+
     ASSERT(0);
 }
 
 CanonFunction* CanonFunction::createCanonFunction(Store* store, const FunctionType* functionType, Type type)
 {
-    CanonFunction* func = new CanonFunction(functionType, type);
+    CanonFunction* func = new CanonFunction(functionType, type, store);
     store->appendExtern(func);
     return func;
 }
 
 void CanonFunction::call(ExecutionState& state, Value* argv, Value* result)
 {
-    ASSERT(0);
+    ComponentInstance* instance = store()->context()->instance();
+
+    switch (type()) {
+    case ResourceDrop: {
+        uint32_t index = argv[0].asI32();
+        ComponentHandle* handle = instance->getHandle(state, index);
+#ifdef ENABLE_WASI
+        if (dropWasiResource(state, handle)) {
+            delete handle;
+            instance->removeHandle(index);
+            break;
+        }
+#endif /* ENABLE_WASI */
+
+        if (handle->kind() != ComponentHandle::ResourceRepKind) {
+            ComponentInstance::throwInvalidHandle(state, index);
+        }
+
+        delete handle;
+        instance->removeHandle(index);
+        break;
+    }
+    default:
+        ASSERT(0);
+        break;
+    }
+}
+
+ComponentInstance::ComponentInstance(ComponentType* type)
+    : Object(GET_GLOBAL_TYPE_INFO(componentInstanceTypeInfo))
+    , m_type(type)
+    , m_freeResourceHandle(LastHandle)
+{
+    type->addRef();
+}
+
+ComponentInstance::~ComponentInstance()
+{
+    for (auto it : m_handles) {
+        if ((it & (UnusedSlotMask | BorrowedHandleMask)) == 0) {
+            delete reinterpret_cast<ComponentHandle*>(it);
+        }
+    }
+    for (auto it : m_funcs) {
+        it->releaseRef();
+    }
+    for (auto it : m_canonOptions) {
+        delete it;
+    }
+    m_type->releaseRef();
+}
+
+uint32_t ComponentInstance::appendHandle(ExecutionState& state, ComponentHandle* handle)
+{
+    uintptr_t handleValue = reinterpret_cast<uintptr_t>(handle);
+    ASSERT((handleValue & (UnusedSlotMask | BorrowedHandleMask)) == 0);
+
+    if (m_freeResourceHandle != LastHandle) {
+        uint32_t result = static_cast<uint32_t>(m_freeResourceHandle);
+        ASSERT((reinterpret_cast<uintptr_t>(m_handles[result]) & UnusedSlotMask) != 0);
+        m_freeResourceHandle = m_handles[result];
+        if (m_freeResourceHandle != LastHandle) {
+            m_freeResourceHandle >>= UnusedSlotShift;
+        }
+        m_handles[result] = handleValue;
+        return result + FirstHandleIndex;
+    }
+
+    if (m_handles.size() >= ~static_cast<uint32_t>(0) - FirstHandleIndex) {
+        std::string message = "too many handles allocated";
+        Trap::throwException(state, message);
+        return 0;
+    }
+
+    uint32_t result = static_cast<uint32_t>(m_handles.size());
+    m_handles.push_back(handleValue);
+    return result + FirstHandleIndex;
+}
+
+ComponentHandle* ComponentInstance::getHandle(ExecutionState& state, uint32_t index)
+{
+    if (index >= FirstHandleIndex && (index - FirstHandleIndex) < m_handles.size()) {
+        uintptr_t handleValue = m_handles[index - FirstHandleIndex];
+        if ((handleValue & UnusedSlotMask) == 0) {
+            return reinterpret_cast<ComponentHandle*>(handleValue & ~BorrowedHandleMask);
+        }
+    }
+
+    throwInvalidHandle(state, index);
+    RELEASE_ASSERT_NOT_REACHED();
+    return nullptr;
+}
+
+void ComponentInstance::removeHandle(uint32_t index)
+{
+    ASSERT(index >= FirstHandleIndex && (index - FirstHandleIndex) < m_handles.size()
+           && (m_handles[index - FirstHandleIndex] & UnusedSlotMask) == 0);
+    index -= FirstHandleIndex;
+    m_handles[index] = (m_freeResourceHandle << UnusedSlotShift) | UnusedSlotMask;
+    m_freeResourceHandle = index;
+}
+
+void ComponentInstance::throwInvalidHandle(ExecutionState& state, uint32_t index)
+{
+    std::string message = "invalid resource handle: ";
+    message.append(std::to_string(index));
+    Trap::throwException(state, message);
+}
+
+ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType* type)
+{
+    ComponentInstance* instance = new ComponentInstance(type);
+    store->appendComponentInstance(instance);
+    return instance;
 }
 
 void ComponentInstance::coreInstantiate(ExecutionState& state, Store* store, Component* component, ComponentCoreInstantiate* instantiate)
@@ -86,7 +206,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Store* store, Com
             }
 
             if (exportType == nullptr) {
-                std::string message = "Cannot import field \"";
+                std::string message = "cannot import field \"";
                 message.append(import->fieldName());
                 message.append("\" from module: ");
                 message.append(import->moduleName());
@@ -143,7 +263,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Store* store, Com
             }
         } else {
             if (inlineIndex == 0) {
-                std::string message = "Cannot import module: ";
+                std::string message = "cannot import module: ";
                 message.append(import->moduleName());
                 Trap::throwException(state, message);
             }
@@ -163,7 +283,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Store* store, Com
             }
 
             if (sort == ComponentSort::Invalid) {
-                std::string message = "Cannot import field \"";
+                std::string message = "cannot import field \"";
                 message.append(import->fieldName());
                 message.append("\" from module: ");
                 message.append(import->moduleName());
@@ -221,7 +341,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Store* store, Com
         }
 
         if (value == nullptr) {
-            std::string message = "Type mismatch for field \"";
+            std::string message = "type mismatch for field \"";
             message.append(import->fieldName());
             message.append("\" form module: ");
             message.append(import->moduleName());
@@ -335,7 +455,7 @@ void ComponentInstance::lowerFunction(Store* store, std::vector<CanonOptions*>& 
 
 #ifdef ENABLE_WASI
     if (func->kind() == LiftedFunction::WasiFunctionKind) {
-        m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(store, func->asLiftedWasiFunction()->functionType(), func, options));
+        m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(store, getWasiFunctionType(func->asLiftedWasiFunction()), func, options));
         return;
     }
 #endif /* ENABLE_WASI */
@@ -344,8 +464,7 @@ void ComponentInstance::lowerFunction(Store* store, std::vector<CanonOptions*>& 
 
 ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component* component, ComponentInstance* parent, ComponentInstantiate* arg)
 {
-    ComponentInstance* instance = new ComponentInstance(component->type());
-    m_store->appendComponentInstance(instance);
+    ComponentInstance* instance = createInstance(m_store, component->type());
 
     for (auto it : component->declarations()) {
         switch (it->kind()) {
@@ -421,9 +540,8 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
 
 #ifdef ENABLE_WASI
             if (!success && external.sort == ComponentSort::Instance) {
-                ComponentInstance* importedInstance = wasi02LoadInstance(external, m_functionTypes);
+                ComponentInstance* importedInstance = wasi02LoadInstance(m_store, m_functionTypes, external.name);
                 if (importedInstance != nullptr) {
-                    m_store->appendComponentInstance(importedInstance);
                     instance->m_instances.push_back(importedInstance);
                     success = true;
                     break;
@@ -432,7 +550,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
 #endif /* ENABLE_WASI */
 
             if (!success) {
-                std::string message = "Cannot import: ";
+                std::string message = "cannot import: ";
                 message.append(external.name);
                 Trap::throwException(m_state, message);
             }
@@ -451,24 +569,6 @@ ComponentInstance* ComponentInstance::instantiate(ExecutionState& state, Store* 
 {
     InstantiateContext context(state, store, functionTypes);
     return context.instantiate(component, nullptr, nullptr);
-}
-
-ComponentInstance::ComponentInstance(ComponentType* type)
-    : Object(GET_GLOBAL_TYPE_INFO(componentInstanceTypeInfo))
-    , m_type(type)
-{
-    type->addRef();
-}
-
-ComponentInstance::~ComponentInstance()
-{
-    m_type->releaseRef();
-    for (auto it : m_funcs) {
-        it->releaseRef();
-    }
-    for (auto it : m_canonOptions) {
-        delete it;
-    }
 }
 
 } // namespace Walrus

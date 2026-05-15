@@ -52,8 +52,10 @@ public:
         DefinedFunctionKind,
         ImportedFunctionKind,
         WasiFunctionKind,
+        // Function types used by component support.
         LoweredFunctionKind,
         CanonFunctionKind,
+        WasiResourceReleaseKind,
     };
 
     const FunctionType* functionType() const { return m_functionType; }

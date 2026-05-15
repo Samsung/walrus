@@ -396,13 +396,13 @@ static Trap::TrapResult executeWASMComponent(Store* store, DefinedFunctionTypes&
             }
         }
 
-        Function* run = nullptr;
+        LiftedCoreFunction* run = nullptr;
         if (instance != nullptr) {
             for (auto& it : instance->type()->exports()) {
                 if (it.sort == ComponentSort::Func && it.name == "run") {
                     LiftedFunction* func = instance->getFunction(it.exportIndex);
                     if (func->kind() == LiftedFunction::CoreFunctionKind) {
-                        run = func->asLiftedCoreFunction()->function();
+                        run = func->asLiftedCoreFunction();
                     }
                     break;
                 }
@@ -411,7 +411,8 @@ static Trap::TrapResult executeWASMComponent(Store* store, DefinedFunctionTypes&
 
         if (run != nullptr) {
             Value resultValue[1];
-            run->call(state, nullptr, resultValue);
+            Store::ComponentContext context(data->store, run->options()->instance());
+            run->function()->call(state, nullptr, resultValue);
         } else {
             printf("Note: Cannot execute component, missing run()\n");
         }
@@ -1348,6 +1349,7 @@ int main(int argc, const char* argv[])
     WASI::initialize(&uvwasi);
 #endif
 
+    int result = 0;
     for (const auto& filePath : options.fileNames) {
         FILE* fp = fopen(filePath.data(), "r");
         if (fp) {
@@ -1372,13 +1374,15 @@ int main(int argc, const char* argv[])
                     auto trapResult = executeWASMComponent(store, functionTypes, filePath, buf);
                     if (trapResult.exception) {
                         fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
-                        return -1;
+                        result = -1;
+                        break;
                     }
                 } else {
                     auto trapResult = executeWASM(store, filePath, buf, functionTypes);
                     if (trapResult.exception) {
                         fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
-                        return -1;
+                        result = -1;
+                        break;
                     }
                 }
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
@@ -1386,7 +1390,8 @@ int main(int argc, const char* argv[])
             }
         } else {
             printf("Cannot open file %s\n", filePath.data());
-            return -1;
+            result = -1;
+            break;
         }
     }
 
@@ -1404,5 +1409,5 @@ int main(int argc, const char* argv[])
     ProfilerStop();
 #endif
 
-    return 0;
+    return result;
 }

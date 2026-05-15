@@ -108,4 +108,19 @@ Waiter* Store::getWaiter(void* address)
     m_waiterList.push_back(waiter);
     return waiter;
 }
+
+void Store::registerComponentInstance(std::string& name, ComponentInstance* instance)
+{
+    m_namedComponentInstances[name] = instance;
+}
+
+ComponentInstance* Store::findComponentInstance(std::string& name)
+{
+    auto it = m_namedComponentInstances.find(name);
+    if (it == m_namedComponentInstances.end()) {
+        return nullptr;
+    }
+    return it->second;
+}
+
 } // namespace Walrus

@@ -56,6 +56,39 @@ struct Waiter {
 
 class Store {
 public:
+    class ComponentContext {
+        MAKE_STACK_ALLOCATED()
+
+    public:
+        ComponentContext(Store* store, ComponentInstance* instance)
+            : m_store(store)
+            , m_prevContext(store->m_context)
+            , m_instance(instance)
+        {
+            m_store->m_context = this;
+        }
+
+        ~ComponentContext()
+        {
+            m_store->m_context = m_prevContext;
+        }
+
+        ComponentContext* prevContext() const
+        {
+            return m_prevContext;
+        }
+
+        ComponentInstance* instance() const
+        {
+            return m_instance;
+        }
+
+    private:
+        Store* m_store;
+        ComponentContext* m_prevContext;
+        ComponentInstance* m_instance;
+    };
+
     Store(Engine* engine);
 
     ~Store();
@@ -101,6 +134,14 @@ public:
 
     Waiter* getWaiter(void* address);
 
+    ComponentContext* context() const
+    {
+        return m_context;
+    }
+
+    void registerComponentInstance(std::string& name, ComponentInstance* instance);
+    ComponentInstance* findComponentInstance(std::string& name);
+
 private:
     Engine* m_engine;
     TypeStore m_typeStore;
@@ -113,6 +154,9 @@ private:
 
     std::mutex m_waiterListLock;
     std::vector<Waiter*> m_waiterList;
+
+    ComponentContext* m_context;
+    std::map<std::string, ComponentInstance*> m_namedComponentInstances;
 };
 
 } // namespace Walrus
