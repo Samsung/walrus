@@ -22,7 +22,7 @@
 #include "Walrus.h"
 #include "runtime/Function.h"
 #include "runtime/ObjectType.h"
-#include "runtime/DefinedFunctionTypes.h"
+#include "runtime/Store.h"
 #include <uvwasi.h>
 
 namespace Walrus {
@@ -161,7 +161,7 @@ public:
 
     struct WasiFuncInfo {
         std::string name;
-        DefinedFunctionTypes::Index functionType;
+        Store::DefinedFunctionType functionType;
         WasiFunction::WasiFunctionCallback ptr;
     };
 

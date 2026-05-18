@@ -169,7 +169,7 @@ public:
 
     FunctionType(size_t paramTypesCount, size_t paramRefsCount,
                  size_t resultTypesCount, size_t resultRefsCount)
-        : CompositeType(ObjectType::FunctionKind, false, nullptr)
+        : CompositeType(ObjectType::FunctionKind, true, nullptr)
         , m_paramTypes(paramTypesCount, paramRefsCount)
         , m_resultTypes(resultTypesCount, resultRefsCount)
         , m_paramStackSize(0)
@@ -178,7 +178,7 @@ public:
     }
 
     FunctionType(Value::Type type)
-        : CompositeType(ObjectType::FunctionKind, false, nullptr)
+        : CompositeType(ObjectType::FunctionKind, true, nullptr)
         , m_paramTypes(0, 0)
         , m_resultTypes(1, 0)
         , m_paramStackSize(0)

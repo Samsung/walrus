@@ -56,6 +56,34 @@ struct Waiter {
 
 class Store {
 public:
+    enum DefinedFunctionType : uint8_t {
+        // The R is meant to represent the results, after R are the result types.
+        NONE = 0,
+        I32R,
+        I32I32R,
+        I32I32I32I32R,
+        I32_RI32,
+        I32I32_RI32,
+        I32I64I32_RI32,
+        I32I32I32_RI32,
+        I32I32I32I32_RI32,
+        I32I64I32I32_RI32,
+        I32I64I64I32_RI32,
+        I32I32I32I32I32_RI32,
+        I32I32I32I64I32_RI32,
+        I32I32I32I32I32I32_RI32,
+        I32I32I32I32I64I64I32_RI32,
+        I32I32I32I32I32I64I64I32I32_RI32,
+        RI32,
+        I64R,
+        F32R,
+        F64R,
+        I32F32R,
+        F64F64R,
+        INVALID,
+        FUNC_TYPES_NUM,
+    };
+
     class ComponentContext {
         MAKE_STACK_ALLOCATED()
 
@@ -95,6 +123,14 @@ public:
 
     static void finalize();
     static FunctionType* getDefaultFunctionType(Value::Type type);
+
+    FunctionType* getDefinedFunctionType(DefinedFunctionType type)
+    {
+        if (m_definedFuncTypes[type] != nullptr) {
+            return m_definedFuncTypes[type];
+        }
+        return createDefinedFunctionType(type);
+    }
 
     void appendModule(Module* module)
     {
@@ -143,8 +179,12 @@ public:
     ComponentInstance* findComponentInstance(std::string& name);
 
 private:
+    FunctionType* createDefinedFunctionType(DefinedFunctionType type);
+
     Engine* m_engine;
     TypeStore m_typeStore;
+
+    FunctionType* m_definedFuncTypes[FUNC_TYPES_NUM];
 
     Vector<Module*> m_modules;
     Vector<Instance*> m_instances;
