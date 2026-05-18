@@ -20,7 +20,6 @@
 #include "runtime/Global.h"
 #include "runtime/Tag.h"
 #include "runtime/Trap.h"
-#include "runtime/DefinedFunctionTypes.h"
 #include "parser/WASMParser.h"
 #include "parser/WASMComponentParser.h"
 
@@ -155,7 +154,7 @@ static ExternalValue* findExternalValue(size_t value)
     return externalValues.back();
 }
 
-static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes,
+static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src,
                                     std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
 {
     auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags, s_FeatureFlags);
@@ -196,7 +195,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         auto import = importTypes[i];
         if (import->moduleName() == "spectest") {
             if (import->fieldName() == "print") {
-                auto ft = functionTypes[DefinedFunctionTypes::NONE];
+                auto ft = store->getDefinedFunctionType(Store::NONE);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -204,7 +203,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i32") {
-                auto ft = functionTypes[DefinedFunctionTypes::I32R];
+                auto ft = store->getDefinedFunctionType(Store::I32R);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -213,7 +212,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i64") {
-                auto ft = functionTypes[DefinedFunctionTypes::I64R];
+                auto ft = store->getDefinedFunctionType(Store::I64R);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -222,7 +221,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_f32") {
-                auto ft = functionTypes[DefinedFunctionTypes::F32R];
+                auto ft = store->getDefinedFunctionType(Store::F32R);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -231,7 +230,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_f64") {
-                auto ft = functionTypes[DefinedFunctionTypes::F64R];
+                auto ft = store->getDefinedFunctionType(Store::F64R);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -240,7 +239,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i32_f32") {
-                auto ft = functionTypes[DefinedFunctionTypes::I32F32R];
+                auto ft = store->getDefinedFunctionType(Store::I32F32R);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -250,7 +249,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     },
                     nullptr));
             } else if (import->fieldName() == "print_f64_f64") {
-                auto ft = functionTypes[DefinedFunctionTypes::F64F64R];
+                auto ft = store->getDefinedFunctionType(Store::F64F64R);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -273,7 +272,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                 importValues.push_back(Memory::createMemory(store, 1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize, false, false));
             } else {
                 // import wrong value for test
-                auto ft = functionTypes[DefinedFunctionTypes::INVALID];
+                auto ft = store->getDefinedFunctionType(Store::INVALID);
                 importValues.push_back(ImportedFunction::createImportedFunction(
                     store,
                     ft,
@@ -285,7 +284,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         } else if (import->moduleName() == "wasi_snapshot_preview1") {
             WASI::WasiFuncInfo* wasiImportFunc = WASI::find(import->fieldName());
             if (wasiImportFunc) {
-                FunctionType* ft = functionTypes[wasiImportFunc->functionType];
+                FunctionType* ft = store->getDefinedFunctionType(wasiImportFunc->functionType);
                 if (ft->equals(import->functionType())) {
                     importValues.push_back(WasiFunction::createWasiFunction(
                         store,
@@ -370,7 +369,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
                     &data);
 }
 
-static Trap::TrapResult executeWASMComponent(Store* store, DefinedFunctionTypes& functionTypes, const std::string& filename, const std::vector<uint8_t>& src)
+static Trap::TrapResult executeWASMComponent(Store* store, const std::string& filename, const std::vector<uint8_t>& src)
 {
     std::pair<Optional<Component*>, std::string> parseResult = WASMComponentParser::parseBinary(store, filename, src.data(), src.size());
     if (!parseResult.second.empty()) {
@@ -382,13 +381,12 @@ static Trap::TrapResult executeWASMComponent(Store* store, DefinedFunctionTypes&
     struct RunData {
         Component* component;
         Store* store;
-        DefinedFunctionTypes& functionTypes;
-    } data = { parseResult.first.value(), store, functionTypes };
+    } data = { parseResult.first.value(), store };
 
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
-        ComponentInstance* instance = ComponentInstance::instantiate(state, data->store, data->functionTypes, data->component);
+        ComponentInstance* instance = ComponentInstance::instantiate(state, data->store, data->component);
         for (auto& it : instance->type()->exports()) {
             if (it.sort == ComponentSort::Instance && it.name == "wasi:cli/run@0.2.6") {
                 instance = instance->getInstance(it.exportIndex);
@@ -850,7 +848,7 @@ static Instance* fetchInstance(wabt::Var& moduleVar, std::map<size_t, Instance*>
     return registeredInstanceMap[moduleVar.name()];
 }
 
-static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src, DefinedFunctionTypes& functionTypes)
+static void executeWAST(Store* store, const std::string& filename, const std::vector<uint8_t>& src)
 {
     wabt::Errors errors;
     wabt::Features features;
@@ -870,7 +868,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             result = WriteBinaryComponent(&stream, component.get(), writeBinaryOptions);
 
             if (wabt::Succeeded(result)) {
-                auto trapResult = executeWASMComponent(store, functionTypes, filename, stream.output_buffer().data);
+                auto trapResult = executeWASMComponent(store, filename, stream.output_buffer().data);
                 if (trapResult.exception) {
                     std::string& errorMessage = trapResult.exception->message();
                     printf("Error: %s\n", errorMessage.c_str());
@@ -909,7 +907,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::ScriptModule: {
             auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
             auto buf = readModuleData(&moduleCommand->module);
-            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, &registeredInstanceMap);
             if (trapResult.exception) {
                 std::string& errorMessage = trapResult.exception->message();
                 printf("Error: %s\n", errorMessage.c_str());
@@ -990,7 +988,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 RELEASE_ASSERT_NOT_REACHED();
             }
             auto buf = readModuleData(&tsm->module);
-            auto trapResult = executeWASM(store, filename, buf->data, functionTypes, &registeredInstanceMap);
+            auto trapResult = executeWASM(store, filename, buf->data, &registeredInstanceMap);
             RELEASE_ASSERT(trapResult.exception);
             std::string& s = trapResult.exception->message();
             if (s.find(assertModuleUninstantiable->text) != 0) {
@@ -1038,7 +1036,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, functionTypes);
+            auto trapResult = executeWASM(store, filename, buf);
             if (trapResult.exception == nullptr) {
                 printf("Execute WASM returned nullptr (in wabt::CommandType::AssertInvalid case)\n");
                 printf("Expected exception:%s\n", assertModuleInvalid->text.data());
@@ -1069,7 +1067,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
             } else {
                 buf = dsm->data;
             }
-            auto trapResult = executeWASM(store, filename, buf, functionTypes);
+            auto trapResult = executeWASM(store, filename, buf);
             if (trapResult.exception == nullptr) {
                 printf("Execute WASM returned nullptr (in wabt::CommandType::AssertUnlinkable case)\n");
                 printf("Expected exception:%s\n", assertUnlinkable->text.data());
@@ -1105,7 +1103,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
     }
 }
 
-static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun, DefinedFunctionTypes& functionTypes)
+static void runExports(Store* store, const std::string& filename, const std::vector<uint8_t>& src, std::string& exportToRun)
 {
     auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags);
     if (!parseResult.second.empty()) {
@@ -1124,7 +1122,7 @@ static void runExports(Store* store, const std::string& filename, const std::vec
         if (import->moduleName() == "wasi_snapshot_preview1") {
             Walrus::WASI::WasiFuncInfo* wasiImportFunc = WASI::find(import->fieldName());
             if (wasiImportFunc != nullptr) {
-                FunctionType* ft = functionTypes[wasiImportFunc->functionType];
+                FunctionType* ft = store->getDefinedFunctionType(wasiImportFunc->functionType);
                 if (ft->equals(import->functionType())) {
                     importValues.push_back(WasiFunction::createWasiFunction(
                         store,
@@ -1310,7 +1308,6 @@ int main(int argc, const char* argv[])
     Engine* engine = new Engine();
     Store* store = new Store(engine);
 
-    DefinedFunctionTypes functionTypes;
     ParseOptions options;
 
     parseArguments(argc, argv, options);
@@ -1369,16 +1366,16 @@ int main(int argc, const char* argv[])
             }
             if (endsWith(filePath, "wasm")) {
                 if (!options.exportToRun.empty()) {
-                    runExports(store, filePath, buf, options.exportToRun, functionTypes);
+                    runExports(store, filePath, buf, options.exportToRun);
                 } else if (wabt::ReadBinaryIsComponent(buf.data(), buf.size())) {
-                    auto trapResult = executeWASMComponent(store, functionTypes, filePath, buf);
+                    auto trapResult = executeWASMComponent(store, filePath, buf);
                     if (trapResult.exception) {
                         fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
                         result = -1;
                         break;
                     }
                 } else {
-                    auto trapResult = executeWASM(store, filePath, buf, functionTypes);
+                    auto trapResult = executeWASM(store, filePath, buf);
                     if (trapResult.exception) {
                         fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
                         result = -1;
@@ -1386,7 +1383,7 @@ int main(int argc, const char* argv[])
                     }
                 }
             } else if (endsWith(filePath, "wat") || endsWith(filePath, "wast")) {
-                executeWAST(store, filePath, buf, functionTypes);
+                executeWAST(store, filePath, buf);
             }
         } else {
             printf("Cannot open file %s\n", filePath.data());

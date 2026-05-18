@@ -16,7 +16,6 @@
 #include "Walrus.h"
 
 #include "runtime/ComponentInstance.h"
-#include "runtime/DefinedFunctionTypes.h"
 #include "runtime/Instance.h"
 #include "runtime/Global.h"
 #include "runtime/Memory.h"
@@ -507,7 +506,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
             break;
         }
         case ComponentDeclaration::CanonResourceDrop: {
-            instance->m_coreFuncs.push_back(CanonFunction::createCanonFunction(m_store, m_functionTypes[DefinedFunctionTypes::I32R], CanonFunction::ResourceDrop));
+            instance->m_coreFuncs.push_back(CanonFunction::createCanonFunction(m_store, m_store->getDefinedFunctionType(Store::I32R), CanonFunction::ResourceDrop));
             break;
         }
         case ComponentDeclaration::ImportKind: {
@@ -540,7 +539,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
 
 #ifdef ENABLE_WASI
             if (!success && external.sort == ComponentSort::Instance) {
-                ComponentInstance* importedInstance = wasi02LoadInstance(m_store, m_functionTypes, external.name);
+                ComponentInstance* importedInstance = wasi02LoadInstance(m_store, external.name);
                 if (importedInstance != nullptr) {
                     instance->m_instances.push_back(importedInstance);
                     success = true;
@@ -565,9 +564,9 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
     return instance;
 }
 
-ComponentInstance* ComponentInstance::instantiate(ExecutionState& state, Store* store, DefinedFunctionTypes& functionTypes, Component* component)
+ComponentInstance* ComponentInstance::instantiate(ExecutionState& state, Store* store, Component* component)
 {
-    InstantiateContext context(state, store, functionTypes);
+    InstantiateContext context(state, store);
     return context.instantiate(component, nullptr, nullptr);
 }
 

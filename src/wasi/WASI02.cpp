@@ -18,7 +18,6 @@
 
 #include "wasi/WASI02.h"
 #include "runtime/ComponentInstance.h"
-#include "runtime/DefinedFunctionTypes.h"
 #include "runtime/Memory.h"
 #include "runtime/Store.h"
 
@@ -150,9 +149,8 @@ private:
 
 class ComponentInstanceWasi02 {
 public:
-    ComponentInstanceWasi02(Store* store, DefinedFunctionTypes& functionTypes)
+    ComponentInstanceWasi02(Store* store)
         : m_store(store)
-        , m_functionTypes(functionTypes)
         , m_type(nullptr)
     {
     }
@@ -167,12 +165,16 @@ public:
     ComponentInstance* loadInstance(const char* name, size_t length);
 
 private:
+    FunctionType* getType(Store::DefinedFunctionType type)
+    {
+        return m_store->getDefinedFunctionType(type);
+    }
+
     static void aliasExport(ComponentInstance* instance, const char* name, ComponentRefCounted* type);
     static void addExport(ComponentInstance* instance, const char* name, LiftedWasiFunction::Type type, FunctionType* functionType);
     ComponentInstance* getInstance(const char* name, const char* postfix, size_t postfixLength);
 
     Store* m_store;
-    DefinedFunctionTypes& m_functionTypes;
     ComponentType* m_type;
 };
 
@@ -199,7 +201,7 @@ ComponentInstance* ComponentInstanceWasi02::getInstance(const char* name, const 
     memcpy(buffer, name, length);
     memcpy(buffer + length, postfix, postfixLength);
     std::string str(buffer, length + postfixLength);
-    return wasi02LoadInstance(m_store, m_functionTypes, str);
+    return wasi02LoadInstance(m_store, str);
 }
 
 static bool compareName(const char* name, size_t length, const char* expected)
@@ -250,7 +252,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             m_type = new ComponentType(ComponentType::ComponentTypeKind);
             ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
             m_type->pushType(new ComponentTypeResource(false, ComponentTypeResource::NotDefined)); /* 0 */
-            addExport(instance, "[method]pollable.block", LiftedWasiFunction::ioPollableBlock02, m_functionTypes[DefinedFunctionTypes::I32R]);
+            addExport(instance, "[method]pollable.block", LiftedWasiFunction::ioPollableBlock02, getType(Store::I32R));
             return instance;
         }
         if (compareName(name, length, "streams")) {
@@ -265,11 +267,11 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             ComponentInstance* pollIntance = getInstance("wasi:io/poll@0.2.", postfix, postfixLength);
             instance->m_instances.push_back(pollIntance);
             aliasExport(instance, "pollable", pollIntance->type()->getType(0)); /* 3 */
-            addExport(instance, "[method]output-stream.check-write", LiftedWasiFunction::ioOutputStreamCheckWrite02, m_functionTypes[DefinedFunctionTypes::I32I32R]);
-            addExport(instance, "[method]output-stream.write", LiftedWasiFunction::ioOutputStreamWrite02, m_functionTypes[DefinedFunctionTypes::I32I32I32I32R]);
-            addExport(instance, "[method]output-stream.blocking-write-and-flush", LiftedWasiFunction::ioOutputStreamBlockingWriteAndFlush02, m_functionTypes[DefinedFunctionTypes::I32I32I32I32R]);
-            addExport(instance, "[method]output-stream.blocking-flush", LiftedWasiFunction::ioOutputStreamBlockingFlush02, m_functionTypes[DefinedFunctionTypes::I32I32R]);
-            addExport(instance, "[method]output-stream.subscribe", LiftedWasiFunction::ioOutputStreamSubscribe02, m_functionTypes[DefinedFunctionTypes::I32_RI32]);
+            addExport(instance, "[method]output-stream.check-write", LiftedWasiFunction::ioOutputStreamCheckWrite02, getType(Store::I32I32R));
+            addExport(instance, "[method]output-stream.write", LiftedWasiFunction::ioOutputStreamWrite02, getType(Store::I32I32I32I32R));
+            addExport(instance, "[method]output-stream.blocking-write-and-flush", LiftedWasiFunction::ioOutputStreamBlockingWriteAndFlush02, getType(Store::I32I32I32I32R));
+            addExport(instance, "[method]output-stream.blocking-flush", LiftedWasiFunction::ioOutputStreamBlockingFlush02, getType(Store::I32I32R));
+            addExport(instance, "[method]output-stream.subscribe", LiftedWasiFunction::ioOutputStreamSubscribe02, getType(Store::I32_RI32));
             return instance;
         }
         return nullptr;
@@ -282,7 +284,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
         if (compareName(name, length, "exit")) {
             m_type = new ComponentType(ComponentType::ComponentTypeKind);
             ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-            addExport(instance, "exit", LiftedWasiFunction::cliExit02, m_functionTypes[DefinedFunctionTypes::I32R]);
+            addExport(instance, "exit", LiftedWasiFunction::cliExit02, getType(Store::I32R));
             return instance;
         }
         if (compareName(name, length, "stdin")) {
@@ -292,7 +294,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             ComponentInstance* streamsIntance = getInstance("wasi:io/streams@0.2.", postfix, postfixLength);
             instance->m_instances.push_back(streamsIntance);
             aliasExport(instance, "input-stream", streamsIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-stdin", LiftedWasiFunction::cliGetStdin02, m_functionTypes[DefinedFunctionTypes::RI32]);
+            addExport(instance, "get-stdin", LiftedWasiFunction::cliGetStdin02, getType(Store::RI32));
             return instance;
         }
         if (compareName(name, length, "stdout")) {
@@ -302,7 +304,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             ComponentInstance* streamsIntance = getInstance("wasi:io/streams@0.2.", postfix, postfixLength);
             instance->m_instances.push_back(streamsIntance);
             aliasExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
-            addExport(instance, "get-stdout", LiftedWasiFunction::cliGetStdout02, m_functionTypes[DefinedFunctionTypes::RI32]);
+            addExport(instance, "get-stdout", LiftedWasiFunction::cliGetStdout02, getType(Store::RI32));
             return instance;
         }
         if (compareName(name, length, "stderr")) {
@@ -312,7 +314,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             ComponentInstance* streamsIntance = getInstance("wasi:io/streams@0.2.", postfix, postfixLength);
             instance->m_instances.push_back(streamsIntance);
             aliasExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
-            addExport(instance, "get-stderr", LiftedWasiFunction::cliGetStderr02, m_functionTypes[DefinedFunctionTypes::RI32]);
+            addExport(instance, "get-stderr", LiftedWasiFunction::cliGetStderr02, getType(Store::RI32));
             return instance;
         }
         if (compareName(name, length, "terminal-input")) {
@@ -334,7 +336,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             ComponentInstance* inputIntance = getInstance("wasi:cli/terminal-input@0.2.", postfix, postfixLength);
             instance->m_instances.push_back(inputIntance);
             aliasExport(instance, "terminal-input", inputIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-terminal-stdin", LiftedWasiFunction::cliGetTerminalStdin02, m_functionTypes[DefinedFunctionTypes::I32R]);
+            addExport(instance, "get-terminal-stdin", LiftedWasiFunction::cliGetTerminalStdin02, getType(Store::I32R));
             return instance;
         }
         if (compareName(name, length, "terminal-stdout")) {
@@ -344,7 +346,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             ComponentInstance* outputIntance = getInstance("wasi:cli/terminal-output@0.2.", postfix, postfixLength);
             instance->m_instances.push_back(outputIntance);
             aliasExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-terminal-stdout", LiftedWasiFunction::cliGetTerminalStdout02, m_functionTypes[DefinedFunctionTypes::I32R]);
+            addExport(instance, "get-terminal-stdout", LiftedWasiFunction::cliGetTerminalStdout02, getType(Store::I32R));
             return instance;
         }
         if (compareName(name, length, "terminal-stderr")) {
@@ -354,7 +356,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
             ComponentInstance* outputIntance = getInstance("wasi:cli/terminal-output@0.2.", postfix, postfixLength);
             instance->m_instances.push_back(outputIntance);
             aliasExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-terminal-stderr", LiftedWasiFunction::cliGetTerminalStderr02, m_functionTypes[DefinedFunctionTypes::I32R]);
+            addExport(instance, "get-terminal-stderr", LiftedWasiFunction::cliGetTerminalStderr02, getType(Store::I32R));
             return instance;
         }
         return nullptr;
@@ -362,14 +364,14 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_
     return nullptr;
 }
 
-ComponentInstance* wasi02LoadInstance(Store* store, DefinedFunctionTypes& functionTypes, std::string& name)
+ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
 {
     ComponentInstance* instance = store->findComponentInstance(name);
     if (instance != nullptr) {
         return instance;
     }
 
-    ComponentInstanceWasi02 instanceCreator(store, functionTypes);
+    ComponentInstanceWasi02 instanceCreator(store);
     instance = instanceCreator.loadInstance(name.data(), name.length());
     store->registerComponentInstance(name, instance);
     return instance;

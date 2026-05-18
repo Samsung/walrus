@@ -84,9 +84,9 @@ void WASI::initialize(uvwasi_t* uvwasi)
     g_uvwasi = uvwasi;
 
     // fill wasi function table
-#define WASI_FUNC_TABLE(NAME, FUNCTYPE)                                                       \
-    g_wasiFunctions[WasiFuncIndex::NAME##FUNC].name = #NAME;                                  \
-    g_wasiFunctions[WasiFuncIndex::NAME##FUNC].functionType = DefinedFunctionTypes::FUNCTYPE; \
+#define WASI_FUNC_TABLE(NAME, FUNCTYPE)                                        \
+    g_wasiFunctions[WasiFuncIndex::NAME##FUNC].name = #NAME;                   \
+    g_wasiFunctions[WasiFuncIndex::NAME##FUNC].functionType = Store::FUNCTYPE; \
     g_wasiFunctions[WasiFuncIndex::NAME##FUNC].ptr = &WASI::NAME;
     FOR_EACH_WASI_FUNC(WASI_FUNC_TABLE)
 #undef WASI_FUNC_TABLE

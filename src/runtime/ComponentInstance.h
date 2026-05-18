@@ -331,15 +331,13 @@ private:
     };
 };
 
-class DefinedFunctionTypes;
-
 class ComponentInstance : public Object {
 #ifdef ENABLE_WASI
     friend class ComponentInstanceWasi02;
 #endif /* ENABLE_WASI */
 
 public:
-    static ComponentInstance* instantiate(ExecutionState& state, Store* store, DefinedFunctionTypes& functionTypes, Component* component);
+    static ComponentInstance* instantiate(ExecutionState& state, Store* store, Component* component);
 
     ~ComponentInstance();
 
@@ -376,10 +374,9 @@ private:
 
     class InstantiateContext {
     public:
-        InstantiateContext(ExecutionState& state, Store* store, DefinedFunctionTypes& functionTypes)
+        InstantiateContext(ExecutionState& state, Store* store)
             : m_state(state)
             , m_store(store)
-            , m_functionTypes(functionTypes)
         {
         }
 
@@ -388,7 +385,6 @@ private:
     private:
         ExecutionState& m_state;
         Store* m_store;
-        DefinedFunctionTypes& m_functionTypes;
     };
 
     static constexpr uint32_t FirstHandleIndex = 1;
