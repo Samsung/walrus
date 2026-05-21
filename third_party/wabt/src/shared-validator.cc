@@ -2211,8 +2211,10 @@ Result SharedComponentValidator::OnAliasOuter(const Location& loc,
 
   TypeDefList* target = current_;
   bool exclude_last = false;
+  bool cross_component = false;
   while (counter > 0 && target != nullptr) {
     if ((target->info_bits & IsObject) != 0) {
+      cross_component = true;
       exclude_last = (sort == ComponentSort::Component);
     } else {
       exclude_last = (sort == ComponentSort::Type);
@@ -2251,8 +2253,8 @@ Result SharedComponentValidator::OnAliasOuter(const Location& loc,
     type_base = nullptr;
   } else {
     type_base = (*target_sort_vector)[index];
-    if (sort == ComponentSort::Type && type_base != nullptr &&
-        (type_base->info_bits & HasResource) != 0) {
+    if (sort == ComponentSort::Type && cross_component &&
+        type_base != nullptr && (type_base->info_bits & HasResource) != 0) {
       result |= PrintError(loc, "resource type is rejected by outer alias");
       type_base = nullptr;
     }
@@ -2900,6 +2902,7 @@ Result SharedComponentValidator::CheckExternalInfo(
   if (sort == ComponentSort::Type &&
       external_info.external == ComponentExternalDesc::TypeSubRes) {
     auto type_value = MakeUnique<TypeResource>(TypeResource::Imported);
+    type_value->info_bits |= HasResource;
     *out_type_base = type_value.get();
     objects_.push_back(std::move(type_value));
     return Result::Ok;

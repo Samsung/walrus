@@ -172,6 +172,52 @@ ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType
     return instance;
 }
 
+bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources)
+{
+    switch (expected->kind()) {
+    case ComponentRefCounted::InstanceTypeKind: {
+        if (!provided->isComponentType()) {
+            return false;
+        }
+
+        ComponentType* expectedType = expected->asComponentType();
+        ComponentType* providedType = provided->asComponentType();
+
+        for (auto& left : expectedType->exports()) {
+            ComponentType::External* found = nullptr;
+
+            for (auto& right : providedType->exports()) {
+                if (left.name == right.name) {
+                    found = &right;
+                    break;
+                }
+            }
+
+            if (found == nullptr || left.sort != found->sort) {
+                return false;
+            }
+
+            if (left.type->kind() == ComponentRefCounted::SubResourceKind) {
+                if (found->type->kind() != ComponentRefCounted::SubResourceKind && !found->type->isTypeResource()) {
+                    return false;
+                }
+
+                uint32_t index = left.type->asTypeSubResource()->index();
+                if (resources[index] == nullptr) {
+                    resources[index] = found->type;
+                } else if (resources[index] != found->type) {
+                    return false;
+                }
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return true;
+}
+
 void ComponentInstance::coreInstantiate(ExecutionState& state, Store* store, Component* component, ComponentCoreInstantiate* instantiate)
 {
     ExternVector imports;
@@ -464,6 +510,8 @@ void ComponentInstance::lowerFunction(Store* store, std::vector<CanonOptions*>& 
 ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component* component, ComponentInstance* parent, ComponentInstantiate* arg)
 {
     ComponentInstance* instance = createInstance(m_store, component->type());
+    std::vector<ComponentRefCounted*> resources;
+    resources.resize(component->resourceCount());
 
     for (auto it : component->declarations()) {
         switch (it->kind()) {
@@ -543,13 +591,22 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
                 if (importedInstance != nullptr) {
                     instance->m_instances.push_back(importedInstance);
                     success = true;
-                    break;
                 }
             }
 #endif /* ENABLE_WASI */
 
             if (!success) {
                 std::string message = "cannot import: ";
+                message.append(external.name);
+                Trap::throwException(m_state, message);
+            }
+
+            if (external.sort == ComponentSort::Instance) {
+                success = compareTypes(external.type, instance->m_instances.back()->type(), resources);
+            }
+
+            if (!success) {
+                std::string message = "import type mismatch: ";
                 message.append(external.name);
                 Trap::throwException(m_state, message);
             }
