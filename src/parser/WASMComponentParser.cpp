@@ -262,7 +262,7 @@ private:
             break;
         case ComponentSort::Type:
             if (externalInfo.external == ComponentExternalDesc::TypeSubRes) {
-                type = new Walrus::ComponentTypeSubResource();
+                type = new Walrus::ComponentTypeSubResource(m_currentComponent->m_resourceCount++);
             } else {
                 type = m_current->getType(externalInfo.index.index);
                 type->addRef();
@@ -673,14 +673,12 @@ public:
     void OnOwnType(Index index)
     {
         Walrus::ComponentTypeSubResource* ref = m_current->getType(index)->asTypeSubResource();
-        ref->addRef();
         m_current->pushType(new Walrus::ComponentTypeResourceRef(Walrus::ComponentRefCounted::OwnKind, ref));
     }
 
     void OnBorrowType(Index index)
     {
         Walrus::ComponentTypeSubResource* ref = m_current->getType(index)->asTypeSubResource();
-        ref->addRef();
         m_current->pushType(new Walrus::ComponentTypeResourceRef(Walrus::ComponentRefCounted::BorrowKind, ref));
     }
 
@@ -739,7 +737,6 @@ public:
         Walrus::ComponentType* current = m_current;
         m_currentInfo = new ComponentTypeInfo(m_currentInfo, m_current, m_currentComponent);
         m_current = new Walrus::ComponentType(Walrus::ComponentRefCounted::InstanceTypeKind);
-        m_currentComponent = nullptr;
         current->pushType(m_current);
     }
 
@@ -759,7 +756,6 @@ public:
         Walrus::ComponentType* current = m_current;
         m_currentInfo = new ComponentTypeInfo(m_currentInfo, m_current, m_currentComponent);
         m_current = new Walrus::ComponentType(Walrus::ComponentRefCounted::ComponentTypeKind);
-        m_currentComponent = nullptr;
         current->pushType(m_current);
     }
 

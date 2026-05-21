@@ -196,14 +196,9 @@ public:
         return reinterpret_cast<ComponentTypeFunc*>(this);
     }
 
-    bool isTypeSubResource() const
-    {
-        return kind() == SubResourceKind || kind() == ResourceKind || kind() == ResourceAsyncKind;
-    }
-
     ComponentTypeSubResource* asTypeSubResource()
     {
-        ASSERT(isTypeSubResource());
+        ASSERT(kind() == SubResourceKind);
         return reinterpret_cast<ComponentTypeSubResource*>(this);
     }
 
@@ -475,25 +470,35 @@ private:
 
 class ComponentTypeSubResource : public ComponentRefCounted {
 public:
-    ComponentTypeSubResource()
+    ComponentTypeSubResource(uint32_t index)
         : ComponentRefCounted(SubResourceKind)
+        , m_index(index)
     {
+    }
+
+    uint32_t index() const
+    {
+        return m_index;
     }
 
 protected:
-    ComponentTypeSubResource(Kind kind)
+    ComponentTypeSubResource(Kind kind, uint32_t index)
         : ComponentRefCounted(kind)
+        , m_index(index)
     {
         ASSERT(kind == ResourceKind || kind == ResourceAsyncKind);
     }
+
+private:
+    uint32_t m_index;
 };
 
-class ComponentTypeResource : public ComponentTypeSubResource {
+class ComponentTypeResource : public ComponentRefCounted {
 public:
     static constexpr uint32_t NotDefined = ~static_cast<uint32_t>(0);
 
     ComponentTypeResource(bool i64, uint32_t dtorIndex)
-        : ComponentTypeSubResource(ResourceKind)
+        : ComponentRefCounted(ResourceKind)
         , m_i64(i64)
         , m_dtorIndex(dtorIndex)
     {
@@ -511,7 +516,7 @@ public:
 
 protected:
     ComponentTypeResource(Kind kind, bool i64, uint32_t dtorIndex)
-        : ComponentTypeSubResource(kind)
+        : ComponentRefCounted(kind)
         , m_i64(i64)
         , m_dtorIndex(dtorIndex)
     {
@@ -542,20 +547,21 @@ private:
 
 class ComponentTypeResourceRef : public ComponentRefCounted {
 public:
-    ComponentTypeResourceRef(Kind kind, ComponentTypeSubResource* ref)
+    ComponentTypeResourceRef(Kind kind, ComponentRefCounted* ref)
         : ComponentRefCounted(kind)
         , m_ref(ref)
     {
         ASSERT(isTypeResourceRef());
+        ref->addRef();
     }
 
-    ComponentTypeSubResource* ref() const
+    ComponentRefCounted* ref() const
     {
         return m_ref;
     }
 
 private:
-    ComponentTypeSubResource* m_ref;
+    ComponentRefCounted* m_ref;
 };
 
 // Immutable type declarations for components, instances
@@ -1033,6 +1039,11 @@ public:
         return m_type;
     }
 
+    uint32_t resourceCount() const
+    {
+        return m_resourceCount;
+    }
+
     void pushDeclaration(ComponentDeclaration* declaration)
     {
         m_declarations.push_back(declaration);
@@ -1086,6 +1097,7 @@ public:
 private:
     // Declarations for instantiation.
     ComponentType* m_type;
+    uint32_t m_resourceCount;
     std::vector<ComponentDeclaration*> m_declarations;
     std::vector<InlineExport> m_coreInlineExports;
     std::vector<size_t> m_coreInlineExportsStarts;

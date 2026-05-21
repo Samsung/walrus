@@ -74,7 +74,7 @@ void ComponentRefCounted::releaseAllRefs(ComponentRefCounted* ref)
             break;
         }
         default:
-            ASSERT(ref->isValueType() || ref->isTypeLabels() || ref->isTypeSubResource());
+            ASSERT(ref->isValueType() || ref->isTypeLabels() || ref->isTypeResource() || ref->kind() == SubResourceKind);
             break;
         }
 
@@ -85,6 +85,7 @@ void ComponentRefCounted::releaseAllRefs(ComponentRefCounted* ref)
 }
 
 Component::Component(Store* store)
+    : m_resourceCount(0)
 {
     m_type = new ComponentType(ComponentRefCounted::ComponentTypeKind);
     store->appendComponent(this);

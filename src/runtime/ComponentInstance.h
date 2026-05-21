@@ -395,6 +395,7 @@ private:
 
     static ComponentInstance* createInstance(Store* store, ComponentType* type);
 
+    static bool compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources);
     void coreInstantiate(ExecutionState& state, Store* store, Component* component, ComponentCoreInstantiate* instantiate);
     void aliasExport(ComponentAliasExport* alias);
     void aliasCoreExport(ComponentAliasExport* alias);
