@@ -464,7 +464,7 @@ void WASI::path_rename(ExecutionState& state, Value* argv, Value* result, Instan
     const char* oldPath = reinterpret_cast<char*>(get_memory_pointer(instance, argv[1], oldLength));
     uint32_t newFd = argv[3].asI32();
     uint32_t newLength = argv[5].asI32();
-    const char* newPath = reinterpret_cast<char*>(get_memory_pointer(instance, argv[4], oldLength));
+    const char* newPath = reinterpret_cast<char*>(get_memory_pointer(instance, argv[4], newLength));
 
     result[0] = Value(uvwasi_path_rename(WASI::g_uvwasi, oldFd, oldPath, oldLength, newFd, newPath, newLength));
 }
