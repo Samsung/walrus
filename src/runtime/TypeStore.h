@@ -133,7 +133,14 @@ private:
 #endif
 
     static const CompositeType** updateRefs(CompositeType* type, const Vector<CompositeType*>& types, const CompositeType** nextSubType);
-    void releaseRecursiveType(RecursiveType* recType);
+    void destroyRecursiveType(RecursiveType* recType);
+
+    void releaseRecursiveType(RecursiveType* recType)
+    {
+        if (--recType->m_refCount == 0) {
+            destroyRecursiveType(recType);
+        }
+    }
 
 #ifdef ENABLE_GC
     void insertRootRef(GCBase* object);
