@@ -175,8 +175,10 @@ public:
         return m_context;
     }
 
-    void registerComponentInstance(std::string& name, ComponentInstance* instance);
-    ComponentInstance* findComponentInstance(std::string& name);
+#ifdef ENABLE_WASI
+    void registerWasiComponentInstance(size_t instanceId, ComponentInstance* instance);
+    ComponentInstance* findWasiComponentInstance(size_t instanceId);
+#endif
 
 private:
     FunctionType* createDefinedFunctionType(DefinedFunctionType type);
@@ -196,7 +198,9 @@ private:
     std::vector<Waiter*> m_waiterList;
 
     ComponentContext* m_context;
-    std::map<std::string, ComponentInstance*> m_namedComponentInstances;
+#ifdef ENABLE_WASI
+    std::map<size_t, ComponentInstance*> m_wasiInstances;
+#endif
 };
 
 } // namespace Walrus

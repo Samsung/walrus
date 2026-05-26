@@ -23,6 +23,22 @@
 
 namespace Walrus {
 
+enum WasiNamedInstances : size_t {
+    instanceUnknown,
+    instanceIoError02,
+    instanceIoPoll02,
+    instanceIoStreams02,
+    instanceCliExit02,
+    instanceCliStdin02,
+    instanceCliStdout02,
+    instanceCliStderr02,
+    instanceCliTerminalInput02,
+    instanceCliTerminalOutput02,
+    instanceCliTerminalStdin02,
+    instanceCliTerminalStdout02,
+    instanceCliTerminalStderr02,
+};
+
 class ComponentResourceWasiStream : public ComponentResource {
     friend class ComponentResourceWasiPollable;
 
@@ -162,7 +178,7 @@ public:
         }
     }
 
-    ComponentInstance* loadInstance(const char* name, size_t length);
+    ComponentInstance* loadInstance(size_t instanceId, bool useCache = true);
 
 private:
     FunctionType* getType(Store::DefinedFunctionType type)
@@ -174,7 +190,6 @@ private:
     static void addExport(ComponentInstance* instance, const char* name, LiftedWasiFunction::Type type, FunctionType* functionType);
     static void addTypeExport(ComponentInstance* instance, const char* name, ComponentRefCounted* type);
     static void addResourceExport(ComponentInstance* instance, const char* name);
-    ComponentInstance* getInstance(const char* name, const char* postfix, size_t postfixLength);
 
     Store* m_store;
     ComponentType* m_type;
@@ -204,17 +219,6 @@ void ComponentInstanceWasi02::addResourceExport(ComponentInstance* instance, con
     addTypeExport(instance, name, new ComponentTypeResource(false, ComponentTypeResource::NotDefined));
 }
 
-ComponentInstance* ComponentInstanceWasi02::getInstance(const char* name, const char* postfix, size_t postfixLength)
-{
-    size_t length = strlen(name);
-    ASSERT(length < 62);
-    char buffer[64];
-    memcpy(buffer, name, length);
-    memcpy(buffer + length, postfix, postfixLength);
-    std::string str(buffer, length + postfixLength);
-    return wasi02LoadInstance(m_store, str);
-}
-
 static bool compareName(const char* name, size_t length, const char* expected)
 {
     if (strlen(expected) != length) {
@@ -223,176 +227,219 @@ static bool compareName(const char* name, size_t length, const char* expected)
     return memcmp(name, expected, length) == 0;
 }
 
-ComponentInstance* ComponentInstanceWasi02::loadInstance(const char* name, size_t length)
+ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool useCache)
 {
-    if (length < 12 || memcmp(name, "wasi:", 5) != 0) {
+    if (useCache) {
+        ComponentInstance* instance = m_store->findWasiComponentInstance(instanceId);
+        if (instance != nullptr) {
+            return instance;
+        }
+    }
+
+    switch (instanceId) {
+    case instanceIoError02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "error"); /* 0 */
+        return instance;
+    }
+    case instanceIoPoll02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "pollable"); /* 0 */
+        addExport(instance, "[method]pollable.block", LiftedWasiFunction::ioPollableBlock02, getType(Store::I32R));
+        return instance;
+    }
+    case instanceIoStreams02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "input-stream"); /* 0 */
+        addResourceExport(instance, "output-stream"); /* 1 */
+
+        ComponentInstance* errorIntance = loadInstance(instanceIoError02);
+        instance->m_instances.push_back(errorIntance);
+        ComponentRefCounted* errorType = errorIntance->type()->getType(0);
+        aliasTypeExport(instance, "error", errorType); /* 2 */
+        ComponentInstance* pollIntance = loadInstance(instanceIoPoll02);
+        instance->m_instances.push_back(pollIntance);
+        aliasTypeExport(instance, "pollable", pollIntance->type()->getType(0)); /* 3 */
+        ComponentRefCounted* ownErrorType = new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, errorType);
+        instance->m_type->pushType(ownErrorType); /* 4 */
+        ComponentTypeItems* variant = new ComponentTypeItems(ComponentRefCounted::VariantKind);
+        ownErrorType->addRef();
+        variant->items().push_back(ComponentTypeItems::Item{ "last-operation-failed", ComponentTypeRef(ownErrorType) });
+        variant->items().push_back(ComponentTypeItems::Item{ "closed", ComponentTypeRef() });
+        addTypeExport(instance, "stream-error", variant);
+        addExport(instance, "[method]output-stream.check-write", LiftedWasiFunction::ioOutputStreamCheckWrite02, getType(Store::I32I32R));
+        addExport(instance, "[method]output-stream.write", LiftedWasiFunction::ioOutputStreamWrite02, getType(Store::I32I32I32I32R));
+        addExport(instance, "[method]output-stream.blocking-write-and-flush", LiftedWasiFunction::ioOutputStreamBlockingWriteAndFlush02, getType(Store::I32I32I32I32R));
+        addExport(instance, "[method]output-stream.blocking-flush", LiftedWasiFunction::ioOutputStreamBlockingFlush02, getType(Store::I32I32R));
+        addExport(instance, "[method]output-stream.subscribe", LiftedWasiFunction::ioOutputStreamSubscribe02, getType(Store::I32_RI32));
+        return instance;
+    }
+    case instanceCliExit02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addExport(instance, "exit", LiftedWasiFunction::cliExit02, getType(Store::I32R));
+        return instance;
+    }
+    case instanceCliStdin02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+
+        ComponentInstance* streamsIntance = loadInstance(instanceIoStreams02);
+        instance->m_instances.push_back(streamsIntance);
+        aliasTypeExport(instance, "input-stream", streamsIntance->type()->getType(0)); /* 0 */
+        addExport(instance, "get-stdin", LiftedWasiFunction::cliGetStdin02, getType(Store::RI32));
+        return instance;
+    }
+    case instanceCliStdout02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+
+        ComponentInstance* streamsIntance = loadInstance(instanceIoStreams02);
+        instance->m_instances.push_back(streamsIntance);
+        aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
+        addExport(instance, "get-stdout", LiftedWasiFunction::cliGetStdout02, getType(Store::RI32));
+        return instance;
+    }
+    case instanceCliStderr02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+
+        ComponentInstance* streamsIntance = loadInstance(instanceIoStreams02);
+        instance->m_instances.push_back(streamsIntance);
+        aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
+        addExport(instance, "get-stderr", LiftedWasiFunction::cliGetStderr02, getType(Store::RI32));
+        return instance;
+    }
+    case instanceCliTerminalInput02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "terminal-input"); /* 0 */
+        return instance;
+    }
+    case instanceCliTerminalOutput02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "terminal-output"); /* 0 */
+        return instance;
+    }
+    case instanceCliTerminalStdin02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+
+        ComponentInstance* inputIntance = loadInstance(instanceCliTerminalInput02);
+        instance->m_instances.push_back(inputIntance);
+        aliasTypeExport(instance, "terminal-input", inputIntance->type()->getType(0)); /* 0 */
+        addExport(instance, "get-terminal-stdin", LiftedWasiFunction::cliGetTerminalStdin02, getType(Store::I32R));
+        return instance;
+    }
+    case instanceCliTerminalStdout02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+
+        ComponentInstance* outputIntance = loadInstance(instanceCliTerminalOutput02);
+        instance->m_instances.push_back(outputIntance);
+        aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
+        addExport(instance, "get-terminal-stdout", LiftedWasiFunction::cliGetTerminalStdout02, getType(Store::I32R));
+        return instance;
+    }
+    case instanceCliTerminalStderr02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+
+        ComponentInstance* outputIntance = loadInstance(instanceCliTerminalOutput02);
+        instance->m_instances.push_back(outputIntance);
+        aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
+        addExport(instance, "get-terminal-stderr", LiftedWasiFunction::cliGetTerminalStderr02, getType(Store::I32R));
+        return instance;
+    }
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        return nullptr;
+    }
+}
+
+ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
+{
+    size_t length = name.length();
+    const char* charData = name.data();
+
+    if (length < 12 || memcmp(charData, "wasi:", 5) != 0) {
         return nullptr;
     }
 
-    if (name[length - 1] < '0' || name[length - 1] > '9') {
+    if (charData[length - 1] < '0' || charData[length - 1] > '9') {
         return nullptr;
     }
 
     size_t postfixLength = 1;
-    if (name[length - 2] != '.') {
+    if (charData[length - 2] != '.') {
         postfixLength = 2;
-        if (name[length - 1] > '1' || name[length - 2] != '1' || name[length - 3] != '.') {
+        if (charData[length - 1] > '1' || charData[length - 2] != '1' || charData[length - 3] != '.') {
             return nullptr;
         }
     }
 
     length -= postfixLength;
-    const char* postfix = name + length;
+    const char* postfix = charData + length;
 
-    if (memcmp(name + length - 5, "@0.2.", 5) != 0) {
+    if (memcmp(charData + length - 5, "@0.2.", 5) != 0) {
         return nullptr;
     }
     length -= 5;
 
-    if (length > 8 && memcmp(name, "wasi:io/", 8) == 0) {
-        name += 8;
+    size_t instanceId = instanceUnknown;
+
+    if (length > 8 && memcmp(charData, "wasi:io/", 8) == 0) {
+        charData += 8;
         length -= 8;
 
-        if (compareName(name, length, "error")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-            addResourceExport(instance, "error"); /* 0 */
-            return instance;
+        if (compareName(charData, length, "error")) {
+            instanceId = instanceIoError02;
+        } else if (compareName(charData, length, "poll")) {
+            instanceId = instanceIoPoll02;
+        } else if (compareName(charData, length, "streams")) {
+            instanceId = instanceIoStreams02;
         }
-        if (compareName(name, length, "poll")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-            addResourceExport(instance, "pollable"); /* 0 */
-            addExport(instance, "[method]pollable.block", LiftedWasiFunction::ioPollableBlock02, getType(Store::I32R));
-            return instance;
-        }
-        if (compareName(name, length, "streams")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-            addResourceExport(instance, "input-stream"); /* 0 */
-            addResourceExport(instance, "output-stream"); /* 1 */
-
-            ComponentInstance* errorIntance = getInstance("wasi:io/error@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(errorIntance);
-            ComponentRefCounted* errorType = errorIntance->type()->getType(0);
-            aliasTypeExport(instance, "error", errorType); /* 2 */
-            ComponentInstance* pollIntance = getInstance("wasi:io/poll@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(pollIntance);
-            aliasTypeExport(instance, "pollable", pollIntance->type()->getType(0)); /* 3 */
-            ComponentRefCounted* ownErrorType = new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, errorType);
-            instance->m_type->pushType(ownErrorType); /* 4 */
-            ComponentTypeItems* variant = new ComponentTypeItems(ComponentRefCounted::VariantKind);
-            ownErrorType->addRef();
-            variant->items().push_back(ComponentTypeItems::Item{ "last-operation-failed", ComponentTypeRef(ownErrorType) });
-            variant->items().push_back(ComponentTypeItems::Item{ "closed", ComponentTypeRef() });
-            addTypeExport(instance, "stream-error", variant);
-            addExport(instance, "[method]output-stream.check-write", LiftedWasiFunction::ioOutputStreamCheckWrite02, getType(Store::I32I32R));
-            addExport(instance, "[method]output-stream.write", LiftedWasiFunction::ioOutputStreamWrite02, getType(Store::I32I32I32I32R));
-            addExport(instance, "[method]output-stream.blocking-write-and-flush", LiftedWasiFunction::ioOutputStreamBlockingWriteAndFlush02, getType(Store::I32I32I32I32R));
-            addExport(instance, "[method]output-stream.blocking-flush", LiftedWasiFunction::ioOutputStreamBlockingFlush02, getType(Store::I32I32R));
-            addExport(instance, "[method]output-stream.subscribe", LiftedWasiFunction::ioOutputStreamSubscribe02, getType(Store::I32_RI32));
-            return instance;
-        }
-        return nullptr;
-    }
-
-    if (length > 9 && memcmp(name, "wasi:cli/", 9) == 0) {
-        name += 9;
+    } else if (length > 9 && memcmp(charData, "wasi:cli/", 9) == 0) {
+        charData += 9;
         length -= 9;
 
-        if (compareName(name, length, "exit")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-            addExport(instance, "exit", LiftedWasiFunction::cliExit02, getType(Store::I32R));
-            return instance;
+        if (compareName(charData, length, "exit")) {
+            instanceId = instanceCliExit02;
+        } else if (compareName(charData, length, "stdin")) {
+            instanceId = instanceCliStdin02;
+        } else if (compareName(charData, length, "stdout")) {
+            instanceId = instanceCliStdout02;
+        } else if (compareName(charData, length, "stderr")) {
+            instanceId = instanceCliStderr02;
+        } else if (compareName(charData, length, "terminal-input")) {
+            instanceId = instanceCliTerminalInput02;
+        } else if (compareName(charData, length, "terminal-output")) {
+            instanceId = instanceCliTerminalOutput02;
+        } else if (compareName(charData, length, "terminal-stdin")) {
+            instanceId = instanceCliTerminalStdin02;
+        } else if (compareName(charData, length, "terminal-stdout")) {
+            instanceId = instanceCliTerminalStdout02;
+        } else if (compareName(charData, length, "terminal-stderr")) {
+            instanceId = instanceCliTerminalStderr02;
         }
-        if (compareName(name, length, "stdin")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+    }
 
-            ComponentInstance* streamsIntance = getInstance("wasi:io/streams@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(streamsIntance);
-            aliasTypeExport(instance, "input-stream", streamsIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-stdin", LiftedWasiFunction::cliGetStdin02, getType(Store::RI32));
-            return instance;
-        }
-        if (compareName(name, length, "stdout")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
-            ComponentInstance* streamsIntance = getInstance("wasi:io/streams@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(streamsIntance);
-            aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
-            addExport(instance, "get-stdout", LiftedWasiFunction::cliGetStdout02, getType(Store::RI32));
-            return instance;
-        }
-        if (compareName(name, length, "stderr")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
-            ComponentInstance* streamsIntance = getInstance("wasi:io/streams@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(streamsIntance);
-            aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
-            addExport(instance, "get-stderr", LiftedWasiFunction::cliGetStderr02, getType(Store::RI32));
-            return instance;
-        }
-        if (compareName(name, length, "terminal-input")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-            addResourceExport(instance, "terminal-input"); /* 0 */
-            return instance;
-        }
-        if (compareName(name, length, "terminal-output")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-            addResourceExport(instance, "terminal-output"); /* 0 */
-            return instance;
-        }
-        if (compareName(name, length, "terminal-stdin")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
-            ComponentInstance* inputIntance = getInstance("wasi:cli/terminal-input@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(inputIntance);
-            aliasTypeExport(instance, "terminal-input", inputIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-terminal-stdin", LiftedWasiFunction::cliGetTerminalStdin02, getType(Store::I32R));
-            return instance;
-        }
-        if (compareName(name, length, "terminal-stdout")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
-            ComponentInstance* outputIntance = getInstance("wasi:cli/terminal-output@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(outputIntance);
-            aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-terminal-stdout", LiftedWasiFunction::cliGetTerminalStdout02, getType(Store::I32R));
-            return instance;
-        }
-        if (compareName(name, length, "terminal-stderr")) {
-            m_type = new ComponentType(ComponentType::ComponentTypeKind);
-            ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
-            ComponentInstance* outputIntance = getInstance("wasi:cli/terminal-output@0.2.", postfix, postfixLength);
-            instance->m_instances.push_back(outputIntance);
-            aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
-            addExport(instance, "get-terminal-stderr", LiftedWasiFunction::cliGetTerminalStderr02, getType(Store::I32R));
-            return instance;
-        }
+    if (instanceId == instanceUnknown) {
         return nullptr;
     }
-    return nullptr;
-}
 
-ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
-{
-    ComponentInstance* instance = store->findComponentInstance(name);
+    ComponentInstance* instance = store->findWasiComponentInstance(instanceId);
     if (instance != nullptr) {
         return instance;
     }
 
     ComponentInstanceWasi02 instanceCreator(store);
-    instance = instanceCreator.loadInstance(name.data(), name.length());
-    store->registerComponentInstance(name, instance);
+    instance = instanceCreator.loadInstance(instanceId, false);
+    store->registerWasiComponentInstance(instanceId, instance);
     return instance;
 }
 

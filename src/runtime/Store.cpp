@@ -117,19 +117,21 @@ Waiter* Store::getWaiter(void* address)
     return waiter;
 }
 
-void Store::registerComponentInstance(std::string& name, ComponentInstance* instance)
+#ifdef ENABLE_WASI
+void Store::registerWasiComponentInstance(size_t instanceId, ComponentInstance* instance)
 {
-    m_namedComponentInstances[name] = instance;
+    m_wasiInstances[instanceId] = instance;
 }
 
-ComponentInstance* Store::findComponentInstance(std::string& name)
+ComponentInstance* Store::findWasiComponentInstance(size_t instanceId)
 {
-    auto it = m_namedComponentInstances.find(name);
-    if (it == m_namedComponentInstances.end()) {
+    auto it = m_wasiInstances.find(instanceId);
+    if (it == m_wasiInstances.end()) {
         return nullptr;
     }
     return it->second;
 }
+#endif
 
 FunctionType* Store::createDefinedFunctionType(DefinedFunctionType type)
 {
