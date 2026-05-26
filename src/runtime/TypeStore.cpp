@@ -379,12 +379,9 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
     }
 }
 
-void TypeStore::releaseRecursiveType(RecursiveType* recType)
+void TypeStore::destroyRecursiveType(RecursiveType* recType)
 {
-    recType->m_refCount--;
-    if (recType->m_refCount != 0) {
-        return;
-    }
+    ASSERT(recType->m_refCount == 0);
 
     if (recType->m_prev == nullptr) {
         m_first = recType->m_next;
@@ -434,7 +431,7 @@ void TypeStore::ReleaseRef(const CompositeType** typeInfo)
     ASSERT(index > 0);
     RecursiveType* recType = typeInfo[index]->getRecursiveType();
     if (--recType->m_refCount == 0) {
-        recType->m_typeStore->releaseRecursiveType(recType);
+        recType->m_typeStore->destroyRecursiveType(recType);
     }
 }
 

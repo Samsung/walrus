@@ -388,7 +388,7 @@ static Trap::TrapResult executeWASMComponent(Store* store, const std::string& fi
         RunData* data = reinterpret_cast<RunData*>(d);
         ComponentInstance* instance = ComponentInstance::instantiate(state, data->store, data->component);
         for (auto& it : instance->type()->exports()) {
-            if (it.sort == ComponentSort::Instance && it.name == "wasi:cli/run@0.2.6") {
+            if (it.sort == ComponentSort::Instance && it.name.length() >= 17 && memcmp(it.name.data(), "wasi:cli/run@0.2.", 17) == 0) {
                 instance = instance->getInstance(it.exportIndex);
                 break;
             }

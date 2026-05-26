@@ -745,7 +745,6 @@ public:
         ComponentTypeInfo* info = m_currentInfo;
         m_current = m_currentInfo->parentComponentType;
         m_currentComponent = m_currentInfo->parentComponent;
-        ASSERT(m_currentComponent == nullptr || m_currentComponent->type() == m_current);
         m_currentInfo = m_currentInfo->parent;
         delete info;
     }
@@ -764,7 +763,6 @@ public:
         ComponentTypeInfo* info = m_currentInfo;
         m_current = m_currentInfo->parentComponentType;
         m_currentComponent = m_currentInfo->parentComponent;
-        ASSERT(m_currentComponent == nullptr || m_currentComponent->type() == m_current);
         m_currentInfo = m_currentInfo->parent;
         delete info;
     }
@@ -806,7 +804,7 @@ public:
                   nonstd::string_view* versionSuffix,
                   const ComponentExternalInfo& externalInfo)
     {
-        if (m_currentComponent != nullptr) {
+        if (m_currentComponent->type() == m_current) {
             m_currentComponent->pushDeclaration(new Walrus::ComponentImport(static_cast<uint32_t>(m_current->imports().size())));
         }
         m_current->imports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(externalInfo), getSort(externalInfo.sort), kInvalidIndex });
@@ -823,8 +821,34 @@ public:
             return;
         }
 
-        ComponentExternalInfo info{ exportInfo->sort, ComponentExternalDesc::Unused, exportInfo->index };
-        m_current->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), pushExternalType(info), getSort(exportInfo->sort), exportInfo->index.index });
+        ASSERT(m_currentComponent->type() == m_current);
+        Walrus::ComponentRefCounted* type;
+
+        switch (exportInfo->sort) {
+        case ComponentSort::Func:
+            type = m_currentInfo->funcTypes[exportInfo->index.index];
+            m_currentInfo->funcTypes.push_back(type->asTypeFunc());
+            break;
+        case ComponentSort::Type:
+            type = m_current->getType(exportInfo->index.index);
+            type->addRef();
+            m_current->pushType(type);
+            break;
+        case ComponentSort::Component:
+            type = m_currentInfo->componentTypes[exportInfo->index.index];
+            m_currentInfo->componentTypes.push_back(type->asComponentType());
+            break;
+        case ComponentSort::Instance:
+            type = m_currentInfo->instanceTypes[exportInfo->index.index];
+            m_currentInfo->instanceTypes.push_back(type->asComponentType());
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            return;
+        }
+
+        type->addRef();
+        m_current->exports().push_back(Walrus::ComponentType::External{ name.str.to_string(), type, getSort(exportInfo->sort), exportInfo->index.index });
     }
 
     Walrus::Component* parsingResult()
