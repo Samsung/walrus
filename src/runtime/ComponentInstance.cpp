@@ -28,10 +28,159 @@ namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(componentInstanceTypeInfo, ComponentInstanceKind);
 
-LoweredFunction* LoweredFunction::createLoweredFunction(Store* store, const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options)
+static void throwException(ExecutionState& state, const char* message)
+{
+    std::string stringMessage = message;
+    Trap::throwException(state, stringMessage);
+}
+
+void CanonOptions::memoryCheckRange32(ExecutionState& state, uint32_t align, uint32_t start, uint32_t size)
+{
+    ASSERT(!memory()->is64() && align <= 8 && (align & (align - 1)) == 0);
+
+    align = start & (align - 1);
+    if (align == 0 && memory()->sizeInByte() >= size && memory()->sizeInByte() - size >= start) {
+        return;
+    }
+
+    throwException(state, align != 0 ? "incorrectly aligned memory area" : "out of bounds memory area");
+}
+
+void CanonOptions::memoryCheckRange64(ExecutionState& state, uint64_t align, uint64_t start, uint64_t size)
+{
+    ASSERT(memory()->is64() && align <= 8 && (align & (align - 1)) == 0);
+
+    align = start & (align - 1);
+    if (align == 0 && memory()->sizeInByte() >= size && memory()->sizeInByte() - size >= start) {
+        return;
+    }
+
+    throwException(state, align != 0 ? "incorrectly aligned memory area" : "out of bounds memory area");
+}
+
+uint32_t CanonOptions::memoryMalloc32(ExecutionState& state, uint32_t align, uint32_t size)
+{
+    ASSERT(!memory()->is64() && realloc() != nullptr && align <= 8 && (align & (align - 1)) == 0);
+
+    Value argv[4];
+    Value result;
+    argv[0] = Value(static_cast<int32_t>(0));
+    argv[1] = Value(static_cast<int32_t>(0));
+    argv[2] = Value(static_cast<int32_t>(align));
+    argv[3] = Value(static_cast<int32_t>(size));
+
+    // Should trap on an error (unreachable).
+    realloc()->call(state, argv, &result);
+    uint32_t start = static_cast<uint32_t>(result.asI32());
+    memoryCheckRange32(state, align, start, size);
+    return start;
+}
+
+uint64_t CanonOptions::memoryMalloc64(ExecutionState& state, uint64_t align, uint64_t size)
+{
+    ASSERT(memory()->is64() && realloc() != nullptr && align <= 8 && (align & (align - 1)) == 0);
+
+    Value argv[4];
+    Value result;
+    argv[0] = Value(static_cast<int64_t>(0));
+    argv[1] = Value(static_cast<int64_t>(0));
+    argv[2] = Value(static_cast<int64_t>(align));
+    argv[3] = Value(static_cast<int64_t>(size));
+
+    // Should trap on an error (unreachable).
+    realloc()->call(state, argv, &result);
+    uint64_t start = static_cast<uint64_t>(result.asI64());
+    memoryCheckRange64(state, align, start, size);
+    return start;
+}
+
+enum Utf8Consts : uint8_t {
+    Utf8Len1Mask = 0x7f,
+    Utf8Len2 = 0xc0,
+    Utf8Len2Mask = 0x1f,
+    Utf8Cont = 0x80,
+    Utf8ContMask = 0x3f,
+    Utf8ContShift1 = 6,
+    Utf8ContShift2 = 12,
+    Utf8ContShift3 = 18,
+};
+
+uint64_t CanonOptions::storeLatin1String(ExecutionState& state, const uint8_t* src, uint32_t* length)
+{
+    uint32_t codeUnitLength = *length;
+    uint32_t byteLength = codeUnitLength;
+    uint32_t align = 2;
+    const uint8_t* end = src + codeUnitLength;
+
+    switch (encoding()) {
+    case ComponentCanonOptions::Utf8:
+        align = 1;
+        for (const uint8_t* ptr = src; ptr < end; ptr++) {
+            if ((*ptr & ~Utf8Len1Mask) != 0) {
+                byteLength++;
+            }
+        }
+        *length = byteLength;
+        break;
+    case ComponentCanonOptions::Utf16:
+        byteLength <<= 1;
+        break;
+    default:
+        ASSERT(encoding() == ComponentCanonOptions::Latin1Utf16);
+        break;
+    }
+
+    if (byteLength > Component::MaxStringByteLength) {
+        throwException(state, "result string too large");
+    }
+
+    uint64_t start;
+    uint8_t* ptr;
+    if (memory()->is64()) {
+        start = memoryMalloc64(state, align, byteLength);
+        ptr = reinterpret_cast<uint8_t*>(memory()->buffer() + start);
+    } else {
+        uint32_t start32 = memoryMalloc32(state, align, byteLength);
+        ptr = reinterpret_cast<uint8_t*>(memory()->buffer() + start32);
+        start = start32;
+    }
+
+    switch (encoding()) {
+    case ComponentCanonOptions::Utf8:
+        if (byteLength == codeUnitLength) {
+            break;
+        }
+
+        while (src < end) {
+            if ((*src & ~Utf8Len1Mask) == 0) {
+                *ptr++ = *src;
+            } else {
+                ptr[0] = static_cast<uint8_t>(Utf8Len2 | (*src >> Utf8ContShift1));
+                ptr[1] = static_cast<uint8_t>(Utf8Cont | (*src & Utf8ContMask));
+                ptr += 2;
+            }
+            src++;
+        }
+        return start;
+    case ComponentCanonOptions::Utf16:
+        while (src < end) {
+            ptr[0] = *src++;
+            ptr[1] = 0;
+            ptr += 2;
+        }
+        return start;
+    default:
+        ASSERT(byteLength == codeUnitLength);
+        break;
+    }
+    memcpy(ptr, src, byteLength);
+    return start;
+}
+
+LoweredFunction* LoweredFunction::createLoweredFunction(const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options)
 {
     LoweredFunction* func = new LoweredFunction(functionType, liftedFunction, options);
-    store->appendExtern(func);
+    options->instance()->store()->appendExtern(func);
     return func;
 }
 
@@ -84,9 +233,10 @@ void CanonFunction::call(ExecutionState& state, Value* argv, Value* result)
     }
 }
 
-ComponentInstance::ComponentInstance(ComponentType* type)
+ComponentInstance::ComponentInstance(Store* store, ComponentType* type)
     : Object(GET_GLOBAL_TYPE_INFO(componentInstanceTypeInfo))
     , m_type(type)
+    , m_store(store)
     , m_freeResourceHandle(LastHandle)
 {
     type->addRef();
@@ -167,7 +317,7 @@ void ComponentInstance::throwInvalidHandle(ExecutionState& state, uint32_t index
 
 ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType* type)
 {
-    ComponentInstance* instance = new ComponentInstance(type);
+    ComponentInstance* instance = new ComponentInstance(store, type);
     store->appendComponentInstance(instance);
     return instance;
 }
@@ -218,7 +368,7 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
     return true;
 }
 
-void ComponentInstance::coreInstantiate(ExecutionState& state, Store* store, Component* component, ComponentCoreInstantiate* instantiate)
+void ComponentInstance::coreInstantiate(ExecutionState& state, Component* component, ComponentCoreInstantiate* instantiate)
 {
     ExternVector imports;
     Module* module = component->modules()[instantiate->moduleIndex()];
@@ -487,24 +637,24 @@ void ComponentInstance::aliasInline(ComponentAliasInline* alias)
     }
 }
 
-void ComponentInstance::liftFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLift* lift)
+void ComponentInstance::liftFunction(std::vector<CanonOptions*>& canonOptions, ComponentCanonLift* lift)
 {
     CanonOptions* options = canonOptions[lift->options()];
     m_funcs.push_back(new LiftedCoreFunction(m_coreFuncs[lift->coreFuncIndex()], options));
 }
 
-void ComponentInstance::lowerFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLower* lower)
+void ComponentInstance::lowerFunction(std::vector<CanonOptions*>& canonOptions, ComponentCanonLower* lower)
 {
     LiftedFunction* func = m_funcs[lower->funcIndex()];
     CanonOptions* options = canonOptions[lower->options()];
 
 #ifdef ENABLE_WASI
     if (func->kind() == LiftedFunction::WasiFunctionKind) {
-        m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(store, getWasiFunctionType(func->asLiftedWasiFunction()), func, options));
+        m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(getWasiFunctionType(func->asLiftedWasiFunction()), func, options));
         return;
     }
 #endif /* ENABLE_WASI */
-    m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(store, func->asLiftedCoreFunction()->function()->functionType(), func, options));
+    m_coreFuncs.push_back(LoweredFunction::createLoweredFunction(func->asLiftedCoreFunction()->function()->functionType(), func, options));
 }
 
 ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component* component, ComponentInstance* parent, ComponentInstantiate* arg)
@@ -516,7 +666,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
     for (auto it : component->declarations()) {
         switch (it->kind()) {
         case ComponentDeclaration::CoreInstantiateKind: {
-            instance->coreInstantiate(m_state, m_store, component, it->asCoreInstantiate());
+            instance->coreInstantiate(m_state, component, it->asCoreInstantiate());
             break;
         }
         case ComponentDeclaration::InstantiateKind: {
@@ -542,15 +692,29 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
             Function* realloc = options->reallocIndex() == ComponentCanonOptions::NotDefined ? nullptr : instance->m_coreFuncs[options->reallocIndex()];
             Function* postReturn = options->postReturnIndex() == ComponentCanonOptions::NotDefined ? nullptr : instance->m_coreFuncs[options->postReturnIndex()];
             Function* callback = options->callbackIndex() == ComponentCanonOptions::NotDefined ? nullptr : instance->m_coreFuncs[options->callbackIndex()];
+
+            if (realloc != nullptr) {
+                ASSERT(memory != nullptr);
+                Value::Type type = memory->is64() ? Value::I64 : Value::I32;
+
+                const TypeVector::Types& param = realloc->functionType()->param().types();
+                const TypeVector::Types& result = realloc->functionType()->result().types();
+                if (param.size() != 4 || param[0] != type || param[1] != type || param[2] != type || param[3] != type
+                    || result.size() != 1 || result[0] != type) {
+                    std::string message = "invalid realloc function";
+                    Trap::throwException(m_state, message);
+                }
+            }
+
             instance->m_canonOptions.push_back(new CanonOptions(instance, options->encoding(), options->isAsync(), memory, realloc, postReturn, callback));
             break;
         }
         case ComponentDeclaration::CanonLiftKind: {
-            instance->liftFunction(m_store, instance->m_canonOptions, it->asCanonLift());
+            instance->liftFunction(instance->m_canonOptions, it->asCanonLift());
             break;
         }
         case ComponentDeclaration::CanonLowerKind: {
-            instance->lowerFunction(m_store, instance->m_canonOptions, it->asCanonLower());
+            instance->lowerFunction(instance->m_canonOptions, it->asCanonLower());
             break;
         }
         case ComponentDeclaration::CanonResourceDrop: {

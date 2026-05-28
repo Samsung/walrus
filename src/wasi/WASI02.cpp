@@ -17,11 +17,52 @@
 #ifdef ENABLE_WASI
 
 #include "wasi/WASI02.h"
-#include "runtime/ComponentInstance.h"
-#include "runtime/Memory.h"
+#include "wasi/WASI02Impl.h"
 #include "runtime/Store.h"
 
 namespace Walrus {
+
+WasiStoreData::WasiStoreData(int argc, const char** argv, const char** envp)
+{
+    m_arguments.reserve(static_cast<size_t>(argc));
+    while (argc-- > 0) {
+        m_arguments.push_back(*argv++);
+    }
+
+    if (envp != nullptr) {
+        while (*envp != nullptr) {
+            const char* name = *envp;
+            const char* value = name;
+
+            while (true) {
+                if (*value == '\0') {
+                    m_environment.push_back(std::pair<std::string, std::string>(std::string(name, value - name), ""));
+                    break;
+                } else if (*value == '=') {
+                    value++;
+                    m_environment.push_back(std::pair<std::string, std::string>(std::string(name, value - name - 1), value));
+                    break;
+                }
+                value++;
+            }
+            envp++;
+        }
+    }
+}
+
+WasiStoreData* wasi02InitData(int argc, const char** argv, const char** envp)
+{
+    return new WasiStoreData(argc, argv, envp);
+}
+
+static ComponentInstance* findWasiComponentInstance(Store* store, size_t instanceId)
+{
+    auto it = store->wasiData()->wasiInstances().find(instanceId);
+    if (it == store->wasiData()->wasiInstances().end()) {
+        return nullptr;
+    }
+    return it->second;
+}
 
 enum WasiNamedInstances : size_t {
     InstanceUnknown,
@@ -42,146 +83,6 @@ enum WasiNamedInstances : size_t {
     InstanceClockWall02,
     InstanceFileSystemTypes02,
     InstanceFileSystemPreOpens02,
-};
-
-class ComponentResourceWasiStream : public ComponentResource {
-    friend class ComponentResourceWasiPollable;
-
-public:
-    ComponentResourceWasiStream(ComponentTypeResource* type, FILE* file)
-        : ComponentResource(ResourceWasiStreamKind, type)
-        , m_file(file)
-        , m_pollableCount(0)
-    {
-    }
-
-    FILE* file() const
-    {
-        return m_file;
-    }
-
-    size_t pollableCount() const
-    {
-        return m_pollableCount;
-    }
-
-private:
-    FILE* m_file;
-    size_t m_pollableCount;
-};
-
-class ComponentResourceWasiPollable : public ComponentResource {
-public:
-    ComponentResourceWasiPollable(ComponentTypeResource* type, ComponentResourceWasiStream* stream)
-        : ComponentResource(ResourceWasiPollableKind, type)
-        , m_stream(stream)
-    {
-        stream->m_pollableCount++;
-    }
-
-    ~ComponentResourceWasiPollable()
-    {
-        m_stream->m_pollableCount--;
-    }
-
-    ComponentResourceWasiStream* stream() const
-    {
-        return m_stream;
-    }
-
-private:
-    ComponentResourceWasiStream* m_stream;
-};
-
-class ComponentResourceWasiTerminal : public ComponentResource {
-public:
-    ComponentResourceWasiTerminal(ComponentTypeResource* type, int fileNo)
-        : ComponentResource(ResourceWasiTerminalKind, type)
-        , m_fileNo(fileNo)
-    {
-    }
-
-    int fileNo() const
-    {
-        return m_fileNo;
-    }
-
-private:
-    int m_fileNo;
-};
-
-static ComponentResourceWasiStream* asStream(ComponentHandle* handle)
-{
-    ASSERT(handle->kind() == ComponentHandle::ResourceWasiStreamKind);
-    return reinterpret_cast<ComponentResourceWasiStream*>(handle);
-}
-
-class LiftedWasiFunction : public LiftedFunction {
-public:
-    enum Type {
-        cliExit02,
-        ioPollableBlock02,
-        ioPoll02,
-        ioInputStreamRead02,
-        ioInputStreamSubscribe02,
-        ioOutputStreamCheckWrite02,
-        ioOutputStreamWrite02,
-        ioOutputStreamBlockingWriteAndFlush02,
-        ioOutputStreamBlockingFlush02,
-        ioOutputStreamSubscribe02,
-        cliGetEnvironment02,
-        cliGetArguments02,
-        cliGetStdin02,
-        cliGetStdout02,
-        cliGetStderr02,
-        cliGetTerminalStdin02,
-        cliGetTerminalStdout02,
-        cliGetTerminalStderr02,
-        clockMonotonicNow02,
-        clockSubscribeDuration02,
-        clockWallNow02,
-        fileSystemDescriptorReadViaStream02,
-        fileSystemDescriptorWriteViaStream02,
-        fileSystemDescriptorAppendViaStream02,
-        fileSystemDescriptorGetFlags02,
-        fileSystemDescriptorStat02,
-        fileSystemDescriptorOpenAt02,
-        fileSystemDescriptorMetadataHash02,
-        fileSystemGetDirectories02,
-    };
-
-    LiftedWasiFunction(Type type, ComponentInstance* instance, FunctionType* functionType)
-        : LiftedFunction()
-        , m_type(type)
-        , m_instance(instance)
-        , m_functionType(functionType)
-    {
-    }
-
-    virtual Kind kind() const override
-    {
-        return WasiFunctionKind;
-    }
-
-    Type type() const
-    {
-        return m_type;
-    }
-
-    ComponentInstance* instance() const
-    {
-        return m_instance;
-    }
-
-    FunctionType* functionType() const
-    {
-        return m_functionType;
-    }
-
-private:
-    Type m_type;
-    ComponentInstance* m_instance;
-    FunctionType* m_functionType;
 };
 
 class ComponentInstanceWasi02 {
@@ -251,7 +152,7 @@ static bool compareName(const char* name, size_t length, const char* expected)
 ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool useCache)
 {
     if (useCache) {
-        ComponentInstance* instance = m_store->findWasiComponentInstance(instanceId);
+        ComponentInstance* instance = findWasiComponentInstance(m_store, instanceId);
         if (instance != nullptr) {
             return instance;
         }
@@ -539,6 +440,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
 
 ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
 {
+    ASSERT(store->wasiData() != nullptr);
     size_t length = name.length();
     const char* charData = name.data();
 
@@ -628,102 +530,20 @@ ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
         return nullptr;
     }
 
-    ComponentInstance* instance = store->findWasiComponentInstance(instanceId);
+    ComponentInstance* instance = findWasiComponentInstance(store, instanceId);
     if (instance != nullptr) {
         return instance;
     }
 
     ComponentInstanceWasi02 instanceCreator(store);
     instance = instanceCreator.loadInstance(instanceId, false);
-    store->registerWasiComponentInstance(instanceId, instance);
+    store->wasiData()->wasiInstances()[instanceId] = instance;
     return instance;
 }
 
 const FunctionType* getWasiFunctionType(LiftedWasiFunction* function)
 {
     return function->functionType();
-}
-
-void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedWasiFunction* function, CanonOptions* options)
-{
-    ComponentInstance* instance = function->instance();
-
-    switch (function->type()) {
-    case LiftedWasiFunction::ioOutputStreamCheckWrite02: {
-        uint32_t offset = argv[1].asI32();
-        uint64_t value = 0xffffffff;
-        options->memory()->store(state, offset, 8, value);
-        options->memory()->buffer()[offset] = 0;
-        break;
-    }
-    case LiftedWasiFunction::ioOutputStreamWrite02: {
-        uint32_t index = argv[0].asI32();
-        ComponentHandle* handle = options->instance()->getHandle(state, index);
-        if (handle->kind() != ComponentHandle::ResourceWasiStreamKind) {
-            ComponentInstance::throwInvalidHandle(state, index);
-        }
-
-        uint32_t bufferStart = argv[1].asI32();
-        uint32_t bufferLength = argv[2].asI32();
-        fwrite(options->memory()->buffer() + bufferStart, bufferLength, 1, asStream(handle)->file());
-
-        uint32_t offset = argv[3].asI32();
-        options->memory()->buffer()[offset] = 0;
-        break;
-    }
-    case LiftedWasiFunction::ioOutputStreamBlockingFlush02: {
-        uint32_t offset = argv[1].asI32();
-        options->memory()->buffer()[offset] = 0;
-        break;
-    }
-    case LiftedWasiFunction::ioOutputStreamSubscribe02: {
-        uint32_t index = argv[0].asI32();
-        ComponentHandle* handle = options->instance()->getHandle(state, index);
-        if (handle->kind() != ComponentHandle::ResourceWasiStreamKind) {
-            ComponentInstance::throwInvalidHandle(state, index);
-        }
-
-        ComponentResource* resource = new ComponentResourceWasiPollable(instance->type()->getType(0)->asTypeResource(), asStream(handle));
-        result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, resource)));
-        break;
-    }
-    case LiftedWasiFunction::cliGetStdout02: {
-        ComponentResource* resource = new ComponentResourceWasiStream(instance->type()->getType(0)->asTypeResource(), stdout);
-        result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, resource)));
-        break;
-    }
-    case LiftedWasiFunction::cliGetTerminalStdout02: {
-        ComponentResource* resource = new ComponentResourceWasiTerminal(instance->type()->getType(0)->asTypeResource(), 1);
-        uint32_t offset = argv[0].asI32();
-        uint32_t value = options->instance()->appendHandle(state, resource);
-        options->memory()->store(state, offset, 4, value);
-        options->memory()->buffer()[offset] = 1;
-        break;
-    }
-    default:
-        std::string message = "unimplemented wasi function";
-        Trap::throwException(state, message);
-        break;
-    }
-}
-
-bool dropWasiResource(ExecutionState& state, ComponentHandle* handle)
-{
-    switch (handle->kind()) {
-    case ComponentHandle::ResourceWasiStreamKind:
-        if (asStream(handle)->pollableCount() != 0) {
-            std::string message = "stream cannot be destroyed (has assigned pollable)";
-            Trap::throwException(state, message);
-        }
-        break;
-    case ComponentHandle::ResourceWasiPollableKind:
-        break;
-    case ComponentHandle::ResourceWasiTerminalKind:
-        break;
-    default:
-        return false;
-    }
-    return true;
 }
 
 } // namespace Walrus

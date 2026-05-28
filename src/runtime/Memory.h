@@ -34,6 +34,8 @@ class Memory : public Extern {
 public:
     static const uint32_t s_memoryPageSize = 1024 * 64;
     static const uint64_t s_maxMemory64Grow = ~static_cast<uint64_t>(0) / s_memoryPageSize;
+    static const uint64_t s_maxMemory64 = ~static_cast<uint64_t>(0);
+    static const uint32_t s_maxMemory32 = ~static_cast<uint32_t>(0);
 
     // Caching memory target for fast access.
     struct TargetBuffer {

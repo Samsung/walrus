@@ -1025,6 +1025,8 @@ class Component {
     friend class wabt::WASMComponentBinaryReader;
 
 public:
+    static constexpr uint32_t MaxStringByteLength = 0x0fffffff;
+
     struct InlineExport {
         std::string name;
         ComponentSort sort;

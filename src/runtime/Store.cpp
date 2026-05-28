@@ -40,6 +40,9 @@ static const FunctionType g_defaultFunctionTypes[] = {
 
 Store::Store(Engine* engine)
     : m_engine(engine)
+#ifdef ENABLE_WASI
+    , m_wasiData(nullptr)
+#endif
 {
     memset(m_definedFuncTypes, 0, sizeof(m_definedFuncTypes));
 #ifdef ENABLE_GC
@@ -116,22 +119,6 @@ Waiter* Store::getWaiter(void* address)
     m_waiterList.push_back(waiter);
     return waiter;
 }
-
-#ifdef ENABLE_WASI
-void Store::registerWasiComponentInstance(size_t instanceId, ComponentInstance* instance)
-{
-    m_wasiInstances[instanceId] = instance;
-}
-
-ComponentInstance* Store::findWasiComponentInstance(size_t instanceId)
-{
-    auto it = m_wasiInstances.find(instanceId);
-    if (it == m_wasiInstances.end()) {
-        return nullptr;
-    }
-    return it->second;
-}
-#endif
 
 FunctionType* Store::createDefinedFunctionType(DefinedFunctionType type)
 {
