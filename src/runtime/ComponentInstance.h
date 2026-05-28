@@ -250,9 +250,12 @@ public:
     enum Kind {
         ResourceRepKind,
 #ifdef ENABLE_WASI
-        ResourceWasiStreamKind,
+        ResourceWasiInputStreamKind,
+        ResourceWasiOutputStreamKind,
         ResourceWasiPollableKind,
         ResourceWasiTerminalKind,
+        ResourceWasiFileKind,
+        ResourceWasiDirectoryKind,
 #endif /* ENABLE_WASI */
     };
 

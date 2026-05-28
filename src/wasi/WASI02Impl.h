@@ -27,7 +27,27 @@ namespace Walrus {
 
 class WasiStoreData {
 public:
-    WasiStoreData(int argc, const char** argv, const char** envp);
+    WasiStoreData(int argc, const char** argv, const char** envp, Wasi02DirMap& preOpens);
+
+    uint64_t prevNow() const
+    {
+        return m_prevNow;
+    }
+
+    void setPrevNow(uint64_t value)
+    {
+        m_prevNow = value;
+    }
+
+    clock_t prevClockNow() const
+    {
+        return m_prevClockNow;
+    }
+
+    void setPrevClockNow(clock_t value)
+    {
+        m_prevClockNow = value;
+    }
 
     const std::vector<std::string>& arguments() const
     {
@@ -39,31 +59,88 @@ public:
         return m_environment;
     }
 
+    const std::vector<std::pair<std::string, std::string>>& preOpens() const
+    {
+        return m_preOpens;
+    }
+
     std::map<size_t, ComponentInstance*>& wasiInstances()
     {
         return m_wasiInstances;
     }
 
 private:
+    uint64_t m_prevNow;
+    clock_t m_prevClockNow;
     std::vector<std::string> m_arguments;
     std::vector<std::pair<std::string, std::string>> m_environment;
+    std::vector<std::pair<std::string, std::string>> m_preOpens;
     std::map<size_t, ComponentInstance*> m_wasiInstances;
+};
+
+class WasiRefCountedFile {
+public:
+    WasiRefCountedFile(FILE* file)
+        : m_file(file)
+        , m_refCount(1)
+    {
+    }
+
+    FILE* file()
+    {
+        return m_file;
+    }
+
+    void addRef()
+    {
+        m_refCount++;
+    }
+
+    void releaseRef()
+    {
+        if (--m_refCount == 0) {
+            destroyFile();
+        }
+    }
+
+private:
+    void destroyFile();
+
+    FILE* m_file;
+    size_t m_refCount;
 };
 
 class ComponentResourceWasiStream : public ComponentResource {
     friend class ComponentResourceWasiPollable;
 
 public:
-    ComponentResourceWasiStream(ComponentTypeResource* type, FILE* file)
-        : ComponentResource(ResourceWasiStreamKind, type)
+    static constexpr long int NoSeek = -1;
+
+    ComponentResourceWasiStream(ComponentTypeResource* type, Kind kind, WasiRefCountedFile* file, long int offset)
+        : ComponentResource(kind, type)
         , m_file(file)
         , m_pollableCount(0)
+        , m_offset(offset)
     {
+        ASSERT(kind == ResourceWasiInputStreamKind || kind == ResourceWasiOutputStreamKind);
+    }
+
+    ~ComponentResourceWasiStream()
+    {
+        if (m_file != nullptr) {
+            m_file->releaseRef();
+        }
+    }
+
+    bool isClosed() const
+    {
+        return m_file == nullptr;
     }
 
     FILE* file() const
     {
-        return m_file;
+        ASSERT(!isClosed());
+        return m_file->file();
     }
 
     size_t pollableCount() const
@@ -71,9 +148,35 @@ public:
         return m_pollableCount;
     }
 
+    bool seekNeeded() const
+    {
+        return m_offset != NoSeek;
+    }
+
+    long int offset() const
+    {
+        return m_offset;
+    }
+
+    void advanceOffset(size_t bytes)
+    {
+        if (m_offset != NoSeek) {
+            m_offset += static_cast<long int>(bytes);
+        }
+    }
+
+    void dropFileRef()
+    {
+        ASSERT(!isClosed());
+        m_file->releaseRef();
+        m_file = nullptr;
+    }
+
 private:
-    FILE* m_file;
+    // The m_file is nullptr for closed streams.
+    WasiRefCountedFile* m_file;
     size_t m_pollableCount;
+    long int m_offset;
 };
 
 class ComponentResourceWasiPollable : public ComponentResource {
@@ -114,6 +217,60 @@ public:
 
 private:
     int m_fileNo;
+};
+
+class ComponentResourceWasiFile : public ComponentResource {
+    friend class ComponentResourceWasiPollable;
+
+public:
+    ComponentResourceWasiFile(ComponentTypeResource* type, WasiRefCountedFile* file)
+        : ComponentResource(ResourceWasiFileKind, type)
+        , m_file(file)
+    {
+    }
+
+    ~ComponentResourceWasiFile()
+    {
+        m_file->releaseRef();
+    }
+
+    FILE* file() const
+    {
+        return m_file->file();
+    }
+
+    WasiRefCountedFile* addFileRef()
+    {
+        m_file->addRef();
+        return m_file;
+    }
+
+private:
+    WasiRefCountedFile* m_file;
+};
+
+class ComponentResourceWasiDirectory : public ComponentResource {
+public:
+    ComponentResourceWasiDirectory(ComponentTypeResource* type, const std::string& mappedPath, const std::string& realPath)
+        : ComponentResource(ResourceWasiDirectoryKind, type)
+        , m_mappedPath(mappedPath)
+        , m_realPath(realPath)
+    {
+    }
+
+    const std::string mappedPath() const
+    {
+        return m_mappedPath;
+    }
+
+    std::string realPath()
+    {
+        return m_realPath;
+    }
+
+private:
+    std::string m_mappedPath;
+    std::string m_realPath;
 };
 
 class LiftedWasiFunction : public LiftedFunction {

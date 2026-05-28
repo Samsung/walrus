@@ -44,9 +44,11 @@ struct ParseOptions {
     std::vector<std::string> fileNames;
 
     // WASI options
+#ifdef ENABLE_WASI
     std::vector<const char*> wasi_envs;
-    std::vector<std::pair<std::string, std::string>> wasi_dirs;
+    Walrus::Wasi02DirMap wasi_dirs;
     int argsIndex = -1;
+#endif
 };
 
 static uint32_t s_JITFlags = 0;
@@ -1212,6 +1214,9 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                     ++i;
                     options.exportToRun = argv[i];
                     continue;
+                } else if (strcmp(argv[i], "--enable-web-assembly3") == 0) {
+                    s_FeatureFlags |= wabt::FeatureFlagValue::enableWebAssembly3;
+                    continue;
 #if defined(WALRUS_ENABLE_JIT)
                 } else if (strcmp(argv[i], "--jit") == 0) {
                     s_JITFlags |= JITFlagValue::useJIT;
@@ -1226,16 +1231,15 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                     s_JITFlags |= JITFlagValue::disableRegAlloc;
                     continue;
 #endif
-                } else if (strcmp(argv[i], "--enable-web-assembly3") == 0) {
-                    s_FeatureFlags |= wabt::FeatureFlagValue::enableWebAssembly3;
-                    continue;
                 } else if (strcmp(argv[i], "--env") == 0) {
                     if (i + 1 == argc || argv[i + 1][0] == '-') {
                         fprintf(stderr, "error: --env requires an argument\n");
                         exit(1);
                     }
                     ++i;
+#ifdef ENABLE_WASI
                     options.wasi_envs.emplace_back(argv[i]);
+#endif
                     continue;
                 } else if (strcmp(argv[i], "--mapdirs") == 0) {
                     if (i + 2 >= argc || argv[i + 1][0] == '-' || argv[i + 2][0] == '-') {
@@ -1243,7 +1247,9 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                         exit(1);
                     }
                     // pair of (mapped path, real_path)
-                    options.wasi_dirs.push_back(std::make_pair(argv[i + 2], argv[i + 1]));
+#ifdef ENABLE_WASI
+                    options.wasi_dirs.push_back(Wasi02DirMapEntry{ argv[i + 2], argv[i + 1] });
+#endif
                     i += 2;
                     continue;
                 } else if (strcmp(argv[i], "--args") == 0) {
@@ -1252,17 +1258,21 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                         exit(1);
                     }
                     ++i;
+#ifdef ENABLE_WASI
                     options.fileNames.emplace_back(argv[i]);
                     options.argsIndex = i;
+#endif
                     break;
                 } else if (strcmp(argv[i], "--help") == 0) {
                     fprintf(stdout, "Usage: walrus [OPTIONS] <INPUT>\n\n");
                     fprintf(stdout, "OPTIONS:\n");
                     fprintf(stdout, "\t--help\n\t\tShow this message then exit.\n\n");
+                    fprintf(stdout, "\t--enable-web-assembly3\n\t\tEnable support for web assembly3 features.\n\n");
+#if defined(WALRUS_ENABLE_JIT)
                     fprintf(stdout, "\t--jit\n\t\tEnable just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose\n\t\tEnable verbose output for just-in-time interpretation.\n\n");
                     fprintf(stdout, "\t--jit-verbose-color\n\t\tEnable colored verbose output for just-in-time interpretation.\n\n");
-                    fprintf(stdout, "\t--enable-web-assembly3\n\t\tEnable support for web assembly3 features.\n\n");
+#endif
                     fprintf(stdout, "\t--mapdirs <HOST_DIR> <VIRTUAL_DIR>\n\t\tMap real directories to virtual ones for WASI functions to use.\n\t\tExample: ./walrus test.wasm --mapdirs this/real/directory/ this/virtual/directory\n\n");
                     fprintf(stdout, "\t--env\n\t\tShare host environment to walrus WASI.\n\n");
                     fprintf(stdout, "\t--args <MODULE_FILE_NAME> [<ARG1> <ARG2> ... <ARGN>]\n\t\tRun Webassembly module with arguments: must be followed by the name of the Webassembly module file, then optionally following arguments which are passed on to the module\n\t\tExample: ./walrus --args test.wasm 'hello' 'world' 42\n\n");
@@ -1320,7 +1330,7 @@ int main(int argc, const char* argv[])
 
     std::vector<uvwasi_preopen_t> dirs;
     for (auto& dir : options.wasi_dirs) {
-        dirs.push_back({ dir.first.c_str(), dir.second.c_str() });
+        dirs.push_back({ dir.mappedPath, dir.realPath });
     }
 
     uvwasi_options_t init_options;
@@ -1341,7 +1351,7 @@ int main(int argc, const char* argv[])
 
     WASI::initialize(&uvwasi);
     // Wasi 0.2
-    store->initWasiData(wasi02InitData(init_options.argc, init_options.argv, init_options.envp));
+    store->initWasiData(wasi02InitData(init_options.argc, init_options.argv, init_options.envp, options.wasi_dirs));
 #endif
 
     int result = 0;

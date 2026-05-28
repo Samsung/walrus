@@ -22,7 +22,9 @@
 
 namespace Walrus {
 
-WasiStoreData::WasiStoreData(int argc, const char** argv, const char** envp)
+WasiStoreData::WasiStoreData(int argc, const char** argv, const char** envp, Wasi02DirMap& preOpens)
+    : m_prevNow(0)
+    , m_prevClockNow(clock())
 {
     m_arguments.reserve(static_cast<size_t>(argc));
     while (argc-- > 0) {
@@ -48,11 +50,15 @@ WasiStoreData::WasiStoreData(int argc, const char** argv, const char** envp)
             envp++;
         }
     }
+
+    for (auto& it : preOpens) {
+        m_preOpens.push_back(std::pair<std::string, std::string>(it.mappedPath, it.realPath));
+    }
 }
 
-WasiStoreData* wasi02InitData(int argc, const char** argv, const char** envp)
+WasiStoreData* wasi02InitData(int argc, const char** argv, const char** envp, Wasi02DirMap& preOpens)
 {
-    return new WasiStoreData(argc, argv, envp);
+    return new WasiStoreData(argc, argv, envp, preOpens);
 }
 
 static ComponentInstance* findWasiComponentInstance(Store* store, size_t instanceId)
