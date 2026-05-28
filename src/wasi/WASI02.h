@@ -24,11 +24,13 @@
 
 namespace Walrus {
 
+class WasiStoreData;
 class ComponentInstance;
 class CanonOptions;
 class ComponentHandle;
 class LiftedWasiFunction;
 
+WasiStoreData* wasi02InitData(int argc, const char** argv, const char** envp);
 ComponentInstance* wasi02LoadInstance(Store* store, std::string& name);
 const FunctionType* getWasiFunctionType(LiftedWasiFunction* function);
 void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedWasiFunction* function, CanonOptions* options);

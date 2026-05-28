@@ -33,6 +33,10 @@ class ComponentInstance;
 class Extern;
 class FunctionType;
 
+#ifdef ENABLE_WASI
+class WasiStoreData;
+#endif
+
 struct Waiter {
     struct WaiterItem {
         WaiterItem(Waiter* waiter)
@@ -181,8 +185,16 @@ public:
     }
 
 #ifdef ENABLE_WASI
-    void registerWasiComponentInstance(size_t instanceId, ComponentInstance* instance);
-    ComponentInstance* findWasiComponentInstance(size_t instanceId);
+    WasiStoreData* wasiData() const
+    {
+        return m_wasiData;
+    }
+
+    void initWasiData(WasiStoreData* data)
+    {
+        ASSERT(m_wasiData == nullptr);
+        m_wasiData = data;
+    }
 #endif
 
 private:
@@ -204,7 +216,7 @@ private:
 
     ComponentContext* m_context;
 #ifdef ENABLE_WASI
-    std::map<size_t, ComponentInstance*> m_wasiInstances;
+    WasiStoreData* m_wasiData;
 #endif
 };
 

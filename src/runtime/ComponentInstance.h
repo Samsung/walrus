@@ -26,6 +26,8 @@ class ComponentInstance;
 
 class CanonOptions {
 public:
+    static constexpr uint32_t Utf16Tag = static_cast<uint32_t>(1) << 31;
+
     CanonOptions(ComponentInstance* instance, ComponentCanonOptions::StringEncoding encoding, bool isAsync,
                  Memory* memory, Function* realloc, Function* postReturn, Function* callback)
         : m_instance(instance)
@@ -72,6 +74,13 @@ public:
     {
         return m_callback;
     }
+
+    void memoryCheckRange32(ExecutionState& state, uint32_t align, uint32_t start, uint32_t size);
+    void memoryCheckRange64(ExecutionState& state, uint64_t align, uint64_t start, uint64_t size);
+    uint32_t memoryMalloc32(ExecutionState& state, uint32_t align, uint32_t size);
+    uint64_t memoryMalloc64(ExecutionState& state, uint64_t align, uint64_t size);
+
+    uint64_t storeLatin1String(ExecutionState& state, const uint8_t* src, uint32_t* length);
 
 private:
     ComponentInstance* m_instance;
@@ -169,7 +178,7 @@ private:
 
 class LoweredFunction : public NativeFunction {
 public:
-    static LoweredFunction* createLoweredFunction(Store* store, const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options);
+    static LoweredFunction* createLoweredFunction(const FunctionType* functionType, LiftedFunction* liftedFunction, CanonOptions* options);
 
     virtual Kind kind() const override
     {
@@ -346,6 +355,11 @@ public:
         return m_type;
     }
 
+    Store* store()
+    {
+        return m_store;
+    }
+
     LiftedFunction* getFunction(uint32_t index)
     {
         return m_funcs[index];
@@ -370,7 +384,7 @@ public:
     }
 
 private:
-    ComponentInstance(ComponentType* type);
+    ComponentInstance(Store* store, ComponentType* type);
 
     class InstantiateContext {
     public:
@@ -396,14 +410,15 @@ private:
     static ComponentInstance* createInstance(Store* store, ComponentType* type);
 
     static bool compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources);
-    void coreInstantiate(ExecutionState& state, Store* store, Component* component, ComponentCoreInstantiate* instantiate);
+    void coreInstantiate(ExecutionState& state, Component* component, ComponentCoreInstantiate* instantiate);
     void aliasExport(ComponentAliasExport* alias);
     void aliasCoreExport(ComponentAliasExport* alias);
     void aliasInline(ComponentAliasInline* alias);
-    void liftFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLift* lift);
-    void lowerFunction(Store* store, std::vector<CanonOptions*>& canonOptions, ComponentCanonLower* lower);
+    void liftFunction(std::vector<CanonOptions*>& canonOptions, ComponentCanonLift* lift);
+    void lowerFunction(std::vector<CanonOptions*>& canonOptions, ComponentCanonLower* lower);
 
     ComponentType* m_type;
+    Store* m_store;
     uintptr_t m_freeResourceHandle;
     std::vector<Function*> m_coreFuncs;
     std::vector<Table*> m_coreTables;

@@ -31,6 +31,7 @@
 
 #ifdef ENABLE_WASI
 #include "wasi/WASI.h"
+#include "wasi/WASI02.h"
 #endif
 
 struct spectestseps : std::numpunct<char> {
@@ -43,7 +44,7 @@ struct ParseOptions {
     std::vector<std::string> fileNames;
 
     // WASI options
-    std::vector<std::string> wasi_envs;
+    std::vector<const char*> wasi_envs;
     std::vector<std::pair<std::string, std::string>> wasi_dirs;
     int argsIndex = -1;
 };
@@ -1315,12 +1316,7 @@ int main(int argc, const char* argv[])
 #ifdef ENABLE_WASI
     // initialize WASI
     uvwasi_t uvwasi;
-
-    std::vector<const char*> envp;
-    for (auto& s : options.wasi_envs) {
-        envp.push_back(s.c_str());
-    }
-    envp.push_back(nullptr);
+    options.wasi_envs.push_back(nullptr);
 
     std::vector<uvwasi_preopen_t> dirs;
     for (auto& dir : options.wasi_dirs) {
@@ -1334,7 +1330,7 @@ int main(int argc, const char* argv[])
     init_options.fd_table_size = 3;
     init_options.argc = (options.argsIndex == -1 ? 0 : argc - options.argsIndex);
     init_options.argv = (options.argsIndex == -1 ? nullptr : argv + options.argsIndex);
-    init_options.envp = envp.data();
+    init_options.envp = options.wasi_envs.data();
     init_options.preopenc = dirs.size();
     init_options.preopens = dirs.data();
     init_options.preopen_socketc = 0;
@@ -1344,6 +1340,8 @@ int main(int argc, const char* argv[])
     assert(err == UVWASI_ESUCCESS);
 
     WASI::initialize(&uvwasi);
+    // Wasi 0.2
+    store->initWasiData(wasi02InitData(init_options.argc, init_options.argv, init_options.envp));
 #endif
 
     int result = 0;
