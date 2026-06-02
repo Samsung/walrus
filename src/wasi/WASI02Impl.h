@@ -305,6 +305,10 @@ public:
         fileSystemDescriptorOpenAt02,
         fileSystemDescriptorMetadataHash02,
         fileSystemGetDirectories02,
+        neuralNetworkTensorConstructor02,
+        neuralNetworkInferenceGraphExecutionContextCompute,
+        neuralNetworkGraphInitExectionContext02,
+        neuralNetworkGraphLoad02,
     };
 
     LiftedWasiFunction(Type type, ComponentInstance* instance, FunctionType* functionType)

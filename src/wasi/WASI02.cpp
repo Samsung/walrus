@@ -61,6 +61,11 @@ WasiStoreData* wasi02InitData(int argc, const char** argv, const char** envp, Wa
     return new WasiStoreData(argc, argv, envp, preOpens);
 }
 
+void destroyWasi02Data(WasiStoreData* data)
+{
+    delete data;
+}
+
 static ComponentInstance* findWasiComponentInstance(Store* store, size_t instanceId)
 {
     auto it = store->wasiData()->wasiInstances().find(instanceId);
@@ -89,6 +94,10 @@ enum WasiNamedInstances : size_t {
     InstanceClockWall02,
     InstanceFileSystemTypes02,
     InstanceFileSystemPreOpens02,
+    InstanceWasiNNTensor02,
+    InstanceWasiNNErrors02,
+    InstanceWasiNNInference02,
+    InstanceWasiNNGraph02,
 };
 
 class ComponentInstanceWasi02 {
@@ -208,13 +217,13 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         variant->items().push_back(ComponentTypeItems::Item{ "closed", ComponentTypeRef() });
         addTypeExport(instance, "stream-error", variant);
         ComponentTypeFunc* streamRead = new ComponentTypeFunc(ComponentType::FuncKind);
-        streamRead->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream) });
+        streamRead->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream)) });
         streamRead->params().push_back(ComponentTypeFunc::Param{ "len", ComponentTypeRef(ComponentTypeRef::U64) });
         variant->addRef();
         streamRead->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef(ComponentTypeRef::U8))), ComponentTypeRef(variant));
         addExport(instance, "[method]input-stream.read", LiftedWasiFunction::ioInputStreamRead02, getType(Store::I32I64I32R), streamRead);
         ComponentTypeFunc* intputStreamSubscribe = new ComponentTypeFunc(ComponentType::FuncKind);
-        intputStreamSubscribe->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream) });
+        intputStreamSubscribe->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream)) });
         intputStreamSubscribe->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, outputStream);
         addExport(instance, "[method]input-stream.subscribe", LiftedWasiFunction::ioInputStreamSubscribe02, getType(Store::I32_RI32), intputStreamSubscribe);
         ComponentTypeFunc* streamCheckWrite = new ComponentTypeFunc(ComponentType::FuncKind);
@@ -276,7 +285,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->m_instances.push_back(streamsIntance);
         aliasTypeExport(instance, "input-stream", streamsIntance->type()->getType(0)); /* 0 */
         ComponentTypeFunc* getStdin = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         getStdin->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0));
         addExport(instance, "get-stdin", LiftedWasiFunction::cliGetStdin02, getType(Store::RI32), getStdin);
         return instance;
@@ -288,7 +296,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->m_instances.push_back(streamsIntance);
         aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
         ComponentTypeFunc* getStdout = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         getStdout->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0));
         addExport(instance, "get-stdout", LiftedWasiFunction::cliGetStdout02, getType(Store::RI32), getStdout);
         return instance;
@@ -300,7 +307,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->m_instances.push_back(streamsIntance);
         aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
         ComponentTypeFunc* getStderr = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         getStderr->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0));
         addExport(instance, "get-stderr", LiftedWasiFunction::cliGetStderr02, getType(Store::RI32), getStderr);
         return instance;
@@ -324,7 +330,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->m_instances.push_back(inputIntance);
         aliasTypeExport(instance, "terminal-input", inputIntance->type()->getType(0)); /* 0 */
         ComponentTypeFunc* getTerminalStdin = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         getTerminalStdin->result() = new ComponentValueTypeRef(ComponentType::OptionKind, new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0)));
         addExport(instance, "get-terminal-stdin", LiftedWasiFunction::cliGetTerminalStdin02, getType(Store::I32R), getTerminalStdin);
         return instance;
@@ -336,7 +341,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->m_instances.push_back(outputIntance);
         aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
         ComponentTypeFunc* getTerminalStdout = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         getTerminalStdout->result() = new ComponentValueTypeRef(ComponentType::OptionKind, new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0)));
         addExport(instance, "get-terminal-stdout", LiftedWasiFunction::cliGetTerminalStdout02, getType(Store::I32R), getTerminalStdout);
         return instance;
@@ -348,7 +352,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->m_instances.push_back(outputIntance);
         aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
         ComponentTypeFunc* getTerminalStderr = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         getTerminalStderr->result() = new ComponentValueTypeRef(ComponentType::OptionKind, new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0)));
         addExport(instance, "get-terminal-stderr", LiftedWasiFunction::cliGetTerminalStderr02, getType(Store::I32R), getTerminalStderr);
         return instance;
@@ -493,11 +496,10 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         readViaStream->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
         instance->type()->getType(1)->addRef();
         readViaStream->params().push_back(ComponentTypeFunc::Param{ "offset", ComponentTypeRef(instance->type()->getType(1)) });
-        instance->type()->getType(2)->addRef();
+        instance->type()->getType(4)->addRef();
         readViaStream->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(2))), ComponentTypeRef(instance->type()->getType(4)));
         addExport(instance, "[method]descriptor.read-via-stream", LiftedWasiFunction::fileSystemDescriptorReadViaStream02, getType(Store::I32I64I32R), readViaStream);
         ComponentTypeFunc* writeViaStream = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         writeViaStream->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
         instance->type()->getType(1)->addRef();
         writeViaStream->params().push_back(ComponentTypeFunc::Param{ "offset", ComponentTypeRef(instance->type()->getType(1)) });
@@ -510,7 +512,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         appendViaStream->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(3))), ComponentTypeRef(instance->type()->getType(4)));
         addExport(instance, "[method]descriptor.append-via-stream", LiftedWasiFunction::fileSystemDescriptorAppendViaStream02, getType(Store::I32I32R), appendViaStream);
         ComponentTypeFunc* getFlags = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        instance->type()->getType(0)->addRef();
         getFlags->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
         instance->type()->getType(4)->addRef();
         instance->type()->getType(5)->addRef();
@@ -557,6 +558,112 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         addExport(instance, "get-directories", LiftedWasiFunction::fileSystemGetDirectories02, getType(Store::I32R), getDirectories);
         return instance;
     }
+    case InstanceWasiNNTensor02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        ComponentValueTypeRef* tensorDimensions = new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef::U32);
+        addTypeExport(instance, "tensor-dimensions", tensorDimensions); /* 0 */
+        ComponentTypeLabels* tensorType = new ComponentTypeLabels(ComponentType::EnumKind);
+        tensorType->labels().push_back("FP16");
+        tensorType->labels().push_back("FP32");
+        tensorType->labels().push_back("FP64");
+        tensorType->labels().push_back("BF16");
+        tensorType->labels().push_back("U8");
+        tensorType->labels().push_back("I32");
+        tensorType->labels().push_back("I64");
+        addTypeExport(instance, "tensor-type", tensorType); /* 1 */
+        ComponentValueTypeRef* tensorData = new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef::U8);
+        addTypeExport(instance, "tensor-data", tensorData); /* 2 */
+        addResourceExport(instance, "tensor"); /* 3 */
+        ComponentTypeFunc* tensorConstructorType = new ComponentTypeFunc(ComponentType::FuncKind);
+        tensorDimensions->addRef();
+        tensorConstructorType->params().push_back(ComponentTypeFunc::Param{ "dimensions", ComponentTypeRef(tensorDimensions) });
+        tensorType->addRef();
+        tensorConstructorType->params().push_back(ComponentTypeFunc::Param{ "ty", ComponentTypeRef(tensorType) });
+        tensorData->addRef();
+        tensorConstructorType->params().push_back(ComponentTypeFunc::Param{ "data", ComponentTypeRef(tensorData) });
+        tensorConstructorType->result() = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, (instance->type()->getType(3))));
+        addExport(instance, "[constructor]tensor", LiftedWasiFunction::neuralNetworkTensorConstructor02, getType(Store::I32I32I32I32I32_RI32), tensorConstructorType); /* 4 */
+        return instance;
+    }
+    case InstanceWasiNNErrors02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "error"); /* 0 */
+        return instance;
+    }
+    case InstanceWasiNNInference02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "graph-execution-context"); /* 0 */
+        ComponentInstance* tensorInstance = loadInstance(InstanceWasiNNTensor02);
+        instance->m_instances.push_back(tensorInstance);
+        ComponentRefCounted* tensorType = tensorInstance->type()->getType(3);
+        aliasTypeExport(instance, "tensor", tensorType); /* 1 */
+        ComponentTypeTuple* namedTensorTuple = new ComponentTypeTuple();
+        namedTensorTuple->items().push_back(ComponentTypeRef(ComponentTypeRef::String));
+        namedTensorTuple->items().push_back(ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, tensorType)));
+        addTypeExport(instance, "named-tensor", namedTensorTuple); /* 2 */
+        ComponentInstance* wasiNNError = loadInstance(InstanceWasiNNErrors02);
+        instance->m_instances.push_back(wasiNNError);
+        ComponentRefCounted* wasiNNErrorType = wasiNNError->type()->getType(0);
+        aliasTypeExport(instance, "error", wasiNNErrorType); /* 3 */
+        ComponentTypeFunc* computeType = new ComponentTypeFunc(ComponentType::FuncKind);
+        computeType->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, (instance->type()->getType(1)))) });
+        namedTensorTuple->addRef();
+        computeType->params().push_back(ComponentTypeFunc::Param{ "inputs", new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef(namedTensorTuple)) });
+        namedTensorTuple->addRef();
+        ComponentTypeRef resultOk = ComponentTypeRef(namedTensorTuple);
+        ComponentTypeRef resultErr = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, wasiNNErrorType));
+        computeType->result() = new ComponentTypeResult(resultOk, resultErr);
+        addExport(instance, "[method]graph-execution-context.compute", LiftedWasiFunction::neuralNetworkInferenceGraphExecutionContextCompute, getType(Store::I32I32I32I32R), computeType);
+        return instance;
+    }
+    case InstanceWasiNNGraph02: {
+        m_type = new ComponentType(ComponentType::ComponentTypeKind);
+        ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
+        addResourceExport(instance, "graph"); /* 0 */
+        ComponentInstance* inferenceInstance = loadInstance(InstanceWasiNNInference02);
+        instance->m_instances.push_back(inferenceInstance);
+        ComponentRefCounted* graphExecutionContextType = inferenceInstance->type()->getType(0);
+        aliasTypeExport(instance, "graph-execution-context", graphExecutionContextType); /* 1 */
+        ComponentInstance* wasiNNError = loadInstance(InstanceWasiNNErrors02);
+        instance->m_instances.push_back(wasiNNError);
+        ComponentRefCounted* wasiNNErrorType = wasiNNError->type()->getType(0);
+        aliasTypeExport(instance, "error", wasiNNErrorType); /* 2 */
+        addTypeExport(instance, "graph-builder", new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef::U8)); /* 3 */
+        ComponentTypeLabels* encodingEnum = new ComponentTypeLabels(ComponentType::EnumKind);
+        encodingEnum->labels().push_back("openvino");
+        encodingEnum->labels().push_back("onnx");
+        encodingEnum->labels().push_back("tensorflow");
+        encodingEnum->labels().push_back("pytorch");
+        encodingEnum->labels().push_back("tensorflowlite");
+        encodingEnum->labels().push_back("ggml");
+        encodingEnum->labels().push_back("autodetect");
+        addTypeExport(instance, "graph-encoding", encodingEnum); /* 4 */
+        ComponentTypeLabels* executionTarget = new ComponentTypeLabels(ComponentType::EnumKind);
+        executionTarget->labels().push_back("cpu");
+        executionTarget->labels().push_back("gpu");
+        executionTarget->labels().push_back("tpu");
+        addTypeExport(instance, "execution-target", executionTarget); /* 4 */
+        ComponentTypeFunc* initExecutionContext = new ComponentTypeFunc(ComponentType::FuncKind);
+        initExecutionContext->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(0)) });
+        ComponentTypeRef resultOk = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(1)));
+        ComponentTypeRef resultErr = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(2)));
+        initExecutionContext->result() = new ComponentTypeResult(resultOk, resultErr);
+        addExport(instance, "[method]graph.init-execution-context", LiftedWasiFunction::neuralNetworkGraphInitExectionContext02, getType(Store::I32I32R), initExecutionContext);
+        ComponentTypeFunc* load = new ComponentTypeFunc(ComponentType::FuncKind);
+        load->params().push_back(ComponentTypeFunc::Param{ "builder", ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef::U8)) });
+        encodingEnum->addRef();
+        load->params().push_back(ComponentTypeFunc::Param{ "encoding", ComponentTypeRef(encodingEnum) });
+        executionTarget->addRef();
+        load->params().push_back(ComponentTypeFunc::Param{ "target", ComponentTypeRef(executionTarget) });
+        resultOk = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(0)));
+        resultErr = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, instance->type()->getType(2)));
+        load->result() = new ComponentTypeResult(resultOk, resultErr);
+        addExport(instance, "load", LiftedWasiFunction::neuralNetworkGraphLoad02, getType(Store::I32I32I32I32I32R), load);
+        return instance;
+    }
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return nullptr;
@@ -575,6 +682,12 @@ ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
 
     if (charData[length - 1] < '0' || charData[length - 1] > '9') {
         return nullptr;
+    }
+
+    // remove the date part from wasi:nn
+    if (memcmp(charData, "wasi:nn", 7) == 0) {
+        name.erase(length - 14, 14);
+        length = name.length();
     }
 
     size_t postfixLength = 1;
@@ -648,6 +761,19 @@ ComponentInstance* wasi02LoadInstance(Store* store, std::string& name)
             instanceId = InstanceFileSystemTypes02;
         } else if (compareName(charData, length, "preopens")) {
             instanceId = InstanceFileSystemPreOpens02;
+        }
+    } else if (length > 9 && memcmp(charData, "wasi:nn/", 8) == 0) {
+        charData += 8;
+        length -= 8;
+
+        if (compareName(charData, length, "tensor")) {
+            instanceId = InstanceWasiNNTensor02;
+        } else if (compareName(charData, length, "errors")) {
+            instanceId = InstanceWasiNNErrors02;
+        } else if (compareName(charData, length, "inference")) {
+            instanceId = InstanceWasiNNInference02;
+        } else if (compareName(charData, length, "graph")) {
+            instanceId = InstanceWasiNNGraph02;
         }
     }
 

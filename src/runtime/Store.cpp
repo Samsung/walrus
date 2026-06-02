@@ -164,6 +164,15 @@ FunctionType* Store::createDefinedFunctionType(DefinedFunctionType type)
         param->setType(2, Value::Type::I32);
         param->setType(3, Value::Type::I32);
         break;
+    case I32I32I32I32I32R:
+        functionType = new FunctionType(5, 0, 0, 0, true, noIndex);
+        param = functionType->initParam();
+        param->setType(0, Value::Type::I32);
+        param->setType(1, Value::Type::I32);
+        param->setType(2, Value::Type::I32);
+        param->setType(3, Value::Type::I32);
+        param->setType(4, Value::Type::I32);
+        break;
     case I32_RI32:
         functionType = new FunctionType(1, 0, 1, 0, true, noIndex);
         param = functionType->initParam();

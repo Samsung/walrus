@@ -38,6 +38,7 @@ struct Wasi02DirMapEntry {
 typedef std::vector<Wasi02DirMapEntry> Wasi02DirMap;
 
 WasiStoreData* wasi02InitData(int argc, const char** argv, const char** envp, Wasi02DirMap& preOpens);
+void destroyWasi02Data(WasiStoreData* data);
 ComponentInstance* wasi02LoadInstance(Store* store, std::string& name);
 const FunctionType* getWasiFunctionType(LiftedWasiFunction* function);
 void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedWasiFunction* function, CanonOptions* options);

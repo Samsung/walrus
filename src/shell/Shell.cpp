@@ -1402,6 +1402,8 @@ int main(int argc, const char* argv[])
 
 #ifdef ENABLE_WASI
     uvwasi_destroy(&uvwasi);
+    // Wasi 0.2
+    destroyWasi02Data(store->wasiData());
 #endif
     // finalize
     delete store;
