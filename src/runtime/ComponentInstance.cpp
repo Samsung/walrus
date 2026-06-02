@@ -539,7 +539,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Component* compon
         if (value == nullptr) {
             std::string message = "type mismatch for field \"";
             message.append(import->fieldName());
-            message.append("\" form module: ");
+            message.append("\" from module: ");
             message.append(import->moduleName());
             Trap::throwException(state, message);
         }

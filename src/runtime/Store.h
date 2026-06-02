@@ -68,6 +68,7 @@ public:
         I32I32I32R,
         I32I64I32R,
         I32I32I32I32R,
+        I32I32I32I32I32R,
         I32_RI32,
         I32I32_RI32,
         I32I64I32_RI32,
