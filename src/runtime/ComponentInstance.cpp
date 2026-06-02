@@ -322,7 +322,7 @@ ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType
     return instance;
 }
 
-bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources)
+bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources, std::string& componentName)
 {
     switch (expected->kind()) {
     case ComponentRefCounted::InstanceTypeKind: {
@@ -343,6 +343,7 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
                 }
             }
 
+            componentName = left.name;
             if (found == nullptr || left.sort != found->sort) {
                 return false;
             }
@@ -765,13 +766,17 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
                 Trap::throwException(m_state, message);
             }
 
+            std::string componentName;
             if (external.sort == ComponentSort::Instance) {
-                success = compareTypes(external.type, instance->m_instances.back()->type(), resources);
+                success = compareTypes(external.type, instance->m_instances.back()->type(), resources, componentName);
             }
 
             if (!success) {
-                std::string message = "import type mismatch: ";
-                message.append(external.name);
+                std::string message = "import type mismatch in: ";
+                message += external.name;
+                if (!componentName.empty()) {
+                    message += " at: " + componentName;
+                }
                 Trap::throwException(m_state, message);
             }
             break;
