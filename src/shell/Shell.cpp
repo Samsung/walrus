@@ -374,7 +374,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
 
 static Trap::TrapResult executeWASMComponent(Store* store, const std::string& filename, const std::vector<uint8_t>& src)
 {
-    std::pair<Optional<Component*>, std::string> parseResult = WASMComponentParser::parseBinary(store, filename, src.data(), src.size());
+    std::pair<Optional<Component*>, std::string> parseResult = WASMComponentParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags, s_FeatureFlags);
     if (!parseResult.second.empty()) {
         Trap::TrapResult tr;
         tr.exception = Exception::create(parseResult.second);

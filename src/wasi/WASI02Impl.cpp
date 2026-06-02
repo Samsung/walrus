@@ -22,6 +22,21 @@
 
 namespace Walrus {
 
+enum OptionalTypes : uint8_t {
+    optionalNone = 0,
+    optionalSome = 1,
+};
+
+enum ResultTypes : uint8_t {
+    resultOk = 0,
+    resultError = 1,
+};
+
+enum StreamErrorTypes : uint8_t {
+    streamErrLastOperationFailed = 0,
+    streamErrClosed = 1,
+};
+
 enum DescriptorFlags : uint32_t {
     flagRead = 1 << 0,
     flagWrite = 1 << 1,
@@ -36,6 +51,17 @@ enum OpenFlags : uint32_t {
     openDirectory = 1 << 1,
     openExclusive = 1 << 2,
     openTruncate = 1 << 3,
+};
+
+enum FileType : uint8_t {
+    fileTypeUnknown = 0,
+    fileTypeBlockDevice = 1,
+    fileTypeCharacterDevice = 2,
+    fileTypeDirectory = 3,
+    fileTypeFifo = 4,
+    fileTypeSymbolicLink = 5,
+    fileTypeRegularFile = 6,
+    fileTypeSocket = 7,
 };
 
 static void throwNoMemory(ExecutionState& state)
@@ -94,7 +120,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         uint32_t offset = argv[1].asI32();
         uint64_t value = 0xffffffff;
         options->memory()->store(state, offset, 8, value);
-        options->memory()->buffer()[offset] = 0;
+        options->memory()->buffer()[offset] = resultOk;
         break;
     }
     case LiftedWasiFunction::ioInputStreamRead02: {
@@ -103,7 +129,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         uint32_t offset = argv[2].asI32();
 
         ASSERT(!options->memory()->is64());
-        options->memoryCheckRange32(state, 1, offset, 12);
+        options->memoryCheckRange32(state, 4, offset, 12);
 
         ComponentHandle* handle = options->instance()->getHandle(state, index);
         if (handle->kind() != ComponentHandle::ResourceWasiInputStreamKind) {
@@ -112,8 +138,8 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
 
         ComponentResourceWasiStream* stream = asStream(handle);
         if (stream->isClosed()) {
-            options->memory()->buffer()[offset + 4] = 1;
-            options->memory()->buffer()[offset] = 1;
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
             break;
         }
 
@@ -126,7 +152,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         uint32_t start = options->memoryMalloc32(state, 1, read);
         memcpy(options->memory()->buffer() + start, buffer.data(), size);
 
-        options->memory()->buffer()[offset] = 0;
+        options->memory()->buffer()[offset] = resultOk;
         uint32_t* list = reinterpret_cast<uint32_t*>(options->memory()->buffer() + offset);
         list[1] = start;
         list[2] = read;
@@ -164,11 +190,11 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         }
 
         ASSERT(!options->memory()->is64());
-        options->memoryCheckRange32(state, 1, offset, 12);
+        options->memoryCheckRange32(state, 4, offset, 12);
         ComponentResourceWasiStream* stream = asStream(handle);
         if (stream->isClosed()) {
-            options->memory()->buffer()[offset + 4] = 1;
-            options->memory()->buffer()[offset] = 1;
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
             break;
         }
 
@@ -181,7 +207,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         size_t written = fwrite(options->memory()->buffer() + bufferStart, bufferSize, 1, stream->file());
         stream->advanceOffset(written);
 
-        options->memory()->buffer()[offset] = 0;
+        options->memory()->buffer()[offset] = resultOk;
         break;
     }
     case LiftedWasiFunction::ioOutputStreamBlockingFlush02: {
@@ -194,8 +220,8 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         }
 
         ASSERT(!options->memory()->is64());
-        options->memoryCheckRange32(state, 1, offset, 12);
-        options->memory()->buffer()[offset] = 0;
+        options->memoryCheckRange32(state, 4, offset, 12);
+        options->memory()->buffer()[offset] = resultOk;
         break;
     }
     case LiftedWasiFunction::cliGetEnvironment02: {
@@ -254,8 +280,16 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         }
         break;
     }
-    case LiftedWasiFunction::cliGetStdout02: {
-        WasiRefCountedFile* fileRef = new WasiRefCountedFile(stdout);
+    case LiftedWasiFunction::cliGetStdin02:
+    case LiftedWasiFunction::cliGetStdout02:
+    case LiftedWasiFunction::cliGetStderr02: {
+        FILE* file = stdin;
+        if (function->type() == LiftedWasiFunction::cliGetStdout02) {
+            file = stdout;
+        } else if (function->type() == LiftedWasiFunction::cliGetStderr02) {
+            file = stderr;
+        }
+        WasiRefCountedFile* fileRef = new WasiRefCountedFile(file);
         ComponentTypeResource* resourceType = instance->type()->getType(0)->asTypeResource();
         ComponentResource* resource = new ComponentResourceWasiStream(resourceType, ComponentHandle::ResourceWasiOutputStreamKind, fileRef, ComponentResourceWasiStream::NoSeek);
         result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, resource)));
@@ -266,7 +300,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         uint32_t offset = argv[0].asI32();
         uint32_t value = options->instance()->appendHandle(state, resource);
         options->memory()->store(state, offset, 4, value);
-        options->memory()->buffer()[offset] = 1;
+        options->memory()->buffer()[offset] = optionalSome;
         break;
     }
     case LiftedWasiFunction::clockMonotonicNow02: {
@@ -293,7 +327,31 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         ComponentResource* resource = new ComponentResourceWasiStream(resourceType, ComponentHandle::ResourceWasiInputStreamKind, fileRef, offset);
         uint32_t resultResource = options->instance()->appendHandle(state, resource);
         options->memory()->store(state, resultOffset, 4, resultResource);
-        options->memory()->buffer()[resultOffset] = 0;
+        options->memory()->buffer()[resultOffset] = resultOk;
+        break;
+    }
+    case LiftedWasiFunction::fileSystemDescriptorStat02: {
+        uint32_t descriptorIndex = argv[0].asI32();
+        uint32_t offset = argv[1].asI32();
+
+        ComponentHandle* handle = options->instance()->getHandle(state, descriptorIndex);
+        if (handle->kind() != ComponentHandle::ResourceWasiFileKind) {
+            ComponentInstance::throwInvalidHandle(state, descriptorIndex);
+        }
+
+        ComponentResourceWasiFile* file = asFile(handle);
+
+        options->memoryCheckRange32(state, 8, offset, 96);
+        uint8_t* buffer = options->memory()->buffer() + offset;
+        buffer[0] = resultOk;
+        buffer[8] = fileTypeRegularFile;
+        *reinterpret_cast<uint64_t*>(buffer + 16) = 1;
+        fseek(file->file(), 0, SEEK_END);
+        *reinterpret_cast<uint64_t*>(buffer + 24) = static_cast<uint64_t>(ftell(file->file()));
+        // Optional(dateTime) is 24 bytes long.
+        buffer[32] = optionalNone;
+        buffer[56] = optionalNone;
+        buffer[80] = optionalNone;
         break;
     }
     case LiftedWasiFunction::fileSystemDescriptorOpenAt02: {
@@ -345,7 +403,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         if (file == NULL) {
             // Support more error codes.
             options->memory()->store(state, resultOffset, 4, 0);
-            options->memory()->buffer()[resultOffset] = 1;
+            options->memory()->buffer()[resultOffset] = resultError;
             break;
         }
 
@@ -353,7 +411,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         ComponentResource* resource = new ComponentResourceWasiFile(instance->type()->getType(0)->asTypeResource(), fileRef);
         uint32_t resultResource = options->instance()->appendHandle(state, resource);
         options->memory()->store(state, resultOffset, 4, resultResource);
-        options->memory()->buffer()[resultOffset] = 0;
+        options->memory()->buffer()[resultOffset] = resultOk;
         break;
     }
     case LiftedWasiFunction::fileSystemGetDirectories02: {
