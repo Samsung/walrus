@@ -315,6 +315,11 @@ public:
         ASSERT(type != ComponentTypeRef::TypeIndex && type != ComponentTypeRef::TypeNone);
     }
 
+    const ComponentTypeRef::Type& type() const
+    {
+        return m_type;
+    }
+
 private:
     ComponentTypeRef::Type m_type;
 };

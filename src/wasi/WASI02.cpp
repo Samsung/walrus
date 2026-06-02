@@ -115,9 +115,9 @@ private:
     }
 
     static void aliasTypeExport(ComponentInstance* instance, const char* name, ComponentRefCounted* type);
-    static void addExport(ComponentInstance* instance, const char* name, LiftedWasiFunction::Type type, FunctionType* functionType);
+    static void addExport(ComponentInstance* instance, const char* name, LiftedWasiFunction::Type type, FunctionType* functionType, ComponentRefCounted* complexType);
     static void addTypeExport(ComponentInstance* instance, const char* name, ComponentRefCounted* type);
-    static void addResourceExport(ComponentInstance* instance, const char* name);
+    static ComponentRefCounted* addResourceExport(ComponentInstance* instance, const char* name);
 
     Store* m_store;
     ComponentType* m_type;
@@ -129,9 +129,9 @@ void ComponentInstanceWasi02::aliasTypeExport(ComponentInstance* instance, const
     addTypeExport(instance, name, type);
 }
 
-void ComponentInstanceWasi02::addExport(ComponentInstance* instance, const char* name, LiftedWasiFunction::Type type, FunctionType* functionType)
+void ComponentInstanceWasi02::addExport(ComponentInstance* instance, const char* name, LiftedWasiFunction::Type type, FunctionType* functionType, ComponentRefCounted* complexType = nullptr)
 {
-    instance->m_type->exports().push_back(ComponentType::External{ name, nullptr, ComponentSort::Func, static_cast<uint32_t>(instance->m_funcs.size()) });
+    instance->m_type->exports().push_back(ComponentType::External{ name, complexType, ComponentSort::Func, static_cast<uint32_t>(instance->m_funcs.size()) });
     instance->m_funcs.push_back(new LiftedWasiFunction(type, instance, functionType));
 }
 
@@ -142,9 +142,11 @@ void ComponentInstanceWasi02::addTypeExport(ComponentInstance* instance, const c
     instance->m_type->pushType(type);
 }
 
-void ComponentInstanceWasi02::addResourceExport(ComponentInstance* instance, const char* name)
+ComponentRefCounted* ComponentInstanceWasi02::addResourceExport(ComponentInstance* instance, const char* name)
 {
-    addTypeExport(instance, name, new ComponentTypeResource(false, ComponentTypeResource::NotDefined));
+    ComponentRefCounted* type = new ComponentTypeResource(false, ComponentTypeResource::NotDefined);
+    addTypeExport(instance, name, type);
+    return type;
 }
 
 static bool compareName(const char* name, size_t length, const char* expected)
@@ -174,24 +176,30 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
     case InstanceIoPoll02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-        addResourceExport(instance, "pollable"); /* 0 */
-        addExport(instance, "[method]pollable.block", LiftedWasiFunction::ioPollableBlock02, getType(Store::I32R));
-        addExport(instance, "poll", LiftedWasiFunction::ioPoll02, getType(Store::I32I32I32R));
+        ComponentRefCounted* pollable = addResourceExport(instance, "pollable"); /* 0 */
+
+        ComponentTypeFunc* blockType = new ComponentTypeFunc(ComponentType::FuncKind);
+        blockType->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, pollable) });
+        addExport(instance, "[method]pollable.block", LiftedWasiFunction::ioPollableBlock02, getType(Store::I32R), blockType);
+        ComponentTypeFunc* pollType = new ComponentTypeFunc(ComponentType::FuncKind);
+        pollType->params().push_back(ComponentTypeFunc::Param{ "in", new ComponentValueTypeRef(ComponentRefCounted::ListKind, new ComponentTypeResourceRef(ComponentType::BorrowKind, pollable)) });
+        pollType->result() = new ComponentValueTypeRef(ComponentRefCounted::ListKind, ComponentTypeRef(ComponentTypeRef::U32));
+        addExport(instance, "poll", LiftedWasiFunction::ioPoll02, getType(Store::I32I32I32R), pollType);
         return instance;
     }
     case InstanceIoStreams02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-        addResourceExport(instance, "input-stream"); /* 0 */
-        addResourceExport(instance, "output-stream"); /* 1 */
+        ComponentRefCounted* inputStream = addResourceExport(instance, "input-stream"); /* 0 */
+        ComponentRefCounted* outputStream = addResourceExport(instance, "output-stream"); /* 1 */
 
         ComponentInstance* errorIntance = loadInstance(InstanceIoError02);
         instance->m_instances.push_back(errorIntance);
         ComponentRefCounted* errorType = errorIntance->type()->getType(0);
         aliasTypeExport(instance, "error", errorType); /* 2 */
-        ComponentInstance* pollIntance = loadInstance(InstanceIoPoll02);
-        instance->m_instances.push_back(pollIntance);
-        aliasTypeExport(instance, "pollable", pollIntance->type()->getType(0)); /* 3 */
+        ComponentInstance* pollInstance = loadInstance(InstanceIoPoll02);
+        instance->m_instances.push_back(pollInstance);
+        aliasTypeExport(instance, "pollable", pollInstance->type()->getType(0)); /* 3 */
         ComponentRefCounted* ownErrorType = new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, errorType);
         instance->m_type->pushType(ownErrorType); /* 4 */
         ComponentTypeItems* variant = new ComponentTypeItems(ComponentRefCounted::VariantKind);
@@ -199,56 +207,102 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         variant->items().push_back(ComponentTypeItems::Item{ "last-operation-failed", ComponentTypeRef(ownErrorType) });
         variant->items().push_back(ComponentTypeItems::Item{ "closed", ComponentTypeRef() });
         addTypeExport(instance, "stream-error", variant);
-        addExport(instance, "[method]input-stream.read", LiftedWasiFunction::ioInputStreamRead02, getType(Store::I32I64I32R));
-        addExport(instance, "[method]input-stream.subscribe", LiftedWasiFunction::ioInputStreamSubscribe02, getType(Store::I32_RI32));
-        addExport(instance, "[method]output-stream.check-write", LiftedWasiFunction::ioOutputStreamCheckWrite02, getType(Store::I32I32R));
-        addExport(instance, "[method]output-stream.write", LiftedWasiFunction::ioOutputStreamWrite02, getType(Store::I32I32I32I32R));
+        ComponentTypeFunc* streamRead = new ComponentTypeFunc(ComponentType::FuncKind);
+        streamRead->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream) });
+        streamRead->params().push_back(ComponentTypeFunc::Param{ "len", ComponentTypeRef(ComponentTypeRef::U64) });
+        variant->addRef();
+        streamRead->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef(ComponentTypeRef::U8))), ComponentTypeRef(variant));
+        addExport(instance, "[method]input-stream.read", LiftedWasiFunction::ioInputStreamRead02, getType(Store::I32I64I32R), streamRead);
+        ComponentTypeFunc* intputStreamSubscribe = new ComponentTypeFunc(ComponentType::FuncKind);
+        intputStreamSubscribe->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream) });
+        intputStreamSubscribe->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, outputStream);
+        addExport(instance, "[method]input-stream.subscribe", LiftedWasiFunction::ioInputStreamSubscribe02, getType(Store::I32_RI32), intputStreamSubscribe);
+        ComponentTypeFunc* streamCheckWrite = new ComponentTypeFunc(ComponentType::FuncKind);
+        streamCheckWrite->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, outputStream) });
+        variant->addRef();
+        streamCheckWrite->result() = new ComponentTypeResult(ComponentTypeRef(ComponentTypeRef::U64), ComponentTypeRef(variant));
+        addExport(instance, "[method]output-stream.check-write", LiftedWasiFunction::ioOutputStreamCheckWrite02, getType(Store::I32I32R), streamCheckWrite);
+        ComponentTypeFunc* streamWrite = new ComponentTypeFunc(ComponentType::FuncKind);
+        streamWrite->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, outputStream) });
+        streamWrite->params().push_back(ComponentTypeFunc::Param{ "contents", new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef(ComponentTypeRef::U8)) });
+        variant->addRef();
+        streamWrite->result() = new ComponentTypeResult(ComponentTypeRef(), ComponentTypeRef(variant));
+        addExport(instance, "[method]output-stream.write", LiftedWasiFunction::ioOutputStreamWrite02, getType(Store::I32I32I32I32R), streamWrite);
         addExport(instance, "[method]output-stream.blocking-write-and-flush", LiftedWasiFunction::ioOutputStreamBlockingWriteAndFlush02, getType(Store::I32I32I32I32R));
-        addExport(instance, "[method]output-stream.blocking-flush", LiftedWasiFunction::ioOutputStreamBlockingFlush02, getType(Store::I32I32R));
-        addExport(instance, "[method]output-stream.subscribe", LiftedWasiFunction::ioOutputStreamSubscribe02, getType(Store::I32_RI32));
+        ComponentTypeFunc* streamBlockingFlush = new ComponentTypeFunc(ComponentType::FuncKind);
+        streamBlockingFlush->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, outputStream) });
+        variant->addRef();
+        streamBlockingFlush->result() = new ComponentTypeResult(ComponentTypeRef(), ComponentTypeRef(variant));
+        addExport(instance, "[method]output-stream.blocking-flush", LiftedWasiFunction::ioOutputStreamBlockingFlush02, getType(Store::I32I32R), streamBlockingFlush);
+        ComponentTypeFunc* outputStreamSubscribe = new ComponentTypeFunc(ComponentType::FuncKind);
+        outputStreamSubscribe->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, outputStream) });
+        variant->addRef();
+        outputStreamSubscribe->result() = new ComponentTypeResult(ComponentTypeRef(), ComponentTypeRef(variant));
+        addExport(instance, "[method]output-stream.subscribe", LiftedWasiFunction::ioOutputStreamSubscribe02, getType(Store::I32_RI32), outputStreamSubscribe);
         return instance;
     }
     case InstanceCliEnvironment02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-        addExport(instance, "get-environment", LiftedWasiFunction::cliGetEnvironment02, getType(Store::I32R));
-        addExport(instance, "get-arguments", LiftedWasiFunction::cliGetArguments02, getType(Store::I32R));
+        ComponentTypeFunc* getEnvironmentType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        ComponentTypeTuple* resultTuple = new ComponentTypeTuple();
+        resultTuple->items().push_back(ComponentTypeRef(ComponentTypeRef::String));
+        resultTuple->items().push_back(ComponentTypeRef(ComponentTypeRef::String));
+        resultTuple->addRef();
+        ComponentRefCounted* getEnvResult = new ComponentValueTypeRef(ComponentRefCounted::ListKind, resultTuple);
+        getEnvironmentType->result() = getEnvResult;
+        addExport(instance, "get-environment", LiftedWasiFunction::cliGetEnvironment02, getType(Store::I32R), getEnvironmentType);
+        ComponentTypeFunc* getArgsType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        ComponentRefCounted* getArgsResult = new ComponentValueType(ComponentTypeRef::String);
+        getArgsResult->addRef();
+        getArgsType->result() = getArgsResult;
+        addExport(instance, "get-arguments", LiftedWasiFunction::cliGetArguments02, getType(Store::I32R), getArgsType);
         return instance;
     }
     case InstanceCliExit02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-        addExport(instance, "exit", LiftedWasiFunction::cliExit02, getType(Store::I32R));
+        ComponentTypeFunc* exitType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        ComponentRefCounted* exitParam = new ComponentTypeResult(ComponentTypeRef(), ComponentTypeRef());
+        exitParam->addRef();
+        exitType->params().push_back(ComponentTypeFunc::Param{ "status", ComponentTypeRef(exitParam) });
+        addExport(instance, "exit", LiftedWasiFunction::cliExit02, getType(Store::I32R), exitType);
         return instance;
     }
     case InstanceCliStdin02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentInstance* streamsIntance = loadInstance(InstanceIoStreams02);
         instance->m_instances.push_back(streamsIntance);
         aliasTypeExport(instance, "input-stream", streamsIntance->type()->getType(0)); /* 0 */
-        addExport(instance, "get-stdin", LiftedWasiFunction::cliGetStdin02, getType(Store::RI32));
+        ComponentTypeFunc* getStdin = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        getStdin->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0));
+        addExport(instance, "get-stdin", LiftedWasiFunction::cliGetStdin02, getType(Store::RI32), getStdin);
         return instance;
     }
     case InstanceCliStdout02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentInstance* streamsIntance = loadInstance(InstanceIoStreams02);
         instance->m_instances.push_back(streamsIntance);
         aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
-        addExport(instance, "get-stdout", LiftedWasiFunction::cliGetStdout02, getType(Store::RI32));
+        ComponentTypeFunc* getStdout = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        getStdout->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0));
+        addExport(instance, "get-stdout", LiftedWasiFunction::cliGetStdout02, getType(Store::RI32), getStdout);
         return instance;
     }
     case InstanceCliStderr02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentInstance* streamsIntance = loadInstance(InstanceIoStreams02);
         instance->m_instances.push_back(streamsIntance);
         aliasTypeExport(instance, "output-stream", streamsIntance->type()->getType(1)); /* 0 */
-        addExport(instance, "get-stderr", LiftedWasiFunction::cliGetStderr02, getType(Store::RI32));
+        ComponentTypeFunc* getStderr = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        getStderr->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0));
+        addExport(instance, "get-stderr", LiftedWasiFunction::cliGetStderr02, getType(Store::RI32), getStderr);
         return instance;
     }
     case InstanceCliTerminalInput02: {
@@ -266,62 +320,78 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
     case InstanceCliTerminalStdin02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentInstance* inputIntance = loadInstance(InstanceCliTerminalInput02);
         instance->m_instances.push_back(inputIntance);
         aliasTypeExport(instance, "terminal-input", inputIntance->type()->getType(0)); /* 0 */
-        addExport(instance, "get-terminal-stdin", LiftedWasiFunction::cliGetTerminalStdin02, getType(Store::I32R));
+        ComponentTypeFunc* getTerminalStdin = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        getTerminalStdin->result() = new ComponentValueTypeRef(ComponentType::OptionKind, new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0)));
+        addExport(instance, "get-terminal-stdin", LiftedWasiFunction::cliGetTerminalStdin02, getType(Store::I32R), getTerminalStdin);
         return instance;
     }
     case InstanceCliTerminalStdout02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentInstance* outputIntance = loadInstance(InstanceCliTerminalOutput02);
         instance->m_instances.push_back(outputIntance);
         aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
-        addExport(instance, "get-terminal-stdout", LiftedWasiFunction::cliGetTerminalStdout02, getType(Store::I32R));
+        ComponentTypeFunc* getTerminalStdout = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        getTerminalStdout->result() = new ComponentValueTypeRef(ComponentType::OptionKind, new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0)));
+        addExport(instance, "get-terminal-stdout", LiftedWasiFunction::cliGetTerminalStdout02, getType(Store::I32R), getTerminalStdout);
         return instance;
     }
     case InstanceCliTerminalStderr02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentInstance* outputIntance = loadInstance(InstanceCliTerminalOutput02);
         instance->m_instances.push_back(outputIntance);
         aliasTypeExport(instance, "terminal-output", outputIntance->type()->getType(0)); /* 0 */
-        addExport(instance, "get-terminal-stderr", LiftedWasiFunction::cliGetTerminalStderr02, getType(Store::I32R));
+        ComponentTypeFunc* getTerminalStderr = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        getTerminalStderr->result() = new ComponentValueTypeRef(ComponentType::OptionKind, new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0)));
+        addExport(instance, "get-terminal-stderr", LiftedWasiFunction::cliGetTerminalStderr02, getType(Store::I32R), getTerminalStderr);
         return instance;
     }
     case InstanceClockMonotonic02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentValueType* timeType = new ComponentValueType(ComponentTypeRef::U64);
         addTypeExport(instance, "instant", timeType); /* 0 */
         aliasTypeExport(instance, "duration", timeType); /* 1 */
         ComponentInstance* pollIntance = loadInstance(InstanceIoPoll02);
         instance->m_instances.push_back(pollIntance);
         aliasTypeExport(instance, "pollable", pollIntance->type()->getType(0)); /* 2 */
-        addExport(instance, "now", LiftedWasiFunction::clockMonotonicNow02, getType(Store::RI64));
-        addExport(instance, "subscribe-duration", LiftedWasiFunction::clockSubscribeDuration02, getType(Store::I64_RI32));
+        ComponentTypeFunc* nowType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        ComponentTypeItems* nowRecord = new ComponentTypeItems(ComponentType::RecordKind);
+        nowRecord->items().push_back(ComponentTypeItems::Item{ "seconds", ComponentTypeRef(ComponentTypeRef::U64) });
+        nowRecord->items().push_back(ComponentTypeItems::Item{ "nanoseconds", ComponentTypeRef(ComponentTypeRef::U32) });
+        nowRecord->addRef();
+        nowType->result() = nowRecord;
+        addExport(instance, "now", LiftedWasiFunction::clockMonotonicNow02, getType(Store::RI64), nowType);
+        ComponentTypeFunc* subscribeDurationType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(1)->addRef();
+        subscribeDurationType->params().push_back(ComponentTypeFunc::Param{ "when", ComponentTypeRef(instance->type()->getType(1)) });
+        subscribeDurationType->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(2));
+        addExport(instance, "subscribe-duration", LiftedWasiFunction::clockSubscribeDuration02, getType(Store::I64_RI32), subscribeDurationType);
         return instance;
     }
     case InstanceClockWall02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentTypeItems* dateTime = new ComponentTypeItems(ComponentRefCounted::RecordKind);
         dateTime->items().push_back(ComponentTypeItems::Item{ "seconds", ComponentTypeRef(ComponentTypeRef::U64) });
         dateTime->items().push_back(ComponentTypeItems::Item{ "nanoseconds", ComponentTypeRef(ComponentTypeRef::U32) });
-        addTypeExport(instance, "datetime", dateTime);
-        addExport(instance, "now", LiftedWasiFunction::clockWallNow02, getType(Store::I32R));
+        addTypeExport(instance, "datetime", dateTime); /* 0 */
+        ComponentTypeFunc* nowType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        nowType->result() = ComponentTypeRef(instance->type()->getType(0));
+        addExport(instance, "now", LiftedWasiFunction::clockWallNow02, getType(Store::I32R), nowType);
         return instance;
     }
     case InstanceFileSystemTypes02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         addResourceExport(instance, "descriptor"); /* 0 */
         ComponentValueType* u64Type = new ComponentValueType(ComponentTypeRef::U64);
         addTypeExport(instance, "filesize", u64Type); /* 1 */
@@ -419,23 +489,72 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         metadataHashValue->items().push_back(ComponentTypeItems::Item{ "lower", ComponentTypeRef(ComponentTypeRef::U64) });
         metadataHashValue->items().push_back(ComponentTypeItems::Item{ "upper", ComponentTypeRef(ComponentTypeRef::U64) });
         addTypeExport(instance, "metadata-hash-value", metadataHashValue); /* 12 */
-        addExport(instance, "[method]descriptor.read-via-stream", LiftedWasiFunction::fileSystemDescriptorReadViaStream02, getType(Store::I32I64I32R));
-        addExport(instance, "[method]descriptor.write-via-stream", LiftedWasiFunction::fileSystemDescriptorWriteViaStream02, getType(Store::I32I64I32R));
-        addExport(instance, "[method]descriptor.append-via-stream", LiftedWasiFunction::fileSystemDescriptorAppendViaStream02, getType(Store::I32I32R));
-        addExport(instance, "[method]descriptor.get-flags", LiftedWasiFunction::fileSystemDescriptorGetFlags02, getType(Store::I32I32R));
-        addExport(instance, "[method]descriptor.stat", LiftedWasiFunction::fileSystemDescriptorStat02, getType(Store::I32I32R));
-        addExport(instance, "[method]descriptor.open-at", LiftedWasiFunction::fileSystemDescriptorOpenAt02, getType(Store::I32I32I32I32I32I32I32R));
-        addExport(instance, "[method]descriptor.metadata-hash", LiftedWasiFunction::fileSystemDescriptorMetadataHash02, getType(Store::I32I32R));
+        ComponentTypeFunc* readViaStream = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        readViaStream->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(1)->addRef();
+        readViaStream->params().push_back(ComponentTypeFunc::Param{ "offset", ComponentTypeRef(instance->type()->getType(1)) });
+        instance->type()->getType(2)->addRef();
+        readViaStream->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(2))), ComponentTypeRef(instance->type()->getType(4)));
+        addExport(instance, "[method]descriptor.read-via-stream", LiftedWasiFunction::fileSystemDescriptorReadViaStream02, getType(Store::I32I64I32R), readViaStream);
+        ComponentTypeFunc* writeViaStream = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        writeViaStream->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(1)->addRef();
+        writeViaStream->params().push_back(ComponentTypeFunc::Param{ "offset", ComponentTypeRef(instance->type()->getType(1)) });
+        instance->type()->getType(4)->addRef();
+        writeViaStream->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(3))), ComponentTypeRef(instance->type()->getType(4)));
+        addExport(instance, "[method]descriptor.write-via-stream", LiftedWasiFunction::fileSystemDescriptorWriteViaStream02, getType(Store::I32I64I32R), writeViaStream);
+        ComponentTypeFunc* appendViaStream = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        appendViaStream->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(4)->addRef();
+        appendViaStream->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(3))), ComponentTypeRef(instance->type()->getType(4)));
+        addExport(instance, "[method]descriptor.append-via-stream", LiftedWasiFunction::fileSystemDescriptorAppendViaStream02, getType(Store::I32I32R), appendViaStream);
+        ComponentTypeFunc* getFlags = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        instance->type()->getType(0)->addRef();
+        getFlags->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(4)->addRef();
+        instance->type()->getType(5)->addRef();
+        getFlags->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(5)), ComponentTypeRef(instance->type()->getType(4)));
+        addExport(instance, "[method]descriptor.get-flags", LiftedWasiFunction::fileSystemDescriptorGetFlags02, getType(Store::I32I32R), getFlags);
+        ComponentTypeFunc* stat = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        stat->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(9)->addRef();
+        instance->type()->getType(4)->addRef();
+        stat->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(9)), ComponentTypeRef(instance->type()->getType(4)));
+        addExport(instance, "[method]descriptor.stat", LiftedWasiFunction::fileSystemDescriptorStat02, getType(Store::I32I32R), stat);
+        ComponentTypeFunc* openAt = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        openAt->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(10)->addRef();
+        openAt->params().push_back(ComponentTypeFunc::Param{ "path-flags", ComponentTypeRef(instance->type()->getType(10)) });
+        openAt->params().push_back(ComponentTypeFunc::Param{ "path", ComponentTypeRef(ComponentTypeRef::String) });
+        instance->type()->getType(11)->addRef();
+        openAt->params().push_back(ComponentTypeFunc::Param{ "open-flags", ComponentTypeRef(instance->type()->getType(11)) });
+        instance->type()->getType(5)->addRef();
+        openAt->params().push_back(ComponentTypeFunc::Param{ "flags", ComponentTypeRef(instance->type()->getType(5)) });
+        instance->type()->getType(4)->addRef();
+        openAt->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0))), ComponentTypeRef(instance->type()->getType(4)));
+        addExport(instance, "[method]descriptor.open-at", LiftedWasiFunction::fileSystemDescriptorOpenAt02, getType(Store::I32I32I32I32I32I32I32R), openAt);
+        ComponentTypeFunc* metadataHash = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        metadataHash->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
+        instance->type()->getType(10)->addRef();
+        instance->type()->getType(4)->addRef();
+        metadataHash->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(10)), ComponentTypeRef(instance->type()->getType(4)));
+        addExport(instance, "[method]descriptor.metadata-hash", LiftedWasiFunction::fileSystemDescriptorMetadataHash02, getType(Store::I32I32R), metadataHash);
         return instance;
     }
     case InstanceFileSystemPreOpens02: {
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
-
         ComponentInstance* typesIntance = loadInstance(InstanceFileSystemTypes02);
         instance->m_instances.push_back(typesIntance);
         aliasTypeExport(instance, "descriptor", typesIntance->type()->getType(0)); /* 0 */
-        addExport(instance, "get-directories", LiftedWasiFunction::fileSystemGetDirectories02, getType(Store::I32R));
+        ComponentTypeFunc* getDirectories = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
+        ComponentTypeTuple* tuple = new ComponentTypeTuple();
+        tuple->items().push_back(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0))));
+        tuple->items().push_back(ComponentTypeRef(ComponentTypeRef::String));
+        tuple->addRef();
+        getDirectories->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, tuple)), ComponentTypeRef());
+        addExport(instance, "get-directories", LiftedWasiFunction::fileSystemGetDirectories02, getType(Store::I32R), getDirectories);
         return instance;
     }
     default:
