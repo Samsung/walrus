@@ -396,8 +396,15 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
 
         std::string path = asDirectory(handle)->realPath();
         path.append("/");
-        options->memoryCheckRange32(state, 1, pathStart, pathSize);
-        path.append(reinterpret_cast<const char*>(options->memory()->buffer() + pathStart), pathSize);
+        CanonOptions::UtfData utfData;
+        options->validateString(state, pathStart, pathSize, &utfData);
+        if (options->encoding() == ComponentCanonOptions::Utf8) {
+            path.append(reinterpret_cast<const char*>(utfData.buffer()), utfData.length());
+        } else {
+            std::vector<uint8_t> utf8String(utfData.utf8Length());
+            utfData.toUtf8String(utf8String.data());
+            path.append(reinterpret_cast<const char*>(utf8String.data()), utf8String.size());
+        }
         FILE* file = fopen(path.c_str(), access);
 
         if (file == NULL) {

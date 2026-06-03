@@ -34,6 +34,313 @@ static void throwException(ExecutionState& state, const char* message)
     Trap::throwException(state, stringMessage);
 }
 
+enum Utf8Consts : uint8_t {
+    Utf8Len2 = 0xc0,
+    Utf8Len2Mask = 0x1f,
+    Utf8Len3 = 0xe0,
+    Utf8Len3Mask = 0x0f,
+    Utf8Len4 = 0xf0,
+    Utf8Len4Mask = 0x07,
+    Utf8Cont = 0x80,
+    Utf8ContMask = 0x3f,
+    Utf8ContShift1 = 6,
+    Utf8ContShift2 = 12,
+    Utf8ContShift3 = 18,
+
+    // The F and S postfix represents a two byte sequence, where the first byte is fixed.
+    Utf8Len2Start = 0xc2,
+    Utf8Latin1End = 0xc4,
+    Utf8Len3StartF = 0xe0,
+    Utf8Len3StartS = 0xa0,
+    Utf8SurrogateStartF = 0xed,
+    Utf8SurrogateStartS = 0xa0,
+    Utf8Len4StartF = 0xf0,
+    Utf8Len4StartS = 0xc0,
+    Utf8Len4EndF = 0xf4,
+    Utf8Len4EndS = 0x8f,
+};
+
+enum Utf16Consts : uint16_t {
+    Utf16HighSurrogate = 0xd800,
+    Utf16LowSurrogate = 0xdc00,
+    Utf16SurrogateEnd = 0xdfff,
+    Utf16SurrogateMask = 0x3ff,
+    Utf16ContShift = 10,
+};
+
+enum UtfLimits : uint32_t {
+    UtfChar1Limit = 0x80,
+    UtfCharL1Limit = 0x100,
+    UtfChar2Limit = 0x800,
+    UtfChar3Limit = 0x10000,
+    UtfChar4Limit = 0x110000,
+};
+
+bool CanonOptions::UtfData::validateUtfString()
+{
+    ASSERT(m_type != UtfData::Latin1);
+
+    if (UNLIKELY(m_type == UtfData::Utf16)) {
+        const uint16_t* buffer = reinterpret_cast<const uint16_t*>(m_buffer);
+        const uint16_t* end = buffer + m_length;
+        uint32_t charL1 = 0;
+        uint32_t char2 = 0;
+        uint32_t char3 = 0;
+        uint32_t char4 = 0;
+
+        while (buffer < end) {
+            uint16_t chr = *buffer;
+
+            if (chr < Utf16HighSurrogate || chr > Utf16SurrogateEnd) {
+                if (chr < UtfChar2Limit) {
+                    if (chr >= UtfChar1Limit) {
+                        charL1++;
+                    }
+                } else if (chr < 0x800) {
+                    char2++;
+                } else {
+                    char3++;
+                }
+                buffer++;
+            } else {
+                if (chr >= Utf16LowSurrogate
+                    || buffer >= end
+                    || buffer[1] < Utf16LowSurrogate
+                    || buffer[1] > Utf16SurrogateEnd) {
+                    return false;
+                }
+
+                char4++;
+                buffer += 2;
+            }
+        }
+
+        m_charL1 = charL1;
+        m_char2 = char2;
+        m_char3 = char3;
+        m_char4 = char4;
+        return true;
+    }
+
+    const uint8_t* buffer = m_buffer;
+    const uint8_t* end = buffer + m_length;
+    uint32_t charL1 = 0;
+    uint32_t char2 = 0;
+    uint32_t char3 = 0;
+    uint32_t char4 = 0;
+
+    while (buffer < end) {
+        uint8_t chr = *buffer;
+        if (chr <= Utf8Cont) {
+            buffer++;
+        } else if (chr < Utf8Len3) {
+            if (chr < Utf8Len2 // Continuation byte.
+                || end - buffer < 2
+                || (buffer[1] & ~Utf8ContMask) != Utf8Cont
+                || chr < Utf8Len2Start) {
+                return false;
+            }
+
+            if (chr < Utf8Latin1End) {
+                charL1++;
+            } else {
+                char2++;
+            }
+            buffer += 2;
+        } else if (chr < Utf8Len4) {
+            if (end - buffer < 3
+                || (buffer[1] & ~Utf8ContMask) != Utf8Cont
+                || (buffer[2] & ~Utf8ContMask) != Utf8Cont
+                || (chr == Utf8Len3StartF && buffer[1] < Utf8Len3StartS)
+                || (chr == Utf8SurrogateStartF && buffer[1] >= Utf8SurrogateStartS)) {
+                return false;
+            }
+
+            buffer += 3;
+            char3++;
+        } else {
+            if (chr > Utf8Len4EndF
+                || end - buffer < 4
+                || (buffer[1] & ~Utf8ContMask) != Utf8Cont
+                || (buffer[2] & ~Utf8ContMask) != Utf8Cont
+                || (buffer[3] & ~Utf8ContMask) != Utf8Cont
+                || (chr == Utf8Len4StartF && buffer[1] < Utf8Len4StartS)
+                || (chr == Utf8Len4EndF && buffer[1] > Utf8Len4EndS)) {
+                return false;
+            }
+
+            buffer += 4;
+            char4++;
+        }
+    }
+
+    m_charL1 = charL1;
+    m_char2 = char2;
+    m_char3 = char3;
+    m_char4 = char4;
+    return true;
+}
+
+void CanonOptions::UtfData::utf8ComputeL1()
+{
+    ASSERT(m_type == UtfData::Latin1);
+    if (m_char2 == 1) {
+        return;
+    }
+
+    const uint8_t* buffer = m_buffer;
+    const uint8_t* end = buffer + m_length;
+    uint32_t charL1 = 0;
+
+    while (buffer < end) {
+        if (*buffer++ >= UtfChar1Limit) {
+            charL1++;
+        }
+    }
+    m_charL1 = charL1;
+    m_char2 = 1;
+}
+
+void CanonOptions::UtfData::toUtf8String(uint8_t* dstBuffer)
+{
+#if !defined(NDEBUG)
+    uint8_t* start = dstBuffer;
+#endif
+    ASSERT(m_type != UtfData::Utf8);
+
+    if (m_type == UtfData::Latin1) {
+        const uint8_t* buffer = m_buffer;
+        const uint8_t* end = buffer + m_length;
+
+        while (buffer < end) {
+            uint8_t chr = *buffer++;
+            if (chr < Utf8Cont) {
+                *dstBuffer++ = chr;
+            } else {
+                dstBuffer[0] = static_cast<uint8_t>(Utf8Len2 | (chr >> Utf8ContShift1));
+                dstBuffer[1] = static_cast<uint8_t>(Utf8Cont | (chr & Utf8ContMask));
+                dstBuffer += 2;
+            }
+        }
+        ASSERT(static_cast<size_t>(dstBuffer - start) == utf8Length());
+        return;
+    }
+
+    const uint16_t* buffer = reinterpret_cast<const uint16_t*>(m_buffer);
+    const uint16_t* end = buffer + m_length;
+
+    while (buffer < end) {
+        uint16_t chr = *buffer;
+
+        if (chr < Utf16HighSurrogate || chr > Utf16SurrogateEnd) {
+            if (chr < UtfChar1Limit) {
+                *dstBuffer++ = static_cast<uint8_t>(chr);
+            } else if (chr < UtfChar2Limit) {
+                dstBuffer[0] = static_cast<uint8_t>(Utf8Len2 | (chr >> Utf8ContShift1));
+                dstBuffer[1] = static_cast<uint8_t>(Utf8Cont | (chr & Utf8ContMask));
+                dstBuffer += 2;
+            } else {
+                dstBuffer[0] = static_cast<uint8_t>(Utf8Len3 | (chr >> Utf8ContShift2));
+                dstBuffer[1] = static_cast<uint8_t>(Utf8Cont | ((chr >> Utf8ContShift1) & Utf8ContMask));
+                dstBuffer[2] = static_cast<uint8_t>(Utf8Cont | (chr & Utf8ContMask));
+                dstBuffer += 3;
+            }
+            buffer++;
+        } else {
+            uint32_t chr32 = (static_cast<uint32_t>(chr & Utf16SurrogateMask) << Utf16ContShift) + static_cast<uint32_t>(buffer[1] & Utf16SurrogateMask) + UtfChar3Limit;
+            dstBuffer[0] = static_cast<uint8_t>(Utf8Len4 | (chr >> Utf8ContShift3));
+            dstBuffer[1] = static_cast<uint8_t>(Utf8Cont | ((chr >> Utf8ContShift2) & Utf8ContMask));
+            dstBuffer[2] = static_cast<uint8_t>(Utf8Cont | ((chr >> Utf8ContShift1) & Utf8ContMask));
+            dstBuffer[3] = static_cast<uint8_t>(Utf8Cont | (chr & Utf8ContMask));
+            dstBuffer += 4;
+            buffer += 2;
+        }
+    }
+    ASSERT(static_cast<size_t>(dstBuffer - start) == utf8Length());
+}
+
+void CanonOptions::UtfData::toUtf16String(uint16_t* dstBuffer)
+{
+#if !defined(NDEBUG)
+    uint16_t* start = dstBuffer;
+#endif
+    const uint8_t* buffer = m_buffer;
+    const uint8_t* end = buffer + m_length;
+    ASSERT(m_type != UtfData::Utf16);
+
+    if (m_type == UtfData::Latin1) {
+        while (buffer < end) {
+            *dstBuffer++ = *buffer++;
+        }
+        ASSERT(static_cast<size_t>(dstBuffer - start) == utf8Length());
+        return;
+    }
+
+    while (buffer < end) {
+        uint16_t chr;
+        uint8_t byte = *buffer;
+
+        if (byte < UtfChar1Limit) {
+            chr = byte;
+            buffer++;
+        } else if (byte < Utf8Len2) {
+            chr = static_cast<uint16_t>((byte & Utf8Len2Mask) << Utf8ContShift1);
+            chr |= static_cast<uint16_t>(buffer[1] & Utf8ContMask);
+            buffer += 2;
+        } else if (byte < Utf8Len3) {
+            chr = static_cast<uint16_t>((byte & Utf8Len3Mask) << Utf8ContShift2);
+            chr |= static_cast<uint16_t>((buffer[1] & Utf8ContMask) << Utf8ContShift1);
+            chr |= static_cast<uint16_t>(buffer[2] & Utf8ContMask);
+            buffer += 3;
+        } else {
+            uint32_t chr32 = static_cast<uint32_t>((byte & Utf8Len4Mask) << Utf8ContShift3);
+            chr32 |= static_cast<uint32_t>((buffer[1] & Utf8ContMask) << Utf8ContShift2);
+            chr32 |= static_cast<uint32_t>((buffer[2] & Utf8ContMask) << Utf8ContShift1);
+            chr32 |= static_cast<uint32_t>(buffer[3] & Utf8ContMask);
+            chr = static_cast<uint16_t>(Utf16LowSurrogate | (chr32 & Utf16SurrogateMask));
+            *dstBuffer++ = static_cast<uint16_t>(Utf16HighSurrogate | (chr32 >> Utf16ContShift));
+        }
+
+        *dstBuffer++ = chr;
+    }
+}
+
+void CanonOptions::UtfData::toLatin1String(uint8_t* dstBuffer)
+{
+#if !defined(NDEBUG)
+    uint8_t* start = dstBuffer;
+#endif
+    const uint8_t* buffer = m_buffer;
+    ASSERT(m_type != UtfData::Latin1);
+
+    if (m_type == UtfData::Utf16) {
+        const uint8_t* end = buffer + (m_length << 1);
+
+        while (buffer < end) {
+            *dstBuffer++ = *buffer;
+            buffer += 2;
+        }
+        ASSERT(static_cast<size_t>(dstBuffer - start) == latin1Length());
+        return;
+    }
+
+    const uint8_t* end = buffer + m_length;
+
+    while (buffer < end) {
+        uint8_t chr;
+        uint8_t byte = *buffer;
+        if (byte < UtfChar1Limit) {
+            chr = byte;
+            buffer++;
+        } else {
+            chr = static_cast<uint8_t>((byte << Utf8ContShift1) | (buffer[1] & Utf8ContMask));
+            buffer += 2;
+        }
+        *dstBuffer++ = chr;
+    }
+    ASSERT(static_cast<size_t>(dstBuffer - start) == latin1Length());
+}
+
 void CanonOptions::memoryCheckRange32(ExecutionState& state, uint32_t align, uint32_t start, uint32_t size)
 {
     ASSERT(!memory()->is64() && align <= 8 && (align & (align - 1)) == 0);
@@ -94,16 +401,160 @@ uint64_t CanonOptions::memoryMalloc64(ExecutionState& state, uint64_t align, uin
     return start;
 }
 
-enum Utf8Consts : uint8_t {
-    Utf8Len1Mask = 0x7f,
-    Utf8Len2 = 0xc0,
-    Utf8Len2Mask = 0x1f,
-    Utf8Cont = 0x80,
-    Utf8ContMask = 0x3f,
-    Utf8ContShift1 = 6,
-    Utf8ContShift2 = 12,
-    Utf8ContShift3 = 18,
-};
+void CanonOptions::validateString(ExecutionState& state, uint64_t start, uint64_t length, UtfData* utfData)
+{
+    uint8_t* buffer = memory()->buffer();
+    uint32_t align = encoding() == ComponentCanonOptions::Utf8 ? 1 : 2;
+    UtfData::Type type = UtfData::Utf8;
+    uint32_t length32;
+
+    if (memory()->is64()) {
+        uint32_t shift = 0;
+
+        if (encoding() == ComponentCanonOptions::Utf16) {
+            shift = 1;
+            type = UtfData::Utf16;
+        } else if (encoding() == ComponentCanonOptions::Latin1Utf16) {
+            if ((length & Utf16Tag64) != 0) {
+                length ^= Utf16Tag64;
+                shift = 1;
+                type = UtfData::Utf16;
+            } else {
+                type = UtfData::Latin1;
+            }
+        }
+
+        if (length > (Component::MaxStringByteLength >> shift)) {
+            throwException(state, "Input string too large");
+        }
+        memoryCheckRange64(state, align, start, length);
+        length32 = static_cast<uint32_t>(length);
+        buffer += start;
+    } else {
+        uint32_t start32 = static_cast<uint32_t>(start);
+        length32 = static_cast<uint32_t>(length);
+        uint32_t shift = 0;
+
+        if (encoding() == ComponentCanonOptions::Utf16) {
+            shift = 1;
+            type = UtfData::Utf16;
+        } else if (encoding() == ComponentCanonOptions::Latin1Utf16) {
+            if ((length32 & Utf16Tag32) != 0) {
+                length32 ^= Utf16Tag32;
+                shift = 1;
+                type = UtfData::Utf16;
+            } else {
+                type = UtfData::Latin1;
+            }
+        }
+
+        if (length32 > (Component::MaxStringByteLength >> shift)) {
+            throwException(state, "Input string too large");
+        }
+        memoryCheckRange32(state, align, start32, length32);
+        buffer += start32;
+    }
+    utfData->init(type, buffer, length32);
+
+    // Latin1 is not validated by default.
+    if (type != UtfData::Latin1 && !utfData->validateUtfString()) {
+        throwException(state, type == UtfData::Utf8 ? "Invalid UTF8 string" : "Invalid UTF16 string");
+    }
+}
+
+uint64_t CanonOptions::storeString(ExecutionState& state, UtfData& utfData, uint32_t* length)
+{
+    uint32_t byteLength;
+    bool copy = false;
+    bool isLatin1 = false;
+
+    switch (encoding()) {
+    case ComponentCanonOptions::Utf8:
+        if (utfData.type() == UtfData::Utf8) {
+            byteLength = utfData.length();
+            copy = true;
+            break;
+        }
+        if (utfData.type() == UtfData::Latin1) {
+            utfData.utf8ComputeL1();
+        }
+        byteLength = utfData.utf8Length();
+        break;
+    case ComponentCanonOptions::Utf16:
+        if (utfData.type() == UtfData::Utf16) {
+            byteLength = utfData.length() << 1;
+            copy = true;
+            break;
+        }
+        byteLength = utfData.utf16Length() << 1;
+        break;
+    default:
+        ASSERT(encoding() == ComponentCanonOptions::Latin1Utf16);
+        if (utfData.type() == UtfData::Latin1) {
+            byteLength = utfData.length();
+            copy = true;
+            break;
+        }
+        if (utfData.isLatin1()) {
+            byteLength = utfData.latin1Length();
+            isLatin1 = true;
+            break;
+        }
+        if (utfData.type() == UtfData::Utf16) {
+            byteLength = utfData.length() << 1;
+            copy = true;
+            break;
+        }
+        byteLength = utfData.utf16Length() << 1;
+        break;
+    }
+
+    if (byteLength > Component::MaxStringByteLength) {
+        throwException(state, "result string too large");
+    }
+
+    uint32_t align = encoding() == ComponentCanonOptions::Utf8 ? 1 : 2;
+    uint64_t start;
+    uint8_t* ptr;
+    if (memory()->is64()) {
+        start = memoryMalloc64(state, align, byteLength);
+        ptr = reinterpret_cast<uint8_t*>(memory()->buffer() + start);
+    } else {
+        uint32_t start32 = memoryMalloc32(state, align, byteLength);
+        ptr = reinterpret_cast<uint8_t*>(memory()->buffer() + start32);
+        start = start32;
+    }
+
+    if (copy) {
+        *length = utfData.length();
+        memcpy(ptr, utfData.buffer(), byteLength);
+        return start;
+    }
+
+    switch (encoding()) {
+    case ComponentCanonOptions::Utf8:
+        ASSERT(!isLatin1);
+        utfData.toUtf8String(ptr);
+        *length = byteLength;
+        break;
+    case ComponentCanonOptions::Utf16:
+        ASSERT(!isLatin1);
+        utfData.toUtf16String(reinterpret_cast<uint16_t*>(ptr));
+        *length = byteLength >> 1;
+        break;
+    default:
+        ASSERT(encoding() == ComponentCanonOptions::Latin1Utf16);
+        if (isLatin1) {
+            utfData.toLatin1String(ptr);
+            *length = byteLength;
+        } else {
+            utfData.toUtf16String(reinterpret_cast<uint16_t*>(ptr));
+            *length = (byteLength >> 1) | Utf16Tag32;
+        }
+        break;
+    }
+    return start;
+}
 
 uint64_t CanonOptions::storeLatin1String(ExecutionState& state, const uint8_t* src, uint32_t* length)
 {
@@ -116,7 +567,7 @@ uint64_t CanonOptions::storeLatin1String(ExecutionState& state, const uint8_t* s
     case ComponentCanonOptions::Utf8:
         align = 1;
         for (const uint8_t* ptr = src; ptr < end; ptr++) {
-            if ((*ptr & ~Utf8Len1Mask) != 0) {
+            if (*ptr >= UtfChar1Limit) {
                 byteLength++;
             }
         }
@@ -152,7 +603,7 @@ uint64_t CanonOptions::storeLatin1String(ExecutionState& state, const uint8_t* s
         }
 
         while (src < end) {
-            if ((*src & ~Utf8Len1Mask) == 0) {
+            if (*src < UtfChar1Limit) {
                 *ptr++ = *src;
             } else {
                 ptr[0] = static_cast<uint8_t>(Utf8Len2 | (*src >> Utf8ContShift1));

@@ -26,7 +26,103 @@ class ComponentInstance;
 
 class CanonOptions {
 public:
-    static constexpr uint32_t Utf16Tag = static_cast<uint32_t>(1) << 31;
+    static constexpr uint32_t Utf16Tag32 = static_cast<uint32_t>(1) << 31;
+    static constexpr uint64_t Utf16Tag64 = static_cast<uint64_t>(1) << 63;
+
+    class UtfData {
+    public:
+        enum Type : uint8_t {
+            Utf8,
+            Utf16,
+            Latin1,
+        };
+
+        UtfData()
+            : m_buffer(nullptr)
+            , m_length(0)
+            , m_type(Utf8)
+            , m_codepoint(0)
+            , m_charL1(0)
+            , m_char2(0)
+            , m_char3(0)
+            , m_char4(0)
+        {
+        }
+
+        void init(Type type, const uint8_t* buffer, uint32_t length)
+        {
+            m_buffer = buffer;
+            m_length = length;
+            m_type = type;
+        }
+
+        Type type() const
+        {
+            return m_type;
+        }
+
+        const uint8_t* buffer() const
+        {
+            return m_buffer;
+        }
+
+        uint32_t length() const
+        {
+            return m_length;
+        }
+
+        bool isLatin1()
+        {
+            ASSERT(m_type != Latin1);
+            return m_char2 == 0 && m_char3 == 0 && m_char4 == 0;
+        }
+
+        size_t utf8Length()
+        {
+            ASSERT(m_type != Utf8);
+            if (m_type == Latin1) {
+                ASSERT(m_char2 == 1);
+                return m_length + m_charL1;
+            }
+            return m_length + (m_charL1 + m_char2) + ((m_char3 + m_char4) * 2);
+        }
+
+        size_t utf16Length()
+        {
+            ASSERT(m_type != Utf16);
+            if (m_type == Latin1) {
+                return m_length;
+            }
+            return m_length - (m_charL1 + m_char2) - ((m_char3 + m_char4) * 2);
+        }
+
+        size_t latin1Length()
+        {
+            ASSERT(m_type != Latin1 && isLatin1());
+            if (m_type == Utf16) {
+                return m_length;
+            }
+            return m_length - m_charL1;
+        }
+
+        bool validateUtfString();
+        void utf8ComputeL1();
+        void toUtf8String(uint8_t* dstBuffer);
+        void toUtf16String(uint16_t* dstBuffer);
+        void toLatin1String(uint8_t* dstBuffer);
+
+    private:
+        const uint8_t* m_buffer;
+        uint32_t m_length;
+        // Stats are not computed for Latin1 strings.
+        Type m_type;
+        // Number of character encoded as an 1..4 byte long UTF8 sequence
+        uint32_t m_codepoint;
+        uint32_t m_charL1; // < 0x100 (Latin1 limit)
+        uint32_t m_char2; // < 0x800 (set to 1 for Latin1 strings after calling utf8ComputeL1)
+        uint32_t m_char3; // < 0x10000
+        uint32_t m_char4; // < 0x110000
+    };
 
     CanonOptions(ComponentInstance* instance, ComponentCanonOptions::StringEncoding encoding, bool isAsync,
                  Memory* memory, Function* realloc, Function* postReturn, Function* callback)
@@ -80,6 +176,8 @@ public:
     uint32_t memoryMalloc32(ExecutionState& state, uint32_t align, uint32_t size);
     uint64_t memoryMalloc64(ExecutionState& state, uint64_t align, uint64_t size);
 
+    void validateString(ExecutionState& state, uint64_t start, uint64_t length, UtfData* utfData);
+    uint64_t storeString(ExecutionState& state, UtfData& utfData, uint32_t* length);
     uint64_t storeLatin1String(ExecutionState& state, const uint8_t* src, uint32_t* length);
 
 private:
