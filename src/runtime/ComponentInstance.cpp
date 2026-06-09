@@ -773,8 +773,12 @@ ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType
     return instance;
 }
 
-bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources, std::string& componentName)
+bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources, std::string& componentName, uint64_t& depth)
 {
+    if (++depth > 10000) {
+        return false;
+    }
+
     switch (expected->kind()) {
     case ComponentRefCounted::InstanceTypeKind: {
         if (!provided->isComponentType()) {
@@ -799,7 +803,8 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
                 return false;
             }
 
-            if (left.type->kind() == ComponentRefCounted::SubResourceKind) {
+            switch (left.type->kind()) {
+            case ComponentRefCounted::SubResourceKind: {
                 if (found->type->kind() != ComponentRefCounted::SubResourceKind && !found->type->isTypeResource()) {
                     return false;
                 }
@@ -810,6 +815,146 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
                 } else if (resources[index] != found->type) {
                     return false;
                 }
+                break;
+            }
+            case ComponentRefCounted::TupleKind: {
+                if (found->type->kind() != ComponentRefCounted::TupleKind) {
+                    return false;
+                }
+
+                std::vector<ComponentTypeRef> expectedItems = left.type->asTypeTuple()->items();
+                std::vector<ComponentTypeRef> providedItems = left.type->asTypeTuple()->items();
+
+                for (uint64_t i = 0; i < expectedItems.size(); i++) {
+                    if (expectedItems[i].type() != providedItems[i].type()) {
+                        return false;
+                    }
+
+                    if (expectedItems[i].ref() != nullptr) {
+                        if (!compareTypes(expectedItems[i].ref(), providedItems[i].ref(), resources, componentName, depth)) {
+                            return false;
+                        }
+                    }
+                }
+
+                break;
+            }
+            case ComponentRefCounted::ValueTypeKind: {
+                if (!found->type->isValueType()) {
+                    return false;
+                }
+
+                if (left.type->asValueType()->type() != found->type->asValueType()->type()) {
+                    return false;
+                }
+
+                break;
+            }
+            case ComponentRefCounted::RecordKind:
+            case ComponentRefCounted::VariantKind: {
+                if (!found->type->isTypeItems()) {
+                    return false;
+                }
+
+                ComponentTypeItems* expected = left.type->asTypeItems();
+                ComponentTypeItems* provided = found->type->asTypeItems();
+
+                for (uint64_t i = 0; i < expected->items().size(); i++) {
+                    if (expected->items()[i].name != provided->items()[i].name) {
+                        return false;
+                    }
+
+                    if (expected->items()[i].type.type() != provided->items()[i].type.type()) {
+                        return false;
+                    }
+
+                    if (expected->items()[i].type.ref() != nullptr) {
+                        if (!compareTypes(expected->items()[i].type.ref(), provided->items()[i].type.ref(), resources, componentName, depth)) {
+                            return false;
+                        }
+                    }
+                }
+
+                break;
+            }
+            case ComponentRefCounted::FuncKind: {
+                if (!found->type->isTypeFunc()) {
+                    return false;
+                }
+                ComponentTypeFunc* expectedFunc = left.type->asTypeFunc();
+                ComponentTypeFunc* providedFunc = found->type->asTypeFunc();
+
+                for (uint64_t i = 0; i < expectedFunc->params().size(); i++) {
+                    if (expectedFunc->params()[i].name != providedFunc->params()[i].name) {
+                        return false;
+                    }
+
+                    if (expectedFunc->params()[i].type.type() != providedFunc->params()[i].type.type()) {
+                        return false;
+                    }
+
+                    if (expectedFunc->params()[i].type.ref() != nullptr) {
+                        if (!compareTypes(expectedFunc->params()[i].type.ref(), providedFunc->params()[i].type.ref(), resources, componentName, depth)) {
+                            return false;
+                        }
+                    }
+                }
+
+                if (expectedFunc->result().type() != providedFunc->result().type()) {
+                    return false;
+                }
+
+                if (expectedFunc->result().ref() != nullptr) {
+                    if (!compareTypes(expectedFunc->result().ref(), providedFunc->result().ref(), resources, componentName, depth)) {
+                        return false;
+                    }
+                }
+
+                break;
+            }
+            case ComponentRefCounted::EnumKind:
+            case ComponentRefCounted::FlagsKind: {
+                if (!found->type->isTypeLabels()) {
+                    return false;
+                }
+
+                std::vector<std::string> providedStrings = left.type->asTypeLabels()->labels();
+                std::vector<std::string> foundStrings = left.type->asTypeLabels()->labels();
+
+                for (uint64_t i = 0; i < providedStrings.size(); i++) {
+                    if (providedStrings[i] != foundStrings[i]) {
+                        return false;
+                    }
+                }
+
+                break;
+            }
+            case ComponentRefCounted::ListKind:
+            case ComponentRefCounted::OptionKind:
+            case ComponentRefCounted::StreamKind:
+            case ComponentRefCounted::FutureKind: {
+                if (!found->type->isValueTypeRef()) {
+                    return false;
+                }
+
+                if (left.type->asValueTypeRef()->kind() != found->type->asValueTypeRef()->kind()) {
+                    return false;
+                }
+
+
+                if (left.type->asValueTypeRef()->type().type() != found->type->asValueTypeRef()->type().type()) {
+                    return false;
+                }
+
+                if (left.type->asValueTypeRef()->type().ref() != nullptr) {
+                    return compareTypes(left.type->asValueTypeRef()->type().ref(), found->type->asValueTypeRef()->type().ref(), resources, componentName, depth);
+                }
+                break;
+            }
+            default: {
+                return false;
+                break;
+            }
             }
         }
         break;
@@ -1219,7 +1364,8 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
 
             std::string componentName;
             if (external.sort == ComponentSort::Instance) {
-                success = compareTypes(external.type, instance->m_instances.back()->type(), resources, componentName);
+                uint64_t depth = 0;
+                success = compareTypes(external.type, instance->m_instances.back()->type(), resources, componentName, depth);
             }
 
             if (!success) {
