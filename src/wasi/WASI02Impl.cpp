@@ -103,6 +103,11 @@ void WasiRefCountedFile::destroyFile()
     delete this;
 }
 
+LiftedWasiFunction::~LiftedWasiFunction()
+{
+    TypeStore::ReleaseRef(m_functionType->subTypeList());
+}
+
 void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedWasiFunction* function, CanonOptions* options)
 {
     ComponentInstance* instance = function->instance();
