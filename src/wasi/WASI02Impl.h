@@ -125,7 +125,7 @@ public:
         ASSERT(kind == ResourceWasiInputStreamKind || kind == ResourceWasiOutputStreamKind);
     }
 
-    ~ComponentResourceWasiStream()
+    virtual ~ComponentResourceWasiStream() override
     {
         if (m_file != nullptr) {
             m_file->releaseRef();
@@ -318,6 +318,8 @@ public:
         , m_functionType(functionType)
     {
     }
+
+    virtual ~LiftedWasiFunction() override;
 
     virtual Kind kind() const override
     {

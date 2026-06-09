@@ -315,7 +315,7 @@ public:
         ASSERT(type != ComponentTypeRef::TypeIndex && type != ComponentTypeRef::TypeNone);
     }
 
-    const ComponentTypeRef::Type& type() const
+    ComponentTypeRef::Type type() const
     {
         return m_type;
     }
@@ -467,6 +467,8 @@ public:
     {
         return m_result;
     }
+
+    FunctionType* createFunctionType(Store* store, bool is64);
 
 private:
     std::vector<Param> m_params;

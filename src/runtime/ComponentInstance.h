@@ -357,7 +357,7 @@ public:
 #endif /* ENABLE_WASI */
     };
 
-    ~ComponentHandle() {}
+    virtual ~ComponentHandle() {}
 
     Kind kind()
     {
