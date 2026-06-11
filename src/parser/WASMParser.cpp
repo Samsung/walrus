@@ -484,11 +484,14 @@ private:
             m_constantData.clear();
         }
 
-        void seenBranch()
+        void seenBranch(size_t targetDepth = 1)
         {
             if (m_inPreprocess) {
-                if (m_reader.m_blockInfo.size()) {
-                    m_reader.m_blockInfo.back().m_flags |= BlockInfo::SeenBranch;
+                size_t n = m_reader.m_blockInfo.size();
+                // Prevents out of bounds index when branch targets to function body
+                size_t depth = std::min(targetDepth, n);
+                for (size_t i = 0; i < depth; i++) {
+                    m_reader.m_blockInfo[n - 1 - i].m_flags |= BlockInfo::SeenBranch;
                 }
                 for (auto& info : m_localVariableInfo) {
                     info.m_writePlacesBetweenBranches.clear();
@@ -551,7 +554,24 @@ private:
                     m_localVariableInfo[localIndex].m_definitelyWritePlaces.push_back(pos);
                 }
 
-                m_localVariableInfo[localIndex].m_writePlacesBetweenBranches.push_back(pos);
+                m_localVariableInfo[localIndex].m_writePlacesBetweenBranches.push_back(m_reader.m_blockInfo.size());
+            }
+        }
+
+        void onBlockEnd()
+        {
+            if (m_inPreprocess) {
+                size_t depth = m_reader.m_blockInfo.size();
+                for (auto& info : m_localVariableInfo) {
+                    auto& w = info.m_writePlacesBetweenBranches;
+                    size_t keep = 0;
+                    for (size_t i = 0; i < w.size(); i++) {
+                        if (w[i] <= depth) {
+                            w[keep++] = w[i];
+                        }
+                    }
+                    w.resize(keep);
+                }
             }
         }
 
@@ -2112,7 +2132,7 @@ public:
 
     virtual void OnBrExpr(Index depth) override
     {
-        m_preprocessData.seenBranch();
+        m_preprocessData.seenBranch(depth + 1);
         if (m_blockInfo.size() == depth) {
             // this case acts like return
             generateFunctionReturnCode(true);
@@ -2212,7 +2232,7 @@ public:
 
     virtual void OnBrIfExpr(Index depth) override
     {
-        m_preprocessData.seenBranch();
+        m_preprocessData.seenBranch(depth + 1);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         size_t stackPos = popVMStack();
         bool isInverted = canBeInverted(stackPos);
@@ -2229,7 +2249,7 @@ public:
 
     virtual void OnBrOnNonNullExpr(Index depth) override
     {
-        m_preprocessData.seenBranch();
+        m_preprocessData.seenBranch(depth + 1);
         ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
         VMStackInfo& info = peekVMStackInfo();
         info.toNonNullableRef();
@@ -2239,7 +2259,7 @@ public:
 
     virtual void OnBrOnNullExpr(Index depth) override
     {
-        m_preprocessData.seenBranch();
+        m_preprocessData.seenBranch(depth + 1);
         ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
         // Temporarily remove the top element of the stack for the sake of variable copying.
         VMStackInfo info = m_vmStack.back();
@@ -2288,7 +2308,11 @@ public:
 
     virtual void OnBrTableExpr(Index numTargets, Index* targetDepths, Index defaultTargetDepth) override
     {
-        m_preprocessData.seenBranch();
+        Index maxDepth = defaultTargetDepth;
+        for (Index i = 0; i < numTargets; i++) {
+            maxDepth = std::max(maxDepth, targetDepths[i]);
+        }
+        m_preprocessData.seenBranch(maxDepth + 1);
         ASSERT(peekVMStackValueType() == Walrus::Value::I32);
         auto stackPos = popVMStack();
 
@@ -3005,7 +3029,7 @@ public:
     {
         Walrus::Type targetType = toRefValueKind(type, &m_result);
 
-        m_preprocessData.seenBranch();
+        m_preprocessData.seenBranch(depth + 1);
         ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
 
         VMStackInfo& info = peekVMStackInfo();
@@ -3334,6 +3358,7 @@ public:
             auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
             auto blockInfo = m_blockInfo.back();
             m_blockInfo.pop_back();
+            m_preprocessData.onBlockEnd();
 
 #if !defined(NDEBUG)
             if (!blockInfo.shouldRestoreVMStackAtEnd()) {
