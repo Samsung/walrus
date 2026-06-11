@@ -773,194 +773,272 @@ ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType
     return instance;
 }
 
-bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources, std::string& componentName, uint64_t& depth)
+
+bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources, std::string& componentName, std::set<const ComponentRefCounted*>& cache)
 {
-    if (++depth > 10000) {
-        return false;
-    }
+    std::vector<std::pair<ComponentRefCounted*, ComponentRefCounted*>> elems;
+    elems.push_back(std::make_pair(expected, provided));
+    uint64_t compareCount = 0;
 
-    switch (expected->kind()) {
-    case ComponentRefCounted::InstanceTypeKind: {
-        if (!provided->isComponentType()) {
+    while (!elems.empty()) {
+        if (compareCount > 10000) {
+            throw Exception::create("Engine limit of 10.000 reached for WASI 0.2 type comparisons!");
+        }
+
+        std::pair<ComponentRefCounted*, ComponentRefCounted*> curr = elems.back();
+        elems.pop_back();
+
+        if (cache.find(curr.second) == cache.end()) {
+            cache.insert(curr.second);
+        } else {
+            continue;
+        }
+
+        ComponentRefCounted* currExpected = curr.first;
+        switch (currExpected->kind()) {
+        case ComponentRefCounted::ComponentTypeKind:
+        case ComponentRefCounted::InstanceTypeKind: {
+            if (!curr.second->isComponentType()) {
+                return false;
+            }
+
+            ComponentType* expectedType = currExpected->asComponentType();
+            ComponentType* providedType = curr.second->asComponentType();
+
+            for (auto& left : expectedType->exports()) {
+                ComponentType::External* found = nullptr;
+
+                for (auto& right : providedType->exports()) {
+                    if (left.name == right.name) {
+                        found = &right;
+                        break;
+                    }
+                }
+
+                componentName = left.name;
+                if (found == nullptr || left.sort != found->sort) {
+                    return false;
+                }
+
+                elems.push_back(std::make_pair(left.type, found->type));
+            }
+
+            if (curr.second->kind() != ComponentRefCounted::ComponentTypeKind) {
+                for (auto& left : expectedType->imports()) {
+                    ComponentType::External* found = nullptr;
+
+                    for (auto& right : providedType->imports()) {
+                        if (left.name == right.name) {
+                            found = &right;
+                            break;
+                        }
+                    }
+
+                    componentName = left.name;
+                    if (found == nullptr || left.sort != found->sort) {
+                        return false;
+                    }
+
+                    elems.push_back(std::make_pair(left.type, found->type));
+                }
+
+                break;
+            }
+            break;
+        }
+        case ComponentRefCounted::ResourceAsyncKind:
+        case ComponentRefCounted::ResourceKind: {
+            if (!currExpected->isTypeResource()) {
+                return false;
+            }
+
+            if (currExpected->asTypeResource()->i64() != curr.second->asTypeResource()->i64() || currExpected->asTypeResource()->dtorIndex() != curr.second->asTypeResource()->dtorIndex()) {
+                return false;
+            }
+
+            break;
+        }
+        case ComponentRefCounted::SubResourceKind: {
+            if (curr.second->kind() != ComponentRefCounted::SubResourceKind && !curr.second->isTypeResource()) {
+                return false;
+            }
+
+            uint32_t index = currExpected->asTypeSubResource()->index();
+            if (resources[index] == nullptr) {
+                resources[index] = provided;
+            } else if (resources[index] != provided) {
+                return false;
+            }
+            break;
+        }
+        case ComponentRefCounted::ResultKind: {
+            if (curr.second->kind() != ComponentRefCounted::ResultKind) {
+                return false;
+            }
+
+            ComponentTypeResult* expectedRes = currExpected->asTypeResult();
+            ComponentTypeResult* providedRes = curr.second->asTypeResult();
+            if (expectedRes->result().type() != providedRes->result().type() || expectedRes->error().type() != providedRes->error().type()) {
+                return false;
+            }
+
+            if (expectedRes->result().ref() != nullptr) {
+                elems.push_back(std::make_pair(expectedRes->result().ref(), providedRes->result().ref()));
+            }
+            if (expectedRes->error().ref() != nullptr) {
+                elems.push_back(std::make_pair(expectedRes->error().ref(), providedRes->error().ref()));
+            }
+
+            break;
+        }
+        case ComponentRefCounted::OwnKind:
+        case ComponentRefCounted::BorrowKind: {
+            if (!curr.second->isTypeResourceRef()) {
+                return false;
+            }
+
+            elems.push_back(std::make_pair(currExpected->asTypeResourceRef()->ref(), curr.second->asTypeResourceRef()->ref()));
+            break;
+        }
+        case ComponentRefCounted::ListFixedKind: {
+            if (curr.second->kind() != ComponentRefCounted::ListFixedKind) {
+                return false;
+            }
+
+            ComponentTypeListFixed* expectedList = currExpected->asTypeListFixed();
+            ComponentTypeListFixed* providedList = curr.second->asTypeListFixed();
+            if (expectedList->size() != providedList->size()) {
+                return false;
+            }
+            elems.push_back(std::make_pair(expectedList->type().ref(), providedList->type().ref()));
+            break;
+        }
+        case ComponentRefCounted::TupleKind: {
+            if (curr.second->kind() != ComponentRefCounted::TupleKind) {
+                return false;
+            }
+
+            std::vector<ComponentTypeRef> expectedItems = currExpected->asTypeTuple()->items();
+            std::vector<ComponentTypeRef> providedItems = curr.second->asTypeTuple()->items();
+            for (uint64_t i = 0; i < expectedItems.size(); i++) {
+                if (expectedItems[i].type() != providedItems[i].type()) {
+                    return false;
+                }
+
+                if (expectedItems[i].ref() != nullptr) {
+                    elems.push_back(std::make_pair(expectedItems[i].ref(), providedItems[i].ref()));
+                }
+            }
+            break;
+        }
+        case ComponentRefCounted::ValueTypeKind: {
+            if (!curr.second->isValueType()) {
+                return false;
+            }
+
+            if (currExpected->asValueType()->type() != curr.second->asValueType()->type()) {
+                return false;
+            }
+            break;
+        }
+        case ComponentRefCounted::RecordKind:
+        case ComponentRefCounted::VariantKind: {
+            if (!curr.second->isTypeItems()) {
+                return false;
+            }
+
+            ComponentTypeItems* expectedItems = currExpected->asTypeItems();
+            ComponentTypeItems* providedItems = curr.second->asTypeItems();
+            for (uint64_t i = 0; i < expectedItems->items().size(); i++) {
+                if (expectedItems->items()[i].name != providedItems->items()[i].name) {
+                    return false;
+                }
+
+                if (expectedItems->items()[i].type.type() != providedItems->items()[i].type.type()) {
+                    return false;
+                }
+
+                if (expectedItems->items()[i].type.ref() != nullptr) {
+                    elems.push_back(std::make_pair(expectedItems->items()[i].type.ref(), providedItems->items()[i].type.ref()));
+                }
+            }
+            break;
+        }
+        case ComponentRefCounted::AsyncFuncKind:
+        case ComponentRefCounted::FuncKind: {
+            if (!curr.second->isTypeFunc()) {
+                return false;
+            }
+            ComponentTypeFunc* expectedFunc = currExpected->asTypeFunc();
+            ComponentTypeFunc* providedFunc = curr.second->asTypeFunc();
+
+            for (uint64_t i = 0; i < expectedFunc->params().size(); i++) {
+                if (expectedFunc->params()[i].name != providedFunc->params()[i].name) {
+                    return false;
+                }
+
+                if (expectedFunc->params()[i].type.type() != providedFunc->params()[i].type.type()) {
+                    return false;
+                }
+
+                if (expectedFunc->params()[i].type.ref() != nullptr) {
+                    elems.push_back(std::make_pair(expectedFunc->params()[i].type.ref(), providedFunc->params()[i].type.ref()));
+                }
+            }
+            if (expectedFunc->result().type() != providedFunc->result().type()) {
+                return false;
+            }
+            if (expectedFunc->result().ref() != nullptr) {
+                elems.push_back(std::make_pair(expectedFunc->result().ref(), providedFunc->result().ref()));
+            }
+            break;
+        }
+        case ComponentRefCounted::EnumKind:
+        case ComponentRefCounted::FlagsKind: {
+            if (!curr.second->isTypeLabels()) {
+                return false;
+            }
+
+            std::vector<std::string> providedStrings = currExpected->asTypeLabels()->labels();
+            std::vector<std::string> foundStrings = curr.second->asTypeLabels()->labels();
+
+            for (uint64_t i = 0; i < providedStrings.size(); i++) {
+                if (providedStrings[i] != foundStrings[i]) {
+                    return false;
+                }
+            }
+
+            break;
+        }
+        case ComponentRefCounted::ListKind:
+        case ComponentRefCounted::OptionKind:
+        case ComponentRefCounted::StreamKind:
+        case ComponentRefCounted::FutureKind: {
+            if (!curr.second->isValueTypeRef()) {
+                return false;
+            }
+
+            if (currExpected->asValueTypeRef()->kind() != curr.second->asValueTypeRef()->kind()) {
+                return false;
+            }
+
+
+            if (currExpected->asValueTypeRef()->type().type() != curr.second->asValueTypeRef()->type().type()) {
+                return false;
+            }
+
+            if (currExpected->asValueTypeRef()->type().ref() != nullptr) {
+                elems.push_back(std::make_pair(currExpected->asValueTypeRef()->type().ref(), curr.second->asValueTypeRef()->type().ref()));
+            }
+            break;
+        }
+        default: {
             return false;
+            break;
+        }
         }
 
-        ComponentType* expectedType = expected->asComponentType();
-        ComponentType* providedType = provided->asComponentType();
-
-        for (auto& left : expectedType->exports()) {
-            ComponentType::External* found = nullptr;
-
-            for (auto& right : providedType->exports()) {
-                if (left.name == right.name) {
-                    found = &right;
-                    break;
-                }
-            }
-
-            componentName = left.name;
-            if (found == nullptr || left.sort != found->sort) {
-                return false;
-            }
-
-            switch (left.type->kind()) {
-            case ComponentRefCounted::SubResourceKind: {
-                if (found->type->kind() != ComponentRefCounted::SubResourceKind && !found->type->isTypeResource()) {
-                    return false;
-                }
-
-                uint32_t index = left.type->asTypeSubResource()->index();
-                if (resources[index] == nullptr) {
-                    resources[index] = found->type;
-                } else if (resources[index] != found->type) {
-                    return false;
-                }
-                break;
-            }
-            case ComponentRefCounted::TupleKind: {
-                if (found->type->kind() != ComponentRefCounted::TupleKind) {
-                    return false;
-                }
-
-                std::vector<ComponentTypeRef> expectedItems = left.type->asTypeTuple()->items();
-                std::vector<ComponentTypeRef> providedItems = left.type->asTypeTuple()->items();
-
-                for (uint64_t i = 0; i < expectedItems.size(); i++) {
-                    if (expectedItems[i].type() != providedItems[i].type()) {
-                        return false;
-                    }
-
-                    if (expectedItems[i].ref() != nullptr) {
-                        if (!compareTypes(expectedItems[i].ref(), providedItems[i].ref(), resources, componentName, depth)) {
-                            return false;
-                        }
-                    }
-                }
-
-                break;
-            }
-            case ComponentRefCounted::ValueTypeKind: {
-                if (!found->type->isValueType()) {
-                    return false;
-                }
-
-                if (left.type->asValueType()->type() != found->type->asValueType()->type()) {
-                    return false;
-                }
-
-                break;
-            }
-            case ComponentRefCounted::RecordKind:
-            case ComponentRefCounted::VariantKind: {
-                if (!found->type->isTypeItems()) {
-                    return false;
-                }
-
-                ComponentTypeItems* expected = left.type->asTypeItems();
-                ComponentTypeItems* provided = found->type->asTypeItems();
-
-                for (uint64_t i = 0; i < expected->items().size(); i++) {
-                    if (expected->items()[i].name != provided->items()[i].name) {
-                        return false;
-                    }
-
-                    if (expected->items()[i].type.type() != provided->items()[i].type.type()) {
-                        return false;
-                    }
-
-                    if (expected->items()[i].type.ref() != nullptr) {
-                        if (!compareTypes(expected->items()[i].type.ref(), provided->items()[i].type.ref(), resources, componentName, depth)) {
-                            return false;
-                        }
-                    }
-                }
-
-                break;
-            }
-            case ComponentRefCounted::FuncKind: {
-                if (!found->type->isTypeFunc()) {
-                    return false;
-                }
-                ComponentTypeFunc* expectedFunc = left.type->asTypeFunc();
-                ComponentTypeFunc* providedFunc = found->type->asTypeFunc();
-
-                for (uint64_t i = 0; i < expectedFunc->params().size(); i++) {
-                    if (expectedFunc->params()[i].name != providedFunc->params()[i].name) {
-                        return false;
-                    }
-
-                    if (expectedFunc->params()[i].type.type() != providedFunc->params()[i].type.type()) {
-                        return false;
-                    }
-
-                    if (expectedFunc->params()[i].type.ref() != nullptr) {
-                        if (!compareTypes(expectedFunc->params()[i].type.ref(), providedFunc->params()[i].type.ref(), resources, componentName, depth)) {
-                            return false;
-                        }
-                    }
-                }
-
-                if (expectedFunc->result().type() != providedFunc->result().type()) {
-                    return false;
-                }
-
-                if (expectedFunc->result().ref() != nullptr) {
-                    if (!compareTypes(expectedFunc->result().ref(), providedFunc->result().ref(), resources, componentName, depth)) {
-                        return false;
-                    }
-                }
-
-                break;
-            }
-            case ComponentRefCounted::EnumKind:
-            case ComponentRefCounted::FlagsKind: {
-                if (!found->type->isTypeLabels()) {
-                    return false;
-                }
-
-                std::vector<std::string> providedStrings = left.type->asTypeLabels()->labels();
-                std::vector<std::string> foundStrings = left.type->asTypeLabels()->labels();
-
-                for (uint64_t i = 0; i < providedStrings.size(); i++) {
-                    if (providedStrings[i] != foundStrings[i]) {
-                        return false;
-                    }
-                }
-
-                break;
-            }
-            case ComponentRefCounted::ListKind:
-            case ComponentRefCounted::OptionKind:
-            case ComponentRefCounted::StreamKind:
-            case ComponentRefCounted::FutureKind: {
-                if (!found->type->isValueTypeRef()) {
-                    return false;
-                }
-
-                if (left.type->asValueTypeRef()->kind() != found->type->asValueTypeRef()->kind()) {
-                    return false;
-                }
-
-
-                if (left.type->asValueTypeRef()->type().type() != found->type->asValueTypeRef()->type().type()) {
-                    return false;
-                }
-
-                if (left.type->asValueTypeRef()->type().ref() != nullptr) {
-                    return compareTypes(left.type->asValueTypeRef()->type().ref(), found->type->asValueTypeRef()->type().ref(), resources, componentName, depth);
-                }
-                break;
-            }
-            default: {
-                return false;
-                break;
-            }
-            }
-        }
-        break;
-    }
-    default:
-        break;
+        compareCount++;
     }
     return true;
 }
@@ -1259,6 +1337,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
     ComponentInstance* instance = createInstance(m_store, component->type());
     std::vector<ComponentRefCounted*> resources;
     resources.resize(component->resourceCount());
+    std::set<const ComponentRefCounted*> cache;
 
     for (auto it : component->declarations()) {
         switch (it->kind()) {
@@ -1364,8 +1443,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
 
             std::string componentName;
             if (external.sort == ComponentSort::Instance) {
-                uint64_t depth = 0;
-                success = compareTypes(external.type, instance->m_instances.back()->type(), resources, componentName, depth);
+                success = compareTypes(external.type, instance->m_instances.back()->type(), resources, componentName, cache);
             }
 
             if (!success) {
