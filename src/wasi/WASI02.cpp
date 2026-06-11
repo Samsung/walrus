@@ -224,7 +224,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         addFuncExport(instance, "[method]input-stream.read", LiftedWasiFunction::ioInputStreamRead02, streamRead);
         ComponentTypeFunc* intputStreamSubscribe = new ComponentTypeFunc(ComponentType::FuncKind);
         intputStreamSubscribe->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, inputStream)) });
-        intputStreamSubscribe->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, outputStream);
+        intputStreamSubscribe->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(3));
         addFuncExport(instance, "[method]input-stream.subscribe", LiftedWasiFunction::ioInputStreamSubscribe02, intputStreamSubscribe);
         ComponentTypeFunc* streamCheckWrite = new ComponentTypeFunc(ComponentType::FuncKind);
         streamCheckWrite->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, outputStream) });
@@ -246,7 +246,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         addFuncExport(instance, "[method]output-stream.blocking-flush", LiftedWasiFunction::ioOutputStreamBlockingFlush02, streamBlockingFlush);
         ComponentTypeFunc* outputStreamSubscribe = new ComponentTypeFunc(ComponentType::FuncKind);
         outputStreamSubscribe->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, outputStream) });
-        outputStreamSubscribe->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, outputStream);
+        outputStreamSubscribe->result() = new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(3));
         addFuncExport(instance, "[method]output-stream.subscribe", LiftedWasiFunction::ioOutputStreamSubscribe02, outputStreamSubscribe);
         return instance;
     }
@@ -261,7 +261,8 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         getEnvironmentType->result() = getEnvResult;
         addFuncExport(instance, "get-environment", LiftedWasiFunction::cliGetEnvironment02, getEnvironmentType);
         ComponentTypeFunc* getArgsType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
-        ComponentRefCounted* getArgsResult = new ComponentValueType(ComponentTypeRef::String);
+        ComponentRefCounted* getArgsResult = new ComponentValueTypeRef(ComponentRefCounted::ListKind, ComponentTypeRef::String);
+        getArgsResult->addRef();
         getArgsType->result() = getArgsResult;
         addFuncExport(instance, "get-arguments", LiftedWasiFunction::cliGetArguments02, getArgsType);
         return instance;
@@ -531,9 +532,9 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         addFuncExport(instance, "[method]descriptor.open-at", LiftedWasiFunction::fileSystemDescriptorOpenAt02, openAt);
         ComponentTypeFunc* metadataHash = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
         metadataHash->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
-        instance->type()->getType(10)->addRef();
+        instance->type()->getType(12)->addRef();
         instance->type()->getType(4)->addRef();
-        metadataHash->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(10)), ComponentTypeRef(instance->type()->getType(4)));
+        metadataHash->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(12)), ComponentTypeRef(instance->type()->getType(4)));
         addFuncExport(instance, "[method]descriptor.metadata-hash", LiftedWasiFunction::fileSystemDescriptorMetadataHash02, metadataHash);
         return instance;
     }
@@ -547,7 +548,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         ComponentTypeTuple* tuple = new ComponentTypeTuple();
         tuple->items().push_back(ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::OwnKind, instance->type()->getType(0))));
         tuple->items().push_back(ComponentTypeRef(ComponentTypeRef::String));
-        getDirectories->result() = new ComponentTypeResult(ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, tuple)), ComponentTypeRef());
+        getDirectories->result() = new ComponentValueTypeRef(ComponentType::ListKind, tuple);
         addFuncExport(instance, "get-directories", LiftedWasiFunction::fileSystemGetDirectories02, getDirectories);
         return instance;
     }
@@ -602,11 +603,11 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         ComponentRefCounted* wasiNNErrorType = wasiNNError->type()->getType(0);
         aliasTypeExport(instance, "error", wasiNNErrorType); /* 3 */
         ComponentTypeFunc* computeType = new ComponentTypeFunc(ComponentType::FuncKind);
-        computeType->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, (instance->type()->getType(1)))) });
+        computeType->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::BorrowKind, (instance->type()->getType(0)))) });
         namedTensorTuple->addRef();
         computeType->params().push_back(ComponentTypeFunc::Param{ "inputs", new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef(namedTensorTuple)) });
         namedTensorTuple->addRef();
-        ComponentTypeRef resultOk = ComponentTypeRef(namedTensorTuple);
+        ComponentTypeRef resultOk = ComponentTypeRef(new ComponentValueTypeRef(ComponentRefCounted::ListKind, namedTensorTuple));
         ComponentTypeRef resultErr = ComponentTypeRef(new ComponentTypeResourceRef(ComponentRefCounted::OwnKind, wasiNNErrorType));
         computeType->result() = new ComponentTypeResult(resultOk, resultErr);
         addFuncExport(instance, "[method]graph-execution-context.compute", LiftedWasiFunction::neuralNetworkInferenceGraphExecutionContextCompute, computeType);
@@ -646,7 +647,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         initExecutionContext->result() = new ComponentTypeResult(resultOk, resultErr);
         addFuncExport(instance, "[method]graph.init-execution-context", LiftedWasiFunction::neuralNetworkGraphInitExectionContext02, initExecutionContext);
         ComponentTypeFunc* load = new ComponentTypeFunc(ComponentType::FuncKind);
-        load->params().push_back(ComponentTypeFunc::Param{ "builder", ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef::U8)) });
+        load->params().push_back(ComponentTypeFunc::Param{ "builder", ComponentTypeRef(new ComponentValueTypeRef(ComponentType::ListKind, new ComponentValueTypeRef(ComponentType::ListKind, ComponentTypeRef::U8))) });
         encodingEnum->addRef();
         load->params().push_back(ComponentTypeFunc::Param{ "encoding", ComponentTypeRef(encodingEnum) });
         executionTarget->addRef();
