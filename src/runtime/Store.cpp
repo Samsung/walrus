@@ -43,6 +43,8 @@ Store::Store(Engine* engine)
 #ifdef ENABLE_WASI
     , m_wasiData(nullptr)
 #endif
+    , m_tcoResultOffsetCount(0)
+    , m_tcoFunctionTarget(nullptr)
 {
     memset(m_definedFuncTypes, 0, sizeof(m_definedFuncTypes));
 #ifdef ENABLE_GC

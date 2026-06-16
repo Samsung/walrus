@@ -19,3 +19,10 @@ rules.ninja
 node_modules
 /test/wasmBenchmarker/ctests/wasm
 /test/wasmBenchmarker/emsdk
+/.cache
+/build/.cache
+/build/.cmake
+/build/_deps
+/build/third_party
+/build/walrus
+compile_commands.json
