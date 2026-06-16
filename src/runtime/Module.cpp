@@ -255,7 +255,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
-                DefinedFunctionWithTryCatch fakeFunction(data->instance, data->mf);
+                DefinedFunction fakeFunction(data->instance, data->mf);
                 Value result;
                 fakeFunction.call(state, nullptr, &result);
                 data->initValue = result.asReference();
@@ -301,7 +301,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
-                DefinedFunctionWithTryCatch fakeFunction(data->instance, data->mf);
+                DefinedFunction fakeFunction(data->instance, data->mf);
                 Value result;
                 fakeFunction.call(state, nullptr, &result);
                 data->instance->m_globals[data->index]->setValue(result);
@@ -329,7 +329,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             Walrus::Trap trap;
             trap.run([](Walrus::ExecutionState& state, void* d) {
                 RunData* data = reinterpret_cast<RunData*>(d);
-                DefinedFunctionWithTryCatch fakeFunction(data->instance, data->exprFunc);
+                DefinedFunction fakeFunction(data->instance, data->exprFunc);
                 Value func;
                 fakeFunction.call(state, nullptr, &func);
                 data->ref = func.asReference();
@@ -350,7 +350,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Walrus::Trap trap;
                 trap.run([](Walrus::ExecutionState& state, void* d) {
                     RunData* data = reinterpret_cast<RunData*>(d);
-                    DefinedFunctionWithTryCatch fakeFunction(data->instance, data->offsetFunc);
+                    DefinedFunction fakeFunction(data->instance, data->offsetFunc);
                     Value offset;
                     fakeFunction.call(state, nullptr, &offset);
                     data->offset = offset.asI32();
@@ -387,8 +387,8 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         auto result = trap.run([](Walrus::ExecutionState& state, void* d) {
             RunData* data = reinterpret_cast<RunData*>(d);
             if (data->init->moduleFunction()->byteCodeSize()) {
-                DefinedFunctionWithTryCatch fakeFunction(data->instance,
-                                                         data->init->moduleFunction());
+                DefinedFunction fakeFunction(data->instance,
+                                             data->init->moduleFunction());
                 Value offset;
                 fakeFunction.call(state, nullptr, &offset);
 

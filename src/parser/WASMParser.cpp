@@ -1598,7 +1598,7 @@ public:
     virtual void OnReturnCallExpr(uint32_t index) override
     {
         m_preprocessData.seenBranch();
-        if (UNLIKELY(m_useJIT)) {
+        if (m_useJIT) {
             OnCallExpr(index);
             generateFunctionReturnCode();
             return;
@@ -1620,7 +1620,7 @@ public:
     virtual void OnReturnCallIndirectExpr(Index sigIndex, Index tableIndex) override
     {
         m_preprocessData.seenBranch();
-        if (UNLIKELY(m_useJIT)) {
+        if (m_useJIT) {
             OnCallIndirectExpr(sigIndex, tableIndex);
             generateFunctionReturnCode();
             return;
@@ -1642,7 +1642,7 @@ public:
     virtual void OnReturnCallRefExpr(Type sig_type) override
     {
         m_preprocessData.seenBranch();
-        if (UNLIKELY(m_useJIT)) {
+        if (m_useJIT) {
             OnCallRefExpr(sig_type);
             generateFunctionReturnCode();
             return;

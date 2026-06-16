@@ -198,29 +198,6 @@ public:
     }
 #endif
 
-    bool hasTCO() const { return m_tcoFunctionTarget != nullptr; }
-
-    Function* tcoFunctionTarget() const { return m_tcoFunctionTarget; }
-
-    void setTCO(const uint8_t* bp, const ByteCodeStackOffset* offsets, size_t paramCount, uint16_t resultOffsetCount, Function* target)
-    {
-        m_tcoBuffer.resize(paramCount);
-        for (size_t i = 0; i < paramCount; i++) {
-            m_tcoBuffer[i] = *((size_t*)(bp + offsets[i]));
-        }
-        m_tcoResultOffsetCount = resultOffsetCount;
-        m_tcoFunctionTarget = target;
-    }
-
-    size_t* tcoBuffer() { return m_tcoBuffer.data(); }
-    size_t tcoBufferSize() const { return m_tcoBuffer.size(); }
-    uint16_t tcoResultOffsetCount() const { return m_tcoResultOffsetCount; }
-
-    void clearTCO()
-    {
-        m_tcoFunctionTarget = nullptr;
-    }
-
 private:
     FunctionType* createDefinedFunctionType(DefinedFunctionType type);
 
@@ -242,10 +219,6 @@ private:
 #ifdef ENABLE_WASI
     WasiStoreData* m_wasiData;
 #endif
-
-    std::vector<size_t> m_tcoBuffer;
-    uint16_t m_tcoResultOffsetCount;
-    Function* m_tcoFunctionTarget;
 };
 
 } // namespace Walrus
