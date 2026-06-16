@@ -17,9 +17,9 @@
 #include "Walrus.h"
 
 #include "runtime/Function.h"
+#include "runtime/Module.h"
 #include "runtime/Store.h"
 #include "interpreter/Interpreter.h"
-#include "runtime/Module.h"
 #include "runtime/Tag.h"
 #include "runtime/Instance.h"
 #include "runtime/Value.h"
@@ -91,6 +91,13 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
     }
     ASSERT(offsetIndex == parameterOffsetSize + resultOffsetSize);
     interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetSize);
+
+    auto store = m_instance->module()->store();
+    while (UNLIKELY(store->hasTCO())) {
+        auto resultOffsetCount = store->tcoResultOffsetCount();
+        auto target = store->tcoFunctionTarget();
+        target->interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetCount);
+    }
 
     size_t resultOffsetIndex = 0;
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {

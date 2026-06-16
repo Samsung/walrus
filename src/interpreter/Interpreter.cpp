@@ -17,10 +17,12 @@
 
 #include "Walrus.h"
 
+#include "interpreter/ByteCode.h"
 #include "interpreter/Interpreter.h"
 #include "runtime/Instance.h"
 #include "runtime/Function.h"
 #include "runtime/Memory.h"
+#include "runtime/Store.h"
 #include "runtime/Table.h"
 #include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
@@ -1711,6 +1713,72 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(ReturnCall)
+        :
+    {
+        ReturnCall* code = (ReturnCall*)programCounter;
+        auto target = instance->function(code->index());
+
+        auto paramSize = code->parameterOffsetsSize();
+        auto offsets = code->stackOffsets();
+
+        auto store = instance->module()->store();
+        store->setTCO(bp, offsets, paramSize, code->resultOffsetsSize(), target);
+
+        return nullptr;
+    }
+
+    DEFINE_OPCODE(ReturnCallIndirect)
+        :
+    {
+        ReturnCallIndirect* code = (ReturnCallIndirect*)programCounter;
+        Table* table = instance->table(code->tableIndex());
+
+        uint32_t idx = readValue<uint32_t>(bp, code->calleeOffset());
+        if (UNLIKELY(idx >= table->size())) {
+            Trap::throwException(state, "undefined element");
+        }
+        auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
+        if (UNLIKELY(Value::isNull(target))) {
+            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+        }
+        const FunctionType* ft = target->functionType();
+        if (UNLIKELY(!ft->equals(code->functionType()))) {
+            Trap::throwException(state, "indirect call type mismatch");
+        }
+
+        auto paramSize = code->parameterOffsetsSize();
+        auto offsets = code->stackOffsets();
+
+        auto store = instance->module()->store();
+        store->setTCO(bp, offsets, paramSize, code->resultOffsetsSize(), target);
+
+        return nullptr;
+    }
+
+    DEFINE_OPCODE(ReturnCallRef)
+        :
+    {
+        ReturnCallRef* code = (ReturnCallRef*)programCounter;
+
+        auto target = readValue<Function*>(bp, code->calleeOffset());
+        if (UNLIKELY(Value::isNull(target))) {
+            Trap::throwException(state, "null function reference");
+        }
+        const FunctionType* ft = target->functionType();
+        if (UNLIKELY(!ft->equals(code->functionType()))) {
+            Trap::throwException(state, "call by reference type mismatch");
+        }
+
+        auto paramSize = code->parameterOffsetsSize();
+        auto offsets = code->stackOffsets();
+
+        auto store = instance->module()->store();
+        store->setTCO(bp, offsets, paramSize, code->resultOffsetsSize(), target);
+
+        return nullptr;
+    }
+
     DEFINE_OPCODE(Select)
         :
     {
@@ -2976,11 +3044,22 @@ NextInstruction:
 
         uint8_t* ptr = userExceptionData.data();
         auto& param = tag->functionType()->param().types();
-        for (size_t i = 0; i < param.size(); i++) {
-            auto sz = valueStackAllocatedSize(param[i]);
-            memcpy(ptr, bp + code->dataOffsets()[i], sz);
-            ptr += sz;
+        auto store = instance->module()->store();
+
+        if (!store->hasTCO()) {
+            for (size_t i = 0; i < param.size(); i++) {
+                auto sz = valueStackAllocatedSize(param[i]);
+                memcpy(ptr, bp + code->dataOffsets()[i], sz);
+                ptr += sz;
+            }
+        } else {
+            for (size_t i = 0; i < param.size(); i++) {
+                auto sz = valueStackAllocatedSize(param[i]);
+                memcpy(ptr, bp + store->tcoBuffer()[i], sz);
+                ptr += sz;
+            }
         }
+
         Trap::throwException(state, tag, std::move(userExceptionData));
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
@@ -3041,7 +3120,15 @@ NEVER_INLINE void Interpreter::callOperation(
 {
     Call* code = (Call*)programCounter;
     Function* target = instance->function(code->index());
+    auto store = instance->module()->store();
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(store->hasTCO())) {
+        auto resultOffsetCount = store->tcoResultOffsetCount();
+        target = store->tcoFunctionTarget();
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), resultOffsetCount);
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
@@ -3068,7 +3155,15 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         Trap::throwException(state, "indirect call type mismatch");
     }
 
+    auto store = instance->module()->store();
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(store->hasTCO())) {
+        auto resultOffsetCount = store->tcoResultOffsetCount();
+        target = store->tcoFunctionTarget();
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), resultOffsetCount);
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
@@ -3090,7 +3185,15 @@ NEVER_INLINE void Interpreter::callRefOperation(
         Trap::throwException(state, "call by reference type mismatch");
     }
 
+    auto store = instance->module()->store();
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+
+    while (UNLIKELY(store->hasTCO())) {
+        auto resultOffsetCount = store->tcoResultOffsetCount();
+        target = store->tcoFunctionTarget();
+        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), resultOffsetCount);
+    }
+
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }

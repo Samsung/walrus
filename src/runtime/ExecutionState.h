@@ -32,6 +32,7 @@ public:
 
     ExecutionState(ExecutionState& parent)
         : m_parent(&parent)
+        , m_currentFunction(nullptr)
         , m_stackLimit(parent.m_stackLimit)
     {
     }
@@ -56,6 +57,8 @@ public:
 private:
     friend class ByteCodeTable;
     ExecutionState()
+        : m_parent(nullptr)
+        , m_currentFunction(nullptr)
     {
         m_stackLimit = (size_t)currentStackPointer();
 

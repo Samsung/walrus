@@ -71,6 +71,21 @@ size_t ByteCode::getSize() const
         return ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * callRef->parameterOffsetsSize()
                                             + sizeof(ByteCodeStackOffset) * callRef->resultOffsetsSize());
     }
+    case ReturnCallOpcode: {
+        const ReturnCall* returnCall = reinterpret_cast<const ReturnCall*>(this);
+        return ByteCode::pointerAlignedSize(sizeof(ReturnCall) + sizeof(ByteCodeStackOffset) * returnCall->parameterOffsetsSize()
+                                            + sizeof(ByteCodeStackOffset) * returnCall->resultOffsetsSize());
+    }
+    case ReturnCallIndirectOpcode: {
+        const ReturnCallIndirect* returnCallIndirect = reinterpret_cast<const ReturnCallIndirect*>(this);
+        return ByteCode::pointerAlignedSize(sizeof(ReturnCallIndirect) + sizeof(ByteCodeStackOffset) * returnCallIndirect->parameterOffsetsSize()
+                                            + sizeof(ByteCodeStackOffset) * returnCallIndirect->resultOffsetsSize());
+    }
+    case ReturnCallRefOpcode: {
+        const ReturnCallRef* returnCallRef = reinterpret_cast<const ReturnCallRef*>(this);
+        return ByteCode::pointerAlignedSize(sizeof(ReturnCallRef) + sizeof(ByteCodeStackOffset) * returnCallRef->parameterOffsetsSize()
+                                            + sizeof(ByteCodeStackOffset) * returnCallRef->resultOffsetsSize());
+    }
     case EndOpcode: {
         const End* end = reinterpret_cast<const End*>(this);
         return ByteCode::pointerAlignedSize(sizeof(End) + sizeof(ByteCodeStackOffset) * end->offsetsSize());

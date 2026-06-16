@@ -22,6 +22,7 @@
 #include "runtime/Instance.h"
 #include "runtime/JITExec.h"
 #include "runtime/Module.h"
+#include "runtime/Store.h"
 #include "runtime/Tag.h"
 #include "interpreter/ByteCode.h"
 
@@ -50,11 +51,16 @@ private:
         CHECK_STACK_LIMIT(newState);
 
         auto moduleFunction = function->moduleFunction();
+        auto store = function->instance()->module()->store();
         ALLOCA(uint8_t, functionStackBase, moduleFunction->requiredStackSize());
 
-        // init parameter space
-        for (size_t i = 0; i < parameterOffsetCount; i++) {
-            ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
+        if (store->hasTCO()) {
+            VectorCopier<size_t>::copy((size_t*)functionStackBase, store->tcoBuffer(), store->tcoBufferSize());
+            store->clearTCO();
+        } else {
+            for (size_t i = 0; i < parameterOffsetCount; i++) {
+                ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
+            }
         }
 
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
@@ -72,6 +78,7 @@ private:
                     resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
                     break;
                 } catch (std::unique_ptr<Exception>& e) {
+                    store->clearTCO();
                     for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
                         if (e->m_programCounterInfo[i - 1].first == &newState) {
                             programCounter = e->m_programCounterInfo[i - 1].second;
@@ -104,6 +111,10 @@ private:
             }
         } else {
             resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
+        }
+
+        if (store->hasTCO()) {
+            return;
         }
 
         offsets += parameterOffsetCount;

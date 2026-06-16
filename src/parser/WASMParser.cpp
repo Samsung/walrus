@@ -667,6 +667,7 @@ private:
     // i32.eqz and JumpIf can be unified in some cases
     static const size_t s_noI32Eqz = SIZE_MAX - sizeof(Walrus::I32Eqz);
     size_t m_lastI32EqzPos;
+    bool m_useJIT;
 
     Walrus::FunctionType* getFunctionType(Index index)
     {
@@ -879,7 +880,7 @@ private:
     }
 
 public:
-    WASMBinaryReader(Walrus::TypeStore& typeStore)
+    WASMBinaryReader(Walrus::TypeStore& typeStore, bool useJIT = false)
         : m_readerOffsetPointer(nullptr)
         , m_readerDataPointer(nullptr)
         , m_codeEndOffset(0)
@@ -895,6 +896,7 @@ public:
         , m_segmentMode(Walrus::SegmentMode::None)
         , m_preprocessData(*this)
         , m_lastI32EqzPos(s_noI32Eqz)
+        , m_useJIT(useJIT)
     {
     }
 
@@ -1611,6 +1613,71 @@ public:
 
         auto code = peekByteCode<Walrus::CallRef>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
+    }
+
+    virtual void OnReturnCallExpr(uint32_t index) override
+    {
+        m_preprocessData.seenBranch();
+        if (UNLIKELY(m_useJIT)) {
+            OnCallExpr(index);
+            generateFunctionReturnCode();
+            return;
+        }
+        auto functionType = m_result.m_functions[index]->functionType();
+        auto callPos = m_currentByteCode.size();
+        auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
+        auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
+        pushByteCode(Walrus::ReturnCall(index, parameterCount, resultCount, functionType), WASMOpcode::ReturnCallOpcode);
+
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        auto code = peekByteCode<Walrus::ReturnCall>(callPos);
+
+        generateCallExpr(code, parameterCount, resultCount, functionType);
+        stopToGenerateByteCodeWhileBlockEnd();
+    }
+
+    virtual void OnReturnCallIndirectExpr(Index sigIndex, Index tableIndex) override
+    {
+        m_preprocessData.seenBranch();
+        if (UNLIKELY(m_useJIT)) {
+            OnCallIndirectExpr(sigIndex, tableIndex);
+            generateFunctionReturnCode();
+            return;
+        }
+        auto functionType = getFunctionType(sigIndex);
+        auto callPos = m_currentByteCode.size();
+        auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
+        auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
+        pushByteCode(Walrus::ReturnCallIndirect(popVMStack(), tableIndex, functionType, parameterCount, resultCount),
+                     WASMOpcode::ReturnCallIndirectOpcode);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+
+        auto code = peekByteCode<Walrus::ReturnCallIndirect>(callPos);
+        generateCallExpr(code, parameterCount, resultCount, functionType);
+        stopToGenerateByteCodeWhileBlockEnd();
+    }
+
+    virtual void OnReturnCallRefExpr(Type sig_type) override
+    {
+        m_preprocessData.seenBranch();
+        if (UNLIKELY(m_useJIT)) {
+            OnCallRefExpr(sig_type);
+            generateFunctionReturnCode();
+            return;
+        }
+        auto functionType = getFunctionType(sig_type.GetReferenceIndex());
+        auto callPos = m_currentByteCode.size();
+        auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
+        auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
+        pushByteCode(Walrus::ReturnCallRef(popVMStack(), functionType, parameterCount, resultCount), WASMOpcode::ReturnCallRefOpcode);
+        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+
+        auto code = peekByteCode<Walrus::ReturnCallRef>(callPos);
+        generateCallExpr(code, parameterCount, resultCount, functionType);
+        stopToGenerateByteCodeWhileBlockEnd();
     }
 
     bool processConstValue(const Walrus::Value& value)
@@ -3934,7 +4001,7 @@ void WASMParsingResult::clear()
 
 std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, const std::string& filename, const uint8_t* data, size_t len, const uint32_t JITFlags, const uint32_t featureFlags)
 {
-    wabt::WASMBinaryReader delegate(store->getTypeStore());
+    wabt::WASMBinaryReader delegate(store->getTypeStore(), JITFlags & JITFlagValue::useJIT);
 
     std::string error = ReadWasmBinary(filename, data, len, &delegate, featureFlags);
 
