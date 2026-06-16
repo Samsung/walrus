@@ -118,23 +118,6 @@ protected:
     ModuleFunction* m_moduleFunction;
 };
 
-class DefinedFunctionWithTryCatch : public DefinedFunction {
-    friend class DefinedFunction;
-    friend class Module;
-    friend class Table;
-
-public:
-    virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
-                                 uint16_t parameterOffsetCount, uint16_t resultOffsetCount) override;
-
-protected:
-    DefinedFunctionWithTryCatch(Instance* instance,
-                                ModuleFunction* moduleFunction)
-        : DefinedFunction(instance, moduleFunction)
-    {
-    }
-};
-
 class NativeFunction : public Function {
 public:
     virtual void interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,

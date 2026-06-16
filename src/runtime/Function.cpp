@@ -38,12 +38,7 @@ DefinedFunction* DefinedFunction::createDefinedFunction(Store* store,
                                                         Instance* instance,
                                                         ModuleFunction* moduleFunction)
 {
-    DefinedFunction* func;
-    if (moduleFunction->hasTryCatch()) {
-        func = new DefinedFunctionWithTryCatch(instance, moduleFunction);
-    } else {
-        func = new DefinedFunction(instance, moduleFunction);
-    }
+    DefinedFunction* func = new DefinedFunction(instance, moduleFunction);
     store->appendExtern(func);
     return func;
 }
@@ -92,13 +87,6 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
     ASSERT(offsetIndex == parameterOffsetSize + resultOffsetSize);
     interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetSize);
 
-    auto store = m_instance->module()->store();
-    while (UNLIKELY(store->hasTCO())) {
-        auto resultOffsetCount = store->tcoResultOffsetCount();
-        auto target = store->tcoFunctionTarget();
-        target->interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetCount);
-    }
-
     size_t resultOffsetIndex = 0;
     for (size_t i = 0; i < resultTypeInfo.size(); i++) {
         result[i] = Value(resultTypeInfo[i], valueBuffer + offsetBuffer[resultOffsetIndex + parameterOffsetSize]);
@@ -110,13 +98,7 @@ void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
 void DefinedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
                                       uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
-    Interpreter::callInterpreter<false>(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
-}
-
-void DefinedFunctionWithTryCatch::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
-                                                  uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
-{
-    Interpreter::callInterpreter<true>(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
+    Interpreter::callInterpreter(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
 }
 
 void NativeFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,

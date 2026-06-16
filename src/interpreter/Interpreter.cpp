@@ -154,7 +154,8 @@ ByteCodeTable::ByteCodeTable()
     b.m_opcodeInAddress = const_cast<void*>(FillByteCodeOpcodeAddress[0]);
 #endif
     size_t pc = reinterpret_cast<size_t>(&b);
-    Interpreter::interpret(dummyState, pc, nullptr, nullptr);
+    Interpreter::StackFrame dummyFrame(nullptr, 0);
+    Interpreter::interpret(dummyState, pc, dummyFrame, nullptr);
 #endif
 }
 
@@ -482,10 +483,11 @@ static void initAddressToOpcodeTable()
 
 ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
                                             size_t programCounter,
-                                            uint8_t* bp,
+                                            StackFrame& frame,
                                             Instance* instance)
 {
     Memory** memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+    uint8_t* bp = frame.bp();
 
     state.m_programCounterPointer = &programCounter;
 
@@ -1717,15 +1719,15 @@ NextInstruction:
         :
     {
         ReturnCall* code = (ReturnCall*)programCounter;
-        auto target = instance->function(code->index());
+        Function* target = instance->function(code->index());
 
-        auto paramSize = code->parameterOffsetsSize();
-        auto offsets = code->stackOffsets();
-
-        auto store = instance->module()->store();
-        store->setTCO(bp, offsets, paramSize, code->resultOffsetsSize(), target);
-
-        return nullptr;
+        if (tailCallOperation(state, programCounter, frame, instance, target, code->stackOffsets(),
+                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
+            bp = frame.bp();
+            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+            NEXT_INSTRUCTION();
+        }
+        return code->stackOffsets() + code->parameterOffsetsSize();
     }
 
     DEFINE_OPCODE(ReturnCallIndirect)
@@ -1747,13 +1749,13 @@ NextInstruction:
             Trap::throwException(state, "indirect call type mismatch");
         }
 
-        auto paramSize = code->parameterOffsetsSize();
-        auto offsets = code->stackOffsets();
-
-        auto store = instance->module()->store();
-        store->setTCO(bp, offsets, paramSize, code->resultOffsetsSize(), target);
-
-        return nullptr;
+        if (tailCallOperation(state, programCounter, frame, instance, target, code->stackOffsets(),
+                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
+            bp = frame.bp();
+            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+            NEXT_INSTRUCTION();
+        }
+        return code->stackOffsets() + code->parameterOffsetsSize();
     }
 
     DEFINE_OPCODE(ReturnCallRef)
@@ -1770,13 +1772,13 @@ NextInstruction:
             Trap::throwException(state, "call by reference type mismatch");
         }
 
-        auto paramSize = code->parameterOffsetsSize();
-        auto offsets = code->stackOffsets();
-
-        auto store = instance->module()->store();
-        store->setTCO(bp, offsets, paramSize, code->resultOffsetsSize(), target);
-
-        return nullptr;
+        if (tailCallOperation(state, programCounter, frame, instance, target, code->stackOffsets(),
+                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
+            bp = frame.bp();
+            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+            NEXT_INSTRUCTION();
+        }
+        return code->stackOffsets() + code->parameterOffsetsSize();
     }
 
     DEFINE_OPCODE(Select)
@@ -3044,20 +3046,11 @@ NextInstruction:
 
         uint8_t* ptr = userExceptionData.data();
         auto& param = tag->functionType()->param().types();
-        auto store = instance->module()->store();
 
-        if (!store->hasTCO()) {
-            for (size_t i = 0; i < param.size(); i++) {
-                auto sz = valueStackAllocatedSize(param[i]);
-                memcpy(ptr, bp + code->dataOffsets()[i], sz);
-                ptr += sz;
-            }
-        } else {
-            for (size_t i = 0; i < param.size(); i++) {
-                auto sz = valueStackAllocatedSize(param[i]);
-                memcpy(ptr, bp + store->tcoBuffer()[i], sz);
-                ptr += sz;
-            }
+        for (size_t i = 0; i < param.size(); i++) {
+            auto sz = valueStackAllocatedSize(param[i]);
+            memcpy(ptr, bp + code->dataOffsets()[i], sz);
+            ptr += sz;
         }
 
         Trap::throwException(state, tag, std::move(userExceptionData));
@@ -3120,14 +3113,7 @@ NEVER_INLINE void Interpreter::callOperation(
 {
     Call* code = (Call*)programCounter;
     Function* target = instance->function(code->index());
-    auto store = instance->module()->store();
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-
-    while (UNLIKELY(store->hasTCO())) {
-        auto resultOffsetCount = store->tcoResultOffsetCount();
-        target = store->tcoFunctionTarget();
-        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), resultOffsetCount);
-    }
 
     programCounter += ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
@@ -3155,14 +3141,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
         Trap::throwException(state, "indirect call type mismatch");
     }
 
-    auto store = instance->module()->store();
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-
-    while (UNLIKELY(store->hasTCO())) {
-        auto resultOffsetCount = store->tcoResultOffsetCount();
-        target = store->tcoFunctionTarget();
-        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), resultOffsetCount);
-    }
 
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
@@ -3185,17 +3164,54 @@ NEVER_INLINE void Interpreter::callRefOperation(
         Trap::throwException(state, "call by reference type mismatch");
     }
 
-    auto store = instance->module()->store();
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-
-    while (UNLIKELY(store->hasTCO())) {
-        auto resultOffsetCount = store->tcoResultOffsetCount();
-        target = store->tcoFunctionTarget();
-        target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), resultOffsetCount);
-    }
 
     programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+}
+
+NEVER_INLINE bool Interpreter::tailCallOperation(
+    ExecutionState& state,
+    size_t& programCounter,
+    StackFrame& frame,
+    Instance*& instance,
+    Function* target,
+    ByteCodeStackOffset* offsets,
+    uint16_t parameterOffsetCount,
+    uint16_t resultOffsetCount)
+{
+    if (LIKELY(target->kind() == Function::DefinedFunctionKind)) {
+        DefinedFunction* definedTarget = target->asDefinedFunction();
+        ModuleFunction* targetModuleFunction = definedTarget->moduleFunction();
+#if defined(WALRUS_ENABLE_JIT)
+        if (LIKELY(targetModuleFunction->jitFunction() == nullptr))
+#endif
+        {
+            size_t requiredStackSize = targetModuleFunction->requiredStackSize();
+            if (UNLIKELY(requiredStackSize > frame.capacity())) {
+                uint8_t* newBuffer = StackFrame::allocateBuffer(requiredStackSize);
+                for (size_t i = 0; i < parameterOffsetCount; i++) {
+                    ((size_t*)newBuffer)[i] = *((size_t*)(frame.bp() + offsets[i]));
+                }
+                frame.replaceBuffer(newBuffer, requiredStackSize);
+            } else {
+                ALLOCA(size_t, paramBuffer, parameterOffsetCount * sizeof(size_t));
+                for (size_t i = 0; i < parameterOffsetCount; i++) {
+                    paramBuffer[i] = *((size_t*)(frame.bp() + offsets[i]));
+                }
+                VectorCopier<size_t>::copy((size_t*)frame.bp(), paramBuffer, parameterOffsetCount);
+            }
+
+            state.m_currentFunction = definedTarget;
+            instance = definedTarget->instance();
+            programCounter = reinterpret_cast<size_t>(targetModuleFunction->byteCode());
+            return true;
+        }
+    }
+
+    state.m_currentFunction = nullptr;
+    target->interpreterCall(state, frame.bp(), offsets, parameterOffsetCount, resultOffsetCount);
+    return false;
 }
 
 NEVER_INLINE bool Interpreter::testRefGeneric(void* refPtr, Value::Type type)

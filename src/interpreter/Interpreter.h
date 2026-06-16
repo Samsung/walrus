@@ -41,9 +41,62 @@ class Interpreter {
 private:
     friend class ByteCodeTable;
     friend class DefinedFunction;
-    friend class DefinedFunctionWithTryCatch;
 
-    template <const bool considerException>
+    class StackFrame {
+        MAKE_STACK_ALLOCATED();
+
+    public:
+        StackFrame(uint8_t* bp, size_t capacity)
+            : m_bp(bp)
+            , m_capacity(capacity)
+            , m_owned(nullptr)
+        {
+        }
+
+        ~StackFrame()
+        {
+            if (m_owned != nullptr) {
+                deallocateBuffer(m_owned);
+            }
+        }
+
+        uint8_t* bp() const { return m_bp; }
+        size_t capacity() const { return m_capacity; }
+
+        static uint8_t* allocateBuffer(size_t size)
+        {
+#ifdef ENABLE_GC
+            return reinterpret_cast<uint8_t*>(GC_MALLOC_UNCOLLECTABLE(size));
+#else
+            return reinterpret_cast<uint8_t*>(malloc(size));
+#endif
+        }
+
+        void replaceBuffer(uint8_t* buffer, size_t capacity)
+        {
+            if (m_owned != nullptr) {
+                deallocateBuffer(m_owned);
+            }
+            m_owned = buffer;
+            m_bp = buffer;
+            m_capacity = capacity;
+        }
+
+    private:
+        static void deallocateBuffer(uint8_t* buffer)
+        {
+#ifdef ENABLE_GC
+            GC_FREE(buffer);
+#else
+            free(buffer);
+#endif
+        }
+
+        uint8_t* m_bp;
+        size_t m_capacity;
+        uint8_t* m_owned;
+    };
+
     ALWAYS_INLINE static void callInterpreter(ExecutionState& state, DefinedFunction* function, uint8_t* bp, ByteCodeStackOffset* offsets,
                                               uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
     {
@@ -51,34 +104,32 @@ private:
         CHECK_STACK_LIMIT(newState);
 
         auto moduleFunction = function->moduleFunction();
-        auto store = function->instance()->module()->store();
         ALLOCA(uint8_t, functionStackBase, moduleFunction->requiredStackSize());
 
-        if (store->hasTCO()) {
-            VectorCopier<size_t>::copy((size_t*)functionStackBase, store->tcoBuffer(), store->tcoBufferSize());
-            store->clearTCO();
-        } else {
-            for (size_t i = 0; i < parameterOffsetCount; i++) {
-                ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
-            }
+        for (size_t i = 0; i < parameterOffsetCount; i++) {
+            ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
         }
 
         size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
+        StackFrame frame(functionStackBase, moduleFunction->requiredStackSize());
         ByteCodeStackOffset* resultOffsets;
 
 #if defined(WALRUS_ENABLE_JIT)
         if (moduleFunction->jitFunction() != nullptr) {
             resultOffsets = moduleFunction->jitFunction()->call(newState, function->instance(), functionStackBase);
-        } else if (considerException) {
-#else
-        if (considerException) {
+        } else
 #endif
+        {
             while (true) {
                 try {
-                    resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
+                    resultOffsets = interpret(newState, programCounter, frame, function->instance());
                     break;
                 } catch (std::unique_ptr<Exception>& e) {
-                    store->clearTCO();
+                    if (UNLIKELY(!newState.m_currentFunction.hasValue())) {
+                        throw std::unique_ptr<Exception>(std::move(e));
+                    }
+                    function = newState.m_currentFunction.value()->asDefinedFunction();
+                    moduleFunction = function->moduleFunction();
                     for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
                         if (e->m_programCounterInfo[i - 1].first == &newState) {
                             programCounter = e->m_programCounterInfo[i - 1].second;
@@ -93,7 +144,7 @@ private:
                             if (item.m_tryStart <= offset && offset < item.m_tryEnd) {
                                 if (item.m_tagIndex == std::numeric_limits<uint32_t>::max() || function->instance()->tag(item.m_tagIndex) == tag) {
                                     programCounter = item.m_catchStartPosition + reinterpret_cast<size_t>(moduleFunction->byteCode());
-                                    uint8_t* sp = functionStackBase + item.m_stackSizeToBe;
+                                    uint8_t* sp = frame.bp() + item.m_stackSizeToBe;
                                     if (item.m_tagIndex != std::numeric_limits<uint32_t>::max() && tag->functionType()->paramStackSize()) {
                                         memcpy(sp, e->userExceptionData().data(), tag->functionType()->paramStackSize());
                                     }
@@ -109,23 +160,17 @@ private:
                     throw std::unique_ptr<Exception>(std::move(e));
                 }
             }
-        } else {
-            resultOffsets = interpret(newState, programCounter, functionStackBase, function->instance());
-        }
-
-        if (store->hasTCO()) {
-            return;
         }
 
         offsets += parameterOffsetCount;
         for (size_t i = 0; i < resultOffsetCount; i++) {
-            *((size_t*)(bp + offsets[i])) = *((size_t*)(functionStackBase + resultOffsets[i]));
+            *((size_t*)(bp + offsets[i])) = *((size_t*)(frame.bp() + resultOffsets[i]));
         }
     }
 
     static ByteCodeStackOffset* interpret(ExecutionState& state,
                                           size_t programCounter,
-                                          uint8_t* bp,
+                                          StackFrame& frame,
                                           Instance* instance);
 
     static void callOperation(ExecutionState& state,
@@ -142,6 +187,15 @@ private:
                                  size_t& programCounter,
                                  uint8_t* bp,
                                  Instance* instance);
+
+    static bool tailCallOperation(ExecutionState& state,
+                                  size_t& programCounter,
+                                  StackFrame& frame,
+                                  Instance*& instance,
+                                  Function* target,
+                                  ByteCodeStackOffset* offsets,
+                                  uint16_t parameterOffsetCount,
+                                  uint16_t resultOffsetCount);
 
     static bool testRefGeneric(void* refPtr, Value::Type type);
     static bool testRefDefined(void* refPtr, const CompositeType** typeInfo);
