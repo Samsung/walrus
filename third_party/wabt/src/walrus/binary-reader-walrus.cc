@@ -1629,8 +1629,10 @@ std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, siz
 
 class ComponentBinaryReaderDelegateWalrus: public ComponentBinaryReaderDelegate {
 public:
-    ComponentBinaryReaderDelegateWalrus(WASMComponentBinaryReaderDelegate *delegate) :
-        m_externalDelegate(delegate), m_validator(&m_errors, delegate->filename(), ValidateOptions(getFeatures(delegate->featureFlags()))) {
+    ComponentBinaryReaderDelegateWalrus(WASMComponentBinaryReaderDelegate *delegate)
+        : m_externalDelegate(delegate)
+        , m_validator(&m_errors, delegate->filename(), ValidateOptions(getFeatures(delegate->featureFlags())))
+        , m_data(this) {
     }
 
     Location GetLocation() const {
@@ -1652,7 +1654,7 @@ public:
                         size_t size,
                         const ReadBinaryOptions& options) override {
         CHECK_RESULT(m_validator.OnCoreModule());
-        m_externalDelegate->OnCoreModule(data, size, options);
+        m_externalDelegate->OnCoreModule(data, size, options, &m_data);
         return CheckParseError();
     }
 
@@ -2078,7 +2080,46 @@ public:
     WASMComponentBinaryReaderDelegate *m_externalDelegate;
     Errors m_errors;
     SharedComponentValidator m_validator;
+    WASMComponentBinaryReaderDelegate::CoreTypeData m_data;
 };
+
+void WASMComponentBinaryReaderDelegate::CoreTypeData::CoreModuleAddFunctionExport(std::string& name, CoreFuncSignature signature)
+{
+    SharedComponentValidator::CoreFuncSignature sig;
+
+    switch (signature) {
+    case CoreFuncSignature::FunctionOther:
+        sig = SharedComponentValidator::FunctionOther;
+        break;
+    case CoreFuncSignature::FunctionParamI32x4ResultI32:
+        sig = SharedComponentValidator::FunctionParamI32x4ResultI32;
+        break;
+    case CoreFuncSignature::FunctionParamI64x4ResultI64:
+        sig = SharedComponentValidator::FunctionParamI64x4ResultI64;
+        break;
+    }
+    m_delegate->m_validator.CoreModuleAddFunctionExport(name, sig);
+}
+
+void WASMComponentBinaryReaderDelegate::CoreTypeData::CoreModuleAddTableExport(std::string& name)
+{
+    m_delegate->m_validator.CoreModuleAddTableExport(name);
+}
+
+void WASMComponentBinaryReaderDelegate::CoreTypeData::CoreModuleAddGlobalExport(std::string& name)
+{
+    m_delegate->m_validator.CoreModuleAddGlobalExport(name);
+}
+
+void WASMComponentBinaryReaderDelegate::CoreTypeData::CoreModuleAddMemoryExport(std::string& name, bool is_64)
+{
+    m_delegate->m_validator.CoreModuleAddMemoryExport(name, is_64);
+}
+
+void WASMComponentBinaryReaderDelegate::CoreTypeData::CoreModuleAddTagExport(std::string& name)
+{
+    m_delegate->m_validator.CoreModuleAddTagExport(name);
+}
 
 std::string ReadWasmComponentBinary(const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate *delegate) {
     const bool kReadDebugNames = false;

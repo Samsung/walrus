@@ -415,6 +415,29 @@ class SharedValidator {
 class SharedComponentValidator {
  public:
   WABT_DISALLOW_COPY_AND_ASSIGN(SharedComponentValidator);
+
+  enum LoweredFuncInfo : uint32_t {
+    // Memory in canonical options must be present.
+    RequireMemory = 0x1,
+    // Realloc function in canonical options must be present.
+    RequireRealloc = 0x2,
+    // Flattening params is not possible.
+    ParamsInMemory = 0x4,
+    // Flattening results is not possible.
+    ResultsInMemory = 0x8,
+  };
+
+  enum CoreFuncSignature {
+    FunctionOther,
+    FunctionParamI32x4ResultI32,
+    FunctionParamI64x4ResultI64,
+  };
+
+  struct CoreFuncType {
+    TypeVector params;
+    TypeVector results;
+  };
+
   SharedComponentValidator(Errors* errors,
                            nonstd::string_view filename,
                            const ValidateOptions& options);
@@ -522,6 +545,18 @@ class SharedComponentValidator {
                   ComponentExternalInfo* external_info,
                   ComponentExportInfo* export_info);
 
+  void CoreModuleAddFunctionExport(nonstd::string_view name,
+                                   CoreFuncSignature signature);
+  void CoreModuleAddTableExport(nonstd::string_view name);
+  void CoreModuleAddGlobalExport(nonstd::string_view name);
+  void CoreModuleAddMemoryExport(nonstd::string_view name, bool is_64);
+  void CoreModuleAddTagExport(nonstd::string_view name);
+
+  // Can be nullptr on error.
+  const CoreFuncType* GetLoweredFunctionType(uint32_t func_index,
+                                             bool is_ptr64,
+                                             uint32_t* out_info);
+
  private:
   enum class TypeDef : uint8_t {
     ValueType,
@@ -564,9 +599,18 @@ class SharedComponentValidator {
     IsObject = 0x4,
   };
 
+  enum CanonOptionInfoBits : uint32_t {
+    HasMemory32Option = 0x1,
+    HasMemory64Option = 0x2,
+    HasReallocOption = 0x4,
+    ReallocSignature32 = 0x8,
+    ReallocSignature64 = 0x10,
+  };
+
   struct ValueType;
   struct ValueTypePair;
   struct TypeItems;
+  struct TypeListFixed;
   struct TypeTuple;
   struct TypeLabels;
   struct TypeResource;
@@ -612,6 +656,11 @@ class SharedComponentValidator {
       return reinterpret_cast<TypeItems*>(this);
     }
 
+    TypeListFixed* AsTypeListFixed() {
+      assert(type_def == TypeDef::ListFixed);
+      return reinterpret_cast<TypeListFixed*>(this);
+    }
+
     TypeTuple* AsTypeTuple() {
       assert(type_def == TypeDef::Tuple);
       return reinterpret_cast<TypeTuple*>(this);
@@ -641,7 +690,8 @@ class SharedComponentValidator {
     }
 
     TypeExternalList* AsTypeExternalList() {
-      assert(type_def == TypeDef::Instance || type_def == TypeDef::Component);
+      assert(type_def == TypeDef::CoreModule ||
+             type_def == TypeDef::Component || type_def == TypeDef::Instance);
       return reinterpret_cast<TypeExternalList*>(this);
     }
 
@@ -653,14 +703,14 @@ class SharedComponentValidator {
     TypeRef()
         : type(ComponentType::TypeNone), ref(nullptr) {}
 
-    TypeRef(const TypeBase* ref)
+    TypeRef(TypeBase* ref)
         : type(ComponentType::TypeIndex), ref(ref) {}
 
     TypeRef(ComponentType::Enum type)
         : type(type), ref(nullptr) {}
 
     ComponentType::Enum type;
-    const TypeBase* ref;
+    TypeBase* ref;
   };
 
   struct ValueType : public TypeBase {
@@ -753,18 +803,28 @@ class SharedComponentValidator {
   };
 
   struct TypeFunc : public TypeBase {
+    enum LoweredTypeStatus : uint8_t {
+      LoweredTypeError = 0x1,
+      LoweredType32Available = 0x2,
+      LoweredType64Available = 0x4,
+    };
+
     struct Param {
       const std::string* name;
       TypeRef type;
     };
 
     TypeFunc(TypeDef type_def)
-        : TypeBase(type_def) {
+        : TypeBase(type_def), ltype_status(0), ltype_info(0) {
       assert(IsTypeFunc());
     }
 
     std::vector<Param> params;
     TypeRef result;
+    uint8_t ltype_status;
+    uint32_t ltype_info;
+    CoreFuncType ltype32;
+    CoreFuncType ltype64;
   };
 
   using TypeBaseVector = std::vector<TypeBase*>;
@@ -778,7 +838,8 @@ class SharedComponentValidator {
 
     TypeExternalList(TypeDef type)
         : TypeBase(type) {
-      assert(type == TypeDef::Instance || type == TypeDef::Component);
+      assert(type == TypeDef::CoreModule || type == TypeDef::Instance ||
+             type == TypeDef::Component);
     }
 
     using ExternalVector = std::vector<External>;
@@ -817,9 +878,47 @@ class SharedComponentValidator {
     TypeBaseVector components;
   };
 
-  struct CoreModule : public TypeBase {
+  struct CoreModule : public TypeExternalList {
     CoreModule()
-        : TypeBase(TypeDef::CoreModule) {}
+        : TypeExternalList(TypeDef::CoreModule) {}
+  };
+
+  class CoreTypeList {
+  public:
+    static constexpr uint32_t TooManyTypes = ~static_cast<uint32_t>(0);
+    static constexpr uint8_t TypeF32 = 0x1;
+    static constexpr uint8_t TypeI32 = 0x2;
+    static constexpr uint8_t TypeF64 = 0x4;
+    static constexpr uint8_t TypeI64 = 0x8;
+
+    CoreTypeList(uint8_t* list, uint32_t max_index, bool is_ptr64)
+        : list_(list)
+        , max_index_(max_index)
+        , ptr_type_(is_ptr64 ? TypeI64 : TypeI32) {
+      assert(max_index > 0);
+    }
+
+    uint32_t End() const {
+      return current_index_;
+    }
+
+    bool IsError() const {
+      return max_index_ == 0;
+    }
+
+    bool ReallocNeeded() const {
+      return realloc_needed;
+    }
+
+    void Append(TypeRef& ref);
+    static Type::Enum GetValueType(uint8_t type);
+
+  private:
+    uint8_t* list_;
+    uint32_t current_index_ = 0;
+    uint32_t max_index_;
+    uint8_t ptr_type_;
+    bool realloc_needed = false;
   };
 
   Component* CurrentAsComponent() {
@@ -854,13 +953,19 @@ class SharedComponentValidator {
                      TypeRef* type_ref,
                      const char* desc);
   Result CheckCanonOptions(uint32_t option_count,
-                           const ComponentCanonOption* options);
+                           const ComponentCanonOption* options,
+                           uint32_t* info);
 
   Result CheckExternalInfo(const ComponentExternalInfo& external_info,
                            TypeBase** out_type_base);
 
   std::vector<std::unique_ptr<TypeBase>> objects_;
   TypeDefList* current_;
+  TypeBase core_func_other_;
+  TypeBase core_func_i32x4_i32_;
+  TypeBase core_func_i64x4_i64_;
+  TypeBase core_memory32_;
+  TypeBase core_memory64_;
   Location current_loc_;
   uint32_t argument_count_;
   uint32_t not_found_count_;
