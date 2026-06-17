@@ -162,6 +162,32 @@ private:
         }
     }
 
+    WASMComponentBinaryReaderDelegate::CoreTypeData::CoreFuncSignature getSignature(Walrus::ModuleFunction* function)
+    {
+        Walrus::FunctionType* type = function->functionType();
+
+        if (type->param().size() == 4 && type->result().size() == 1) {
+            Walrus::TypeVector::Types param = type->param().types();
+            Walrus::TypeVector::Types result = type->result().types();
+
+            if (param[0] == Walrus::Value::I32) {
+                if (param[1] == Walrus::Value::I32
+                    && param[2] == Walrus::Value::I32
+                    && param[3] == Walrus::Value::I32
+                    && result[0] == Walrus::Value::I32) {
+                    return WASMComponentBinaryReaderDelegate::CoreTypeData::FunctionParamI32x4ResultI32;
+                }
+            } else if (param[0] == Walrus::Value::I64
+                       && param[1] == Walrus::Value::I64
+                       && param[2] == Walrus::Value::I64
+                       && param[3] == Walrus::Value::I64
+                       && result[0] == Walrus::Value::I64) {
+                return WASMComponentBinaryReaderDelegate::CoreTypeData::FunctionParamI64x4ResultI64;
+            }
+        }
+        return WASMComponentBinaryReaderDelegate::CoreTypeData::FunctionOther;
+    }
+
     Walrus::ComponentTypeRef refType(const ComponentType& type)
     {
         if (type.IsIndex()) {
@@ -317,14 +343,38 @@ public:
 
     void OnCoreModule(const void* data,
                       size_t size,
-                      const ReadBinaryOptions& options)
+                      const ReadBinaryOptions& options,
+                      CoreTypeData* typeData)
     {
         std::pair<Walrus::Optional<Walrus::Module*>, std::string> result = Walrus::WASMParser::parseBinary(m_store, m_filename, reinterpret_cast<const uint8_t*>(data), size, m_JITFlags, m_featureFlags);
         if (!result.second.empty()) {
             m_walrusParseError = result.second;
         }
+
+        Walrus::Module* module = result.first.value();
+
+        for (auto it : module->exports()) {
+            switch (it->exportType()) {
+            case Walrus::ExportType::Function:
+                typeData->CoreModuleAddFunctionExport(it->name(), getSignature(module->function(it->itemIndex())));
+                break;
+            case Walrus::ExportType::Table:
+                typeData->CoreModuleAddTableExport(it->name());
+                break;
+            case Walrus::ExportType::Memory:
+                typeData->CoreModuleAddMemoryExport(it->name(), module->memoryType(it->itemIndex())->is64());
+                break;
+            case Walrus::ExportType::Global:
+                typeData->CoreModuleAddGlobalExport(it->name());
+                break;
+            case Walrus::ExportType::Tag:
+                typeData->CoreModuleAddTagExport(it->name());
+                break;
+            }
+        }
+
         // Module has already been added to store.
-        m_currentComponent->pushModule(result.first.value());
+        m_currentComponent->pushModule(module);
     }
 
     void BeginComponent(uint32_t version, size_t depth)
@@ -877,9 +927,6 @@ std::pair<Optional<Component*>, std::string> WASMComponentParser::parseBinary(St
 
     std::string error = ReadWasmComponentBinary(data, len, &delegate);
     if (error.length()) {
-        if (delegate.parsingResult() != nullptr) {
-            delete delegate.parsingResult();
-        }
         return std::make_pair(nullptr, error);
     }
 

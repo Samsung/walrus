@@ -248,8 +248,33 @@ protected:
     size_t m_skipValidationUntil;
 };
 
+class ComponentBinaryReaderDelegateWalrus;
+
 class WASMComponentBinaryReaderDelegate {
 public:
+    class CoreTypeData {
+    public:
+        enum CoreFuncSignature {
+            FunctionOther,
+            FunctionParamI32x4ResultI32,
+            FunctionParamI64x4ResultI64,
+        };
+
+        CoreTypeData(ComponentBinaryReaderDelegateWalrus* delegate)
+            : m_delegate(delegate)
+        {
+        }
+
+        void CoreModuleAddFunctionExport(std::string& name, CoreFuncSignature signature);
+        void CoreModuleAddTableExport(std::string& name);
+        void CoreModuleAddGlobalExport(std::string& name);
+        void CoreModuleAddMemoryExport(std::string& name, bool is_64);
+        void CoreModuleAddTagExport(std::string& name);
+
+    private:
+        ComponentBinaryReaderDelegateWalrus* m_delegate;
+    };
+
     virtual ~WASMComponentBinaryReaderDelegate() {}
 
     virtual const std::string& filename() = 0;
@@ -257,7 +282,8 @@ public:
 
     virtual void OnCoreModule(const void* data,
                               size_t size,
-                              const ReadBinaryOptions& options) = 0;
+                              const ReadBinaryOptions& options,
+                              CoreTypeData* typeData) = 0;
     virtual void BeginComponent(uint32_t version, size_t depth) = 0;
     virtual void EndComponent() = 0;
 

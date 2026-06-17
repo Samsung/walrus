@@ -1901,7 +1901,12 @@ SharedComponentValidator::SharedComponentValidator(
     Errors* errors,
     nonstd::string_view filename,
     const ValidateOptions& options)
-    : options_(options),
+    : core_func_other_(TypeDef::CoreFunc),
+      core_func_i32x4_i32_(TypeDef::CoreFunc),
+      core_func_i64x4_i64_(TypeDef::CoreFunc),
+      core_memory32_(TypeDef::CoreMemory),
+      core_memory64_(TypeDef::CoreMemory),
+      options_(options),
       errors_(errors),
       filename_(filename),
       string_table_(&string_list_) {
@@ -2141,7 +2146,7 @@ Result SharedComponentValidator::OnAliasExport(
     type_base = nullptr;
     if (export_name != nullptr) {
       for (auto& item : instance->exports) {
-        if (item.name == export_name) {
+        if (item.sort == sort && item.name == export_name) {
           found = true;
           type_base = item.type_base;
           break;
@@ -2179,6 +2184,27 @@ Result SharedComponentValidator::OnAliasCoreExport(
   Result result =
       CheckIndex(ComponentSort::CoreInstance, core_instance_index, &type_base);
 
+  bool found = false;
+  if (type_base != nullptr) {
+    TypeExternalList* core_instance = type_base->AsTypeExternalList();
+    const std::string* export_name = string_table_.Find(name.str);
+    type_base = nullptr;
+    if (export_name != nullptr) {
+      for (auto& item : core_instance->exports) {
+        if (item.sort == sort && item.name == export_name) {
+          found = true;
+          type_base = item.type_base;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!found) {
+    result |= PrintError(name.loc, "export \"" PRIstringview "\" not found.",
+                         WABT_PRINTF_STRING_VIEW_ARG(name.str));
+  }
+
   switch (sort) {
     case ComponentSort::CoreTable:
       CurrentAsComponent()->core_tables++;
@@ -2190,7 +2216,6 @@ Result SharedComponentValidator::OnAliasCoreExport(
       CurrentAsComponent()->core_tags++;
       break;
     default: {
-      type_base = nullptr;
       TypeBaseVector* type_vector = GetSort(current_, sort);
       assert(type_vector != nullptr);
       type_vector->push_back(type_base);
@@ -2568,10 +2593,19 @@ Result SharedComponentValidator::OnCanonLift(
     const ComponentIndexLoc& type_index) {
   TypeBase* core_func = nullptr;
   TypeBase* type_base = nullptr;
-  Result result =
-      CheckIndex(ComponentSort::CoreFunc, core_func_index, &core_func);
-  result |= CheckIndex(ComponentSort::Type, type_index, &type_base);
-  result |= CheckCanonOptions(option_count, options);
+  uint32_t info = 0;
+  Result result = CheckIndex(ComponentSort::Type, type_index, &type_base);
+  result |= CheckIndex(ComponentSort::CoreFunc, core_func_index, &core_func);
+  result |= CheckCanonOptions(option_count, options, &info);
+  if (result == Result::Ok) {
+    uint32_t lower_info = 0;
+    GetLoweredFunctionType(type_index.index, (info & HasMemory64Option) != 0,
+                           &lower_info);
+    if ((lower_info & RequireMemory) != 0 &&
+        (info & (HasMemory32Option | HasMemory64Option)) == 0) {
+      result |= PrintError(type_index.loc, "memory option must be present.");
+    }
+  }
   auto type_value = MakeUnique<TypeBase>(TypeDef::Func);
   CurrentAsComponent()->funcs.push_back(type_value.get());
   objects_.push_back(std::move(type_value));
@@ -2583,8 +2617,31 @@ Result SharedComponentValidator::OnCanonLower(
     uint32_t option_count,
     const ComponentCanonOption* options) {
   TypeBase* func = nullptr;
+  uint32_t info = 0;
   Result result = CheckIndex(ComponentSort::Func, func_index, &func);
-  result |= CheckCanonOptions(option_count, options);
+  result |= CheckCanonOptions(option_count, options, &info);
+  if (result == Result::Ok) {
+    uint32_t lower_info = 0;
+    GetLoweredFunctionType(func_index.index, (info & HasMemory64Option) != 0,
+                           &lower_info);
+    if ((lower_info & RequireMemory) != 0 &&
+        (info & (HasMemory32Option | HasMemory64Option)) == 0) {
+      result |= PrintError(func_index.loc, "memory option must be present.");
+    }
+    if ((lower_info & RequireRealloc) != 0) {
+      if ((info & HasReallocOption) == 0) {
+        result |= PrintError(func_index.loc, "realloc option must be present.");
+      } else if ((info & HasMemory32Option) != 0 &&
+                 (info & ReallocSignature32) == 0) {
+        result |= PrintError(func_index.loc,
+                             "unexpected 32 bit realloc function signature");
+      } else if ((info & HasMemory64Option) != 0 &&
+                 (info & ReallocSignature64) == 0) {
+        result |= PrintError(func_index.loc,
+                             "unexpected 64 bit realloc function signature");
+      }
+    }
+  }
   auto type_value = MakeUnique<TypeBase>(TypeDef::CoreFunc);
   CurrentAsComponent()->core_funcs.push_back(type_value.get());
   objects_.push_back(std::move(type_value));
@@ -2670,6 +2727,350 @@ Result SharedComponentValidator::OnExport(const ComponentStringLoc& name,
   current_->exports.push_back(
       TypeExternalList::External{export_name, sort, type_base});
   return Result::Ok;
+}
+
+void SharedComponentValidator::CoreModuleAddFunctionExport(
+    nonstd::string_view name,
+    CoreFuncSignature signature) {
+  TypeExternalList* module =
+      CurrentAsComponent()->core_modules.back()->AsTypeExternalList();
+  TypeBase* func_type;
+  switch (signature) {
+    case FunctionParamI32x4ResultI32:
+      func_type = &core_func_i32x4_i32_;
+      break;
+    case FunctionParamI64x4ResultI64:
+      func_type = &core_func_i64x4_i64_;
+      break;
+    default:
+      func_type = &core_func_other_;
+      break;
+  }
+
+  const std::string* export_name = string_table_.Append(name);
+  module->exports.push_back(TypeExternalList::External{
+      export_name, ComponentSort::CoreFunc, func_type});
+}
+
+void SharedComponentValidator::CoreModuleAddTableExport(nonstd::string_view name) {
+  TypeExternalList* module =
+      CurrentAsComponent()->core_modules.back()->AsTypeExternalList();
+  const std::string* export_name = string_table_.Append(name);
+  module->exports.push_back(TypeExternalList::External{
+      export_name, ComponentSort::CoreTable, nullptr});
+}
+
+void SharedComponentValidator::CoreModuleAddGlobalExport(
+    nonstd::string_view name) {
+  TypeExternalList* module =
+      CurrentAsComponent()->core_modules.back()->AsTypeExternalList();
+  const std::string* export_name = string_table_.Append(name);
+  module->exports.push_back(TypeExternalList::External{
+      export_name, ComponentSort::CoreGlobal, nullptr});
+}
+
+void SharedComponentValidator::CoreModuleAddMemoryExport(nonstd::string_view name,
+                                                         bool is_64) {
+  TypeExternalList* module =
+      CurrentAsComponent()->core_modules.back()->AsTypeExternalList();
+  TypeBase* memory = is_64 ? &core_memory64_ : &core_memory32_;
+  const std::string* export_name = string_table_.Append(name);
+  module->exports.push_back(TypeExternalList::External{
+      export_name, ComponentSort::CoreMemory, memory});
+}
+
+void SharedComponentValidator::CoreModuleAddTagExport(nonstd::string_view name) {
+  TypeExternalList* module =
+      CurrentAsComponent()->core_modules.back()->AsTypeExternalList();
+  const std::string* export_name = string_table_.Append(name);
+  module->exports.push_back(
+      TypeExternalList::External{export_name, ComponentSort::CoreTag, nullptr});
+}
+
+const SharedComponentValidator::CoreFuncType*
+SharedComponentValidator::GetLoweredFunctionType(uint32_t func_index,
+                                                 bool is_ptr64,
+                                                 uint32_t* out_info) {
+  *out_info = 0;
+  if ((current_->info_bits & IsObject) == 0) {
+    return nullptr;
+  }
+
+  Component* component = reinterpret_cast<Component*>(current_);
+
+  if (func_index >= component->funcs.size()) {
+    return nullptr;
+  }
+
+  TypeFunc* func = component->funcs[func_index]->AsTypeFunc();
+
+  if ((func->ltype_status & TypeFunc::LoweredTypeError) != 0) {
+    return nullptr;
+  }
+
+  if (!is_ptr64) {
+    if ((func->ltype_status & TypeFunc::LoweredType32Available) != 0) {
+      *out_info = func->ltype_info;
+      return &func->ltype32;
+    }
+
+    func->ltype_status |= TypeFunc::LoweredType32Available;
+  } else {
+    if ((func->ltype_status & TypeFunc::LoweredType64Available) != 0) {
+      *out_info = func->ltype_info;
+      return &func->ltype64;
+    }
+
+    func->ltype_status |= TypeFunc::LoweredType64Available;
+  }
+
+  uint8_t core_params[16] = {0};
+  CoreTypeList param_list(core_params, 16, is_ptr64);
+
+  for (auto& param : func->params) {
+    param_list.Append(param.type);
+  }
+
+  if (param_list.IsError()) {
+    func->ltype_status |= TypeFunc::LoweredTypeError;
+    return nullptr;
+  }
+
+  uint8_t core_result[1] = {0};
+  CoreTypeList result_list(core_result, 1, is_ptr64);
+
+  if (func->result.type != ComponentType::TypeNone) {
+    result_list.Append(func->result);
+  }
+
+  if (result_list.IsError()) {
+    func->ltype_status |= TypeFunc::LoweredTypeError;
+    return nullptr;
+  }
+
+  CoreFuncType* lowered_type = is_ptr64 ? &func->ltype64 : &func->ltype32;
+
+  if (param_list.ReallocNeeded()) {
+    func->ltype_info |= RequireMemory;
+  }
+
+  if (result_list.ReallocNeeded()) {
+    func->ltype_info |= RequireRealloc | RequireMemory;
+  }
+
+  uint32_t param_count = param_list.End();
+  uint32_t result_count = result_list.End();
+
+  if (param_count == CoreTypeList::TooManyTypes) {
+    func->ltype_info |= ParamsInMemory | RequireMemory;
+    param_count = 1;
+  }
+
+  if (result_count == CoreTypeList::TooManyTypes) {
+    func->ltype_info |= ResultsInMemory | RequireMemory;
+    param_count += 1;
+    result_count = 0;
+  }
+
+  lowered_type->params.resize(param_count);
+  lowered_type->results.resize(result_count);
+
+  param_count = param_list.End();
+  if (param_count == CoreTypeList::TooManyTypes) {
+    lowered_type->params[0] = is_ptr64 ? Type::I64 : Type::I32;
+    param_count = 1;
+  } else {
+    for (uint32_t i = 0; i < param_count; i++) {
+      lowered_type->params[i] = CoreTypeList::GetValueType(core_params[i]);
+    }
+  }
+
+  result_count = result_list.End();
+  if (result_count == CoreTypeList::TooManyTypes) {
+    lowered_type->params[param_count] = is_ptr64 ? Type::I64 : Type::I32;
+  } else if (result_count > 0) {
+    assert(result_count == 1);
+    lowered_type->results[0] = CoreTypeList::GetValueType(core_result[0]);
+  }
+
+  *out_info = func->ltype_info;
+  return lowered_type;
+}
+
+void SharedComponentValidator::CoreTypeList::Append(TypeRef& ref) {
+  assert(ref.type != ComponentType::TypeNone);
+
+  if (current_index_ >= max_index_) {
+    current_index_ = TooManyTypes;
+    return;
+  }
+
+  ComponentType::Enum ref_type = ref.type;
+  if (ref_type == ComponentType::TypeIndex) {
+    if (ref.ref == nullptr) {
+      max_index_ = 0;
+      current_index_ = TooManyTypes;
+      return;
+    }
+    if (ref.ref->type_def == TypeDef::ValueType) {
+      ref_type = ref.ref->AsValueType()->type.type;
+      assert(ref_type != ComponentType::TypeIndex);
+    }
+  }
+
+  switch (ref_type) {
+    case ComponentType::S64:
+    case ComponentType::U64:
+      list_[current_index_++] |= TypeI64;
+      return;
+    case ComponentType::F32:
+      list_[current_index_++] |= TypeF32;
+      return;
+    case ComponentType::F64:
+      list_[current_index_++] |= TypeF64;
+      return;
+    case ComponentType::String:
+      list_[current_index_++] |= ptr_type_;
+      realloc_needed = true;
+      if (current_index_ < max_index_) {
+        list_[current_index_++] |= ptr_type_;
+      } else {
+        current_index_ = TooManyTypes;
+      }
+      return;
+    case ComponentType::TypeIndex:
+      break;
+    default:
+      assert(ref_type == ComponentType::Bool || ref_type == ComponentType::S8 ||
+             ref_type == ComponentType::U8 || ref_type == ComponentType::S16 ||
+             ref_type == ComponentType::U16 || ref_type == ComponentType::S32 ||
+             ref_type == ComponentType::U32 ||
+             ref_type == ComponentType::Char ||
+             ref_type == ComponentType::ErrorContext);
+      list_[current_index_++] |= TypeI32;
+      return;
+  }
+
+  TypeBase* target = ref.ref;
+
+  switch (target->type_def) {
+    case TypeDef::Record:
+      for (auto& item : target->AsTypeItems()->items) {
+        Append(item.type);
+        if (current_index_ == TooManyTypes) {
+          break;
+        }
+      }
+      break;
+    case TypeDef::Variant: {
+      list_[current_index_++] |= TypeI32;
+      uint32_t start_index = current_index_;
+      uint32_t max_index = current_index_;
+
+      for (auto& item : target->AsTypeItems()->items) {
+        if (item.type.type == ComponentType::TypeNone) {
+          continue;
+        }
+        current_index_ = start_index;
+        Append(item.type);
+        if (max_index < current_index_) {
+          max_index = current_index_;
+        }
+        if (current_index_ == TooManyTypes) {
+          assert(max_index == TooManyTypes);
+          break;
+        }
+      }
+      current_index_ = max_index;
+      break;
+    }
+    case TypeDef::List: {
+      list_[current_index_++] |= ptr_type_;
+      realloc_needed = true;
+      if (current_index_ < max_index_) {
+        list_[current_index_++] |= ptr_type_;
+      } else {
+        current_index_ = TooManyTypes;
+      }
+      break;
+    }
+    case TypeDef::ListFixed: {
+      TypeRef& item = target->AsTypeListFixed()->type;
+      uint32_t count = target->AsTypeListFixed()->size;
+      while (count > 0) {
+        Append(item);
+        if (current_index_ == TooManyTypes) {
+          break;
+        }
+        count--;
+      }
+      break;
+    }
+    case TypeDef::Tuple:
+      for (auto& item : target->AsTypeTuple()->items) {
+        Append(item);
+        if (current_index_ == TooManyTypes) {
+          break;
+        }
+      }
+      break;
+    case TypeDef::Option:
+      list_[current_index_++] |= TypeI32;
+      if (current_index_ < max_index_) {
+        Append(target->AsValueType()->type);
+      } else {
+        current_index_ = TooManyTypes;
+      }
+      break;
+    case TypeDef::Result: {
+      list_[current_index_++] |= TypeI32;
+      uint32_t start_index = current_index_;
+      ValueTypePair* result = target->AsValueTypePair();
+      if (result->first.type != ComponentType::TypeNone) {
+        Append(result->first);
+        if (current_index_ == TooManyTypes) {
+          break;
+        }
+      }
+
+      uint32_t max_index = current_index_;
+      if (result->second.type != ComponentType::TypeNone) {
+        current_index_ = start_index;
+        Append(result->second);
+        if (current_index_ < max_index) {
+          assert(current_index_ != TooManyTypes);
+          current_index_ = max_index;
+        }
+      }
+      break;
+    }
+    case TypeDef::Flags:
+    case TypeDef::Enum:
+    case TypeDef::Own:
+    case TypeDef::Borrow:
+    case TypeDef::Stream:
+    case TypeDef::Future:
+      break;
+    default:
+      max_index_ = 0;
+      current_index_ = TooManyTypes;
+      break;
+  }
+}
+
+Type::Enum SharedComponentValidator::CoreTypeList::GetValueType(uint8_t type) {
+  assert(type != 0);
+
+  if (type == TypeF32) {
+    return Type::F32;
+  }
+  if (type == TypeF64) {
+    return Type::F64;
+  }
+  if ((type & (TypeI64 | TypeF64)) == 0) {
+    return Type::I32;
+  }
+  return Type::I64;
 }
 
 SharedComponentValidator::TypeBaseVector* SharedComponentValidator::GetSort(
@@ -2814,7 +3215,8 @@ Result SharedComponentValidator::CheckBorrow(const Location& loc,
 
 Result SharedComponentValidator::CheckCanonOptions(
     uint32_t option_count,
-    const ComponentCanonOption* options) {
+    const ComponentCanonOption* options,
+    uint32_t* info) {
   bool seen_string_encoding = false;
   const ComponentCanonOption* memory = nullptr;
   const ComponentCanonOption* realloc = nullptr;
@@ -2886,6 +3288,25 @@ Result SharedComponentValidator::CheckCanonOptions(
     type_base = nullptr;
     result |= CheckIndex(memory->loc, ComponentSort::CoreMemory, memory->index,
                          IncludeLast, &type_base);
+    assert(type_base == nullptr || type_base == &core_memory32_ ||
+           type_base == &core_memory64_);
+    if (type_base == &core_memory64_) {
+      *info |= HasMemory64Option;
+    } else {
+      *info |= HasMemory32Option;
+    }
+  }
+  if (realloc != nullptr) {
+    type_base = nullptr;
+    result |= CheckIndex(realloc->loc, ComponentSort::CoreFunc, realloc->index,
+                         IncludeLast, &type_base);
+    if (type_base == &core_func_i32x4_i32_) {
+      *info |= ReallocSignature32;
+    } else if (type_base == &core_func_i64x4_i64_) {
+      *info |= ReallocSignature64;
+    }
+
+    *info |= HasReallocOption;
   }
   if (callback != nullptr) {
     type_base = nullptr;
