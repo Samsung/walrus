@@ -97,8 +97,9 @@ static inline long int maxFileOffset(uint64_t offset)
 void WasiRefCountedFile::destroyFile()
 {
     ASSERT(m_refCount == 0);
-    if (m_file != stdin && m_file != stdout && m_file != stderr) {
-        fclose(m_file);
+    if (m_uvDescriptor > WASI_STDERR) {
+        uv_fs_t req;
+        uv_fs_close(nullptr, &req, m_uvDescriptor, nullptr);
     }
     delete this;
 }
@@ -148,12 +149,25 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             break;
         }
 
-        if (stream->seekNeeded()) {
-            fseek(stream->file(), stream->offset(), SEEK_SET);
+        if (!(stream->file()->flags() & DescriptorFlags::flagRead)) {
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
+            break;
         }
-        std::vector<uint8_t> buffer(size);
-        size_t read = fread(buffer.data(), 1, static_cast<size_t>(size), stream->file());
-        stream->advanceOffset(read);
+
+        uv_fs_t req;
+        std::vector<uint8_t> buffer;
+        buffer.reserve(size);
+        uv_buf_t iov = uv_buf_init((char*)buffer.data(), size);
+
+        int r = uv_fs_read(nullptr, &req, stream->fileDescriptor(), &iov, 1, -1, nullptr);
+        if (r < 0) {
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
+            break;
+        }
+        size_t read = req.result;
+
         uint32_t start = options->memoryMalloc32(state, 1, read);
         memcpy(options->memory()->buffer() + start, buffer.data(), size);
 
@@ -203,14 +217,25 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             break;
         }
 
+        if (!(stream->file()->flags() & DescriptorFlags::flagWrite)) {
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
+            break;
+        }
+
         uint32_t bufferStart = argv[1].asI32();
         uint32_t bufferSize = argv[2].asI32();
         options->memoryCheckRange32(state, 1, bufferStart, bufferSize);
-        if (stream->seekNeeded()) {
-            fseek(stream->file(), stream->offset(), SEEK_SET);
+
+        uv_fs_t req;
+        uv_buf_t iovs = uv_buf_init((char*)(options->memory()->buffer()) + bufferStart, bufferSize);
+        int r = uv_fs_write(nullptr, &req, stream->fileDescriptor(), &iovs, 1, -1, nullptr);
+        if (r < 0) {
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
+            break;
         }
-        size_t written = fwrite(options->memory()->buffer() + bufferStart, bufferSize, 1, stream->file());
-        stream->advanceOffset(written);
+        stream->advanceOffset(req.result);
 
         options->memory()->buffer()[offset] = resultOk;
         break;
@@ -285,23 +310,48 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         }
         break;
     }
-    case LiftedWasiFunction::cliGetStdin02:
-    case LiftedWasiFunction::cliGetStdout02:
-    case LiftedWasiFunction::cliGetStderr02: {
-        FILE* file = stdin;
-        if (function->type() == LiftedWasiFunction::cliGetStdout02) {
-            file = stdout;
-        } else if (function->type() == LiftedWasiFunction::cliGetStderr02) {
-            file = stderr;
-        }
-        WasiRefCountedFile* fileRef = new WasiRefCountedFile(file);
+    case LiftedWasiFunction::cliGetStdin02: {
+        WasiRefCountedFile* fileRef = new WasiRefCountedFile(WASI_STDIN, std::string(), DescriptorFlags::flagRead);
+
         ComponentTypeResource* resourceType = instance->type()->getType(0)->asTypeResource();
-        ComponentResource* resource = new ComponentResourceWasiStream(resourceType, ComponentHandle::ResourceWasiOutputStreamKind, fileRef, ComponentResourceWasiStream::NoSeek);
+        ComponentResource* resource = new ComponentResourceWasiStream(resourceType, ComponentHandle::ResourceWasiOutputStreamKind, fileRef);
         result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, resource)));
         break;
     }
+    case LiftedWasiFunction::cliGetStdout02: {
+        WasiRefCountedFile* fileRef = new WasiRefCountedFile(WASI_STDOUT, std::string(), DescriptorFlags::flagWrite);
+
+        ComponentTypeResource* resourceType = instance->type()->getType(0)->asTypeResource();
+        ComponentResource* resource = new ComponentResourceWasiStream(resourceType, ComponentHandle::ResourceWasiOutputStreamKind, fileRef);
+        result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, resource)));
+        break;
+    }
+    case LiftedWasiFunction::cliGetStderr02: {
+        WasiRefCountedFile* fileRef = new WasiRefCountedFile(WASI_STDERR, std::string(), DescriptorFlags::flagWrite);
+
+        ComponentTypeResource* resourceType = instance->type()->getType(0)->asTypeResource();
+        ComponentResource* resource = new ComponentResourceWasiStream(resourceType, ComponentHandle::ResourceWasiOutputStreamKind, fileRef);
+        result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, resource)));
+        break;
+    }
+    case LiftedWasiFunction::cliGetTerminalStdin02: {
+        ComponentResource* resource = new ComponentResourceWasiTerminal(instance->type()->getType(0)->asTypeResource(), WASI_STDIN);
+        uint32_t offset = argv[0].asI32();
+        uint32_t value = options->instance()->appendHandle(state, resource);
+        options->memory()->store(state, offset, 4, value);
+        options->memory()->buffer()[offset] = optionalSome;
+        break;
+    }
     case LiftedWasiFunction::cliGetTerminalStdout02: {
-        ComponentResource* resource = new ComponentResourceWasiTerminal(instance->type()->getType(0)->asTypeResource(), 1);
+        ComponentResource* resource = new ComponentResourceWasiTerminal(instance->type()->getType(0)->asTypeResource(), WASI_STDOUT);
+        uint32_t offset = argv[0].asI32();
+        uint32_t value = options->instance()->appendHandle(state, resource);
+        options->memory()->store(state, offset, 4, value);
+        options->memory()->buffer()[offset] = optionalSome;
+        break;
+    }
+    case LiftedWasiFunction::cliGetTerminalStderr02: {
+        ComponentResource* resource = new ComponentResourceWasiTerminal(instance->type()->getType(0)->asTypeResource(), WASI_STDERR);
         uint32_t offset = argv[0].asI32();
         uint32_t value = options->instance()->appendHandle(state, resource);
         options->memory()->store(state, offset, 4, value);
@@ -309,15 +359,47 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         break;
     }
     case LiftedWasiFunction::clockMonotonicNow02: {
-        WasiStoreData* data = instance->store()->wasiData();
-        clock_t now = clock();
-        uint64_t now64 = data->prevNow() + static_cast<uint64_t>(now - data->prevClockNow()) * (1000000000 / CLOCKS_PER_SEC);
-        data->setPrevClockNow(now);
-        data->setPrevNow(now64);
-        result[0] = Value(static_cast<int64_t>(now64));
+        uv_timespec64_t time;
+        int r = uv_clock_gettime(UV_CLOCK_MONOTONIC, &time);
+        if (r < 0) {
+            result[0] = Value(static_cast<int64_t>(0));
+            break;
+        }
+
+        result[0] = Value(time.tv_sec);
+
         break;
     }
-    case LiftedWasiFunction::fileSystemDescriptorReadViaStream02: {
+    case LiftedWasiFunction::clockSubscribeDuration02: {
+        uint64_t duration = argv[0].asI64();
+
+        uint64_t start = uv_hrtime() + duration;
+        ComponentResource* timer = new ComponentResourceWasiPollableTimer(instance->type()->getType(2)->asTypeResource(), start);
+        result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, timer)));
+        break;
+    }
+    case LiftedWasiFunction::clockWallNow02: {
+        uint32_t offset = argv[0].asI32();
+
+        uv_timespec64_t time;
+        int r = uv_clock_gettime(UV_CLOCK_REALTIME, &time);
+        if (r < 0) {
+            result[0] = Value(static_cast<int64_t>(0));
+            break;
+        }
+
+        options->memory()->store(state, offset, time.tv_sec);
+        options->memory()->store(state, offset, 8, time.tv_nsec);
+        break;
+    }
+    case LiftedWasiFunction::fileSystemDescriptorReadViaStream02:
+    case LiftedWasiFunction::fileSystemDescriptorWriteViaStream02:
+    case LiftedWasiFunction::fileSystemDescriptorAppendViaStream02: {
+        ComponentHandle::Kind streamKind = ComponentHandle::ResourceWasiInputStreamKind;
+        if (function->type() == LiftedWasiFunction::fileSystemDescriptorWriteViaStream02 || function->type() == LiftedWasiFunction::fileSystemDescriptorAppendViaStream02) {
+            streamKind = ComponentHandle::ResourceWasiOutputStreamKind;
+        }
+
         uint32_t descriptorIndex = argv[0].asI32();
         long int offset = maxFileOffset(argv[1].asI64());
         uint32_t resultOffset = argv[2].asI32();
@@ -327,12 +409,58 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             ComponentInstance::throwInvalidHandle(state, descriptorIndex);
         }
 
+        uint32_t flags = asFile(handle)->file()->flags();
+        if (streamKind == ComponentHandle::ResourceWasiInputStreamKind && !(flags & DescriptorFlags::flagRead)) {
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
+            break;
+        } else if (streamKind == ComponentHandle::ResourceWasiOutputStreamKind && !(flags & DescriptorFlags::flagWrite)) {
+            options->memory()->buffer()[offset + 4] = streamErrClosed;
+            options->memory()->buffer()[offset] = resultError;
+            break;
+        }
+
+
         WasiRefCountedFile* fileRef = asFile(handle)->addFileRef();
         ComponentTypeResource* resourceType = instance->type()->getType(2)->asTypeResource();
-        ComponentResource* resource = new ComponentResourceWasiStream(resourceType, ComponentHandle::ResourceWasiInputStreamKind, fileRef, offset);
+        ComponentResource* resource = new ComponentResourceWasiStream(resourceType, streamKind, fileRef, offset);
         uint32_t resultResource = options->instance()->appendHandle(state, resource);
         options->memory()->store(state, resultOffset, 4, resultResource);
         options->memory()->buffer()[resultOffset] = resultOk;
+        break;
+    }
+    case Walrus::LiftedWasiFunction::fileSystemDescriptorGetFlags02: {
+        uint32_t descriptorIndex = argv[0].asI32();
+        uint32_t resultOffset = argv[1].asI32();
+
+        int result = 0;
+        ComponentHandle* handle = options->instance()->getHandle(state, descriptorIndex);
+        if (handle->kind() != ComponentHandle::ResourceWasiFileKind) {
+            ComponentInstance::throwInvalidHandle(state, descriptorIndex);
+        }
+
+        uint32_t flags = asFile(handle)->file()->flags();
+        if (flags & DescriptorFlags::flagFileIntegritySync) {
+            result |= DescriptorFlags::flagFileIntegritySync;
+        }
+        if (flags & DescriptorFlags::flagDataIntegritySync) {
+            result |= DescriptorFlags::flagDataIntegritySync;
+        }
+        if (flags & DescriptorFlags::flagRequestedWriteSync) {
+            result |= DescriptorFlags::flagRequestedWriteSync;
+        }
+        if (flags & DescriptorFlags::flagMutateDirectory) {
+            result |= DescriptorFlags::flagMutateDirectory;
+        }
+        if (flags & DescriptorFlags::flagRead) {
+            result |= DescriptorFlags::flagRead;
+        }
+        if (flags & DescriptorFlags::flagWrite) {
+            result |= DescriptorFlags::flagWrite;
+        }
+
+        options->memory()->store(state, resultOffset, resultOk);
+        options->memory()->store(state, resultOffset, 4, result);
         break;
     }
     case LiftedWasiFunction::fileSystemDescriptorStat02: {
@@ -347,16 +475,54 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         ComponentResourceWasiFile* file = asFile(handle);
 
         options->memoryCheckRange32(state, 8, offset, 96);
+
+        uv_fs_t req;
+        int r = uv_fs_stat(nullptr, &req, file->path().c_str(), nullptr);
+        if (r < 0) {
+            options->memory()->store(state, offset, 4, 0);
+            options->memory()->buffer()[offset] = resultError;
+        }
+
+        FileType fp = FileType::fileTypeUnknown;
+        switch (req.statbuf.st_mode) {
+        case UV_DIRENT_FILE:
+            fp = FileType::fileTypeRegularFile;
+            break;
+        case UV_DIRENT_SOCKET:
+            fp = FileType::fileTypeSocket;
+            break;
+        case UV_DIRENT_LINK:
+            fp = FileType::fileTypeSymbolicLink;
+            break;
+        case UV_DIRENT_BLOCK:
+            fp = FileType::fileTypeBlockDevice;
+            break;
+        case UV_DIRENT_DIR:
+            fp = FileType::fileTypeDirectory;
+            break;
+        case UV_DIRENT_CHAR:
+            fp = FileType::fileTypeCharacterDevice;
+            break;
+        case UV_DIRENT_FIFO:
+            fp = FileType::fileTypeFifo;
+            break;
+        }
+
         uint8_t* buffer = options->memory()->buffer() + offset;
         buffer[0] = resultOk;
-        buffer[8] = fileTypeRegularFile;
-        *reinterpret_cast<uint64_t*>(buffer + 16) = 1;
-        fseek(file->file(), 0, SEEK_END);
-        *reinterpret_cast<uint64_t*>(buffer + 24) = static_cast<uint64_t>(ftell(file->file()));
+        buffer[8] = fp;
+        *reinterpret_cast<uint64_t*>(buffer + 16) = req.statbuf.st_nlink;
+        *reinterpret_cast<uint64_t*>(buffer + 24) = req.statbuf.st_size;
         // Optional(dateTime) is 24 bytes long.
-        buffer[32] = optionalNone;
-        buffer[56] = optionalNone;
-        buffer[80] = optionalNone;
+        options->memory()->store(state, offset, 36, req.statbuf.st_atim.tv_sec);
+        options->memory()->store(state, offset, 44, (int32_t)req.statbuf.st_atim.tv_nsec);
+        buffer[32] = optionalSome;
+        options->memory()->store(state, offset, 60, req.statbuf.st_mtim.tv_sec);
+        options->memory()->store(state, offset, 68, (int32_t)req.statbuf.st_mtim.tv_nsec);
+        buffer[56] = optionalSome;
+        options->memory()->store(state, offset, 84, req.statbuf.st_ctim.tv_sec);
+        options->memory()->store(state, offset, 92, (int32_t)req.statbuf.st_ctim.tv_nsec);
+        buffer[80] = optionalSome;
         break;
     }
     case LiftedWasiFunction::fileSystemDescriptorOpenAt02: {
@@ -374,31 +540,6 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             ComponentInstance::throwInvalidHandle(state, descriptorIndex);
         }
 
-        const char* access = "r";
-        bool invalid = false;
-        if ((flags & flagWrite) != 0) {
-            if (openFlags & openCreate) {
-                access = (flags & flagRead) != 0 ? "w+" : "w";
-            } else {
-                access = "r+";
-            }
-        } else if ((flags & flagRead) != 0) {
-            if ((openFlags & openCreate) != 0) {
-                invalid = true;
-            }
-        } else {
-            invalid = true;
-        }
-
-        if ((openFlags & (openDirectory | openExclusive | openTruncate)) != 0) {
-            invalid = true;
-        }
-
-        if (invalid) {
-            std::string message = "invalid/unsupported flag combination for open";
-            Trap::throwException(state, message);
-        }
-
         std::string path = asDirectory(handle)->realPath();
         path.append("/");
         CanonOptions::UtfData utfData;
@@ -410,20 +551,45 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             utfData.toUtf8String(utf8String.data());
             path.append(reinterpret_cast<const char*>(utf8String.data()), utf8String.size());
         }
-        FILE* file = fopen(path.c_str(), access);
 
-        if (file == NULL) {
-            // Support more error codes.
+        uv_fs_t req;
+        int descriptor = uv_fs_open(NULL, &req, path.c_str(), openFlags, 0666, NULL);
+        if (descriptor < 0) {
             options->memory()->store(state, resultOffset, 4, 0);
             options->memory()->buffer()[resultOffset] = resultError;
             break;
         }
 
-        WasiRefCountedFile* fileRef = new WasiRefCountedFile(file);
+        WasiRefCountedFile* fileRef = new WasiRefCountedFile(descriptor, path, flags);
         ComponentResource* resource = new ComponentResourceWasiFile(instance->type()->getType(0)->asTypeResource(), fileRef);
         uint32_t resultResource = options->instance()->appendHandle(state, resource);
         options->memory()->store(state, resultOffset, 4, resultResource);
         options->memory()->buffer()[resultOffset] = resultOk;
+        break;
+    }
+    case Walrus::LiftedWasiFunction::fileSystemDescriptorMetadataHash02: {
+        uint32_t descriptorIndex = argv[0].asI32();
+        uint32_t offset = argv[1].asI32();
+
+        ASSERT(!options->memory()->is64());
+
+        ComponentHandle* handle = options->instance()->getHandle(state, descriptorIndex);
+        if (handle->kind() != ComponentHandle::ResourceWasiFileKind) {
+            ComponentInstance::throwInvalidHandle(state, descriptorIndex);
+        }
+        ComponentResourceWasiFile* file = asFile(handle);
+
+        uv_fs_t req;
+        int r = uv_fs_stat(nullptr, &req, file->path().c_str(), nullptr);
+        if (r < 0) {
+            options->memory()->store(state, offset, 4, 0);
+            options->memory()->buffer()[offset] = resultError;
+        }
+
+        std::hash<uint64_t> hash;
+        options->memory()->store(state, offset, 4, hash(req.statbuf.st_mtim.tv_sec));
+        options->memory()->store(state, offset, 12, hash(req.statbuf.st_size));
+        options->memory()->buffer()[offset] = resultOk;
         break;
     }
     case LiftedWasiFunction::fileSystemGetDirectories02: {
@@ -446,7 +612,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
                 throwNoMemory(state);
             }
 
-            ComponentResource* resource = new ComponentResourceWasiDirectory(instance->type()->getType(0)->asTypeResource(), it.first, it.second);
+            ComponentResource* resource = new ComponentResourceWasiDirectory(instance->type()->getType(0)->asTypeResource(), it.first, it.second, true);
             *argBuffer++ = options->instance()->appendHandle(state, resource);
             length = static_cast<uint32_t>(it.first.length());
             start = static_cast<uint32_t>(options->storeLatin1String(state, reinterpret_cast<const uint8_t*>(it.first.data()), &length));
