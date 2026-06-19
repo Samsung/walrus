@@ -773,7 +773,6 @@ ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType
     return instance;
 }
 
-
 bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRefCounted* provided, std::vector<ComponentRefCounted*>& resources, std::string& componentName, std::set<const ComponentRefCounted*>& cache)
 {
     std::vector<std::pair<ComponentRefCounted*, ComponentRefCounted*>> elems;

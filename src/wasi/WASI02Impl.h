@@ -22,6 +22,11 @@
 #include "Walrus.h"
 #include "runtime/Component.h"
 #include "runtime/ComponentInstance.h"
+#include "uv.h"
+
+#define WASI_STDIN 0
+#define WASI_STDOUT 1
+#define WASI_STDERR 0
 
 namespace Walrus {
 
@@ -80,15 +85,27 @@ private:
 
 class WasiRefCountedFile {
 public:
-    WasiRefCountedFile(FILE* file)
-        : m_file(file)
+    WasiRefCountedFile(int desc, std::string path, uint32_t flags)
+        : m_path(path)
+        , m_uvDescriptor(desc)
+        , m_flags(flags)
         , m_refCount(1)
     {
     }
 
-    FILE* file()
+    int fileDescriptor()
     {
-        return m_file;
+        return m_uvDescriptor;
+    }
+
+    std::string path()
+    {
+        return m_path;
+    }
+
+    uint32_t flags()
+    {
+        return m_flags;
     }
 
     void addRef()
@@ -106,7 +123,9 @@ public:
 private:
     void destroyFile();
 
-    FILE* m_file;
+    std::string m_path;
+    int m_uvDescriptor;
+    uint32_t m_flags;
     size_t m_refCount;
 };
 
@@ -114,7 +133,14 @@ class ComponentResourceWasiStream : public ComponentResource {
     friend class ComponentResourceWasiPollable;
 
 public:
-    static constexpr long int NoSeek = -1;
+    ComponentResourceWasiStream(ComponentTypeResource* type, Kind kind, WasiRefCountedFile* file)
+        : ComponentResource(kind, type)
+        , m_file(file)
+        , m_pollableCount(0)
+        , m_offset(0)
+    {
+        ASSERT(kind == ResourceWasiInputStreamKind || kind == ResourceWasiOutputStreamKind);
+    }
 
     ComponentResourceWasiStream(ComponentTypeResource* type, Kind kind, WasiRefCountedFile* file, long int offset)
         : ComponentResource(kind, type)
@@ -137,10 +163,9 @@ public:
         return m_file == nullptr;
     }
 
-    FILE* file() const
+    int fileDescriptor()
     {
-        ASSERT(!isClosed());
-        return m_file->file();
+        return m_file->fileDescriptor();
     }
 
     size_t pollableCount() const
@@ -148,21 +173,24 @@ public:
         return m_pollableCount;
     }
 
-    bool seekNeeded() const
-    {
-        return m_offset != NoSeek;
-    }
-
     long int offset() const
     {
         return m_offset;
     }
 
+    void setOffset(size_t offset)
+    {
+        m_offset = offset;
+    }
+
     void advanceOffset(size_t bytes)
     {
-        if (m_offset != NoSeek) {
-            m_offset += static_cast<long int>(bytes);
-        }
+        m_offset += static_cast<long int>(bytes);
+    }
+
+    WasiRefCountedFile* file()
+    {
+        return m_file;
     }
 
     void dropFileRef()
@@ -202,6 +230,29 @@ private:
     ComponentResourceWasiStream* m_stream;
 };
 
+class ComponentResourceWasiPollableTimer : public ComponentResource {
+public:
+    ComponentResourceWasiPollableTimer(ComponentTypeResource* type, uint64_t startSeconds)
+        : ComponentResource(ResourceWasiPollableKind, type)
+        , m_startNanosec(startSeconds)
+    {
+    }
+
+    bool isReady()
+    {
+        uint64_t nanosecs = uv_hrtime();
+
+        if (m_startNanosec < nanosecs) {
+            return true;
+        }
+
+        return false;
+    }
+
+private:
+    uint64_t m_startNanosec;
+};
+
 class ComponentResourceWasiTerminal : public ComponentResource {
 public:
     ComponentResourceWasiTerminal(ComponentTypeResource* type, int fileNo)
@@ -234,9 +285,14 @@ public:
         m_file->releaseRef();
     }
 
-    FILE* file() const
+    WasiRefCountedFile* file() const
     {
-        return m_file->file();
+        return m_file;
+    }
+
+    std::string path()
+    {
+        return m_file->path();
     }
 
     WasiRefCountedFile* addFileRef()
@@ -251,10 +307,11 @@ private:
 
 class ComponentResourceWasiDirectory : public ComponentResource {
 public:
-    ComponentResourceWasiDirectory(ComponentTypeResource* type, const std::string& mappedPath, const std::string& realPath)
+    ComponentResourceWasiDirectory(ComponentTypeResource* type, const std::string& mappedPath, const std::string& realPath, bool mut)
         : ComponentResource(ResourceWasiDirectoryKind, type)
         , m_mappedPath(mappedPath)
         , m_realPath(realPath)
+        , m_mutable(mut)
     {
     }
 
@@ -268,9 +325,15 @@ public:
         return m_realPath;
     }
 
+    bool isMutable()
+    {
+        return m_mutable;
+    }
+
 private:
     std::string m_mappedPath;
     std::string m_realPath;
+    bool m_mutable;
 };
 
 class LiftedWasiFunction : public LiftedFunction {
