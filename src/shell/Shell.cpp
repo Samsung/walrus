@@ -270,7 +270,9 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
             } else if (import->fieldName() == "global_f64") {
                 importValues.push_back(Global::createGlobal(store, Value(double(0x4084d00000000000)), MutableType(Value::F64, false)));
             } else if (import->fieldName() == "table") {
-                importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20));
+                importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20, false));
+            } else if (import->fieldName() == "table64") {
+                importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20, true));
             } else if (import->fieldName() == "memory") {
                 importValues.push_back(Memory::createMemory(store, 1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize, false, false));
             } else {
@@ -1027,17 +1029,39 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         case wabt::CommandType::AssertInvalid: {
             auto* assertModuleInvalid = static_cast<wabt::AssertModuleCommand<wabt::CommandType::AssertInvalid>*>(command.get());
             auto m = assertModuleInvalid->module.get();
-            auto tsm = dynamic_cast<wabt::TextScriptModule*>(m);
-            auto dsm = dynamic_cast<wabt::BinaryScriptModule*>(m);
-            if (!tsm && !dsm) {
-                printf("Module is neither TextScriptModule nor BinaryScriptModule.\n");
-                RELEASE_ASSERT_NOT_REACHED();
+            wabt::TextScriptModule* tsm = dynamic_cast<wabt::TextScriptModule*>(m);
+            wabt::BinaryScriptModule* dsm = nullptr;
+            wabt::QuotedScriptModule* qsm = nullptr;
+            if (!tsm) {
+                dsm = dynamic_cast<wabt::BinaryScriptModule*>(m);
+                if (!dsm) {
+                    qsm = dynamic_cast<wabt::QuotedScriptModule*>(m);
+                    if (!qsm) {
+                        printf("Module is not TextScriptModule, BinaryScriptModule, or QuotedScriptModule.\n");
+                        RELEASE_ASSERT_NOT_REACHED();
+                    }
+                }
             }
             std::vector<uint8_t> buf;
             if (tsm) {
                 buf = readModuleData(&tsm->module)->data;
-            } else {
+            } else if (dsm) {
                 buf = dsm->data;
+            } else {
+                wabt::Errors errors;
+                wabt::Features features;
+                features.EnableAll();
+                wabt::WastParseOptions options(features);
+                std::unique_ptr<wabt::Module> m;
+                auto lexer = wabt::WastLexer::CreateBufferLexer(filename, qsm->data.data(), qsm->data.size(), &errors);
+                auto result = wabt::ParseWatModule(lexer.get(), &m, &errors, &options);
+                if (result != wabt::Result::Error) {
+                    printf("Parsing WAT returned Ok (in wabt::CommandType::AssertInvalid case)\n");
+                    printf("Expected exception:%s\n", assertModuleInvalid->text.data());
+                    RELEASE_ASSERT_NOT_REACHED();
+                }
+                printf("assertModuleInvalid (expect compile error: '%s', actual '%s'(line: %d)) : OK\n", assertModuleInvalid->text.data(), errors[0].message.c_str(), errors[0].loc.line);
+                break;
             }
             auto trapResult = executeWASM(store, filename, buf);
             if (trapResult.exception == nullptr) {

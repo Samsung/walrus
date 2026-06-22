@@ -294,19 +294,21 @@ private:
 
 class TableType : public ObjectType {
 public:
-    TableType(Type type, uint32_t initSize, uint32_t maxSize)
+    TableType(Type type, uint64_t initSize, uint64_t maxSize, bool is64)
         : ObjectType(ObjectType::TableKind)
         , m_type(type)
         , m_initialSize(initSize)
         , m_maximumSize(maxSize)
+        , m_is64(is64)
         , m_function(nullptr)
     {
     }
 
     Type type() const { return m_type; }
-    uint32_t initialSize() const { return m_initialSize; }
-    uint32_t maximumSize() const { return m_maximumSize; }
+    uint64_t initialSize() const { return m_initialSize; }
+    uint64_t maximumSize() const { return m_maximumSize; }
     ModuleFunction* function() const { return m_function; }
+    bool is64() const { return m_is64; }
 
     inline void setFunction(ModuleFunction* func)
     {
@@ -316,8 +318,9 @@ public:
 
 private:
     Type m_type;
-    uint32_t m_initialSize;
-    uint32_t m_maximumSize;
+    uint64_t m_initialSize;
+    uint64_t m_maximumSize;
+    bool m_is64;
     ModuleFunction* m_function;
 };
 

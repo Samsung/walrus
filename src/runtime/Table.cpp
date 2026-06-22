@@ -30,17 +30,18 @@ namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(tableTypeInfo, TableKind);
 
-Table* Table::createTable(Store* store, Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
+Table* Table::createTable(Store* store, Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, void* init)
 {
-    Table* tbl = new Table(type, initialSize, maximumSize, init ? init : reinterpret_cast<void*>(Value::NullBits));
+    Table* tbl = new Table(type, initialSize, maximumSize, is64, init ? init : reinterpret_cast<void*>(Value::NullBits));
     store->appendExtern(tbl);
 
     return tbl;
 }
 
-Table::Table(Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
+Table::Table(Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, void* init)
     : Extern(GET_GLOBAL_TYPE_INFO(tableTypeInfo))
     , m_type(type)
+    , m_is64(is64)
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
 {
@@ -48,6 +49,12 @@ Table::Table(Type type, uint32_t initialSize, uint32_t maximumSize, void* init)
         m_elements = nullptr;
         return;
     }
+
+    if (initialSize > (SIZE_MAX / sizeof(void*))) {
+        // Should cause an allocation error.
+        initialSize = SIZE_MAX / sizeof(void*);
+    }
+
 #ifdef ENABLE_GC
     m_elements = reinterpret_cast<void**>(GC_MALLOC_UNCOLLECTABLE(static_cast<size_t>(initialSize) * sizeof(void*)));
 #else
@@ -71,6 +78,12 @@ void Table::grow(uint64_t newSize, void* val)
     if (newSize == m_size) {
         return;
     }
+
+    if (newSize > (SIZE_MAX / sizeof(void*))) {
+        // Should cause an allocation error.
+        newSize = SIZE_MAX / sizeof(void*);
+    }
+
 #ifdef ENABLE_GC
     if (LIKELY(m_elements != nullptr)) {
         m_elements = reinterpret_cast<void**>(GC_REALLOC(m_elements, static_cast<size_t>(newSize) * sizeof(void*)));
@@ -84,12 +97,9 @@ void Table::grow(uint64_t newSize, void* val)
     m_size = newSize;
 }
 
-void Table::init(ExecutionState& state, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Table::init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize)
 {
-    if (UNLIKELY((uint64_t)dstStart + (uint64_t)srcSize > (uint64_t)m_size)) {
-        throwException(state);
-    }
-    if (UNLIKELY((srcStart + srcSize) > source->size())) {
+    if (UNLIKELY(!isValidRange(dstStart, srcSize) || (srcSize > source->size() || srcStart > source->size() - srcSize))) {
         throwException(state);
     }
     if (UNLIKELY(!m_type.isRef())) {
@@ -99,18 +109,18 @@ void Table::init(ExecutionState& state, ElementSegment* source, uint32_t dstStar
     this->initTable(source, dstStart, srcStart, srcSize);
 }
 
-void Table::copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
+void Table::copy(ExecutionState& state, const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex)
 {
-    if (UNLIKELY(((uint64_t)srcIndex + (uint64_t)n > (uint64_t)srcTable->size()) || ((uint64_t)dstIndex + (uint64_t)n > (uint64_t)m_size))) {
+    if (UNLIKELY(!isValidRange(dstIndex, n) || !srcTable->isValidRange(srcIndex, n))) {
         throwException(state);
     }
 
     this->copyTable(srcTable, n, srcIndex, dstIndex);
 }
 
-void Table::fill(ExecutionState& state, uint32_t n, void* value, uint32_t index)
+void Table::fill(ExecutionState& state, uint64_t n, void* value, uint64_t index)
 {
-    if ((uint64_t)index + (uint64_t)n > (uint64_t)m_size) {
+    if (UNLIKELY(!isValidRange(index, n))) {
         throwException(state);
     }
 
@@ -122,26 +132,17 @@ void Table::throwException(ExecutionState& state) const
     Trap::throwException(state, "out of bounds table access");
 }
 
-void Table::initTable(ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Table::initTable(ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize)
 {
     memcpy(m_elements + dstStart, source->elements() + srcStart, srcSize * sizeof(void*));
 }
 
-void Table::copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex)
+void Table::copyTable(const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex)
 {
-    while (n > 0) {
-        if (dstIndex <= srcIndex) {
-            m_elements[dstIndex] = srcTable->uncheckedGetElement(srcIndex);
-            dstIndex++;
-            srcIndex++;
-        } else {
-            m_elements[dstIndex + n - 1] = srcTable->uncheckedGetElement(srcIndex + n - 1);
-        }
-        n--;
-    }
+    memmove(m_elements + dstIndex, srcTable->m_elements + srcIndex, n * sizeof(void*));
 }
 
-void Table::fillTable(uint32_t n, void* value, uint32_t index)
+void Table::fillTable(uint64_t n, void* value, uint64_t index)
 {
     while (n > 0) {
         m_elements[index] = value;

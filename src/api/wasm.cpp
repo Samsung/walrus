@@ -226,7 +226,7 @@ struct wasm_tabletype_t : wasm_externtype_t {
     wasm_tabletype_t(const TableType* type)
         : wasm_externtype_t(WASM_EXTERN_TABLE)
         , valtype(type->type())
-        , limits{ type->initialSize(), type->maximumSize() }
+        , limits{ static_cast<uint32_t>(type->initialSize()), static_cast<uint32_t>(type->maximumSize()) }
     {
     }
 
@@ -1077,9 +1077,9 @@ own wasm_table_t* wasm_table_new(
 {
     Table* table = nullptr;
     if (UNLIKELY((size_t)init & OTHER_EXTERN_REF_TAG)) {
-        table = Table::createTable(store->get(), tt->valtype.type, tt->limits.min, tt->limits.max, reinterpret_cast<Object*>(init));
+        table = Table::createTable(store->get(), tt->valtype.type, tt->limits.min, tt->limits.max, false, reinterpret_cast<Object*>(init));
     } else {
-        table = Table::createTable(store->get(), tt->valtype.type, tt->limits.min, tt->limits.max, init ? const_cast<Object*>(init->get()) : nullptr);
+        table = Table::createTable(store->get(), tt->valtype.type, tt->limits.min, tt->limits.max, false, init ? const_cast<Object*>(init->get()) : nullptr);
     }
 
     return new wasm_table_t(table, tt->clone());

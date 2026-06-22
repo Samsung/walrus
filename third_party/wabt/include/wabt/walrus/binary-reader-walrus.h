@@ -58,8 +58,8 @@ public:
     virtual void OnImportCount(Index count) = 0;
     virtual void OnImportFunc(Index importIndex, std::string moduleName, std::string fieldName, Index funcIndex, Index sigIndex) = 0;
     virtual void OnImportGlobal(Index importIndex, std::string moduleName, std::string fieldName, Index globalIndex, Type type, bool mutable_) = 0;
-    virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, size_t initialSize, size_t maximumSize) = 0;
-    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool isShared, bool is64) = 0;
+    virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, uint64_t initialSize, uint64_t maximumSize, bool is64) = 0;
+    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, uint64_t initialSize, uint64_t maximumSize, bool isShared, bool is64) = 0;
     virtual void OnImportTag(Index importIndex, std::string moduleName, std::string fieldName, Index tagIndex, Index sigIndex) = 0;
 
     virtual void OnExportCount(Index count) = 0;
@@ -76,7 +76,7 @@ public:
     virtual void EndDataSegment(Index index) = 0;
 
     virtual void OnTableCount(Index count) = 0;
-    virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) = 0;
+    virtual void OnTable(Index index, Type type, uint64_t initialSize, uint64_t maximumSize, bool is64) = 0;
     virtual void BeginTableInitExpr(Index index) = 0;
     virtual void EndTableInitExpr(Index index) = 0;
 

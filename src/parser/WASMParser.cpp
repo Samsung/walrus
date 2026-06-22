@@ -1071,19 +1071,19 @@ public:
             moduleName, fieldName, m_result.m_globalTypes[globalIndex]));
     }
 
-    virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, size_t initialSize, size_t maximumSize) override
+    virtual void OnImportTable(Index importIndex, std::string moduleName, std::string fieldName, Index tableIndex, Type type, uint64_t initialSize, uint64_t maximumSize, bool is64) override
     {
         ASSERT(tableIndex == m_result.m_tableTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
         ASSERT(type.IsRef());
 
-        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type, &m_result), initialSize, maximumSize));
+        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type, &m_result), initialSize, maximumSize, is64));
         m_result.m_imports.push_back(new Walrus::ImportType(
             Walrus::ImportType::Table,
             moduleName, fieldName, m_result.m_tableTypes[tableIndex]));
     }
 
-    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, size_t initialSize, size_t maximumSize, bool isShared, bool is64) override
+    virtual void OnImportMemory(Index importIndex, std::string moduleName, std::string fieldName, Index memoryIndex, uint64_t initialSize, uint64_t maximumSize, bool isShared, bool is64) override
     {
         ASSERT(memoryIndex == m_result.m_memoryTypes.size());
         ASSERT(m_result.m_imports.size() == importIndex);
@@ -1130,11 +1130,11 @@ public:
         m_result.m_tableTypes.reserve(count);
     }
 
-    virtual void OnTable(Index index, Type type, size_t initialSize, size_t maximumSize) override
+    virtual void OnTable(Index index, Type type, uint64_t initialSize, uint64_t maximumSize, bool is64) override
     {
         ASSERT(index == m_result.m_tableTypes.size());
         ASSERT(type.IsRef());
-        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type, &m_result), initialSize, maximumSize));
+        m_result.m_tableTypes.push_back(new Walrus::TableType(toRefValueKind(type, &m_result), initialSize, maximumSize, is64));
     }
 
     virtual void BeginTableInitExpr(Index index) override
