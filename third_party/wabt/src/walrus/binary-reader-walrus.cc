@@ -262,7 +262,8 @@ public:
     Result OnImportTable(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index table_index, Type elem_type, const Limits *elem_limits) override {
         CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, wabt::TableImportStatus::TableIsImported, wabt::TableInitExprStatus::TableWithoutInitExpression));
         m_tableTypes.push_back(elem_type);
-        m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
+        uint64_t max = elem_limits->has_max ? elem_limits->max : (elem_limits->is_64 ? std::numeric_limits<uint64_t>::max() : std::numeric_limits<uint32_t>::max());
+        m_externalDelegate->OnImportTable(import_index, std::string(module_name), std::string(field_name), table_index, elem_type, elem_limits->initial, max, elem_limits->is_64);
         return Result::Ok;
     }
     Result OnImportMemory(Index import_index, nonstd::string_view module_name, nonstd::string_view field_name, Index memory_index, const Limits *page_limits, uint32_t page_size) override {
@@ -313,7 +314,8 @@ public:
     Result BeginTable(Index index, Type elem_type, const Limits* elem_limits, TableInitExprStatus init_provided) override {
         CHECK_RESULT(m_validator.OnTable(GetLocation(), elem_type, *elem_limits, wabt::TableImportStatus::TableIsNotImported, init_provided));
         m_tableTypes.push_back(elem_type);
-        m_externalDelegate->OnTable(index, elem_type, elem_limits->initial, elem_limits->has_max ? elem_limits->max : std::numeric_limits<uint32_t>::max());
+        uint64_t max = elem_limits->has_max ? elem_limits->max : (elem_limits->is_64 ? std::numeric_limits<uint64_t>::max() : std::numeric_limits<uint32_t>::max());
+        m_externalDelegate->OnTable(index, elem_type, elem_limits->initial, max, elem_limits->is_64);
         assert(m_lastInitType == Type::___);
         m_lastInitType = elem_type;
         return Result::Ok;

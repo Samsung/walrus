@@ -31,7 +31,7 @@ class Table : public Extern {
     friend class JITFieldAccessor;
 
 public:
-    static Table* createTable(Store* store, Type type, uint32_t initialSize, uint32_t maximumSize, void* init = nullptr);
+    static Table* createTable(Store* store, Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, void* init = nullptr);
 
     ~Table();
 
@@ -40,18 +40,33 @@ public:
         return m_type;
     }
 
-    uint32_t size() const
+    bool is64() const
+    {
+        return m_is64;
+    }
+
+    uint64_t size() const
     {
         return m_size;
     }
 
-    uint32_t maximumSize() const
+    uint64_t maximumSize() const
     {
         return m_maximumSize;
     }
 
     void* getElement(ExecutionState& state, uint32_t elemIndex) const
     {
+        ASSERT(!m_is64);
+        if (UNLIKELY(elemIndex >= m_size)) {
+            throwException(state);
+        }
+        return m_elements[elemIndex];
+    }
+
+    void* getElement64(ExecutionState& state, uint64_t elemIndex) const
+    {
+        ASSERT(m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
             throwException(state);
         }
@@ -60,12 +75,28 @@ public:
 
     void* uncheckedGetElement(uint32_t elemIndex) const
     {
-        ASSERT(elemIndex < m_size);
+        ASSERT(!m_is64 && elemIndex < m_size);
+        return m_elements[elemIndex];
+    }
+
+    void* uncheckedGetElement64(uint64_t elemIndex) const
+    {
+        ASSERT(m_is64 && elemIndex < m_size);
         return m_elements[elemIndex];
     }
 
     void setElement(ExecutionState& state, uint32_t elemIndex, void* val)
     {
+        ASSERT(!m_is64);
+        if (UNLIKELY(elemIndex >= m_size)) {
+            throwException(state);
+        }
+        m_elements[elemIndex] = val;
+    }
+
+    void setElement64(ExecutionState& state, uint64_t elemIndex, void* val)
+    {
+        ASSERT(m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
             throwException(state);
         }
@@ -74,28 +105,40 @@ public:
 
     void uncheckedSetElement(uint32_t elemIndex, void* val)
     {
-        ASSERT(elemIndex < m_size);
+        ASSERT(!m_is64 && elemIndex < m_size);
+        m_elements[elemIndex] = val;
+    }
+
+    void uncheckedSetElement64(uint64_t elemIndex, void* val)
+    {
+        ASSERT(m_is64 && elemIndex < m_size);
         m_elements[elemIndex] = val;
     }
 
     void grow(uint64_t newSize, void* val);
-    void copy(ExecutionState& state, const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
-    void fill(ExecutionState& state, uint32_t n, void* value, uint32_t index);
-    void init(ExecutionState& state, ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copy(ExecutionState& state, const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
+    void fill(ExecutionState& state, uint64_t n, void* value, uint64_t index);
+    void init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize);
 
-    void initTable(ElementSegment* source, uint32_t dstStart, uint32_t srcStart, uint32_t srcSize);
-    void copyTable(const Table* srcTable, uint32_t n, uint32_t srcIndex, uint32_t dstIndex);
-    void fillTable(uint32_t n, void* value, uint32_t index);
+    void initTable(ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize);
+    void copyTable(const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
+    void fillTable(uint64_t n, void* value, uint64_t index);
 
 private:
-    Table(Type type, uint32_t initialSize, uint32_t maximumSize, void* init);
+    Table(Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, void* init);
+
+    bool isValidRange(uint64_t start, uint64_t size) const
+    {
+        return size <= m_size && start <= m_size - size;
+    }
 
     void throwException(ExecutionState& state) const;
 
     // Table has elements of reference type (FuncRef | ExternRef)
     Type m_type;
-    uint32_t m_size;
-    uint32_t m_maximumSize;
+    bool m_is64;
+    uint64_t m_size;
+    uint64_t m_maximumSize;
 
     // FIXME handle references of Function objects
     void** m_elements;
