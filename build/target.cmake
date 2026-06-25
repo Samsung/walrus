@@ -87,8 +87,9 @@ ELSEIF ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang") # Clang and AppleClang
         -fno-fast-math -fno-unsafe-math-optimizations -fdenormal-fp-math=ieee
         -Wno-type-limits -Wno-unused-result -Wno-unused-variable -Wno-invalid-offsetof -Wno-unused-function
         -Wno-deprecated-declarations -Wno-parentheses-equality -Wno-dynamic-class-memaccess -Wno-deprecated-register
-        -Wno-expansion-to-defined -Wno-return-type -Wno-overloaded-virtual -Wno-unused-private-field -Wno-deprecated-copy -Wno-atomic-alignment
-        -Wno-ambiguous-reversed-operator -Wno-deprecated-enum-enum-conversion -Wno-deprecated-enum-float-conversion -Wno-braced-scalar-init -Wno-unused-parameter
+        -Wno-expansion-to-defined -Wno-return-type -Wno-overloaded-virtual -Wno-unused-private-field -Wno-deprecated-copy
+        -Wno-atomic-alignment -Wno-ambiguous-reversed-operator -Wno-deprecated-enum-enum-conversion
+        -Wno-deprecated-enum-float-conversion -Wno-braced-scalar-init -Wno-unused-parameter -Wno-deprecated-literal-operator
     )
     IF (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 10)
         # this feature supported after clang version 11
