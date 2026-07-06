@@ -334,9 +334,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
                           uint8_t flags) override;
   Result BeginDataSegmentInitExpr(Index index) override;
   Result EndDataSegmentInitExpr(Index index) override;
-  Result OnDataSegmentData(Index index,
-                           const void* data,
-                           Address size) override;
+  Result OnDataSegmentData(Index index, ByteSpan data) override;
   Result EndDataSegment(Index index) override;
   Result EndDataSection() override;
 
@@ -396,9 +394,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result EndDylinkSection() override;
 
   Result BeginGenericCustomSection(Offset size) override;
-  Result OnGenericCustomSection(nonstd::string_view name,
-                                const void* data,
-                                Offset size) override;
+  Result OnGenericCustomSection(nonstd::string_view name, ByteSpan data) override;
   Result EndGenericCustomSection() override;
 
   Result BeginTargetFeaturesSection(Offset size) override;
@@ -456,7 +452,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
   Result BeginCodeMetadataSection(nonstd::string_view name, Offset size) override;
   Result OnCodeMetadataFuncCount(Index count) override;
   Result OnCodeMetadataCount(Index function_index, Index count) override;
-  Result OnCodeMetadata(Offset offset, const void* data, Address size) override;
+  Result OnCodeMetadata(Offset offset, ByteSpan data) override;
   Result EndCodeMetadataSection() override;
 
  private:

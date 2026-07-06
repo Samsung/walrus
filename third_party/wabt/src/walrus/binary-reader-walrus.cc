@@ -178,7 +178,7 @@ public:
     void OnSetState(const State* s) override {
         BinaryReaderDelegate::OnSetState(s);
         m_externalDelegate->OnSetOffsetAddress(const_cast<size_t*>(&s->offset));
-        m_externalDelegate->OnSetDataAddress(s->data);
+        m_externalDelegate->OnSetDataAddress(s->data.data());
     }
 
     bool OnError(const Error& err) override {
@@ -1165,8 +1165,8 @@ public:
         m_externalDelegate->EndDataSegmentInitExpr(index);
         return Result::Ok;
     }
-    Result OnDataSegmentData(Index index, const void *data, Address size) override {
-        m_externalDelegate->OnDataSegmentData(index, data, size);
+    Result OnDataSegmentData(Index index, ByteSpan data) override {
+        m_externalDelegate->OnDataSegmentData(index, data.data(), data.size());
         return Result::Ok;
     }
     Result EndDataSegment(Index index) override {
@@ -1296,7 +1296,7 @@ public:
         abort();
         return Result::Ok;
     }
-    Result OnCodeMetadata(Offset offset, const void *data, Address size) override {
+    Result OnCodeMetadata(Offset offset, ByteSpan data) override {
         abort();
         return Result::Ok;
     }
@@ -1362,7 +1362,7 @@ public:
     Result BeginGenericCustomSection(Offset size) override {
         return Result::Ok;
     }
-    Result OnGenericCustomSection(nonstd::string_view name, const void* data, Offset size) override {
+    Result OnGenericCustomSection(nonstd::string_view name, ByteSpan data) override {
         return Result::Ok;
     }
     Result EndGenericCustomSection() override {
@@ -1606,7 +1606,7 @@ std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, siz
     const bool kFailOnCustomSectionError = true;
     ReadBinaryOptions options(getFeatures(featureFlags), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
     BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename, featureFlags);
-    Result result = ReadBinary(data, size, &binaryReaderDelegateWalrus, options);
+    Result result = ReadBinary(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);
 
     if (WABT_UNLIKELY(binaryReaderDelegateWalrus.m_errors.size())) {
         return std::move(binaryReaderDelegateWalrus.m_errors.begin()->message);
@@ -1650,11 +1650,9 @@ public:
         return m_externalDelegate->WalrusParseError().empty() ? Result::Ok : Result::Error;
     }
 
-    Result OnCoreModule(const void* data,
-                        size_t size,
-                        const ReadBinaryOptions& options) override {
+    Result OnCoreModule(ByteSpan data, const ReadBinaryOptions& options) override {
         CHECK_RESULT(m_validator.OnCoreModule());
-        m_externalDelegate->OnCoreModule(data, size, options, &m_data);
+        m_externalDelegate->OnCoreModule(data.data(), data.size(), options, &m_data);
         return CheckParseError();
     }
 
@@ -2127,7 +2125,7 @@ std::string ReadWasmComponentBinary(const uint8_t *data, size_t size, WASMCompon
     const bool kFailOnCustomSectionError = true;
     ReadBinaryOptions options(getFeatures(delegate->featureFlags()), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
     ComponentBinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate);
-    Result result = ReadBinaryComponent(data, size, &binaryReaderDelegateWalrus, options);
+    Result result = ReadBinaryComponent(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);
 
     if (WABT_UNLIKELY(binaryReaderDelegateWalrus.m_errors.size())) {
         return std::move(binaryReaderDelegateWalrus.m_errors.begin()->message);
