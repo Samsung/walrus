@@ -343,9 +343,7 @@ class BinaryReaderIR : public BinaryReaderNop {
                           uint8_t flags) override;
   Result BeginDataSegmentInitExpr(Index index) override;
   Result EndDataSegmentInitExpr(Index index) override;
-  Result OnDataSegmentData(Index index,
-                           const void* data,
-                           Address size) override;
+  Result OnDataSegmentData(Index index, ByteSpan data) override;
 
   Result OnModuleName(nonstd::string_view module_name) override;
   Result OnFunctionNamesCount(Index num_functions) override;
@@ -359,9 +357,7 @@ class BinaryReaderIR : public BinaryReaderNop {
                      Index index,
                      nonstd::string_view name) override;
 
-  Result OnGenericCustomSection(nonstd::string_view name,
-                                const void* data,
-                                Offset size) override;
+  Result OnGenericCustomSection(nonstd::string_view name, ByteSpan data) override;
 
   Result BeginTagSection(Offset size) override { return Result::Ok; }
   Result OnTagCount(Index count) override { return Result::Ok; }
@@ -389,7 +385,7 @@ class BinaryReaderIR : public BinaryReaderNop {
   Result BeginCodeMetadataSection(nonstd::string_view name, Offset size) override;
   Result OnCodeMetadataFuncCount(Index count) override;
   Result OnCodeMetadataCount(Index function_index, Index count) override;
-  Result OnCodeMetadata(Offset offset, const void* data, Address size) override;
+  Result OnCodeMetadata(Offset offset, ByteSpan data) override;
 
   Result OnTagSymbol(Index index,
                      uint32_t flags,
@@ -1672,15 +1668,10 @@ Result BinaryReaderIR::EndDataSegmentInitExpr(Index index) {
   return EndInitExpr();
 }
 
-Result BinaryReaderIR::OnDataSegmentData(Index index,
-                                         const void* data,
-                                         Address size) {
+Result BinaryReaderIR::OnDataSegmentData(Index index, ByteSpan data) {
   assert(index == module_->data_segments.size() - 1);
   DataSegment* segment = module_->data_segments[index];
-  segment->data.resize(size);
-  if (size > 0) {
-    memcpy(segment->data.data(), data, size);
-  }
+  segment->data.assign(data.begin(), data.end());
   return Result::Ok;
 }
 
@@ -1907,11 +1898,8 @@ Result BinaryReaderIR::OnCodeMetadataCount(Index function_index, Index count) {
   return Result::Error;
 }
 
-Result BinaryReaderIR::OnCodeMetadata(Offset offset,
-                                      const void* data,
-                                      Address size) {
-  std::vector<uint8_t> data_(static_cast<const uint8_t*>(data),
-                             static_cast<const uint8_t*>(data) + size);
+Result BinaryReaderIR::OnCodeMetadata(Offset offset, ByteSpan data) {
+  std::vector<uint8_t> data_(data.begin(), data.end());
   auto meta = MakeUnique<CodeMetadataExpr>(current_metadata_name_,
                                                  std::move(data_));
   meta->loc.offset = offset;
@@ -2034,13 +2022,9 @@ Result BinaryReaderIR::OnTableSymbol(Index index,
 }
 
 Result BinaryReaderIR::OnGenericCustomSection(nonstd::string_view name,
-                                              const void* data,
-                                              Offset size) {
+                                              ByteSpan data) {
   Custom custom = Custom(GetLocation(), name);
-  custom.data.resize(size);
-  if (size > 0) {
-    memcpy(custom.data.data(), data, size);
-  }
+  custom.data.assign(data.begin(), data.end());
   module_->customs.push_back(std::move(custom));
   return Result::Ok;
 }
@@ -2054,9 +2038,7 @@ class BinaryReaderComponentIR : public ComponentBinaryReaderDelegate {
  public:
   bool OnError(const Error&) override { return false; }
 
-  Result OnCoreModule(const void* data,
-                      size_t size,
-                      const ReadBinaryOptions& options) override;
+  Result OnCoreModule(ByteSpan data, const ReadBinaryOptions& options) override;
   Result BeginComponent(uint32_t version, size_t depth) override;
   Result EndComponent() override;
 
@@ -2192,12 +2174,11 @@ BinaryReaderComponentIR::BinaryReaderComponentIR(Component* out_component,
       string_table_(out_component),
       filename_(filename) {}
 
-Result BinaryReaderComponentIR::OnCoreModule(const void* data,
-                                             size_t size,
+Result BinaryReaderComponentIR::OnCoreModule(ByteSpan data,
                                              const ReadBinaryOptions& options) {
   auto coreModule = MakeUnique<ComponentCoreModule>();
   BinaryReaderIR reader(coreModule->module(), filename_, errors_);
-  CHECK_RESULT(ReadBinary(data, size, &reader, options));
+  CHECK_RESULT(ReadBinary(data, &reader, options));
   ComponentData* component = def_list_->AsComponent();
   component->Append(std::move(coreModule));
   return Result::Ok;
@@ -2763,23 +2744,33 @@ void BinaryReaderComponentIR::ParseCanonOptions(
 }  // end anonymous namespace
 
 Result ReadBinaryIr(const char* filename,
-                    const void* data,
-                    size_t size,
+                    ByteSpan data,
                     const ReadBinaryOptions& options,
                     Errors* errors,
                     Module* out_module) {
   BinaryReaderIR reader(out_module, filename, errors);
-  return ReadBinary(data, size, &reader, options);
+  return ReadBinary(data, &reader, options);
+}
+
+// TODO(sbc): Remove this old API. Use the ByteSpan overload instead.
+Result ReadBinaryIr(const char* filename,
+                    const uint8_t* data,
+                    size_t size,
+                    const ReadBinaryOptions& options,
+                    Errors* errors,
+                    Module* out_module) {
+  return ReadBinaryIr(filename, ByteSpan(data, size), options, errors,
+                      out_module);
 }
 
 Result ReadBinaryComponentIr(const char* filename,
-                             const void* data,
+                             const uint8_t* data,
                              size_t size,
                              const ReadBinaryOptions& options,
                              Errors* errors,
                              Component* out_component) {
   BinaryReaderComponentIR reader(out_component, filename, errors);
-  return ReadBinaryComponent(data, size, &reader, options);
+  return ReadBinaryComponent(ByteSpan(data, size), &reader, options);
 }
 
 }  // namespace wabt

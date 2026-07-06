@@ -23,6 +23,7 @@
 #include "wabt/literal.h"
 
 #include <locale.h>
+#include <bit>
 #include <cassert>
 #include <cerrno>
 #include <cinttypes>
@@ -40,6 +41,35 @@
 namespace wabt {
 
 namespace {
+
+#if COMPILER_IS_CLANG || COMPILER_IS_GNU
+
+inline int Clz(unsigned x) { return x ? __builtin_clz(x) : sizeof(x) * 8; }
+inline int Clz(unsigned long x) { return x ? __builtin_clzl(x) : sizeof(x) * 8; }
+inline int Clz(unsigned long long x) { return x ? __builtin_clzll(x) : sizeof(x) * 8; }
+
+#else
+
+inline int Clz(uint32_t mask) {
+  if (mask == 0)
+    return 32;
+
+  unsigned long index;
+  _BitScanReverse(&index, mask);
+  return sizeof(unsigned long) * 8 - (index + 1);
+}
+
+inline int Clz(uint64_t mask) {
+  if (mask == 0)
+    return 64;
+
+  if ((mask >> 32) != 0)
+    return Clz(static_cast<uint32_t>(mask >> 32));
+
+  return Clz(static_cast<uint32_t>(mask)) + 32;
+}
+
+#endif
 
 // Always use the C locale for parsing floats since the Wat grammar requires
 // `.` for the radix.
@@ -137,21 +167,14 @@ class FloatWriter {
   static void WriteHex(char* out, size_t size, Uint bits);
 };
 
-// Return 1 if the non-NULL-terminated string starting with |start| and ending
-// with |end| starts with the NULL-terminated string |prefix|.
+// Return true if the non-NULL-terminated string starting with |start| and
+// ending with |end| starts with the NULL-terminated string |prefix|.
 template <typename T>
 // static
 bool FloatParser<T>::StringStartsWith(const char* start,
                                       const char* end,
                                       const char* prefix) {
-  while (start < end && *prefix) {
-    if (*start != *prefix) {
-      return false;
-    }
-    start++;
-    prefix++;
-  }
-  return *prefix == 0;
+  return nonstd::string_view(start, end - start).starts_with(prefix);
 }
 
 // static
@@ -305,7 +328,8 @@ Result FloatParser<T>::ParseHex(const char* s,
     } else if (*s == '.') {
       seen_dot = true;
     } else if (Succeeded(ParseHexdigit(*s, &digit))) {
-      if (Traits::kBits - Clz(significand) <= Traits::kSigPlusOneBits) {
+      if (Traits::kBits - Clz(significand) <=
+          Traits::kSigPlusOneBits) {
         significand = (significand << 4) + digit;
         if (seen_dot) {
           significand_exponent -= 4;

@@ -171,7 +171,8 @@ Result SharedValidator::OnTable(const Location& loc,
   if (tables_.size() > 0 && !options_.features.reference_types_enabled()) {
     result |= PrintError(loc, "only one table allowed");
   }
-  result |= CheckLimits(loc, limits, UINT32_MAX, "elems");
+  uint64_t absolute_max = limits.is_64 ? UINT64_MAX : UINT32_MAX;
+  result |= CheckLimits(loc, limits, absolute_max, "elems");
 
   if (limits.is_shared) {
     result |= PrintError(loc, "tables may not be shared");
@@ -1214,7 +1215,8 @@ Result SharedValidator::OnCallIndirect(const Location& loc,
   TableType table_type;
   result |= CheckFuncTypeIndex(sig_var, &func_type);
   result |= CheckTableIndex(table_var, &table_type);
-  if (Failed(typechecker_.CheckType(table_type.element, Type::FuncRef))) {
+  if (table_type.element == Type::Any ||
+      Failed(typechecker_.CheckType(table_type.element, Type::FuncRef))) {
     result |= PrintError(
         loc,
         "type mismatch: call_indirect must reference table of funcref type");
@@ -1591,7 +1593,8 @@ Result SharedValidator::OnReturnCallIndirect(const Location& loc,
   TableType table_type;
   result |= CheckFuncTypeIndex(sig_var, &func_type);
   result |= CheckTableIndex(table_var, &table_type);
-  if (table_type.element != Type::FuncRef) {
+  if (table_type.element == Type::Any ||
+      Failed(typechecker_.CheckType(table_type.element, Type::FuncRef))) {
     result |= PrintError(loc,
                          "type mismatch: return_call_indirect must reference "
                          "table of funcref type");
