@@ -203,6 +203,14 @@ void WASI::fd_pwrite(ExecutionState& state, Value* argv, Value* result, Instance
     result[0] = Value(uvwasi_fd_pwrite(WASI::g_uvwasi, fd, iovs, iovsLen, offset, nwritten));
 }
 
+void WASI::fd_allocate(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint64_t offset = argv[1].asI64();
+    uint64_t len = argv[2].asI64();
+    result[0] = Value(uvwasi_fd_allocate(WASI::g_uvwasi, fd, offset, len));
+}
+
 void WASI::fd_write(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
