@@ -122,29 +122,77 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
         addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
         functionType = callIndirect->functionType();
         stackOffset = callIndirect->stackOffsets();
-    } else {
+    } else if (instr->opcode() == ByteCode::CallRefOpcode) {
         CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+        addr = GET_FUNC_ADDR(sljit_sw, callFunctionRef);
+        functionType = callRef->functionType();
+        stackOffset = callRef->stackOffsets();
+    } else if (instr->opcode() == ByteCode::ReturnCallOpcode) {
+        ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
+        addr = GET_FUNC_ADDR(sljit_sw, callFunction);
+        functionType = context->compiler->module()->function(call->index())->functionType();
+        stackOffset = call->stackOffsets();
+    } else if (instr->opcode() == ByteCode::ReturnCallIndirectOpcode) {
+        ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode());
+        addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
+        functionType = callIndirect->functionType();
+        stackOffset = callIndirect->stackOffsets();
+    } else {
+        ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
         addr = GET_FUNC_ADDR(sljit_sw, callFunctionRef);
         functionType = callRef->functionType();
         stackOffset = callRef->stackOffsets();
     }
 
     Operand* operand = instr->operands();
+
+    if (instr->info() & Instruction::kIsReturnCall) {
+        //Tail-Call Optimize
+        //Rewind the function flow into start of function.
+        ASSERT(instr->opcode() == ByteCode::ReturnCallOpcode);
+        sljit_sw paramOffset = 0;
+
+        for (auto it : functionType->param().types()) {
+            Operand dst = VARIABLE_SET(STACK_OFFSET(paramOffset), Instruction::Offset);
+
+            switch (VARIABLE_TYPE(*operand)) {
+            case Instruction::ConstPtr:
+                ASSERT(!(VARIABLE_GET_IMM(*operand)->info() & Instruction::kKeepInstruction));
+                emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(*operand), false);
+                break;
+            case Instruction::Register:
+                emitMove(compiler, Instruction::valueTypeToOperandType(it), operand, &dst);
+                break;
+            }
+
+            paramOffset += static_cast<sljit_sw>(valueStackAllocatedSize(it));
+            operand++;
+        }
+
+        sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->tailCallLabel);
+        return;
+    }
+
     stackOffset = emitStoreOntoStack(compiler, operand, stackOffset, functionType->param(), true);
     operand += instr->paramCount();
 
-    // Pass the value using memory
-    if (instr->opcode() != ByteCode::CallOpcode) {
+    ByteCode::Opcode callOpcode = instr->opcode();
+    if (callOpcode == ByteCode::CallIndirectOpcode || callOpcode == ByteCode::CallRefOpcode
+        || callOpcode == ByteCode::ReturnCallIndirectOpcode || callOpcode == ByteCode::ReturnCallRefOpcode) {
         ByteCodeStackOffset calleeOffset;
         sljit_s32 movOpcode;
 
-        if (instr->opcode() == ByteCode::CallIndirectOpcode) {
-            CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
-            calleeOffset = callIndirect->calleeOffset();
+        if (callOpcode == ByteCode::CallIndirectOpcode) {
+            calleeOffset = reinterpret_cast<CallIndirect*>(instr->byteCode())->calleeOffset();
             movOpcode = SLJIT_MOV32;
+        } else if (callOpcode == ByteCode::ReturnCallIndirectOpcode) {
+            calleeOffset = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode())->calleeOffset();
+            movOpcode = SLJIT_MOV32;
+        } else if (callOpcode == ByteCode::CallRefOpcode) {
+            calleeOffset = reinterpret_cast<CallRef*>(instr->byteCode())->calleeOffset();
+            movOpcode = SLJIT_MOV;
         } else {
-            CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
-            calleeOffset = callRef->calleeOffset();
+            calleeOffset = reinterpret_cast<ReturnCallRef*>(instr->byteCode())->calleeOffset();
             movOpcode = SLJIT_MOV;
         }
         operand--;
@@ -177,6 +225,7 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(instr->byteCode()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
+
 
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 

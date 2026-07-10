@@ -519,8 +519,18 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         } else if (instr->opcode() == ByteCode::CallIndirectOpcode) {
             CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
             functionType = callIndirect->functionType();
-        } else {
+        } else if (instr->opcode() == ByteCode::CallRefOpcode) {
             CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+            functionType = callRef->functionType();
+        } else if (instr->opcode() == ByteCode::ReturnCallOpcode) {
+            ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
+            functionType = module()->function(call->index())->functionType();
+        } else if (instr->opcode() == ByteCode::ReturnCallIndirectOpcode) {
+            ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode());
+            functionType = callIndirect->functionType();
+        } else {
+            ASSERT(instr->opcode() == ByteCode::ReturnCallRefOpcode);
+            ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
             functionType = callRef->functionType();
         }
 
@@ -782,6 +792,21 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     }
                     case ByteCode::CallRefOpcode: {
                         CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+                        types = &callRef->functionType()->param();
+                        break;
+                    }
+                    case ByteCode::ReturnCallOpcode: {
+                        ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
+                        types = &module()->function(call->index())->functionType()->param();
+                        break;
+                    }
+                    case ByteCode::ReturnCallIndirectOpcode: {
+                        ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode());
+                        types = &callIndirect->functionType()->param();
+                        break;
+                    }
+                    case ByteCode::ReturnCallRefOpcode: {
+                        ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
                         types = &callRef->functionType()->param();
                         break;
                     }

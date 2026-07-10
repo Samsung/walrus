@@ -261,6 +261,7 @@ public:
     // These two are only used by memory load/store instructions
     static const uint16_t kMultiMemory = 1 << 9;
     static const uint16_t kMemory64 = 1 << 10;
+    static const uint16_t kIsReturnCall = 1 << 11;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -565,6 +566,9 @@ struct CompileContext {
     void emitSlowCases(sljit_compiler* compiler);
 
     JITCompiler* compiler;
+    // Label at the top of the current function body (right after the prolog).
+    // Self tail calls jump here to reuse the frame instead of recursing.
+    sljit_label* tailCallLabel;
     uintptr_t branchTableOffset;
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     uintptr_t shuffleOffset;

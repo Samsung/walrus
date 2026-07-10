@@ -1119,6 +1119,7 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 #endif /* WALRUS_JITPERF */
 
     emitProlog();
+    m_context.tailCallLabel = sljit_emit_label(m_compiler);
 
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
 #if defined(WALRUS_JITPERF) && !defined(NDEBUG)
