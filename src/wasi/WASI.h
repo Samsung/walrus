@@ -44,6 +44,7 @@ public:
     F(clock_time_get, I32I64I32_RI32)                      \
     F(random_get, I32I32_RI32)                             \
     F(fd_pwrite, I32I32I32I64I32_RI32)                     \
+    F(fd_allocate, I32I64I64_RI32)                         \
     F(fd_write, I32I32I32I32_RI32)                         \
     F(fd_tell, I32I32_RI32)                                \
     F(fd_read, I32I32I32I32_RI32)                          \
