@@ -623,6 +623,7 @@ private:
 
     bool m_inInitExpr;
     Walrus::ModuleFunction* m_currentFunction;
+    uint32_t m_currentFunctionIndex;
     Walrus::FunctionType* m_currentFunctionType;
     Walrus::Vector<uint8_t, std::allocator<uint8_t>> m_currentByteCode;
     uint32_t m_initialFunctionStackSize;
@@ -1354,6 +1355,7 @@ public:
     {
         ASSERT(resumeGenerateByteCodeAfterNBlockEnd() == 0);
         ASSERT(m_currentFunction == nullptr);
+        m_currentFunctionIndex = index;
         beginFunction(m_result.m_functions[index], false);
     }
 
@@ -1619,7 +1621,7 @@ public:
     virtual void OnReturnCallExpr(uint32_t index) override
     {
         m_preprocessData.seenBranch();
-        if (m_useJIT) {
+        if (m_useJIT && index != m_currentFunctionIndex) {
             OnCallExpr(index);
             generateFunctionReturnCode();
             return;

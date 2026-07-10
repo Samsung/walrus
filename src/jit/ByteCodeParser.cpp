@@ -1223,6 +1223,54 @@ static void compileFunction(JITCompiler* compiler)
             ASSERT(operand == instr->operands() + instr->paramCount() + instr->resultCount());
             break;
         }
+        case ByteCode::ReturnCallOpcode:
+        case ByteCode::ReturnCallIndirectOpcode:
+        case ByteCode::ReturnCallRefOpcode: {
+            FunctionType* functionType;
+            ByteCodeStackOffset* stackOffset;
+            uint32_t callerCount;
+
+            if (opcode == ByteCode::ReturnCallOpcode) {
+                ReturnCall* call = reinterpret_cast<ReturnCall*>(byteCode);
+                functionType = compiler->module()->function(call->index())->functionType();
+                stackOffset = call->stackOffsets();
+                callerCount = 0;
+            } else if (opcode == ByteCode::ReturnCallIndirectOpcode) {
+                ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(byteCode);
+                functionType = callIndirect->functionType();
+                stackOffset = callIndirect->stackOffsets();
+                callerCount = 1;
+            } else {
+                ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(byteCode);
+                functionType = callRef->functionType();
+                stackOffset = callRef->stackOffsets();
+                callerCount = 1;
+            }
+
+            Instruction* instr = compiler->appendExtended(byteCode, Instruction::Call, opcode,
+                                                          functionType->param().size() + callerCount, functionType->result().size());
+            Operand* operand = instr->operands();
+            instr->addInfo(Instruction::kIsCallback | Instruction::kFreeUnusedEarly | Instruction::kIsReturnCall);
+
+            for (auto it : functionType->param().types()) {
+                *operand++ = STACK_OFFSET(*stackOffset);
+                stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
+            }
+
+            if (opcode == ByteCode::ReturnCallIndirectOpcode) {
+                *operand++ = STACK_OFFSET(reinterpret_cast<ReturnCallIndirect*>(byteCode)->calleeOffset());
+            } else if (opcode == ByteCode::ReturnCallRefOpcode) {
+                *operand++ = STACK_OFFSET(reinterpret_cast<ReturnCallRef*>(byteCode)->calleeOffset());
+            }
+
+            for (auto it : functionType->result().types()) {
+                *operand++ = STACK_OFFSET(*stackOffset);
+                stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
+            }
+
+            ASSERT(operand == instr->operands() + instr->paramCount() + instr->resultCount());
+            break;
+        }
         case ByteCode::ThrowOpcode: {
             Throw* throwTag = reinterpret_cast<Throw*>(byteCode);
             TagType* tagType = compiler->module()->tagType(throwTag->tagIndex());

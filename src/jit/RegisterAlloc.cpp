@@ -697,7 +697,8 @@ void JITCompiler::allocateRegisters()
             // No register assignment required.
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
-                   || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::JumpOpcode
+                   || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::ReturnCallOpcode
+                   || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode
                    || instr->opcode() == ByteCode::ArrayInitDataOpcode || instr->opcode() == ByteCode::ArrayInitElemOpcode
@@ -1034,7 +1035,8 @@ void JITCompiler::allocateRegistersSimple()
             // No register assignment required.
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
-                   || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::JumpOpcode
+                   || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::ReturnCallOpcode
+                   || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode
                    || instr->opcode() == ByteCode::ArrayInitDataOpcode || instr->opcode() == ByteCode::ArrayInitElemOpcode
