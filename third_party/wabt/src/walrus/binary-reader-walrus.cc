@@ -1087,8 +1087,8 @@ public:
     Result BeginElemSegment(Index index, Index table_index, uint8_t flags) override {
         auto mode = ToSegmentMode(flags);
         CHECK_RESULT(m_validator.OnElemSegment(GetLocation(), Var(table_index, GetLocation()), mode));
-        m_externalDelegate->BeginElemSegment(index, table_index, flags);
-        m_lastInitType = Type::I32;
+        bool is64 = m_externalDelegate->BeginElemSegment(index, table_index, flags);
+        m_lastInitType = !is64 ? Type::I32 : Type::I64;
         m_currentElementTableIndex = table_index;
         return Result::Ok;
     }

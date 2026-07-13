@@ -2431,10 +2431,25 @@ NextInstruction:
         TableGet* code = (TableGet*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(!table->is64());
         void* val = table->getElement(state, readValue<uint32_t>(bp, code->srcOffset()));
         writeValue(bp, code->dstOffset(), val);
 
         ADD_PROGRAM_COUNTER(TableGet);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(TableGetM64)
+        :
+    {
+        TableGetM64* code = (TableGetM64*)programCounter;
+        ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
+        Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(table->is64());
+        void* val = table->getElementM64(state, readValue<uint64_t>(bp, code->srcOffset()));
+        writeValue(bp, code->dstOffset(), val);
+
+        ADD_PROGRAM_COUNTER(TableGetM64);
         NEXT_INSTRUCTION();
     }
 
@@ -2444,10 +2459,25 @@ NextInstruction:
         TableSet* code = (TableSet*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(!table->is64());
         void* ptr = readValue<void*>(bp, code->src1Offset());
         table->setElement(state, readValue<uint32_t>(bp, code->src0Offset()), ptr);
 
         ADD_PROGRAM_COUNTER(TableSet);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(TableSetM64)
+        :
+    {
+        TableSetM64* code = (TableSetM64*)programCounter;
+        ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
+        Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(table->is64());
+        void* ptr = readValue<void*>(bp, code->src1Offset());
+        table->setElementM64(state, readValue<uint64_t>(bp, code->src0Offset()), ptr);
+
+        ADD_PROGRAM_COUNTER(TableSetM64);
         NEXT_INSTRUCTION();
     }
 
@@ -2457,14 +2487,15 @@ NextInstruction:
         TableGrow* code = (TableGrow*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
-        size_t size = table->size();
+        uint64_t size = table->size();
+        ASSERT(!table->is64() && size <= table->maximumSize());
 
-        uint64_t newSize = (uint64_t)readValue<uint32_t>(bp, code->src1Offset()) + size;
+        uint32_t newSize = readValue<uint32_t>(bp, code->src1Offset());
         // FIXME read reference
         void* ptr = readValue<void*>(bp, code->src0Offset());
 
-        if (newSize <= table->maximumSize()) {
-            table->grow(newSize, ptr);
+        if (newSize <= table->maximumSize() - size) {
+            table->grow(size + newSize, ptr);
             writeValue<uint32_t>(bp, code->dstOffset(), size);
         } else {
             writeValue<uint32_t>(bp, code->dstOffset(), -1);
@@ -2474,16 +2505,55 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(TableGrowM64)
+        :
+    {
+        TableGrowM64* code = (TableGrowM64*)programCounter;
+        ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
+        Table* table = instance->m_tables[code->tableIndex()];
+        uint64_t size = table->size();
+        ASSERT(table->is64() && size <= table->maximumSize());
+
+        uint64_t newSize = readValue<uint64_t>(bp, code->src1Offset());
+        // FIXME read reference
+        void* ptr = readValue<void*>(bp, code->src0Offset());
+
+        if (newSize <= table->maximumSize() - size) {
+            table->grow(size + newSize, ptr);
+            writeValue<uint64_t>(bp, code->dstOffset(), size);
+        } else {
+            writeValue<uint64_t>(bp, code->dstOffset(), -1);
+        }
+
+        ADD_PROGRAM_COUNTER(TableGrowM64);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(TableSize)
         :
     {
         TableSize* code = (TableSize*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
-        size_t size = table->size();
+        ASSERT(!table->is64());
+        uint32_t size = table->size();
         writeValue<uint32_t>(bp, code->dstOffset(), size);
 
         ADD_PROGRAM_COUNTER(TableSize);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(TableSizeM64)
+        :
+    {
+        TableSizeM64* code = (TableSizeM64*)programCounter;
+        ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
+        Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(table->is64());
+        uint64_t size = table->size();
+        writeValue<uint64_t>(bp, code->dstOffset(), size);
+
+        ADD_PROGRAM_COUNTER(TableSizeM64);
         NEXT_INSTRUCTION();
     }
 
@@ -2495,6 +2565,8 @@ NextInstruction:
         ASSERT(code->srcIndex() < instance->module()->numberOfTableTypes());
         Table* dstTable = instance->m_tables[code->dstIndex()];
         Table* srcTable = instance->m_tables[code->srcIndex()];
+        ASSERT(!dstTable->is64());
+        ASSERT(!srcTable->is64());
 
         uint32_t dstIndex = readValue<uint32_t>(bp, code->srcOffsets()[0]);
         uint32_t srcIndex = readValue<uint32_t>(bp, code->srcOffsets()[1]);
@@ -2506,19 +2578,100 @@ NextInstruction:
         NEXT_INSTRUCTION();
     }
 
+    DEFINE_OPCODE(TableCopyM64)
+        :
+    {
+        TableCopyM64* code = (TableCopyM64*)programCounter;
+        ASSERT(code->dstIndex() < instance->module()->numberOfTableTypes());
+        ASSERT(code->srcIndex() < instance->module()->numberOfTableTypes());
+        Table* dstTable = instance->m_tables[code->dstIndex()];
+        Table* srcTable = instance->m_tables[code->srcIndex()];
+        ASSERT(dstTable->is64());
+        ASSERT(srcTable->is64());
+
+        uint64_t dstIndex = readValue<uint64_t>(bp, code->srcOffsets()[0]);
+        uint64_t srcIndex = readValue<uint64_t>(bp, code->srcOffsets()[1]);
+        uint64_t n = readValue<uint64_t>(bp, code->srcOffsets()[2]);
+
+        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
+
+        ADD_PROGRAM_COUNTER(TableCopyM64);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(TableCopyM64M32)
+        :
+    {
+        TableCopyM64M32* code = (TableCopyM64M32*)programCounter;
+        ASSERT(code->dstIndex() < instance->module()->numberOfTableTypes());
+        ASSERT(code->srcIndex() < instance->module()->numberOfTableTypes());
+        Table* dstTable = instance->m_tables[code->dstIndex()];
+        Table* srcTable = instance->m_tables[code->srcIndex()];
+        ASSERT(dstTable->is64());
+        ASSERT(!srcTable->is64());
+
+        uint64_t dstIndex = readValue<uint64_t>(bp, code->srcOffsets()[0]);
+        uint32_t srcIndex = readValue<uint32_t>(bp, code->srcOffsets()[1]);
+        uint32_t n = readValue<uint32_t>(bp, code->srcOffsets()[2]);
+
+        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
+
+        ADD_PROGRAM_COUNTER(TableCopyM64M32);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(TableCopyM32M64)
+        :
+    {
+        TableCopyM32M64* code = (TableCopyM32M64*)programCounter;
+        ASSERT(code->dstIndex() < instance->module()->numberOfTableTypes());
+        ASSERT(code->srcIndex() < instance->module()->numberOfTableTypes());
+        Table* dstTable = instance->m_tables[code->dstIndex()];
+        Table* srcTable = instance->m_tables[code->srcIndex()];
+        ASSERT(!dstTable->is64());
+        ASSERT(srcTable->is64());
+
+        uint32_t dstIndex = readValue<uint32_t>(bp, code->srcOffsets()[0]);
+        uint64_t srcIndex = readValue<uint64_t>(bp, code->srcOffsets()[1]);
+        uint32_t n = readValue<uint32_t>(bp, code->srcOffsets()[2]);
+
+        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
+
+        ADD_PROGRAM_COUNTER(TableCopyM32M64);
+        NEXT_INSTRUCTION();
+    }
+
     DEFINE_OPCODE(TableFill)
         :
     {
         TableFill* code = (TableFill*)programCounter;
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(!table->is64());
 
         int32_t index = readValue<int32_t>(bp, code->srcOffsets()[0]);
         void* ptr = readValue<void*>(bp, code->srcOffsets()[1]);
-        int32_t n = readValue<int32_t>(bp, code->srcOffsets()[2]);
+        uint32_t n = readValue<uint32_t>(bp, code->srcOffsets()[2]);
         table->fill(state, n, ptr, index);
 
         ADD_PROGRAM_COUNTER(TableFill);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(TableFillM64)
+        :
+    {
+        TableFillM64* code = (TableFillM64*)programCounter;
+        ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
+        Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(table->is64());
+
+        int64_t index = readValue<int64_t>(bp, code->srcOffsets()[0]);
+        void* ptr = readValue<void*>(bp, code->srcOffsets()[1]);
+        uint64_t n = readValue<uint64_t>(bp, code->srcOffsets()[2]);
+        table->fill(state, n, ptr, index);
+
+        ADD_PROGRAM_COUNTER(TableFillM64);
         NEXT_INSTRUCTION();
     }
 
@@ -2534,6 +2687,25 @@ NextInstruction:
 
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(!table->is64());
+        table->init(state, sg, dstStart, srcStart, size);
+        ADD_PROGRAM_COUNTER(TableInit);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(TableInitM64)
+        :
+    {
+        TableInitM64* code = (TableInitM64*)programCounter;
+        ElementSegment* sg = instance->elementSegment(code->segmentIndex());
+
+        int64_t dstStart = readValue<int64_t>(bp, code->srcOffsets()[0]);
+        int32_t srcStart = readValue<int32_t>(bp, code->srcOffsets()[1]);
+        int32_t size = readValue<int32_t>(bp, code->srcOffsets()[2]);
+
+        ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
+        Table* table = instance->m_tables[code->tableIndex()];
+        ASSERT(table->is64());
         table->init(state, sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();

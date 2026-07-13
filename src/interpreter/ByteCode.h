@@ -65,13 +65,22 @@ class FunctionType;
     F(MemoryFill)               \
     F(MemoryFillM64)            \
     F(TableInit)                \
+    F(TableInitM64)             \
     F(ElemDrop)                 \
     F(TableCopy)                \
+    F(TableCopyM64)             \
+    F(TableCopyM64M32)          \
+    F(TableCopyM32M64)          \
     F(TableGet)                 \
+    F(TableGetM64)              \
     F(TableSet)                 \
+    F(TableSetM64)              \
     F(TableGrow)                \
+    F(TableGrowM64)             \
     F(TableSize)                \
+    F(TableSizeM64)             \
     F(TableFill)                \
+    F(TableFillM64)             \
     F(RefFunc)                  \
     F(MoveI32)                  \
     F(MoveF32)                  \
@@ -4245,200 +4254,209 @@ protected:
     uint8_t m_value[16];
 };
 
-class TableGet : public ByteCodeOffset2Value {
-public:
-    TableGet(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2Value(Opcode::TableGetOpcode, srcOffset, dstOffset, index)
-    {
-    }
+#define DEFINE_TABLE_GET(className, opStr)                                                      \
+    class className : public ByteCodeOffset2Value {                                             \
+    public:                                                                                     \
+        className(uint32_t index, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset) \
+            : ByteCodeOffset2Value(Opcode::className##Opcode, srcOffset, dstOffset, index)      \
+        {                                                                                       \
+        }                                                                                       \
+                                                                                                \
+        ByteCodeStackOffset srcOffset() const { return stackOffset1(); }                        \
+        ByteCodeStackOffset dstOffset() const { return stackOffset2(); }                        \
+        uint32_t tableIndex() const { return uintValue(); }                                     \
+                                                                                                \
+        IF_DEBUG_ENABLED(                                                                       \
+            void dump(size_t pos) {                                                             \
+                printf("table.get%s ", opStr);                                                  \
+                DUMP_BYTECODE_OFFSET(stackOffset1);                                             \
+                DUMP_BYTECODE_OFFSET(stackOffset2);                                             \
+                printf("tableIndex: %" PRIu32, tableIndex());                                   \
+            })                                                                                  \
+    };
 
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-    uint32_t tableIndex() const { return uintValue(); }
+DEFINE_TABLE_GET(TableGet, "")
+DEFINE_TABLE_GET(TableGetM64, "M64")
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("table.get ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-        printf("tableIndex: %" PRIu32, tableIndex());
-    }
-#endif
-};
+#define DEFINE_TABLE_SET(className, opStr)                                            \
+    class className : public ByteCodeOffset2Value {                                   \
+    public:                                                                           \
+        className(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1) \
+            : ByteCodeOffset2Value(Opcode::className##Opcode, src0, src1, index)      \
+        {                                                                             \
+        }                                                                             \
+                                                                                      \
+        ByteCodeStackOffset src0Offset() const { return stackOffset1(); }             \
+        ByteCodeStackOffset src1Offset() const { return stackOffset2(); }             \
+        uint32_t tableIndex() const { return uintValue(); }                           \
+                                                                                      \
+        IF_DEBUG_ENABLED(                                                             \
+            void dump(size_t pos) {                                                   \
+                printf("table.set%s ", opStr);                                        \
+                DUMP_BYTECODE_OFFSET(stackOffset1);                                   \
+                DUMP_BYTECODE_OFFSET(stackOffset2);                                   \
+                printf("tableIndex: %" PRIu32, tableIndex());                         \
+            })                                                                        \
+    };
 
-class TableSet : public ByteCodeOffset2Value {
-public:
-    TableSet(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1)
-        : ByteCodeOffset2Value(Opcode::TableSetOpcode, src0, src1, index)
-    {
-    }
+DEFINE_TABLE_SET(TableSet, "")
+DEFINE_TABLE_SET(TableSetM64, "M64")
 
-    ByteCodeStackOffset src0Offset() const { return stackOffset1(); }
-    ByteCodeStackOffset src1Offset() const { return stackOffset2(); }
-    uint32_t tableIndex() const { return uintValue(); }
+#define DEFINE_TABLE_GROW(className, opStr)                                                                    \
+    class className : public ByteCode {                                                                        \
+    public:                                                                                                    \
+        className(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst) \
+            : ByteCode(Opcode::className##Opcode)                                                              \
+            , m_tableIndex(index)                                                                              \
+            , m_src0Offset(src0)                                                                               \
+            , m_src1Offset(src1)                                                                               \
+            , m_dstOffset(dst)                                                                                 \
+        {                                                                                                      \
+        }                                                                                                      \
+                                                                                                               \
+        uint32_t tableIndex() const { return m_tableIndex; }                                                   \
+        ByteCodeStackOffset src0Offset() const { return m_src0Offset; }                                        \
+        ByteCodeStackOffset src1Offset() const { return m_src1Offset; }                                        \
+        ByteCodeStackOffset dstOffset() const { return m_dstOffset; }                                          \
+                                                                                                               \
+        IF_DEBUG_ENABLED(                                                                                      \
+            void dump(size_t pos) {                                                                            \
+                printf("table.grow%s ", opStr);                                                                \
+                DUMP_BYTECODE_OFFSET(src0Offset);                                                              \
+                DUMP_BYTECODE_OFFSET(src1Offset);                                                              \
+                DUMP_BYTECODE_OFFSET(dstOffset);                                                               \
+                printf("tableIndex: %" PRIu32, m_tableIndex);                                                  \
+            })                                                                                                 \
+                                                                                                               \
+    protected:                                                                                                 \
+        uint32_t m_tableIndex;                                                                                 \
+        ByteCodeStackOffset m_src0Offset;                                                                      \
+        ByteCodeStackOffset m_src1Offset;                                                                      \
+        ByteCodeStackOffset m_dstOffset;                                                                       \
+    };
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("table.set ");
-        DUMP_BYTECODE_OFFSET(stackOffset1);
-        DUMP_BYTECODE_OFFSET(stackOffset2);
-        printf("tableIndex: %" PRIu32, tableIndex());
-    }
-#endif
-};
+DEFINE_TABLE_GROW(TableGrow, "")
+DEFINE_TABLE_GROW(TableGrowM64, "M64")
 
-class TableGrow : public ByteCode {
-public:
-    TableGrow(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset dst)
-        : ByteCode(Opcode::TableGrowOpcode)
-        , m_tableIndex(index)
-        , m_src0Offset(src0)
-        , m_src1Offset(src1)
-        , m_dstOffset(dst)
-    {
-    }
+#define DEFINE_TABLE_SIZE(className, opStr)                              \
+    class className : public ByteCodeOffsetValue {                       \
+    public:                                                              \
+        className(uint32_t index, ByteCodeStackOffset dst)               \
+            : ByteCodeOffsetValue(Opcode::className##Opcode, dst, index) \
+        {                                                                \
+        }                                                                \
+                                                                         \
+        uint32_t tableIndex() const { return uint32Value(); }            \
+        ByteCodeStackOffset dstOffset() const { return stackOffset(); }  \
+                                                                         \
+        IF_DEBUG_ENABLED(                                                \
+            void dump(size_t pos) {                                      \
+                printf("table.size%s ", opStr);                          \
+                DUMP_BYTECODE_OFFSET(stackOffset);                       \
+                printf("tableIndex: %" PRIu32, tableIndex());            \
+            })                                                           \
+    };
 
-    uint32_t tableIndex() const { return m_tableIndex; }
-    ByteCodeStackOffset src0Offset() const { return m_src0Offset; }
-    ByteCodeStackOffset src1Offset() const { return m_src1Offset; }
-    ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
+DEFINE_TABLE_SIZE(TableSize, "")
+DEFINE_TABLE_SIZE(TableSizeM64, "M64")
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("table.grow ");
-        DUMP_BYTECODE_OFFSET(src0Offset);
-        DUMP_BYTECODE_OFFSET(src1Offset);
-        DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("tableIndex: %" PRIu32, m_tableIndex);
-    }
-#endif
+#define DEFINE_TABLE_COPY(className, opStr)                                                                                           \
+    class className : public ByteCode {                                                                                               \
+    public:                                                                                                                           \
+        className(uint32_t dstIndex, uint32_t srcIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2) \
+            : ByteCode(Opcode::className##Opcode)                                                                                     \
+            , m_dstIndex(dstIndex)                                                                                                    \
+            , m_srcIndex(srcIndex)                                                                                                    \
+            , m_srcOffsets{ src0, src1, src2 }                                                                                        \
+        {                                                                                                                             \
+        }                                                                                                                             \
+                                                                                                                                      \
+        uint32_t dstIndex() const { return m_dstIndex; }                                                                              \
+        uint32_t srcIndex() const { return m_srcIndex; }                                                                              \
+        const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }                                                        \
+                                                                                                                                      \
+        IF_DEBUG_ENABLED(                                                                                                             \
+            void dump(size_t pos) {                                                                                                   \
+                printf("table.copy%s ", opStr);                                                                                       \
+                DUMP_BYTECODE_OFFSET(srcOffsets[0]);                                                                                  \
+                DUMP_BYTECODE_OFFSET(srcOffsets[1]);                                                                                  \
+                DUMP_BYTECODE_OFFSET(srcOffsets[2]);                                                                                  \
+                printf("dstIndex: %" PRIu32 " srcIndex: %" PRIu32, m_dstIndex, m_srcIndex);                                           \
+            })                                                                                                                        \
+                                                                                                                                      \
+    protected:                                                                                                                        \
+        uint32_t m_dstIndex;                                                                                                          \
+        uint32_t m_srcIndex;                                                                                                          \
+        ByteCodeStackOffset m_srcOffsets[3];                                                                                          \
+    };
 
-protected:
-    uint32_t m_tableIndex;
-    ByteCodeStackOffset m_src0Offset;
-    ByteCodeStackOffset m_src1Offset;
-    ByteCodeStackOffset m_dstOffset;
-};
+DEFINE_TABLE_COPY(TableCopy, "")
+DEFINE_TABLE_COPY(TableCopyM64, "M64")
+DEFINE_TABLE_COPY(TableCopyM64M32, "M64M32")
+DEFINE_TABLE_COPY(TableCopyM32M64, "M32M64")
 
-class TableSize : public ByteCodeOffsetValue {
-public:
-    TableSize(uint32_t index, ByteCodeStackOffset dst)
-        : ByteCodeOffsetValue(Opcode::TableSizeOpcode, dst, index)
-    {
-    }
+#define DEFINE_TABLE_FILL(className, opStr)                                                                     \
+    class className : public ByteCode {                                                                         \
+    public:                                                                                                     \
+        className(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2) \
+            : ByteCode(Opcode::className##Opcode)                                                               \
+            , m_tableIndex(index)                                                                               \
+            , m_srcOffsets{ src0, src1, src2 }                                                                  \
+        {                                                                                                       \
+        }                                                                                                       \
+                                                                                                                \
+        uint32_t tableIndex() const { return m_tableIndex; }                                                    \
+        const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }                                  \
+                                                                                                                \
+        IF_DEBUG_ENABLED(                                                                                       \
+            void dump(size_t pos) {                                                                             \
+                printf("table.fill%s ", opStr);                                                                 \
+                DUMP_BYTECODE_OFFSET(srcOffsets[0]);                                                            \
+                DUMP_BYTECODE_OFFSET(srcOffsets[1]);                                                            \
+                DUMP_BYTECODE_OFFSET(srcOffsets[2]);                                                            \
+                printf("tableIndex: %" PRIu32, m_tableIndex);                                                   \
+            })                                                                                                  \
+                                                                                                                \
+    protected:                                                                                                  \
+        uint32_t m_tableIndex;                                                                                  \
+        ByteCodeStackOffset m_srcOffsets[3];                                                                    \
+    };
 
-    uint32_t tableIndex() const { return uint32Value(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset(); }
+DEFINE_TABLE_FILL(TableFill, "")
+DEFINE_TABLE_FILL(TableFillM64, "M64")
 
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("table.size ");
-        DUMP_BYTECODE_OFFSET(stackOffset);
-        printf("tableIndex: %" PRIu32, tableIndex());
-    }
-#endif
-};
+#define DEFINE_TABLE_INIT(className, opStr)                                                                                                 \
+    class className : public ByteCode {                                                                                                     \
+    public:                                                                                                                                 \
+        className(uint32_t tableIndex, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2) \
+            : ByteCode(Opcode::className##Opcode)                                                                                           \
+            , m_tableIndex(tableIndex)                                                                                                      \
+            , m_segmentIndex(segmentIndex)                                                                                                  \
+            , m_srcOffsets{ src0, src1, src2 }                                                                                              \
+        {                                                                                                                                   \
+        }                                                                                                                                   \
+                                                                                                                                            \
+        uint32_t tableIndex() const { return m_tableIndex; }                                                                                \
+        uint32_t segmentIndex() const { return m_segmentIndex; }                                                                            \
+        const ByteCodeStackOffset* srcOffsets() const { return m_srcOffsets; }                                                              \
+                                                                                                                                            \
+        IF_DEBUG_ENABLED(                                                                                                                   \
+            void dump(size_t pos) {                                                                                                         \
+                printf("table.init%s ", opStr);                                                                                             \
+                DUMP_BYTECODE_OFFSET(srcOffsets[0]);                                                                                        \
+                DUMP_BYTECODE_OFFSET(srcOffsets[1]);                                                                                        \
+                DUMP_BYTECODE_OFFSET(srcOffsets[2]);                                                                                        \
+                printf("tableIndex: %" PRIu32 " segmentIndex: %" PRIu32, m_tableIndex, m_segmentIndex);                                     \
+            })                                                                                                                              \
+                                                                                                                                            \
+    protected:                                                                                                                              \
+        uint32_t m_tableIndex;                                                                                                              \
+        uint32_t m_segmentIndex;                                                                                                            \
+        ByteCodeStackOffset m_srcOffsets[3];                                                                                                \
+    };
 
-class TableCopy : public ByteCode {
-public:
-    TableCopy(uint32_t dstIndex, uint32_t srcIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCode(Opcode::TableCopyOpcode)
-        , m_dstIndex(dstIndex)
-        , m_srcIndex(srcIndex)
-        , m_srcOffsets{ src0, src1, src2 }
-    {
-    }
-
-    uint32_t dstIndex() const { return m_dstIndex; }
-    uint32_t srcIndex() const { return m_srcIndex; }
-    const ByteCodeStackOffset* srcOffsets() const
-    {
-        return m_srcOffsets;
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("table.copy ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("dstIndex: %" PRIu32 " srcIndex: %" PRIu32, m_dstIndex, m_srcIndex);
-    }
-#endif
-
-protected:
-    uint32_t m_dstIndex;
-    uint32_t m_srcIndex;
-    ByteCodeStackOffset m_srcOffsets[3];
-};
-
-class TableFill : public ByteCode {
-public:
-    TableFill(uint32_t index, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCode(Opcode::TableFillOpcode)
-        , m_tableIndex(index)
-        , m_srcOffsets{ src0, src1, src2 }
-    {
-    }
-
-    uint32_t tableIndex() const { return m_tableIndex; }
-    const ByteCodeStackOffset* srcOffsets() const
-    {
-        return m_srcOffsets;
-    }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("table.fill ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("tableIndex: %" PRIu32, m_tableIndex);
-    }
-#endif
-
-protected:
-    uint32_t m_tableIndex;
-    ByteCodeStackOffset m_srcOffsets[3];
-};
-
-class TableInit : public ByteCode {
-public:
-    TableInit(uint32_t tableIndex, uint32_t segmentIndex, ByteCodeStackOffset src0, ByteCodeStackOffset src1, ByteCodeStackOffset src2)
-        : ByteCode(Opcode::TableInitOpcode)
-        , m_tableIndex(tableIndex)
-        , m_segmentIndex(segmentIndex)
-        , m_srcOffsets{ src0, src1, src2 }
-    {
-    }
-
-    uint32_t tableIndex() const { return m_tableIndex; }
-    uint32_t segmentIndex() const { return m_segmentIndex; }
-    const ByteCodeStackOffset* srcOffsets() const
-    {
-        return m_srcOffsets;
-    }
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("table.init ");
-        DUMP_BYTECODE_OFFSET(srcOffsets[0]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[1]);
-        DUMP_BYTECODE_OFFSET(srcOffsets[2]);
-        printf("tableIndex: %" PRIu32 " segmentIndex: %" PRIu32, m_tableIndex, m_segmentIndex);
-    }
-#endif
-
-protected:
-    uint32_t m_tableIndex;
-    uint32_t m_segmentIndex;
-    ByteCodeStackOffset m_srcOffsets[3];
-};
+DEFINE_TABLE_INIT(TableInit, "");
+DEFINE_TABLE_INIT(TableInitM64, "M64");
 
 class ElemDrop : public ByteCode {
 public:

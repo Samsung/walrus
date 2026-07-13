@@ -1160,16 +1160,17 @@ public:
         m_result.m_elements.reserve(count);
     }
 
-    virtual void BeginElemSegment(Index index, Index tableIndex, uint8_t flags) override
+    virtual bool BeginElemSegment(Index index, Index tableIndex, uint8_t flags) override
     {
         m_elementTableIndex = tableIndex;
         m_elementOffsetFunction = nullptr;
         m_segmentMode = toSegmentMode(flags);
+        return m_segmentMode == Walrus::SegmentMode::Active && m_result.m_tableTypes[tableIndex]->is64();
     }
 
     virtual void BeginElemSegmentInitExpr(Index index) override
     {
-        beginNewFunction(Walrus::Value::I32, true);
+        beginNewFunction(!m_result.m_tableTypes[m_elementTableIndex]->is64() ? Walrus::Value::I32 : Walrus::Value::I64, true);
     }
 
     virtual void EndElemSegmentInitExpr(Index index) override
@@ -2575,57 +2576,91 @@ public:
 
     virtual void OnTableGetExpr(Index tableIndex) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src = popVMStack();
         auto dst = computeExprResultPosition(m_result.m_tableTypes[tableIndex]->type());
-        pushByteCode(Walrus::TableGet(tableIndex, src, dst), WASMOpcode::TableGetOpcode);
+        if (!m_result.m_tableTypes[tableIndex]->is64()) {
+            pushByteCode(Walrus::TableGet(tableIndex, src, dst), WASMOpcode::TableGetOpcode);
+        } else {
+            pushByteCode(Walrus::TableGetM64(tableIndex, src, dst), WASMOpcode::TableGetOpcode);
+        }
     }
 
     virtual void OnTableSetExpr(Index tableIndex) override
     {
         ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(m_result.m_tableTypes[tableIndex]->type()));
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableSet(tableIndex, src0, src1), WASMOpcode::TableSetOpcode);
+        if (!m_result.m_tableTypes[tableIndex]->is64()) {
+            pushByteCode(Walrus::TableSet(tableIndex, src0, src1), WASMOpcode::TableSetOpcode);
+        } else {
+            pushByteCode(Walrus::TableSetM64(tableIndex, src0, src1), WASMOpcode::TableSetOpcode);
+        }
     }
 
     virtual void OnTableGrowExpr(Index tableIndex) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        bool is64 = m_result.m_tableTypes[tableIndex]->is64();
+        ASSERT(peekVMStackValueType() == is64 ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src1 = popVMStack();
         ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(m_result.m_tableTypes[tableIndex]->type()));
         auto src0 = popVMStack();
-        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
-        pushByteCode(Walrus::TableGrow(tableIndex, src0, src1, dst), WASMOpcode::TableGrowOpcode);
+        auto dst = computeExprResultPosition(!is64 ? Walrus::Value::Type::I32 : Walrus::Value::Type::I64);
+        if (!m_result.m_tableTypes[tableIndex]->is64()) {
+            pushByteCode(Walrus::TableGrow(tableIndex, src0, src1, dst), WASMOpcode::TableGrowOpcode);
+        } else {
+            pushByteCode(Walrus::TableGrowM64(tableIndex, src0, src1, dst), WASMOpcode::TableGrowOpcode);
+        }
     }
 
     virtual void OnTableSizeExpr(Index tableIndex) override
     {
-        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
-        pushByteCode(Walrus::TableSize(tableIndex, dst), WASMOpcode::TableSizeOpcode);
+        bool is64 = m_result.m_tableTypes[tableIndex]->is64();
+        auto dst = computeExprResultPosition(!is64 ? Walrus::Value::Type::I32 : Walrus::Value::Type::I64);
+
+        if (!is64) {
+            pushByteCode(Walrus::TableSize(tableIndex, dst), WASMOpcode::TableSizeOpcode);
+        } else {
+            pushByteCode(Walrus::TableSizeM64(tableIndex, dst), WASMOpcode::TableSizeOpcode);
+        }
     }
 
     virtual void OnTableCopyExpr(Index dst_index, Index src_index) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == (m_result.m_tableTypes[dst_index]->is64() && m_result.m_tableTypes[src_index]->is64()) ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src2 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[src_index]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[dst_index]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableCopy(dst_index, src_index, src0, src1, src2), WASMOpcode::TableCopyOpcode);
+
+        if (!m_result.m_tableTypes[dst_index]->is64()) {
+            if (!m_result.m_tableTypes[src_index]->is64()) {
+                pushByteCode(Walrus::TableCopy(dst_index, src_index, src0, src1, src2), WASMOpcode::TableCopyOpcode);
+            } else {
+                pushByteCode(Walrus::TableCopyM32M64(dst_index, src_index, src0, src1, src2), WASMOpcode::TableCopyOpcode);
+            }
+        } else if (!m_result.m_tableTypes[src_index]->is64()) {
+            pushByteCode(Walrus::TableCopyM64M32(dst_index, src_index, src0, src1, src2), WASMOpcode::TableCopyOpcode);
+        } else {
+            pushByteCode(Walrus::TableCopyM64(dst_index, src_index, src0, src1, src2), WASMOpcode::TableCopyOpcode);
+        }
     }
 
     virtual void OnTableFillExpr(Index tableIndex) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src2 = popVMStack();
         ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(m_result.m_tableTypes[tableIndex]->type()));
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableFill(tableIndex, src0, src1, src2), WASMOpcode::TableFillOpcode);
+        if (!m_result.m_tableTypes[tableIndex]->is64()) {
+            pushByteCode(Walrus::TableFill(tableIndex, src0, src1, src2), WASMOpcode::TableFillOpcode);
+        } else {
+            pushByteCode(Walrus::TableFillM64(tableIndex, src0, src1, src2), WASMOpcode::TableFillOpcode);
+        }
     }
 
     virtual void OnElemDropExpr(Index segmentIndex) override
@@ -2639,9 +2674,13 @@ public:
         auto src2 = popVMStack();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto src1 = popVMStack();
-        ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto src0 = popVMStack();
-        pushByteCode(Walrus::TableInit(tableIndex, segmentIndex, src0, src1, src2), WASMOpcode::TableInitOpcode);
+        if (!m_result.m_tableTypes[tableIndex]->is64()) {
+            pushByteCode(Walrus::TableInit(tableIndex, segmentIndex, src0, src1, src2), WASMOpcode::TableInitOpcode);
+        } else {
+            pushByteCode(Walrus::TableInitM64(tableIndex, segmentIndex, src0, src1, src2), WASMOpcode::TableInitOpcode);
+        }
     }
 
     virtual void OnLoadExpr(int opcode, Index memidx, Address alignmentLog2, Address offset) override

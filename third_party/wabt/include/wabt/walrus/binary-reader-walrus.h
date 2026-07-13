@@ -81,7 +81,7 @@ public:
     virtual void EndTableInitExpr(Index index) = 0;
 
     virtual void OnElemSegmentCount(Index count) = 0;
-    virtual void BeginElemSegment(Index index, Index tableIndex, uint8_t flags) = 0;
+    virtual bool BeginElemSegment(Index index, Index tableIndex, uint8_t flags) = 0;
     virtual void BeginElemSegmentInitExpr(Index index) = 0;
     virtual void EndElemSegmentInitExpr(Index index) = 0;
     virtual void OnElemSegmentElemType(Index index, Type elemType) = 0;
