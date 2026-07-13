@@ -341,20 +341,22 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         }
 
         if (elem->mode() == SegmentMode::Active) {
-            uint32_t offset = 0;
+            uint64_t offset = 0;
+            Table* table = instance->m_tables[elem->tableIndex()];
             if (elem->hasOffsetFunction()) {
                 struct RunData {
                     Instance* instance;
                     ModuleFunction* offsetFunc;
-                    uint32_t& offset;
-                } data = { instance, elem->offsetFunction(), offset };
+                    bool is64;
+                    uint64_t& offset;
+                } data = { instance, elem->offsetFunction(), table->is64(), offset };
                 Walrus::Trap trap;
                 trap.run([](Walrus::ExecutionState& state, void* d) {
                     RunData* data = reinterpret_cast<RunData*>(d);
                     DefinedFunction fakeFunction(data->instance, data->offsetFunc);
                     Value offset;
                     fakeFunction.call(state, nullptr, &offset);
-                    data->offset = offset.asI32();
+                    data->offset = data->is64 ? offset.asI64() : offset.asI32();
                 },
                          &data);
             }
@@ -363,12 +365,12 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Trap::throwException(state, "out of bounds table access");
             }
 
-            uint32_t size = instance->m_tables[elem->tableIndex()]->size();
+            uint64_t size = table->size();
             if (UNLIKELY(offset > size || (size - offset) < elem->exprFunctions().size())) {
                 Trap::throwException(state, "out of bounds table access");
             }
 
-            instance->m_tables[elem->tableIndex()]->initTable(instance->m_elementSegments + i, offset, 0, exprs.size());
+            table->initTable(instance->m_elementSegments + i, offset, 0, exprs.size());
             instance->m_elementSegments[i].drop();
         } else if (elem->mode() == SegmentMode::Declared) {
             instance->m_elementSegments[i].drop();

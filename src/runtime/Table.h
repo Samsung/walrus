@@ -64,7 +64,7 @@ public:
         return m_elements[elemIndex];
     }
 
-    void* getElement64(ExecutionState& state, uint64_t elemIndex) const
+    void* getElementM64(ExecutionState& state, uint64_t elemIndex) const
     {
         ASSERT(m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
@@ -79,7 +79,7 @@ public:
         return m_elements[elemIndex];
     }
 
-    void* uncheckedGetElement64(uint64_t elemIndex) const
+    void* uncheckedGetElementM64(uint64_t elemIndex) const
     {
         ASSERT(m_is64 && elemIndex < m_size);
         return m_elements[elemIndex];
@@ -94,7 +94,7 @@ public:
         m_elements[elemIndex] = val;
     }
 
-    void setElement64(ExecutionState& state, uint64_t elemIndex, void* val)
+    void setElementM64(ExecutionState& state, uint64_t elemIndex, void* val)
     {
         ASSERT(m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
@@ -109,7 +109,7 @@ public:
         m_elements[elemIndex] = val;
     }
 
-    void uncheckedSetElement64(uint64_t elemIndex, void* val)
+    void uncheckedSetElementM64(uint64_t elemIndex, void* val)
     {
         ASSERT(m_is64 && elemIndex < m_size);
         m_elements[elemIndex] = val;
@@ -118,9 +118,9 @@ public:
     void grow(uint64_t newSize, void* val);
     void copy(ExecutionState& state, const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
     void fill(ExecutionState& state, uint64_t n, void* value, uint64_t index);
-    void init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize);
+    void init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
-    void initTable(ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize);
+    void initTable(ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize);
     void copyTable(const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
     void fillTable(uint64_t n, void* value, uint64_t index);
 

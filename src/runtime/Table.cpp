@@ -97,7 +97,7 @@ void Table::grow(uint64_t newSize, void* val)
     m_size = newSize;
 }
 
-void Table::init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize)
+void Table::init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
     if (UNLIKELY(!isValidRange(dstStart, srcSize) || (srcSize > source->size() || srcStart > source->size() - srcSize))) {
         throwException(state);
@@ -132,7 +132,7 @@ void Table::throwException(ExecutionState& state) const
     Trap::throwException(state, "out of bounds table access");
 }
 
-void Table::initTable(ElementSegment* source, uint64_t dstStart, uint64_t srcStart, uint64_t srcSize)
+void Table::initTable(ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
     memcpy(m_elements + dstStart, source->elements() + srcStart, srcSize * sizeof(void*));
 }
