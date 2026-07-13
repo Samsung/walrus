@@ -53,6 +53,7 @@ public:
     F(fd_datasync, I32_RI32)                               \
     F(fd_sync, I32_RI32)                                   \
     F(fd_renumber, I32I32_RI32)                            \
+    F(fd_filestat_set_size, I32I64_RI32)                   \
     F(fd_filestat_set_times, I32I64I64I32_RI32)            \
     F(fd_fdstat_get, I32I32_RI32)                          \
     F(fd_fdstat_set_flags, I32I32_RI32)                    \

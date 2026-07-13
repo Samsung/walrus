@@ -345,6 +345,14 @@ void WASI::fd_renumber(ExecutionState& state, Value* argv, Value* result, Instan
     result[0] = Value(uvwasi_fd_renumber(WASI::g_uvwasi, from, to));
 }
 
+void WASI::fd_filestat_set_size(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint64_t size = argv[1].asI64();
+
+    result[0] = Value(uvwasi_fd_filestat_set_size(WASI::g_uvwasi, fd, size));
+}
+
 void WASI::fd_filestat_set_times(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
