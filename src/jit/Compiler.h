@@ -261,7 +261,6 @@ public:
     // These two are only used by memory load/store instructions
     static const uint16_t kMultiMemory = 1 << 9;
     static const uint16_t kMemory64 = 1 << 10;
-    static const uint16_t kIsReturnCall = 1 << 11;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 

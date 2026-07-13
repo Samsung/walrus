@@ -1250,7 +1250,7 @@ static void compileFunction(JITCompiler* compiler)
             Instruction* instr = compiler->appendExtended(byteCode, Instruction::Call, opcode,
                                                           functionType->param().size() + callerCount, functionType->result().size());
             Operand* operand = instr->operands();
-            instr->addInfo(Instruction::kIsCallback | Instruction::kFreeUnusedEarly | Instruction::kIsReturnCall);
+            instr->addInfo(Instruction::kIsCallback | Instruction::kFreeUnusedEarly);
 
             for (auto it : functionType->param().types()) {
                 *operand++ = STACK_OFFSET(*stackOffset);
