@@ -105,6 +105,22 @@ static sljit_sw callFunctionRef(
     return error;
 }
 
+static sljit_sw shuffleTailCallSelfArguments(uint8_t* bp, ByteCodeStackOffset* offsets, sljit_uw parameterOffsetCount)
+{
+    Vector<size_t> paramBuffer;
+    paramBuffer.resizeWithUninitializedValues(parameterOffsetCount);
+
+    for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
+        paramBuffer[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
+    }
+
+    for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
+        reinterpret_cast<size_t*>(bp)[i] = paramBuffer[i];
+    }
+
+    return ExecutionContext::NoError;
+}
+
 static void emitCall(sljit_compiler* compiler, Instruction* instr)
 {
     FunctionType* functionType;
@@ -146,27 +162,44 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
 
     Operand* operand = instr->operands();
 
-    if (instr->info() & Instruction::kIsReturnCall) {
-        //Tail-Call Optimize
-        //Rewind the function flow into start of function.
-        ASSERT(instr->opcode() == ByteCode::ReturnCallOpcode);
-        sljit_sw paramOffset = 0;
+    if (instr->opcode() == ByteCode::ReturnCallOpcode) {
+        ReturnCall* returnCall = reinterpret_cast<ReturnCall*>(instr->byteCode());
 
-        for (auto it : functionType->param().types()) {
-            Operand dst = VARIABLE_SET(STACK_OFFSET(paramOffset), Instruction::Offset);
-
-            switch (VARIABLE_TYPE(*operand)) {
-            case Instruction::ConstPtr:
-                ASSERT(!(VARIABLE_GET_IMM(*operand)->info() & Instruction::kKeepInstruction));
-                emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(*operand), false);
-                break;
-            case Instruction::Register:
-                emitMove(compiler, Instruction::valueTypeToOperandType(it), operand, &dst);
+        // Detect memory offset instr for copy all oprands related to memory
+        bool hasMemoryArgument = false;
+        for (uint32_t i = 0; i < instr->paramCount(); i++) {
+            if (VARIABLE_TYPE(operand[i]) == Instruction::Offset) {
+                hasMemoryArgument = true;
                 break;
             }
+        }
 
-            paramOffset += static_cast<sljit_sw>(valueStackAllocatedSize(it));
-            operand++;
+        if (!hasMemoryArgument) {
+            sljit_sw paramOffset = 0;
+
+            for (auto it : functionType->param().types()) {
+                Operand dst = VARIABLE_SET(STACK_OFFSET(paramOffset), Instruction::Offset);
+
+                if (VARIABLE_TYPE(*operand) == Instruction::ConstPtr) {
+                    ASSERT(!(VARIABLE_GET_IMM(*operand)->info() & Instruction::kKeepInstruction));
+                    emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(*operand), false);
+                } else {
+                    ASSERT(VARIABLE_TYPE(*operand) == Instruction::Register);
+                    emitMove(compiler, Instruction::valueTypeToOperandType(it), operand, &dst);
+                }
+
+                paramOffset += static_cast<sljit_sw>(valueStackAllocatedSize(it));
+                operand++;
+            }
+        } else {
+            // At least one argument is in memory and may alias a parameter slot.
+            // arguments are all shuffled when start to enter a function.
+            emitStoreOntoStack(compiler, operand, returnCall->stackOffsets(), functionType->param(), true);
+
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kFrameReg, 0);
+            sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R1, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(returnCall->stackOffsets()));
+            sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_IMM, static_cast<sljit_sw>(returnCall->parameterOffsetsSize()));
+            sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, shuffleTailCallSelfArguments));
         }
 
         sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->tailCallLabel);
@@ -225,8 +258,6 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(instr->byteCode()));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
-
-
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
     sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
