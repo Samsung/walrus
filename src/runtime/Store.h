@@ -70,6 +70,7 @@ public:
         I32I64I32_RI32,
         I32I32I32_RI32,
         I32I32I32I32_RI32,
+        I32I64_RI32,
         I32I64I32I32_RI32,
         I32I64I64_RI32,
         I32I64I64I32_RI32,
