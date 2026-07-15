@@ -115,8 +115,10 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 #define PTR I32
+#define S0_64 0
 #else /* !SLJIT_32BIT_ARCHITECTURE */
 #define PTR I64
+#define S0_64 S0
 #endif /* SLJIT_32BIT_ARCHITECTURE */
 
 // S/D/T represents Source Destination operands and Temporary registers.
@@ -200,9 +202,13 @@ static bool isFloatGlobal(uint32_t globalIndex, Module* module)
     OL3(OTCallbackI32I64I32, /* SSS */ I32, I64, I32)                                     \
     OL3(OTCallbackI64I32I64, /* SSS */ I64, I32, I64)                                     \
     OL3(OTTableGrow, /* SSD */ PTR, I32, I32 | S0 | S1)                                   \
+    OL3(OTTableGrowM64, /* SSD */ PTR, I64, I64 | S0_64 | S1)                             \
     OL3(OTTableFill, /* SSS */ I32, PTR, I32)                                             \
-    OL4(OTTableSet, /* SSTT */ I32, PTR, I32 | S0, PTR)                                   \
-    OL3(OTTableGet, /* SDT */ I32, PTR | TMP | S0, I32)                                   \
+    OL3(OTTableFillM64, /* SSS */ I64, PTR, I64)                                          \
+    OL3(OTTableSet, /* SST */ I32, PTR, I32 | S0)                                         \
+    OL3(OTTableSetM64, /* SST */ I64, PTR, PTR | S0)                                      \
+    OL3(OTTableGet, /* SDT */ I32, PTR | S0, I32)                                         \
+    OL3(OTTableGetM64, /* SDT */ I64, PTR | S0, PTR)                                      \
     OL1(OTGlobalGetF32, /* D */ F32)                                                      \
     OL1(OTGlobalGetF64, /* D */ F64)                                                      \
     OL2(OTGlobalSetI32, /* ST */ I32, PTR)                                                \
@@ -1873,18 +1879,58 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(tableInit->srcOffsets()[2]);
             break;
         }
+        case ByteCode::TableInitM64Opcode: {
+            auto tableInit = reinterpret_cast<TableInitM64*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTCallbackI64I32I32);
+            compiler->increaseStackTmpSize(sizeof(TableInitArguments));
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(tableInit->srcOffsets()[0]);
+            operands[1] = STACK_OFFSET(tableInit->srcOffsets()[1]);
+            operands[2] = STACK_OFFSET(tableInit->srcOffsets()[2]);
+            break;
+        }
         case ByteCode::TableSizeOpcode: {
             group = Instruction::Table;
             paramType = ParamTypes::ParamDst;
             requiredInit = OTPutI32;
             break;
         }
-        case ByteCode::TableCopyOpcode: {
-            auto tableCopy = reinterpret_cast<TableCopy*>(byteCode);
+        case ByteCode::TableSizeM64Opcode: {
+            group = Instruction::Table;
+            paramType = ParamTypes::ParamDst;
+            requiredInit = OTPutI64;
+            break;
+        }
+        case ByteCode::TableCopyOpcode:
+        case ByteCode::TableCopyM64Opcode:
+        case ByteCode::TableCopyM64M32Opcode:
+        case ByteCode::TableCopyM32M64Opcode: {
+            auto tableCopy = reinterpret_cast<ByteCodeOffset3TableIndex2*>(byteCode);
 
             Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
             instr->addInfo(Instruction::kIsCallback);
-            instr->setRequiredRegsDescriptor(OTCallbackI32I32I32);
+
+            uint32_t requiredRegsDescriptor;
+            switch (opcode) {
+            case ByteCode::TableCopyM64Opcode:
+                requiredRegsDescriptor = OTCallbackI64I64I64;
+                break;
+            case ByteCode::TableCopyM64M32Opcode:
+                requiredRegsDescriptor = OTCallbackI64I32I32;
+                break;
+            case ByteCode::TableCopyM32M64Opcode:
+                requiredRegsDescriptor = OTCallbackI32I64I32;
+                break;
+            default:
+                requiredRegsDescriptor = OTCallbackI32I32I32;
+                break;
+            }
+
+            instr->setRequiredRegsDescriptor(requiredRegsDescriptor);
             compiler->increaseStackTmpSize(sizeof(TableCopyArguments));
 
             Operand* operands = instr->operands();
@@ -1906,6 +1952,19 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(tableFill->srcOffsets()[2]);
             break;
         }
+        case ByteCode::TableFillM64Opcode: {
+            auto tableFill = reinterpret_cast<TableFillM64*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 3, 0);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTTableFillM64);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(tableFill->srcOffsets()[0]);
+            operands[1] = STACK_OFFSET(tableFill->srcOffsets()[1]);
+            operands[2] = STACK_OFFSET(tableFill->srcOffsets()[2]);
+            break;
+        }
         case ByteCode::TableGrowOpcode: {
             auto tableGrow = reinterpret_cast<TableGrow*>(byteCode);
 
@@ -1919,16 +1978,41 @@ static void compileFunction(JITCompiler* compiler)
             operands[2] = STACK_OFFSET(tableGrow->dstOffset());
             break;
         }
+        case ByteCode::TableGrowM64Opcode: {
+            auto tableGrow = reinterpret_cast<TableGrowM64*>(byteCode);
+
+            Instruction* instr = compiler->append(byteCode, Instruction::Table, opcode, 2, 1);
+            instr->addInfo(Instruction::kIsCallback);
+            instr->setRequiredRegsDescriptor(OTTableGrowM64);
+
+            Operand* operands = instr->operands();
+            operands[0] = STACK_OFFSET(tableGrow->src0Offset());
+            operands[1] = STACK_OFFSET(tableGrow->src1Offset());
+            operands[2] = STACK_OFFSET(tableGrow->dstOffset());
+            break;
+        }
         case ByteCode::TableSetOpcode: {
             group = Instruction::Table;
             paramType = ParamTypes::ParamSrc2Value;
             requiredInit = OTTableSet;
             break;
         }
+        case ByteCode::TableSetM64Opcode: {
+            group = Instruction::Table;
+            paramType = ParamTypes::ParamSrc2Value;
+            requiredInit = OTTableSetM64;
+            break;
+        }
         case ByteCode::TableGetOpcode: {
             group = Instruction::Table;
             paramType = ParamTypes::ParamSrcDstValue;
             requiredInit = OTTableGet;
+            break;
+        }
+        case ByteCode::TableGetM64Opcode: {
+            group = Instruction::Table;
+            paramType = ParamTypes::ParamSrcDstValue;
+            requiredInit = OTTableGetM64;
             break;
         }
         case ByteCode::MemorySizeOpcode:

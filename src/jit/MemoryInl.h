@@ -161,7 +161,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_
         ASSERT(baseReg != 0 && offsetReg != 0);
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kInstanceReg),
-                       targetBufferOffset + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
+                       targetBufferOffset + offsetof(Memory::TargetBuffer, sizeInByte));
 
         sljit_emit_op1(compiler, SLJIT_MOV, offsetReg, 0, SLJIT_IMM, static_cast<sljit_sw>(offset + size));
         sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kInstanceReg),
@@ -201,7 +201,7 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_
     if (initialMemorySize != maximumMemorySize) {
         /* The sizeInByte is always a 32 bit number on 32 bit systems. */
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(kInstanceReg),
-                       targetBufferOffset + offsetof(Memory::TargetBuffer, sizeInByte) + WORD_LOW_OFFSET);
+                       targetBufferOffset + offsetof(Memory::TargetBuffer, sizeInByte));
         offset += size;
     }
 

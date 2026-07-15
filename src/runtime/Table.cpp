@@ -72,11 +72,11 @@ Table::~Table()
 #endif
 }
 
-void Table::grow(uint64_t newSize, void* val)
+bool Table::grow(uint64_t newSize, void* val)
 {
     ASSERT(newSize <= m_maximumSize);
     if (newSize == m_size) {
-        return;
+        return true;
     }
 
     if (newSize > (SIZE_MAX / sizeof(void*))) {
@@ -84,17 +84,24 @@ void Table::grow(uint64_t newSize, void* val)
         newSize = SIZE_MAX / sizeof(void*);
     }
 
+    void** elements;
 #ifdef ENABLE_GC
     if (LIKELY(m_elements != nullptr)) {
-        m_elements = reinterpret_cast<void**>(GC_REALLOC(m_elements, static_cast<size_t>(newSize) * sizeof(void*)));
+        elements = reinterpret_cast<void**>(GC_REALLOC(m_elements, static_cast<size_t>(newSize) * sizeof(void*)));
     } else {
-        m_elements = reinterpret_cast<void**>(GC_MALLOC_UNCOLLECTABLE(static_cast<size_t>(newSize) * sizeof(void*)));
+        elements = reinterpret_cast<void**>(GC_MALLOC_UNCOLLECTABLE(static_cast<size_t>(newSize) * sizeof(void*)));
     }
 #else
-    m_elements = reinterpret_cast<void**>(realloc(m_elements, static_cast<size_t>(newSize) * sizeof(void*)));
+    elements = reinterpret_cast<void**>(realloc(m_elements, static_cast<size_t>(newSize) * sizeof(void*)));
 #endif
+    if (elements == nullptr) {
+        return false;
+    }
+
+    m_elements = elements;
     std::fill(m_elements + m_size, m_elements + newSize, val);
     m_size = newSize;
+    return true;
 }
 
 void Table::init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize)

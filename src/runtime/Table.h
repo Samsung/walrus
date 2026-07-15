@@ -115,7 +115,7 @@ public:
         m_elements[elemIndex] = val;
     }
 
-    void grow(uint64_t newSize, void* val);
+    bool grow(uint64_t newSize, void* val);
     void copy(ExecutionState& state, const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
     void fill(ExecutionState& state, uint64_t n, void* value, uint64_t index);
     void init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize);

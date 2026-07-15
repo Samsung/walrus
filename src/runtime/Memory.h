@@ -46,7 +46,7 @@ public:
 
         void setUninitialized()
         {
-            sizeInByte = ~(uint64_t)0;
+            sizeInByte = ~(size_t)0;
         }
 
         void enque(Memory* memory);
@@ -54,7 +54,7 @@ public:
 
         TargetBuffer* next;
         uint8_t* buffer;
-        uint64_t sizeInByte;
+        size_t sizeInByte;
     };
 
     static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte,

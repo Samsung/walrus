@@ -45,6 +45,14 @@ extern "C" {
 #error Unsupported architecture
 #endif
 
+#if (defined SLJIT_BIG_ENDIAN && SLJIT_BIG_ENDIAN)
+#define WORD_LOW_OFFSET (sizeof(sljit_s32))
+#define WORD_HIGH_OFFSET 0
+#else /* !SLJIT_BIG_ENDIAN */
+#define WORD_LOW_OFFSET 0
+#define WORD_HIGH_OFFSET (sizeof(sljit_s32))
+#endif /* !SLJIT_BIG_ENDIAN */
+
 #define OffsetOfContextField(field) \
     (static_cast<sljit_sw>(offsetof(ExecutionContext, field)))
 
