@@ -371,6 +371,19 @@ void WASI::fd_filestat_set_times(ExecutionState& state, Value* argv, Value* resu
     result[0] = Value(uvwasi_fd_filestat_set_times(WASI::g_uvwasi, fd, st_atim, st_mtim, fst_flags));
 }
 
+void WASI::sock_accept(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint32_t flags = argv[1].asI32();
+    uint32_t* ro_fd = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[2], sizeof(uint32_t)));
+    if (ro_fd == nullptr) {
+        result[0] = Value(WasiErrNo::inval);
+        return;
+    }
+
+    result[0] = Value(uvwasi_sock_accept(WASI::g_uvwasi, fd, flags, ro_fd));
+}
+
 void WASI::sock_shutdown(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t sock = argv[0].asI32();
