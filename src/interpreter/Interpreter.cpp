@@ -2494,8 +2494,7 @@ NextInstruction:
         // FIXME read reference
         void* ptr = readValue<void*>(bp, code->src0Offset());
 
-        if (newSize <= table->maximumSize() - size) {
-            table->grow(size + newSize, ptr);
+        if (newSize <= table->maximumSize() - size && table->grow(size + newSize, ptr)) {
             writeValue<uint32_t>(bp, code->dstOffset(), size);
         } else {
             writeValue<uint32_t>(bp, code->dstOffset(), -1);
@@ -2518,8 +2517,7 @@ NextInstruction:
         // FIXME read reference
         void* ptr = readValue<void*>(bp, code->src0Offset());
 
-        if (newSize <= table->maximumSize() - size) {
-            table->grow(size + newSize, ptr);
+        if (newSize <= table->maximumSize() - size && table->grow(size + newSize, ptr)) {
             writeValue<uint64_t>(bp, code->dstOffset(), size);
         } else {
             writeValue<uint64_t>(bp, code->dstOffset(), -1);

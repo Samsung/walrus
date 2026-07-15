@@ -306,7 +306,7 @@ void Memory::TargetBuffer::enque(Memory* memory)
 void Memory::TargetBuffer::deque(Memory* memory)
 {
     // Cache is not initialized.
-    if (sizeInByte == ~(uint64_t)0) {
+    if (sizeInByte == ~(size_t)0) {
         return;
     }
 
