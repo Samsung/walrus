@@ -408,6 +408,15 @@ void WASI::fd_fdstat_set_flags(ExecutionState& state, Value* argv, Value* result
     result[0] = Value(uvwasi_fd_fdstat_set_flags(WASI::g_uvwasi, fd, fdflags));
 }
 
+void WASI::fd_fdstat_set_rights(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    uint64_t fs_rights_base = argv[1].asI64();
+    uint64_t fs_rights_inheriting = argv[2].asI64();
+
+    result[0] = Value(uvwasi_fd_fdstat_set_rights(WASI::g_uvwasi, fd, fs_rights_base, fs_rights_inheriting));
+}
+
 void WASI::fd_prestat_get(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t fd = argv[0].asI32();
