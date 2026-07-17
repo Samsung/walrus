@@ -58,6 +58,7 @@ public:
     F(fd_filestat_set_times, I32I64I64I32_RI32)            \
     F(fd_fdstat_get, I32I32_RI32)                          \
     F(fd_fdstat_set_flags, I32I32_RI32)                    \
+    F(fd_fdstat_set_rights, I32I64I64_RI32)                \
     F(fd_prestat_get, I32I32_RI32)                         \
     F(fd_prestat_dir_name, I32I32I32_RI32)                 \
     F(fd_filestat_get, I32I32_RI32)                        \
