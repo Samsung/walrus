@@ -416,6 +416,39 @@ void WASI::sock_send(ExecutionState& state, Value* argv, Value* result, Instance
     result[0] = Value(uvwasi_sock_send(WASI::g_uvwasi, fd, iovs, iovsLen, flags, nwritten));
 }
 
+void WASI::sock_recv(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t fd = argv[0].asI32();
+    size_t iovsLen = static_cast<size_t>(argv[2].asI32());
+    uvwasi_riflags_t flags = static_cast<uvwasi_riflags_t>(argv[3].asI32());
+    uint32_t* nread = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[4], sizeof(uint32_t)));
+    uvwasi_roflags_t* roflags = reinterpret_cast<uvwasi_roflags_t*>(get_memory_pointer(instance, argv[5], sizeof(uvwasi_roflags_t)));
+    uint32_t* iovptr = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[1], iovsLen * (sizeof(uint32_t) << 1)));
+
+    if (iovsLen == 0 || iovptr == nullptr || nread == nullptr || roflags == nullptr) {
+        result[0] = Value(WasiErrNo::inval);
+        return;
+    }
+
+    TemporaryData<uvwasi_iovec_t, 8> iovsBuffer(iovsLen);
+    uvwasi_iovec_t* iovs = iovsBuffer.data();
+    uint64_t sizeInByte = instance->memory(0)->sizeInByte();
+    uint8_t* buffer = instance->memory(0)->buffer();
+
+    for (uint32_t i = 0; i < iovsLen; i++) {
+        if (iovptr[1] > sizeInByte || iovptr[0] > sizeInByte - iovptr[1]) {
+            result[0] = Value(WasiErrNo::inval);
+            return;
+        }
+
+        iovs[i].buf = buffer + iovptr[0];
+        iovs[i].buf_len = iovptr[1];
+        iovptr += 2;
+    }
+
+    result[0] = Value(uvwasi_sock_recv(WASI::g_uvwasi, fd, iovs, iovsLen, flags, nread, roflags));
+}
+
 void WASI::sock_shutdown(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t sock = argv[0].asI32();
