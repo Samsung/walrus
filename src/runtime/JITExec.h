@@ -26,6 +26,7 @@ namespace Walrus {
 class Exception;
 class Memory;
 class InstanceConstData;
+class Function;
 
 struct ExecutionContext {
     enum ErrorCodes : uint32_t {
@@ -67,6 +68,10 @@ struct ExecutionContext {
         , instance(instance)
         , capturedException(nullptr)
         , error(NoError)
+        , tailCallTarget(nullptr)
+        , tailCallOffsets(nullptr)
+        , tailCallParamCount(0)
+        , tailCallResultCount(0)
     {
     }
 
@@ -82,6 +87,10 @@ struct ExecutionContext {
     Instance* instance;
     Exception* capturedException;
     ErrorCodes error;
+    Function* tailCallTarget;
+    ByteCodeStackOffset* tailCallOffsets;
+    uint16_t tailCallParamCount;
+    uint16_t tailCallResultCount;
 };
 
 class JITModule {
@@ -113,6 +122,13 @@ private:
     std::vector<void*> m_codeBlocks;
 };
 
+struct JITTailCall {
+    Function* target;
+    ByteCodeStackOffset* offsets;
+    uint16_t paramCount;
+    uint16_t resultCount;
+};
+
 class JITFunction {
     friend class JITCompiler;
 
@@ -132,7 +148,7 @@ public:
     }
 
     bool isCompiled() const { return m_exportEntry != nullptr; }
-    ByteCodeStackOffset* call(ExecutionState& state, Instance* instance, uint8_t* bp) const;
+    ByteCodeStackOffset* call(ExecutionState& state, Instance* instance, uint8_t* bp, JITTailCall* tailOut = nullptr) const;
 
 private:
     void* m_exportEntry;

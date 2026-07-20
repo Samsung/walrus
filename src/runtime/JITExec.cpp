@@ -24,7 +24,7 @@
 
 namespace Walrus {
 
-ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance, uint8_t* bp) const
+ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance, uint8_t* bp, JITTailCall* tailOut) const
 {
     ASSERT(m_exportEntry);
 
@@ -32,6 +32,15 @@ ByteCodeStackOffset* JITFunction::call(ExecutionState& state, Instance* instance
     Memory* memory0 = nullptr;
 
     ByteCodeStackOffset* resultOffsets = m_module->exportCall()(&context, bp, m_exportEntry);
+
+    if (context.tailCallTarget != nullptr) {
+        ASSERT(tailOut != nullptr);
+        tailOut->target = context.tailCallTarget;
+        tailOut->offsets = context.tailCallOffsets;
+        tailOut->paramCount = context.tailCallParamCount;
+        tailOut->resultCount = context.tailCallResultCount;
+        return nullptr;
+    }
 
     if (context.error != ExecutionContext::NoError) {
         switch (context.error) {

@@ -3386,6 +3386,60 @@ NEVER_INLINE bool Interpreter::tailCallOperation(
     return false;
 }
 
+#if defined(WALRUS_ENABLE_JIT)
+NEVER_INLINE void Interpreter::prepareTailFrame(StackFrame& frame, ByteCodeStackOffset* offsets, uint16_t parameterOffsetCount, size_t requiredStackSize)
+{
+    if (UNLIKELY(requiredStackSize > frame.capacity())) {
+        uint8_t* newBuffer = StackFrame::allocateBuffer(requiredStackSize);
+        for (size_t i = 0; i < parameterOffsetCount; i++) {
+            ((size_t*)newBuffer)[i] = *((size_t*)(frame.bp() + offsets[i]));
+        }
+        frame.replaceBuffer(newBuffer, requiredStackSize);
+    } else {
+        ALLOCA(size_t, paramBuffer, parameterOffsetCount * sizeof(size_t));
+        for (size_t i = 0; i < parameterOffsetCount; i++) {
+            paramBuffer[i] = *((size_t*)(frame.bp() + offsets[i]));
+        }
+        VectorCopier<size_t>::copy((size_t*)frame.bp(), paramBuffer, parameterOffsetCount);
+    }
+}
+
+ByteCodeStackOffset* Interpreter::runJITFunction(ExecutionState& state, DefinedFunction* function, StackFrame& frame)
+{
+    Instance* instance = function->instance();
+    ModuleFunction* moduleFunction = function->moduleFunction();
+
+    while (true) {
+        JITTailCall tail;
+        tail.target = nullptr;
+        ByteCodeStackOffset* resultOffsets = moduleFunction->jitFunction()->call(state, instance, frame.bp(), &tail);
+
+        if (LIKELY(tail.target == nullptr)) {
+            // Normal return (or an exception was already thrown by JITFunction::call).
+            return resultOffsets;
+        }
+
+        Function* target = tail.target;
+        if (LIKELY(target->kind() == Function::DefinedFunctionKind)) {
+            DefinedFunction* definedTarget = target->asDefinedFunction();
+            ModuleFunction* targetModuleFunction = definedTarget->moduleFunction();
+            if (LIKELY(targetModuleFunction->jitFunction() != nullptr)) {
+                prepareTailFrame(frame, tail.offsets, tail.paramCount, targetModuleFunction->requiredStackSize());
+                state.m_currentFunction = definedTarget;
+                instance = definedTarget->instance();
+                function = definedTarget;
+                moduleFunction = targetModuleFunction;
+                continue;
+            }
+        }
+
+        // Fallback
+        target->interpreterCall(state, frame.bp(), tail.offsets, tail.paramCount, tail.resultCount);
+        return tail.offsets + tail.paramCount;
+    }
+}
+#endif
+
 NEVER_INLINE bool Interpreter::testRefGeneric(void* refPtr, Value::Type type)
 {
     ASSERT(!Value::isNull(refPtr));

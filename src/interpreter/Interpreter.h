@@ -116,7 +116,7 @@ private:
 
 #if defined(WALRUS_ENABLE_JIT)
         if (moduleFunction->jitFunction() != nullptr) {
-            resultOffsets = moduleFunction->jitFunction()->call(newState, function->instance(), functionStackBase);
+            resultOffsets = runJITFunction(newState, function, frame);
         } else
 #endif
         {
@@ -199,6 +199,11 @@ private:
 
     static bool testRefGeneric(void* refPtr, Value::Type type);
     static bool testRefDefined(void* refPtr, const CompositeType** typeInfo);
+
+#if defined(WALRUS_ENABLE_JIT)
+    static ByteCodeStackOffset* runJITFunction(ExecutionState& state, DefinedFunction* function, StackFrame& frame);
+    static void prepareTailFrame(StackFrame& frame, ByteCodeStackOffset* offsets, uint16_t parameterOffsetCount, size_t requiredStackSize);
+#endif
 };
 
 } // namespace Walrus

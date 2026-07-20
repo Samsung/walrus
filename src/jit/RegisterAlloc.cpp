@@ -698,6 +698,7 @@ void JITCompiler::allocateRegisters()
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
                    || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::ReturnCallOpcode
+                   || instr->opcode() == ByteCode::ReturnCallIndirectOpcode || instr->opcode() == ByteCode::ReturnCallRefOpcode
                    || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode
@@ -1036,6 +1037,7 @@ void JITCompiler::allocateRegistersSimple()
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
                    || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
                    || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::ReturnCallOpcode
+                   || instr->opcode() == ByteCode::ReturnCallIndirectOpcode || instr->opcode() == ByteCode::ReturnCallRefOpcode
                    || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode

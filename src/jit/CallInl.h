@@ -121,6 +121,75 @@ static sljit_sw shuffleTailCallSelfArguments(uint8_t* bp, ByteCodeStackOffset* o
     return ExecutionContext::NoError;
 }
 
+static sljit_sw tailCallFunction(
+    ReturnCall* code,
+    uint8_t* bp,
+    ExecutionContext* context)
+{
+    context->tailCallTarget = context->instance->function(code->index());
+    context->tailCallOffsets = code->stackOffsets();
+    context->tailCallParamCount = code->parameterOffsetsSize();
+    context->tailCallResultCount = code->resultOffsetsSize();
+    return ExecutionContext::NoError;
+}
+
+static sljit_sw tailCallFunctionIndirect(
+    ReturnCallIndirect* code,
+    uint8_t* bp,
+    ExecutionContext* context)
+{
+    Instance* instance = context->instance;
+    Table* table = instance->table(code->tableIndex());
+
+    uint32_t idx = *reinterpret_cast<uint32_t*>(bp + code->calleeOffset());
+    if (idx >= table->size()) {
+        context->error = ExecutionContext::UndefinedElementError;
+        return ExecutionContext::UndefinedElementError;
+    }
+
+    auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
+    if (UNLIKELY(Value::isNull(target))) {
+        context->error = ExecutionContext::UninitializedElementError;
+        return ExecutionContext::UninitializedElementError;
+    }
+
+    const FunctionType* ft = target->functionType();
+    if (!ft->equals(code->functionType())) {
+        context->error = ExecutionContext::IndirectCallTypeMismatchError;
+        return ExecutionContext::IndirectCallTypeMismatchError;
+    }
+
+    context->tailCallTarget = target;
+    context->tailCallOffsets = code->stackOffsets();
+    context->tailCallParamCount = code->parameterOffsetsSize();
+    context->tailCallResultCount = code->resultOffsetsSize();
+    return ExecutionContext::NoError;
+}
+
+static sljit_sw tailCallFunctionRef(
+    ReturnCallRef* code,
+    uint8_t* bp,
+    ExecutionContext* context)
+{
+    auto target = *reinterpret_cast<Function**>(bp + code->calleeOffset());
+    if (UNLIKELY(Value::isNull(target))) {
+        context->error = ExecutionContext::NullFunctionReferenceError;
+        return ExecutionContext::NullFunctionReferenceError;
+    }
+
+    const FunctionType* ft = target->functionType();
+    if (!ft->equals(code->functionType())) {
+        context->error = ExecutionContext::CallRefTypeMismatchError;
+        return ExecutionContext::CallRefTypeMismatchError;
+    }
+
+    context->tailCallTarget = target;
+    context->tailCallOffsets = code->stackOffsets();
+    context->tailCallParamCount = code->parameterOffsetsSize();
+    context->tailCallResultCount = code->resultOffsetsSize();
+    return ExecutionContext::NoError;
+}
+
 static void emitCall(sljit_compiler* compiler, Instruction* instr)
 {
     FunctionType* functionType;
@@ -145,24 +214,33 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
         stackOffset = callRef->stackOffsets();
     } else if (instr->opcode() == ByteCode::ReturnCallOpcode) {
         ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
-        addr = GET_FUNC_ADDR(sljit_sw, callFunction);
+        addr = GET_FUNC_ADDR(sljit_sw, tailCallFunction);
         functionType = context->compiler->module()->function(call->index())->functionType();
         stackOffset = call->stackOffsets();
     } else if (instr->opcode() == ByteCode::ReturnCallIndirectOpcode) {
         ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode());
-        addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
+        addr = GET_FUNC_ADDR(sljit_sw, tailCallFunctionIndirect);
         functionType = callIndirect->functionType();
         stackOffset = callIndirect->stackOffsets();
     } else {
         ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
-        addr = GET_FUNC_ADDR(sljit_sw, callFunctionRef);
+        addr = GET_FUNC_ADDR(sljit_sw, tailCallFunctionRef);
         functionType = callRef->functionType();
         stackOffset = callRef->stackOffsets();
     }
 
     Operand* operand = instr->operands();
 
+    bool isReturnCall = instr->opcode() == ByteCode::ReturnCallOpcode
+        || instr->opcode() == ByteCode::ReturnCallIndirectOpcode
+        || instr->opcode() == ByteCode::ReturnCallRefOpcode;
+    bool isSelfDirect = false;
     if (instr->opcode() == ByteCode::ReturnCallOpcode) {
+        ReturnCall* returnCall = reinterpret_cast<ReturnCall*>(instr->byteCode());
+        isSelfDirect = context->compiler->module()->function(returnCall->index()) == context->compiler->moduleFunction();
+    }
+
+    if (isSelfDirect) {
         ReturnCall* returnCall = reinterpret_cast<ReturnCall*>(instr->byteCode());
 
         // Detect memory offset instr for copy all oprands related to memory
@@ -262,16 +340,20 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
 
     sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
 
-    for (auto it : functionType->result().types()) {
-        ASSERT(VARIABLE_TYPE(*operand) != Instruction::ConstPtr);
+    if (isReturnCall) {
+        context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+    } else {
+        for (auto it : functionType->result().types()) {
+            ASSERT(VARIABLE_TYPE(*operand) != Instruction::ConstPtr);
 
-        if (VARIABLE_TYPE(*operand) == Instruction::Register) {
-            Operand src = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
-            emitMove(compiler, Instruction::valueTypeToOperandType(it), &src, operand);
+            if (VARIABLE_TYPE(*operand) == Instruction::Register) {
+                Operand src = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
+                emitMove(compiler, Instruction::valueTypeToOperandType(it), &src, operand);
+            }
+
+            operand++;
+            stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
         }
-
-        operand++;
-        stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
     }
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {
