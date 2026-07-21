@@ -32,7 +32,7 @@ TEST_DIR = join(dirname(abspath(__file__)), "ctests")
 DIFF_TRESHOLD = 1e-7
 
 expectedValues = {
-    "binary-trees" : 135854,
+    "binary-trees": 135854,
     "change": 3,
     "factorial": 899999994000000000,
     "fannkuch": 360,
@@ -57,11 +57,12 @@ expectedValues = {
     "simdMandelbrotDouble": 775014,
     "simdNbody": -0.16904405,
     "simdMatrixMultiply": 3920.0,
+    "spectral-norm": 1.274219991,
     "ticTacToe": 18995600,
 }
 
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
-gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees"]
+gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees", "spectral-norm"]
 
 simdTests = [
     "simdMandelbrotFloat",
