@@ -1704,7 +1704,14 @@ NextInstruction:
     DEFINE_OPCODE(CallIndirect)
         :
     {
-        callIndirectOperation(state, programCounter, bp, instance);
+        callIndirectOperation(state, programCounter, bp, instance, false);
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(CallIndirectM64)
+        :
+    {
+        callIndirectOperation(state, programCounter, bp, instance, true);
         NEXT_INSTRUCTION();
     }
 
@@ -1741,6 +1748,34 @@ NextInstruction:
             Trap::throwException(state, "undefined element");
         }
         auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
+        if (UNLIKELY(Value::isNull(target))) {
+            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+        }
+        const FunctionType* ft = target->functionType();
+        if (UNLIKELY(!ft->equals(code->functionType()))) {
+            Trap::throwException(state, "indirect call type mismatch");
+        }
+
+        if (tailCallOperation(state, programCounter, frame, instance, target, code->stackOffsets(),
+                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
+            bp = frame.bp();
+            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
+            NEXT_INSTRUCTION();
+        }
+        return code->stackOffsets() + code->parameterOffsetsSize();
+    }
+
+    DEFINE_OPCODE(ReturnCallIndirectM64)
+        :
+    {
+        ReturnCallIndirectM64* code = (ReturnCallIndirectM64*)programCounter;
+        Table* table = instance->table(code->tableIndex());
+
+        uint64_t idx = readValue<uint64_t>(bp, code->calleeOffset());
+        if (UNLIKELY(idx >= table->size())) {
+            Trap::throwException(state, "undefined element");
+        }
+        auto target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
         if (UNLIKELY(Value::isNull(target))) {
             Trap::throwException(state, "uninitialized element " + std::to_string(idx));
         }
@@ -3293,19 +3328,33 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     ExecutionState& state,
     size_t& programCounter,
     uint8_t* bp,
-    Instance* instance)
+    Instance* instance,
+    bool is64)
 {
-    CallIndirect* code = (CallIndirect*)programCounter;
+    CallTable* code = (CallTable*)programCounter;
     Table* table = instance->table(code->tableIndex());
 
-    uint32_t idx = readValue<uint32_t>(bp, code->calleeOffset());
-    if (idx >= table->size()) {
-        Trap::throwException(state, "undefined element");
+    Function* target;
+    if (!is64) {
+        uint32_t idx = readValue<uint32_t>(bp, code->calleeOffset());
+        if (idx >= table->size()) {
+            Trap::throwException(state, "undefined element");
+        }
+        target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
+        if (UNLIKELY(Value::isNull(target))) {
+            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+        }
+    } else {
+        uint64_t idx = readValue<uint64_t>(bp, code->calleeOffset());
+        if (idx >= table->size()) {
+            Trap::throwException(state, "undefined element");
+        }
+        target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
+        if (UNLIKELY(Value::isNull(target))) {
+            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+        }
     }
-    auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
-    if (UNLIKELY(Value::isNull(target))) {
-        Trap::throwException(state, "uninitialized element " + std::to_string(idx));
-    }
+
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
         Trap::throwException(state, "indirect call type mismatch");

@@ -1589,13 +1589,18 @@ public:
 
     virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) override
     {
-        ASSERT(peekVMStackValueType() == Walrus::Value::I32);
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto functionType = getFunctionType(sigIndex);
         auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
-        pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType, parameterCount, resultCount),
-                     WASMOpcode::CallIndirectOpcode);
+
+        if (!m_result.m_tableTypes[tableIndex]->is64()) {
+            pushByteCode(Walrus::CallIndirect(popVMStack(), tableIndex, functionType, parameterCount, resultCount), WASMOpcode::CallIndirectOpcode);
+        } else {
+            pushByteCode(Walrus::CallIndirectM64(popVMStack(), tableIndex, functionType, parameterCount, resultCount), WASMOpcode::CallIndirectOpcode);
+        }
+
         expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
         ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
 
@@ -1648,12 +1653,17 @@ public:
             generateFunctionReturnCode();
             return;
         }
+        ASSERT(peekVMStackValueType() == m_result.m_tableTypes[tableIndex]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
         auto functionType = getFunctionType(sigIndex);
         auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
-        pushByteCode(Walrus::ReturnCallIndirect(popVMStack(), tableIndex, functionType, parameterCount, resultCount),
-                     WASMOpcode::ReturnCallIndirectOpcode);
+
+        if (!m_result.m_tableTypes[tableIndex]->is64()) {
+            pushByteCode(Walrus::ReturnCallIndirect(popVMStack(), tableIndex, functionType, parameterCount, resultCount), WASMOpcode::ReturnCallIndirectOpcode);
+        } else {
+            pushByteCode(Walrus::ReturnCallIndirectM64(popVMStack(), tableIndex, functionType, parameterCount, resultCount), WASMOpcode::ReturnCallIndirectOpcode);
+        }
         expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
         ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
 
