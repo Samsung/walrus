@@ -74,6 +74,44 @@ static sljit_sw callFunctionIndirect(
     return error;
 }
 
+static sljit_sw callFunctionIndirectM64(
+    CallIndirect* code,
+    uint8_t* bp,
+    ExecutionContext* context)
+{
+    Instance* instance = context->instance;
+    Table* table = instance->table(code->tableIndex());
+
+    uint64_t idx = *reinterpret_cast<uint64_t*>(bp + code->calleeOffset());
+    if (idx >= table->size()) {
+        context->error = ExecutionContext::UndefinedElementError;
+        return ExecutionContext::UndefinedElementError;
+    }
+
+    auto target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
+    if (UNLIKELY(Value::isNull(target))) {
+        context->error = ExecutionContext::UninitializedElementError;
+        return ExecutionContext::UninitializedElementError;
+    }
+
+    const FunctionType* ft = target->functionType();
+    if (!ft->equals(code->functionType())) {
+        context->error = ExecutionContext::IndirectCallTypeMismatchError;
+        return ExecutionContext::IndirectCallTypeMismatchError;
+    }
+
+    sljit_sw error = ExecutionContext::NoError;
+    try {
+        target->interpreterCall(context->state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
+    } catch (std::unique_ptr<Exception>& exception) {
+        context->capturedException = exception.release();
+        context->error = ExecutionContext::CapturedException;
+        error = ExecutionContext::CapturedException;
+    }
+
+    return error;
+}
+
 static sljit_sw callFunctionRef(
     CallRef* code,
     uint8_t* bp,
@@ -127,37 +165,68 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     CompileContext* context = CompileContext::get(compiler);
     ByteCodeStackOffset* stackOffset;
     sljit_sw addr;
+    ByteCodeStackOffset calleeOffset = 0;
+    uint8_t calleeType = 0;
 
-    if (instr->opcode() == ByteCode::CallOpcode) {
+    switch (instr->opcode()) {
+    case ByteCode::CallOpcode: {
         Call* call = reinterpret_cast<Call*>(instr->byteCode());
         addr = GET_FUNC_ADDR(sljit_sw, callFunction);
         functionType = context->compiler->module()->function(call->index())->functionType();
         stackOffset = call->stackOffsets();
-    } else if (instr->opcode() == ByteCode::CallIndirectOpcode) {
-        CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
-        addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
-        functionType = callIndirect->functionType();
-        stackOffset = callIndirect->stackOffsets();
-    } else if (instr->opcode() == ByteCode::CallRefOpcode) {
-        CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
-        addr = GET_FUNC_ADDR(sljit_sw, callFunctionRef);
-        functionType = callRef->functionType();
-        stackOffset = callRef->stackOffsets();
-    } else if (instr->opcode() == ByteCode::ReturnCallOpcode) {
+        break;
+    }
+    case ByteCode::ReturnCallOpcode: {
         ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
         addr = GET_FUNC_ADDR(sljit_sw, callFunction);
         functionType = context->compiler->module()->function(call->index())->functionType();
         stackOffset = call->stackOffsets();
-    } else if (instr->opcode() == ByteCode::ReturnCallIndirectOpcode) {
-        ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode());
-        addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
-        functionType = callIndirect->functionType();
-        stackOffset = callIndirect->stackOffsets();
-    } else {
+        break;
+    }
+    case ByteCode::CallIndirectOpcode:
+    case ByteCode::CallIndirectM64Opcode:
+    case ByteCode::ReturnCallIndirectOpcode:
+    case ByteCode::ReturnCallIndirectM64Opcode: {
+        CallTable* callTable = reinterpret_cast<CallTable*>(instr->byteCode());
+        if (instr->opcode() == ByteCode::CallIndirectOpcode || instr->opcode() == ByteCode::ReturnCallIndirectOpcode) {
+            addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirect);
+            calleeType = Instruction::Int32Operand;
+        } else {
+            addr = GET_FUNC_ADDR(sljit_sw, callFunctionIndirectM64);
+            calleeType = Instruction::Int64Operand;
+        }
+        functionType = callTable->functionType();
+        stackOffset = callTable->stackOffsets();
+        calleeOffset = callTable->calleeOffset();
+        break;
+    }
+    case ByteCode::CallRefOpcode: {
+        CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+        addr = GET_FUNC_ADDR(sljit_sw, callFunctionRef);
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        calleeType = Instruction::Int64Operand;
+#else /* !SLJIT_64BIT_ARCHITECTURE */
+        calleeType = Instruction::Int32Operand;
+#endif /* SLJIT_64BIT_ARCHITECTURE */
+        functionType = callRef->functionType();
+        stackOffset = callRef->stackOffsets();
+        calleeOffset = callRef->calleeOffset();
+        break;
+    }
+    default: {
+        ASSERT(instr->opcode() == ByteCode::ReturnCallRefOpcode);
         ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+        calleeType = Instruction::Int64Operand;
+#else /* !SLJIT_64BIT_ARCHITECTURE */
+        calleeType = Instruction::Int32Operand;
+#endif /* SLJIT_64BIT_ARCHITECTURE */
         addr = GET_FUNC_ADDR(sljit_sw, callFunctionRef);
         functionType = callRef->functionType();
         stackOffset = callRef->stackOffsets();
+        calleeOffset = callRef->calleeOffset();
+        break;
+    }
     }
 
     Operand* operand = instr->operands();
@@ -210,48 +279,19 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     operand += instr->paramCount();
 
     ByteCode::Opcode callOpcode = instr->opcode();
-    if (callOpcode == ByteCode::CallIndirectOpcode || callOpcode == ByteCode::CallRefOpcode
-        || callOpcode == ByteCode::ReturnCallIndirectOpcode || callOpcode == ByteCode::ReturnCallRefOpcode) {
-        ByteCodeStackOffset calleeOffset;
-        sljit_s32 movOpcode;
-
-        if (callOpcode == ByteCode::CallIndirectOpcode) {
-            calleeOffset = reinterpret_cast<CallIndirect*>(instr->byteCode())->calleeOffset();
-            movOpcode = SLJIT_MOV32;
-        } else if (callOpcode == ByteCode::ReturnCallIndirectOpcode) {
-            calleeOffset = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode())->calleeOffset();
-            movOpcode = SLJIT_MOV32;
-        } else if (callOpcode == ByteCode::CallRefOpcode) {
-            calleeOffset = reinterpret_cast<CallRef*>(instr->byteCode())->calleeOffset();
-            movOpcode = SLJIT_MOV;
-        } else {
-            calleeOffset = reinterpret_cast<ReturnCallRef*>(instr->byteCode())->calleeOffset();
-            movOpcode = SLJIT_MOV;
-        }
+    if (calleeType != 0) {
+        Operand dst = VARIABLE_SET(STACK_OFFSET(calleeOffset), Instruction::Offset);
         operand--;
 
         switch (VARIABLE_TYPE(*operand)) {
-        case Instruction::ConstPtr: {
+        case Instruction::ConstPtr:
             ASSERT(!(VARIABLE_GET_IMM(*operand)->info() & Instruction::kKeepInstruction));
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-            if (movOpcode == SLJIT_MOV) {
-                Const64* value = reinterpret_cast<Const64*>(VARIABLE_GET_IMM(*operand)->byteCode());
-                sljit_emit_op1(compiler, movOpcode, SLJIT_MEM1(kFrameReg), calleeOffset, SLJIT_IMM, static_cast<sljit_sw>(value->value()));
-            } else {
-#endif /* SLJIT_64BIT_ARCHITECTURE */
-                Const32* value = reinterpret_cast<Const32*>(VARIABLE_GET_IMM(*operand)->byteCode());
-                sljit_emit_op1(compiler, movOpcode, SLJIT_MEM1(kFrameReg), calleeOffset, SLJIT_IMM, static_cast<sljit_s32>(value->value()));
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-            }
-#endif /* SLJIT_64BIT_ARCHITECTURE */
+            emitStoreImmediate(compiler, &dst, VARIABLE_GET_IMM(*operand), false);
+            break;
+        case Instruction::Register:
+            emitMove(compiler, calleeType, operand, &dst);
             break;
         }
-        case Instruction::Register: {
-            sljit_emit_op1(compiler, movOpcode, SLJIT_MEM1(kFrameReg), calleeOffset, static_cast<sljit_s32>(VARIABLE_GET_REF(*operand)), 0);
-            break;
-        }
-        }
-
         operand++;
     }
 

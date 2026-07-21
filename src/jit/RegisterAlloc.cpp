@@ -696,8 +696,9 @@ void JITCompiler::allocateRegisters()
         if (*list == 0) {
             // No register assignment required.
             ASSERT(instr->opcode() == ByteCode::EndOpcode || instr->opcode() == ByteCode::ThrowOpcode
-                   || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::CallIndirectOpcode
-                   || instr->opcode() == ByteCode::CallRefOpcode || instr->opcode() == ByteCode::ReturnCallOpcode
+                   || instr->opcode() == ByteCode::CallOpcode || instr->opcode() == ByteCode::ReturnCallOpcode
+                   || instr->opcode() == ByteCode::CallIndirectOpcode || instr->opcode() == ByteCode::CallIndirectM64Opcode
+                   || instr->opcode() == ByteCode::CallRefOpcode
                    || instr->opcode() == ByteCode::JumpOpcode
                    || instr->opcode() == ByteCode::ElemDropOpcode || instr->opcode() == ByteCode::DataDropOpcode
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode

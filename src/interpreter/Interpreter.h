@@ -181,7 +181,8 @@ private:
     static void callIndirectOperation(ExecutionState& state,
                                       size_t& programCounter,
                                       uint8_t* bp,
-                                      Instance* instance);
+                                      Instance* instance,
+                                      bool is64);
 
     static void callRefOperation(ExecutionState& state,
                                  size_t& programCounter,

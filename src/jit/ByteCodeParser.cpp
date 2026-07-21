@@ -1183,6 +1183,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::CallOpcode:
         case ByteCode::CallIndirectOpcode:
+        case ByteCode::CallIndirectM64Opcode:
         case ByteCode::CallRefOpcode: {
             FunctionType* functionType;
             ByteCodeStackOffset* stackOffset;
@@ -1193,15 +1194,15 @@ static void compileFunction(JITCompiler* compiler)
                 functionType = compiler->module()->function(call->index())->functionType();
                 stackOffset = call->stackOffsets();
                 callerCount = 0;
-            } else if (opcode == ByteCode::CallIndirectOpcode) {
-                CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(byteCode);
-                functionType = callIndirect->functionType();
-                stackOffset = callIndirect->stackOffsets();
-                callerCount = 1;
-            } else {
+            } else if (opcode == ByteCode::CallRefOpcode) {
                 CallRef* callRef = reinterpret_cast<CallRef*>(byteCode);
                 functionType = callRef->functionType();
                 stackOffset = callRef->stackOffsets();
+                callerCount = 1;
+            } else {
+                CallTable* callTable = reinterpret_cast<CallTable*>(byteCode);
+                functionType = callTable->functionType();
+                stackOffset = callTable->stackOffsets();
                 callerCount = 1;
             }
 
@@ -1215,8 +1216,8 @@ static void compileFunction(JITCompiler* compiler)
                 stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
 
-            if (opcode == ByteCode::CallIndirectOpcode) {
-                *operand++ = STACK_OFFSET(reinterpret_cast<CallIndirect*>(byteCode)->calleeOffset());
+            if (opcode == ByteCode::CallIndirectOpcode || opcode == ByteCode::CallIndirectM64Opcode) {
+                *operand++ = STACK_OFFSET(reinterpret_cast<CallTable*>(byteCode)->calleeOffset());
             } else if (opcode == ByteCode::CallRefOpcode) {
                 *operand++ = STACK_OFFSET(reinterpret_cast<CallRef*>(byteCode)->calleeOffset());
             }
@@ -1231,6 +1232,7 @@ static void compileFunction(JITCompiler* compiler)
         }
         case ByteCode::ReturnCallOpcode:
         case ByteCode::ReturnCallIndirectOpcode:
+        case ByteCode::ReturnCallIndirectM64Opcode:
         case ByteCode::ReturnCallRefOpcode: {
             FunctionType* functionType;
             ByteCodeStackOffset* stackOffset;
@@ -1241,15 +1243,15 @@ static void compileFunction(JITCompiler* compiler)
                 functionType = compiler->module()->function(call->index())->functionType();
                 stackOffset = call->stackOffsets();
                 callerCount = 0;
-            } else if (opcode == ByteCode::ReturnCallIndirectOpcode) {
-                ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(byteCode);
-                functionType = callIndirect->functionType();
-                stackOffset = callIndirect->stackOffsets();
-                callerCount = 1;
-            } else {
+            } else if (opcode == ByteCode::ReturnCallRefOpcode) {
                 ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(byteCode);
                 functionType = callRef->functionType();
                 stackOffset = callRef->stackOffsets();
+                callerCount = 1;
+            } else {
+                CallTable* callTable = reinterpret_cast<CallTable*>(byteCode);
+                functionType = callTable->functionType();
+                stackOffset = callTable->stackOffsets();
                 callerCount = 1;
             }
 
@@ -1263,8 +1265,8 @@ static void compileFunction(JITCompiler* compiler)
                 stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
             }
 
-            if (opcode == ByteCode::ReturnCallIndirectOpcode) {
-                *operand++ = STACK_OFFSET(reinterpret_cast<ReturnCallIndirect*>(byteCode)->calleeOffset());
+            if (opcode == ByteCode::ReturnCallIndirectOpcode || opcode == ByteCode::ReturnCallIndirectM64Opcode) {
+                *operand++ = STACK_OFFSET(reinterpret_cast<CallTable*>(byteCode)->calleeOffset());
             } else if (opcode == ByteCode::ReturnCallRefOpcode) {
                 *operand++ = STACK_OFFSET(reinterpret_cast<ReturnCallRef*>(byteCode)->calleeOffset());
             }

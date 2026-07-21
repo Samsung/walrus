@@ -512,26 +512,36 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         }
 
         FunctionType* functionType;
-
-        if (instr->opcode() == ByteCode::CallOpcode) {
+        switch (instr->opcode()) {
+        case ByteCode::CallOpcode: {
             Call* call = reinterpret_cast<Call*>(instr->byteCode());
             functionType = module()->function(call->index())->functionType();
-        } else if (instr->opcode() == ByteCode::CallIndirectOpcode) {
-            CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
-            functionType = callIndirect->functionType();
-        } else if (instr->opcode() == ByteCode::CallRefOpcode) {
-            CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
-            functionType = callRef->functionType();
-        } else if (instr->opcode() == ByteCode::ReturnCallOpcode) {
+            break;
+        }
+        case ByteCode::ReturnCallOpcode: {
             ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
             functionType = module()->function(call->index())->functionType();
-        } else if (instr->opcode() == ByteCode::ReturnCallIndirectOpcode) {
-            ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode());
-            functionType = callIndirect->functionType();
-        } else {
+            break;
+        }
+        case ByteCode::CallIndirectOpcode:
+        case ByteCode::CallIndirectM64Opcode:
+        case ByteCode::ReturnCallIndirectOpcode:
+        case ByteCode::ReturnCallIndirectM64Opcode: {
+            CallTable* callTable = reinterpret_cast<CallTable*>(instr->byteCode());
+            functionType = callTable->functionType();
+            break;
+        }
+        case ByteCode::CallRefOpcode: {
+            CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+            functionType = callRef->functionType();
+            break;
+        }
+        default: {
             ASSERT(instr->opcode() == ByteCode::ReturnCallRefOpcode);
             ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
             functionType = callRef->functionType();
+            break;
+        }
         }
 
         ASSERT(functionType->result().size() == resultCount);
@@ -778,6 +788,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 }
                 default: {
                     const TypeVector* types = nullptr;
+                    uint16_t calleeInfo = 0;
 
                     switch (instr->opcode()) {
                     case ByteCode::CallOpcode: {
@@ -785,24 +796,32 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                         types = &module()->function(call->index())->functionType()->param();
                         break;
                     }
-                    case ByteCode::CallIndirectOpcode: {
-                        CallIndirect* callIndirect = reinterpret_cast<CallIndirect*>(instr->byteCode());
-                        types = &callIndirect->functionType()->param();
-                        break;
-                    }
-                    case ByteCode::CallRefOpcode: {
-                        CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
-                        types = &callRef->functionType()->param();
-                        break;
-                    }
                     case ByteCode::ReturnCallOpcode: {
                         ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
                         types = &module()->function(call->index())->functionType()->param();
                         break;
                     }
-                    case ByteCode::ReturnCallIndirectOpcode: {
-                        ReturnCallIndirect* callIndirect = reinterpret_cast<ReturnCallIndirect*>(instr->byteCode());
-                        types = &callIndirect->functionType()->param();
+                    case ByteCode::CallIndirectOpcode:
+                    case ByteCode::ReturnCallIndirectOpcode:
+                        calleeInfo = Instruction::Int32Operand;
+                        FALLTHROUGH;
+                    case ByteCode::CallIndirectM64Opcode:
+                    case ByteCode::ReturnCallIndirectM64Opcode: {
+                        CallTable* callTable = reinterpret_cast<CallTable*>(instr->byteCode());
+                        types = &callTable->functionType()->param();
+                        if (calleeInfo == 0) {
+                            calleeInfo = Instruction::Int64Operand;
+                        }
+                        break;
+                    }
+                    case ByteCode::CallRefOpcode: {
+                        CallRef* callRef = reinterpret_cast<CallRef*>(instr->byteCode());
+                        types = &callRef->functionType()->param();
+#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
+                        calleeInfo = Instruction::Int64Operand;
+#else /* !SLJIT_64BIT_ARCHITECTURE */
+                        calleeInfo = Instruction::Int32Operand;
+#endif /* SLJIT_64BIT_ARCHITECTURE */
                         break;
                     }
                     case ByteCode::ReturnCallRefOpcode: {
@@ -828,13 +847,8 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                         variable.info |= Instruction::valueTypeToOperandType(it);
                     }
 
-                    if (instr->opcode() == ByteCode::CallIndirectOpcode || instr->opcode() == ByteCode::CallRefOpcode) {
-                        VariableList::Variable& variable = m_variableList->variables[*param];
-#if (defined SLJIT_64BIT_ARCHITECTURE && SLJIT_64BIT_ARCHITECTURE)
-                        variable.info |= (instr->opcode() == ByteCode::CallIndirectOpcode) ? Instruction::Int32Operand : Instruction::Int64Operand;
-#else /* !SLJIT_64BIT_ARCHITECTURE */
-                        variable.info |= Instruction::Int32Operand;
-#endif /* SLJIT_64BIT_ARCHITECTURE */
+                    if (calleeInfo != 0) {
+                        m_variableList->variables[*param].info |= calleeInfo;
                     }
                 }
                 }

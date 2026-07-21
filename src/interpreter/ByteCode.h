@@ -46,9 +46,11 @@ class FunctionType;
     F(BrTable)                  \
     F(Call)                     \
     F(CallIndirect)             \
+    F(CallIndirectM64)          \
     F(CallRef)                  \
     F(ReturnCall)               \
     F(ReturnCallIndirect)       \
+    F(ReturnCallIndirectM64)    \
     F(ReturnCallRef)            \
     F(Select)                   \
     F(MemorySize)               \
@@ -2024,12 +2026,12 @@ protected:
     uint16_t m_resultOffsetsSize;
 };
 
-class CallIndirect : public ByteCode {
+class CallTable : public ByteCode {
 public:
-    CallIndirect(ByteCodeStackOffset stackOffset, uint32_t tableIndex, FunctionType* functionType,
-                 uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize)
-        : ByteCode(Opcode::CallIndirectOpcode)
-        , m_calleeOffset(stackOffset)
+    CallTable(Opcode opcode, ByteCodeStackOffset calleeOffset, uint32_t tableIndex,
+              FunctionType* functionType, uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize)
+        : ByteCode(opcode)
+        , m_calleeOffset(calleeOffset)
         , m_tableIndex(tableIndex)
         , m_functionType(functionType)
         , m_parameterOffsetsSize(parameterOffsetsSize)
@@ -2040,42 +2042,13 @@ public:
     ByteCodeStackOffset calleeOffset() const { return m_calleeOffset; }
     uint32_t tableIndex() const { return m_tableIndex; }
     FunctionType* functionType() const { return m_functionType; }
+    uint16_t parameterOffsetsSize() const { return m_parameterOffsetsSize; }
+    uint16_t resultOffsetsSize() const { return m_resultOffsetsSize; }
+
     ByteCodeStackOffset* stackOffsets() const
     {
-        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallIndirect));
+        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(CallTable));
     }
-
-    uint16_t parameterOffsetsSize() const
-    {
-        return m_parameterOffsetsSize;
-    }
-
-    uint16_t resultOffsetsSize() const
-    {
-        return m_resultOffsetsSize;
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("call_indirect ");
-        printf("tableIndex: %" PRId32 " ", m_tableIndex);
-        DUMP_BYTECODE_OFFSET(calleeOffset);
-
-        size_t c = 0;
-        auto arr = stackOffsets();
-        printf("paramOffsets: ");
-        for (size_t i = 0; i < m_parameterOffsetsSize; i++) {
-            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
-        }
-        printf(" ");
-
-        printf("resultOffsets: ");
-        for (size_t i = 0; i < m_resultOffsetsSize; i++) {
-            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
-        }
-    }
-#endif
 
 protected:
     ByteCodeStackOffset m_calleeOffset;
@@ -2084,6 +2057,38 @@ protected:
     uint16_t m_parameterOffsetsSize;
     uint16_t m_resultOffsetsSize;
 };
+
+#define DEFINE_CALL_INDIRECT(className, opStr)                                                                                      \
+    class className : public CallTable {                                                                                            \
+    public:                                                                                                                         \
+        className(ByteCodeStackOffset calleeOffset, uint32_t tableIndex, FunctionType* functionType,                                \
+                  uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize)                                                        \
+            : CallTable(Opcode::className##Opcode, calleeOffset, tableIndex, functionType, parameterOffsetsSize, resultOffsetsSize) \
+        {                                                                                                                           \
+        }                                                                                                                           \
+                                                                                                                                    \
+        IF_DEBUG_ENABLED(                                                                                                           \
+            void dump(size_t pos) {                                                                                                 \
+                printf("%s tableIndex: %" PRId32 " ", opStr, m_tableIndex);                                                         \
+                DUMP_BYTECODE_OFFSET(calleeOffset);                                                                                 \
+                                                                                                                                    \
+                size_t c = 0;                                                                                                       \
+                auto arr = stackOffsets();                                                                                          \
+                printf("paramOffsets: ");                                                                                           \
+                for (size_t i = 0; i < parameterOffsetsSize(); i++) {                                                               \
+                    printf("%" PRIu32 " ", (uint32_t)arr[c++]);                                                                     \
+                }                                                                                                                   \
+                printf(" ");                                                                                                        \
+                                                                                                                                    \
+                printf("resultOffsets: ");                                                                                          \
+                for (size_t i = 0; i < resultOffsetsSize(); i++) {                                                                  \
+                    printf("%" PRIu32 " ", (uint32_t)arr[c++]);                                                                     \
+                }                                                                                                                   \
+            })                                                                                                                      \
+    };
+
+DEFINE_CALL_INDIRECT(CallIndirect, "CallIndirect")
+DEFINE_CALL_INDIRECT(CallIndirectM64, "CallIndirectM64")
 
 class CallRef : public ByteCode {
 public:
@@ -2193,66 +2198,8 @@ protected:
     uint16_t m_resultOffsetsSize;
 };
 
-class ReturnCallIndirect : public ByteCode {
-public:
-    ReturnCallIndirect(ByteCodeStackOffset stackOffset, uint32_t tableIndex, FunctionType* functionType,
-                       uint16_t parameterOffsetsSize, uint16_t resultOffsetsSize)
-        : ByteCode(Opcode::ReturnCallIndirectOpcode)
-        , m_calleeOffset(stackOffset)
-        , m_tableIndex(tableIndex)
-        , m_functionType(functionType)
-        , m_parameterOffsetsSize(parameterOffsetsSize)
-        , m_resultOffsetsSize(resultOffsetsSize)
-    {
-    }
-
-    ByteCodeStackOffset calleeOffset() const { return m_calleeOffset; }
-    uint32_t tableIndex() const { return m_tableIndex; }
-    FunctionType* functionType() const { return m_functionType; }
-    ByteCodeStackOffset* stackOffsets() const
-    {
-        return reinterpret_cast<ByteCodeStackOffset*>(reinterpret_cast<size_t>(this) + sizeof(ReturnCallIndirect));
-    }
-
-    uint16_t parameterOffsetsSize() const
-    {
-        return m_parameterOffsetsSize;
-    }
-
-    uint16_t resultOffsetsSize() const
-    {
-        return m_resultOffsetsSize;
-    }
-
-#if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-        printf("return_call_indirect ");
-        printf("tableIndex: %" PRId32 " ", m_tableIndex);
-        DUMP_BYTECODE_OFFSET(calleeOffset);
-
-        size_t c = 0;
-        auto arr = stackOffsets();
-        printf("paramOffsets: ");
-        for (size_t i = 0; i < m_parameterOffsetsSize; i++) {
-            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
-        }
-        printf(" ");
-
-        printf("resultOffsets: ");
-        for (size_t i = 0; i < m_resultOffsetsSize; i++) {
-            printf("%" PRIu32 " ", (uint32_t)arr[c++]);
-        }
-    }
-#endif
-
-protected:
-    ByteCodeStackOffset m_calleeOffset;
-    uint32_t m_tableIndex;
-    FunctionType* m_functionType;
-    uint16_t m_parameterOffsetsSize;
-    uint16_t m_resultOffsetsSize;
-};
+DEFINE_CALL_INDIRECT(ReturnCallIndirect, "ReturnCallIndirect")
+DEFINE_CALL_INDIRECT(ReturnCallIndirectM64, "ReturnCallIndirectM64")
 
 class ReturnCallRef : public ByteCode {
 public:
