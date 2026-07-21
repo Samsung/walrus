@@ -121,16 +121,39 @@ static sljit_sw shuffleTailCallSelfArguments(uint8_t* bp, ByteCodeStackOffset* o
     return ExecutionContext::NoError;
 }
 
+static sljit_sw resolvePendingTailCall(
+    Function* target,
+    ByteCodeStackOffset* offsets,
+    uint16_t parameterOffsetCount,
+    uint16_t resultOffsetCount,
+    uint8_t* bp,
+    ExecutionContext* context)
+{
+    if (LIKELY(target->kind() == Function::DefinedFunctionKind)) {
+        shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
+        context->tailCallTarget = target;
+        context->error = ExecutionContext::TailCall;
+        return ExecutionContext::TailCall;
+    }
+
+    sljit_sw result = reinterpret_cast<sljit_sw>(offsets + parameterOffsetCount);
+    try {
+        target->interpreterCall(context->state, bp, offsets, parameterOffsetCount, resultOffsetCount);
+    } catch (std::unique_ptr<Exception>& exception) {
+        context->capturedException = exception.release();
+        context->error = ExecutionContext::CapturedException;
+        result = ExecutionContext::CapturedException;
+    }
+    return result;
+}
+
 static sljit_sw tailCallFunction(
     ReturnCall* code,
     uint8_t* bp,
     ExecutionContext* context)
 {
-    context->tailCallTarget = context->instance->function(code->index());
-    context->tailCallOffsets = code->stackOffsets();
-    context->tailCallParamCount = code->parameterOffsetsSize();
-    context->tailCallResultCount = code->resultOffsetsSize();
-    return ExecutionContext::NoError;
+    Function* target = context->instance->function(code->index());
+    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), bp, context);
 }
 
 static sljit_sw tailCallFunctionIndirect(
@@ -159,11 +182,7 @@ static sljit_sw tailCallFunctionIndirect(
         return ExecutionContext::IndirectCallTypeMismatchError;
     }
 
-    context->tailCallTarget = target;
-    context->tailCallOffsets = code->stackOffsets();
-    context->tailCallParamCount = code->parameterOffsetsSize();
-    context->tailCallResultCount = code->resultOffsetsSize();
-    return ExecutionContext::NoError;
+    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), bp, context);
 }
 
 static sljit_sw tailCallFunctionRef(
@@ -183,11 +202,7 @@ static sljit_sw tailCallFunctionRef(
         return ExecutionContext::CallRefTypeMismatchError;
     }
 
-    context->tailCallTarget = target;
-    context->tailCallOffsets = code->stackOffsets();
-    context->tailCallParamCount = code->parameterOffsetsSize();
-    context->tailCallResultCount = code->resultOffsetsSize();
-    return ExecutionContext::NoError;
+    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), bp, context);
 }
 
 static void emitCall(sljit_compiler* compiler, Instruction* instr)
@@ -230,17 +245,13 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     }
 
     Operand* operand = instr->operands();
+    ReturnCall* returnCall = reinterpret_cast<ReturnCall*>(instr->byteCode());
 
-    bool isReturnCall = instr->opcode() == ByteCode::ReturnCallOpcode
+    bool isTailCall = instr->opcode() == ByteCode::ReturnCallOpcode
         || instr->opcode() == ByteCode::ReturnCallIndirectOpcode
         || instr->opcode() == ByteCode::ReturnCallRefOpcode;
-    bool isSelfDirect = false;
-    if (instr->opcode() == ByteCode::ReturnCallOpcode) {
-        ReturnCall* returnCall = reinterpret_cast<ReturnCall*>(instr->byteCode());
-        isSelfDirect = context->compiler->module()->function(returnCall->index()) == context->compiler->moduleFunction();
-    }
 
-    if (isSelfDirect) {
+    if (instr->opcode() == ByteCode::ReturnCallOpcode && context->compiler->module()->function(returnCall->index()) == context->compiler->moduleFunction()) {
         ReturnCall* returnCall = reinterpret_cast<ReturnCall*>(instr->byteCode());
 
         // Detect memory offset instr for copy all oprands related to memory
@@ -338,22 +349,23 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
+    if (isTailCall) {
+        context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+        return;
+    }
+
     sljit_jump* jump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::NoError);
 
-    if (isReturnCall) {
-        context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
-    } else {
-        for (auto it : functionType->result().types()) {
-            ASSERT(VARIABLE_TYPE(*operand) != Instruction::ConstPtr);
+    for (auto it : functionType->result().types()) {
+        ASSERT(VARIABLE_TYPE(*operand) != Instruction::ConstPtr);
 
-            if (VARIABLE_TYPE(*operand) == Instruction::Register) {
-                Operand src = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
-                emitMove(compiler, Instruction::valueTypeToOperandType(it), &src, operand);
-            }
-
-            operand++;
-            stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
+        if (VARIABLE_TYPE(*operand) == Instruction::Register) {
+            Operand src = VARIABLE_SET(STACK_OFFSET(*stackOffset), Instruction::Offset);
+            emitMove(compiler, Instruction::valueTypeToOperandType(it), &src, operand);
         }
+
+        operand++;
+        stackOffset += (valueSize(it) + (sizeof(size_t) - 1)) / sizeof(size_t);
     }
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {

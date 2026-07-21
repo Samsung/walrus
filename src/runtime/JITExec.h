@@ -60,6 +60,7 @@ struct ExecutionContext {
         GenericTrap, // Error code received in SLJIT_R0.
         ReturnToLabel, // Used for returning with an exception.
         ErrorCodesEnd,
+        TailCall,
     };
 
     ExecutionContext(InstanceConstData* currentInstanceConstData, ExecutionState& state, Instance* instance)
@@ -69,9 +70,6 @@ struct ExecutionContext {
         , capturedException(nullptr)
         , error(NoError)
         , tailCallTarget(nullptr)
-        , tailCallOffsets(nullptr)
-        , tailCallParamCount(0)
-        , tailCallResultCount(0)
     {
     }
 
@@ -88,9 +86,6 @@ struct ExecutionContext {
     Exception* capturedException;
     ErrorCodes error;
     Function* tailCallTarget;
-    ByteCodeStackOffset* tailCallOffsets;
-    uint16_t tailCallParamCount;
-    uint16_t tailCallResultCount;
 };
 
 class JITModule {
@@ -122,13 +117,6 @@ private:
     std::vector<void*> m_codeBlocks;
 };
 
-struct JITTailCall {
-    Function* target;
-    ByteCodeStackOffset* offsets;
-    uint16_t paramCount;
-    uint16_t resultCount;
-};
-
 class JITFunction {
     friend class JITCompiler;
 
@@ -148,7 +136,8 @@ public:
     }
 
     bool isCompiled() const { return m_exportEntry != nullptr; }
-    ByteCodeStackOffset* call(ExecutionState& state, Instance* instance, uint8_t* bp, JITTailCall* tailOut = nullptr) const;
+    InstanceConstData* instanceConstData() const { return m_module->instanceConstData(); }
+    ByteCodeStackOffset* call(ExecutionContext& context, uint8_t* bp) const;
 
 private:
     void* m_exportEntry;
