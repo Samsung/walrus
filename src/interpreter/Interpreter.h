@@ -114,13 +114,34 @@ private:
         StackFrame frame(functionStackBase, moduleFunction->requiredStackSize());
         ByteCodeStackOffset* resultOffsets;
 
+        while (true) {
 #if defined(WALRUS_ENABLE_JIT)
-        if (moduleFunction->jitFunction() != nullptr) {
-            resultOffsets = runJITFunction(newState, function, frame);
-        } else
+            if (moduleFunction->jitFunction() != nullptr) {
+                const JITFunction* jitFunc = moduleFunction->jitFunction();
+                ExecutionContext context(jitFunc->instanceConstData(), newState, function->instance());
+                resultOffsets = jitFunc->call(context, frame.bp());
+
+                if (LIKELY(context.error != ExecutionContext::TailCall)) {
+                    break;
+                }
+
+                // Restart the pending tail call in the current frame: its
+                // arguments are already placed at the frame base.
+                newState.m_currentFunction = context.tailCallTarget;
+                function = newState.m_currentFunction.value()->asDefinedFunction();
+                moduleFunction = function->moduleFunction();
+                programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
+
+                size_t requiredStackSize = moduleFunction->requiredStackSize();
+                if (UNLIKELY(requiredStackSize > frame.capacity())) {
+                    uint8_t* newBuffer = StackFrame::allocateBuffer(requiredStackSize);
+                    memcpy(newBuffer, frame.bp(), function->functionType()->paramStackSize());
+                    frame.replaceBuffer(newBuffer, requiredStackSize);
+                }
+                continue;
+            }
 #endif
-        {
-            while (true) {
+            {
                 try {
                     resultOffsets = interpret(newState, programCounter, frame, function->instance());
                     break;
@@ -200,11 +221,6 @@ private:
 
     static bool testRefGeneric(void* refPtr, Value::Type type);
     static bool testRefDefined(void* refPtr, const CompositeType** typeInfo);
-
-#if defined(WALRUS_ENABLE_JIT)
-    static ByteCodeStackOffset* runJITFunction(ExecutionState& state, DefinedFunction* function, StackFrame& frame);
-    static void prepareTailFrame(StackFrame& frame, ByteCodeStackOffset* offsets, uint16_t parameterOffsetCount, size_t requiredStackSize);
-#endif
 };
 
 } // namespace Walrus
