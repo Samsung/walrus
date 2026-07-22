@@ -545,6 +545,17 @@ void WASI::path_link(ExecutionState& state, Value* argv, Value* result, Instance
     result[0] = Value(uvwasi_path_link(WASI::g_uvwasi, oldFd, oldFlags, oldPath, oldLength, newFd, newPath, newLength));
 }
 
+void WASI::path_symlink(ExecutionState& state, Value* argv, Value* result, Instance* instance)
+{
+    uint32_t oldLength = argv[1].asI32();
+    const char* oldPath = reinterpret_cast<char*>(get_memory_pointer(instance, argv[0], oldLength));
+    uint32_t fd = argv[2].asI32();
+    uint32_t newLength = argv[4].asI32();
+    const char* newPath = reinterpret_cast<char*>(get_memory_pointer(instance, argv[3], newLength));
+
+    result[0] = Value(uvwasi_path_symlink(WASI::g_uvwasi, oldPath, oldLength, fd, newPath, newLength));
+}
+
 void WASI::path_rename(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
     uint32_t oldFd = argv[0].asI32();

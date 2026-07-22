@@ -71,6 +71,7 @@ public:
     F(path_filestat_get, I32I32I32I32I32_RI32)             \
     F(path_filestat_set_times, I32I32I32I32I64I64I32_RI32) \
     F(path_link, I32I32I32I32I32I32I32_RI32)               \
+    F(path_symlink, I32I32I32I32I32_RI32)                  \
     F(path_rename, I32I32I32I32I32I32_RI32)                \
     F(path_unlink_file, I32I32I32_RI32)                    \
     F(poll_oneoff, I32I32I32I32_RI32)                      \
