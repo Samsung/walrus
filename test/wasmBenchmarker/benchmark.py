@@ -37,6 +37,8 @@ expectedValues = {
     "factorial": 899999994000000000,
     "fannkuch": 360,
     "fibonacci": 63245986,
+    "floydWarshall": 774678,
+    "gaussian": 400.06561652,
     "gregory": 3.14159264,
     "hanoi": 67108863,
     "heapsort": 0,
