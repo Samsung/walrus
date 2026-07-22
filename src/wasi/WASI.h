@@ -77,6 +77,7 @@ public:
     F(environ_sizes_get, I32I32_RI32)                      \
     F(sched_yield, RI32)                                   \
     F(sock_accept, I32I32I32_RI32)                         \
+    F(sock_send, I32I32I32I32I32_RI32)                     \
     F(sock_shutdown, I32I32_RI32)
 
 #define ERRORS(ERR)                                                   \
