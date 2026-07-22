@@ -623,7 +623,6 @@ private:
 
     bool m_inInitExpr;
     Walrus::ModuleFunction* m_currentFunction;
-    uint32_t m_currentFunctionIndex;
     Walrus::FunctionType* m_currentFunctionType;
     Walrus::Vector<uint8_t, std::allocator<uint8_t>> m_currentByteCode;
     uint32_t m_initialFunctionStackSize;
@@ -1355,7 +1354,6 @@ public:
     {
         ASSERT(resumeGenerateByteCodeAfterNBlockEnd() == 0);
         ASSERT(m_currentFunction == nullptr);
-        m_currentFunctionIndex = index;
         beginFunction(m_result.m_functions[index], false);
     }
 
@@ -1621,11 +1619,6 @@ public:
     virtual void OnReturnCallExpr(uint32_t index) override
     {
         m_preprocessData.seenBranch();
-        if (m_useJIT && index != m_currentFunctionIndex) {
-            OnCallExpr(index);
-            generateFunctionReturnCode();
-            return;
-        }
         auto functionType = m_result.m_functions[index]->functionType();
         auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
@@ -1643,11 +1636,6 @@ public:
     virtual void OnReturnCallIndirectExpr(Index sigIndex, Index tableIndex) override
     {
         m_preprocessData.seenBranch();
-        if (m_useJIT) {
-            OnCallIndirectExpr(sigIndex, tableIndex);
-            generateFunctionReturnCode();
-            return;
-        }
         auto functionType = getFunctionType(sigIndex);
         auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
@@ -1665,11 +1653,6 @@ public:
     virtual void OnReturnCallRefExpr(Type sig_type) override
     {
         m_preprocessData.seenBranch();
-        if (m_useJIT) {
-            OnCallRefExpr(sig_type);
-            generateFunctionReturnCode();
-            return;
-        }
         auto functionType = getFunctionType(sig_type.GetReferenceIndex());
         auto callPos = m_currentByteCode.size();
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());

@@ -26,6 +26,7 @@ namespace Walrus {
 class Exception;
 class Memory;
 class InstanceConstData;
+class Function;
 
 struct ExecutionContext {
     enum ErrorCodes : uint32_t {
@@ -59,6 +60,7 @@ struct ExecutionContext {
         GenericTrap, // Error code received in SLJIT_R0.
         ReturnToLabel, // Used for returning with an exception.
         ErrorCodesEnd,
+        TailCall,
     };
 
     ExecutionContext(InstanceConstData* currentInstanceConstData, ExecutionState& state, Instance* instance)
@@ -67,6 +69,7 @@ struct ExecutionContext {
         , instance(instance)
         , capturedException(nullptr)
         , error(NoError)
+        , tailCallTarget(nullptr)
     {
     }
 
@@ -82,6 +85,7 @@ struct ExecutionContext {
     Instance* instance;
     Exception* capturedException;
     ErrorCodes error;
+    Function* tailCallTarget;
 };
 
 class JITModule {
@@ -132,7 +136,8 @@ public:
     }
 
     bool isCompiled() const { return m_exportEntry != nullptr; }
-    ByteCodeStackOffset* call(ExecutionState& state, Instance* instance, uint8_t* bp) const;
+    InstanceConstData* instanceConstData() const { return m_module->instanceConstData(); }
+    ByteCodeStackOffset* call(ExecutionContext& context, uint8_t* bp) const;
 
 private:
     void* m_exportEntry;
