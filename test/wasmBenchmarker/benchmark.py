@@ -32,6 +32,7 @@ TEST_DIR = join(dirname(abspath(__file__)), "ctests")
 DIFF_TRESHOLD = 1e-7
 
 expectedValues = {
+    "fasta": 18250822540888487192,
     "binary-trees": 135854,
     "change": 3,
     "factorial": 899999994000000000,
@@ -64,7 +65,7 @@ expectedValues = {
 }
 
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
-gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees", "spectral-norm"]
+gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees", "spectral-norm", "fasta"]
 
 simdTests = [
     "simdMandelbrotFloat",
