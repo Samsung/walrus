@@ -53,6 +53,7 @@ expectedValues = {
     "prime": 70657,
     "quickSort": 0,
     "redBlack": 13354000,
+    "reverse-complement": 1,
     "rsa": 0,
     "salesman": 2520,
     "simdMandelbrotFloat": 775014,
@@ -64,7 +65,7 @@ expectedValues = {
 }
 
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
-gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees", "spectral-norm"]
+gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees", "spectral-norm", "reverse-complement"]
 
 simdTests = [
     "simdMandelbrotFloat",

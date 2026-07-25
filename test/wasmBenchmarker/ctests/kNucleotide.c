@@ -17,10 +17,11 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include "include/fastaInput.h"
 
 #define LOOP 2
 
-extern const char *input_3;
+const char *input_3 = FASTA_THREE_SEQUENCE;
 
 typedef struct {
     char key[50];
@@ -245,89 +246,4 @@ bool runtime() {
     return checks == LOOP;
 }
 
-const char *input_3 =
-        /* ">THREE Homo sapiens frequency" */
-        "aacacttcaccaggtatcgtgaaggctcaagattacccagagaacctttgcaatataaga"
-        "atatgtatgcagcattaccctaagtaattatattctttttctgactcaaagtgacaagcc"
-        "ctagtgtatattaaatcggtatatttgggaaattcctcaaactatcctaatcaggtagcc"
-        "atgaaagtgatcaaaaaagttcgtacttataccatacatgaattctggccaagtaaaaaa"
-        "tagattgcgcaaaattcgtaccttaagtctctcgccaagatattaggatcctattactca"
-        "tatcgtgtttttctttattgccgccatccccggagtatctcacccatccttctcttaaag"
-        "gcctaatattacctatgcaaataaacatatattgttgaaaattgagaacctgatcgtgat"
-        "tcttatgtgtaccatatgtatagtaatcacgcgactatatagtgctttagtatcgcccgt"
-        "gggtgagtgaatattctgggctagcgtgagatagtttcttgtcctaatatttttcagatc"
-        "gaatagcttctatttttgtgtttattgacatatgtcgaaactccttactcagtgaaagtc"
-        "atgaccagatccacgaacaatcttcggaatcagtctcgttttacggcggaatcttgagtc"
-        "taacttatatcccgtcgcttactttctaacaccccttatgtatttttaaaattacgttta"
-        "ttcgaacgtacttggcggaagcgttattttttgaagtaagttacattgggcagactcttg"
-        "acattttcgatacgactttctttcatccatcacaggactcgttcgtattgatatcagaag"
-        "ctcgtgatgattagttgtcttctttaccaatactttgaggcctattctgcgaaatttttg"
-        "ttgccctgcgaacttcacataccaaggaacacctcgcaacatgccttcatatccatcgtt"
-        "cattgtaattcttacacaatgaatcctaagtaattacatccctgcgtaaaagatggtagg"
-        "ggcactgaggatatattaccaagcatttagttatgagtaatcagcaatgtttcttgtatt"
-        "aagttctctaaaatagttacatcgtaatgttatctcgggttccgcgaataaacgagatag"
-        "attcattatatatggccctaagcaaaaacctcctcgtattctgttggtaattagaatcac"
-        "acaatacgggttgagatattaattatttgtagtacgaagagatataaaaagatgaacaat"
-        "tactcaagtcaagatgtatacgggatttataataaaaatcgggtagagatctgctttgca"
-        "attcagacgtgccactaaatcgtaatatgtcgcgttacatcagaaagggtaactattatt"
-        "aattaataaagggcttaatcactacatattagatcttatccgatagtcttatctattcgt"
-        "tgtatttttaagcggttctaattcagtcattatatcagtgctccgagttctttattattg"
-        "ttttaaggatgacaaaatgcctcttgttataacgctgggagaagcagactaagagtcgga"
-        "gcagttggtagaatgaggctgcaaaagacggtctcgacgaatggacagactttactaaac"
-        "caatgaaagacagaagtagagcaaagtctgaagtggtatcagcttaattatgacaaccct"
-        "taatacttccctttcgccgaatactggcgtggaaaggttttaaaagtcgaagtagttaga"
-        "ggcatctctcgctcataaataggtagactactcgcaatccaatgtgactatgtaatactg"
-        "ggaacatcagtccgcgatgcagcgtgtttatcaaccgtccccactcgcctggggagacat"
-        "gagaccacccccgtggggattattagtccgcagtaatcgactcttgacaatccttttcga"
-        "ttatgtcatagcaatttacgacagttcagcgaagtgactactcggcgaaatggtattact"
-        "aaagcattcgaacccacatgaatgtgattcttggcaatttctaatccactaaagcttttc"
-        "cgttgaatctggttgtagatatttatataagttcactaattaagatcacggtagtatatt"
-        "gatagtgatgtctttgcaagaggttggccgaggaatttacggattctctattgatacaat"
-        "ttgtctggcttataactcttaaggctgaaccaggcgtttttagacgacttgatcagctgt"
-        "tagaatggtttggactccctctttcatgtcagtaacatttcagccgttattgttacgata"
-        "tgcttgaacaatattgatctaccacacacccatagtatattttataggtcatgctgttac"
-        "ctacgagcatggtattccacttcccattcaatgagtattcaacatcactagcctcagaga"
-        "tgatgacccacctctaataacgtcacgttgcggccatgtgaaacctgaacttgagtagac"
-        "gatatcaagcgctttaaattgcatataacatttgagggtaaagctaagcggatgctttat"
-        "ataatcaatactcaataataagatttgattgcattttagagttatgacacgacatagttc"
-        "actaacgagttactattcccagatctagactgaagtactgatcgagacgatccttacgtc"
-        "gatgatcgttagttatcgacttaggtcgggtctctagcggtattggtacttaaccggaca"
-        "ctatactaataacccatgatcaaagcataacagaatacagacgataatttcgccaacata"
-        "tatgtacagaccccaagcatgagaagctcattgaaagctatcattgaagtcccgctcaca"
-        "atgtgtcttttccagacggtttaactggttcccgggagtcctggagtttcgacttacata"
-        "aatggaaacaatgtattttgctaatttatctatagcgtcatttggaccaatacagaatat"
-        "tatgttgcctagtaatccactataacccgcaagtgctgatagaaaatttttagacgattt"
-        "ataaatgccccaagtatccctcccgtgaatcctccgttatactaattagtattcgttcat"
-        "acgtataccgcgcatatatgaacatttggcgataaggcgcgtgaattgttacgtgacaga"
-        "gatagcagtttcttgtgatatggttaacagacgtacatgaagggaaactttatatctata"
-        "gtgatgcttccgtagaaataccgccactggtctgccaatgatgaagtatgtagctttagg"
-        "tttgtactatgaggctttcgtttgtttgcagagtataacagttgcgagtgaaaaaccgac"
-        "gaatttatactaatacgctttcactattggctacaaaatagggaagagtttcaatcatga"
-        "gagggagtatatggatgctttgtagctaaaggtagaacgtatgtatatgctgccgttcat"
-        "tcttgaaagatacataagcgataagttacgacaattataagcaacatccctaccttcgta"
-        "acgatttcactgttactgcgcttgaaatacactatggggctattggcggagagaagcaga"
-        "tcgcgccgagcatatacgagacctataatgttgatgatagagaaggcgtctgaattgata"
-        "catcgaagtacactttctttcgtagtatctctcgtcctctttctatctccggacacaaga"
-        "attaagttatatatatagagtcttaccaatcatgttgaatcctgattctcagagttcttt"
-        "ggcgggccttgtgatgactgagaaacaatgcaatattgctccaaatttcctaagcaaatt"
-        "ctcggttatgttatgttatcagcaaagcgttacgttatgttatttaaatctggaatgacg"
-        "gagcgaagttcttatgtcggtgtgggaataattcttttgaagacagcactccttaaataa"
-        "tatcgctccgtgtttgtatttatcgaatgggtctgtaaccttgcacaagcaaatcggtgg"
-        "tgtatatatcggataacaattaatacgatgttcatagtgacagtatactgatcgagtcct"
-        "ctaaagtcaattacctcacttaacaatctcattgatgttgtgtcattcccggtatcgccc"
-        "gtagtatgtgctctgattgaccgagtgtgaaccaaggaacatctactaatgcctttgtta"
-        "ggtaagatctctctgaattccttcgtgccaacttaaaacattatcaaaatttcttctact"
-        "tggattaactacttttacgagcatggcaaattcccctgtggaagacggttcattattatc"
-        "ggaaaccttatagaaattgcgtgttgactgaaattagatttttattgtaagagttgcatc"
-        "tttgcgattcctctggtctagcttccaatgaacagtcctcccttctattcgacatcgggt"
-        "ccttcgtacatgtctttgcgatgtaataattaggttcggagtgtggccttaatgggtgca"
-        "actaggaatacaacgcaaatttgctgacatgatagcaaatcggtatgccggcaccaaaac"
-        "gtgctccttgcttagcttgtgaatgagactcagtagttaaataaatccatatctgcaatc"
-        "gattccacaggtattgtccactatctttgaactactctaagagatacaagcttagctgag"
-        "accgaggtgtatatgactacgctgatatctgtaaggtaccaatgcaggcaaagtatgcga"
-        "gaagctaataccggctgtttccagctttataagattaaaatttggctgtcctggcggcct"
-        "cagaattgttctatcgtaatcagttggttcattaattagctaagtacgaggtacaactta"
-        "tctgtcccagaacagctccacaagtttttttacagccgaaacccctgtgtgaatcttaat"
-        "atccaagcgcgttatctgattagagtttacaactcagtattttatcagtacgttttgttt"
-        "ccaacattacccggtatgacaaaatgacgccacgtgtcgaataatggtctgaccaatgta"
-        "ggaagtgaaaagataaatat";
+
