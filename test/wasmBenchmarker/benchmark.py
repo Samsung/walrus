@@ -63,10 +63,11 @@ expectedValues = {
     "simdMatrixMultiply": 3920.0,
     "spectral-norm": 1.274219991,
     "ticTacToe": 18995600,
+    "pidigits": 5621537181112947474
 }
 
 # https://benchmarksgame-team.pages.debian.net/benchmarksgame/description/simple.html#simple
-gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees", "spectral-norm", "reverse-complement", "fasta"]
+gameTests = ["mandelbrotFloat", "nbody", "gregory", "fannkuch", "kNucleotide", "binary-trees", "spectral-norm", "reverse-complement", "fasta", "pidigits"]
 
 simdTests = [
     "simdMandelbrotFloat",
