@@ -145,8 +145,12 @@ static sljit_sw callFunctionRef(
 
 static sljit_sw shuffleTailCallSelfArguments(uint8_t* bp, ByteCodeStackOffset* offsets, sljit_uw parameterOffsetCount)
 {
-    Vector<size_t> paramBuffer;
-    paramBuffer.resizeWithUninitializedValues(parameterOffsetCount);
+    size_t stackBuffer[64];
+    size_t* paramBuffer = stackBuffer;
+
+    if (UNLIKELY(parameterOffsetCount > 64)) {
+        paramBuffer = static_cast<size_t*>(malloc(parameterOffsetCount * sizeof(size_t)));
+    }
 
     for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
         paramBuffer[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
@@ -154,6 +158,10 @@ static sljit_sw shuffleTailCallSelfArguments(uint8_t* bp, ByteCodeStackOffset* o
 
     for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
         reinterpret_cast<size_t*>(bp)[i] = paramBuffer[i];
+    }
+
+    if (UNLIKELY(paramBuffer != stackBuffer)) {
+        free(paramBuffer);
     }
 
     return ExecutionContext::NoError;
@@ -168,13 +176,24 @@ static sljit_sw resolvePendingTailCall(
     ExecutionContext* context)
 {
     if (LIKELY(target->kind() == Function::DefinedFunctionKind)) {
-        shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
-        context->tailCallTarget = target;
-        context->error = ExecutionContext::TailCall;
-        return ExecutionContext::TailCall;
+        DefinedFunction* definedTarget = target->asDefinedFunction();
+        ModuleFunction* targetModuleFunction = definedTarget->moduleFunction();
+        JITFunction* targetJitFunction = targetModuleFunction->jitFunction();
+
+        // It is really TCO capable function?
+        if (LIKELY(targetJitFunction != nullptr && targetJitFunction->isCompiled()
+                   && targetJitFunction->instanceConstData() == context->currentInstanceConstData
+                   && targetModuleFunction->requiredStackSize() <= context->frameCapacity)) {
+            // The caller jumps directly to the target entry.
+            shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
+            context->instance = definedTarget->instance();
+            context->tailCallEntry = targetJitFunction->exportEntry();
+            return ExecutionContext::TailCallJump;
+        }
     }
 
     sljit_sw result = reinterpret_cast<sljit_sw>(offsets + parameterOffsetCount);
+    // Cannot resolved with TCO
     try {
         target->interpreterCall(context->state, bp, offsets, parameterOffsetCount, resultOffsetCount);
     } catch (std::unique_ptr<Exception>& exception) {
@@ -357,8 +376,6 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
         || instr->opcode() == ByteCode::ReturnCallRefOpcode;
 
     if (instr->opcode() == ByteCode::ReturnCallOpcode && context->compiler->module()->function(returnCall->index()) == context->compiler->moduleFunction()) {
-        ReturnCall* returnCall = reinterpret_cast<ReturnCall*>(instr->byteCode());
-
         // Detect memory offset instr for copy all oprands related to memory
         bool hasMemoryArgument = false;
         for (uint32_t i = 0; i < instr->paramCount(); i++) {
@@ -403,7 +420,6 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     stackOffset = emitStoreOntoStack(compiler, operand, stackOffset, functionType->param(), true);
     operand += instr->paramCount();
 
-    ByteCode::Opcode callOpcode = instr->opcode();
     if (calleeType != 0) {
         Operand dst = VARIABLE_SET(STACK_OFFSET(calleeOffset), Instruction::Offset);
         operand--;
@@ -426,7 +442,15 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
     if (isTailCall) {
+        sljit_jump* tailCallJump = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::TailCallJump);
         context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+
+        // Jump to the entry of the resolved target
+        sljit_set_label(tailCallJump, sljit_emit_label(compiler));
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
+        sljit_emit_op1(compiler, SLJIT_MOV_P, kInstanceReg, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(instance));
+        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(tailCallEntry));
+        sljit_emit_icall(compiler, SLJIT_CALL_REG_ARG | SLJIT_CALL_RETURN, SLJIT_ARGS1(P, P), SLJIT_R2, 0);
         return;
     }
 
