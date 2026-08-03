@@ -16,6 +16,7 @@
 
 #include "Walrus.h"
 
+#include "GCUtil.h"
 #include "runtime/JITExec.h"
 #include "runtime/Instance.h"
 #include "runtime/Module.h"
@@ -32,6 +33,15 @@ ByteCodeStackOffset* JITFunction::call(ExecutionContext& context, uint8_t* bp) c
     ByteCodeStackOffset* resultOffsets = m_module->exportCall()(&context, bp, m_exportEntry);
 
     if (context.error != ExecutionContext::NoError) {
+        if (UNLIKELY(context.ownedFrame != nullptr)) {
+#ifdef ENABLE_GC
+            GC_FREE(context.ownedFrame);
+#else
+            free(context.ownedFrame);
+#endif
+            context.ownedFrame = nullptr;
+        }
+
         switch (context.error) {
         case ExecutionContext::CapturedException:
             throw std::unique_ptr<Exception>(context.capturedException);

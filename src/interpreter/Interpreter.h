@@ -120,6 +120,10 @@ private:
             ExecutionContext context(jitFunc->instanceConstData(), newState, function->instance());
             context.frameCapacity = frame.capacity();
             resultOffsets = jitFunc->call(context, frame.bp());
+
+            if (UNLIKELY(context.ownedFrame != nullptr)) {
+                frame.replaceBuffer(context.ownedFrame, context.frameCapacity);
+            }
         } else
 #endif
         {

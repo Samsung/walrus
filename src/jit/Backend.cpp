@@ -18,6 +18,7 @@
 
 #include "Walrus.h"
 
+#include "GCUtil.h"
 #include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
 #include "runtime/GCException.h"
