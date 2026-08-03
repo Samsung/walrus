@@ -15,7 +15,6 @@
  */
 
 /* Only included by jit-backend.cc */
-
 static sljit_sw callFunction(
     Call* code,
     uint8_t* bp,
@@ -145,12 +144,7 @@ static sljit_sw callFunctionRef(
 
 static sljit_sw shuffleTailCallSelfArguments(uint8_t* bp, ByteCodeStackOffset* offsets, sljit_uw parameterOffsetCount)
 {
-    size_t stackBuffer[64];
-    size_t* paramBuffer = stackBuffer;
-
-    if (UNLIKELY(parameterOffsetCount > 64)) {
-        paramBuffer = static_cast<size_t*>(malloc(parameterOffsetCount * sizeof(size_t)));
-    }
+    ALLOCA(size_t, paramBuffer, parameterOffsetCount * sizeof(size_t));
 
     for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
         paramBuffer[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
@@ -158,10 +152,6 @@ static sljit_sw shuffleTailCallSelfArguments(uint8_t* bp, ByteCodeStackOffset* o
 
     for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
         reinterpret_cast<size_t*>(bp)[i] = paramBuffer[i];
-    }
-
-    if (UNLIKELY(paramBuffer != stackBuffer)) {
-        free(paramBuffer);
     }
 
     return ExecutionContext::NoError;
@@ -182,10 +172,35 @@ static sljit_sw resolvePendingTailCall(
 
         // It is really TCO capable function?
         if (LIKELY(targetJitFunction != nullptr && targetJitFunction->isCompiled()
-                   && targetJitFunction->instanceConstData() == context->currentInstanceConstData
-                   && targetModuleFunction->requiredStackSize() <= context->frameCapacity)) {
+                   && targetJitFunction->instanceConstData() == context->currentInstanceConstData)) {
+            size_t requiredStackSize = targetModuleFunction->requiredStackSize();
+            // Allocate more stack and hang to pointer
+            if (UNLIKELY(requiredStackSize > context->frameCapacity)) {
+#ifdef ENABLE_GC
+                uint8_t* newFrame = reinterpret_cast<uint8_t*>(GC_MALLOC_UNCOLLECTABLE(requiredStackSize));
+#else
+                uint8_t* newFrame = reinterpret_cast<uint8_t*>(malloc(requiredStackSize));
+#endif
+                for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
+                    reinterpret_cast<size_t*>(newFrame)[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
+                }
+
+                if (context->ownedFrame != nullptr) {
+#ifdef ENABLE_GC
+                    GC_FREE(context->ownedFrame);
+#else
+                    free(context->ownedFrame);
+#endif
+                }
+                context->ownedFrame = newFrame;
+                context->frameCapacity = requiredStackSize;
+                bp = newFrame;
+            } else {
+                shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
+            }
+
             // The caller jumps directly to the target entry.
-            shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
+            context->frameStart = bp;
             context->instance = definedTarget->instance();
             context->tailCallEntry = targetJitFunction->exportEntry();
             return ExecutionContext::TailCallJump;
@@ -448,6 +463,7 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
         // Jump to the entry of the resolved target
         sljit_set_label(tailCallJump, sljit_emit_label(compiler));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
+        sljit_emit_op1(compiler, SLJIT_MOV_P, kFrameReg, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(frameStart));
         sljit_emit_op1(compiler, SLJIT_MOV_P, kInstanceReg, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(instance));
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(tailCallEntry));
         sljit_emit_icall(compiler, SLJIT_CALL_REG_ARG | SLJIT_CALL_RETURN, SLJIT_ARGS1(P, P), SLJIT_R2, 0);
