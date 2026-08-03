@@ -69,6 +69,8 @@ struct ExecutionContext {
         , capturedException(nullptr)
         , error(NoError)
         , tailCallEntry(nullptr)
+        , frameStart(nullptr)
+        , ownedFrame(nullptr)
         , frameCapacity(0)
     {
     }
@@ -86,6 +88,8 @@ struct ExecutionContext {
     Exception* capturedException;
     ErrorCodes error;
     void* tailCallEntry;
+    uint8_t* frameStart;
+    uint8_t* ownedFrame;
     size_t frameCapacity;
 };
 
