@@ -174,9 +174,8 @@ void TypeChecker::PushLabel(LabelType label_type,
                             type_stack_.size());
 }
 
-Result TypeChecker::PopLabel() {
+void TypeChecker::PopLabel() {
   label_stack_.pop_back();
-  return Result::Ok;
 }
 
 Result TypeChecker::CheckLabelType(Label* label, LabelType label_type) {
@@ -483,6 +482,16 @@ bool TypeChecker::CompareType(Type actual,
             break;
           }
           return false;
+        case Type::ExnRef:
+          if (gen_actual == Type::NullExnRef) {
+            break;
+          }
+          [[fallthrough]];
+        case Type::NullExnRef:
+          if (gen_actual.IsBottomRef()) {
+            break;
+          }
+          return false;
         case Type::AnyRef:
           if (gen_actual == Type::EqRef) {
             break;
@@ -498,12 +507,6 @@ bool TypeChecker::CompareType(Type actual,
         case Type::StructRef:
         case Type::ArrayRef:
           if (gen_actual == Type::NullRef) {
-            break;
-          }
-          return false;
-        case Type::ExnRef:
-          // Note: noexn is not implemented.
-          if (gen_actual.IsBottomRef()) {
             break;
           }
           return false;
@@ -707,7 +710,7 @@ Result TypeChecker::PopAndCheckReference(Type* actual, const char* desc) {
   // it is changed to an unkown reference.
   if (*actual == Type::Any || !actual->IsRef()) {
     if (*actual != Type::Any) {
-      result = Result::Error;
+      result |= Result::Error;
     }
     *actual = Type::BottomRef();
   }
@@ -835,11 +838,11 @@ Result TypeChecker::OnArrayCopy(Type dst_ref_type,
                                     Type::I32, Type::I32, "array.copy");
   if (!dst_array_type.mutable_) {
     PrintError("array is immutable");
-    result = Result::Error;
+    result |= Result::Error;
   }
   if (Failed(CheckType(src_array_type, dst_array_type.type))) {
     PrintError("type mismatch: array types do not match");
-    result = Result::Error;
+    result |= Result::Error;
   }
   return result;
 }
@@ -850,7 +853,7 @@ Result TypeChecker::OnArrayFill(Type ref_type, TypeMut& array_type) {
                         Type::I32, "array.fill");
   if (!array_type.mutable_) {
     PrintError("array is immutable");
-    result = Result::Error;
+    result |= Result::Error;
   }
   return result;
 }
@@ -861,7 +864,7 @@ Result TypeChecker::OnArrayGet(Opcode opcode, Type ref_type, Type array_type) {
 
   if (array_type.IsPackedType() != is_packed_get) {
     PrintError("array is %spacked", is_packed_get ? "not " : "");
-    result = Result::Error;
+    result |= Result::Error;
   }
 
   PushType(ToUnpackedType(array_type));
@@ -873,11 +876,11 @@ Result TypeChecker::OnArrayInitData(Type ref_type, TypeMut& array_type) {
                                     "array.init_data");
   if (!array_type.mutable_) {
     PrintError("array is immutable");
-    result = Result::Error;
+    result |= Result::Error;
   }
   if (array_type.type.IsRef()) {
     PrintError("type mismatch: array type must be number or vector type");
-    result = Result::Error;
+    result |= Result::Error;
   }
   return result;
 }
@@ -889,11 +892,11 @@ Result TypeChecker::OnArrayInitElem(Type ref_type,
                                     "array.init_elem");
   if (!array_type.mutable_) {
     PrintError("array is immutable");
-    result = Result::Error;
+    result |= Result::Error;
   }
   if (Failed(CheckType(elem_type, array_type.type))) {
     PrintError("type mismatch: array type does not match to elem type");
-    result = Result::Error;
+    result |= Result::Error;
   }
   return result;
 }
@@ -909,7 +912,7 @@ Result TypeChecker::OnArrayNewData(Type ref_type, Type array_type) {
   Result result = PopAndCheck2Types(Type::I32, Type::I32, "array.new_elem");
   if (array_type.IsRef()) {
     PrintError("type mismatch: array type must be number or vector type");
-    result = Result::Error;
+    result |= Result::Error;
   }
   PushType(ToUnpackedType(ref_type));
   return result;
@@ -942,10 +945,10 @@ Result TypeChecker::OnArrayNewFixed(Type ref_type,
     // For a very large count, PrintStackIfFailedV might print too many values.
     if (Failed(PeekAndCheckType(count - i - 1, array_type))) {
       Type actual = Type::Any;
-      PeekType(count - i - 1, &actual);
+      (void)PeekType(count - i - 1, &actual);
       PrintError("array.new_fixed expects %s but got %s at depth %" PRIindex,
                  array_type.GetName().c_str(), actual.GetName().c_str(), i);
-      result = Result::Error;
+      result |= Result::Error;
       break;
     }
   }
@@ -960,7 +963,7 @@ Result TypeChecker::OnArraySet(Type ref_type, const TypeMut& field) {
                                     ToUnpackedType(field.type), "array.set");
   if (!field.mutable_) {
     PrintError("array is immutable");
-    result = Result::Error;
+    result |= Result::Error;
   }
   return result;
 }
@@ -1036,13 +1039,13 @@ Result TypeChecker::OnBrOnCast(Opcode opcode,
   if (Failed(TypeChecker::CheckType(actual, type1))) {
     PrintError("type mismatch: %s is not a subtype of %s",
                actual.GetName().c_str(), type1.GetName().c_str());
-    result = Result::Error;
+    result |= Result::Error;
   }
 
   if (Failed(TypeChecker::CheckType(type2, type1))) {
     PrintError("type mismatch: %s is not a subtype of %s",
                type2.GetName().c_str(), type1.GetName().c_str());
-    result = Result::Error;
+    result |= Result::Error;
   }
 
   // The spec expects a type1 \ type2 subtraction operation.
@@ -1057,7 +1060,7 @@ Result TypeChecker::OnBrOnCast(Opcode opcode,
     result |= PopAndCheckSignature(label->br_types(), opcode.GetName());
     PushTypes(label->br_types());
   } else {
-    result = Result::Error;
+    result |= Result::Error;
   }
   result |= DropTypes(1);
   PushType(opcode == Opcode::BrOnCast ? type1 : type2);
@@ -1303,16 +1306,16 @@ Result TypeChecker::OnGCUnary(Opcode opcode) {
     case Opcode::AnyConvertExtern: {
       Type type;
       // Nullability must be copied.
-      PeekType(0, &type);
-      result = PopAndCheck1Type(Type::ExternRef, "any.convert_extern");
+      result = PeekType(0, &type);
+      result |= PopAndCheck1Type(Type::ExternRef, "any.convert_extern");
       PushType(Type(Type::AnyRef, !type.IsNonNullableRef()));
       return result;
     }
     case Opcode::ExternConvertAny: {
       Type type;
       // Nullability must be copied.
-      PeekType(0, &type);
-      result = PopAndCheck1Type(Type::AnyRef, "any.convert_extern");
+      result = PeekType(0, &type);
+      result |= PopAndCheck1Type(Type::AnyRef, "any.convert_extern");
       PushType(Type(Type::ExternRef, !type.IsNonNullableRef()));
       return result;
     }
@@ -1464,7 +1467,7 @@ Result TypeChecker::OnRefCast(Type type) {
   Result result = Result::Ok;
   if (!type.IsRef()) {
     PrintError("type mismatch: reference type expected");
-    result = Result::Error;
+    result |= Result::Error;
   } else {
     Type expected = Type::Any;
     result |= PeekType(0, &expected);
@@ -1472,19 +1475,19 @@ Result TypeChecker::OnRefCast(Type type) {
       if (!expected.IsRef()) {
         PrintError("type mismatch: reference type expected, but got %s",
                    expected.GetName().c_str());
-        result = Result::Error;
+        result |= Result::Error;
       } else if (type != Type::NullRef && expected != Type::NullRef &&
                  type_fields_.GetGroupType(type) !=
                      type_fields_.GetGroupType(expected)) {
         PrintError("type mismatch: %s is not a subtype of %s",
                    type.GetName().c_str(), expected.GetName().c_str());
-        result = Result::Error;
+        result |= Result::Error;
       }
     }
   }
-  DropTypes(1);
+  result |= DropTypes(1);
   PushType(type);
-  return Result::Ok;
+  return result;
 }
 
 Result TypeChecker::OnRefFuncExpr(Index func_type) {
@@ -1516,7 +1519,7 @@ Result TypeChecker::OnRefTest(Type type) {
   Result result = Result::Ok;
   if (!type.IsRef()) {
     PrintError("type mismatch: reference type expected");
-    result = Result::Error;
+    result |= Result::Error;
   } else {
     Type expected = Type::Any;
     result |= PeekType(0, &expected);
@@ -1524,19 +1527,19 @@ Result TypeChecker::OnRefTest(Type type) {
       if (!expected.IsRef()) {
         PrintError("type mismatch: reference type expected, but got %s",
                    expected.GetName().c_str());
-        result = Result::Error;
+        result |= Result::Error;
       } else if (type != Type::NullRef && expected != Type::NullRef &&
                  type_fields_.GetGroupType(type) !=
                      type_fields_.GetGroupType(expected)) {
         PrintError("type mismatch: %s is not a subtype of %s",
                    type.GetName().c_str(), expected.GetName().c_str());
-        result = Result::Error;
+        result |= Result::Error;
       }
     }
   }
-  DropTypes(1);
+  result |= DropTypes(1);
   PushType(Type::I32);
-  return Result::Ok;
+  return result;
 }
 
 Result TypeChecker::OnRethrow(Index depth) {
@@ -1580,7 +1583,7 @@ Result TypeChecker::OnSelect(const TypeVector& expected) {
   result |= PeekType(2, &type2);
   if (expected.empty()) {
     if (type1.IsRef() || type2.IsRef()) {
-      result = Result::Error;
+      result |= Result::Error;
     } else {
       result |= CheckType(type1, type2);
       result_type = type1;
@@ -1608,7 +1611,7 @@ Result TypeChecker::OnStructGet(Opcode opcode,
   Result result = PopAndCheck1Type(ref_type, "struct.get");
   if (field >= struct_type.fields.size()) {
     PrintError("unknown field: %" PRIindex, field);
-    result = Result::Error;
+    result |= Result::Error;
   } else {
     Type type = struct_type.fields[field].type;
     bool is_packed_get = (opcode != Opcode::StructGet);
@@ -1616,7 +1619,7 @@ Result TypeChecker::OnStructGet(Opcode opcode,
     if (type.IsPackedType() != is_packed_get) {
       PrintError("field %" PRIindex " is %spacked", field,
                  is_packed_get ? "not " : "");
-      result = Result::Error;
+      result |= Result::Error;
     }
 
     PushType(ToUnpackedType(type));
@@ -1665,9 +1668,9 @@ Result TypeChecker::OnStructSet(Type ref_type,
                               ? "unknown field: %" PRIindex
                               : "field %" PRIindex " is immutable";
     PrintError(message, field);
-    DropTypes(1);
-    PopAndCheck1Type(ref_type, "struct.set");
-    result = Result::Error;
+    (void)DropTypes(1);
+    (void)PopAndCheck1Type(ref_type, "struct.set");
+    result |= Result::Error;
   } else {
     Type expected_type = ToUnpackedType(struct_type.fields[field].type);
     result |= PopAndCheck2Types(ref_type, expected_type, "struct.set");
@@ -1693,7 +1696,7 @@ Result TypeChecker::OnTryTableCatch(const TypeVector& sig, Index depth) {
   Label* label;
   CHECK_RESULT(GetLabel(depth, &label));
   TypeVector& label_sig = label->br_types();
-  result |= CheckTypes(label_sig, sig);
+  result |= CheckTypes(sig, label_sig);
   if (Failed(result)) {
     PrintError("catch signature doesn't match target: expected %s, got %s",
                TypesToString(sig).c_str(), TypesToString(label_sig).c_str());

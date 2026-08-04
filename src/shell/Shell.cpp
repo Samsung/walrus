@@ -839,7 +839,7 @@ static std::unique_ptr<wabt::OutputBuffer> readModuleData(wabt::Module* module)
     wabt::Features features;
     features.EnableAll();
     options.features = features;
-    wabt::WriteBinaryModule(&stream, module, options);
+    (void)wabt::WriteBinaryModule(&stream, module, options);
     stream.Flush();
     return stream.ReleaseOutputBuffer();
 }

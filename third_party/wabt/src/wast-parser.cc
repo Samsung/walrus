@@ -1013,7 +1013,9 @@ Result WastParser::ParseRefDeclaration(Var* out_type) {
     case TokenType::Any:
     case TokenType::Array:
     case TokenType::Eq:
+    case TokenType::Exn:
     case TokenType::I31:
+    case TokenType::NoExn:
     case TokenType::NoExtern:
     case TokenType::NoFunc:
     case TokenType::None:
@@ -1360,7 +1362,8 @@ Result WastParser::ParseModule(std::unique_ptr<Module>* out_module) {
                           lexer_->Filename(), "empty module");
   } else {
     ConsumeIfLpar();
-    ErrorExpected({"a module field", "a module"});
+    // Intentionally continuing to report additional errors.
+    (void)ErrorExpected({"a module field", "a module"});
   }
 
   EXPECT(Eof);
@@ -1393,7 +1396,8 @@ Result WastParser::ParseScript(std::unique_ptr<Script>* out_script) {
                           lexer_->Filename(), "empty script");
   } else {
     ConsumeIfLpar();
-    ErrorExpected({"a module field", "a command"});
+    // Intentionally continuing to report additional errors.
+    (void)ErrorExpected({"a module field", "a command"});
   }
 
   EXPECT(Eof);
@@ -1426,7 +1430,7 @@ Result WastParser::ParseComponent(std::unique_ptr<Component>* out_component) {
                           lexer_->Filename(), "empty component");
   } else {
     ConsumeIfLpar();
-    ErrorExpected({"a component field", "a component"});
+    return ErrorExpected({"a component field", "a component"});
   }
 
   EXPECT(Eof);
@@ -3817,7 +3821,7 @@ Result WastParser::ParseLabelOpt(std::string* out_label) {
   WABT_TRACE(ParseLabelOpt);
   if (PeekMatch(TokenType::Var)) {
     Token token = Consume();
-    ParseVarText(token, out_label);
+    CHECK_RESULT(ParseVarText(token, out_label));
   } else {
     out_label->clear();
   }
@@ -3965,7 +3969,8 @@ Result WastParser::ParseExpr(ExprList* exprs) {
               break;
             }
             default:
-              ErrorExpected({"catch", "catch_all", "delegate"});
+              // Intentionally continuing to report additional errors.
+              (void)ErrorExpected({"catch", "catch_all", "delegate"});
               break;
           }
         }
@@ -4376,7 +4381,7 @@ Result WastParser::ParseComponentAlias(ComponentDefList* def_list,
     ComponentDef::StringLoc export_name;
     CHECK_RESULT(ParseComponentString(string_table, &export_name));
     EXPECT(Lpar);
-    ParseComponentSort(&sort);
+    CHECK_RESULT(ParseComponentSort(&sort));
 
     const std::string* name;
     CHECK_RESULT(ParseComponentName(def_list, string_table, sort, &name));
@@ -5627,7 +5632,8 @@ Result WastParser::ParseModuleCommand(Script* script, CommandPtr* out_command) {
       Errors errors;
       const char* filename = "<text>";
       if (options_->parse_binary_modules) {
-        ReadBinaryIr(filename, bsm->data, options, &errors, module);
+        // TODO: what should we do about errors?
+        (void)ReadBinaryIr(filename, bsm->data, options, &errors, module);
       }
       module->name = bsm->name;
       module->loc = bsm->loc;

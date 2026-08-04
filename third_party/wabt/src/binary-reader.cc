@@ -107,60 +107,52 @@ class BinaryReader {
   };
 
   void WABT_PRINTF_FORMAT(2, 3) PrintError(const char* format, ...);
-  [[nodiscard]] Result ReadOpcode(Opcode* out_value, const char* desc);
+  Result ReadOpcode(Opcode* out_value, const char* desc);
   template <typename T>
-  [[nodiscard]] Result ReadT(T* out_value,
-                             const char* type_name,
-                             const char* desc);
+  Result ReadT(T* out_value, const char* type_name, const char* desc);
   template <typename T,
             char prefix,
             size_t (*ReadFn)(const uint8_t*, const uint8_t*, T*)>
-  [[nodiscard]] Result ReadLeb128(T* out_value, const char* desc);
-  [[nodiscard]] Result ReadU8(uint8_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadU16(uint16_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadU32(uint32_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadF32(uint32_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadF64(uint64_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadV128(v128* out_value, const char* desc);
-  [[nodiscard]] Result ReadU32Leb128(uint32_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadU64Leb128(uint64_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadU32OrU64Leb128(uint64_t* out_value,
-                                          bool is_64,
-                                          const char* desc);
-  [[nodiscard]] Result ReadS32Leb128(uint32_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadS64Leb128(uint64_t* out_value, const char* desc);
-  [[nodiscard]] Result ReadType(Type* out_value, const char* desc);
-  [[nodiscard]] Result ReadRefType(Type* out_value, const char* desc);
-  [[nodiscard]] Result ReadHeapType(Type* out_value,
-                                    bool is_nullable,
-                                    const char* desc);
-  [[nodiscard]] Result ReadExternalKind(ExternalKind* out_value,
-                                        const char* desc,
-                                        const char* type);
-  [[nodiscard]] Result ReadStr(nonstd::string_view* out_str, const char* desc);
-  [[nodiscard]] Result ReadBytes(ByteSpan* out_data, const char* desc);
-  [[nodiscard]] Result ReadBytesWithSize(ByteSpan* out_data,
-                                         Offset size,
-                                         const char* desc);
-  [[nodiscard]] Result ReadIndex(Index* index, const char* desc);
-  [[nodiscard]] Result ReadOffset(Offset* offset, const char* desc);
-  [[nodiscard]] Result ReadAlignment(Address* align_log2, const char* desc);
-  [[nodiscard]] Result CheckAlignment(Address* align_log2, const char* desc);
-  [[nodiscard]] Result TakeHasMemidx(Address* align_log2, bool* has_memidx);
-  [[nodiscard]] Result ReadMemidx(Index* memidx, const char* desc);
-  [[nodiscard]] Result ReadMemLocation(Address* alignment_log2,
-                                       Index* memidx,
-                                       Address* offset,
-                                       const char* desc_align,
-                                       const char* desc_memidx,
-                                       const char* desc_offset,
-                                       uint8_t* lane_val = nullptr);
-  [[nodiscard]] Result CallbackMemLocation(const Address* alignment_log2,
-                                           const Index* memidx,
-                                           const Address* offset,
-                                           const uint8_t* lane_val = nullptr);
-  [[nodiscard]] Result ReadCount(Index* index, const char* desc);
-  [[nodiscard]] Result ReadField(TypeMut* out_value);
+  Result ReadLeb128(T* out_value, const char* desc);
+  Result ReadU8(uint8_t* out_value, const char* desc);
+  Result ReadU16(uint16_t* out_value, const char* desc);
+  Result ReadU32(uint32_t* out_value, const char* desc);
+  Result ReadF32(uint32_t* out_value, const char* desc);
+  Result ReadF64(uint64_t* out_value, const char* desc);
+  Result ReadV128(v128* out_value, const char* desc);
+  Result ReadU32Leb128(uint32_t* out_value, const char* desc);
+  Result ReadU64Leb128(uint64_t* out_value, const char* desc);
+  Result ReadU32OrU64Leb128(uint64_t* out_value, bool is_64, const char* desc);
+  Result ReadS32Leb128(uint32_t* out_value, const char* desc);
+  Result ReadS64Leb128(uint64_t* out_value, const char* desc);
+  Result ReadType(Type* out_value, const char* desc);
+  Result ReadRefType(Type* out_value, const char* desc);
+  Result ReadHeapType(Type* out_value, bool is_nullable, const char* desc);
+  Result ReadExternalKind(ExternalKind* out_value,
+                          const char* desc,
+                          const char* type);
+  Result ReadStr(nonstd::string_view* out_str, const char* desc);
+  Result ReadBytes(ByteSpan* out_data, const char* desc);
+  Result ReadBytesWithSize(ByteSpan* out_data, Offset size, const char* desc);
+  Result ReadIndex(Index* index, const char* desc);
+  Result ReadOffset(Offset* offset, const char* desc);
+  Result ReadAlignment(Address* align_log2, const char* desc);
+  Result CheckAlignment(Address* align_log2, const char* desc);
+  Result TakeHasMemidx(Address* align_log2, bool* has_memidx);
+  Result ReadMemidx(Index* memidx, const char* desc);
+  Result ReadMemLocation(Address* alignment_log2,
+                         Index* memidx,
+                         Address* offset,
+                         const char* desc_align,
+                         const char* desc_memidx,
+                         const char* desc_offset,
+                         uint8_t* lane_val = nullptr);
+  Result CallbackMemLocation(const Address* alignment_log2,
+                             const Index* memidx,
+                             const Address* offset,
+                             const uint8_t* lane_val = nullptr);
+  Result ReadCount(Index* index, const char* desc);
+  Result ReadField(TypeMut* out_value);
 
   bool IsConcreteReferenceType(Type::Enum);
   bool IsConcreteType(Type);
@@ -168,16 +160,13 @@ class BinaryReader {
 
   Index NumTotalFuncs();
 
-  [[nodiscard]] Result ReadInitExpr(Index index);
-  [[nodiscard]] Result ReadTable(Limits* out_elem_limits);
-  [[nodiscard]] Result ReadMemory(Limits* out_page_limits,
-                                  uint32_t* out_page_size);
-  [[nodiscard]] Result ReadGlobalHeader(Type* out_type, bool* out_mutable);
-  [[nodiscard]] Result ReadTagType(Index* out_sig_index);
-  [[nodiscard]] Result ReadAddress(Address* out_value,
-                                   Index memory,
-                                   const char* desc);
-  [[nodiscard]] Result ReadFunctionBody(Offset end_offset);
+  Result ReadInitExpr(Index index);
+  Result ReadTable(Limits* out_elem_limits);
+  Result ReadMemory(Limits* out_page_limits, uint32_t* out_page_size);
+  Result ReadGlobalHeader(Type* out_type, bool* out_mutable);
+  Result ReadTagType(Index* out_sig_index);
+  Result ReadAddress(Address* out_value, Index memory, const char* desc);
+  Result ReadFunctionBody(Offset end_offset);
   // ReadInstructions reads until end_offset or the nesting depth reaches zero.
   [[nodiscard]] Result ReadInstructions(Offset end_offset, const char* context);
   [[nodiscard]] Result ReadNameSection(Offset section_size);
@@ -436,7 +425,8 @@ Result BinaryReader::ReadType(Type* out_value, const char* desc) {
     if (static_cast<int64_t>(heap_type) < 0 ||
         static_cast<int64_t>(heap_type) >= kInvalidIndex) {
       Type::Enum heap_type_code = static_cast<Type::Enum>(heap_type);
-      ERROR_UNLESS(heap_type_code == Type::FuncRef ||
+      ERROR_UNLESS(heap_type_code == Type::ExnRef ||
+                       heap_type_code == Type::FuncRef ||
                        heap_type_code == Type::ExternRef ||
                        (options_.features.gc_enabled() &&
                         Type::EnumIsNonTypedGCRef(heap_type_code)),

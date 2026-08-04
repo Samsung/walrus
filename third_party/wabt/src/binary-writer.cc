@@ -2619,8 +2619,8 @@ Result BinaryWriter::WriteComponent(const ComponentData* component) {
       }
 
       if (section == ComponentSection::CoreModule) {
-        WriteBinaryModule(stream_, definition->AsCoreModule()->module(),
-                          options_);
+        (void)WriteBinaryModule(stream_, definition->AsCoreModule()->module(),
+                                options_);
       } else {
         size_t last = i;
         while (last < component->Size() &&
