@@ -404,6 +404,9 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         long int offset = maxFileOffset(argv[1].asI64());
         uint32_t resultOffset = argv[2].asI32();
 
+        ASSERT(!options->memory()->is64());
+        options->memoryCheckRange32(state, 4, resultOffset, 8);
+
         ComponentHandle* handle = options->instance()->getHandle(state, descriptorIndex);
         if (handle->kind() != ComponentHandle::ResourceWasiFileKind) {
             ComponentInstance::throwInvalidHandle(state, descriptorIndex);
@@ -411,12 +414,12 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
 
         uint32_t flags = asFile(handle)->file()->flags();
         if (streamKind == ComponentHandle::ResourceWasiInputStreamKind && !(flags & DescriptorFlags::flagRead)) {
-            options->memory()->buffer()[offset + 4] = streamErrClosed;
-            options->memory()->buffer()[offset] = resultError;
+            options->memory()->buffer()[resultOffset + 4] = streamErrClosed;
+            options->memory()->buffer()[resultOffset] = resultError;
             break;
         } else if (streamKind == ComponentHandle::ResourceWasiOutputStreamKind && !(flags & DescriptorFlags::flagWrite)) {
-            options->memory()->buffer()[offset + 4] = streamErrClosed;
-            options->memory()->buffer()[offset] = resultError;
+            options->memory()->buffer()[resultOffset + 4] = streamErrClosed;
+            options->memory()->buffer()[resultOffset] = resultError;
             break;
         }
 
