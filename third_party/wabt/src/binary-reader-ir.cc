@@ -1489,7 +1489,7 @@ Result BinaryReaderIR::OnDelegateExpr(Index depth) {
 
   try_->delegate_target = Var(depth, GetLocation());
 
-  PopLabel();
+  CHECK_RESULT(PopLabel());
   return Result::Ok;
 }
 
@@ -1843,32 +1843,35 @@ Result BinaryReaderIR::OnNameEntry(NameSectionSubsection type,
     case NameSectionSubsection::Field:
       break;
     case NameSectionSubsection::Type:
-      SetTypeName(index, name);
+      return SetTypeName(index, name);
       break;
     case NameSectionSubsection::Tag:
-      SetTagName(index, name);
+      return SetTagName(index, name);
       break;
     case NameSectionSubsection::Global:
-      SetGlobalName(index, name);
+      return SetGlobalName(index, name);
       break;
     case NameSectionSubsection::Table:
-      SetTableName(index, name);
+      return SetTableName(index, name);
       break;
     case NameSectionSubsection::DataSegment:
-      SetDataSegmentName(index, name);
+      return SetDataSegmentName(index, name);
       break;
     case NameSectionSubsection::Memory:
-      SetMemoryName(index, name);
+      return SetMemoryName(index, name);
       break;
     case NameSectionSubsection::ElemSegment:
-      SetElemSegmentName(index, name);
+      return SetElemSegmentName(index, name);
       break;
   }
   return Result::Ok;
 }
 
 Result BinaryReaderIR::OnLocalNameLocalCount(Index index, Index count) {
-  assert(index < module_->funcs.size());
+  if (index >= module_->funcs.size()) {
+    PrintError("invalid function index: %" PRIindex, index);
+    return Result::Error;
+  }
   Func* func = module_->funcs[index];
   Index num_params_and_locals = func->GetNumParamsAndLocals();
   if (count > num_params_and_locals) {
@@ -1914,6 +1917,10 @@ Result BinaryReaderIR::OnLocalName(Index func_index,
     return Result::Ok;
   }
 
+  if (func_index >= module_->funcs.size()) {
+    PrintError("invalid function index: %" PRIindex, func_index);
+    return Result::Error;
+  }
   Func* func = module_->funcs[func_index];
   func->bindings.emplace(GetUniqueName(&func->bindings, MakeDollarName(name)),
                          Binding(local_index));
