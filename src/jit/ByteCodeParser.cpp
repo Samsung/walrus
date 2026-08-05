@@ -1295,6 +1295,12 @@ static void compileFunction(JITCompiler* compiler)
             }
             break;
         }
+        case ByteCode::ThrowRefOpcode: {
+            group = Instruction::Any;
+            paramType = ParamTypes::ParamSrc;
+            requiredInit = OTGetPTR;
+            break;
+        }
         case ByteCode::Load32Opcode: {
             group = Instruction::Load;
             paramType = ParamTypes::ParamSrcDst;

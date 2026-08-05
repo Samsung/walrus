@@ -120,6 +120,8 @@ size_t stackAllocatedSize()
     F(ArrayRef)                \
     F(FuncRef)                 \
     F(NoFuncRef)               \
+    F(ExnRef)                  \
+    F(NoExnRef)                \
     F(DefinedRef)              \
     F(NullExternRef)           \
     F(NullNoExternRef)         \
@@ -131,6 +133,8 @@ size_t stackAllocatedSize()
     F(NullArrayRef)            \
     F(NullFuncRef)             \
     F(NullNoFuncRef)           \
+    F(NullExnRef)              \
+    F(NullNoExnRef)            \
     F(NullDefinedRef)
 
 class Value {
@@ -405,7 +409,7 @@ public:
     static Type toNonNullableRefType(Type type)
     {
         if (isNullableRefType(type)) {
-            return static_cast<Type>(static_cast<uint8_t>(type) - (static_cast<uint8_t>(NullAnyRef) - static_cast<uint8_t>(AnyRef)));
+            return static_cast<Type>(static_cast<uint8_t>(type) - (static_cast<uint8_t>(NullExternRef) - static_cast<uint8_t>(ExternRef)));
         }
         return type;
     }

@@ -116,6 +116,8 @@ WASMCodeInfo g_wasmCodeInfo[static_cast<size_t>(WASMOpcode::OpcodeKindEnd)] = {
 static Walrus::Type toRefValueKind(Type type, Walrus::WASMParsingResult* result)
 {
     switch (type) {
+    case Type::NullExnRef:
+        return type.IsNullableNonTypedRef() ? Walrus::Value::NullNoExnRef : Walrus::Value::NoExnRef;
     case Type::NullFuncRef:
         return type.IsNullableNonTypedRef() ? Walrus::Value::NullNoFuncRef : Walrus::Value::NoFuncRef;
     case Type::NullExternRef:
@@ -136,6 +138,8 @@ static Walrus::Type toRefValueKind(Type type, Walrus::WASMParsingResult* result)
         return type.IsNullableNonTypedRef() ? Walrus::Value::NullStructRef : Walrus::Value::StructRef;
     case Type::ArrayRef:
         return type.IsNullableNonTypedRef() ? Walrus::Value::NullArrayRef : Walrus::Value::ArrayRef;
+    case Type::ExnRef:
+        return type.IsNullableNonTypedRef() ? Walrus::Value::NullExnRef : Walrus::Value::ExnRef;
     case Type::Ref:
         if (result != nullptr) {
             return Walrus::Type(Walrus::Value::DefinedRef, result->m_compositeTypes[type.GetReferenceIndex()]);
@@ -3454,6 +3458,14 @@ public:
 
         auto src0 = popVMStack();
         pushByteCode(Walrus::StructSet(src0, src1, memberOffset, type, info), WASMOpcode::StructSetOpcode);
+    }
+
+    virtual void OnThrowRefExpr() override
+    {
+        ASSERT(peekVMStackValueType() == Walrus::Value::Type::ExnRef || peekVMStackValueType() == Walrus::Value::Type::NullExnRef);
+        bool isNullable = peekVMStackValueType() == Walrus::Value::Type::NullExnRef;
+        auto src = popVMStack();
+        pushByteCode(Walrus::ThrowRef(src, isNullable), WASMOpcode::ThrowRefOpcode);
     }
 
     virtual void OnNopExpr() override

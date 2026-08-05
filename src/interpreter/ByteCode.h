@@ -42,6 +42,7 @@ class FunctionType;
     F_NOP(F)                    \
     F(Unreachable)              \
     F(Throw)                    \
+    F(ThrowRef)                 \
     F(End)                      \
     F(BrTable)                  \
     F(Call)                     \
@@ -5369,6 +5370,26 @@ public:
 protected:
     uint32_t m_tagIndex;
     uint32_t m_offsetsSize;
+};
+
+class ThrowRef : public ByteCodeOffsetValue {
+public:
+    ThrowRef(ByteCodeStackOffset srcOffset, bool isNullable)
+        : ByteCodeOffsetValue(Opcode::ThrowRefOpcode, srcOffset, isNullable ? 1 : 0)
+    {
+    }
+
+    ByteCodeStackOffset srcOffset() const { return stackOffset(); }
+    bool isNullable() const { return uint32Value() != 0; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("throw_ref ");
+        DUMP_BYTECODE_OFFSET(stackOffset);
+        printf("nullable: %s", isNullable() ? "true" : "false");
+    }
+#endif
 };
 
 #if !defined(NDEBUG)

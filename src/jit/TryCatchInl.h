@@ -243,6 +243,12 @@ static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* contex
     context->capturedException = Exception::create(context->state, tag, std::move(userExceptionData)).release();
 }
 
+static void throwRef(GCException* exception, ExecutionContext* context)
+{
+    context->error = ExecutionContext::CapturedException;
+    context->capturedException = exception->exception().release();
+}
+
 static void emitThrow(sljit_compiler* compiler, Instruction* instr)
 {
     CompileContext* context = CompileContext::get(compiler);
@@ -257,6 +263,26 @@ static void emitThrow(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3V(W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwWithArgs));
 
+    sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_JUMP);
+
+    if (context->currentTryBlock == InstanceConstData::globalTryBlock) {
+        context->appendTrapJump(ExecutionContext::ReturnToLabel, jump);
+        return;
+    }
+
+    std::vector<TryBlock>& tryBlocks = context->compiler->tryBlocks();
+    tryBlocks[context->currentTryBlock].throwJumps.push_back(jump);
+}
+
+static void emitThrowRef(sljit_compiler* compiler, Instruction* instr)
+{
+    CompileContext* context = CompileContext::get(compiler);
+    JITArg source(instr->operands());
+
+    MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, source.arg, source.argw);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
+
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1V(W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwRef));
     sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_JUMP);
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {

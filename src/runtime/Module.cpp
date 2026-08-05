@@ -468,6 +468,10 @@ static const char* typeName(Value::Type v)
         return "DefinedRef";
     case Value::NoFuncRef:
         return "NoFuncRef";
+    case Value::ExnRef:
+        return "ExnRef";
+    case Value::NoExnRef:
+        return "NoExnRef";
     case Value::NullAnyRef:
         return "NullAnyRef";
     case Value::NullNoAnyRef:
@@ -488,6 +492,10 @@ static const char* typeName(Value::Type v)
         return "NullFuncRef";
     case Value::NullNoFuncRef:
         return "NullNoFuncRef";
+    case Value::NullExnRef:
+        return "NullExnRef";
+    case Value::NullNoExnRef:
+        return "NullNoExnRef";
     case Value::NullDefinedRef:
         return "NullDefinedRef";
     default:
