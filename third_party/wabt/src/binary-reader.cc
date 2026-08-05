@@ -650,6 +650,10 @@ bool BinaryReader::IsConcreteReferenceType(Type::Enum type) {
     case Type::ExnRef:
       return options_.features.exceptions_enabled();
 
+    case Type::NullExnRef:
+      return options_.features.exceptions_enabled() &&
+             options_.features.gc_enabled();
+
     case Type::NullFuncRef:
     case Type::NullExternRef:
     case Type::NullRef:
