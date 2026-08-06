@@ -52,7 +52,7 @@ GCArray* GCArray::arrayNew(uint32_t length, const ArrayType* type, uint8_t* valu
 
     uint32_t startOffset = getAlignedStartOffset(size);
 
-    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - startOffset) >> log2Size)) {
+    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - (sizeof(void*) - 1) - startOffset) >> log2Size)) {
         // Array is larger than 4GB.
         return nullptr;
     }
@@ -103,7 +103,7 @@ GCArray* GCArray::arrayNewDefault(uint32_t length, const ArrayType* type)
 
     uint32_t startOffset = getAlignedStartOffset(size);
 
-    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - startOffset) >> log2Size)) {
+    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - (sizeof(void*) - 1) - startOffset) >> log2Size)) {
         // Array is larger than 4GB.
         return nullptr;
     }
@@ -137,7 +137,7 @@ GCArray* GCArray::arrayNewFixed(uint32_t length, const ArrayType* type, ByteCode
     uint32_t startOffset = getAlignedStartOffset(size);
 
     // Currently this case is not possible.
-    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - startOffset) >> log2Size)) {
+    if (UNLIKELY(length >= (std::numeric_limits<uint32_t>::max() - (sizeof(void*) - 1) - startOffset) >> log2Size)) {
         // Array is larger than 4GB.
         return nullptr;
     }
@@ -212,7 +212,7 @@ GCArray* GCArray::arrayNewData(uint32_t offset, uint32_t size, const ArrayType* 
 #ifdef ENABLE_GC
     uint32_t startOffset = getAlignedStartOffset(1 << log2Size);
 
-    if (UNLIKELY(size >= (std::numeric_limits<uint32_t>::max() - startOffset) >> log2Size)) {
+    if (UNLIKELY(size >= (std::numeric_limits<uint32_t>::max() - (sizeof(void*) - 1) - startOffset) >> log2Size)) {
         // Array is larger than 4GB.
         return nullptr;
     }
@@ -247,7 +247,7 @@ GCArray* GCArray::arrayNewElem(uint32_t offset, uint32_t size, const ArrayType* 
 #ifdef ENABLE_GC
     uint32_t startOffset = getAlignedStartOffset(sizeof(void*));
 
-    if (UNLIKELY(size >= (std::numeric_limits<uint32_t>::max() - startOffset) / sizeof(void*))) {
+    if (UNLIKELY(size >= (std::numeric_limits<uint32_t>::max() - (sizeof(void*) - 1) - startOffset) / sizeof(void*))) {
         // Array is larger than 4GB.
         return nullptr;
     }
