@@ -16,6 +16,19 @@
 
 #ifdef ENABLE_WASI
 
+// TODO: implement Windows descriptor-relative traversal
+#if defined(_WIN32)
+
+#else
+#include <cerrno>
+#include <fcntl.h>
+#include <string>
+#include <sys/types.h>
+#include <unistd.h>
+#include <utility>
+#include <vector>
+#endif
+
 #include "wasi/WASI02.h"
 #include "wasi/WASI02Impl.h"
 #include "runtime/Memory.h"
@@ -63,6 +76,190 @@ enum FileType : uint8_t {
     fileTypeRegularFile = 6,
     fileTypeSocket = 7,
 };
+
+static inline void closeFdStack(std::vector<int>& fdStack)
+{
+    for (int fd : fdStack) {
+        close(fd);
+    }
+    fdStack.clear();
+}
+
+static bool appendPathComponents(const std::string& path, std::vector<std::string>& components)
+{
+    if (path.empty()) {
+        return false;
+    }
+
+    if (path.front() == '/') {
+        return false;
+    }
+
+    if (path.find('\0') != std::string::npos) {
+        return false;
+    }
+
+    std::vector<std::string> parsedComponents;
+
+    size_t start = 0;
+
+    while (start < path.length()) {
+        size_t end = path.find('/', start);
+
+        if (end == std::string::npos) {
+            end = path.length();
+        }
+
+        if (end > start) {
+            parsedComponents.emplace_back(path.substr(start, end - start));
+        }
+
+        if (end == path.length()) {
+            break;
+        }
+
+        start = end + 1;
+    }
+
+    for (auto it = parsedComponents.rbegin(); it != parsedComponents.rend(); ++it) {
+        components.push_back(*it);
+    }
+
+    return true;
+}
+
+static inline bool splitComponentPath(const std::string& path, std::vector<std::string>& components)
+{
+    components.clear();
+    return appendPathComponents(path, components);
+}
+
+static bool readSymlinkTarget(int directoryFd, const std::string& component, std::string& target)
+{
+    std::vector<char> buffer(256);
+
+    while (true) {
+        ssize_t length = readlinkat(directoryFd, component.c_str(), buffer.data(), buffer.size());
+
+        if (length == -1) {
+            return false;
+        }
+
+        if (static_cast<size_t>(length) < buffer.size()) {
+            target.assign(buffer.data(), static_cast<size_t>(length));
+            return true;
+        }
+
+        if (buffer.size() >= 64 * 1024) {
+            errno = ENAMETOOLONG;
+            return false;
+        }
+
+        buffer.resize(buffer.size() * 2);
+    }
+}
+
+static int resolvePath(int preopenFd, std::vector<std::string> components, int openFlags)
+{
+    if (components.empty()) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    std::vector<int> fdStack;
+
+    int rootFd = dup(preopenFd);
+
+    if (rootFd == -1) {
+        return -1;
+    }
+
+    fdStack.push_back(rootFd);
+
+    constexpr size_t MaxSymlinkCount = 40;
+    size_t symlinkCount = 0;
+
+    auto fail = [&](int error) -> int {
+        closeFdStack(fdStack);
+        errno = error;
+        return -1;
+    };
+
+    while (!components.empty()) {
+        std::string component = std::move(components.back());
+
+        components.pop_back();
+
+        if (component.empty() || component == ".") {
+            continue;
+        }
+
+        if (component == "..") {
+            if (fdStack.size() == 1) {
+                return fail(EPERM);
+            }
+
+            close(fdStack.back());
+            fdStack.pop_back();
+
+            continue;
+        }
+
+        bool isFinalComponent = components.empty();
+
+        int flag;
+
+        if (isFinalComponent) {
+            flag = openFlags | O_NOFOLLOW | O_CLOEXEC;
+        } else {
+            flag = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC;
+        }
+
+        int nextFd = openat(fdStack.back(), component.c_str(), flag, 0666);
+
+        if (nextFd >= 0) {
+            if (isFinalComponent) {
+                closeFdStack(fdStack);
+                return nextFd;
+            }
+
+            fdStack.push_back(nextFd);
+            continue;
+        }
+
+        int openError = errno;
+
+        std::string linkTarget;
+
+        if (readSymlinkTarget(fdStack.back(), component, linkTarget)) {
+            ++symlinkCount;
+
+            if (symlinkCount > MaxSymlinkCount) {
+                return fail(ELOOP);
+            }
+
+            if (!linkTarget.empty() && linkTarget.front() == '/') {
+                return fail(EPERM);
+            }
+
+            if (!appendPathComponents(linkTarget, components)) {
+                return fail(EINVAL);
+            }
+
+            continue;
+        }
+
+        int readlinkError = errno;
+
+        if (readlinkError == EINVAL) {
+            return fail(openError);
+        }
+
+        return fail(openError);
+    }
+
+    return fail(ENOENT);
+}
 
 static void throwNoMemory(ExecutionState& state)
 {
@@ -545,18 +742,35 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
 
         std::string path = asDirectory(handle)->realPath();
         path.append("/");
+
+        std::string componentPath;
+        std::vector<std::string> components;
+
         CanonOptions::UtfData utfData;
         options->validateString(state, pathStart, pathSize, &utfData);
         if (options->encoding() == ComponentCanonOptions::Utf8) {
-            path.append(reinterpret_cast<const char*>(utfData.buffer()), utfData.length());
+            componentPath.assign(reinterpret_cast<const char*>(utfData.buffer()), utfData.length());
         } else {
             std::vector<uint8_t> utf8String(utfData.utf8Length());
             utfData.toUtf8String(utf8String.data());
-            path.append(reinterpret_cast<const char*>(utf8String.data()), utf8String.size());
+            componentPath.assign(reinterpret_cast<const char*>(utf8String.data()), utf8String.size());
         }
 
-        uv_fs_t req;
-        int descriptor = uv_fs_open(NULL, &req, path.c_str(), openFlags, 0666, NULL);
+        int descriptor = -1;
+
+        if (splitComponentPath(componentPath, components)) {
+            int preopenFd = open(path.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+            if (preopenFd >= 0) {
+                descriptor = resolvePath(preopenFd, std::move(components), openFlags);
+
+                close(preopenFd);
+            }
+        }
+
+        path.append(componentPath);
+
+        // uv_fs_t req;
+        // int descriptor = uv_fs_open(NULL, &req, path.c_str(), openFlags, 0666, NULL);
         if (descriptor < 0) {
             options->memory()->store(state, resultOffset, 4, 0);
             options->memory()->buffer()[resultOffset] = resultError;
