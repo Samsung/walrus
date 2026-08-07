@@ -20,6 +20,7 @@
 
 #include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
+#include "runtime/GCException.h"
 #include "runtime/Global.h"
 #include "runtime/Function.h"
 #include "runtime/Instance.h"
@@ -1425,6 +1426,10 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             }
             case ByteCode::ThrowOpcode: {
                 emitThrow(m_compiler, item->asInstruction());
+                break;
+            }
+            case ByteCode::ThrowRefOpcode: {
+                emitThrowRef(m_compiler, item->asInstruction());
                 break;
             }
             case ByteCode::UnreachableOpcode: {

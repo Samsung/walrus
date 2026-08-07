@@ -1582,7 +1582,9 @@ public:
     }
     Result OnThrowRefExpr() override
     {
-        abort();
+        CHECK_RESULT(m_validator.OnThrowRef(GetLocation()));
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnThrowRefExpr();
         return Result::Ok;
     }
     Result OnTryTableExpr(Type sig_type, const CatchClauseVector &catches) override

@@ -41,6 +41,7 @@ public:
         StructKind = 1,
         ArrayKind,
         FunctionKind,
+        ExceptionKind,
         // Host types
         ModuleKind,
         InstanceKind,

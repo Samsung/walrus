@@ -26,6 +26,7 @@
 #include "runtime/Table.h"
 #include "runtime/GCArray.h"
 #include "runtime/GCStruct.h"
+#include "runtime/GCException.h"
 #include "runtime/Global.h"
 #include "runtime/Module.h"
 #include "runtime/Trap.h"
@@ -3259,6 +3260,21 @@ NextInstruction:
         }
 
         Trap::throwException(state, tag, std::move(userExceptionData));
+        ASSERT_NOT_REACHED();
+        NEXT_INSTRUCTION();
+    }
+
+    DEFINE_OPCODE(ThrowRef)
+        :
+    {
+        ThrowRef* code = (ThrowRef*)programCounter;
+
+        GCException* ptr = readValue<GCException*>(bp, code->srcOffset());
+        if (UNLIKELY(Value::isNull(ptr))) {
+            Trap::throwException(state, "null structure reference");
+        }
+
+        ptr->throwException();
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
     }

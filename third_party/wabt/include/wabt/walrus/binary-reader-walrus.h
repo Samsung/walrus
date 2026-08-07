@@ -191,6 +191,7 @@ public:
     virtual void OnStructNewDefaultExpr(Index type_index) = 0;
     virtual void OnStructGetExpr(Opcode opcode, Index type_index, Index field_index) = 0;
     virtual void OnStructSetExpr(Index type_index, Index field_index) = 0;
+    virtual void OnThrowRefExpr() = 0;
     virtual void OnNopExpr() = 0;
     virtual void OnEndExpr() = 0;
     virtual void OnUnreachableExpr() = 0;
