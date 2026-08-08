@@ -475,8 +475,14 @@ inline static void simdSplatOperation(ExecutionState& state, UnaryOperation* cod
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 static void initAddressToOpcodeTable()
 {
-#define REGISTER_TABLE(name, ...) \
-    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
+#define REGISTER_TABLE(name, ...)                                                                     \
+    {                                                                                                  \
+        void* addr = g_byteCodeTable.m_addressTable[ByteCode::name##Opcode];                          \
+        auto it = g_byteCodeTable.m_addressToOpcodeTable.find(addr);                                   \
+        RELEASE_ASSERT(it == g_byteCodeTable.m_addressToOpcodeTable.end()                              \
+                       || it->second == ByteCode::name##Opcode);                                       \
+        g_byteCodeTable.m_addressToOpcodeTable[addr] = ByteCode::name##Opcode;                         \
+    }
     FOR_EACH_BYTECODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
 }
@@ -1425,7 +1431,10 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
     }
 #endif
 
-#define DEFINE_OPCODE(codeName) codeName##OpcodeLbl
+#define DEFINE_OPCODE(codeName)                                     \
+    codeName##OpcodeLbl:                                            \
+    __asm__ volatile("" ::"i"(ByteCode::Opcode::codeName##Opcode)); \
+    codeName##OpcodeBodyLbl
 #define DEFINE_DEFAULT
 #define NEXT_INSTRUCTION() goto NextInstruction;
 
