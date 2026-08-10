@@ -116,7 +116,10 @@ private:
 
 #if defined(WALRUS_ENABLE_JIT)
         if (moduleFunction->jitFunction() != nullptr) {
-            resultOffsets = moduleFunction->jitFunction()->call(newState, function->instance(), functionStackBase);
+            const JITFunction* jitFunc = moduleFunction->jitFunction();
+            ExecutionContext context(jitFunc->instanceConstData(), newState, function->instance());
+            context.frameCapacity = frame.capacity();
+            resultOffsets = jitFunc->call(context, frame.bp());
         } else
 #endif
         {
