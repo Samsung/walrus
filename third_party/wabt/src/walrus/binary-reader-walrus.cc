@@ -655,7 +655,7 @@ public:
         return Result::Ok;
     }
     void SubBlockCheck() {
-        if (WABT_UNLIKELY(m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd() == 1)) {
+        if (m_externalDelegate->resumeGenerateByteCodeAfterNBlockEnd() == 1) {
             m_externalDelegate->setResumeGenerateByteCodeAfterNBlockEnd(0);
             m_externalDelegate->setShouldContinueToGenerateByteCode(true);
         }
@@ -1587,9 +1587,24 @@ public:
         m_externalDelegate->OnThrowRefExpr();
         return Result::Ok;
     }
-    Result OnTryTableExpr(Type sig_type, const CatchClauseVector &catches) override
+    Result OnTryTableExpr(Type sig_type, const CatchClauseVector& catches) override
     {
-        abort();
+        uint32_t exn_stack_height;
+        CHECK_RESULT(m_validator.BeginTryTable(GetLocation(), sig_type));
+        CHECK_RESULT(m_validator.GetCatchCount(m_labelStack.size() - 1, &exn_stack_height));
+        EXECUTE_VALIDATOR(PushLabel(LabelKind::Try));
+
+        for (const auto& catchData : catches) {
+            TableCatch tableCatch;
+            tableCatch.kind = catchData.kind;
+            tableCatch.tag = Var(catchData.tag, GetLocation());
+            tableCatch.target = Var(catchData.depth, GetLocation());
+            CHECK_RESULT(m_validator.OnTryTableCatch(GetLocation(), tableCatch));
+        }
+        CHECK_RESULT(m_validator.EndTryTable(GetLocation(), sig_type));
+
+        SHOULD_GENERATE_BYTECODE;
+        m_externalDelegate->OnTryTableExpr(sig_type, catches);
         return Result::Ok;
     }
 

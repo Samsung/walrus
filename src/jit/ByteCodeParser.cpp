@@ -87,7 +87,7 @@ static void buildCatchInfo(JITCompiler* compiler, ModuleFunction* function, std:
             catchLabel->addInfo(Label::kHasCatchInfo);
         }
 
-        tryBlocks[idx].catchBlocks.push_back(TryBlock::CatchBlock(catchLabel, it.m_stackSizeToBe, it.m_tagIndex));
+        tryBlocks[idx].catchBlocks.push_back(TryBlock::CatchBlock(catchLabel, it.m_stackSizeToBe, it.m_tagIndex, it.m_pushExnRef));
     }
 }
 

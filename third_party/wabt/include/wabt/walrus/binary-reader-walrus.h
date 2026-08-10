@@ -151,6 +151,7 @@ public:
     virtual void OnTryExpr(Type sigType) = 0;
     virtual void OnCatchExpr(Index tagIndex) = 0;
     virtual void OnCatchAllExpr() = 0;
+    virtual void OnTryTableExpr(Type sigType, const CatchClauseVector &catches) = 0;
     virtual void OnMemoryGrowExpr(Index memIdx) = 0;
     virtual void OnMemoryInitExpr(Index segmentIndex, Index memIdx) = 0;
     virtual void OnMemoryCopyExpr(Index srcMemIndex, Index dstMemIndex) = 0;

@@ -63,7 +63,7 @@ InstanceConstData::InstanceConstData(std::vector<TrapBlock>& trapBlocks, std::ve
         m_tryBlocks.push_back(TryBlock(catchStart, catchCount, it.parent, sljit_get_label_addr(it.returnToLabel)));
 
         for (auto catchIt : it.catchBlocks) {
-            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.u.handlerLabel), catchIt.stackSizeToBe, catchIt.tagIndex));
+            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.u.handlerLabel), catchIt.stackSizeToBe, catchIt.tagIndex, catchIt.pushExnRef));
         }
 
         catchStart += catchCount;
@@ -124,7 +124,7 @@ void InstanceConstData::append(std::vector<TrapBlock>& trapBlocks, std::vector<W
         m_tryBlocks.push_back(TryBlock(catchStart, catchCount, parent, sljit_get_label_addr(it.returnToLabel)));
 
         for (auto catchIt : it.catchBlocks) {
-            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.u.handlerLabel), catchIt.stackSizeToBe, catchIt.tagIndex));
+            m_catchBlocks.push_back(CatchBlock(sljit_get_label_addr(catchIt.u.handlerLabel), catchIt.stackSizeToBe, catchIt.tagIndex, catchIt.pushExnRef));
         }
 
         catchStart += catchCount;
@@ -174,16 +174,26 @@ static sljit_sw findCatch(sljit_sw current, uint8_t* bp, ExecutionContext* conte
         while (i < end) {
             if (catchBlocks[i].tagIndex == std::numeric_limits<uint32_t>::max()) {
                 context->error = ExecutionContext::NoError;
-                context->clearException();
+                if (catchBlocks[i].pushExnRef) {
+                    std::unique_ptr<Exception> e(context->capturedException);
+                    *reinterpret_cast<GCException**>(bp) = GCException::exceptionNew(e);
+                } else {
+                    context->clearException();
+                }
                 return catchBlocks[i].handlerAddr;
             }
 
             if (instance->tag(catchBlocks[i].tagIndex) == tag) {
                 context->error = ExecutionContext::NoError;
-                memcpy(bp + catchBlocks[i].stackSizeToBe,
-                       context->capturedException->userExceptionData().data(),
-                       tag->functionType()->paramStackSize());
-                context->clearException();
+                uint8_t* sp = bp + catchBlocks[i].stackSizeToBe;
+                size_t paramStackSize = tag->functionType()->paramStackSize();
+                memcpy(sp, context->capturedException->userExceptionData().data(), paramStackSize);
+                if (catchBlocks[i].pushExnRef) {
+                    std::unique_ptr<Exception> e(context->capturedException);
+                    *reinterpret_cast<GCException**>(sp + paramStackSize) = GCException::exceptionNew(e);
+                } else {
+                    context->clearException();
+                }
                 return catchBlocks[i].handlerAddr;
             }
 

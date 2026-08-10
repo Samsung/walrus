@@ -210,6 +210,7 @@ public:
         size_t m_catchStartPosition;
         size_t m_stackSizeToBe;
         uint32_t m_tagIndex;
+        bool m_pushExnRef;
     };
 
     ModuleFunction(FunctionType* functionType);

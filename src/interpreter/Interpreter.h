@@ -19,6 +19,7 @@
 
 #include "runtime/ExecutionState.h"
 #include "runtime/Function.h"
+#include "runtime/GCException.h"
 #include "runtime/Instance.h"
 #include "runtime/JITExec.h"
 #include "runtime/Module.h"
@@ -152,8 +153,12 @@ private:
                                 if (item.m_tagIndex == std::numeric_limits<uint32_t>::max() || function->instance()->tag(item.m_tagIndex) == tag) {
                                     programCounter = item.m_catchStartPosition + reinterpret_cast<size_t>(moduleFunction->byteCode());
                                     uint8_t* sp = frame.bp() + item.m_stackSizeToBe;
+                                    size_t paramStackSize = tag->functionType()->paramStackSize();
                                     if (item.m_tagIndex != std::numeric_limits<uint32_t>::max() && tag->functionType()->paramStackSize()) {
-                                        memcpy(sp, e->userExceptionData().data(), tag->functionType()->paramStackSize());
+                                        memcpy(sp, e->userExceptionData().data(), paramStackSize);
+                                    }
+                                    if (item.m_pushExnRef) {
+                                        *reinterpret_cast<GCException**>(sp + paramStackSize) = GCException::exceptionNew(e);
                                     }
                                     isCatchSucessful = true;
                                     break;

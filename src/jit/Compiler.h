@@ -446,9 +446,10 @@ private:
 
 struct TryBlock {
     struct CatchBlock {
-        CatchBlock(Label* handler, size_t stackSizeToBe, uint32_t tagIndex)
+        CatchBlock(Label* handler, size_t stackSizeToBe, uint32_t tagIndex, bool pushExnRef)
             : stackSizeToBe(stackSizeToBe)
             , tagIndex(tagIndex)
+            , pushExnRef(pushExnRef)
         {
             u.handler = handler;
         }
@@ -459,6 +460,7 @@ struct TryBlock {
         } u;
         size_t stackSizeToBe;
         uint32_t tagIndex;
+        bool pushExnRef;
     };
 
     TryBlock(Label* start, size_t size)
