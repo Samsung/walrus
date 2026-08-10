@@ -335,6 +335,7 @@ private:
             Loop,
             Block,
             TryCatch,
+            TryTable,
         };
 
         static_assert(sizeof(Walrus::JumpIfTrue) == sizeof(Walrus::JumpIfFalse), "");
@@ -642,8 +643,10 @@ private:
         size_t m_tryEnd;
         size_t m_catchStart;
         uint32_t m_tagIndex;
+        bool m_pushExnRef;
     };
     std::vector<CatchInfo> m_catchInfo;
+    std::vector<CatchClauseVector> m_tryTableCatchVector;
     struct LocalInfo {
         Walrus::Value::Type m_valueType;
         size_t m_position;
@@ -2226,7 +2229,7 @@ public:
             }
         }
         if (blockInfo.m_blockType != BlockInfo::Loop) {
-            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
+            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch || blockInfo.m_blockType == BlockInfo::TryTable);
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
         }
         pushByteCode(Walrus::Jump(offset), WASMOpcode::BrOpcode);
@@ -2258,7 +2261,7 @@ public:
 
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentByteCode.size();
             if (blockInfo.m_blockType != BlockInfo::Loop) {
-                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
+                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch || blockInfo.m_blockType == BlockInfo::TryTable);
                 blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
@@ -2280,7 +2283,7 @@ public:
 
             auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentByteCode.size();
             if (blockInfo.m_blockType != BlockInfo::Loop) {
-                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
+                ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch || blockInfo.m_blockType == BlockInfo::TryTable);
                 blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJump, m_currentByteCode.size() });
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
@@ -2290,7 +2293,7 @@ public:
 
         auto offset = (int32_t)blockInfo.m_position - (int32_t)m_currentByteCode.size();
         if (blockInfo.m_blockType != BlockInfo::Loop) {
-            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
+            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch || blockInfo.m_blockType == BlockInfo::TryTable);
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsJumpIf, m_currentByteCode.size() });
         }
 
@@ -2367,7 +2370,7 @@ public:
         offset = (int32_t)(blockInfo.m_position - brTableCode);
 
         if (blockInfo.m_blockType != BlockInfo::Loop) {
-            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch);
+            ASSERT(blockInfo.m_blockType == BlockInfo::Block || blockInfo.m_blockType == BlockInfo::IfElse || blockInfo.m_blockType == BlockInfo::TryCatch || blockInfo.m_blockType == BlockInfo::TryTable);
             offset = jumpOffset;
             blockInfo.m_jumpToEndBrInfo.push_back({ BlockInfo::JumpToEndBrInfo::IsBrTable, brTableCode + jumpOffset });
         }
@@ -2435,7 +2438,7 @@ public:
             ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
             Walrus::Throw* code = peekByteCode<Walrus::Throw>(pos);
             for (size_t i = 0; i < param.size(); i++) {
-                ASSERT(peekVMStackValueType() == param[functionType->param().size() - i - 1]);
+                ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(param[functionType->param().size() - i - 1]));
                 code->dataOffsets()[param.size() - i - 1] = popVMStack();
             }
         }
@@ -2450,9 +2453,9 @@ public:
         m_currentFunction->m_hasTryCatch = true;
     }
 
-    void processCatchExpr(Index tagIndex)
+    void processCatchExpr(Index tagIndex, bool pushExnRef)
     {
-        ASSERT(m_blockInfo.back().m_blockType == BlockInfo::TryCatch);
+        ASSERT(m_blockInfo.back().m_blockType == BlockInfo::TryCatch || m_blockInfo.back().m_blockType == BlockInfo::TryTable);
 
         m_preprocessData.seenBranch();
         auto& blockInfo = m_blockInfo.back();
@@ -2472,7 +2475,7 @@ public:
 
         blockInfo.clearByteCodeGenerationStopped();
 
-        m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentByteCode.size(), tagIndex });
+        m_catchInfo.push_back({ m_blockInfo.size(), m_blockInfo.back().m_position, tryEnd, m_currentByteCode.size(), tagIndex, pushExnRef });
 
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto& param = m_result.m_tagTypes[tagIndex]->functionType()->param().types();
@@ -2480,16 +2483,27 @@ public:
                 pushVMStack(param[i]);
             }
         }
+        if (pushExnRef) {
+            pushVMStack(Walrus::Value::ExnRef);
+        }
     }
 
     virtual void OnCatchExpr(Index tagIndex) override
     {
-        processCatchExpr(tagIndex);
+        processCatchExpr(tagIndex, false);
     }
 
     virtual void OnCatchAllExpr() override
     {
-        processCatchExpr(std::numeric_limits<Index>::max());
+        processCatchExpr(std::numeric_limits<Index>::max(), false);
+    }
+
+    virtual void OnTryTableExpr(Type sigType, const CatchClauseVector& catches) override
+    {
+        BlockInfo b(BlockInfo::TryTable, sigType, *this);
+        m_blockInfo.push_back(b);
+        m_currentFunction->m_hasTryCatch = true;
+        m_tryTableCatchVector.push_back(catches);
     }
 
     virtual void OnMemoryInitExpr(Index segmentIndex, Index memIdx) override
@@ -3470,6 +3484,22 @@ public:
         // because it is possible to jump to the location after i32.eqz
         m_lastI32EqzPos = s_noI32Eqz;
         if (m_blockInfo.size()) {
+            if (m_blockInfo.back().m_blockType == BlockInfo::TryTable && resumeGenerateByteCodeAfterNBlockEnd() == 0) {
+                ASSERT(shouldContinueToGenerateByteCode());
+                for (auto iter : m_tryTableCatchVector.back()) {
+                    Index tagIndex = (iter.kind == CatchKind::Catch || iter.kind == CatchKind::CatchRef) ? iter.tag : std::numeric_limits<Index>::max();
+                    bool pushExnRef = (iter.kind == CatchKind::CatchRef || iter.kind == CatchKind::CatchAllRef);
+
+                    setResumeGenerateByteCodeAfterNBlockEnd(0);
+                    setShouldContinueToGenerateByteCode(true);
+                    processCatchExpr(tagIndex, pushExnRef);
+                    OnBrExpr(iter.depth + 1);
+                }
+                m_tryTableCatchVector.pop_back();
+                setResumeGenerateByteCodeAfterNBlockEnd(0);
+                setShouldContinueToGenerateByteCode(true);
+            }
+
             auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
             auto blockInfo = m_blockInfo.back();
             m_blockInfo.pop_back();
@@ -3483,7 +3513,7 @@ public:
             }
 #endif
 
-            if (blockInfo.m_blockType == BlockInfo::TryCatch) {
+            if (blockInfo.m_blockType == BlockInfo::TryCatch || blockInfo.m_blockType == BlockInfo::TryTable) {
                 auto iter = m_catchInfo.begin();
                 while (iter != m_catchInfo.end()) {
                     if (iter->m_tryCatchBlockDepth - 1 != m_blockInfo.size()) {
@@ -3494,7 +3524,7 @@ public:
                     for (size_t i = 0; i < blockInfo.m_vmStack.size(); i++) {
                         stackSizeToBe += m_vmStack[i].stackAllocatedSize();
                     }
-                    m_currentFunction->m_catchInfo.push_back({ iter->m_tryStart, iter->m_tryEnd, iter->m_catchStart, stackSizeToBe, iter->m_tagIndex });
+                    m_currentFunction->m_catchInfo.push_back({ iter->m_tryStart, iter->m_tryEnd, iter->m_catchStart, stackSizeToBe, iter->m_tagIndex, iter->m_pushExnRef });
                     iter = m_catchInfo.erase(iter);
                 }
             }

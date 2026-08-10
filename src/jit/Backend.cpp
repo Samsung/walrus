@@ -143,16 +143,18 @@ public:
     };
 
     struct CatchBlock {
-        CatchBlock(sljit_uw handlerAddr, size_t stackSizeToBe, uint32_t tagIndex)
+        CatchBlock(sljit_uw handlerAddr, size_t stackSizeToBe, uint32_t tagIndex, bool pushExnRef)
             : handlerAddr(handlerAddr)
             , stackSizeToBe(stackSizeToBe)
             , tagIndex(tagIndex)
+            , pushExnRef(pushExnRef)
         {
         }
 
         sljit_uw handlerAddr;
         size_t stackSizeToBe;
         uint32_t tagIndex;
+        bool pushExnRef;
     };
 
     InstanceConstData(std::vector<TrapBlock>& trapBlocks, std::vector<Walrus::TryBlock>& tryBlocks);
