@@ -59,6 +59,7 @@ struct ExecutionContext {
         GenericTrap, // Error code received in SLJIT_R0.
         ReturnToLabel, // Used for returning with an exception.
         ErrorCodesEnd,
+        TailCallJump,
     };
 
     ExecutionContext(InstanceConstData* currentInstanceConstData, ExecutionState& state, Instance* instance)
@@ -67,6 +68,8 @@ struct ExecutionContext {
         , instance(instance)
         , capturedException(nullptr)
         , error(NoError)
+        , tailCallEntry(nullptr)
+        , frameCapacity(0)
     {
     }
 
@@ -82,6 +85,8 @@ struct ExecutionContext {
     Instance* instance;
     Exception* capturedException;
     ErrorCodes error;
+    void* tailCallEntry;
+    size_t frameCapacity;
 };
 
 class JITModule {
@@ -132,7 +137,9 @@ public:
     }
 
     bool isCompiled() const { return m_exportEntry != nullptr; }
-    ByteCodeStackOffset* call(ExecutionState& state, Instance* instance, uint8_t* bp) const;
+    void* exportEntry() const { return m_exportEntry; }
+    InstanceConstData* instanceConstData() const { return m_module->instanceConstData(); }
+    ByteCodeStackOffset* call(ExecutionContext& context, uint8_t* bp) const;
 
 private:
     void* m_exportEntry;
