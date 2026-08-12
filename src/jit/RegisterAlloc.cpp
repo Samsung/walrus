@@ -705,7 +705,7 @@ void JITCompiler::allocateRegisters()
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode
                    || instr->opcode() == ByteCode::ArrayInitDataOpcode || instr->opcode() == ByteCode::ArrayInitElemOpcode
                    || instr->opcode() == ByteCode::ArrayFillOpcode || instr->opcode() == ByteCode::ArrayCopyOpcode
-                   || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
+                   || instr->opcode() == ByteCode::UnreachableOpcode || instr->opcode() == ByteCode::AtomicFenceOpcode || NOP_CHECK);
 
             if (!hasResult) {
                 continue;
@@ -1045,7 +1045,7 @@ void JITCompiler::allocateRegistersSimple()
                    || instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode
                    || instr->opcode() == ByteCode::ArrayInitDataOpcode || instr->opcode() == ByteCode::ArrayInitElemOpcode
                    || instr->opcode() == ByteCode::ArrayFillOpcode || instr->opcode() == ByteCode::ArrayCopyOpcode
-                   || instr->opcode() == ByteCode::UnreachableOpcode || NOP_CHECK);
+                   || instr->opcode() == ByteCode::UnreachableOpcode || instr->opcode() == ByteCode::AtomicFenceOpcode || NOP_CHECK);
             continue;
         }
 

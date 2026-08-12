@@ -195,6 +195,11 @@ private:
             ref->addRef();
             return Walrus::ComponentTypeRef(ref);
         }
+
+        if (type.GetType() == ComponentType::TypeNone) {
+            return Walrus::ComponentTypeRef();
+        }
+
         return Walrus::ComponentTypeRef(getValueType(type.GetType()));
     }
 
@@ -281,6 +286,11 @@ private:
     Walrus::ComponentRefCounted* pushExternalType(const ComponentExternalInfo& externalInfo)
     {
         Walrus::ComponentRefCounted* type;
+        if (m_current->types().size() < externalInfo.index.index) {
+            m_walrusParseError = std::string(externalInfo.sort.GetCoreName()) + " type";
+            return nullptr;
+        }
+
         switch (externalInfo.sort) {
         case ComponentSort::Func:
             type = m_current->getType(externalInfo.index.index)->asTypeFunc();
@@ -349,6 +359,7 @@ public:
         std::pair<Walrus::Optional<Walrus::Module*>, std::string> result = Walrus::WASMParser::parseBinary(m_store, m_filename, reinterpret_cast<const uint8_t*>(data), size, m_JITFlags, m_featureFlags);
         if (!result.second.empty()) {
             m_walrusParseError = result.second;
+            return;
         }
 
         Walrus::Module* module = result.first.value();
@@ -823,6 +834,10 @@ public:
                      Index typeIndex)
     {
         uint32_t canonOptions = parseCanonOptions(optionCount, options);
+        if (!m_current->getType(typeIndex)->isTypeFunc()) {
+            m_walrusParseError = "invalid type index";
+            return;
+        }
         Walrus::ComponentTypeFunc* funcType = m_current->getType(typeIndex)->asTypeFunc();
         m_currentComponent->pushDeclaration(new Walrus::ComponentCanonLift(coreFuncIndex, canonOptions, funcType));
         m_currentInfo->funcTypes.push_back(funcType);
@@ -846,6 +861,10 @@ public:
             kind = Walrus::ComponentDeclaration::CanonResourceRep;
         }
 
+        if (m_current->types().size() <= typeIndex) {
+            m_walrusParseError = "invalid type index";
+            return;
+        }
         Walrus::ComponentRefCounted* ref = m_current->getType(typeIndex);
         m_currentComponent->pushDeclaration(new Walrus::ComponentCanonType(kind, ref));
     }
@@ -854,6 +873,11 @@ public:
                   nonstd::string_view* versionSuffix,
                   const ComponentExternalInfo& externalInfo)
     {
+        if (name.str.empty()) {
+            m_walrusParseError = "import name cannot be empty";
+            return;
+        }
+
         if (m_currentComponent->type() == m_current) {
             m_currentComponent->pushDeclaration(new Walrus::ComponentImport(static_cast<uint32_t>(m_current->imports().size())));
         }
@@ -876,19 +900,31 @@ public:
 
         switch (exportInfo->sort) {
         case ComponentSort::Func:
+            if (m_currentInfo->funcTypes.size() <= exportInfo->index.index) {
+                return;
+            }
             type = m_currentInfo->funcTypes[exportInfo->index.index];
             m_currentInfo->funcTypes.push_back(type->asTypeFunc());
             break;
         case ComponentSort::Type:
+            if (m_current->types().size() <= exportInfo->index.index) {
+                return;
+            }
             type = m_current->getType(exportInfo->index.index);
             type->addRef();
             m_current->pushType(type);
             break;
         case ComponentSort::Component:
+            if (m_currentInfo->componentTypes.size() <= exportInfo->index.index) {
+                return;
+            }
             type = m_currentInfo->componentTypes[exportInfo->index.index];
             m_currentInfo->componentTypes.push_back(type->asComponentType());
             break;
         case ComponentSort::Instance:
+            if (m_currentInfo->instanceTypes.size() <= exportInfo->index.index) {
+                return;
+            }
             type = m_currentInfo->instanceTypes[exportInfo->index.index];
             m_currentInfo->instanceTypes.push_back(type->asComponentType());
             break;
@@ -926,6 +962,14 @@ std::pair<Optional<Component*>, std::string> WASMComponentParser::parseBinary(St
     wabt::WASMComponentBinaryReader delegate(store, filename, JITFlags, featureFlags);
 
     std::string error = ReadWasmComponentBinary(data, len, &delegate);
+
+    if (delegate.WalrusParseError().length()) {
+        if (error.length()) {
+            error += ": ";
+        }
+        error += delegate.WalrusParseError();
+    }
+
     if (error.length()) {
         return std::make_pair(nullptr, error);
     }
