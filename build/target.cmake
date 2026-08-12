@@ -56,6 +56,7 @@ ELSEIF ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
         -Wno-type-limits -Wno-unused-result -Wno-unused-variable -Wno-invalid-offsetof
         -Wno-unused-but-set-variable -Wno-unused-but-set-parameter
         -Wno-deprecated-declarations -Wno-unused-function
+        -Wno-unused-label
     )
     IF (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 9)
         SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -Wno-attributes -Wno-class-memaccess -Wno-deprecated-copy -Wno-cast-function-type -Wno-stringop-truncation -Wno-pessimizing-move -Wno-mismatched-new-delete -Wno-overloaded-virtual -Wno-dangling-pointer)
