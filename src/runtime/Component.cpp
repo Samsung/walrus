@@ -54,6 +54,7 @@ void ComponentRefCounted::releaseAllRefs(ComponentRefCounted* ref)
             releaseAndInsert(ref, ref->asTypeResourceRef()->ref());
             break;
         case FuncKind:
+        case AsyncFuncKind:
             for (auto& it : ref->asTypeFunc()->params()) {
                 releaseAndInsert(ref, it.type.ref());
             }

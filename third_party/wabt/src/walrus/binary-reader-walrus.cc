@@ -2073,7 +2073,7 @@ public:
                     const ComponentExternalInfo& external_info) override {
         CHECK_RESULT(m_validator.OnImport(name, version_suffix, external_info));
         m_externalDelegate->OnImport(name, version_suffix, external_info);
-        return Result::Ok;
+        return CheckParseError();
     }
 
     Result BeginExportSection(uint32_t count) override {

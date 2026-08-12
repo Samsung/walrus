@@ -214,6 +214,30 @@ def run_extended_tests(engine):
     if fail_total > 0:
         raise Exception("wasm-test-web-assembly3 failed")
 
+
+@runner('regression', default=True)
+def run_extended_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'regression')
+
+    print('Running regression tests:')
+    should_fail = glob(join(TEST_DIR, '**/*.wast'), recursive=True) + glob(join(TEST_DIR, '**/*.wasm'), recursive=True)
+
+    # remove tests that should pass
+    should_pass = glob(join(TEST_DIR, 'assertion_allocateRegister.wasm'))
+    should_fail.remove(join(TEST_DIR, 'assertion_allocateRegister.wasm'))
+    
+    xpass_result = _run_wast_tests(engine, should_fail, True) + _run_wast_tests(engine, should_pass, False)
+    
+    tests_total = len(should_fail) + len(should_pass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("regression tests failed")
+
+
 def main():
     parser = ArgumentParser(description='Walrus Test Suite Runner')
     parser.add_argument('--engine', metavar='PATH', default=DEFAULT_WALRUS,
