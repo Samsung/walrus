@@ -17,6 +17,10 @@
 #ifdef ENABLE_WASI
 
 #include "wasi/WASI.h"
+extern "C" {
+#include "path_resolver.h"
+#include "uvwasi_alloc.h"
+}
 #include "runtime/Value.h"
 #include "runtime/Memory.h"
 #include "runtime/Instance.h"
@@ -90,6 +94,39 @@ void WASI::initialize(uvwasi_t* uvwasi)
     g_wasiFunctions[WasiFuncIndex::NAME##FUNC].ptr = &WASI::NAME;
     FOR_EACH_WASI_FUNC(WASI_FUNC_TABLE)
 #undef WASI_FUNC_TABLE
+}
+
+uvwasi_errno_t WASI::resolvePath(const std::string& mappedPath, const std::string& realPath, const std::string& guestPath, uvwasi_lookupflags_t flags, std::string& resolvedPath)
+{
+    if (g_uvwasi == nullptr) {
+        return UVWASI_EINVAL;
+    }
+
+    std::vector<char> normalizedMappedPath(mappedPath.size() + 1);
+
+    uvwasi_errno_t error = uvwasi__normalize_path(mappedPath.c_str(), static_cast<uvwasi_size_t>(mappedPath.size()), normalizedMappedPath.data(), static_cast<uvwasi_size_t>(normalizedMappedPath.size()));
+
+    if (error != UVWASI_ESUCCESS) {
+        return error;
+    }
+
+    uvwasi_fd_wrap_t directory{};
+    directory.path = const_cast<char*>(mappedPath.c_str());
+    directory.real_path = const_cast<char*>(realPath.c_str());
+    directory.normalized_path = normalizedMappedPath.data();
+
+    char* rawResolvedPath = nullptr;
+
+    error = uvwasi__resolve_path(g_uvwasi, &directory, guestPath.c_str(), static_cast<uvwasi_size_t>(guestPath.size()), &rawResolvedPath, flags);
+
+    if (error == UVWASI_ESUCCESS) {
+        resolvedPath.assign(rawResolvedPath);
+    } else {
+        resolvedPath.clear();
+    }
+
+    uvwasi__free(g_uvwasi, rawResolvedPath);
+    return error;
 }
 
 WASI::WasiFuncInfo* WASI::find(const std::string& funcName)

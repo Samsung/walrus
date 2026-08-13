@@ -16,6 +16,7 @@
 
 #ifdef ENABLE_WASI
 
+#include "wasi/WASI.h"
 #include "wasi/WASI02.h"
 #include "wasi/WASI02Impl.h"
 #include "runtime/Memory.h"
@@ -86,6 +87,45 @@ static inline ComponentResourceWasiDirectory* asDirectory(ComponentHandle* handl
 {
     ASSERT(handle->kind() == ComponentHandle::ResourceWasiDirectoryKind);
     return reinterpret_cast<ComponentResourceWasiDirectory*>(handle);
+}
+
+static uvwasi_errno_t resolvePathByComponents(ComponentResourceWasiDirectory* directory, const std::string& guestPath, uvwasi_lookupflags_t pathFlags, std::string& resolvedPath)
+{
+    if (guestPath.empty()) {
+        return UVWASI_EINVAL;
+    }
+
+    if (guestPath.front() == '/') {
+        return UVWASI_ENOTCAPABLE;
+    }
+
+    if (guestPath.find('\0') != std::string::npos) {
+        return UVWASI_EINVAL;
+    }
+
+    if ((pathFlags & ~UVWASI_LOOKUP_SYMLINK_FOLLOW) != 0) {
+        return UVWASI_EINVAL;
+    }
+
+    const std::string mappedPath = directory->mappedPath();
+    const std::string realPath = directory->realPath();
+
+    size_t slash = guestPath.find('/');
+
+    while (slash != std::string::npos) {
+        if (slash > 0 && guestPath[slash - 1] != '/') {
+            std::string prefix = guestPath.substr(0, slash);
+
+            uvwasi_errno_t error = WASI::resolvePath(mappedPath, realPath, prefix, UVWASI_LOOKUP_SYMLINK_FOLLOW, resolvedPath);
+            if (error != UVWASI_ESUCCESS) {
+                return error;
+            }
+        }
+
+        slash = guestPath.find('/', slash + 1);
+    }
+
+    return WASI::resolvePath(mappedPath, realPath, guestPath, UVWASI_LOOKUP_SYMLINK_FOLLOW, resolvedPath);
 }
 
 static inline long int maxFileOffset(uint64_t offset)
@@ -530,6 +570,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
     }
     case LiftedWasiFunction::fileSystemDescriptorOpenAt02: {
         uint32_t descriptorIndex = argv[0].asI32();
+        uvwasi_lookupflags_t pathFlags = static_cast<uvwasi_lookupflags_t>(argv[1].asI32());
         uint32_t pathStart = argv[2].asI32();
         uint32_t pathSize = argv[3].asI32();
         uint32_t openFlags = argv[4].asI32();
@@ -543,27 +584,39 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             ComponentInstance::throwInvalidHandle(state, descriptorIndex);
         }
 
-        std::string path = asDirectory(handle)->realPath();
-        path.append("/");
+        std::string guestPath;
+
         CanonOptions::UtfData utfData;
         options->validateString(state, pathStart, pathSize, &utfData);
         if (options->encoding() == ComponentCanonOptions::Utf8) {
-            path.append(reinterpret_cast<const char*>(utfData.buffer()), utfData.length());
+            guestPath.assign(reinterpret_cast<const char*>(utfData.buffer()), utfData.length());
         } else {
             std::vector<uint8_t> utf8String(utfData.utf8Length());
             utfData.toUtf8String(utf8String.data());
-            path.append(reinterpret_cast<const char*>(utf8String.data()), utf8String.size());
+            guestPath.assign(reinterpret_cast<const char*>(utf8String.data()), utf8String.size());
+        }
+
+        std::string resolvedPath;
+
+        uvwasi_errno_t resolveError = resolvePathByComponents(asDirectory(handle), guestPath, pathFlags, resolvedPath);
+
+        if (resolveError != UVWASI_ESUCCESS) {
+            options->memory()->store(state, resultOffset, 4, 0);
+            options->memory()->buffer()[resultOffset] = resultError;
+            break;
         }
 
         uv_fs_t req;
-        int descriptor = uv_fs_open(NULL, &req, path.c_str(), openFlags, 0666, NULL);
+        int descriptor = uv_fs_open(nullptr, &req, resolvedPath.c_str(), openFlags, 0666, nullptr);
+        uv_fs_req_cleanup(&req);
+
         if (descriptor < 0) {
             options->memory()->store(state, resultOffset, 4, 0);
             options->memory()->buffer()[resultOffset] = resultError;
             break;
         }
 
-        WasiRefCountedFile* fileRef = new WasiRefCountedFile(descriptor, path, flags);
+        WasiRefCountedFile* fileRef = new WasiRefCountedFile(descriptor, resolvedPath, flags);
         ComponentResource* resource = new ComponentResourceWasiFile(instance->type()->getType(0)->asTypeResource(), fileRef);
         uint32_t resultResource = options->instance()->appendHandle(state, resource);
         options->memory()->store(state, resultOffset, 4, resultResource);

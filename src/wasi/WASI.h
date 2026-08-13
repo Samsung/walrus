@@ -182,6 +182,7 @@ public:
     };
 
     static void initialize(uvwasi_t* uvwasi);
+    static uvwasi_errno_t resolvePath(const std::string& mappedPath, const std::string& realPath, const std::string& guestPath, uvwasi_lookupflags_t flags, std::string& resolvedPath);
     static WasiFuncInfo* find(const std::string& funcName);
 
 private:
