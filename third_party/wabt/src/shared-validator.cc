@@ -2632,6 +2632,10 @@ Result SharedComponentValidator::OnCanonLift(
   TypeBase* type_base = nullptr;
   uint32_t info = 0;
   Result result = CheckIndex(ComponentSort::Type, type_index, &type_base);
+
+  if (result == Result::Ok && !type_base->IsTypeFunc())
+    return Result::Error;
+  
   result |= CheckIndex(ComponentSort::CoreFunc, core_func_index, &core_func);
   result |= CheckCanonOptions(option_count, options, &info);
   if (result == Result::Ok) {
