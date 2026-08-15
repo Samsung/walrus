@@ -991,9 +991,9 @@ static void compileFunction(JITCompiler* compiler)
             instr->setRequiredRegsDescriptor(OTConvertInt64FromInt32);
             Operand* operands = instr->operands();
 
-            UnaryReversedOperation* unaryReversedOperation = reinterpret_cast<UnaryReversedOperation*>(byteCode);
-            operands[0] = STACK_OFFSET(unaryReversedOperation->srcOffset());
-            operands[1] = STACK_OFFSET(unaryReversedOperation->dstOffset());
+            UnaryOperation* unaryOperation = reinterpret_cast<UnaryOperation*>(byteCode);
+            operands[0] = STACK_OFFSET(unaryOperation->srcOffset());
+            operands[1] = STACK_OFFSET(unaryOperation->dstOffset());
             break;
         }
         case ByteCode::I32TruncF32SOpcode:
