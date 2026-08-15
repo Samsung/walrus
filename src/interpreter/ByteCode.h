@@ -464,7 +464,7 @@ class FunctionType;
     F(F64Abs, floatAbs, double)         \
     F(F64Neg, floatNeg, double)
 
-#define FOR_EACH_BYTECODE_UNARY_OP_2_BASE(F)                            \
+#define FOR_EACH_BYTECODE_UNARY_OP_2(F)                                 \
     F(I64Extend8S, intExtend, uint64_t, uint64_t, uint64_t, 7)          \
     F(I64Extend16S, intExtend, uint64_t, uint64_t, uint64_t, 15)        \
     F(I64Extend32S, intExtend, uint64_t, uint64_t, uint64_t, 31)        \
@@ -496,15 +496,10 @@ class FunctionType;
     F(I64TruncSatF64S, intTruncSat, double, int64_t, int64_t, double)   \
     F(I64TruncSatF64U, intTruncSat, double, uint64_t, uint64_t, double) \
     F(F64PromoteF32, doConvert, float, double, double, float)           \
-    F(F32DemoteF64, doConvert, double, float, float, double)
-
-#define FOR_EACH_BYTECODE_UNARY_OP_2_REVERSED(F)                    \
-    F(I64ExtendI32S, doConvert, int32_t, int64_t, int64_t, int32_t) \
+    F(F32DemoteF64, doConvert, double, float, float, double)            \
+    F(I64ExtendI32S, doConvert, int32_t, int64_t, int64_t, int32_t)     \
     F(I64ExtendI32U, doConvert, uint32_t, uint64_t, uint64_t, uint32_t)
 
-#define FOR_EACH_BYTECODE_UNARY_OP_2(F)  \
-    FOR_EACH_BYTECODE_UNARY_OP_2_BASE(F) \
-    FOR_EACH_BYTECODE_UNARY_OP_2_REVERSED(F)
 
 #define FOR_EACH_BYTECODE_LOAD_INT_OP(F) \
     F(I32Load, int32_t, int32_t)         \
@@ -1811,24 +1806,8 @@ public:
 #endif
 };
 
-class UnaryReversedOperation : public ByteCodeOffset2 {
-public:
-    UnaryReversedOperation(Opcode code, ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)
-        : ByteCodeOffset2(code, srcOffset, dstOffset)
-    {
-    }
-
-    ByteCodeStackOffset srcOffset() const { return stackOffset1(); }
-    ByteCodeStackOffset dstOffset() const { return stackOffset2(); }
-
 #if !defined(NDEBUG)
-    void dump(size_t pos)
-    {
-    }
-#endif
-};
 
-#if !defined(NDEBUG)
 #define DEFINE_UNARY_BYTECODE_DUMP(name)                                                               \
     void dump(size_t pos)                                                                              \
     {                                                                                                  \
@@ -1846,16 +1825,6 @@ public:
         {                                                                  \
         }                                                                  \
         DEFINE_UNARY_BYTECODE_DUMP(name)                                   \
-    };
-
-#define DEFINE_UNARY_REVERSED_BYTECODE(name, ...)                                \
-    class name : public UnaryReversedOperation {                                 \
-    public:                                                                      \
-        name(ByteCodeStackOffset srcOffset, ByteCodeStackOffset dstOffset)       \
-            : UnaryReversedOperation(Opcode::name##Opcode, srcOffset, dstOffset) \
-        {                                                                        \
-        }                                                                        \
-        DEFINE_UNARY_BYTECODE_DUMP(name)                                         \
     };
 
 // dummy ByteCode for ternary operation
@@ -1896,8 +1865,7 @@ public:
 
 FOR_EACH_BYTECODE_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_UNARY_OP(DEFINE_UNARY_BYTECODE)
-FOR_EACH_BYTECODE_UNARY_OP_2_BASE(DEFINE_UNARY_BYTECODE)
-FOR_EACH_BYTECODE_UNARY_OP_2_REVERSED(DEFINE_UNARY_REVERSED_BYTECODE)
+FOR_EACH_BYTECODE_UNARY_OP_2(DEFINE_UNARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_SHIFT_OP(DEFINE_BINARY_BYTECODE)
 FOR_EACH_BYTECODE_SIMD_BINARY_OTHER(DEFINE_BINARY_BYTECODE)
