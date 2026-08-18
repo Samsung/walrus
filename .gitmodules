@@ -17,3 +17,7 @@
 [submodule "test/programs/coremark"]
 	path = test/programs/coremark
 	url = https://github.com/eembc/coremark.git
+[submodule "test/polybench/PolyBenchC-4.2.1"]
+	path = test/polybench/PolyBenchC-4.2.1
+	url = https://github.com/MatthiasJReisinger/PolyBenchC-4.2.1.git
+	ignore = untracked 
