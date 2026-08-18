@@ -630,7 +630,8 @@ class SharedComponentValidator {
              type_def == TypeDef::Own ||
              type_def == TypeDef::Borrow ||
              type_def == TypeDef::Stream ||
-             type_def == TypeDef::Future;
+             type_def == TypeDef::Future ||
+             type_def == TypeDef::ListFixed;
     }
 
     ValueType* AsValueType() {
