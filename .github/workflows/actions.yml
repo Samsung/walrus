@@ -436,6 +436,34 @@ jobs:
         run: |
           test/wasmBenchmarker/benchmark.py --engines $GITHUB_WORKSPACE/out/linux/${{ matrix.arch }}/walrus --iterations 2 --verbose --summary --results i j2i n2i j n2j
 
+  build-test-polybench-x64_x86:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - x86
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build gcc-multilib g++-multilib
+          sudo pip install pandas
+          sudo pip install py-markdown-table
+      - name: Build ${{ matrix.arch }}
+        env:
+          BUILD_OPTIONS: -DWALRUS_ARCH=${{ matrix.arch }} -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
+        run: |
+          cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/polybench/${{ matrix.arch }} $BUILD_OPTIONS
+          ninja -Cout/polybench/${{ matrix.arch }}
+      - name: Run PolyBench Tests
+        run: |
+          test/polybench/polybench.py --engines $GITHUB_WORKSPACE/out/polybench/${{ matrix.arch }}/walrus --dataset MEDIUM --iterations 2 --verbose --summary --results i j2i n2i j n2j
+
   built-test-wasm-c-api:
     runs-on: ubuntu-latest
     strategy:
