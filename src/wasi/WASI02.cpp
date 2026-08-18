@@ -192,7 +192,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         m_type = new ComponentType(ComponentType::ComponentTypeKind);
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
         ComponentRefCounted* pollable = addResourceExport(instance, "pollable"); /* 0 */
-
         ComponentTypeFunc* blockType = new ComponentTypeFunc(ComponentType::FuncKind);
         blockType->params().push_back(ComponentTypeFunc::Param{ "self", new ComponentTypeResourceRef(ComponentType::BorrowKind, pollable) });
         addFuncExport(instance, "[method]pollable.block", LiftedWasiFunction::ioPollableBlock02, blockType);
@@ -207,7 +206,6 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         ComponentInstance* instance = ComponentInstance::createInstance(m_store, m_type);
         ComponentRefCounted* inputStream = addResourceExport(instance, "input-stream"); /* 0 */
         ComponentRefCounted* outputStream = addResourceExport(instance, "output-stream"); /* 1 */
-
         ComponentInstance* errorIntance = loadInstance(InstanceIoError02);
         instance->m_instances.push_back(errorIntance);
         ComponentRefCounted* errorType = errorIntance->type()->getType(0);

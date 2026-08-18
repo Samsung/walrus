@@ -19,3 +19,4 @@ rules.ninja
 node_modules
 /test/wasmBenchmarker/ctests/wasm
 /test/wasmBenchmarker/emsdk
+/third_party/nntrainer/*.so
