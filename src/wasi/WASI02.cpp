@@ -561,7 +561,7 @@ ComponentInstance* ComponentInstanceWasi02::loadInstance(size_t instanceId, bool
         instance->type()->getType(12)->addRef();
         instance->type()->getType(4)->addRef();
         metadataHashAt->result() = new ComponentTypeResult(ComponentTypeRef(instance->type()->getType(12)), ComponentTypeRef(instance->type()->getType(4)));
-        addFuncExport(instance, "[method]descriptor.metadata-hash-at", LiftedWasiFunction::fileSystemDescriptorMetadataHash02, metadataHashAt);
+        addFuncExport(instance, "[method]descriptor.metadata-hash-at", LiftedWasiFunction::fileSystemDescriptorMetadataHashAt02, metadataHashAt);
         addResourceExport(instance, "directory-entry-stream"); /* 13 */
         ComponentTypeFunc* getType = new ComponentTypeFunc(ComponentRefCounted::FuncKind);
         getType->params().push_back(ComponentTypeFunc::Param{ "self", ComponentTypeRef(new ComponentTypeResourceRef(ComponentType::BorrowKind, instance->type()->getType(0))) });
