@@ -167,12 +167,11 @@ private:
 
 class WasiRefCountedFile {
 public:
-    WasiRefCountedFile(int desc, std::string path, uint32_t flags, FileType fileType)
+    WasiRefCountedFile(int desc, std::string path, uint32_t flags)
         : m_path(path)
         , m_uvDescriptor(desc)
         , m_flags(flags)
         , m_refCount(1)
-        , m_fileType(fileType)
     {
     }
 
@@ -189,11 +188,6 @@ public:
     uint32_t flags()
     {
         return m_flags;
-    }
-
-    FileType fileType()
-    {
-        return m_fileType;
     }
 
     void addRef()
@@ -215,7 +209,6 @@ private:
     int m_uvDescriptor;
     uint32_t m_flags;
     size_t m_refCount;
-    FileType m_fileType;
 };
 
 class ComponentResourceWasiStream : public ComponentResource {
@@ -396,11 +389,11 @@ private:
 
 class ComponentResourceWasiDirectory : public ComponentResource {
 public:
-    ComponentResourceWasiDirectory(ComponentTypeResource* type, const std::string& mappedPath, const std::string& realPath, bool mut)
+    ComponentResourceWasiDirectory(ComponentTypeResource* type, const std::string& mappedPath, const std::string& realPath, int32_t flags)
         : ComponentResource(ResourceWasiDirectoryKind, type)
         , m_mappedPath(mappedPath)
         , m_realPath(realPath)
-        , m_mutable(mut)
+        , m_flags(flags)
     {
     }
 
@@ -414,15 +407,15 @@ public:
         return m_realPath;
     }
 
-    bool isMutable()
+    int32_t flags()
     {
-        return m_mutable;
+        return m_flags;
     }
 
 private:
     std::string m_mappedPath;
     std::string m_realPath;
-    bool m_mutable;
+    int32_t m_flags;
 };
 
 class LiftedWasiFunction : public LiftedFunction {
