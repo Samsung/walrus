@@ -4,10 +4,10 @@
   (import "wasi_snapshot_preview1" "fd_fdstat_get" (func $fd_fdstat_get (param i32 i32) (result i32)))
 
   (memory 1 1)
-  (data (i32.const 100) "./fd_fdstat_get.wast")
+  (data (i32.const 100) "./text.txt")
 
   (func (export "fdstatGet") (result i32 i32 i32)
-    i32.const 3 ;; Directory file descriptior, by default 3 is the first opened directory
+    i32.const 3 ;; Directory file descriptor, by default 3 is the first opened directory
     i32.const 1 ;; uvwasi_lookupflags_t: UVWASI_LOOKUP_SYMLINK_FOLLOW
     i32.const 100 ;; Offset of file name in memory
     i32.const 20 ;; Length of file name

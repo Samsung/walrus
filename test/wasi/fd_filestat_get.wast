@@ -4,7 +4,7 @@
   (import "wasi_snapshot_preview1" "fd_filestat_get" (func $fd_filestat_get (param i32 i32) (result i32)))
 
   (memory 1 1)
-  (data (i32.const 100) "./fd_filestat_get.wast")
+  (data (i32.const 100) "./text.txt")
 
   (func (export "fd_filestat_get") (result i32 i32 i32)
     i32.const 3 ;; Directory file descriptior, by default 3 is the first opened directory

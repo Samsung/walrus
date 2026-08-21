@@ -286,10 +286,6 @@ private:
     Walrus::ComponentRefCounted* pushExternalType(const ComponentExternalInfo& externalInfo)
     {
         Walrus::ComponentRefCounted* type;
-        if (m_current->types().size() < externalInfo.index.index) {
-            m_walrusParseError = std::string(externalInfo.sort.GetCoreName()) + " type";
-            return nullptr;
-        }
 
         switch (externalInfo.sort) {
         case ComponentSort::Func:
