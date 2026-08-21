@@ -167,7 +167,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         size_t read = req.result;
 
         uint32_t start = options->memoryMalloc32(state, 1, read);
-        memcpy(options->memory()->buffer() + start, buffer.data(), size);
+        memcpy(options->memory()->buffer() + start, buffer.data(), read);
 
         options->memory()->buffer()[offset] = resultOk;
         uint32_t* list = reinterpret_cast<uint32_t*>(options->memory()->buffer() + offset);

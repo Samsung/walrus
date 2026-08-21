@@ -70,7 +70,7 @@ def _run_wast_tests(engine, files, is_fail, args=None):
             filename = os.path.basename(file)
             if filename in JIT_EXCLUDE_FILES:
                 continue
-        subprocess_args =  qemu + [engine, "--mapdirs", "./test/wasi", "/var"]
+        subprocess_args = qemu + [engine, "--mapdirs", "./test/wasi/var", "/var"]
         if jit or jit_no_reg_alloc: subprocess_args.append("--jit")
         if jit_no_reg_alloc: subprocess_args.append("--jit-no-reg-alloc")
         if web_assembly3: subprocess_args.append("--enable-web-assembly3")
@@ -143,6 +143,7 @@ def run_wasi_tests(engine):
 
     print('Running wasi tests:')
     xpass = glob(join(TEST_DIR, '*.wast'))
+    xpass += glob(join(TEST_DIR, 'wasi-0.2/*.wast'))
     args_tests = glob(join(TEST_DIR, 'args.wast'))
     for item in args_tests:
         xpass.remove(item)
@@ -157,6 +158,9 @@ def run_wasi_tests(engine):
     print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
 
+    # Reset files
+    os.remove(join(TEST_DIR, 'var/linked.txt'));
+    open(join(TEST_DIR, 'var/write_to_this.txt'), 'w').close()
     if fail_total > 0:
         raise Exception("basic wasi tests failed")
 
