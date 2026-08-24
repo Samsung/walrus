@@ -230,6 +230,7 @@ class SharedValidator {
   Result OnReturnCallRef(const Location&, Var function_type_var);
   Result OnReturn(const Location&);
   Result OnSelect(const Location&, Index result_count, Type* result_types);
+  Result OnSelectCondition(const Location&);
   Result OnSimdLaneOp(const Location&, Opcode, uint64_t lane_idx);
   Result OnSimdLoadLane(const Location&,
                         Opcode,
@@ -626,6 +627,7 @@ class SharedComponentValidator {
     bool IsValueType() const {
       return type_def == TypeDef::ValueType ||
              type_def == TypeDef::List ||
+             type_def == TypeDef::ListFixed ||
              type_def == TypeDef::Option ||
              type_def == TypeDef::Own ||
              type_def == TypeDef::Borrow ||

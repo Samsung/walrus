@@ -910,17 +910,37 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
         switch (command->type) {
         case wabt::CommandType::Module:
         case wabt::CommandType::ScriptModule: {
-            auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
-            auto buf = readModuleData(&moduleCommand->module);
-            auto trapResult = executeWASM(store, filename, buf->data, &registeredInstanceMap);
-            if (trapResult.exception) {
-                std::string& errorMessage = trapResult.exception->message();
-                printf("Error: %s\n", errorMessage.c_str());
-                RELEASE_ASSERT_NOT_REACHED();
+            wabt::Module* module;
+            bool is_definition;
+
+            if (command->type == wabt::CommandType::Module) {
+                auto* moduleCommand = static_cast<wabt::ModuleCommand*>(command.get());
+                module = &moduleCommand->module;
+                is_definition = moduleCommand->is_definition;
+            } else {
+                auto* scriptModuleCommand = static_cast<wabt::ScriptModuleCommand*>(command.get());
+                module = &scriptModuleCommand->module;
+                is_definition = scriptModuleCommand->script_module->is_definition;
             }
-            instanceMap[commandCount] = store->getLastInstance();
-            if (moduleCommand->module.name.size()) {
-                registeredInstanceMap[moduleCommand->module.name] = store->getLastInstance();
+            auto buf = readModuleData(module);
+
+            if (!is_definition) {
+                auto trapResult = executeWASM(store, filename, buf->data, &registeredInstanceMap);
+                if (trapResult.exception) {
+                    std::string& errorMessage = trapResult.exception->message();
+                    printf("Error: %s\n", errorMessage.c_str());
+                    RELEASE_ASSERT_NOT_REACHED();
+                }
+                instanceMap[commandCount] = store->getLastInstance();
+                if (module->name.size()) {
+                    registeredInstanceMap[module->name] = store->getLastInstance();
+                }
+            } else {
+                auto parseResult = WASMParser::parseBinary(store, filename, buf->data.data(), buf->data.size(), s_JITFlags, s_FeatureFlags);
+                if (!parseResult.second.empty()) {
+                    printf("Error: %s\n", parseResult.second.c_str());
+                    RELEASE_ASSERT_NOT_REACHED();
+                }
             }
             break;
         }

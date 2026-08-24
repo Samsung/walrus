@@ -220,6 +220,7 @@ class WastParser {
                                          ReferenceVars*, Errors* errors);
   Result ParseModuleFieldList(Module*);
   Result ParseModuleField(Module*);
+  Result ParseModuleFieldImpl(Module*);
   Result ParseDataModuleField(Module*);
   Result ParseElemModuleField(Module*);
   Result ParseTagModuleField(Module*);
