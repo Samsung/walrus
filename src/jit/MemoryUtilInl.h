@@ -25,7 +25,7 @@ static sljit_sw initMemory(uint32_t dstStart, uint32_t srcStart, uint32_t srcSiz
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
-    if (srcStart >= data->sizeInByte() || srcStart + srcSize > data->sizeInByte()) {
+    if (srcStart > data->sizeInByte() || srcSize > data->sizeInByte() - srcStart) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
@@ -42,7 +42,7 @@ static sljit_sw initMemoryM64(sljit_uw dstStart, uint32_t srcStart, uint32_t src
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 
-    if (srcStart >= data->sizeInByte() || srcStart + srcSize > data->sizeInByte()) {
+    if (srcStart > data->sizeInByte() || srcSize > data->sizeInByte() - srcStart) {
         return ExecutionContext::OutOfBoundsMemAccessError;
     }
 

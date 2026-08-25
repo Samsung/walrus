@@ -215,7 +215,7 @@ void Memory::init(ExecutionState& state, DataSegment* source, uint64_t dstStart,
         checkAccessM64(state, dstStart, srcSize);
     }
 
-    if (srcStart >= source->sizeInByte() || srcStart + srcSize > source->sizeInByte()) {
+    if (srcStart > source->sizeInByte() || srcSize > source->sizeInByte() - srcStart) {
         throwRangeException(state, srcStart, srcStart + srcSize, srcSize);
     }
 
