@@ -2737,7 +2737,7 @@ Result SharedComponentValidator::OnImport(
   }
   current_->imports.push_back(
       TypeExternalList::External{import_name, sort, type_base});
-  return Result::Ok;
+  return result;
 }
 
 Result SharedComponentValidator::OnExport(const ComponentStringLoc& name,
@@ -2769,7 +2769,7 @@ Result SharedComponentValidator::OnExport(const ComponentStringLoc& name,
   }
   current_->exports.push_back(
       TypeExternalList::External{export_name, sort, type_base});
-  return Result::Ok;
+  return result;
 }
 
 void SharedComponentValidator::CoreModuleAddFunctionExport(

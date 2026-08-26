@@ -81,17 +81,16 @@ struct Label {
 
 static Features getFeatures(const uint32_t featureFlags) {
     Features features;
-    features.enable_exceptions();
     features.enable_compact_imports();
     // TODO: should use command line flag for this (--enable-threads)
     features.enable_threads();
-    // TODO: should use command line flag for this (--enable-relaxed-simd)
-    features.enable_relaxed_simd();
     if (featureFlags & FeatureFlagValue::enableWebAssembly3) {
-        features.enable_tail_call();
         features.enable_gc();
-        features.enable_multi_memory();
-        features.enable_memory64();
+    } else {
+        features.disable_extended_const();
+        features.disable_tail_call();
+        features.disable_multi_memory();
+        features.disable_memory64();
     }
     return features;
 }
