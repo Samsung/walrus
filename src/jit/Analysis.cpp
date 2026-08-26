@@ -20,6 +20,8 @@
 #include "jit/Compiler.h"
 #include "runtime/GCArray.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <set>
 
 namespace Walrus {
@@ -37,7 +39,67 @@ struct DependencyGenContext {
 
     static const VariableRef kNoRef = ~(VariableRef)0;
 
-    typedef std::set<VariableRef> DependencyList;
+    class DependencyList {
+    public:
+        DependencyList()
+            : m_inline{ 0, 0 }
+        {
+        }
+
+        // DependencyList is not available for copy, since it may double freed.
+        DependencyList(const DependencyList&) = delete;
+        DependencyList& operator=(const DependencyList&) = delete;
+
+        DependencyList(DependencyList&& other) noexcept
+            : m_inline{ other.m_inline[0], other.m_inline[1] }
+        {
+            other.m_inline[0] = 0;
+            other.m_inline[1] = 0;
+        }
+
+        ~DependencyList()
+        {
+            if (isSpilled()) {
+                free(block());
+            }
+        }
+
+        size_t size() const
+        {
+            if (isSpilled()) {
+                return static_cast<size_t>(m_inline[1]);
+            }
+            return m_inline[0] == 0 ? 0 : (m_inline[1] == 0 ? 1 : 2);
+        }
+
+        const VariableRef* begin() const { return isSpilled() ? data() : m_inline; }
+        const VariableRef* end() const { return begin() + size(); }
+
+        VariableRef at(size_t index) const { return begin()[index]; }
+
+        void clear()
+        {
+            if (isSpilled()) {
+                free(block());
+            }
+            m_inline[0] = 0;
+            m_inline[1] = 0;
+        }
+
+        // Returns true when ref was not present yet.
+        bool insert(VariableRef ref);
+
+    private:
+        // Label refs are pointers (low bits 0) and variable refs end in 1,
+        // so 2 is free to mark a spilled block. A ref is never 0.
+        static const VariableRef kSpilledTag = 2;
+
+        bool isSpilled() const { return (m_inline[0] & 0x3) == kSpilledTag; }
+        void* block() const { return reinterpret_cast<void*>(m_inline[0] & ~static_cast<VariableRef>(0x3)); }
+        VariableRef* data() const { return reinterpret_cast<VariableRef*>(static_cast<size_t*>(block()) + 1); }
+
+        VariableRef m_inline[2];
+    };
 
     DependencyGenContext(size_t dependencySize, size_t requiredStackSize)
     {
@@ -67,6 +129,53 @@ struct DependencyGenContext {
     std::vector<VariableRef> currentDependencies;
     std::vector<uint8_t> currentOptions;
 };
+
+bool DependencyGenContext::DependencyList::insert(VariableRef ref)
+{
+    ASSERT(ref != 0 && (ref & 0x3) != kSpilledTag);
+
+    size_t count = size();
+    const VariableRef* items = begin();
+    size_t position = 0;
+
+    while (position < count && items[position] < ref) {
+        position++;
+    }
+
+    if (position < count && items[position] == ref) {
+        return false;
+    }
+
+    if (!isSpilled() && count < 2) {
+        if (position == 0 && count == 1) {
+            m_inline[1] = m_inline[0];
+        }
+        m_inline[position] = ref;
+        return true;
+    }
+
+    size_t capacity = isSpilled() ? *static_cast<size_t*>(block()) : 0;
+
+    if (!isSpilled() || count == capacity) {
+        size_t newCapacity = capacity == 0 ? 4 : capacity * 2;
+        size_t* newBlock = static_cast<size_t*>(malloc(sizeof(size_t) + newCapacity * sizeof(VariableRef)));
+        *newBlock = newCapacity;
+        memcpy(newBlock + 1, items, count * sizeof(VariableRef));
+
+        if (isSpilled()) {
+            free(block());
+        }
+
+        m_inline[0] = reinterpret_cast<VariableRef>(newBlock) | kSpilledTag;
+        m_inline[1] = count;
+    }
+
+    VariableRef* target = data();
+    memmove(target + position + 1, target + position, (count - position) * sizeof(VariableRef));
+    target[position] = ref;
+    m_inline[1] = count + 1;
+    return true;
+}
 
 void DependencyGenContext::update(size_t dependencyStart, size_t id)
 {
@@ -163,7 +272,7 @@ void DependencyGenContext::assignReference(VariableRef ref, size_t offset, uint3
     currentOptions[offset] = 0;
 }
 
-static bool checkSameConst(VariableList* variableList, std::set<VariableRef>& dependencies)
+static bool checkSameConst(VariableList* variableList, DependencyGenContext::DependencyList& dependencies)
 {
     VariableRef constRef = 0;
     Instruction* constInstr = nullptr;
@@ -583,7 +692,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             }
 
             std::vector<Label*> unprocessedLabels;
-            std::set<VariableRef>& dependencies = dependencyCtx.dependencies[i];
+            DependencyGenContext::DependencyList& dependencies = dependencyCtx.dependencies[i];
 
             for (auto it : dependencies) {
                 if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
@@ -593,12 +702,14 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
             while (!unprocessedLabels.empty()) {
                 Label* label = unprocessedLabels.back();
-                std::set<VariableRef>& list = dependencyCtx.dependencies[i - dependencyStart + label->m_dependencyStart];
+                DependencyGenContext::DependencyList& list = dependencyCtx.dependencies[i - dependencyStart + label->m_dependencyStart];
 
                 unprocessedLabels.pop_back();
 
-                for (auto it : list) {
-                    if (dependencies.insert(it).second) {
+                for (size_t j = 0; j < list.size(); ++j) {
+                    VariableRef it = list.at(j);
+
+                    if (dependencies.insert(it)) {
                         if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
                             unprocessedLabels.push_back(VARIABLE_GET_LABEL(it));
                         }
