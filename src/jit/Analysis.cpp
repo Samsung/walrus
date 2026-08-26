@@ -20,8 +20,6 @@
 #include "jit/Compiler.h"
 #include "runtime/GCArray.h"
 
-#include <cstdlib>
-#include <cstring>
 #include <set>
 
 namespace Walrus {
@@ -60,27 +58,70 @@ struct DependencyGenContext {
         ~DependencyList()
         {
             if (isSpilled()) {
-                free(block());
+                delete spilled();
             }
         }
 
         size_t size() const
         {
             if (isSpilled()) {
-                return static_cast<size_t>(m_inline[1]);
+                return spilled()->size();
             }
             return m_inline[0] == 0 ? 0 : (m_inline[1] == 0 ? 1 : 2);
         }
 
-        const VariableRef* begin() const { return isSpilled() ? data() : m_inline; }
-        const VariableRef* end() const { return begin() + size(); }
+        class const_iterator {
+        public:
+            const_iterator(const VariableRef* current)
+                : m_isSpilled(false)
+                , m_current(current)
+            {
+            }
 
-        VariableRef at(size_t index) const { return begin()[index]; }
+            const_iterator(std::set<VariableRef>::const_iterator current)
+                : m_isSpilled(true)
+                , m_current(nullptr)
+                , m_spilledCurrent(current)
+            {
+            }
+
+            VariableRef operator*() const { return m_isSpilled ? *m_spilledCurrent : *m_current; }
+
+            const_iterator& operator++()
+            {
+                if (m_isSpilled) {
+                    ++m_spilledCurrent;
+                } else {
+                    ++m_current;
+                }
+                return *this;
+            }
+
+            bool operator!=(const const_iterator& other) const
+            {
+                return m_isSpilled ? m_spilledCurrent != other.m_spilledCurrent : m_current != other.m_current;
+            }
+
+        private:
+            bool m_isSpilled;
+            const VariableRef* m_current;
+            std::set<VariableRef>::const_iterator m_spilledCurrent;
+        };
+
+        const_iterator begin() const
+        {
+            return isSpilled() ? const_iterator(spilled()->begin()) : const_iterator(m_inline);
+        }
+
+        const_iterator end() const
+        {
+            return isSpilled() ? const_iterator(spilled()->end()) : const_iterator(m_inline + size());
+        }
 
         void clear()
         {
             if (isSpilled()) {
-                free(block());
+                delete spilled();
             }
             m_inline[0] = 0;
             m_inline[1] = 0;
@@ -91,12 +132,14 @@ struct DependencyGenContext {
 
     private:
         // Label refs are pointers (low bits 0) and variable refs end in 1,
-        // so 2 is free to mark a spilled block. A ref is never 0.
+        // so 2 is free to mark a spilled set. A ref is never 0.
         static const VariableRef kSpilledTag = 2;
 
         bool isSpilled() const { return (m_inline[0] & 0x3) == kSpilledTag; }
-        void* block() const { return reinterpret_cast<void*>(m_inline[0] & ~static_cast<VariableRef>(0x3)); }
-        VariableRef* data() const { return reinterpret_cast<VariableRef*>(static_cast<size_t*>(block()) + 1); }
+        std::set<VariableRef>* spilled() const
+        {
+            return reinterpret_cast<std::set<VariableRef>*>(m_inline[0] & ~static_cast<VariableRef>(0x3));
+        }
 
         VariableRef m_inline[2];
     };
@@ -134,46 +177,41 @@ bool DependencyGenContext::DependencyList::insert(VariableRef ref)
 {
     ASSERT(ref != 0 && (ref & 0x3) != kSpilledTag);
 
-    size_t count = size();
-    const VariableRef* items = begin();
-    size_t position = 0;
-
-    while (position < count && items[position] < ref) {
-        position++;
+    if (isSpilled()) {
+        return spilled()->insert(ref).second;
     }
 
-    if (position < count && items[position] == ref) {
-        return false;
-    }
-
-    if (!isSpilled() && count < 2) {
-        if (position == 0 && count == 1) {
-            m_inline[1] = m_inline[0];
-        }
-        m_inline[position] = ref;
+    if (m_inline[0] == 0) {
+        m_inline[0] = ref;
         return true;
     }
 
-    size_t capacity = isSpilled() ? *static_cast<size_t*>(block()) : 0;
-
-    if (!isSpilled() || count == capacity) {
-        size_t newCapacity = capacity == 0 ? 4 : capacity * 2;
-        size_t* newBlock = static_cast<size_t*>(malloc(sizeof(size_t) + newCapacity * sizeof(VariableRef)));
-        *newBlock = newCapacity;
-        memcpy(newBlock + 1, items, count * sizeof(VariableRef));
-
-        if (isSpilled()) {
-            free(block());
-        }
-
-        m_inline[0] = reinterpret_cast<VariableRef>(newBlock) | kSpilledTag;
-        m_inline[1] = count;
+    if (m_inline[0] == ref) {
+        return false;
     }
 
-    VariableRef* target = data();
-    memmove(target + position + 1, target + position, (count - position) * sizeof(VariableRef));
-    target[position] = ref;
-    m_inline[1] = count + 1;
+    if (m_inline[1] == 0) {
+        if (ref < m_inline[0]) {
+            m_inline[1] = m_inline[0];
+            m_inline[0] = ref;
+        } else {
+            m_inline[1] = ref;
+        }
+        return true;
+    }
+
+    if (m_inline[1] == ref) {
+        return false;
+    }
+
+    std::set<VariableRef>* set = new std::set<VariableRef>();
+
+    set->insert(m_inline[0]);
+    set->insert(m_inline[1]);
+    set->insert(ref);
+
+    m_inline[0] = reinterpret_cast<VariableRef>(set) | kSpilledTag;
+    m_inline[1] = 0;
     return true;
 }
 
@@ -706,9 +744,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
                 unprocessedLabels.pop_back();
 
-                for (size_t j = 0; j < list.size(); ++j) {
-                    VariableRef it = list.at(j);
-
+                for (auto it : list) {
                     if (dependencies.insert(it)) {
                         if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
                             unprocessedLabels.push_back(VARIABLE_GET_LABEL(it));
