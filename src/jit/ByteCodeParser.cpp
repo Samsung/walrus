@@ -1285,6 +1285,7 @@ static void compileFunction(JITCompiler* compiler)
             uint32_t size = tagType->functionType()->param().size();
 
             Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, size, 0);
+            instr->addInfo(Instruction::kIsCallback);
             Operand* param = instr->params();
             Operand* end = param + size;
             ByteCodeStackOffset* stackOffset = throwTag->dataOffsets();
@@ -1298,6 +1299,7 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::ThrowRefOpcode: {
             group = Instruction::Any;
             paramType = ParamTypes::ParamSrc;
+            info = Instruction::kIsCallback;
             requiredInit = OTGetPTR;
             break;
         }

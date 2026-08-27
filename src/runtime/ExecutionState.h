@@ -59,6 +59,7 @@ private:
     ExecutionState()
         : m_parent(nullptr)
         , m_currentFunction(nullptr)
+        , m_programCounter(0)
     {
         m_stackLimit = (size_t)currentStackPointer();
 
@@ -72,7 +73,7 @@ private:
     Optional<ExecutionState*> m_parent;
     Optional<Function*> m_currentFunction;
     size_t m_stackLimit;
-    Optional<size_t*> m_programCounterPointer;
+    uintptr_t m_programCounter;
 };
 
 } // namespace Walrus

@@ -26,7 +26,7 @@ namespace Walrus {
 static void throwNoMemory(ExecutionState& state)
 {
     std::string message = "out of memory";
-    Trap::throwException(state, message);
+    Trap::throwException(message);
 }
 
 static inline ComponentResourceWasiStream* asStream(ComponentHandle* handle)
@@ -827,7 +827,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
     }
     default:
         std::string message = "unimplemented wasi function";
-        Trap::throwException(state, message);
+        Trap::throwException(message);
         break;
     }
 }
@@ -839,7 +839,7 @@ bool dropWasiResource(ExecutionState& state, ComponentHandle* handle)
     case ComponentHandle::ResourceWasiOutputStreamKind:
         if (asStream(handle)->pollableCount() != 0) {
             std::string message = "stream cannot be destroyed (has assigned pollable)";
-            Trap::throwException(state, message);
+            Trap::throwException(message);
         }
         break;
     case ComponentHandle::ResourceWasiPollableKind:

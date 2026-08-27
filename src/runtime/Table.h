@@ -55,20 +55,20 @@ public:
         return m_maximumSize;
     }
 
-    void* getElement(ExecutionState& state, uint32_t elemIndex) const
+    void* getElement(uint32_t elemIndex) const
     {
         ASSERT(!m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
-            throwException(state);
+            throwException();
         }
         return m_elements[elemIndex];
     }
 
-    void* getElementM64(ExecutionState& state, uint64_t elemIndex) const
+    void* getElementM64(uint64_t elemIndex) const
     {
         ASSERT(m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
-            throwException(state);
+            throwException();
         }
         return m_elements[elemIndex];
     }
@@ -85,20 +85,20 @@ public:
         return m_elements[elemIndex];
     }
 
-    void setElement(ExecutionState& state, uint32_t elemIndex, void* val)
+    void setElement(uint32_t elemIndex, void* val)
     {
         ASSERT(!m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
-            throwException(state);
+            throwException();
         }
         m_elements[elemIndex] = val;
     }
 
-    void setElementM64(ExecutionState& state, uint64_t elemIndex, void* val)
+    void setElementM64(uint64_t elemIndex, void* val)
     {
         ASSERT(m_is64);
         if (UNLIKELY(elemIndex >= m_size)) {
-            throwException(state);
+            throwException();
         }
         m_elements[elemIndex] = val;
     }
@@ -116,9 +116,9 @@ public:
     }
 
     bool grow(uint64_t newSize, void* val);
-    void copy(ExecutionState& state, const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
-    void fill(ExecutionState& state, uint64_t n, void* value, uint64_t index);
-    void init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize);
+    void copy(const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
+    void fill(uint64_t n, void* value, uint64_t index);
+    void init(ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize);
 
     void initTable(ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize);
     void copyTable(const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex);
@@ -132,7 +132,7 @@ private:
         return size <= m_size && start <= m_size - size;
     }
 
-    void throwException(ExecutionState& state) const;
+    void throwException() const;
 
     // Table has elements of reference type (FuncRef | ExternRef)
     Type m_type;
