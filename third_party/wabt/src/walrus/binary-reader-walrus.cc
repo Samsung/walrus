@@ -906,6 +906,7 @@ public:
     }
     Result OnNopExpr() override {
         CHECK_RESULT(m_validator.OnNop(GetLocation()));
+        SHOULD_GENERATE_BYTECODE;
 #if !defined(NDEBUG)
         m_externalDelegate->OnNopExpr();
 #endif /* !NDEBUG */

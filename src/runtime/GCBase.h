@@ -28,6 +28,7 @@ public:
 #ifdef ENABLE_GC
     void addRef();
     void releaseRef();
+    static void stackArg(void**);
 #endif
 
 protected:

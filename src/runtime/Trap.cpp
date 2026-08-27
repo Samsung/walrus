@@ -44,17 +44,12 @@ void Trap::throwException(const std::string& message)
     throw Exception::create(message);
 }
 
-void Trap::throwException(ExecutionState& state, const std::string& message)
+void Trap::throwException(Tag* tag, Vector<uint8_t>&& userExceptionData)
 {
-    throw Exception::create(state, message);
+    throw Exception::create(tag, std::move(userExceptionData));
 }
 
-void Trap::throwException(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
-{
-    throw Exception::create(state, tag, std::move(userExceptionData));
-}
-
-void Trap::throwException(ExecutionState& state, Exception* e)
+void Trap::throwException(Exception* e)
 {
     e->addRef();
     throw std::move(e);

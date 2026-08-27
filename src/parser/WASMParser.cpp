@@ -3463,6 +3463,7 @@ public:
         bool isNullable = peekVMStackValueType() == Walrus::Value::Type::NullExnRef;
         auto src = popVMStack();
         pushByteCode(Walrus::ThrowRef(src, isNullable), WASMOpcode::ThrowRefOpcode);
+        stopToGenerateByteCodeWhileBlockEnd();
     }
 
     virtual void OnNopExpr() override

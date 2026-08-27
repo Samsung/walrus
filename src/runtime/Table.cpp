@@ -104,39 +104,39 @@ bool Table::grow(uint64_t newSize, void* val)
     return true;
 }
 
-void Table::init(ExecutionState& state, ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize)
+void Table::init(ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
     if (UNLIKELY(!isValidRange(dstStart, srcSize) || (srcSize > source->size() || srcStart > source->size() - srcSize))) {
-        throwException(state);
+        throwException();
     }
     if (UNLIKELY(!m_type.isRef())) {
-        Trap::throwException(state, "type mismatch");
+        Trap::throwException("type mismatch");
     }
 
     this->initTable(source, dstStart, srcStart, srcSize);
 }
 
-void Table::copy(ExecutionState& state, const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex)
+void Table::copy(const Table* srcTable, uint64_t n, uint64_t srcIndex, uint64_t dstIndex)
 {
     if (UNLIKELY(!isValidRange(dstIndex, n) || !srcTable->isValidRange(srcIndex, n))) {
-        throwException(state);
+        throwException();
     }
 
     this->copyTable(srcTable, n, srcIndex, dstIndex);
 }
 
-void Table::fill(ExecutionState& state, uint64_t n, void* value, uint64_t index)
+void Table::fill(uint64_t n, void* value, uint64_t index)
 {
     if (UNLIKELY(!isValidRange(index, n))) {
-        throwException(state);
+        throwException();
     }
 
     this->fillTable(n, value, index);
 }
 
-void Table::throwException(ExecutionState& state) const
+void Table::throwException() const
 {
-    Trap::throwException(state, "out of bounds table access");
+    Trap::throwException("out of bounds table access");
 }
 
 void Table::initTable(ElementSegment* source, uint64_t dstStart, uint32_t srcStart, uint32_t srcSize)

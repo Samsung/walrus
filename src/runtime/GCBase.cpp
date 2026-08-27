@@ -34,6 +34,10 @@ void GCBase::releaseRef()
 {
     objectTypeInfo()->getRecursiveType()->typeStore()->releaseRef(this);
 }
+
+NEVER_INLINE void GCBase::stackArg(void**)
+{
+}
 #endif // ENABLE_GC
 
 } // namespace Walrus

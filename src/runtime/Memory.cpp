@@ -176,7 +176,7 @@ void Memory::throwRangeException(ExecutionState& state, uint32_t offset, uint32_
     str += std::to_string(offset + addend);
     str += "+";
     str += std::to_string(size);
-    Trap::throwException(state, str);
+    Trap::throwException(str);
 }
 
 template <class T>
@@ -333,7 +333,7 @@ void Memory::checkAtomicAccess(ExecutionState& state, uint32_t offset, uint32_t 
 {
     checkAccess(state, offset, size, addend);
     if (UNLIKELY((offset + addend) % size != 0)) {
-        Trap::throwException(state, "unaligned atomic");
+        Trap::throwException("unaligned atomic");
     }
 }
 
@@ -341,12 +341,12 @@ void Memory::checkAtomicAccessM64(ExecutionState& state, uint64_t offset, uint64
 {
     checkAccessM64(state, offset, size, addend);
     if (UNLIKELY((offset + addend) % size != 0)) {
-        Trap::throwException(state, "unaligned atomic");
+        Trap::throwException("unaligned atomic");
     }
 }
 
 void Memory::throwUnsharedMemoryException(ExecutionState& state) const
 {
-    Trap::throwException(state, "expected shared memory");
+    Trap::throwException("expected shared memory");
 }
 } // namespace Walrus

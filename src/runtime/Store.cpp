@@ -40,6 +40,16 @@ static const FunctionType g_defaultFunctionTypes[] = {
 #undef DEFINE_RESULT_TYPE
 };
 
+#ifdef ENABLE_GC
+static NEVER_INLINE void clearStack()
+{
+    void* data[1024];
+    memset(data, 0, sizeof(data));
+    // Without this call, Clang does not perfrom the memset operation.
+    GCBase::stackArg(data);
+}
+#endif /* ENABLE_GC */
+
 Store::Store(Engine* engine)
     : m_engine(engine)
 #ifdef ENABLE_WASI
@@ -90,6 +100,7 @@ Store::~Store()
     Store::finalize();
 
 #ifdef ENABLE_GC
+    clearStack();
     GC_gcollect_and_unmap();
     GC_invoke_finalizers();
 #endif /* ENABLE_GC */

@@ -36,14 +36,9 @@ public:
         return new Exception(m);
     }
 
-    static Exception* create(ExecutionState& state, const std::string& m)
+    static Exception* create(Tag* tag, Vector<uint8_t>&& userExceptionData)
     {
-        return new Exception(state, m);
-    }
-
-    static Exception* create(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
-    {
-        return new Exception(state, tag, std::move(userExceptionData));
+        return new Exception(tag, std::move(userExceptionData));
     }
 
     bool isBuiltinException()
@@ -97,17 +92,13 @@ private:
 #endif
     }
 
-    Exception(ExecutionState& state);
-    Exception(ExecutionState& state, const std::string& message)
-        : Exception(state)
+    Exception(Tag* tag, Vector<uint8_t>&& userExceptionData)
+        : m_refCount(1)
+        , m_tag(tag)
     {
-        m_message = message;
-    }
-
-    Exception(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
-        : Exception(state)
-    {
-        m_tag = tag;
+#ifndef NDEBUG
+        g_exceptionCount++;
+#endif
         m_userExceptionData = std::move(userExceptionData);
     }
 
@@ -115,7 +106,6 @@ private:
     std::string m_message;
     Optional<Tag*> m_tag;
     Vector<uint8_t> m_userExceptionData;
-    Vector<std::pair<ExecutionState*, size_t>> m_programCounterInfo;
 };
 
 } // namespace Walrus
