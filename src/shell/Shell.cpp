@@ -628,6 +628,10 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
             Object* object = reinterpret_cast<Object*>(v.asReference());
             return object->kind() == (c.type() == wabt::Type::StructRef ? Object::StructKind : Object::ArrayKind);
         }
+        case wabt::Type::NullExnRef:
+        case wabt::Type::ExnRef:
+            sameRefType = (vType == Walrus::Value::ExnRef || vType == Walrus::Value::NoExnRef);
+            break;
         default:
             return false;
         }
