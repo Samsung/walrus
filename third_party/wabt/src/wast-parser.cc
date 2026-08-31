@@ -3688,6 +3688,8 @@ Result WastParser::ParseConstList(ConstVector* consts, ConstType type) {
           // Nulls are represented by "null" string.
           if (type == Type::NullRef) {
             type = Type::AnyRef;
+          } else if (type == Type::NullExnRef) {
+            type = Type::ExnRef;
           } else if (type == Type::NullExternRef) {
             type = Type::ExternRef;
           } else if (type == Type::NullFuncRef) {
