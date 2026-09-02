@@ -20,3 +20,4 @@ node_modules
 /test/wasmBenchmarker/ctests/wasm
 /test/polybench/wasm/
 /test/wasmBenchmarker/emsdk
+/third_party/nntrainer/*.so
