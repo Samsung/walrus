@@ -63,14 +63,14 @@ class runner(object):
             DEFAULT_RUNNERS.append(self.suite)
         return fn
 
-def _run_wast_tests(engine, files, is_fail, args=None):
+def _run_wast_tests(engine, files, is_fail, mapdir="./", args=None):
     fails = 0
     for file in files:
         if jit or jit_no_reg_alloc:
             filename = os.path.basename(file)
             if filename in JIT_EXCLUDE_FILES:
                 continue
-        subprocess_args = qemu + [engine, "--mapdirs", "./test/wasi/var", "/var"]
+        subprocess_args = qemu + [engine, "--mapdirs", mapdir, "/var"]
         if jit or jit_no_reg_alloc: subprocess_args.append("--jit")
         if jit_no_reg_alloc: subprocess_args.append("--jit-no-reg-alloc")
         if web_assembly3: subprocess_args.append("--enable-web-assembly3")
@@ -137,32 +137,44 @@ def run_core_tests(engine):
         raise Exception("wasm-test-core failed")
 
 
-@runner('wasi', default=True)
+@runner('wasip1', default=True)
 def run_wasi_tests(engine):
-    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi')
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi', 'preview1')
 
     print('Running wasi tests:')
     xpass = glob(join(TEST_DIR, '*.wast'))
-    xpass += glob(join(TEST_DIR, 'wasi-0.2/*.wast'))
-    args_tests = glob(join(TEST_DIR, 'args.wast'))
-    for item in args_tests:
-        xpass.remove(item)
-
-    xpass_result = _run_wast_tests(engine, xpass, False)
-    xpass_result += _run_wast_tests(engine, args_tests, False,
+    xpass_result = _run_wast_tests(engine, xpass, False, mapdir=join(PROJECT_SOURCE_DIR, 'test', 'wasi', 'preview1'),
                                     args=["Hello", "World!", "Lorem ipsum dolor sit amet, consectetur adipiscing elit"])
 
-    tests_total = len(xpass) + len(args_tests)
+    os.remove(join(PROJECT_SOURCE_DIR, 'test', 'wasi', 'preview1', 'linked.txt'))
+    tests_total = len(xpass)
     fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
     print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
     print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
 
-    # Reset files
-    os.remove(join(TEST_DIR, 'var/linked.txt'));
-    open(join(TEST_DIR, 'var/write_to_this.txt'), 'w').close()
     if fail_total > 0:
         raise Exception("basic wasi tests failed")
+
+
+@runner('wasip2', default=True)
+def run_wasi_tests(engine):
+    TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi', 'preview2')
+
+    print('Running wasi tests:')
+    xpass = glob(join(TEST_DIR, '*.wast'))
+
+    xpass_result = _run_wast_tests(engine, xpass, False, mapdir="./test/wasi/preview2",
+                                    args=["/var/temp.txt", "Hello", "World!", "Lorem ipsum dolor sit amet, consectetur adipiscing elit"])
+    tests_total = len(xpass)
+    fail_total = xpass_result
+    print('TOTAL: %d' % (tests_total))
+    print('%sPASS : %d%s' % (COLOR_GREEN, tests_total - fail_total, COLOR_RESET))
+    print('%sFAIL : %d%s' % (COLOR_RED, fail_total, COLOR_RESET))
+
+    if fail_total > 0:
+        raise Exception("basic wasi tests failed")
+
 
 @runner('jit', default=True)
 def run_jit_tests(engine):
