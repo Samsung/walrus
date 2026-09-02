@@ -176,7 +176,8 @@ static sljit_sw findCatch(sljit_sw current, uint8_t* bp, ExecutionContext* conte
                 context->error = ExecutionContext::NoError;
                 if (catchBlocks[i].pushExnRef) {
                     std::unique_ptr<Exception> e(context->capturedException);
-                    *reinterpret_cast<GCException**>(bp) = GCException::exceptionNew(e);
+                    uint8_t* sp = bp + catchBlocks[i].stackSizeToBe;
+                    *reinterpret_cast<GCException**>(sp) = GCException::exceptionNew(e);
                 } else {
                     context->clearException();
                 }
@@ -250,7 +251,7 @@ static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* contex
     }
 
     context->error = ExecutionContext::CapturedException;
-    context->capturedException = Exception::create(context->state, tag, std::move(userExceptionData)).release();
+    context->capturedException = Exception::create(tag, std::move(userExceptionData)).release();
 }
 
 static void throwRef(GCException* exception, ExecutionContext* context)
@@ -292,7 +293,7 @@ static void emitThrowRef(sljit_compiler* compiler, Instruction* instr)
     MOVE_TO_REG(compiler, SLJIT_MOV, SLJIT_R0, source.arg, source.argw);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
 
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1V(W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwRef));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS2V(W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, throwRef));
     sljit_jump* jump = sljit_emit_jump(compiler, SLJIT_JUMP);
 
     if (context->currentTryBlock == InstanceConstData::globalTryBlock) {

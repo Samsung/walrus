@@ -25,12 +25,12 @@
 #ifdef STACK_GROWS_DOWN
 #define CHECK_STACK_LIMIT(state)                                        \
     if (UNLIKELY(state.stackLimit() > (size_t)currentStackPointer())) { \
-        Trap::throwException(state, "call stack exhausted");            \
+        Trap::throwException("call stack exhausted");                   \
     }
 #else
 #define CHECK_STACK_LIMIT(state)                                        \
     if (UNLIKELY(state.stackLimit() < (size_t)currentStackPointer())) { \
-        Trap::throwException(state, "call stack exhausted");            \
+        Trap::throwException("call stack exhausted");                   \
     }
 #endif
 

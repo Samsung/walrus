@@ -19,15 +19,4 @@
 
 namespace Walrus {
 
-Exception::Exception(ExecutionState& state)
-{
-    Optional<ExecutionState*> s = &state;
-
-    while (s) {
-        if (s->m_programCounterPointer) {
-            m_programCounterInfo.pushBack(std::make_pair(s.value(), *s->m_programCounterPointer.value()));
-        }
-        s = s->m_parent;
-    }
-}
 } // namespace Walrus

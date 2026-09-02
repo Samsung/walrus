@@ -166,7 +166,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         for (uint32_t i = imports.size(); i < m_imports.size(); i++) {
             message.append("  " + m_imports[i]->moduleName() + " : " + m_imports[i]->fieldName() + " -- Type:" + m_imports[i]->typeToString() + "\n");
         }
-        Trap::throwException(state, message);
+        Trap::throwException(message);
     }
 
     for (size_t i = 0; i < m_imports.size(); i++) {
@@ -176,7 +176,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         case ImportType::Function: {
             if (UNLIKELY(imports[i]->kind() != Object::FunctionKind
                          || !imports[i]->asFunction()->functionType()->equals(m_imports[i]->functionType(), true))) {
-                Trap::throwException(state, "incompatible function import type");
+                Trap::throwException("incompatible function import type");
             }
 
             instance->m_functions[funcIndex] = imports[i]->asFunction();
@@ -190,7 +190,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             if (UNLIKELY(imports[i]->kind() != Object::GlobalKind
                          || !m_imports[i]->globalType()->type().isSubType(imports[i]->asGlobal()->type())
                          || m_imports[i]->globalType()->isMutable() != imports[i]->asGlobal()->isMutable())) {
-                Trap::throwException(state, "incompatible global import type");
+                Trap::throwException("incompatible global import type");
             }
 
             instance->m_globals[globIndex++] = imports[i]->asGlobal();
@@ -202,7 +202,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                          || m_imports[i]->tableType()->initialSize() > imports[i]->asTable()->size()
                          || m_imports[i]->tableType()->maximumSize() < imports[i]->asTable()->maximumSize()
                          || m_imports[i]->tableType()->is64() != imports[i]->asTable()->is64())) {
-                Trap::throwException(state, "incompatible table import type");
+                Trap::throwException("incompatible table import type");
             }
 
             instance->m_tables[tableIndex++] = imports[i]->asTable();
@@ -214,7 +214,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                          || m_imports[i]->memoryType()->maximumSize() < imports[i]->asMemory()->maximumSizeInPageSize()
                          || m_imports[i]->memoryType()->isShared() != imports[i]->asMemory()->isShared()
                          || m_imports[i]->memoryType()->is64() != imports[i]->asMemory()->is64())) {
-                Trap::throwException(state, "incompatible memory import type");
+                Trap::throwException("incompatible memory import type");
             }
 
             instance->m_memories[memIndex++] = imports[i]->asMemory();
@@ -223,7 +223,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
         case ImportType::Tag: {
             if (UNLIKELY(imports[i]->kind() != Object::TagKind
                          || !imports[i]->asTag()->functionType()->equals(m_imports[i]->tagType()->functionType(), true))) {
-                Trap::throwException(state, "incompatible tag import type");
+                Trap::throwException("incompatible tag import type");
             }
             instance->m_tags[tagIndex++] = imports[i]->asTag();
             break;
@@ -362,12 +362,12 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
             }
 
             if (UNLIKELY(elem->tableIndex() >= numberOfTableTypes())) {
-                Trap::throwException(state, "out of bounds table access");
+                Trap::throwException("out of bounds table access");
             }
 
             uint64_t size = table->size();
             if (UNLIKELY(offset > size || (size - offset) < elem->exprFunctions().size())) {
-                Trap::throwException(state, "out of bounds table access");
+                Trap::throwException("out of bounds table access");
             }
 
             table->initTable(instance->m_elementSegments + i, offset, 0, exprs.size());
@@ -402,14 +402,14 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 if (m->sizeInByte() >= initData.size() && m->sizeInByte() - initData.size() >= offsetValue) {
                     memcpyEndianAware(m->buffer(), initData.data(), m->sizeInByte(), initData.size(), offsetValue, 0, initData.size());
                 } else {
-                    Trap::throwException(state, "out of bounds memory access");
+                    Trap::throwException("out of bounds memory access");
                 }
             }
         },
                                &data);
 
         if (result.exception) {
-            Trap::throwException(state, std::move(result.exception));
+            Trap::throwException(std::move(result.exception));
         }
     }
 

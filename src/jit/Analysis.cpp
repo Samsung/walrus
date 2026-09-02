@@ -162,7 +162,7 @@ struct DependencyGenContext {
     }
 
     void update(size_t dependencyStart, size_t id);
-    void update(size_t dependencyStart, size_t id, size_t excludeStart, const TypeVector& param, VariableList* variableList);
+    void update(size_t dependencyStart, size_t id, size_t excludeStart, const TypeVector* param, VariableList* variableList, bool pushExnRef);
     void updateWithGetter(VariableList* variableList, VariableRef ref, Instruction* getter);
     void assignReference(VariableRef ref, size_t offset, uint32_t typeInfo);
 
@@ -235,7 +235,7 @@ void DependencyGenContext::update(size_t dependencyStart, size_t id)
     }
 }
 
-void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excludeStart, const TypeVector& param, VariableList* variableList)
+void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excludeStart, const TypeVector* param, VariableList* variableList, bool pushExnRef)
 {
     size_t size = currentDependencies.size();
     size_t offset = excludeStart;
@@ -244,7 +244,21 @@ void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excl
            && (dependencyStart % size) == 0
            && maxDistance[dependencyStart / size] <= id);
 
-    for (auto it : param.types()) {
+    if (param != nullptr) {
+        for (auto it : param->types()) {
+            if (variableList != nullptr) {
+                // Construct new variables.
+                VariableRef ref = variableList->variables.size();
+
+                dependencies[dependencyStart + offset].insert(VARIABLE_SET(ref, Variable));
+                variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(offset, Instruction::Offset), 0, id));
+            }
+
+            offset += STACK_OFFSET(valueStackAllocatedSize(it));
+        }
+    }
+
+    if (pushExnRef) {
         if (variableList != nullptr) {
             // Construct new variables.
             VariableRef ref = variableList->variables.size();
@@ -253,7 +267,7 @@ void DependencyGenContext::update(size_t dependencyStart, size_t id, size_t excl
             variableList->variables.push_back(VariableList::Variable(VARIABLE_SET(offset, Instruction::Offset), 0, id));
         }
 
-        offset += STACK_OFFSET(valueStackAllocatedSize(it));
+        offset += STACK_OFFSET(valueStackAllocatedSize(Value::ExnRef));
     }
 
     for (size_t i = 0; i < size; i++) {
@@ -458,6 +472,9 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                             TagType* tagType = module()->tagType(it.tagIndex);
                             variableCount += tagType->functionType()->param().size();
                         }
+                        if (it.pushExnRef) {
+                            variableCount++;
+                        }
                     }
 
                     nextTryBlock++;
@@ -513,17 +530,17 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 do {
                     for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
                         // Forward jump.
+                        Label* catchLabel = it.u.handler;
                         if (it.tagIndex == std::numeric_limits<uint32_t>::max()) {
-                            dependencyCtx.update(it.u.handler->m_dependencyStart, label->id());
+                            dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
+                                                 STACK_OFFSET(it.stackSizeToBe), nullptr, m_variableList, it.pushExnRef);
                         } else {
                             TagType* tagType = module()->tagType(it.tagIndex);
                             const TypeVector& param = tagType->functionType()->param();
-                            Label* catchLabel = it.u.handler;
 
-                            m_variableList->pushCatchUpdate(catchLabel, param.size());
-
+                            m_variableList->pushCatchUpdate(catchLabel, param.size() + (it.pushExnRef ? 1 : 0));
                             dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
-                                                 STACK_OFFSET(it.stackSizeToBe), param, m_variableList);
+                                                 STACK_OFFSET(it.stackSizeToBe), &param, m_variableList, it.pushExnRef);
                         }
                     }
 
@@ -545,6 +562,8 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             updateDeps = true;
             continue;
         }
+
+        ASSERT(updateDeps);
 
         Instruction* instr = item->asInstruction();
         Operand* operand = instr->operands();
@@ -591,36 +610,38 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             continue;
         }
 
-        if (activeTryBlocks.size() > 0 && (instr->group() == Instruction::Call || instr->opcode() == ByteCode::ThrowOpcode)) {
+        if (instr->info() & Instruction::kIsCallback) {
+            for (size_t i = 0; i < requiredStackSize; i++) {
+                dependencyCtx.currentOptions[i] |= VariableList::kIsCallback;
+            }
+        }
+
+        if (activeTryBlocks.size() > 0
+            && (instr->group() == Instruction::Call || instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::ThrowRefOpcode)) {
             // Every call or throw may jump to any active catch block. Future
             // optimizations could reduce these (e.g. a throw can be converted
             // to a jump if its target catch block is in the same function).
             for (auto blockIt : activeTryBlocks) {
                 for (auto it : tryBlocks()[blockIt].catchBlocks) {
+                    Label* catchLabel = it.u.handler;
                     if (it.tagIndex == std::numeric_limits<uint32_t>::max()) {
-                        dependencyCtx.update(it.u.handler->m_dependencyStart, instr->id());
+                        dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
+                                             STACK_OFFSET(it.stackSizeToBe), nullptr, nullptr, it.pushExnRef);
                     } else {
                         TagType* tagType = module()->tagType(it.tagIndex);
                         const TypeVector& param = tagType->functionType()->param();
-                        Label* catchLabel = it.u.handler;
 
                         dependencyCtx.update(catchLabel->m_dependencyStart, catchLabel->id(),
-                                             STACK_OFFSET(it.stackSizeToBe), param, nullptr);
+                                             STACK_OFFSET(it.stackSizeToBe), &param, nullptr, it.pushExnRef);
                     }
                 }
             }
         }
 
-        if (instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::UnreachableOpcode
-            || instr->opcode() == ByteCode::EndOpcode) {
+        if (instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::ThrowRefOpcode
+            || instr->opcode() == ByteCode::UnreachableOpcode || instr->opcode() == ByteCode::EndOpcode) {
             updateDeps = false;
             continue;
-        }
-
-        if (instr->info() & Instruction::kIsCallback) {
-            for (size_t i = 0; i < requiredStackSize; i++) {
-                dependencyCtx.currentOptions[i] |= VariableList::kIsCallback;
-            }
         }
 
         if (instr->info() & Instruction::kDestroysR0R1) {
@@ -668,12 +689,15 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         case ByteCode::ReturnCallOpcode: {
             ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
             functionType = module()->function(call->index())->functionType();
+            updateDeps = false;
             break;
         }
-        case ByteCode::CallIndirectOpcode:
-        case ByteCode::CallIndirectM64Opcode:
         case ByteCode::ReturnCallIndirectOpcode:
-        case ByteCode::ReturnCallIndirectM64Opcode: {
+        case ByteCode::ReturnCallIndirectM64Opcode:
+            updateDeps = false;
+            FALLTHROUGH;
+        case ByteCode::CallIndirectOpcode:
+        case ByteCode::CallIndirectM64Opcode: {
             CallTable* callTable = reinterpret_cast<CallTable*>(instr->byteCode());
             functionType = callTable->functionType();
             break;
@@ -687,6 +711,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             ASSERT(instr->opcode() == ByteCode::ReturnCallRefOpcode);
             ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
             functionType = callRef->functionType();
+            updateDeps = false;
             break;
         }
         }

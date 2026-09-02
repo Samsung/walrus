@@ -227,10 +227,10 @@ template <typename T>
 T intDiv(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException(state, "integer divide by zero");
+        Trap::throwException("integer divide by zero");
     }
     if (UNLIKELY(!isNormalDivRem(lhs, rhs))) {
-        Trap::throwException(state, "integer overflow");
+        Trap::throwException("integer overflow");
     }
     return lhs / rhs;
 }
@@ -239,7 +239,7 @@ template <typename T>
 T intRem(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException(state, "integer divide by zero");
+        Trap::throwException("integer divide by zero");
     }
     if (LIKELY(isNormalDivRem(lhs, rhs))) {
         return lhs % rhs;
@@ -254,11 +254,11 @@ R doConvert(ExecutionState& state, T val)
     if (std::is_integral<R>::value && std::is_floating_point<T>::value) {
         // Don't use std::isnan here because T may be a non-floating-point type.
         if (UNLIKELY(isNaN(val))) {
-            Trap::throwException(state, "invalid conversion to integer");
+            Trap::throwException("invalid conversion to integer");
         }
     }
     if (UNLIKELY(!canConvert<R>(val))) {
-        Trap::throwException(state, "integer overflow");
+        Trap::throwException("integer overflow");
     }
     return convert<R>(val);
 }
@@ -490,8 +490,6 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
 {
     Memory** memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
     uint8_t* bp = frame.bp();
-
-    state.m_programCounterPointer = &programCounter;
 
 #define ADD_PROGRAM_COUNTER(codeName) programCounter += sizeof(codeName);
 
@@ -1614,24 +1612,28 @@ NextInstruction:
 
     DEFINE_OPCODE(Call)
     {
+        state.m_programCounter = programCounter;
         callOperation(state, programCounter, bp, instance);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(CallIndirect)
     {
+        state.m_programCounter = programCounter;
         callIndirectOperation(state, programCounter, bp, instance, false);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(CallIndirectM64)
     {
+        state.m_programCounter = programCounter;
         callIndirectOperation(state, programCounter, bp, instance, true);
         NEXT_INSTRUCTION();
     }
 
     DEFINE_OPCODE(CallRef)
     {
+        state.m_programCounter = programCounter;
         callRefOperation(state, programCounter, bp, instance);
         NEXT_INSTRUCTION();
     }
@@ -1657,15 +1659,15 @@ NextInstruction:
 
         uint32_t idx = readValue<uint32_t>(bp, code->calleeOffset());
         if (UNLIKELY(idx >= table->size())) {
-            Trap::throwException(state, "undefined element");
+            Trap::throwException("undefined element");
         }
         auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+            Trap::throwException("uninitialized element " + std::to_string(idx));
         }
         const FunctionType* ft = target->functionType();
         if (UNLIKELY(!ft->equals(code->functionType()))) {
-            Trap::throwException(state, "indirect call type mismatch");
+            Trap::throwException("indirect call type mismatch");
         }
 
         if (tailCallOperation(state, programCounter, frame, instance, target, code->stackOffsets(),
@@ -1684,15 +1686,15 @@ NextInstruction:
 
         uint64_t idx = readValue<uint64_t>(bp, code->calleeOffset());
         if (UNLIKELY(idx >= table->size())) {
-            Trap::throwException(state, "undefined element");
+            Trap::throwException("undefined element");
         }
         auto target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+            Trap::throwException("uninitialized element " + std::to_string(idx));
         }
         const FunctionType* ft = target->functionType();
         if (UNLIKELY(!ft->equals(code->functionType()))) {
-            Trap::throwException(state, "indirect call type mismatch");
+            Trap::throwException("indirect call type mismatch");
         }
 
         if (tailCallOperation(state, programCounter, frame, instance, target, code->stackOffsets(),
@@ -1710,11 +1712,11 @@ NextInstruction:
 
         auto target = readValue<Function*>(bp, code->calleeOffset());
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException(state, "null function reference");
+            Trap::throwException("null function reference");
         }
         const FunctionType* ft = target->functionType();
         if (UNLIKELY(!ft->equals(code->functionType()))) {
-            Trap::throwException(state, "call by reference type mismatch");
+            Trap::throwException("call by reference type mismatch");
         }
 
         if (tailCallOperation(state, programCounter, frame, instance, target, code->stackOffsets(),
@@ -2332,7 +2334,7 @@ NextInstruction:
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
         ASSERT(!table->is64());
-        void* val = table->getElement(state, readValue<uint32_t>(bp, code->srcOffset()));
+        void* val = table->getElement(readValue<uint32_t>(bp, code->srcOffset()));
         writeValue(bp, code->dstOffset(), val);
 
         ADD_PROGRAM_COUNTER(TableGet);
@@ -2345,7 +2347,7 @@ NextInstruction:
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
         ASSERT(table->is64());
-        void* val = table->getElementM64(state, readValue<uint64_t>(bp, code->srcOffset()));
+        void* val = table->getElementM64(readValue<uint64_t>(bp, code->srcOffset()));
         writeValue(bp, code->dstOffset(), val);
 
         ADD_PROGRAM_COUNTER(TableGetM64);
@@ -2359,7 +2361,7 @@ NextInstruction:
         Table* table = instance->m_tables[code->tableIndex()];
         ASSERT(!table->is64());
         void* ptr = readValue<void*>(bp, code->src1Offset());
-        table->setElement(state, readValue<uint32_t>(bp, code->src0Offset()), ptr);
+        table->setElement(readValue<uint32_t>(bp, code->src0Offset()), ptr);
 
         ADD_PROGRAM_COUNTER(TableSet);
         NEXT_INSTRUCTION();
@@ -2372,7 +2374,7 @@ NextInstruction:
         Table* table = instance->m_tables[code->tableIndex()];
         ASSERT(table->is64());
         void* ptr = readValue<void*>(bp, code->src1Offset());
-        table->setElementM64(state, readValue<uint64_t>(bp, code->src0Offset()), ptr);
+        table->setElementM64(readValue<uint64_t>(bp, code->src0Offset()), ptr);
 
         ADD_PROGRAM_COUNTER(TableSetM64);
         NEXT_INSTRUCTION();
@@ -2462,7 +2464,7 @@ NextInstruction:
         uint32_t srcIndex = readValue<uint32_t>(bp, code->srcOffsets()[1]);
         uint32_t n = readValue<uint32_t>(bp, code->srcOffsets()[2]);
 
-        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
+        dstTable->copy(srcTable, n, srcIndex, dstIndex);
 
         ADD_PROGRAM_COUNTER(TableCopy);
         NEXT_INSTRUCTION();
@@ -2482,7 +2484,7 @@ NextInstruction:
         uint64_t srcIndex = readValue<uint64_t>(bp, code->srcOffsets()[1]);
         uint64_t n = readValue<uint64_t>(bp, code->srcOffsets()[2]);
 
-        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
+        dstTable->copy(srcTable, n, srcIndex, dstIndex);
 
         ADD_PROGRAM_COUNTER(TableCopyM64);
         NEXT_INSTRUCTION();
@@ -2502,7 +2504,7 @@ NextInstruction:
         uint32_t srcIndex = readValue<uint32_t>(bp, code->srcOffsets()[1]);
         uint32_t n = readValue<uint32_t>(bp, code->srcOffsets()[2]);
 
-        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
+        dstTable->copy(srcTable, n, srcIndex, dstIndex);
 
         ADD_PROGRAM_COUNTER(TableCopyM64M32);
         NEXT_INSTRUCTION();
@@ -2522,7 +2524,7 @@ NextInstruction:
         uint64_t srcIndex = readValue<uint64_t>(bp, code->srcOffsets()[1]);
         uint32_t n = readValue<uint32_t>(bp, code->srcOffsets()[2]);
 
-        dstTable->copy(state, srcTable, n, srcIndex, dstIndex);
+        dstTable->copy(srcTable, n, srcIndex, dstIndex);
 
         ADD_PROGRAM_COUNTER(TableCopyM32M64);
         NEXT_INSTRUCTION();
@@ -2538,7 +2540,7 @@ NextInstruction:
         int32_t index = readValue<int32_t>(bp, code->srcOffsets()[0]);
         void* ptr = readValue<void*>(bp, code->srcOffsets()[1]);
         uint32_t n = readValue<uint32_t>(bp, code->srcOffsets()[2]);
-        table->fill(state, n, ptr, index);
+        table->fill(n, ptr, index);
 
         ADD_PROGRAM_COUNTER(TableFill);
         NEXT_INSTRUCTION();
@@ -2554,7 +2556,7 @@ NextInstruction:
         int64_t index = readValue<int64_t>(bp, code->srcOffsets()[0]);
         void* ptr = readValue<void*>(bp, code->srcOffsets()[1]);
         uint64_t n = readValue<uint64_t>(bp, code->srcOffsets()[2]);
-        table->fill(state, n, ptr, index);
+        table->fill(n, ptr, index);
 
         ADD_PROGRAM_COUNTER(TableFillM64);
         NEXT_INSTRUCTION();
@@ -2572,7 +2574,7 @@ NextInstruction:
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
         ASSERT(!table->is64());
-        table->init(state, sg, dstStart, srcStart, size);
+        table->init(sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();
     }
@@ -2589,7 +2591,7 @@ NextInstruction:
         ASSERT(code->tableIndex() < instance->module()->numberOfTableTypes());
         Table* table = instance->m_tables[code->tableIndex()];
         ASSERT(table->is64());
-        table->init(state, sg, dstStart, srcStart, size);
+        table->init(sg, dstStart, srcStart, size);
         ADD_PROGRAM_COUNTER(TableInit);
         NEXT_INSTRUCTION();
     }
@@ -2617,7 +2619,7 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->stackOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null reference");
+            Trap::throwException("null reference");
         }
 
         ADD_PROGRAM_COUNTER(RefAsNonNull);
@@ -2631,10 +2633,10 @@ NextInstruction:
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
             if (!(code->srcInfo() & JumpIfCastGeneric::IsNullable)) {
-                Trap::throwException(state, "cast failure");
+                Trap::throwException("cast failure");
             }
         } else if (!testRefGeneric(ptr, code->typeInfo())) {
-            Trap::throwException(state, "cast failure");
+            Trap::throwException("cast failure");
         }
 
         ADD_PROGRAM_COUNTER(RefCastGeneric);
@@ -2648,10 +2650,10 @@ NextInstruction:
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
             if (!(code->srcInfo() & JumpIfCastGeneric::IsNullable)) {
-                Trap::throwException(state, "cast failure");
+                Trap::throwException("cast failure");
             }
         } else if (!testRefDefined(ptr, code->typeInfo())) {
-            Trap::throwException(state, "cast failure");
+            Trap::throwException("cast failure");
         }
 
         ADD_PROGRAM_COUNTER(RefCastDefined);
@@ -2709,7 +2711,7 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null i31 reference");
+            Trap::throwException("null i31 reference");
         }
         writeValue<int32_t>(bp, code->dstOffset(), Value::getI31SValue(ptr));
 
@@ -2723,7 +2725,7 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null i31 reference");
+            Trap::throwException("null i31 reference");
         }
         writeValue<int32_t>(bp, code->dstOffset(), Value::getI31UValue(ptr));
 
@@ -2738,7 +2740,7 @@ NextInstruction:
         uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
         GCArray* result = GCArray::arrayNew(length, code->typeInfo(), bp + code->src0Offset());
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException(state, "memory allocation failed");
+            Trap::throwException("memory allocation failed");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2753,7 +2755,7 @@ NextInstruction:
         uint32_t length = readValue<uint32_t>(bp, code->srcOffset());
         GCArray* result = GCArray::arrayNewDefault(length, code->typeInfo());
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException(state, "memory allocation failed");
+            Trap::throwException("memory allocation failed");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2767,7 +2769,7 @@ NextInstruction:
 
         GCArray* result = GCArray::arrayNewFixed(code->length(), code->typeInfo(), code->dataOffsets(), bp);
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException(state, "memory allocation failed");
+            Trap::throwException("memory allocation failed");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2784,9 +2786,9 @@ NextInstruction:
         GCArray* result = GCArray::arrayNewData(offset, size, code->typeInfo(), instance->dataSegment(code->index()));
         if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
-                Trap::throwException(state, "memory allocation failed");
+                Trap::throwException("memory allocation failed");
             }
-            Trap::throwException(state, "out of bounds memory access");
+            Trap::throwException("out of bounds memory access");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2803,9 +2805,9 @@ NextInstruction:
         GCArray* result = GCArray::arrayNewElem(offset, size, code->typeInfo(), instance->elementSegment(code->index()));
         if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
-                Trap::throwException(state, "memory allocation failed");
+                Trap::throwException("memory allocation failed");
             }
-            Trap::throwException(state, "out of bounds table access");
+            Trap::throwException("out of bounds table access");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2819,7 +2821,7 @@ NextInstruction:
 
         GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(array))) {
-            Trap::throwException(state, "null array reference");
+            Trap::throwException("null array reference");
         }
         uint32_t log2Size = GCArray::getLog2Size(code->type());
         uint32_t offset = readValue<uint32_t>(bp, code->src1Offset());
@@ -2827,7 +2829,7 @@ NextInstruction:
         void* value_p = bp + code->src2Offset();
 
         if (array->length() < offset || (array->length() - offset) < fillSize) {
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException("out of bounds array access");
         }
 
         if (!(array->length() == offset || fillSize == 0)) {
@@ -2860,7 +2862,7 @@ NextInstruction:
         GCArray* dstArray = readValue<GCArray*>(bp, code->src0Offset());
         GCArray* srcArray = readValue<GCArray*>(bp, code->src2Offset());
         if (UNLIKELY(Value::isNull(dstArray) || Value::isNull(srcArray))) {
-            Trap::throwException(state, "null array reference");
+            Trap::throwException("null array reference");
         }
         uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
         uint32_t src_offset = readValue<uint32_t>(bp, code->src3Offset());
@@ -2868,7 +2870,7 @@ NextInstruction:
 
         if (dstArray->length() < dst_offset || (dstArray->length() - dst_offset) < size
             || srcArray->length() < src_offset || (srcArray->length() - src_offset) < size) {
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException("out of bounds array access");
         }
 
         const uint8_t log2Size = code->log2Size();
@@ -2888,7 +2890,7 @@ NextInstruction:
 
         GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(array))) {
-            Trap::throwException(state, "null array reference");
+            Trap::throwException("null array reference");
         }
 
         uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
@@ -2900,11 +2902,11 @@ NextInstruction:
         size_t dataSize = data->sizeInByte();
 
         if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException("out of bounds array access");
         }
 
         if (dataSize < src_offset || ((dataSize - src_offset) >> log2Size) < size) {
-            Trap::throwException(state, "out of bounds memory access");
+            Trap::throwException("out of bounds memory access");
         }
 
         uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
@@ -2921,7 +2923,7 @@ NextInstruction:
 
         GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(array))) {
-            Trap::throwException(state, "null array reference");
+            Trap::throwException("null array reference");
         }
 
         uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
@@ -2932,11 +2934,11 @@ NextInstruction:
         size_t elemSize = elements->size();
 
         if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException("out of bounds array access");
         }
 
         if (elemSize < src_offset || (elemSize - src_offset) < size) {
-            Trap::throwException(state, "out of bounds table access");
+            Trap::throwException("out of bounds table access");
         }
 
         uintptr_t mask = static_cast<uintptr_t>(sizeof(void*)) - 1;
@@ -2953,12 +2955,12 @@ NextInstruction:
 
         GCArray* ptr = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null array reference");
+            Trap::throwException("null array reference");
         }
 
         uint32_t pos = readValue<uint32_t>(bp, code->src1Offset());
         if (UNLIKELY(pos >= ptr->length())) {
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException("out of bounds array access");
         }
 
         GCArray::get(bp + code->dstOffset(), reinterpret_cast<uint8_t*>(ptr),
@@ -2974,12 +2976,12 @@ NextInstruction:
 
         GCArray* ptr = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null array reference");
+            Trap::throwException("null array reference");
         }
 
         uint32_t pos = readValue<uint32_t>(bp, code->src1Offset());
         if (UNLIKELY(pos >= ptr->length())) {
-            Trap::throwException(state, "out of bounds array access");
+            Trap::throwException("out of bounds array access");
         }
 
         GCArray::set(reinterpret_cast<uint8_t*>(ptr), bp + code->src2Offset(),
@@ -2995,7 +2997,7 @@ NextInstruction:
 
         GCArray* ptr = readValue<GCArray*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null array reference");
+            Trap::throwException("null array reference");
         }
 
         writeValue<uint32_t>(bp, code->dstOffset(), ptr->length());
@@ -3009,7 +3011,7 @@ NextInstruction:
 
         GCStruct* result = GCStruct::structNew(code->typeInfo(), code->dataOffsets(), bp);
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException(state, "memory allocation failed");
+            Trap::throwException("memory allocation failed");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -3023,7 +3025,7 @@ NextInstruction:
 
         GCStruct* result = GCStruct::structNewDefault(code->typeInfo());
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException(state, "memory allocation failed");
+            Trap::throwException("memory allocation failed");
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -3037,7 +3039,7 @@ NextInstruction:
 
         GCStruct* ptr = readValue<GCStruct*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null structure reference");
+            Trap::throwException("null structure reference");
         }
 
         GCStruct::get(bp + code->dstOffset(),
@@ -3054,7 +3056,7 @@ NextInstruction:
 
         GCStruct* ptr = readValue<GCStruct*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null structure reference");
+            Trap::throwException("null structure reference");
         }
 
         GCStruct::set(reinterpret_cast<uint8_t*>(ptr) + code->memberOffset(),
@@ -3081,7 +3083,8 @@ NextInstruction:
             ptr += sz;
         }
 
-        Trap::throwException(state, tag, std::move(userExceptionData));
+        state.m_programCounter = programCounter;
+        Trap::throwException(tag, std::move(userExceptionData));
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
     }
@@ -3092,9 +3095,10 @@ NextInstruction:
 
         GCException* ptr = readValue<GCException*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException(state, "null structure reference");
+            Trap::throwException("null structure reference");
         }
 
+        state.m_programCounter = programCounter;
         ptr->throwException();
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
@@ -3102,7 +3106,7 @@ NextInstruction:
 
     DEFINE_OPCODE(Unreachable)
     {
-        Trap::throwException(state, "unreachable executed");
+        Trap::throwException("unreachable executed");
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
     }
@@ -3171,26 +3175,26 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     if (!is64) {
         uint32_t idx = readValue<uint32_t>(bp, code->calleeOffset());
         if (idx >= table->size()) {
-            Trap::throwException(state, "undefined element");
+            Trap::throwException("undefined element");
         }
         target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+            Trap::throwException("uninitialized element " + std::to_string(idx));
         }
     } else {
         uint64_t idx = readValue<uint64_t>(bp, code->calleeOffset());
         if (idx >= table->size()) {
-            Trap::throwException(state, "undefined element");
+            Trap::throwException("undefined element");
         }
         target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException(state, "uninitialized element " + std::to_string(idx));
+            Trap::throwException("uninitialized element " + std::to_string(idx));
         }
     }
 
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
-        Trap::throwException(state, "indirect call type mismatch");
+        Trap::throwException("indirect call type mismatch");
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
@@ -3209,11 +3213,11 @@ NEVER_INLINE void Interpreter::callRefOperation(
 
     auto target = readValue<Function*>(bp, code->calleeOffset());
     if (UNLIKELY(Value::isNull(target))) {
-        Trap::throwException(state, "null function reference");
+        Trap::throwException("null function reference");
     }
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
-        Trap::throwException(state, "call by reference type mismatch");
+        Trap::throwException("call by reference type mismatch");
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());

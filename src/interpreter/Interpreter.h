@@ -138,13 +138,8 @@ private:
                     }
                     function = newState.m_currentFunction.value()->asDefinedFunction();
                     moduleFunction = function->moduleFunction();
-                    for (size_t i = e->m_programCounterInfo.size(); i > 0; i--) {
-                        if (e->m_programCounterInfo[i - 1].first == &newState) {
-                            programCounter = e->m_programCounterInfo[i - 1].second;
-                            break;
-                        }
-                    }
-                    if (e->isUserException()) {
+                    if (e->isUserException() && newState.m_programCounter != 0) {
+                        programCounter = newState.m_programCounter;
                         bool isCatchSucessful = false;
                         Tag* tag = e->tag().value();
                         size_t offset = programCounter - reinterpret_cast<size_t>(moduleFunction->byteCode());

@@ -31,7 +31,7 @@ DEFINE_GLOBAL_TYPE_INFO(componentInstanceTypeInfo, ComponentInstanceKind);
 static void throwException(ExecutionState& state, const char* message)
 {
     std::string stringMessage = message;
-    Trap::throwException(state, stringMessage);
+    Trap::throwException(stringMessage);
 }
 
 enum Utf8Consts : uint8_t {
@@ -727,7 +727,7 @@ uint32_t ComponentInstance::appendHandle(ExecutionState& state, ComponentHandle*
 
     if (m_handles.size() >= ~static_cast<uint32_t>(0) - FirstHandleIndex) {
         std::string message = "too many handles allocated";
-        Trap::throwException(state, message);
+        Trap::throwException(message);
         return 0;
     }
 
@@ -763,7 +763,7 @@ void ComponentInstance::throwInvalidHandle(ExecutionState& state, uint32_t index
 {
     std::string message = "invalid resource handle: ";
     message.append(std::to_string(index));
-    Trap::throwException(state, message);
+    Trap::throwException(message);
 }
 
 ComponentInstance* ComponentInstance::createInstance(Store* store, ComponentType* type)
@@ -1111,7 +1111,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Component* compon
                 message.append(import->fieldName());
                 message.append("\" from module: ");
                 message.append(import->moduleName());
-                Trap::throwException(state, message);
+                Trap::throwException(message);
             }
 
             switch (import->importType()) {
@@ -1166,7 +1166,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Component* compon
             if (inlineIndex == 0) {
                 std::string message = "cannot import module: ";
                 message.append(import->moduleName());
-                Trap::throwException(state, message);
+                Trap::throwException(message);
             }
 
             size_t inlineStart = component->coreInlineExportsStart(~inlineIndex);
@@ -1188,7 +1188,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Component* compon
                 message.append(import->fieldName());
                 message.append("\" from module: ");
                 message.append(import->moduleName());
-                Trap::throwException(state, message);
+                Trap::throwException(message);
             }
 
             switch (import->importType()) {
@@ -1246,7 +1246,7 @@ void ComponentInstance::coreInstantiate(ExecutionState& state, Component* compon
             message.append(import->fieldName());
             message.append("\" from module: ");
             message.append(import->moduleName());
-            Trap::throwException(state, message);
+            Trap::throwException(message);
         }
 
         imports.push_back(value);
@@ -1409,7 +1409,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
                 if (param.size() != 4 || param[0] != type || param[1] != type || param[2] != type || param[3] != type
                     || result.size() != 1 || result[0] != type) {
                     std::string message = "invalid realloc function";
-                    Trap::throwException(m_state, message);
+                    Trap::throwException(message);
                 }
             }
 
@@ -1469,7 +1469,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
             if (!success) {
                 std::string message = "cannot import: ";
                 message.append(external.name);
-                Trap::throwException(m_state, message);
+                Trap::throwException(message);
             }
 
             std::string componentName;
@@ -1483,7 +1483,7 @@ ComponentInstance* ComponentInstance::InstantiateContext::instantiate(Component*
                 if (!componentName.empty()) {
                     message += " at: " + componentName;
                 }
-                Trap::throwException(m_state, message);
+                Trap::throwException(message);
             }
             break;
         }
