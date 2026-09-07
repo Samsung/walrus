@@ -352,6 +352,12 @@ public:
                       const ReadBinaryOptions& options,
                       CoreTypeData* typeData)
     {
+        if (m_currentComponent == nullptr) {
+            // This error should never happen, since these modules should be handled elsewhere,
+            m_walrusParseError = "raw modules are not supported";
+            return;
+        }
+
         std::pair<Walrus::Optional<Walrus::Module*>, std::string> result = Walrus::WASMParser::parseBinary(m_store, m_filename, reinterpret_cast<const uint8_t*>(data), size, m_JITFlags, m_featureFlags);
         if (!result.second.empty()) {
             m_walrusParseError = result.second;
@@ -925,7 +931,7 @@ public:
             m_currentInfo->instanceTypes.push_back(type->asComponentType());
             break;
         default:
-            RELEASE_ASSERT_NOT_REACHED();
+            m_walrusParseError = "unsupported export type";
             return;
         }
 

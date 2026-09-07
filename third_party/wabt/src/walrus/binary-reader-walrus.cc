@@ -2089,7 +2089,7 @@ public:
                     ComponentExportInfo* export_info) override {
         CHECK_RESULT(m_validator.OnExport(name, version_suffix, external_info, export_info));
         m_externalDelegate->OnExport(name, version_suffix, external_info, export_info);
-        return Result::Ok;
+        return CheckParseError();
     }
 
     WASMComponentBinaryReaderDelegate *m_externalDelegate;
