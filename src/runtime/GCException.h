@@ -25,19 +25,19 @@ class Exception;
 
 class GCException : public GCBase {
 public:
-    static GCException* exceptionNew(std::unique_ptr<Exception>& e);
+    static GCException* exceptionNew(Exception* e);
 
     void throwException();
 
-    std::unique_ptr<Exception>& exception()
+    Exception* exception()
     {
         return m_exception;
     }
 
 private:
-    GCException(std::unique_ptr<Exception>& e);
+    GCException(Exception* e);
 
-    std::unique_ptr<Exception> m_exception;
+    Exception* m_exception;
 };
 
 } // namespace Walrus

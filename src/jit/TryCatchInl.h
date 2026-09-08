@@ -175,11 +175,10 @@ static sljit_sw findCatch(sljit_sw current, uint8_t* bp, ExecutionContext* conte
             if (catchBlocks[i].tagIndex == std::numeric_limits<uint32_t>::max()) {
                 context->error = ExecutionContext::NoError;
                 if (catchBlocks[i].pushExnRef) {
-                    std::unique_ptr<Exception> e(context->capturedException);
+                    Exception* e = context->capturedException;
                     *reinterpret_cast<GCException**>(bp) = GCException::exceptionNew(e);
-                } else {
-                    context->clearException();
                 }
+                context->clearException();
                 return catchBlocks[i].handlerAddr;
             }
 
@@ -189,11 +188,10 @@ static sljit_sw findCatch(sljit_sw current, uint8_t* bp, ExecutionContext* conte
                 size_t paramStackSize = tag->functionType()->paramStackSize();
                 memcpy(sp, context->capturedException->userExceptionData().data(), paramStackSize);
                 if (catchBlocks[i].pushExnRef) {
-                    std::unique_ptr<Exception> e(context->capturedException);
+                    Exception* e = context->capturedException;
                     *reinterpret_cast<GCException**>(sp + paramStackSize) = GCException::exceptionNew(e);
-                } else {
-                    context->clearException();
                 }
+                context->clearException();
                 return catchBlocks[i].handlerAddr;
             }
 
@@ -250,13 +248,14 @@ static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* contex
     }
 
     context->error = ExecutionContext::CapturedException;
-    context->capturedException = Exception::create(context->state, tag, std::move(userExceptionData)).release();
+    context->capturedException = Exception::create(context->state, tag, std::move(userExceptionData));
 }
 
 static void throwRef(GCException* exception, ExecutionContext* context)
 {
     context->error = ExecutionContext::CapturedException;
-    context->capturedException = exception->exception().release();
+    exception->exception()->addRef();
+    context->capturedException = exception->exception();
 }
 
 static void emitThrow(sljit_compiler* compiler, Instruction* instr)

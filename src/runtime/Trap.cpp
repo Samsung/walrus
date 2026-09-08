@@ -32,8 +32,8 @@ Trap::TrapResult Trap::run(void (*runner)(ExecutionState&, void*), void* data)
     try {
         ExecutionState state;
         runner(state, data);
-    } catch (std::unique_ptr<Exception>& e) {
-        r.exception = std::move(e);
+    } catch (Exception* e) {
+        r.exception = e;
     }
 
     return r;
@@ -54,8 +54,9 @@ void Trap::throwException(ExecutionState& state, Tag* tag, Vector<uint8_t>&& use
     throw Exception::create(state, tag, std::move(userExceptionData));
 }
 
-void Trap::throwException(ExecutionState& state, std::unique_ptr<Exception>&& e)
+void Trap::throwException(ExecutionState& state, Exception* e)
 {
+    e->addRef();
     throw std::move(e);
 }
 

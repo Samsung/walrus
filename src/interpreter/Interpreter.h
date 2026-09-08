@@ -132,9 +132,9 @@ private:
                 try {
                     resultOffsets = interpret(newState, programCounter, frame, function->instance());
                     break;
-                } catch (std::unique_ptr<Exception>& e) {
+                } catch (Exception* e) {
                     if (UNLIKELY(!newState.m_currentFunction.hasValue())) {
-                        throw std::unique_ptr<Exception>(std::move(e));
+                        throw e;
                     }
                     function = newState.m_currentFunction.value()->asDefinedFunction();
                     moduleFunction = function->moduleFunction();
@@ -160,6 +160,7 @@ private:
                                     if (item.m_pushExnRef) {
                                         *reinterpret_cast<GCException**>(sp + paramStackSize) = GCException::exceptionNew(e);
                                     }
+                                    e->releaseRef();
                                     isCatchSucessful = true;
                                     break;
                                 }
@@ -169,7 +170,7 @@ private:
                             continue;
                         }
                     }
-                    throw std::unique_ptr<Exception>(std::move(e));
+                    throw e;
                 }
             }
         }

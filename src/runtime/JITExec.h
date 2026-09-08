@@ -78,7 +78,7 @@ struct ExecutionContext {
     void clearException()
     {
         ASSERT(capturedException != nullptr);
-        delete capturedException;
+        capturedException->releaseRef();
         capturedException = nullptr;
     }
 

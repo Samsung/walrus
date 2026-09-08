@@ -26,8 +26,8 @@ static sljit_sw callFunction(
     sljit_sw error = ExecutionContext::NoError;
     try {
         target->interpreterCall(context->state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-    } catch (std::unique_ptr<Exception>& exception) {
-        context->capturedException = exception.release();
+    } catch (Exception* exception) {
+        context->capturedException = exception;
         context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
     }
@@ -64,8 +64,8 @@ static sljit_sw callFunctionIndirect(
     sljit_sw error = ExecutionContext::NoError;
     try {
         target->interpreterCall(context->state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-    } catch (std::unique_ptr<Exception>& exception) {
-        context->capturedException = exception.release();
+    } catch (Exception* exception) {
+        context->capturedException = exception;
         context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
     }
@@ -102,8 +102,8 @@ static sljit_sw callFunctionIndirectM64(
     sljit_sw error = ExecutionContext::NoError;
     try {
         target->interpreterCall(context->state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-    } catch (std::unique_ptr<Exception>& exception) {
-        context->capturedException = exception.release();
+    } catch (Exception* exception) {
+        context->capturedException = exception;
         context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
     }
@@ -133,8 +133,8 @@ static sljit_sw callFunctionRef(
     sljit_sw error = ExecutionContext::NoError;
     try {
         target->interpreterCall(context->state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
-    } catch (std::unique_ptr<Exception>& exception) {
-        context->capturedException = exception.release();
+    } catch (Exception* exception) {
+        context->capturedException = exception;
         context->error = ExecutionContext::CapturedException;
         error = ExecutionContext::CapturedException;
     }
@@ -211,8 +211,8 @@ static sljit_sw resolvePendingTailCall(
     // Cannot resolved with TCO
     try {
         target->interpreterCall(context->state, bp, offsets, parameterOffsetCount, resultOffsetCount);
-    } catch (std::unique_ptr<Exception>& exception) {
-        context->capturedException = exception.release();
+    } catch (Exception* exception) {
+        context->capturedException = exception;
         context->error = ExecutionContext::CapturedException;
         result = ExecutionContext::CapturedException;
     }

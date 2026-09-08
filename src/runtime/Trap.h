@@ -31,10 +31,18 @@ class Tag;
 class Trap : public Object {
 public:
     struct TrapResult {
-        std::unique_ptr<Exception> exception;
+        Exception* exception;
 
         TrapResult()
+            : exception(nullptr)
         {
+        }
+
+        ~TrapResult()
+        {
+            if (exception != nullptr) {
+                exception->releaseRef();
+            }
         }
     };
 
@@ -44,7 +52,7 @@ public:
     static void throwException(const std::string& message);
     static void throwException(ExecutionState& state, const std::string& message);
     static void throwException(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData);
-    static void throwException(ExecutionState& state, std::unique_ptr<Exception>&& e);
+    static void throwException(ExecutionState& state, Exception* e);
 };
 
 } // namespace Walrus

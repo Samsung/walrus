@@ -409,7 +409,7 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                                &data);
 
         if (result.exception) {
-            Trap::throwException(state, std::move(result.exception));
+            Trap::throwException(state, result.exception);
         }
     }
 

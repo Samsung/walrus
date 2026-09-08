@@ -30,11 +30,11 @@ DEFINE_GLOBAL_TYPE_INFO(exceptionTypeInfo, ExceptionKind);
 #ifdef ENABLE_GC
 static void GC_CALLBACK exceptionFinalizer(void* ptr, void* /* ignored ptr */)
 {
-    reinterpret_cast<GCException*>(ptr)->exception() = nullptr;
+    reinterpret_cast<GCException*>(ptr)->exception()->releaseRef();
 }
 #endif // ENABLE_GC
 
-GCException* GCException::exceptionNew(std::unique_ptr<Exception>& e)
+GCException* GCException::exceptionNew(Exception* e)
 {
 #ifdef ENABLE_GC
     // TODO: The object is currently stored on the stack, which is good enough for testing,
@@ -53,20 +53,17 @@ GCException* GCException::exceptionNew(std::unique_ptr<Exception>& e)
 #endif // ENABLE_GC
 }
 
-GCException::GCException(std::unique_ptr<Exception>& e)
+GCException::GCException(Exception* e)
     : GCBase(GET_GLOBAL_TYPE_INFO(exceptionTypeInfo))
-    , m_exception(std::move(e))
+    , m_exception(e)
 {
+    m_exception->addRef();
 }
 
 void GCException::throwException()
 {
-    if (m_exception == nullptr) {
-        // Currently an engine limitation.
-        Trap::throwException("Exception has been thrown");
-    }
-
-    throw std::move(m_exception);
+    m_exception->addRef();
+    throw m_exception;
 }
 
 } // namespace Walrus

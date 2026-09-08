@@ -20,6 +20,7 @@
 #include "runtime/Instance.h"
 #include "runtime/Component.h"
 #include "runtime/ComponentInstance.h"
+#include "runtime/Exception.h"
 #include "runtime/ObjectType.h"
 
 #ifdef ENABLE_GC
@@ -30,6 +31,7 @@ namespace Walrus {
 
 #ifndef NDEBUG
 size_t Extern::g_externCount;
+size_t Exception::g_exceptionCount;
 #endif
 
 static const FunctionType g_defaultFunctionTypes[] = {
@@ -91,14 +93,16 @@ Store::~Store()
     GC_gcollect_and_unmap();
     GC_invoke_finalizers();
 #endif /* ENABLE_GC */
+
+#ifndef NDEBUG
+    // Check if all Extern objects and excetions have been deallocated.
+    ASSERT(Extern::g_externCount == 0);
+    ASSERT(Exception::g_exceptionCount == 0);
+#endif
 }
 
 void Store::finalize()
 {
-#ifndef NDEBUG
-    // check if all Extern objects has been deallocated
-    ASSERT(Extern::g_externCount == 0);
-#endif
 }
 
 FunctionType* Store::getDefaultFunctionType(Value::Type type)

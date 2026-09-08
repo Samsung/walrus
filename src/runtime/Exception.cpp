@@ -20,7 +20,11 @@
 namespace Walrus {
 
 Exception::Exception(ExecutionState& state)
+    : m_refCount(1)
 {
+#ifndef NDEBUG
+    g_exceptionCount++;
+#endif
     Optional<ExecutionState*> s = &state;
 
     while (s) {

@@ -44,7 +44,8 @@ ByteCodeStackOffset* JITFunction::call(ExecutionContext& context, uint8_t* bp) c
 
         switch (context.error) {
         case ExecutionContext::CapturedException:
-            throw std::unique_ptr<Exception>(context.capturedException);
+            // No need to change the reference counter.
+            throw context.capturedException;
         case ExecutionContext::OutOfStackError:
             Trap::throwException(state, "call stack exhausted");
             return resultOffsets;

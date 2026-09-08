@@ -26,19 +26,24 @@ class Tag;
 
 class Exception {
 public:
-    static std::unique_ptr<Exception> create(const std::string& m)
+#ifndef NDEBUG
+    // count the total number of created Extern objects
+    static size_t g_exceptionCount;
+#endif
+
+    static Exception* create(const std::string& m)
     {
-        return std::unique_ptr<Exception>(new Exception(m));
+        return new Exception(m);
     }
 
-    static std::unique_ptr<Exception> create(ExecutionState& state, const std::string& m)
+    static Exception* create(ExecutionState& state, const std::string& m)
     {
-        return std::unique_ptr<Exception>(new Exception(state, m));
+        return new Exception(state, m);
     }
 
-    static std::unique_ptr<Exception> create(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
+    static Exception* create(ExecutionState& state, Tag* tag, Vector<uint8_t>&& userExceptionData)
     {
-        return std::unique_ptr<Exception>(new Exception(state, tag, std::move(userExceptionData)));
+        return new Exception(state, tag, std::move(userExceptionData));
     }
 
     bool isBuiltinException()
@@ -49,6 +54,21 @@ public:
     bool isUserException()
     {
         return !!tag();
+    }
+
+    void addRef()
+    {
+        m_refCount++;
+    }
+
+    void releaseRef()
+    {
+        if (--m_refCount == 0) {
+#ifndef NDEBUG
+            g_exceptionCount--;
+#endif
+            delete this;
+        }
     }
 
     std::string& message()
@@ -69,8 +89,12 @@ public:
 private:
     friend class Interpreter;
     Exception(const std::string& message)
-        : m_message(message)
+        : m_refCount(1)
+        , m_message(message)
     {
+#ifndef NDEBUG
+        g_exceptionCount++;
+#endif
     }
 
     Exception(ExecutionState& state);
@@ -87,6 +111,7 @@ private:
         m_userExceptionData = std::move(userExceptionData);
     }
 
+    size_t m_refCount;
     std::string m_message;
     Optional<Tag*> m_tag;
     Vector<uint8_t> m_userExceptionData;
