@@ -1158,7 +1158,8 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 
             if (UNLIKELY(label->info() & Label::kHasCatchInfo)) {
                 ASSERT(tryBlocks()[m_context.currentTryBlock].catchBlocks[0].u.handler == label);
-                emitCatch(m_compiler, &m_context);
+                m_context.currentTryBlock = m_context.tryBlockStack.back();
+                m_context.tryBlockStack.pop_back();
             }
 
             label->emit(m_compiler);
@@ -1731,6 +1732,7 @@ void JITCompiler::emitEpilog()
     sljit_emit_return(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0);
 
     m_context.emitSlowCases(m_compiler);
+    emitCatches(m_compiler, &m_context, m_tryBlockStart);
 
     std::vector<TrapJump>& trapJumps = m_context.trapJumps;
     // The actual maximum is smaller, but the extra stack consumption is small.

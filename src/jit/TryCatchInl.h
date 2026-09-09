@@ -209,28 +209,47 @@ static sljit_sw findCatch(sljit_sw current, uint8_t* bp, ExecutionContext* conte
     }
 }
 
-static void emitCatch(sljit_compiler* compiler, CompileContext* context)
+static void emitCatches(sljit_compiler* compiler, CompileContext* context, size_t tryBlockStart)
 {
-    TryBlock& tryBlock = context->compiler->tryBlocks()[context->currentTryBlock];
+    size_t size = context->compiler->tryBlocks().size();
+    if (tryBlockStart >= size) {
+        ASSERT(tryBlockStart == size);
+        return;
+    }
+
+    std::vector<sljit_jump*> jumps;
+    jumps.reserve(size - tryBlockStart - 1);
+
+    for (size_t i = tryBlockStart; i < size; i++) {
+        if (i > tryBlockStart) {
+            jumps.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+        }
+
+        TryBlock& tryBlock = context->compiler->tryBlocks()[i];
+        sljit_label* label = sljit_emit_label(compiler);
+
+        tryBlock.findHandlerLabel = label;
+        context->trapBlocks.push_back(TrapBlock(label, i));
+
+        for (auto it : tryBlock.throwJumps) {
+            sljit_set_label(it, label);
+        }
+
+        tryBlock.throwJumps.clear();
+        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(context->compiler->tryBlockOffset() + i));
+    }
+
+    ASSERT(jumps.size() == (size - tryBlockStart - 1));
+
     sljit_label* label = sljit_emit_label(compiler);
-
-    tryBlock.findHandlerLabel = label;
-    context->trapBlocks.push_back(TrapBlock(label, context->currentTryBlock));
-
-    for (auto it : tryBlock.throwJumps) {
+    for (auto it : jumps) {
         sljit_set_label(it, label);
     }
 
-    tryBlock.throwJumps.clear();
-
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_IMM, static_cast<sljit_sw>(context->compiler->tryBlockOffset() + context->currentTryBlock));
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, kFrameReg, 0);
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, findCatch));
     sljit_emit_ijump(compiler, SLJIT_JUMP, SLJIT_R0, 0);
-
-    context->currentTryBlock = context->tryBlockStack.back();
-    context->tryBlockStack.pop_back();
 }
 
 static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* context)
