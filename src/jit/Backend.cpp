@@ -255,7 +255,6 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     , shuffleOffset(0)
 #endif /* SLJIT_CONFIG_X86 */
     , stackTmpStart(sizeof(sljit_sw))
-    , nextTryBlock(0)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
     , module(module)
@@ -765,6 +764,10 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::JumpOpcode: {
+        if (instr->next() == instr->asExtended()->value().targetLabel) {
+            return;
+        }
+
         jump = sljit_emit_jump(compiler, SLJIT_JUMP);
         CompileContext::get(compiler)->emitSlowCases(compiler);
         break;
@@ -1156,17 +1159,11 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         if (item->isLabel()) {
             Label* label = item->asLabel();
 
-            if (UNLIKELY(label->info() & Label::kHasCatchInfo)) {
-                ASSERT(tryBlocks()[m_context.currentTryBlock].catchBlocks[0].u.handler == label);
-                m_context.currentTryBlock = m_context.tryBlockStack.back();
-                m_context.tryBlockStack.pop_back();
-            }
+            ASSERT(!(label->info() & Label::kHasCatchInfo)
+                   || tryBlocks()[label->handlerOfTryBlock()].catchBlocks[0].u.handler == label);
 
             label->emit(m_compiler);
-
-            if (UNLIKELY(label->info() & Label::kHasTryInfo)) {
-                emitTry(&m_context, label);
-            }
+            emitTrapRange(&m_context, label);
             continue;
         }
 
@@ -1475,8 +1472,6 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 
 void JITCompiler::generateCode()
 {
-    ASSERT(m_context.nextTryBlock == tryBlocks().size());
-
     if (m_compiler == nullptr) {
         // All functions are imported.
         return;
