@@ -498,7 +498,17 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
             label->m_tryBlock = currentTryBlock;
         } else {
-            variableCount += item->asInstruction()->resultCount();
+            Instruction* instr = item->asInstruction();
+
+            variableCount += instr->resultCount();
+
+            if (instr->group() == Instruction::DirectBranch && instr->opcode() != ByteCode::JumpOpcode
+                && item->next() != nullptr && !item->next()->isLabel()) {
+                Label* label = new Label();
+
+                label->m_next = item->next();
+                item->m_next = label;
+            }
         }
     }
 
