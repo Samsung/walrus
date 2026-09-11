@@ -803,6 +803,7 @@ public:
         m_moduleFunction = moduleFunction;
     }
 
+    void threadJumps();
     void buildVariables(uint32_t requiredStackSize);
     void allocateRegistersSimple();
     void allocateRegisters();
