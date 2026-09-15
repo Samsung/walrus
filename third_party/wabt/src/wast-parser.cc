@@ -382,6 +382,9 @@ bool IsTypeEnabled(Type::Enum type, WastParseOptions* options_) {
       return options_->features.reference_types_enabled();
     case Type::ExnRef:
       return options_->features.exceptions_enabled();
+    case Type::NullExnRef:
+      return options_->features.exceptions_enabled() &&
+             options_->features.gc_enabled();
     case Type::NullFuncRef:
     case Type::NullExternRef:
     case Type::NullRef:
@@ -1013,16 +1016,21 @@ Result WastParser::ParseRefDeclaration(Var* out_type) {
     case TokenType::Any:
     case TokenType::Array:
     case TokenType::Eq:
-    case TokenType::Exn:
     case TokenType::I31:
-    case TokenType::NoExn:
     case TokenType::NoExtern:
     case TokenType::NoFunc:
     case TokenType::None:
     case TokenType::Struct:
-      if (options_->features.gc_enabled()) {
-        is_generic_ref = true;
-      }
+      is_generic_ref = options_->features.gc_enabled();
+      break;
+
+    case TokenType::Exn:
+      is_generic_ref = options_->features.exceptions_enabled();
+      break;
+
+    case TokenType::NoExn:
+      is_generic_ref = options_->features.gc_enabled() &&
+                       options_->features.exceptions_enabled();
       break;
 
     default:
@@ -5645,7 +5653,29 @@ Result WastParser::ParseActionCommand(CommandPtr* out_command) {
 Result WastParser::ParseModuleCommand(Script* script, CommandPtr* out_command) {
   WABT_TRACE(ParseModuleCommand);
   std::unique_ptr<ScriptModule> script_module;
-  CHECK_RESULT(ParseScriptModule(&script_module));
+  EXPECT(Lpar);
+  if (Peek(1) == TokenType::Instance) {
+    Location loc = GetLocation();
+    EXPECT(Module);
+    EXPECT(Instance);
+    if (!PeekMatch(TokenType::Var)) {
+      Error(loc, "missing instance name");
+      return Result::Error;
+    }
+    std::string instance_name;
+    CHECK_RESULT(ParseBindVarOpt(&instance_name));
+    if (!PeekMatch(TokenType::Var)) {
+      Error(loc, "missing definition name");
+      return Result::Error;
+    }
+    std::string definition_name;
+    CHECK_RESULT(ParseBindVarOpt(&definition_name));
+    EXPECT(Rpar);
+    out_command->reset(
+        new InstanceCommand(loc, instance_name, definition_name));
+    return Result::Ok;
+  }
+  CHECK_RESULT(ParseScriptModuleNoLpar(&script_module));
 
   Module* module = nullptr;
 
@@ -5836,10 +5866,9 @@ Result WastParser::ParseEither(ConstVector* alternatives) {
   return Result::Ok;
 }
 
-Result WastParser::ParseScriptModule(
+Result WastParser::ParseScriptModuleNoLpar(
     std::unique_ptr<ScriptModule>* out_module) {
-  WABT_TRACE(ParseScriptModule);
-  EXPECT(Lpar);
+  WABT_TRACE(ParseScriptModuleNoLpar);
   Location loc = GetLocation();
   EXPECT(Module);
   bool is_definition = Match(TokenType::Definition);
@@ -5896,6 +5925,14 @@ Result WastParser::ParseScriptModule(
   (*out_module)->is_definition = is_definition;
   EXPECT(Rpar);
   return Result::Ok;
+}
+
+Result WastParser::ParseScriptModule(
+    std::unique_ptr<ScriptModule>* out_module) {
+  WABT_TRACE(ParseScriptModule);
+  EXPECT(Lpar);
+  // Should be a tail call.
+  return ParseScriptModuleNoLpar(out_module);
 }
 
 template <typename T>

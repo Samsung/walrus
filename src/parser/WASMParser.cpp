@@ -44,7 +44,9 @@ struct WASMCodeInfo {
                     I64,
                     F32,
                     F64,
-                    V128 };
+                    V128,
+                    // Represents an unspecified type.
+                    Any };
     WASMOpcode m_code;
     CodeType m_resultType;
     CodeType m_paramTypes[3];

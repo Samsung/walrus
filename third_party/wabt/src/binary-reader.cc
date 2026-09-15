@@ -425,9 +425,13 @@ Result BinaryReader::ReadType(Type* out_value, const char* desc) {
     if (static_cast<int64_t>(heap_type) < 0 ||
         static_cast<int64_t>(heap_type) >= kInvalidIndex) {
       Type::Enum heap_type_code = static_cast<Type::Enum>(heap_type);
-      ERROR_UNLESS(heap_type_code == Type::ExnRef ||
-                       heap_type_code == Type::FuncRef ||
+      ERROR_UNLESS(heap_type_code == Type::FuncRef ||
                        heap_type_code == Type::ExternRef ||
+                       (options_.features.exceptions_enabled() &&
+                        heap_type_code == Type::ExnRef) ||
+                       (options_.features.exceptions_enabled() &&
+                        options_.features.gc_enabled() &&
+                        heap_type_code == Type::NullExnRef) ||
                        (options_.features.gc_enabled() &&
                         Type::EnumIsNonTypedGCRef(heap_type_code)),
                    "not allowed reference type: %s", desc);

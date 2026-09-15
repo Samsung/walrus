@@ -157,17 +157,9 @@ static ExternalValue* findExternalValue(size_t value)
     return externalValues.back();
 }
 
-static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src,
-                                    std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
+static Trap::TrapResult executeModule(Store* store, Module* module,
+                                      std::map<std::string, Instance*>* registeredInstanceMap)
 {
-    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags, s_FeatureFlags);
-    if (!parseResult.second.empty()) {
-        Trap::TrapResult tr;
-        tr.exception = Exception::create(parseResult.second);
-        return tr;
-    }
-
-    auto module = parseResult.first;
     const auto& importTypes = module->imports();
 
     ExternVector importValues;
@@ -337,7 +329,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
         Module* module;
         ExternVector& importValues;
         bool hasWasiImport;
-    } data = { module.value(), importValues, hasWasiImport };
+    } data = { module, importValues, hasWasiImport };
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
@@ -372,6 +364,19 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
 #endif
     },
                     &data);
+}
+
+static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src,
+                                    std::map<std::string, Instance*>* registeredInstanceMap = nullptr)
+{
+    auto parseResult = WASMParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags, s_FeatureFlags);
+    if (!parseResult.second.empty()) {
+        Trap::TrapResult tr;
+        tr.exception = Exception::create(parseResult.second);
+        return tr;
+    }
+
+    return executeModule(store, parseResult.first.value(), registeredInstanceMap);
 }
 
 static Trap::TrapResult executeWASMComponent(Store* store, const std::string& filename, const std::vector<uint8_t>& src)
@@ -909,6 +914,7 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
 
     std::map<size_t, Instance*> instanceMap;
     std::map<std::string, Instance*> registeredInstanceMap;
+    std::map<std::string, Module*> registeredModuleMap;
     size_t commandCount = 0;
     for (const std::unique_ptr<wabt::Command>& command : script->commands) {
         switch (command->type) {
@@ -944,6 +950,9 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 if (!parseResult.second.empty()) {
                     printf("Error: %s\n", parseResult.second.c_str());
                     RELEASE_ASSERT_NOT_REACHED();
+                }
+                if (module->name.size()) {
+                    registeredModuleMap[module->name] = parseResult.first.value();
                 }
             }
             break;
@@ -1027,6 +1036,23 @@ static void executeWAST(Store* store, const std::string& filename, const std::ve
                 RELEASE_ASSERT_NOT_REACHED();
             }
             printf("assertModuleUninstantiable (expect exception: %s(line: %d)) : OK\n", assertModuleUninstantiable->text.data(), assertModuleUninstantiable->module->location().line);
+            break;
+        }
+        case wabt::CommandType::Instance: {
+            auto* instanceCommand = static_cast<wabt::InstanceCommand*>(command.get());
+            auto it = registeredModuleMap.find(instanceCommand->definition_name);
+            if (it == registeredModuleMap.end()) {
+                printf("Unknown module definition: %s\n", instanceCommand->definition_name.c_str());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
+
+            auto trapResult = executeModule(store, it->second, &registeredInstanceMap);
+            if (trapResult.exception) {
+                std::string& errorMessage = trapResult.exception->message();
+                printf("Error: %s\n", errorMessage.c_str());
+                RELEASE_ASSERT_NOT_REACHED();
+            }
+            registeredInstanceMap[instanceCommand->instance_name] = store->getLastInstance();
             break;
         }
         case wabt::CommandType::Register: {

@@ -166,7 +166,7 @@ class Type {
         return type_index_ == ReferenceOrNull ? "nullexternref" : "(ref noextern)";
       case Type::NullRef:
         if (type_index_ == kBottomRef) {
-          return "(ref any)";
+          return "(ref bot)";
         }
         return type_index_ == ReferenceOrNull ? "nullref" : "(ref none)";
       case Type::FuncRef:
@@ -207,8 +207,6 @@ class Type {
       case Type::AnyRef:        return "any";
       case Type::EqRef:         return "eq";
       case Type::I31Ref:        return "i31";
-      case Type::Struct:        return "struct";
-      case Type::Array:         return "array";
       default:                  return "<invalid>";
     }
   }
@@ -278,16 +276,16 @@ class Type {
   }
 
   static bool EnumIsNonTypedGCRef(Enum value) {
-    return value == Type::NullExnRef || value == Type::NullFuncRef ||
-           value == Type::NullExternRef || value == Type::NullRef ||
-           value == Type::AnyRef || value == Type::EqRef ||
-           value == Type::I31Ref || value == Type::StructRef ||
-           value == Type::ArrayRef;
+    return value == Type::NullFuncRef || value == Type::NullExternRef ||
+           value == Type::NullRef || value == Type::AnyRef ||
+           value == Type::EqRef || value == Type::I31Ref ||
+           value == Type::StructRef || value == Type::ArrayRef;
   }
 
   static bool EnumIsNonTypedRef(Enum value) {
     return value == Type::ExternRef || value == Type::FuncRef ||
-           value == Type::ExnRef || EnumIsNonTypedGCRef(value);
+           value == Type::ExnRef || value == Type::NullExnRef ||
+           EnumIsNonTypedGCRef(value);
   }
 
   // Bottom references are only used by the shared
