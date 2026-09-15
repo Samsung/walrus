@@ -21,6 +21,7 @@
 #include "jit/Compiler.h"
 #include "runtime/ObjectType.h"
 
+#include <algorithm>
 #include <map>
 
 namespace Walrus {
@@ -107,6 +108,16 @@ void Label::append(Instruction* instr)
     }
 
     m_branches.push_back(instr);
+}
+
+void Label::removeBranch(Instruction* instr)
+{
+    for (size_t i = 0; i < m_branches.size(); i++) {
+        if (m_branches[i] == instr) {
+            m_branches.erase(m_branches.begin() + i);
+            return;
+        }
+    }
 }
 
 void Label::merge(Label* other)
@@ -221,6 +232,140 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
 
     append(branch);
     return branch;
+}
+
+bool Instruction::isBlockTerminator()
+{
+    if (group() == Instruction::BrTable) {
+        return true;
+    }
+
+    switch (opcode()) {
+    case ByteCode::JumpOpcode:
+    case ByteCode::ThrowOpcode:
+    case ByteCode::ThrowRefOpcode:
+    case ByteCode::UnreachableOpcode:
+    case ByteCode::EndOpcode:
+    case ByteCode::ReturnCallOpcode:
+    case ByteCode::ReturnCallIndirectOpcode:
+    case ByteCode::ReturnCallIndirectM64Opcode:
+    case ByteCode::ReturnCallRefOpcode:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void JITCompiler::threadJumps()
+{
+    std::map<Label*, Label*> targets;
+    std::map<Label*, bool> pinned;
+
+    for (size_t i = m_tryBlockStart; i < m_tryBlocks.size(); i++) {
+        pinned[m_tryBlocks[i].start] = true;
+
+        for (auto it : m_tryBlocks[i].catchBlocks) {
+            pinned[it.u.handler] = true;
+        }
+    }
+
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        if (!item->isLabel() || pinned.find(item->asLabel()) != pinned.end()) {
+            continue;
+        }
+
+        InstructionListItem* next = item->next();
+
+        if (next == nullptr || !next->isInstruction()
+            || next->asInstruction()->opcode() != ByteCode::JumpOpcode
+            || (next->next() != nullptr && !next->next()->isLabel())) {
+            continue;
+        }
+
+        targets[item->asLabel()] = next->asInstruction()->asExtended()->value().targetLabel;
+    }
+
+    std::map<Label*, Label*> threaded;
+    std::vector<Label*> path;
+
+    for (auto it : targets) {
+        Label* current = it.first;
+        bool cyclic = false;
+
+        path.clear();
+
+        while (targets.find(current) != targets.end()) {
+            for (auto seen : path) {
+                if (seen == current) {
+                    cyclic = true;
+                    break;
+                }
+            }
+
+            if (cyclic) {
+                break;
+            }
+
+            path.push_back(current);
+            current = targets[current];
+        }
+
+        if (cyclic) {
+            continue;
+        }
+
+        for (auto label : path) {
+            threaded[label] = current;
+        }
+    }
+
+    if (threaded.empty()) {
+        return;
+    }
+
+    InstructionListItem* prev = nullptr;
+    InstructionListItem* item = m_first;
+
+    while (item != nullptr) {
+        std::map<Label*, Label*>::iterator it = item->isLabel() ? threaded.find(item->asLabel()) : threaded.end();
+
+        if (it == threaded.end()) {
+            prev = item;
+            item = item->next();
+            continue;
+        }
+
+        Label* label = item->asLabel();
+        Instruction* jump = item->next()->asInstruction();
+        Label* jumpTarget = jump->asExtended()->value().targetLabel;
+        InstructionListItem* next = jump->next();
+
+        std::vector<Instruction*>& branches = jumpTarget->m_branches;
+
+        for (size_t i = 0; i < branches.size(); i++) {
+            if (branches[i] == jump) {
+                branches.erase(branches.begin() + i);
+                break;
+            }
+        }
+
+        it->second->merge(label);
+
+        if (prev == nullptr) {
+            m_first = next;
+        } else {
+            prev->m_next = next;
+        }
+
+        if (m_last == jump) {
+            m_last = prev;
+        }
+
+        jump->deleteObject();
+        label->deleteObject();
+
+        item = next;
+    }
 }
 
 InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref)
@@ -483,6 +628,144 @@ void JITCompiler::dump()
 }
 
 #endif /* !NDEBUG */
+
+struct SwappableArms {
+    Label* elseLabel;
+    Label* endLabel;
+    InstructionListItem* thenLast;
+    Instruction* thenJump;
+    InstructionListItem* elseLast;
+};
+
+static bool findSwappableArms(Instruction* branch, SwappableArms& arms)
+{
+    ByteCode::Opcode opcode = branch->opcode();
+
+    if (opcode != ByteCode::JumpIfTrueOpcode && opcode != ByteCode::JumpIfFalseOpcode) {
+        return false;
+    }
+
+    ByteCodeOffsetValue* byteCode = reinterpret_cast<ByteCodeOffsetValue*>(branch->byteCode());
+
+    if (byteCode->branchHint() != ByteCodeOffsetValue::BranchHint::NotTaken) {
+        return false;
+    }
+
+    Label* elseLabel = branch->asExtended()->value().targetLabel;
+    InstructionListItem* last = nullptr;
+    InstructionListItem* beforeLast = nullptr;
+
+    for (InstructionListItem* item = branch->next(); item != elseLabel; item = item->next()) {
+        if (item == nullptr) {
+            return false;
+        }
+
+        beforeLast = last;
+        last = item;
+    }
+
+    if (beforeLast == nullptr || !last->isInstruction()
+        || last->asInstruction()->opcode() != ByteCode::JumpOpcode) {
+        return false;
+    }
+
+    arms.elseLabel = elseLabel;
+    arms.thenLast = beforeLast;
+    arms.thenJump = last->asInstruction();
+    arms.endLabel = arms.thenJump->asExtended()->value().targetLabel;
+    arms.elseLast = nullptr;
+
+    for (InstructionListItem* item = elseLabel->next(); item != arms.endLabel; item = item->next()) {
+        if (item == nullptr) {
+            return false;
+        }
+
+        arms.elseLast = item;
+    }
+
+    if (arms.elseLast == nullptr) {
+        return false;
+    }
+
+    for (InstructionListItem* item = branch->next(); item != arms.endLabel; item = item->next()) {
+        if (!item->isLabel() || item == elseLabel) {
+            continue;
+        }
+
+        bool inThenArm = item->id() < elseLabel->id();
+        size_t first = inThenArm ? branch->id() : elseLabel->id();
+        size_t lastId = inThenArm ? arms.thenJump->id() : arms.elseLast->id();
+
+        for (auto it : item->asLabel()->branches()) {
+            if (it->id() <= first || it->id() > lastId) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+void JITCompiler::reorderHintedBranches()
+{
+    size_t id = 0;
+    bool swapped = false;
+
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        item->m_id = ++id;
+    }
+
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        SwappableArms arms;
+
+        if (!item->isInstruction() || item->group() != Instruction::DirectBranch
+            || !findSwappableArms(item->asInstruction(), arms)) {
+            continue;
+        }
+
+        Instruction* branch = item->asInstruction();
+        InstructionListItem* thenFirst = branch->next();
+        Label* thenLabel = thenFirst->isLabel() ? thenFirst->asLabel() : new Label();
+
+        branch->m_opcode = (branch->opcode() == ByteCode::JumpIfTrueOpcode) ? ByteCode::JumpIfFalseOpcode : ByteCode::JumpIfTrueOpcode;
+        branch->asExtended()->value().targetLabel = thenLabel;
+        arms.elseLabel->removeBranch(branch);
+        thenLabel->append(branch);
+
+        branch->m_next = arms.elseLabel;
+
+        if (arms.elseLast->isInstruction() && arms.elseLast->asInstruction()->isBlockTerminator()) {
+            arms.elseLast->m_next = thenLabel;
+            arms.endLabel->removeBranch(arms.thenJump);
+            arms.thenJump->deleteObject();
+        } else {
+            arms.elseLast->m_next = arms.thenJump;
+            arms.thenJump->m_next = thenLabel;
+        }
+
+        if (thenLabel != thenFirst) {
+            thenLabel->m_next = thenFirst;
+        }
+
+        arms.thenLast->m_next = arms.endLabel;
+
+        id = 0;
+        for (InstructionListItem* it = m_first; it != nullptr; it = it->next()) {
+            it->m_id = ++id;
+        }
+
+        swapped = true;
+    }
+
+    if (!swapped || m_tryBlockStart == m_tryBlocks.size()) {
+        return;
+    }
+
+    std::stable_sort(m_tryBlocks.begin() + m_tryBlockStart, m_tryBlocks.end(),
+                     [](const TryBlock& left, const TryBlock& right) -> bool {
+                         return left.start->id() < right.start->id();
+                     });
+}
 
 void JITCompiler::append(InstructionListItem* item)
 {

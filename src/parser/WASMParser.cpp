@@ -678,6 +678,31 @@ private:
     size_t m_lastI32EqzPos;
     bool m_useJIT;
 
+    enum class ConditionHint : uint8_t {
+        None,
+        LikelyFalse,
+        LikelyTrue,
+    };
+    ConditionHint m_pendingConditionHint = ConditionHint::None;
+
+    ConditionHint takeConditionHint()
+    {
+        ConditionHint hint = m_pendingConditionHint;
+        m_pendingConditionHint = ConditionHint::None;
+        return hint;
+    }
+
+    void applyConditionHint(size_t position, ConditionHint hint, bool jumpTakenWhenConditionIsTrue)
+    {
+        if (LIKELY(hint == ConditionHint::None)) {
+            return;
+        }
+        bool taken = (hint == ConditionHint::LikelyTrue) == jumpTakenWhenConditionIsTrue;
+        peekByteCode<Walrus::ByteCodeOffsetValue>(position)
+            ->setBranchHint(taken ? Walrus::ByteCodeOffsetValue::BranchHint::Taken
+                                  : Walrus::ByteCodeOffsetValue::BranchHint::NotTaken);
+    }
+
     Walrus::FunctionType* getFunctionType(Index index)
     {
         return m_result.m_compositeTypes[index]->asFunction();
@@ -1539,6 +1564,11 @@ public:
     {
     }
 
+    virtual void OnBranchHint(bool likely) override
+    {
+        m_pendingConditionHint = likely ? ConditionHint::LikelyTrue : ConditionHint::LikelyFalse;
+    }
+
     uint16_t computeFunctionParameterOrResultOffsetCount(const Walrus::TypeVector& types)
     {
         uint16_t result = 0;
@@ -1898,6 +1928,7 @@ public:
 
     virtual void OnIfExpr(Type sigType) override
     {
+        ConditionHint conditionHint = takeConditionHint();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto stackPos = popVMStack();
 
@@ -1917,6 +1948,8 @@ public:
         } else {
             pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::IfOpcode);
         }
+
+        applyConditionHint(b.m_position, conditionHint, false);
         m_preprocessData.seenBranch();
     }
 
@@ -2239,8 +2272,12 @@ public:
         stopToGenerateByteCodeWhileBlockEnd();
     }
 
+    // Three of the four paths below emit JumpTypeInverted: a jump that skips
+    // over the branch sequence rather than performing the branch, and so is
+    // taken exactly when the wasm branch is not. That is why |conditionHint|,
+    // which describes the condition, is applied with a different sign per path.
     template <typename JumpType, typename JumpTypeInverted, WASMOpcode opcode>
-    size_t GenerateConditionalBranch(Index depth, size_t stackPos)
+    size_t GenerateConditionalBranch(Index depth, size_t stackPos, ConditionHint conditionHint = ConditionHint::None)
     {
         if (m_blockInfo.size() == depth) {
             // this case acts like return
@@ -2251,6 +2288,7 @@ public:
             }
             generateEndCode();
             peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
+            applyConditionHint(pos, conditionHint, false);
             return pos;
         }
 
@@ -2268,6 +2306,7 @@ public:
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
             peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
+            applyConditionHint(pos, conditionHint, false);
             return pos;
         }
 
@@ -2290,6 +2329,7 @@ public:
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
             peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
+            applyConditionHint(pos, conditionHint, false);
             return pos;
         }
 
@@ -2301,23 +2341,27 @@ public:
 
         size_t pos = m_currentByteCode.size();
         pushByteCode(JumpType(stackPos, offset), opcode);
+        applyConditionHint(pos, conditionHint, true);
         return pos;
     }
 
     virtual void OnBrIfExpr(Index depth) override
     {
+        ConditionHint conditionHint = takeConditionHint();
         m_preprocessData.seenBranch(depth + 1);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         size_t stackPos = popVMStack();
         bool isInverted = canBeInverted(stackPos);
 
+        // Inverting swaps the tested value and the jump polarity together, so
+        // the hint carries over unchanged either way.
         if (UNLIKELY(isInverted)) {
             stackPos = peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->srcOffset();
             resizeByteCode(m_lastI32EqzPos);
             m_lastI32EqzPos = s_noI32Eqz;
-            GenerateConditionalBranch<Walrus::JumpIfFalse, Walrus::JumpIfTrue, WASMOpcode::BrIfOpcode>(depth, stackPos);
+            GenerateConditionalBranch<Walrus::JumpIfFalse, Walrus::JumpIfTrue, WASMOpcode::BrIfOpcode>(depth, stackPos, conditionHint);
         } else {
-            GenerateConditionalBranch<Walrus::JumpIfTrue, Walrus::JumpIfFalse, WASMOpcode::BrIfOpcode>(depth, stackPos);
+            GenerateConditionalBranch<Walrus::JumpIfTrue, Walrus::JumpIfFalse, WASMOpcode::BrIfOpcode>(depth, stackPos, conditionHint);
         }
     }
 
