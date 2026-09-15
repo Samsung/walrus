@@ -223,6 +223,118 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
     return branch;
 }
 
+void JITCompiler::threadJumps()
+{
+    std::map<Label*, Label*> targets;
+    std::map<Label*, bool> pinned;
+
+    for (size_t i = m_tryBlockStart; i < m_tryBlocks.size(); i++) {
+        pinned[m_tryBlocks[i].start] = true;
+
+        for (auto it : m_tryBlocks[i].catchBlocks) {
+            pinned[it.u.handler] = true;
+        }
+    }
+
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        if (!item->isLabel() || pinned.find(item->asLabel()) != pinned.end()) {
+            continue;
+        }
+
+        InstructionListItem* next = item->next();
+
+        if (next == nullptr || !next->isInstruction()
+            || next->asInstruction()->opcode() != ByteCode::JumpOpcode
+            || (next->next() != nullptr && !next->next()->isLabel())) {
+            continue;
+        }
+
+        targets[item->asLabel()] = next->asInstruction()->asExtended()->value().targetLabel;
+    }
+
+    std::map<Label*, Label*> threaded;
+    std::vector<Label*> path;
+
+    for (auto it : targets) {
+        Label* current = it.first;
+        bool cyclic = false;
+
+        path.clear();
+
+        while (targets.find(current) != targets.end()) {
+            for (auto seen : path) {
+                if (seen == current) {
+                    cyclic = true;
+                    break;
+                }
+            }
+
+            if (cyclic) {
+                break;
+            }
+
+            path.push_back(current);
+            current = targets[current];
+        }
+
+        if (cyclic) {
+            continue;
+        }
+
+        for (auto label : path) {
+            threaded[label] = current;
+        }
+    }
+
+    if (threaded.empty()) {
+        return;
+    }
+
+    InstructionListItem* prev = nullptr;
+    InstructionListItem* item = m_first;
+
+    while (item != nullptr) {
+        std::map<Label*, Label*>::iterator it = item->isLabel() ? threaded.find(item->asLabel()) : threaded.end();
+
+        if (it == threaded.end()) {
+            prev = item;
+            item = item->next();
+            continue;
+        }
+
+        Label* label = item->asLabel();
+        Instruction* jump = item->next()->asInstruction();
+        Label* jumpTarget = jump->asExtended()->value().targetLabel;
+        InstructionListItem* next = jump->next();
+
+        std::vector<Instruction*>& branches = jumpTarget->m_branches;
+
+        for (size_t i = 0; i < branches.size(); i++) {
+            if (branches[i] == jump) {
+                branches.erase(branches.begin() + i);
+                break;
+            }
+        }
+
+        it->second->merge(label);
+
+        if (prev == nullptr) {
+            m_first = next;
+        } else {
+            prev->m_next = next;
+        }
+
+        if (m_last == jump) {
+            m_last = prev;
+        }
+
+        jump->deleteObject();
+        label->deleteObject();
+
+        item = next;
+    }
+}
+
 InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref)
 {
     uint32_t type = variable.info & Instruction::TypeMask;

@@ -136,21 +136,12 @@ static sljit_uw SLJIT_FUNC getTrapHandler(ExecutionContext* context, sljit_uw re
     return context->currentInstanceConstData->find(returnAddr);
 }
 
-static void emitTry(CompileContext* context, Label* label)
+static void emitTrapRange(CompileContext* context, Label* label)
 {
-    std::vector<TryBlock>& tryBlocks = context->compiler->tryBlocks();
-
-    ASSERT(tryBlocks[context->nextTryBlock].start == label);
-    context->trapBlocks.push_back(TrapBlock(label->label(), context->currentTryBlock));
-
-    do {
-        TryBlock& block = tryBlocks[context->nextTryBlock];
-        block.parent = context->currentTryBlock;
-
-        context->tryBlockStack.push_back(context->currentTryBlock);
-        context->currentTryBlock = context->nextTryBlock++;
-    } while (context->nextTryBlock < tryBlocks.size()
-             && tryBlocks[context->nextTryBlock].start == label);
+    if (label->tryBlock() != context->currentTryBlock) {
+        context->trapBlocks.push_back(TrapBlock(label->label(), context->currentTryBlock));
+        context->currentTryBlock = label->tryBlock();
+    }
 }
 
 static sljit_sw findCatch(sljit_sw current, uint8_t* bp, ExecutionContext* context)
