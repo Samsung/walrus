@@ -3722,6 +3722,7 @@ static void compileFunction(JITCompiler* compiler)
         idx += byteCode->getSize();
     }
 
+    compiler->reorderHintedBranches();
     compiler->buildVariables(STACK_OFFSET(function->requiredStackSize()));
 
     if (compiler->JITFlags() & JITFlagValue::disableRegAlloc) {
