@@ -519,7 +519,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
     }
 
     DependencyGenContext dependencyCtx(dependencySize, requiredStackSize);
-    Instruction* lastInstruction = nullptr;
+    InstructionListItem* fallThrough = nullptr;
     std::vector<size_t> activeTryBlocks;
 
     m_variableList = new VariableList(variableCount, requiredStackSize);
@@ -546,7 +546,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             // Build a dependency list which refers to the last label.
             Label* label = item->asLabel();
 
-            if (lastInstruction != nullptr) {
+            if (fallThrough != nullptr) {
                 ExtendedInstruction* jump = ExtendedInstruction::create(nullptr, Instruction::DirectBranch, ByteCode::JumpOpcode, 0, 0);
 
                 jump->m_id = label->id();
@@ -554,10 +554,10 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 label->m_branches.push_back(jump);
 
                 jump->m_next = item;
-                lastInstruction->m_next = jump;
+                fallThrough->m_next = jump;
             }
 
-            if (lastInstruction != nullptr || item == m_first) {
+            if (fallThrough != nullptr || item == m_first) {
                 dependencyCtx.update(label->m_dependencyStart, label->id());
             } else {
                 dependencyCtx.maxDistance[label->m_dependencyStart / requiredStackSize] = label->id();
@@ -598,7 +598,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 dependencyCtx.currentOptions[i] = 0;
             }
 
-            lastInstruction = nullptr;
+            fallThrough = label;
             continue;
         }
 
@@ -606,7 +606,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         Operand* operand = instr->operands();
         Operand* end = operand + instr->paramCount();
 
-        lastInstruction = instr;
+        fallThrough = instr;
 
         while (operand < end) {
             VariableRef ref = dependencyCtx.currentDependencies[*operand];
@@ -629,7 +629,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             dependencyCtx.update(label->m_dependencyStart, instr->id());
 
             if (instr->opcode() == ByteCode::JumpOpcode) {
-                lastInstruction = nullptr;
+                fallThrough = nullptr;
             }
             continue;
         }
@@ -645,7 +645,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 }
                 label++;
             }
-            lastInstruction = nullptr;
+            fallThrough = nullptr;
             continue;
         }
 
@@ -679,7 +679,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
         if (instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::ThrowRefOpcode
             || instr->opcode() == ByteCode::UnreachableOpcode || instr->opcode() == ByteCode::EndOpcode) {
-            lastInstruction = nullptr;
+            fallThrough = nullptr;
             continue;
         }
 
@@ -728,12 +728,12 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         case ByteCode::ReturnCallOpcode: {
             ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
             functionType = module()->function(call->index())->functionType();
-            lastInstruction = nullptr;
+            fallThrough = nullptr;
             break;
         }
         case ByteCode::ReturnCallIndirectOpcode:
         case ByteCode::ReturnCallIndirectM64Opcode:
-            lastInstruction = nullptr;
+            fallThrough = nullptr;
             FALLTHROUGH;
         case ByteCode::CallIndirectOpcode:
         case ByteCode::CallIndirectM64Opcode: {
@@ -750,7 +750,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             ASSERT(instr->opcode() == ByteCode::ReturnCallRefOpcode);
             ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
             functionType = callRef->functionType();
-            lastInstruction = nullptr;
+            fallThrough = nullptr;
             break;
         }
         }
