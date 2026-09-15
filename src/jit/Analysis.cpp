@@ -606,7 +606,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         Operand* operand = instr->operands();
         Operand* end = operand + instr->paramCount();
 
-        fallThrough = instr;
+        fallThrough = instr->isBlockTerminator() ? nullptr : instr;
 
         while (operand < end) {
             VariableRef ref = dependencyCtx.currentDependencies[*operand];
@@ -627,10 +627,6 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         if (instr->group() == Instruction::DirectBranch) {
             Label* label = instr->asExtended()->value().targetLabel;
             dependencyCtx.update(label->m_dependencyStart, instr->id());
-
-            if (instr->opcode() == ByteCode::JumpOpcode) {
-                fallThrough = nullptr;
-            }
             continue;
         }
 
@@ -645,7 +641,6 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 }
                 label++;
             }
-            fallThrough = nullptr;
             continue;
         }
 
@@ -679,7 +674,6 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
         if (instr->opcode() == ByteCode::ThrowOpcode || instr->opcode() == ByteCode::ThrowRefOpcode
             || instr->opcode() == ByteCode::UnreachableOpcode || instr->opcode() == ByteCode::EndOpcode) {
-            fallThrough = nullptr;
             continue;
         }
 
@@ -728,13 +722,10 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         case ByteCode::ReturnCallOpcode: {
             ReturnCall* call = reinterpret_cast<ReturnCall*>(instr->byteCode());
             functionType = module()->function(call->index())->functionType();
-            fallThrough = nullptr;
             break;
         }
         case ByteCode::ReturnCallIndirectOpcode:
         case ByteCode::ReturnCallIndirectM64Opcode:
-            fallThrough = nullptr;
-            FALLTHROUGH;
         case ByteCode::CallIndirectOpcode:
         case ByteCode::CallIndirectM64Opcode: {
             CallTable* callTable = reinterpret_cast<CallTable*>(instr->byteCode());
@@ -750,7 +741,6 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             ASSERT(instr->opcode() == ByteCode::ReturnCallRefOpcode);
             ReturnCallRef* callRef = reinterpret_cast<ReturnCallRef*>(instr->byteCode());
             functionType = callRef->functionType();
-            fallThrough = nullptr;
             break;
         }
         }

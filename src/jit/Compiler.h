@@ -266,6 +266,8 @@ public:
 
     ByteCode* byteCode() { return m_byteCode; }
 
+    bool isBlockTerminator();
+
     // Params and results are stored in the same operands
     // array, where params come first followed by results.
     Operand* operands() { return reinterpret_cast<Operand*>(this + 1); }
@@ -433,6 +435,7 @@ public:
     }
 
     void append(Instruction* instr);
+    void removeBranch(Instruction* instr);
     // Should be called before removing the other instruction.
     void merge(Label* other);
 
@@ -803,6 +806,7 @@ public:
         m_moduleFunction = moduleFunction;
     }
 
+    void reorderHintedBranches();
     void threadJumps();
     void buildVariables(uint32_t requiredStackSize);
     void allocateRegistersSimple();
