@@ -413,12 +413,18 @@ public:
     static const uint16_t kHasTryInfo = 1 << 2;
     static const uint16_t kHasCatchInfo = 1 << 3;
 
+    static const size_t kNoTryBlock = ~static_cast<size_t>(0);
+
     explicit Label()
         : InstructionListItem(CodeLabel)
+        , m_tryBlock(kNoTryBlock)
+        , m_handlerOfTryBlock(kNoTryBlock)
     {
     }
 
     const std::vector<Instruction*>& branches() { return m_branches; }
+    size_t tryBlock() { return m_tryBlock; }
+    size_t handlerOfTryBlock() { return m_handlerOfTryBlock; }
 
     sljit_label* label()
     {
@@ -435,6 +441,8 @@ public:
 
 private:
     std::vector<Instruction*> m_branches;
+    size_t m_tryBlock;
+    size_t m_handlerOfTryBlock;
 
     // Contexts used by different compiling stages.
     union {
@@ -581,12 +589,10 @@ struct CompileContext {
     size_t dataSegmentsStart;
     size_t elementSegmentsStart;
     sljit_sw stackTmpStart;
-    size_t nextTryBlock;
     size_t currentTryBlock;
     size_t trapBlocksStart;
     Module* module;
     std::vector<TrapBlock> trapBlocks;
-    std::vector<size_t> tryBlockStack;
     std::vector<SlowCase*> slowCases;
     std::vector<sljit_jump*> earlyReturns;
     std::vector<TrapJump> trapJumps;
