@@ -1596,6 +1596,7 @@ enum class CommandType {
   Module,
   ScriptModule,
   Action,
+  Instance,
   Register,
   AssertMalformed,
   AssertInvalid,
@@ -1652,6 +1653,19 @@ class ActionCommandBase : public CommandMixin<TypeEnum> {
 };
 
 using ActionCommand = ActionCommandBase<CommandType::Action>;
+
+class InstanceCommand : public CommandMixin<CommandType::Instance> {
+ public:
+  InstanceCommand(const Location& loc,
+                  std::string instance_name,
+                  std::string definition_name)
+      : loc(loc), instance_name(instance_name),
+        definition_name(definition_name) {}
+
+  Location loc;
+  std::string instance_name;
+  std::string definition_name;
+};
 
 class RegisterCommand : public CommandMixin<CommandType::Register> {
  public:

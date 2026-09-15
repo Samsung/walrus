@@ -244,7 +244,8 @@ Result SharedValidator::OnMemory(const Location& loc,
 Result SharedValidator::OnGlobalImport(const Location& loc,
                                        Type type,
                                        bool mutable_) {
-  Result result = Result::Ok;
+  Result result =
+      CheckReferenceType(loc, type, type_fields_.NumTypes(), "globals");
   if (mutable_ && !options_.features.mutable_globals_enabled()) {
     PrintError(loc, "mutable globals cannot be imported");
     result |= Result::Error;
@@ -257,10 +258,10 @@ Result SharedValidator::OnGlobalImport(const Location& loc,
 Result SharedValidator::BeginGlobal(const Location& loc,
                                     Type type,
                                     bool mutable_) {
-  CHECK_RESULT(
-      CheckReferenceType(loc, type, type_fields_.NumTypes(), "globals"));
+  Result result =
+      CheckReferenceType(loc, type, type_fields_.NumTypes(), "globals");
   globals_.push_back(GlobalType{type, mutable_});
-  return Result::Ok;
+  return result;
 }
 
 Result SharedValidator::EndGlobal(const Location&) {
