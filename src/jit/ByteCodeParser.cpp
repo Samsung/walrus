@@ -3730,6 +3730,8 @@ static void compileFunction(JITCompiler* compiler)
         compiler->allocateRegisters();
     }
 
+    compiler->markSingleJumpBlocks();
+
 #if !defined(NDEBUG)
     if (compiler->JITFlags() & JITFlagValue::JITVerbose) {
         compiler->dump();

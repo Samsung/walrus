@@ -214,6 +214,17 @@ Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opco
     return branch;
 }
 
+Label* Label::finalTarget()
+{
+    Label* label = this;
+
+    while (label->info() & Label::kIsSingleJump) {
+        label = label->next()->asInstruction()->asExtended()->value().targetLabel;
+    }
+
+    return label;
+}
+
 BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset)
 {
     BrTableInstruction* branch = BrTableInstruction::create(byteCode, numTargets + 1);
@@ -221,6 +232,55 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
 
     append(branch);
     return branch;
+}
+
+void JITCompiler::markSingleJumpBlocks()
+{
+    std::vector<Label*> labels;
+
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        if (!item->isLabel()) {
+            continue;
+        }
+
+        InstructionListItem* next = item->next();
+
+        if (next == nullptr || !next->isInstruction()
+            || next->asInstruction()->opcode() != ByteCode::JumpOpcode
+            || (next->next() != nullptr && !next->next()->isLabel())) {
+            continue;
+        }
+
+        item->addInfo(Label::kIsSingleJump);
+        labels.push_back(item->asLabel());
+    }
+
+    std::vector<Label*> path;
+
+    for (auto it : labels) {
+        Label* current = it;
+
+        path.clear();
+
+        while (current->info() & Label::kIsSingleJump) {
+            bool cyclic = false;
+
+            for (auto seen : path) {
+                if (seen == current) {
+                    cyclic = true;
+                    break;
+                }
+            }
+
+            if (cyclic) {
+                current->clearInfo(Label::kIsSingleJump);
+                break;
+            }
+
+            path.push_back(current);
+            current = current->next()->asInstruction()->asExtended()->value().targetLabel;
+        }
+    }
 }
 
 InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref)

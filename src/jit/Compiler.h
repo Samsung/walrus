@@ -412,6 +412,7 @@ public:
     static const uint16_t kHasLabelData = 1 << 1;
     static const uint16_t kHasTryInfo = 1 << 2;
     static const uint16_t kHasCatchInfo = 1 << 3;
+    static const uint16_t kIsSingleJump = 1 << 4;
 
     static const size_t kNoTryBlock = ~static_cast<size_t>(0);
 
@@ -428,10 +429,15 @@ public:
 
     sljit_label* label()
     {
+        if (info() & Label::kIsSingleJump) {
+            return finalTarget()->label();
+        }
+
         ASSERT(info() & Label::kHasLabelData);
         return m_label;
     }
 
+    Label* finalTarget();
     void append(Instruction* instr);
     // Should be called before removing the other instruction.
     void merge(Label* other);
@@ -803,6 +809,7 @@ public:
         m_moduleFunction = moduleFunction;
     }
 
+    void markSingleJumpBlocks();
     void buildVariables(uint32_t requiredStackSize);
     void allocateRegistersSimple();
     void allocateRegisters();

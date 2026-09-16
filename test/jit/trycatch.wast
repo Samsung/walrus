@@ -59,8 +59,24 @@
     f32.const 0
     f64.const 0
   )
+
+  (func (export "try3") (result i32)
+    (block $out
+      (try
+        (do
+           call $throw2
+        )
+        (catch_all
+           br $out
+        )
+      )
+    )
+
+    i32.const 7
+  )
 )
 
 (assert_return (invoke "try1" (i64.const 1234567) (f64.const 123456.5))
     (i32.const 1234567) (i64.const 1234577) (f32.const 123456.5) (f64.const 123446.5))
 (assert_return (invoke "try2") (i32.const 1234) (i64.const 4321) (f32.const 6789.5) (f64.const -9876.75))
+(assert_return (invoke "try3") (i32.const 7))

@@ -764,7 +764,13 @@ static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
 
     switch (instr->opcode()) {
     case ByteCode::JumpOpcode: {
-        if (instr->next() == instr->asExtended()->value().targetLabel) {
+        InstructionListItem* next = instr->next();
+
+        while (next != nullptr && next->isLabel() && (next->asLabel()->info() & Label::kIsSingleJump)) {
+            next = next->next()->next();
+        }
+
+        if (next == instr->asExtended()->value().targetLabel->finalTarget()) {
             return;
         }
 
@@ -1028,6 +1034,11 @@ struct LabelJumpList {
 
 void Label::jumpFrom(sljit_jump* jump)
 {
+    if (info() & Label::kIsSingleJump) {
+        finalTarget()->jumpFrom(jump);
+        return;
+    }
+
     if (info() & Label::kHasLabelData) {
         sljit_set_label(jump, m_label);
         return;
@@ -1158,6 +1169,11 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 
         if (item->isLabel()) {
             Label* label = item->asLabel();
+
+            if (label->info() & Label::kIsSingleJump) {
+                item = item->next();
+                continue;
+            }
 
             ASSERT(!(label->info() & Label::kHasCatchInfo)
                    || tryBlocks()[label->handlerOfTryBlock()].catchBlocks[0].u.handler == label);
@@ -1826,7 +1842,7 @@ void JITCompiler::emitEpilog()
         sljit_label** end = branchList + func.branchTableSize;
 
         do {
-            *branchList = reinterpret_cast<Label*>(*branchList)->m_label;
+            *branchList = reinterpret_cast<Label*>(*branchList)->label();
             branchList++;
         } while (branchList < end);
     }
