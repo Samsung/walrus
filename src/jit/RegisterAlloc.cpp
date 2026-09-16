@@ -583,7 +583,9 @@ static inline int reuseTemporary(uint8_t type, VariableList::Variable** reusable
     }
 
     for (uint32_t i = 0; i < 3; i++) {
-        if ((type & (Instruction::Src0Allowed << i)) && reusableRegs[i] != nullptr) {
+        VariableList::Variable* variable = reusableRegs[i];
+        if ((type & (Instruction::Src0Allowed << i)) && variable != nullptr
+            && variable != reusableRegs[i > 0 ? i - 1 : 2] && variable != reusableRegs[i < 2 ? i + 1 : 0]) {
             return i;
         }
     }
