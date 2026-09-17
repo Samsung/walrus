@@ -30,6 +30,8 @@
 
 namespace Walrus {
 
+class ComponentInstanceWasi02;
+
 enum FileType : uint32_t {
     Unknown,
     BlockDevice,
@@ -72,7 +74,7 @@ enum OpenFlags : uint32_t {
     openTruncate = 1 << 3,
 };
 
-enum FilesystemError : int32_t {
+enum class FilesystemError : int32_t {
     access,
     wouldBlock,
     already,
@@ -112,6 +114,40 @@ enum FilesystemError : int32_t {
     crossDevice
 };
 
+enum IpAddressFamily : uint8_t {
+    ipV4,
+    ipV6
+};
+
+enum SocketType {
+    udp,
+    tcp
+};
+
+enum class NetworkErrorCodes {
+    unknown,
+    accessDenied,
+    notSupported,
+    invalidArgument,
+    outOfMemory,
+    timeout,
+    concurrencyConflict,
+    notInProgress,
+    wouldBlock,
+    invalidState,
+    newSocketLimit,
+    addressNotBindable,
+    addressInUse,
+    remoteUnreachable,
+    connectionRefused,
+    connectionReset,
+    connectionAborted,
+    datagramTooLarge,
+    nameUnresolvable,
+    temporaryResolverFailure,
+    permanentResolverFailure
+};
+
 class WasiStoreData {
 public:
     WasiStoreData(int argc, const char** argv, const char** envp, Wasi02DirMap& preOpens);
@@ -134,6 +170,16 @@ public:
     void setPrevClockNow(clock_t value)
     {
         m_prevClockNow = value;
+    }
+
+    void setInstanceCreator(ComponentInstanceWasi02* instance)
+    {
+        m_instanceCreator = instance;
+    }
+
+    ComponentInstanceWasi02* instanceCreator()
+    {
+        return m_instanceCreator;
     }
 
     const std::vector<std::string>& arguments() const
@@ -159,6 +205,7 @@ public:
 private:
     uint64_t m_prevNow;
     clock_t m_prevClockNow;
+    ComponentInstanceWasi02* m_instanceCreator;
     std::vector<std::string> m_arguments;
     std::vector<std::pair<std::string, std::string>> m_environment;
     std::vector<std::pair<std::string, std::string>> m_preOpens;
@@ -418,6 +465,105 @@ private:
     int32_t m_flags;
 };
 
+class ComponentResourceWasiNetwork : public ComponentResource {
+public:
+    ComponentResourceWasiNetwork(ComponentTypeResource* type, IpAddressFamily family)
+        : ComponentResource(ResourceWasiNetworkKind, type)
+        , m_port(0)
+        , m_family(family)
+    {
+    }
+
+    IpAddressFamily ipAddressFamily()
+    {
+        return m_family;
+    }
+
+    uint8_t* ip()
+    {
+        return m_ip;
+    }
+
+    void setPort(uint16_t port)
+    {
+        m_port = port;
+    }
+
+    uint16_t port()
+    {
+        return m_port;
+    }
+
+private:
+    uint8_t m_ip[4];
+    uint16_t m_port;
+    IpAddressFamily m_family;
+};
+
+class ComponentResourceWasiSocket : public ComponentResource {
+public:
+    ComponentResourceWasiSocket(ComponentTypeResource* type)
+        : ComponentResource(ResourceWasiSocketKind, type)
+        , m_binded(false)
+    {
+    }
+
+    struct NetworkMessage {
+        NetworkMessage(ssize_t suggested)
+        {
+            m_messageBuffer = std::vector<char>(suggested);
+            m_nread = 0;
+        }
+
+        std::vector<char> m_messageBuffer;
+        uint32_t m_nread;
+    };
+
+    ComponentResourceWasiNetwork* network()
+    {
+        return m_network;
+    }
+
+    void setNetwork(ComponentResourceWasiNetwork* network)
+    {
+        m_network = network;
+    }
+
+    bool binded()
+    {
+        return m_binded;
+    }
+
+    void setBinded(bool b)
+    {
+        m_binded = b;
+    }
+
+    std::vector<NetworkMessage>& messages()
+    {
+        return m_messages;
+    }
+
+    uv_tcp_t* getUvTcp()
+    {
+        return &m_tcp;
+    }
+
+    uv_udp_t* getUvUdp()
+    {
+        return &m_udp;
+    }
+
+private:
+    ComponentResourceWasiNetwork* m_network;
+    union {
+        uv_tcp_t m_tcp;
+        uv_udp_t m_udp;
+    };
+    bool m_binded;
+    std::vector<NetworkMessage> m_messages;
+};
+
 class LiftedWasiFunction : public LiftedFunction {
 public:
     enum Type {
@@ -464,8 +610,8 @@ public:
         socketsUdpRemoteAddress02,
         socketsUdpUnicastHoppLimit02,
         socketsUdpUnicastSetHoppLimit02,
-        socketsUdpRecieveBufferSize02,
-        socketsUdpSetRecieveBufferSize02,
+        socketsUdpReceiveBufferSize02,
+        socketsUdpSetReceiveBufferSize02,
         socketsUdpSendBufferSize02,
         socketsUdpSetSendBufferSize02,
         socketsUdpSubscribe02,
@@ -490,13 +636,13 @@ public:
         socketsTcpSetKeepAliveCount02,
         socketsTcpHopLimit02,
         socketsTcpSetHopLimit02,
-        socketsTcpRecieveBufferSize02,
+        socketsTcpReceiveBufferSize02,
         socketsTcpSendBufferSize02,
-        socketsTcpSetRecieveBufferSize02,
+        socketsTcpSetReceiveBufferSize02,
         socketsTcpSetSendBufferSize02,
         socketsTcpSubscrie02,
         socketsTcpShutdown02,
-        socketsIncomingDatagramStreamRecieve02,
+        socketsIncomingDatagramStreamReceive02,
         socketsIncomingDatagramStreamSubscribe02,
         socketsOutgoingDatagramStreamCheckSend02,
         socketsOutgoingDatagramStreamSend02,
