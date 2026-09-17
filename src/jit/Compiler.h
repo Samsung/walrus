@@ -439,6 +439,7 @@ public:
 
     Label* finalTarget();
     void append(Instruction* instr);
+    void removeBranch(Instruction* instr);
     // Should be called before removing the other instruction.
     void merge(Label* other);
 

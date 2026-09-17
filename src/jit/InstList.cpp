@@ -109,6 +109,16 @@ void Label::append(Instruction* instr)
     m_branches.push_back(instr);
 }
 
+void Label::removeBranch(Instruction* instr)
+{
+    for (auto it = m_branches.begin(); it != m_branches.end(); it++) {
+        if (*it == instr) {
+            m_branches.erase(it);
+            return;
+        }
+    }
+}
+
 void Label::merge(Label* other)
 {
     ASSERT(this != other);
@@ -216,12 +226,13 @@ Instruction* JITCompiler::appendBranch(ByteCode* byteCode, ByteCode::Opcode opco
 
 Label* Label::finalTarget()
 {
-    Label* label = this;
-
-    while (label->info() & Label::kIsSingleJump) {
-        label = label->next()->asInstruction()->asExtended()->value().targetLabel;
+    if (!(info() & Label::kIsSingleJump)) {
+        return this;
     }
 
+    Label* label = next()->asInstruction()->asExtended()->value().targetLabel;
+
+    ASSERT(!(label->info() & Label::kIsSingleJump));
     return label;
 }
 
@@ -234,52 +245,82 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
     return branch;
 }
 
-void JITCompiler::markSingleJumpBlocks()
+static bool isBlockWithSingleJump(InstructionListItem* item)
 {
-    std::vector<Label*> labels;
-
-    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
-        if (!item->isLabel()) {
-            continue;
-        }
-
-        InstructionListItem* next = item->next();
-
-        if (next == nullptr || !next->isInstruction()
-            || next->asInstruction()->opcode() != ByteCode::JumpOpcode
-            || (next->next() != nullptr && !next->next()->isLabel())) {
-            continue;
-        }
-
-        item->addInfo(Label::kIsSingleJump);
-        labels.push_back(item->asLabel());
+    if (!item->isLabel()) {
+        return false;
     }
 
-    std::vector<Label*> path;
+    InstructionListItem* next = item->next();
 
-    for (auto it : labels) {
-        Label* current = it;
+    if (next == nullptr || !next->isInstruction() || next->asInstruction()->opcode() != ByteCode::JumpOpcode) {
+        return false;
+    }
 
-        path.clear();
+    return next->next() == nullptr || next->next()->isLabel();
+}
 
-        while (current->info() & Label::kIsSingleJump) {
-            bool cyclic = false;
+static Label*& singleJumpTarget(Label* label)
+{
+    return label->next()->asInstruction()->asExtended()->value().targetLabel;
+}
 
-            for (auto seen : path) {
-                if (seen == current) {
-                    cyclic = true;
-                    break;
-                }
-            }
+void JITCompiler::markSingleJumpBlocks()
+{
+    Label* cyclicLabel = nullptr;
 
-            if (cyclic) {
-                current->clearInfo(Label::kIsSingleJump);
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        if (!isBlockWithSingleJump(item) || (item->info() & Label::kIsSingleJump) || item == cyclicLabel) {
+            continue;
+        }
+
+        Label* start = item->asLabel();
+        Label* current = start;
+        Label* finalLabel;
+
+        while (true) {
+            if (!isBlockWithSingleJump(current) || current == cyclicLabel) {
+                finalLabel = current;
                 break;
             }
 
-            path.push_back(current);
-            current = current->next()->asInstruction()->asExtended()->value().targetLabel;
+            Label* target = singleJumpTarget(current);
+
+            if (!(current->info() & Label::kIsSingleJump)) {
+                current->addInfo(Label::kIsSingleJump);
+                current = target;
+                continue;
+            }
+
+            if (!(target->info() & Label::kIsSingleJump)) {
+                finalLabel = target;
+                break;
+            }
+
+            if (cyclicLabel == nullptr) {
+                cyclicLabel = start;
+                start->clearInfo(Label::kIsSingleJump);
+            }
+
+            finalLabel = cyclicLabel;
+            break;
         }
+
+        current = start;
+
+        do {
+            Label* next = singleJumpTarget(current);
+
+            if (next != finalLabel) {
+                Instruction* jump = current->next()->asInstruction();
+
+                next->removeBranch(jump);
+                finalLabel->append(jump);
+                singleJumpTarget(current) = finalLabel;
+            }
+
+            current = next;
+        } while (current != finalLabel && singleJumpTarget(current) != finalLabel);
     }
 }
 
