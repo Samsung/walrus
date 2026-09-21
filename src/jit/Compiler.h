@@ -413,11 +413,16 @@ public:
     static const uint16_t kHasTryInfo = 1 << 2;
     static const uint16_t kHasCatchInfo = 1 << 3;
     static const uint16_t kIsSingleJump = 1 << 4;
+    static const uint16_t kIsConditional = 1 << 5;
+    // Temporary, can be reused after buildBasicBlocks().
+    static const uint16_t kIsMarkedLabel = 1 << 6;
 
     static const size_t kNoTryBlock = ~static_cast<size_t>(0);
 
     explicit Label()
         : InstructionListItem(CodeLabel)
+        , m_lastInstr(nullptr)
+        , m_prevInstr(nullptr)
         , m_tryBlock(kNoTryBlock)
         , m_handlerOfTryBlock(kNoTryBlock)
     {
@@ -437,6 +442,12 @@ public:
         return m_label;
     }
 
+    void setLastInstruction(Instruction* instr)
+    {
+        ASSERT(m_lastInstr == nullptr && instr != nullptr);
+        m_lastInstr = instr;
+    }
+
     Label* finalTarget();
     void append(Instruction* instr);
     void removeBranch(Instruction* instr);
@@ -448,6 +459,12 @@ public:
 
 private:
     std::vector<Instruction*> m_branches;
+    // Last instruction of the block. When kIsConditional is
+    // set, it is the instruction before the last instruction.
+    Instruction* m_lastInstr;
+    // Instruction before the label.
+    Instruction* m_prevInstr;
+
     size_t m_tryBlock;
     size_t m_handlerOfTryBlock;
 
@@ -810,7 +827,7 @@ public:
         m_moduleFunction = moduleFunction;
     }
 
-    void markSingleJumpBlocks();
+    void buildBasicBlocks();
     void buildVariables(uint32_t requiredStackSize);
     void allocateRegistersSimple();
     void allocateRegisters();
@@ -850,6 +867,7 @@ private:
     void append(InstructionListItem* item);
 
     // Backend operations.
+    Label* emitBasicBlock(Instruction* from);
     void emitProlog();
     void emitEpilog();
 

@@ -1147,7 +1147,252 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
     emitProlog();
     m_context.tailCallLabel = sljit_emit_label(m_compiler);
 
-    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+    Label* block;
+    if (m_first->isInstruction()) {
+        block = emitBasicBlock(m_first->asInstruction());
+        ASSERT(block == nullptr || block->m_prevInstr->next() == block);
+    } else {
+        block = m_first->asLabel();
+        ASSERT(block->m_prevInstr == nullptr);
+    }
+
+    while (block != nullptr) {
+        if (block->info() & Label::kIsSingleJump) {
+            ASSERT(block->next()->asInstruction()->opcode() == ByteCode::JumpOpcode);
+            InstructionListItem* nextItem = block->next()->next();
+            if (nextItem == nullptr) {
+                break;
+            }
+            block = nextItem->asLabel();
+            continue;
+        }
+
+        ASSERT(!(block->info() & Label::kHasCatchInfo)
+               || tryBlocks()[block->handlerOfTryBlock()].catchBlocks[0].u.handler == block);
+
+        block->emit(m_compiler);
+        emitTrapRange(&m_context, block);
+
+#if !defined(NDEBUG)
+        Label* prevBlock = block;
+#endif /* !NDEBUG */
+        block = emitBasicBlock(block->next()->asInstruction());
+
+        // Checks that the basic block chain matches to the instruction chain.
+        ASSERT((prevBlock->info() & Label::kIsConditional) ? prevBlock->m_lastInstr->next()->next() == block : prevBlock->m_lastInstr->next() == block);
+        ASSERT(block == nullptr || block->m_prevInstr->next() == block);
+    }
+
+#if defined(WALRUS_JITPERF) && !defined(NDEBUG)
+    if (perfEnabled) {
+        uint32_t line = PerfDump::instance().dumpEpilog();
+        m_debugEntries.push_back(DebugEntry(sljit_emit_label(m_compiler), line));
+        m_debugEntries.push_back(DebugEntry());
+    }
+#endif /* WALRUS_JITPERF && !NDEBUG */
+
+    emitEpilog();
+    clear();
+}
+
+void JITCompiler::generateCode()
+{
+    if (m_compiler == nullptr) {
+        // All functions are imported.
+        return;
+    }
+
+    if (m_brTableLabels != nullptr) {
+        /* Reverse the chain. */
+        sljit_read_only_buffer* prev = nullptr;
+        sljit_read_only_buffer* current = &m_brTableLabels->header;
+
+        do {
+            sljit_read_only_buffer* next = current->next;
+
+            current->next = prev;
+            prev = current;
+            current = next;
+        } while (current != nullptr);
+
+        sljit_emit_aligned_label(m_compiler, SLJIT_LABEL_ALIGN_W, prev);
+
+        BranchTableLabels* brTable = reinterpret_cast<BranchTableLabels*>(prev);
+        m_brTableLabels = brTable;
+
+        do {
+            sljit_set_label(brTable->jump, brTable->header.u.label);
+            brTable = reinterpret_cast<BranchTableLabels*>(brTable->header.next);
+        } while (brTable != nullptr);
+    }
+
+    void* code = sljit_generate_code(m_compiler, 0, nullptr);
+
+#ifdef WALRUS_JITPERF
+    const bool perfEnabled = PerfDump::instance().perfEnabled();
+    if (perfEnabled) {
+        sljit_uw funcStart = SLJIT_FUNC_UADDR(code);
+        sljit_uw funcEnd = sljit_get_label_addr(m_functionList[0].exportEntryLabel);
+        PerfDump::instance().dumpCodeLoad(funcStart, funcStart, (funcEnd - funcStart), "*entrypoint*", (uint8_t*)funcStart);
+    }
+#endif
+
+    if (code != nullptr) {
+        if (m_brTableLabels != nullptr) {
+            BranchTableLabels* brTable = m_brTableLabels;
+            sljit_sw executable_offset = sljit_get_executable_offset(m_compiler);
+
+            do {
+                sljit_uw addr = sljit_get_label_abs_addr(brTable->header.u.label);
+                sljit_uw size = brTable->header.size;
+
+                ASSERT(brTable->labels.size() * sizeof(sljit_sw) == size);
+                sljit_uw* values = reinterpret_cast<sljit_uw*>(sljit_read_only_buffer_start_writing(addr, size, executable_offset));
+
+                for (auto it : brTable->labels) {
+                    *values++ = sljit_get_label_addr(it.jitLabel);
+                }
+
+                sljit_read_only_buffer_end_writing(addr, size, executable_offset);
+                brTable = reinterpret_cast<BranchTableLabels*>(brTable->header.next);
+            } while (brTable != nullptr);
+        }
+
+        JITModule* moduleDescriptor = module()->m_jitModule;
+
+        if (moduleDescriptor == nullptr) {
+            InstanceConstData* instanceConstData = new InstanceConstData(m_context.trapBlocks, tryBlocks());
+            moduleDescriptor = new JITModule(instanceConstData, code);
+            module()->m_jitModule = moduleDescriptor;
+        } else {
+            moduleDescriptor->m_instanceConstData->append(m_context.trapBlocks, tryBlocks());
+            moduleDescriptor->m_codeBlocks.push_back(code);
+        }
+
+        for (auto it : m_functionList) {
+            it.jitFunc->m_module = moduleDescriptor;
+
+            if (!it.isExported) {
+                it.jitFunc->m_exportEntry = nullptr;
+                continue;
+            }
+
+            it.jitFunc->m_exportEntry = reinterpret_cast<void*>(sljit_get_label_addr(it.exportEntryLabel));
+
+            if (it.branchTableSize > 0) {
+                sljit_up* branchList = reinterpret_cast<sljit_up*>(it.jitFunc->m_constData);
+                ASSERT(branchList != nullptr);
+
+                sljit_up* end = branchList + it.branchTableSize;
+
+                do {
+                    *branchList = sljit_get_label_addr(reinterpret_cast<sljit_label*>(*branchList));
+                    branchList++;
+                } while (branchList < end);
+            }
+        }
+    }
+
+#ifdef WALRUS_JITPERF
+    if (perfEnabled) {
+#if !defined(NDEBUG)
+        size_t size = m_debugEntries.size();
+
+        for (size_t i = 0; i < size; i++) {
+            if (m_debugEntries[i].line != 0) {
+                m_debugEntries[i].u.address = sljit_get_label_addr(m_debugEntries[i].u.label);
+            } else {
+                m_debugEntries[i].u.address = 0;
+            }
+        }
+
+        size_t debugEntryStart = 0;
+#endif /* !NDEBUG */
+
+        for (size_t i = 0; i < m_functionList.size(); i++) {
+            size_t size = module()->numberOfFunctions();
+            int functionIndex = 0;
+
+            for (size_t i = 0; i < size; i++) {
+                if (module()->function(i)->jitFunction() == m_functionList[i].jitFunc) {
+                    functionIndex = static_cast<int>(i);
+                    break;
+                }
+            }
+
+            std::string name = "function" + std::to_string(functionIndex);
+            for (auto exp : module()->exports()) {
+                if (exp->exportType() != Walrus::ExportType::Function) {
+                    continue;
+                }
+                if (module()->function(exp->itemIndex())->jitFunction() == m_functionList[i].jitFunc) {
+                    name += "_" + exp->name();
+                    break;
+                }
+            }
+
+            sljit_uw funcStart = sljit_get_label_addr(m_functionList[i].exportEntryLabel);
+            sljit_uw funcEnd;
+
+#if !defined(NDEBUG)
+            debugEntryStart = PerfDump::instance().dumpDebugInfo(m_debugEntries, debugEntryStart, funcStart);
+#endif /* !NDEBUG */
+
+            if (i < m_functionList.size() - 1) {
+                funcEnd = sljit_get_label_addr(m_functionList[i + 1].exportEntryLabel);
+            } else {
+                funcEnd = SLJIT_FUNC_UADDR(code) + sljit_get_generated_code_size(m_compiler);
+            }
+
+            PerfDump::instance().dumpCodeLoad(funcStart, funcStart, (funcEnd - funcStart), name, (uint8_t*)funcStart);
+        }
+    }
+#endif
+    sljit_free_compiler(m_compiler);
+}
+
+void JITCompiler::clear()
+{
+    InstructionListItem* item = m_first;
+
+    m_first = nullptr;
+    m_last = nullptr;
+    m_branchTableSize = 0;
+    m_stackTmpSize = 0;
+#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
+    m_context.shuffleOffset = 0;
+#endif /* SLJIT_CONFIG_X86 */
+
+    while (item != nullptr) {
+        InstructionListItem* next = item->next();
+
+        if (item->isLabel()) {
+            Label* label = item->asLabel();
+
+            if (label->info() & Label::kHasJumpList) {
+                ASSERT(!(label->info() & Label::kHasLabelData));
+                delete label->m_jumpList;
+            }
+        }
+
+        item->deleteObject();
+        item = next;
+    }
+
+    m_context.trapJumps.clear();
+}
+
+Label* JITCompiler::emitBasicBlock(Instruction* from)
+{
+#if defined(WALRUS_JITPERF) && !defined(NDEBUG)
+    const bool perfEnabled = PerfDump::instance().perfEnabled();
+#endif /* WALRUS_JITPERF && !NDEBUG */
+
+    for (InstructionListItem* item = from; item != nullptr; item = item->next()) {
+        if (item->isLabel()) {
+            return item->asLabel();
+        }
+
 #if defined(WALRUS_JITPERF) && !defined(NDEBUG)
         if (perfEnabled) {
             uint32_t line = PerfDump::instance().dumpByteCode(item);
@@ -1166,22 +1411,6 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
             }
         }
 #endif /* WALRUS_JITPERF && !NDEBUG */
-
-        if (item->isLabel()) {
-            Label* label = item->asLabel();
-
-            if (label->info() & Label::kIsSingleJump) {
-                item = item->next();
-                continue;
-            }
-
-            ASSERT(!(label->info() & Label::kHasCatchInfo)
-                   || tryBlocks()[label->handlerOfTryBlock()].catchBlocks[0].u.handler == label);
-
-            label->emit(m_compiler);
-            emitTrapRange(&m_context, label);
-            continue;
-        }
 
         switch (item->group()) {
         case Instruction::Immediate: {
@@ -1473,204 +1702,7 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         }
         }
     }
-
-#if defined(WALRUS_JITPERF) && !defined(NDEBUG)
-    if (perfEnabled) {
-        uint32_t line = PerfDump::instance().dumpEpilog();
-        m_debugEntries.push_back(DebugEntry(sljit_emit_label(m_compiler), line));
-        m_debugEntries.push_back(DebugEntry());
-    }
-#endif /* WALRUS_JITPERF && !NDEBUG */
-
-    emitEpilog();
-    clear();
-}
-
-void JITCompiler::generateCode()
-{
-    if (m_compiler == nullptr) {
-        // All functions are imported.
-        return;
-    }
-
-    if (m_brTableLabels != nullptr) {
-        /* Reverse the chain. */
-        sljit_read_only_buffer* prev = nullptr;
-        sljit_read_only_buffer* current = &m_brTableLabels->header;
-
-        do {
-            sljit_read_only_buffer* next = current->next;
-
-            current->next = prev;
-            prev = current;
-            current = next;
-        } while (current != nullptr);
-
-        sljit_emit_aligned_label(m_compiler, SLJIT_LABEL_ALIGN_W, prev);
-
-        BranchTableLabels* brTable = reinterpret_cast<BranchTableLabels*>(prev);
-        m_brTableLabels = brTable;
-
-        do {
-            sljit_set_label(brTable->jump, brTable->header.u.label);
-            brTable = reinterpret_cast<BranchTableLabels*>(brTable->header.next);
-        } while (brTable != nullptr);
-    }
-
-    void* code = sljit_generate_code(m_compiler, 0, nullptr);
-
-#ifdef WALRUS_JITPERF
-    const bool perfEnabled = PerfDump::instance().perfEnabled();
-    if (perfEnabled) {
-        sljit_uw funcStart = SLJIT_FUNC_UADDR(code);
-        sljit_uw funcEnd = sljit_get_label_addr(m_functionList[0].exportEntryLabel);
-        PerfDump::instance().dumpCodeLoad(funcStart, funcStart, (funcEnd - funcStart), "*entrypoint*", (uint8_t*)funcStart);
-    }
-#endif
-
-    if (code != nullptr) {
-        if (m_brTableLabels != nullptr) {
-            BranchTableLabels* brTable = m_brTableLabels;
-            sljit_sw executable_offset = sljit_get_executable_offset(m_compiler);
-
-            do {
-                sljit_uw addr = sljit_get_label_abs_addr(brTable->header.u.label);
-                sljit_uw size = brTable->header.size;
-
-                ASSERT(brTable->labels.size() * sizeof(sljit_sw) == size);
-                sljit_uw* values = reinterpret_cast<sljit_uw*>(sljit_read_only_buffer_start_writing(addr, size, executable_offset));
-
-                for (auto it : brTable->labels) {
-                    *values++ = sljit_get_label_addr(it.jitLabel);
-                }
-
-                sljit_read_only_buffer_end_writing(addr, size, executable_offset);
-                brTable = reinterpret_cast<BranchTableLabels*>(brTable->header.next);
-            } while (brTable != nullptr);
-        }
-
-        JITModule* moduleDescriptor = module()->m_jitModule;
-
-        if (moduleDescriptor == nullptr) {
-            InstanceConstData* instanceConstData = new InstanceConstData(m_context.trapBlocks, tryBlocks());
-            moduleDescriptor = new JITModule(instanceConstData, code);
-            module()->m_jitModule = moduleDescriptor;
-        } else {
-            moduleDescriptor->m_instanceConstData->append(m_context.trapBlocks, tryBlocks());
-            moduleDescriptor->m_codeBlocks.push_back(code);
-        }
-
-        for (auto it : m_functionList) {
-            it.jitFunc->m_module = moduleDescriptor;
-
-            if (!it.isExported) {
-                it.jitFunc->m_exportEntry = nullptr;
-                continue;
-            }
-
-            it.jitFunc->m_exportEntry = reinterpret_cast<void*>(sljit_get_label_addr(it.exportEntryLabel));
-
-            if (it.branchTableSize > 0) {
-                sljit_up* branchList = reinterpret_cast<sljit_up*>(it.jitFunc->m_constData);
-                ASSERT(branchList != nullptr);
-
-                sljit_up* end = branchList + it.branchTableSize;
-
-                do {
-                    *branchList = sljit_get_label_addr(reinterpret_cast<sljit_label*>(*branchList));
-                    branchList++;
-                } while (branchList < end);
-            }
-        }
-    }
-
-#ifdef WALRUS_JITPERF
-    if (perfEnabled) {
-#if !defined(NDEBUG)
-        size_t size = m_debugEntries.size();
-
-        for (size_t i = 0; i < size; i++) {
-            if (m_debugEntries[i].line != 0) {
-                m_debugEntries[i].u.address = sljit_get_label_addr(m_debugEntries[i].u.label);
-            } else {
-                m_debugEntries[i].u.address = 0;
-            }
-        }
-
-        size_t debugEntryStart = 0;
-#endif /* !NDEBUG */
-
-        for (size_t i = 0; i < m_functionList.size(); i++) {
-            size_t size = module()->numberOfFunctions();
-            int functionIndex = 0;
-
-            for (size_t i = 0; i < size; i++) {
-                if (module()->function(i)->jitFunction() == m_functionList[i].jitFunc) {
-                    functionIndex = static_cast<int>(i);
-                    break;
-                }
-            }
-
-            std::string name = "function" + std::to_string(functionIndex);
-            for (auto exp : module()->exports()) {
-                if (exp->exportType() != Walrus::ExportType::Function) {
-                    continue;
-                }
-                if (module()->function(exp->itemIndex())->jitFunction() == m_functionList[i].jitFunc) {
-                    name += "_" + exp->name();
-                    break;
-                }
-            }
-
-            sljit_uw funcStart = sljit_get_label_addr(m_functionList[i].exportEntryLabel);
-            sljit_uw funcEnd;
-
-#if !defined(NDEBUG)
-            debugEntryStart = PerfDump::instance().dumpDebugInfo(m_debugEntries, debugEntryStart, funcStart);
-#endif /* !NDEBUG */
-
-            if (i < m_functionList.size() - 1) {
-                funcEnd = sljit_get_label_addr(m_functionList[i + 1].exportEntryLabel);
-            } else {
-                funcEnd = SLJIT_FUNC_UADDR(code) + sljit_get_generated_code_size(m_compiler);
-            }
-
-            PerfDump::instance().dumpCodeLoad(funcStart, funcStart, (funcEnd - funcStart), name, (uint8_t*)funcStart);
-        }
-    }
-#endif
-    sljit_free_compiler(m_compiler);
-}
-
-void JITCompiler::clear()
-{
-    InstructionListItem* item = m_first;
-
-    m_first = nullptr;
-    m_last = nullptr;
-    m_branchTableSize = 0;
-    m_stackTmpSize = 0;
-#if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
-    m_context.shuffleOffset = 0;
-#endif /* SLJIT_CONFIG_X86 */
-
-    while (item != nullptr) {
-        InstructionListItem* next = item->next();
-
-        if (item->isLabel()) {
-            Label* label = item->asLabel();
-
-            if (label->info() & Label::kHasJumpList) {
-                ASSERT(!(label->info() & Label::kHasLabelData));
-                delete label->m_jumpList;
-            }
-        }
-
-        item->deleteObject();
-        item = next;
-    }
-
-    m_context.trapJumps.clear();
+    return nullptr;
 }
 
 void JITCompiler::emitProlog()
