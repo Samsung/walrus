@@ -82,6 +82,7 @@ struct Label {
 static Features getFeatures(const uint32_t featureFlags) {
     Features features;
     features.enable_compact_imports();
+    features.enable_code_metadata();
     // TODO: should use command line flag for this (--enable-threads)
     features.enable_threads();
     if (featureFlags & FeatureFlagValue::enableWebAssembly3) {
@@ -138,6 +139,23 @@ public:
         return m_externalDelegate->WalrusParseError().empty() ? Result::Ok : Result::Error;
     }
 
+    // Forwards the branch hint belonging to the if / br_if the reader is
+    // currently on, if the module carries one for it.
+    void ForwardBranchHint() {
+        if (WABT_LIKELY(m_currentFunctionHints == nullptr)) {
+            return;
+        }
+        Offset offset = m_currentBranchOffset - m_currentFunctionBodyStart;
+        const std::vector<BranchHint>& hints = *m_currentFunctionHints;
+
+        while (m_branchHintCursor < hints.size() && hints[m_branchHintCursor].offset < offset) {
+            m_branchHintCursor++;
+        }
+        if (m_branchHintCursor < hints.size() && hints[m_branchHintCursor].offset == offset) {
+            m_externalDelegate->OnBranchHint(hints[m_branchHintCursor].likely);
+        }
+    }
+
     Result GetDropCount(Index keep_count, size_t type_stack_limit, Index *out_drop_count) {
         assert(m_validator.type_stack_size() >= type_stack_limit);
         Index type_stack_count = m_validator.type_stack_size() - type_stack_limit;
@@ -181,6 +199,12 @@ public:
     }
 
     bool OnError(const Error& err) override {
+        // The reader downgrades errors found inside a custom section to
+        // warnings. Custom section contents are not part of validation, so a
+        // malformed one must not stop an otherwise valid module from loading.
+        if (err.error_level == ErrorLevel::Warning) {
+            return true;
+        }
         m_errors.push_back(err);
         return true;
     }
@@ -441,6 +465,12 @@ public:
         m_labelStack.clear();
         CHECK_RESULT(m_validator.BeginFunctionBody(GetLocation(), index));
         PushLabel(LabelKind::Try);
+
+        // Needed to mark where we uses branch hints
+        m_currentFunctionBodyStart = state->offset;
+        auto it = m_branchHints.find(index);
+        m_currentFunctionHints = (it == m_branchHints.end()) ? nullptr : &it->second;
+        m_branchHintCursor = 0;
         m_externalDelegate->BeginFunctionBody(index, size);
         return Result::Ok;
     }
@@ -465,6 +495,8 @@ public:
     }
 
     Result OnEndPreprocess() override {
+        // The reader is about to rewind and read this function body again.
+        m_branchHintCursor = 0;
         m_externalDelegate->OnEndPreprocess();
         return Result::Ok;
     }
@@ -476,6 +508,13 @@ public:
     /* Function expressions; called between BeginFunctionBody and
      EndFunctionBody */
     Result OnOpcode(Opcode opcode) override {
+        if (WABT_UNLIKELY(m_currentFunctionHints != nullptr)
+            && (opcode == Opcode::If || opcode == Opcode::BrIf)) {
+            // This runs after the opcode has been consumed, and both if and
+            // br_if are encoded as a single unprefixed byte.
+            assert(!opcode.HasPrefix());
+            m_currentBranchOffset = state->offset - 1;
+        }
         SHOULD_GENERATE_BYTECODE;
         Opcode::Enum e = opcode;
         m_externalDelegate->OnOpcode(e);
@@ -593,6 +632,7 @@ public:
         CHECK_RESULT(GetBrDropKeepCount(depth, &drop_count, &keep_count));
         CHECK_RESULT(m_validator.GetCatchCount(depth, &catch_drop_count));
         SHOULD_GENERATE_BYTECODE;
+        ForwardBranchHint();
         m_externalDelegate->OnBrIfExpr(depth);
         return Result::Ok;
     }
@@ -765,6 +805,7 @@ public:
         CHECK_RESULT(m_validator.OnIf(GetLocation(), sig_type));
         EXECUTE_VALIDATOR(PushLabel(LabelKind::Block));
         SHOULD_GENERATE_BYTECODE;
+        ForwardBranchHint();
         m_externalDelegate->OnIfExpr(sig_type);
         return Result::Ok;
     }
@@ -1286,23 +1327,24 @@ public:
 
     /* Code Metadata sections */
     Result BeginCodeMetadataSection(nonstd::string_view name, Offset size) override {
-        abort();
+        m_readingBranchHints = (name == "branch_hint");
         return Result::Ok;
     }
     Result OnCodeMetadataFuncCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnCodeMetadataCount(Index function_index, Index count) override {
-        abort();
+        m_branchHintFunctionIndex = function_index;
         return Result::Ok;
     }
     Result OnCodeMetadata(Offset offset, ByteSpan data) override {
-        abort();
+        if (m_readingBranchHints && data.size() == 1 && data[0] <= 1) {
+            m_branchHints[m_branchHintFunctionIndex].push_back(BranchHint { offset, data[0] != 0 });
+        }
         return Result::Ok;
     }
     Result EndCodeMetadataSection() override {
-        abort();
+        m_readingBranchHints = false;
         return Result::Ok;
     }
 
@@ -1616,12 +1658,24 @@ public:
     Type m_lastInitType;
     std::vector<Type> m_tableTypes;
     Index m_currentElementTableIndex;
+
+    struct BranchHint {
+        Offset offset;
+        bool likely;
+    };
+    std::map<Index, std::vector<BranchHint>> m_branchHints;
+    std::vector<BranchHint>* m_currentFunctionHints = nullptr;
+    size_t m_branchHintCursor = 0;
+    Offset m_currentFunctionBodyStart = 0;
+    Offset m_currentBranchOffset = 0;
+    Index m_branchHintFunctionIndex = 0;
+    bool m_readingBranchHints = false;
 };
 
 std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate *delegate, const uint32_t featureFlags) {
     const bool kReadDebugNames = false;
     const bool kStopOnFirstError = true;
-    const bool kFailOnCustomSectionError = true;
+    const bool kFailOnCustomSectionError = false;
     ReadBinaryOptions options(getFeatures(featureFlags), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
     BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename, featureFlags);
     Result result = ReadBinary(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);
@@ -2140,7 +2194,7 @@ void WASMComponentBinaryReaderDelegate::CoreTypeData::CoreModuleAddTagExport(std
 std::string ReadWasmComponentBinary(const uint8_t *data, size_t size, WASMComponentBinaryReaderDelegate *delegate) {
     const bool kReadDebugNames = false;
     const bool kStopOnFirstError = true;
-    const bool kFailOnCustomSectionError = true;
+    const bool kFailOnCustomSectionError = false;
     ReadBinaryOptions options(getFeatures(delegate->featureFlags()), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
     ComponentBinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate);
     Result result = ReadBinaryComponent(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);

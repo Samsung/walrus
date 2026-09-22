@@ -116,6 +116,8 @@ public:
 
     virtual void OnOpcode(uint32_t opcode) = 0;
 
+    virtual void OnBranchHint(bool likely) = 0;
+
     virtual void OnCallExpr(Index index) = 0;
     virtual void OnCallIndirectExpr(Index sigIndex, Index tableIndex) = 0;
     virtual void OnCallRefExpr(Type sig_type) = 0;

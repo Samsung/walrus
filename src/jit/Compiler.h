@@ -266,6 +266,8 @@ public:
 
     ByteCode* byteCode() { return m_byteCode; }
 
+    bool isBlockTerminator();
+
     // Params and results are stored in the same operands
     // array, where params come first followed by results.
     Operand* operands() { return reinterpret_cast<Operand*>(this + 1); }
@@ -810,6 +812,7 @@ public:
         m_moduleFunction = moduleFunction;
     }
 
+    void reorderHintedBranches();
     void markSingleJumpBlocks();
     void buildVariables(uint32_t requiredStackSize);
     void allocateRegistersSimple();

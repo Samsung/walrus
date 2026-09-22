@@ -21,6 +21,7 @@
 #include "jit/Compiler.h"
 #include "runtime/ObjectType.h"
 
+#include <algorithm>
 #include <map>
 
 namespace Walrus {
@@ -243,6 +244,28 @@ BrTableInstruction* JITCompiler::appendBrTable(ByteCode* byteCode, uint32_t numT
 
     append(branch);
     return branch;
+}
+
+bool Instruction::isBlockTerminator()
+{
+    if (group() == Instruction::BrTable) {
+        return true;
+    }
+
+    switch (opcode()) {
+    case ByteCode::JumpOpcode:
+    case ByteCode::ThrowOpcode:
+    case ByteCode::ThrowRefOpcode:
+    case ByteCode::UnreachableOpcode:
+    case ByteCode::EndOpcode:
+    case ByteCode::ReturnCallOpcode:
+    case ByteCode::ReturnCallIndirectOpcode:
+    case ByteCode::ReturnCallIndirectM64Opcode:
+    case ByteCode::ReturnCallRefOpcode:
+        return true;
+    default:
+        return false;
+    }
 }
 
 static bool isBlockWithSingleJump(InstructionListItem* item)
@@ -584,6 +607,144 @@ void JITCompiler::dump()
 }
 
 #endif /* !NDEBUG */
+
+struct SwappableArms {
+    Label* elseLabel;
+    Label* endLabel;
+    InstructionListItem* thenLast;
+    Instruction* thenJump;
+    InstructionListItem* elseLast;
+};
+
+static bool findSwappableArms(Instruction* branch, SwappableArms& arms)
+{
+    ByteCode::Opcode opcode = branch->opcode();
+
+    if (opcode != ByteCode::JumpIfTrueOpcode && opcode != ByteCode::JumpIfFalseOpcode) {
+        return false;
+    }
+
+    ByteCodeOffsetValue* byteCode = reinterpret_cast<ByteCodeOffsetValue*>(branch->byteCode());
+
+    if (byteCode->branchHint() != ByteCodeOffsetValue::BranchHint::NotTaken) {
+        return false;
+    }
+
+    Label* elseLabel = branch->asExtended()->value().targetLabel;
+    InstructionListItem* last = nullptr;
+    InstructionListItem* beforeLast = nullptr;
+
+    for (InstructionListItem* item = branch->next(); item != elseLabel; item = item->next()) {
+        if (item == nullptr) {
+            return false;
+        }
+
+        beforeLast = last;
+        last = item;
+    }
+
+    if (beforeLast == nullptr || !last->isInstruction()
+        || last->asInstruction()->opcode() != ByteCode::JumpOpcode) {
+        return false;
+    }
+
+    arms.elseLabel = elseLabel;
+    arms.thenLast = beforeLast;
+    arms.thenJump = last->asInstruction();
+    arms.endLabel = arms.thenJump->asExtended()->value().targetLabel;
+    arms.elseLast = nullptr;
+
+    for (InstructionListItem* item = elseLabel->next(); item != arms.endLabel; item = item->next()) {
+        if (item == nullptr) {
+            return false;
+        }
+
+        arms.elseLast = item;
+    }
+
+    if (arms.elseLast == nullptr) {
+        return false;
+    }
+
+    for (InstructionListItem* item = branch->next(); item != arms.endLabel; item = item->next()) {
+        if (!item->isLabel() || item == elseLabel) {
+            continue;
+        }
+
+        bool inThenArm = item->id() < elseLabel->id();
+        size_t first = inThenArm ? branch->id() : elseLabel->id();
+        size_t lastId = inThenArm ? arms.thenJump->id() : arms.elseLast->id();
+
+        for (auto it : item->asLabel()->branches()) {
+            if (it->id() <= first || it->id() > lastId) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+void JITCompiler::reorderHintedBranches()
+{
+    size_t id = 0;
+    bool swapped = false;
+
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        item->m_id = ++id;
+    }
+
+    for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
+        SwappableArms arms;
+
+        if (!item->isInstruction() || item->group() != Instruction::DirectBranch
+            || !findSwappableArms(item->asInstruction(), arms)) {
+            continue;
+        }
+
+        Instruction* branch = item->asInstruction();
+        InstructionListItem* thenFirst = branch->next();
+        Label* thenLabel = thenFirst->isLabel() ? thenFirst->asLabel() : new Label();
+
+        branch->m_opcode = (branch->opcode() == ByteCode::JumpIfTrueOpcode) ? ByteCode::JumpIfFalseOpcode : ByteCode::JumpIfTrueOpcode;
+        branch->asExtended()->value().targetLabel = thenLabel;
+        arms.elseLabel->removeBranch(branch);
+        thenLabel->append(branch);
+
+        branch->m_next = arms.elseLabel;
+
+        if (arms.elseLast->isInstruction() && arms.elseLast->asInstruction()->isBlockTerminator()) {
+            arms.elseLast->m_next = thenLabel;
+            arms.endLabel->removeBranch(arms.thenJump);
+            arms.thenJump->deleteObject();
+        } else {
+            arms.elseLast->m_next = arms.thenJump;
+            arms.thenJump->m_next = thenLabel;
+        }
+
+        if (thenLabel != thenFirst) {
+            thenLabel->m_next = thenFirst;
+        }
+
+        arms.thenLast->m_next = arms.endLabel;
+
+        id = 0;
+        for (InstructionListItem* it = m_first; it != nullptr; it = it->next()) {
+            it->m_id = ++id;
+        }
+
+        swapped = true;
+    }
+
+    if (!swapped || m_tryBlockStart == m_tryBlocks.size()) {
+        return;
+    }
+
+    std::stable_sort(m_tryBlocks.begin() + m_tryBlockStart, m_tryBlocks.end(),
+                     [](const TryBlock& left, const TryBlock& right) -> bool {
+                         return left.start->id() < right.start->id();
+                     });
+}
 
 void JITCompiler::append(InstructionListItem* item)
 {
