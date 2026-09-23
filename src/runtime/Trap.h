@@ -38,6 +38,29 @@ public:
         {
         }
 
+        TrapResult(const TrapResult& other)
+            : exception(other.exception)
+        {
+            if (exception != nullptr) {
+                exception->addRef();
+            }
+        }
+
+        TrapResult& operator=(const TrapResult& other)
+        {
+            if (exception != nullptr) {
+                exception->releaseRef();
+            }
+
+            exception = other.exception;
+
+            if (exception != nullptr) {
+                exception->addRef();
+            }
+
+            return *this;
+        }
+
         ~TrapResult()
         {
             if (exception != nullptr) {
