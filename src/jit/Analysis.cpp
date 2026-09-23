@@ -459,47 +459,68 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
         item->m_id = ++nextId;
 
-        if (item->isLabel()) {
-            Label* label = item->asLabel();
+        if (!item->isLabel()) {
+            Instruction* instr = item->asInstruction();
 
-            label->m_dependencyStart = dependencySize;
-            dependencySize += requiredStackSize;
-
-            ASSERT((label->info() & (Label::kHasTryInfo | Label::kHasCatchInfo)) != (Label::kHasTryInfo | Label::kHasCatchInfo));
-
-            if (label->info() & Label::kHasCatchInfo) {
-                ASSERT(tryBlocks()[currentTryBlock].catchBlocks[0].u.handler == label);
-
-                label->m_handlerOfTryBlock = currentTryBlock;
-                currentTryBlock = tryBlockStack.back();
-                tryBlockStack.pop_back();
+            if (instr->group() != Instruction::DirectBranch) {
+                variableCount += item->asInstruction()->resultCount();
+                continue;
             }
 
-            if (label->info() & Label::kHasTryInfo) {
-                ASSERT(tryBlocks()[nextTryBlock].start == label);
-
-                do {
-                    for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
-                        if (it.tagIndex != std::numeric_limits<uint32_t>::max()) {
-                            TagType* tagType = module()->tagType(it.tagIndex);
-                            variableCount += tagType->functionType()->param().size();
-                        }
-                        if (it.pushExnRef) {
-                            variableCount++;
-                        }
-                    }
-
-                    tryBlocks()[nextTryBlock].parent = currentTryBlock;
-                    tryBlockStack.push_back(currentTryBlock);
-                    currentTryBlock = nextTryBlock++;
-                } while (nextTryBlock < tryBlocks().size()
-                         && tryBlocks()[nextTryBlock].start == label);
+            ASSERT(item->asInstruction()->resultCount() == 0);
+            if (instr->opcode() == ByteCode::JumpOpcode) {
+                continue;
             }
 
-            label->m_tryBlock = currentTryBlock;
-        } else {
-            variableCount += item->asInstruction()->resultCount();
+            InstructionListItem* next = instr->next();
+            ASSERT(next != nullptr);
+            if (next->isLabel() || next->asInstruction()->opcode() == ByteCode::JumpOpcode) {
+                continue;
+            }
+
+            item = new Label();
+            item->m_id = ++nextId;
+            item->m_next = next;
+            instr->m_next = item;
         }
+
+        Label* label = item->asLabel();
+
+        label->m_dependencyStart = dependencySize;
+        dependencySize += requiredStackSize;
+
+        ASSERT((label->info() & (Label::kHasTryInfo | Label::kHasCatchInfo)) != (Label::kHasTryInfo | Label::kHasCatchInfo));
+
+        if (label->info() & Label::kHasCatchInfo) {
+            ASSERT(tryBlocks()[currentTryBlock].catchBlocks[0].u.handler == label);
+
+            label->m_handlerOfTryBlock = currentTryBlock;
+            currentTryBlock = tryBlockStack.back();
+            tryBlockStack.pop_back();
+        }
+
+        if (label->info() & Label::kHasTryInfo) {
+            ASSERT(tryBlocks()[nextTryBlock].start == label);
+
+            do {
+                for (auto it : tryBlocks()[nextTryBlock].catchBlocks) {
+                    if (it.tagIndex != std::numeric_limits<uint32_t>::max()) {
+                        TagType* tagType = module()->tagType(it.tagIndex);
+                        variableCount += tagType->functionType()->param().size();
+                    }
+                    if (it.pushExnRef) {
+                        variableCount++;
+                    }
+                }
+
+                tryBlocks()[nextTryBlock].parent = currentTryBlock;
+                tryBlockStack.push_back(currentTryBlock);
+                currentTryBlock = nextTryBlock++;
+            } while (nextTryBlock < tryBlocks().size()
+                     && tryBlocks()[nextTryBlock].start == label);
+        }
+
+        label->m_tryBlock = currentTryBlock;
     }
 
     ASSERT(tryBlockStack.empty() && currentTryBlock == Label::kNoTryBlock);

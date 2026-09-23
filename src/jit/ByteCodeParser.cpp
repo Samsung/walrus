@@ -681,6 +681,8 @@ static void compileFunction(JITCompiler* compiler)
         nextLabelIndex = it->first;
     }
 
+    Instruction* lastEndInstruction = nullptr;
+
     idx = 0;
     while (idx < endIdx) {
         if (idx == nextLabelIndex) {
@@ -2558,8 +2560,12 @@ static void compileFunction(JITCompiler* compiler)
         case ByteCode::EndOpcode: {
             const TypeVector& result = function->functionType()->result();
 
-            Instruction* instr = compiler->append(byteCode, Instruction::Any, opcode, result.size(), 0);
-            Operand* param = instr->params();
+            if (lastEndInstruction != nullptr) {
+                lastEndInstruction->addInfo(Instruction::kEarlyReturn);
+            }
+
+            lastEndInstruction = compiler->append(byteCode, Instruction::Any, opcode, result.size(), 0);
+            Operand* param = lastEndInstruction->params();
             ByteCodeStackOffset* offsets = reinterpret_cast<End*>(byteCode)->resultOffsets();
 
             for (auto it : result.types()) {
@@ -2568,11 +2574,6 @@ static void compileFunction(JITCompiler* compiler)
             }
 
             idx += byteCode->getSize();
-
-            if (idx != endIdx) {
-                instr->addInfo(Instruction::kEarlyReturn);
-            }
-
             continue;
         }
         /* SIMD support. */
