@@ -252,10 +252,11 @@ static bool isBlockWithSingleJump(Label* label)
     }
 
     InstructionListItem* next = label->next();
+    ASSERT(next != nullptr && next->isInstruction()
+           && (next->asInstruction()->opcode() != ByteCode::JumpOpcode
+               || (next->next() == nullptr || next->next()->isLabel())));
 
-    return next != nullptr && next->isInstruction()
-        && next->asInstruction()->opcode() == ByteCode::JumpOpcode
-        && (next->next() == nullptr || next->next()->isLabel());
+    return next->asInstruction()->opcode() == ByteCode::JumpOpcode;
 }
 
 static Label* singleJumpTarget(Label* label)
@@ -279,25 +280,40 @@ static void setLastInstruction(Label* label, Instruction* lastInstr, Instruction
 void JITCompiler::buildBasicBlocks()
 {
     // The kIsSingleJump is temporarily set, but removed later.
-    Label* cyclicLabel = nullptr;
+    Label* cyclicBlock = nullptr;
     Label* lastBlock = nullptr;
+    Label* lastSingleJumpBlock = nullptr;
     Instruction* lastInstr = nullptr;
     Instruction* beforeLastInstr = nullptr;
 
     for (InstructionListItem* item = m_first; item != nullptr; item = item->next()) {
-        ASSERT(item != cyclicLabel);
+        ASSERT(item != cyclicBlock);
         if (!item->isLabel()) {
             beforeLastInstr = lastInstr;
             lastInstr = item->asInstruction();
+
+            // Check the expected instruction stream for direct branches.
+            ASSERT(lastInstr->group() != Instruction::DirectBranch
+                   || (lastInstr->opcode() == ByteCode::JumpOpcode && (lastInstr->next() == nullptr || lastInstr->next()->isLabel()))
+                   || (lastInstr->next() != nullptr && lastInstr->next()->asInstruction()->opcode() == ByteCode::JumpOpcode));
             continue;
         }
 
+        ASSERT(item->isLabel());
         if (lastBlock != nullptr) {
-            setLastInstruction(lastBlock, lastInstr, beforeLastInstr);
+            if ((lastBlock->info() & Label::kIsSingleJump) && lastBlock != cyclicBlock) {
+                if (lastSingleJumpBlock == nullptr) {
+                    lastSingleJumpBlock = lastBlock;
+                }
+                ASSERT(lastInstr != nullptr && lastInstr->opcode() == ByteCode::JumpOpcode && beforeLastInstr == nullptr);
+                lastSingleJumpBlock->m_lastInstr = lastInstr;
+            } else {
+                lastSingleJumpBlock = nullptr;
+                setLastInstruction(lastBlock, lastInstr, beforeLastInstr);
+            }
         }
 
         lastBlock = item->asLabel();
-        lastBlock->m_prevInstr = lastInstr;
         lastInstr = nullptr;
         beforeLastInstr = nullptr;
 
@@ -305,8 +321,7 @@ void JITCompiler::buildBasicBlocks()
             continue;
         }
 
-        Label* startLabel = lastBlock;
-        Label* current = startLabel;
+        Label* current = lastBlock;
         Label* finalLabel;
 
         while (true) {
@@ -314,11 +329,11 @@ void JITCompiler::buildBasicBlocks()
             current = singleJumpTarget(current);
 
             if (current->info() & Label::kIsMarkedLabel) {
-                if (cyclicLabel == nullptr) {
-                    cyclicLabel = startLabel;
+                if (cyclicBlock == nullptr) {
+                    cyclicBlock = lastBlock;
                 }
 
-                finalLabel = cyclicLabel;
+                finalLabel = cyclicBlock;
                 break;
             }
 
@@ -328,7 +343,7 @@ void JITCompiler::buildBasicBlocks()
             }
         }
 
-        current = startLabel;
+        current = lastBlock;
 
         do {
             Instruction* jump = current->next()->asInstruction();
@@ -348,13 +363,16 @@ void JITCompiler::buildBasicBlocks()
         } while (current->info() & Label::kIsMarkedLabel);
     }
 
-    if (lastBlock != nullptr) {
-        setLastInstruction(lastBlock, lastInstr, beforeLastInstr);
+    if (cyclicBlock != nullptr) {
+        ASSERT(cyclicBlock->info() & Label::kIsSingleJump);
+        cyclicBlock->clearInfo(Label::kIsSingleJump);
     }
 
-    if (cyclicLabel != nullptr) {
-        ASSERT(cyclicLabel->info() & Label::kIsSingleJump);
-        cyclicLabel->clearInfo(Label::kIsSingleJump);
+    if (lastBlock != nullptr) {
+        if ((lastBlock->info() & Label::kIsSingleJump) && lastSingleJumpBlock != nullptr) {
+            lastSingleJumpBlock->m_lastInstr = lastInstr;
+        }
+        setLastInstruction(lastBlock, lastInstr, beforeLastInstr);
     }
 }
 
@@ -602,7 +620,9 @@ void JITCompiler::dump()
             printf("%s%d%s: Label", labelText, static_cast<int>(item->id()), defaultText);
 
             Label* label = item->asLabel();
-            printf(" (%sLastInstr: %d%s)", instrText, static_cast<int>(label->m_lastInstr->id()), defaultText);
+            if (label->m_lastInstr != nullptr) {
+                printf(" (LastInstr: %s%d%s)", instrText, static_cast<int>(label->m_lastInstr->id()), defaultText);
+            }
 
             if (label->info() & Label::kIsConditional) {
                 printf(" (%sConditionalJump%s)", highlightFlagText, defaultText);
