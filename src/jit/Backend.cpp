@@ -1091,7 +1091,6 @@ void Label::emit(sljit_compiler* compiler)
 JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     : m_first(nullptr)
     , m_last(nullptr)
-    , m_firstBlockEnd(nullptr)
     , m_compiler(nullptr)
     , m_context(module, this)
     , m_module(module)
@@ -1376,7 +1375,6 @@ void JITCompiler::clear()
 
     m_first = nullptr;
     m_last = nullptr;
-    m_firstBlockEnd = nullptr;
     m_branchTableSize = 0;
     m_stackTmpSize = 0;
     m_context.earlyReturnLabel = nullptr;
@@ -1406,8 +1404,21 @@ void JITCompiler::clear()
 
 Label* JITCompiler::getNextBlock(Instruction* lastInstr, Label** defaultBlock)
 {
-    // TODO: Currently the lastInstr is ignored.
-    (void)lastInstr;
+    if (!(JITFlags() & JITFlagValue::disableBasicBlockOpt)
+        && lastInstr != nullptr && lastInstr->group() == Instruction::DirectBranch) {
+        if (lastInstr->opcode() != ByteCode::JumpOpcode) {
+            // TODO: Check branch hinting.
+            lastInstr = lastInstr->next()->asInstruction();
+        }
+
+        ASSERT(lastInstr->opcode() == ByteCode::JumpOpcode);
+
+        Label* target = lastInstr->asExtended()->value().targetLabel->finalTarget();
+        if (!(target->info() & Label::kIsCompiled)) {
+            target->addInfo(Label::kIsCompiled);
+            return target;
+        }
+    }
 
     // Find the next suitable block.
     Label* block = *defaultBlock;
@@ -1415,11 +1426,8 @@ Label* JITCompiler::getNextBlock(Instruction* lastInstr, Label** defaultBlock)
         return nullptr;
     }
 
-    ASSERT(!(block->info() & Label::kIsCompiled));
-
-    while (block->info() & Label::kIsSingleJump) {
-        ASSERT(block->next()->asInstruction()->opcode() == ByteCode::JumpOpcode);
-        InstructionListItem* nextItem = block->m_lastInstr->next();
+    while (block->info() & (Label::kIsCompiled | Label::kIsSingleJump)) {
+        InstructionListItem* nextItem = block->getBlockEnd()->next();
         if (nextItem == nullptr) {
             *defaultBlock = nullptr;
             return nullptr;

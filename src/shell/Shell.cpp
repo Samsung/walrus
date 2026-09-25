@@ -1303,6 +1303,9 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                 } else if (strcmp(argv[i], "--jit-no-reg-alloc") == 0) {
                     s_JITFlags |= JITFlagValue::disableRegAlloc;
                     continue;
+                } else if (strcmp(argv[i], "--jit-no-basic-block-opt") == 0) {
+                    s_JITFlags |= JITFlagValue::disableBasicBlockOpt;
+                    continue;
 #endif
                 } else if (strcmp(argv[i], "--env") == 0) {
                     if (i + 1 == argc || argv[i + 1][0] == '-') {
