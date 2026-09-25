@@ -878,7 +878,7 @@ private:
     void append(InstructionListItem* item);
 
     // Backend operations.
-    static Label* getNextBlock(Instruction* lastInstr, Label** defaultBlock);
+    Label* getNextBlock(Instruction* lastInstr, Label** defaultBlock);
     void emitBasicBlock(Instruction* from, Label* nextBlock);
     void emitProlog();
     void emitEpilog();
@@ -889,7 +889,6 @@ private:
 
     InstructionListItem* m_first;
     InstructionListItem* m_last;
-    Instruction* m_firstBlockEnd;
 
     sljit_compiler* m_compiler;
     CompileContext m_context;
