@@ -1406,8 +1406,20 @@ void JITCompiler::clear()
 
 Label* JITCompiler::getNextBlock(Instruction* lastInstr, Label** defaultBlock)
 {
-    // TODO: Currently the lastInstr is ignored.
-    (void)lastInstr;
+    if (lastInstr != nullptr && lastInstr->group() == Instruction::DirectBranch) {
+        if (lastInstr->opcode() != ByteCode::JumpOpcode) {
+            // TODO: Check branch hinting.
+            lastInstr = lastInstr->next()->asInstruction();
+        }
+
+        ASSERT(lastInstr->opcode() == ByteCode::JumpOpcode);
+
+        Label* target = lastInstr->asExtended()->value().targetLabel->finalTarget();
+        if (!(target->info() & Label::kIsCompiled)) {
+            target->addInfo(Label::kIsCompiled);
+            return target;
+        }
+    }
 
     // Find the next suitable block.
     Label* block = *defaultBlock;
@@ -1415,18 +1427,14 @@ Label* JITCompiler::getNextBlock(Instruction* lastInstr, Label** defaultBlock)
         return nullptr;
     }
 
-    ASSERT(!(block->info() & Label::kIsCompiled));
-
-    if (block->info() & Label::kIsSingleJump) {
-        ASSERT(block->next()->asInstruction()->opcode() == ByteCode::JumpOpcode);
-        InstructionListItem* nextItem = block->m_lastInstr->next();
+    while (block->info() & (Label::kIsCompiled | Label::kIsSingleJump)) {
+        InstructionListItem* nextItem = block->getBlockEnd()->next();
         if (nextItem == nullptr) {
             *defaultBlock = nullptr;
             return nullptr;
         }
 
         block = nextItem->asLabel();
-        ASSERT(!(block->info() & Label::kIsSingleJump));
     }
 
     InstructionListItem* nextBlock = block->getBlockEnd()->next();
