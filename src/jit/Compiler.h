@@ -171,6 +171,12 @@ public:
         m_group = Compare;
     }
 
+    static Label* asLabelOrNull(InstructionListItem* item)
+    {
+        ASSERT(item == nullptr || item->isLabel());
+        return reinterpret_cast<Label*>(item);
+    }
+
 protected:
     explicit InstructionListItem(Group group)
         : m_next(nullptr)
@@ -416,13 +422,13 @@ public:
     static const uint16_t kIsConditional = 1 << 5;
     // Temporary, can be reused after buildBasicBlocks().
     static const uint16_t kIsMarkedLabel = 1 << 6;
+    static const uint16_t kIsCompiled = 1 << 6;
 
     static const size_t kNoTryBlock = ~static_cast<size_t>(0);
 
     explicit Label()
         : InstructionListItem(CodeLabel)
         , m_lastInstr(nullptr)
-        , m_prevInstr(nullptr)
         , m_tryBlock(kNoTryBlock)
         , m_handlerOfTryBlock(kNoTryBlock)
     {
@@ -431,6 +437,7 @@ public:
     const std::vector<Instruction*>& branches() { return m_branches; }
     size_t tryBlock() { return m_tryBlock; }
     size_t handlerOfTryBlock() { return m_handlerOfTryBlock; }
+    Instruction* lastInstruction() { return m_lastInstr; }
 
     sljit_label* label()
     {
@@ -448,6 +455,11 @@ public:
         m_lastInstr = instr;
     }
 
+    Instruction* getBlockEnd()
+    {
+        return (info() & kIsConditional) ? m_lastInstr->next()->asInstruction() : m_lastInstr;
+    }
+
     Label* finalTarget();
     void append(Instruction* instr);
     void removeBranch(Instruction* instr);
@@ -462,8 +474,6 @@ private:
     // Last instruction of the block. When kIsConditional is
     // set, it is the instruction before the last instruction.
     Instruction* m_lastInstr;
-    // Instruction before the label.
-    Instruction* m_prevInstr;
 
     size_t m_tryBlock;
     size_t m_handlerOfTryBlock;
@@ -602,6 +612,7 @@ struct CompileContext {
     // Label at the top of the current function body (right after the prolog).
     // Self tail calls jump here to reuse the frame instead of recursing.
     sljit_label* tailCallLabel;
+    sljit_label* earlyReturnLabel;
     uintptr_t branchTableOffset;
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     uintptr_t shuffleOffset;
@@ -867,7 +878,8 @@ private:
     void append(InstructionListItem* item);
 
     // Backend operations.
-    Label* emitBasicBlock(Instruction* from);
+    static Label* getNextBlock(Instruction* lastInstr, Label** defaultBlock);
+    void emitBasicBlock(Instruction* from, Label* nextBlock);
     void emitProlog();
     void emitEpilog();
 
@@ -877,6 +889,7 @@ private:
 
     InstructionListItem* m_first;
     InstructionListItem* m_last;
+    Instruction* m_firstBlockEnd;
 
     sljit_compiler* m_compiler;
     CompileContext m_context;

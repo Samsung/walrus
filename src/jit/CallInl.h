@@ -458,7 +458,12 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
 
     if (isTailCall) {
         sljit_jump* tailCallJump = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::TailCallJump);
-        context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+
+        if (context->earlyReturnLabel != nullptr) {
+            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->earlyReturnLabel);
+        } else {
+            context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+        }
 
         // Jump to the entry of the resolved target
         sljit_set_label(tailCallJump, sljit_emit_label(compiler));

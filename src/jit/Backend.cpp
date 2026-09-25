@@ -250,6 +250,7 @@ protected:
 
 CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     : compiler(compiler)
+    , earlyReturnLabel(nullptr)
     , branchTableOffset(0)
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     , shuffleOffset(0)
@@ -743,6 +744,21 @@ static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand
     return stackOffset;
 }
 
+static void emitReturn(sljit_compiler* compiler, CompileContext* context)
+{
+    sljit_label* label = sljit_emit_label(compiler);
+    ASSERT(context->earlyReturnLabel == nullptr);
+    context->earlyReturnLabel = label;
+
+    if (!context->earlyReturns.empty()) {
+        for (auto it : context->earlyReturns) {
+            sljit_set_label(it, label);
+        }
+        context->earlyReturns.clear();
+    }
+    sljit_emit_return(compiler, SLJIT_MOV_P, SLJIT_R0, 0);
+}
+
 static void emitEnd(sljit_compiler* compiler, Instruction* instr)
 {
     End* end = reinterpret_cast<End*>(instr->byteCode());
@@ -754,23 +770,24 @@ static void emitEnd(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R0, 0, SLJIT_IMM, reinterpret_cast<sljit_sw>(end->resultOffsets()));
 
     if (instr->info() & Instruction::kEarlyReturn) {
-        context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+        if (context->earlyReturnLabel != nullptr) {
+            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->earlyReturnLabel);
+        } else {
+            context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+        }
+    } else {
+        emitReturn(compiler, context);
     }
 }
 
-static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr)
+static void emitDirectBranch(sljit_compiler* compiler, Instruction* instr, Label* nextBlock)
 {
     sljit_jump* jump;
 
     switch (instr->opcode()) {
     case ByteCode::JumpOpcode: {
-        InstructionListItem* next = instr->next();
-
-        while (next != nullptr && next->isLabel() && (next->asLabel()->info() & Label::kIsSingleJump)) {
-            next = next->next()->next();
-        }
-
-        if (next == instr->asExtended()->value().targetLabel->finalTarget()) {
+        ASSERT(instr->next() == nullptr || instr->next()->isLabel());
+        if (nextBlock == instr->asExtended()->value().targetLabel->finalTarget()) {
             return;
         }
 
@@ -1074,6 +1091,7 @@ void Label::emit(sljit_compiler* compiler)
 JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     : m_first(nullptr)
     , m_last(nullptr)
+    , m_firstBlockEnd(nullptr)
     , m_compiler(nullptr)
     , m_context(module, this)
     , m_module(module)
@@ -1147,40 +1165,41 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
     emitProlog();
     m_context.tailCallLabel = sljit_emit_label(m_compiler);
 
-    Label* block;
+    Label* defaultBlock = nullptr;
+    Label* currentBlock = nullptr;
     if (m_first->isInstruction()) {
-        block = emitBasicBlock(m_first->asInstruction());
-        ASSERT(block == nullptr || block->m_prevInstr->next() == block);
-    } else {
-        block = m_first->asLabel();
-        ASSERT(block->m_prevInstr == nullptr);
-    }
-
-    while (block != nullptr) {
-        if (block->info() & Label::kIsSingleJump) {
-            ASSERT(block->next()->asInstruction()->opcode() == ByteCode::JumpOpcode);
-            InstructionListItem* nextItem = block->next()->next();
-            if (nextItem == nullptr) {
-                break;
-            }
-            block = nextItem->asLabel();
-            continue;
+        InstructionListItem* instr = m_first;
+        Instruction* lastInstr = nullptr;
+        while (instr->next() != nullptr && instr->next()->isInstruction()) {
+            lastInstr = instr->asInstruction();
+            instr = instr->next();
         }
 
-        ASSERT(!(block->info() & Label::kHasCatchInfo)
-               || tryBlocks()[block->handlerOfTryBlock()].catchBlocks[0].u.handler == block);
+        defaultBlock = InstructionListItem::asLabelOrNull(instr->next());
 
-        block->emit(m_compiler);
-        emitTrapRange(&m_context, block);
+        if (lastInstr != nullptr && lastInstr->group() == Instruction::DirectBranch) {
+            ASSERT(lastInstr->opcode() != ByteCode::JumpOpcode);
+            instr = lastInstr;
+        }
 
-#if !defined(NDEBUG)
-        Label* prevBlock = block;
-#endif /* !NDEBUG */
-        block = emitBasicBlock(block->next()->asInstruction());
+        currentBlock = getNextBlock(instr->asInstruction(), &defaultBlock);
+        emitBasicBlock(m_first->asInstruction(), currentBlock);
+    } else {
+        defaultBlock = m_first->asLabel();
+        currentBlock = getNextBlock(nullptr, &defaultBlock);
+    }
 
-        // Checks that the basic block chain matches to the instruction chain.
-        ASSERT((prevBlock->info() & Label::kIsConditional) ? prevBlock->m_lastInstr->next()->next() == block : prevBlock->m_lastInstr->next() == block);
-        ASSERT(block == nullptr || block->m_prevInstr->next() == block);
+    while (currentBlock != nullptr) {
+        ASSERT(!(currentBlock->info() & Label::kIsSingleJump));
+        ASSERT(!(currentBlock->info() & Label::kHasCatchInfo)
+               || tryBlocks()[currentBlock->handlerOfTryBlock()].catchBlocks[0].u.handler == currentBlock);
+
+        currentBlock->emit(m_compiler);
+        emitTrapRange(&m_context, currentBlock);
+
+        Label* nextBlock = getNextBlock(currentBlock->m_lastInstr, &defaultBlock);
+        emitBasicBlock(currentBlock->next()->asInstruction(), nextBlock);
+        currentBlock = nextBlock;
     }
 
 #if defined(WALRUS_JITPERF) && !defined(NDEBUG)
@@ -1357,8 +1376,11 @@ void JITCompiler::clear()
 
     m_first = nullptr;
     m_last = nullptr;
+    m_firstBlockEnd = nullptr;
     m_branchTableSize = 0;
     m_stackTmpSize = 0;
+    m_context.earlyReturnLabel = nullptr;
+    m_context.branchTableOffset = 0;
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     m_context.shuffleOffset = 0;
 #endif /* SLJIT_CONFIG_X86 */
@@ -1382,7 +1404,38 @@ void JITCompiler::clear()
     m_context.trapJumps.clear();
 }
 
-Label* JITCompiler::emitBasicBlock(Instruction* from)
+Label* JITCompiler::getNextBlock(Instruction* lastInstr, Label** defaultBlock)
+{
+    // TODO: Currently the lastInstr is ignored.
+    (void)lastInstr;
+
+    // Find the next suitable block.
+    Label* block = *defaultBlock;
+    if (block == nullptr) {
+        return nullptr;
+    }
+
+    ASSERT(!(block->info() & Label::kIsCompiled));
+
+    if (block->info() & Label::kIsSingleJump) {
+        ASSERT(block->next()->asInstruction()->opcode() == ByteCode::JumpOpcode);
+        InstructionListItem* nextItem = block->m_lastInstr->next();
+        if (nextItem == nullptr) {
+            *defaultBlock = nullptr;
+            return nullptr;
+        }
+
+        block = nextItem->asLabel();
+        ASSERT(!(block->info() & Label::kIsSingleJump));
+    }
+
+    InstructionListItem* nextBlock = block->getBlockEnd()->next();
+    *defaultBlock = InstructionListItem::asLabelOrNull(nextBlock);
+    block->addInfo(Label::kIsCompiled);
+    return block;
+}
+
+void JITCompiler::emitBasicBlock(Instruction* from, Label* nextBlock)
 {
 #if defined(WALRUS_JITPERF) && !defined(NDEBUG)
     const bool perfEnabled = PerfDump::instance().perfEnabled();
@@ -1390,7 +1443,7 @@ Label* JITCompiler::emitBasicBlock(Instruction* from)
 
     for (InstructionListItem* item = from; item != nullptr; item = item->next()) {
         if (item->isLabel()) {
-            return item->asLabel();
+            return;
         }
 
 #if defined(WALRUS_JITPERF) && !defined(NDEBUG)
@@ -1418,7 +1471,7 @@ Label* JITCompiler::emitBasicBlock(Instruction* from)
             break;
         }
         case Instruction::DirectBranch: {
-            emitDirectBranch(m_compiler, item->asInstruction());
+            emitDirectBranch(m_compiler, item->asInstruction(), nextBlock);
             break;
         }
         case Instruction::BrTable: {
@@ -1702,7 +1755,7 @@ Label* JITCompiler::emitBasicBlock(Instruction* from)
         }
         }
     }
-    return nullptr;
+    return;
 }
 
 void JITCompiler::emitProlog()
@@ -1734,7 +1787,6 @@ void JITCompiler::emitProlog()
 
     sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), kContextOffset, SLJIT_R0, 0);
 
-    m_context.branchTableOffset = 0;
     size_t size = func.branchTableSize * sizeof(sljit_up);
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
     size += m_context.shuffleOffset;
@@ -1763,16 +1815,8 @@ void JITCompiler::emitEpilog()
     ASSERT(m_context.currentTryBlock == InstanceConstData::globalTryBlock);
 
     if (!m_context.earlyReturns.empty()) {
-        sljit_label* label = sljit_emit_label(m_compiler);
-
-        for (auto it : m_context.earlyReturns) {
-            sljit_set_label(it, label);
-        }
-
-        m_context.earlyReturns.clear();
+        emitReturn(m_compiler, &m_context);
     }
-
-    sljit_emit_return(m_compiler, SLJIT_MOV_P, SLJIT_R0, 0);
 
     m_context.emitSlowCases(m_compiler);
     emitCatches(m_compiler, &m_context, m_tryBlockStart);
