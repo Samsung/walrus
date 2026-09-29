@@ -101,7 +101,7 @@ uint32_t Instruction::valueTypeToOperandType(Value::Type type)
 void Label::append(Instruction* instr)
 {
     for (auto it : m_branches) {
-        if (it == instr) {
+        if (it.instr == instr) {
             return;
         }
     }
@@ -112,7 +112,7 @@ void Label::append(Instruction* instr)
 void Label::removeBranch(Instruction* instr)
 {
     for (auto it = m_branches.begin(); it != m_branches.end(); it++) {
-        if (*it == instr) {
+        if (it->instr == instr) {
             m_branches.erase(it);
             return;
         }
@@ -124,14 +124,14 @@ void Label::merge(Label* other)
     ASSERT(this != other);
 
     for (auto it : other->m_branches) {
-        if (it->group() != Instruction::BrTable) {
-            ASSERT(it->group() == Instruction::DirectBranch);
-            it->asExtended()->value().targetLabel = this;
+        if (it.instr->group() != Instruction::BrTable) {
+            ASSERT(it.instr->group() == Instruction::DirectBranch);
+            it.instr->asExtended()->value().targetLabel = this;
             m_branches.push_back(it);
             continue;
         }
 
-        BrTableInstruction* instr = it->asBrTable();
+        BrTableInstruction* instr = it.instr->asBrTable();
 
         Label** label = instr->targetLabels();
         Label** end = label + instr->asBrTable()->targetLabelCount();
@@ -627,7 +627,7 @@ void JITCompiler::dump()
                    (label->info() & Label::kHasCatchInfo) ? " hasCatchInfo" : "");
 
             for (auto it : label->branches()) {
-                printf("  Jump from: %s%d%s\n", instrText, static_cast<int>(it->id()), defaultText);
+                printf("  Jump from: %s%d%s\n", instrText, static_cast<int>(it.instr->id()), defaultText);
             }
         }
     }

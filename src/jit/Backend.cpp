@@ -1045,10 +1045,6 @@ JITModule::~JITModule()
     }
 }
 
-struct LabelJumpList {
-    std::vector<sljit_jump*> jumpList;
-};
-
 void Label::jumpFrom(sljit_jump* jump)
 {
     if (info() & Label::kIsSingleJump) {
@@ -1062,11 +1058,11 @@ void Label::jumpFrom(sljit_jump* jump)
     }
 
     if (!(info() & Label::kHasJumpList)) {
-        m_jumpList = new LabelJumpList;
+        m_branches.clear();
         addInfo(Label::kHasJumpList);
     }
 
-    m_jumpList->jumpList.push_back(jump);
+    m_branches.push_back(Ptr(jump));
 }
 
 void Label::emit(sljit_compiler* compiler)
@@ -1076,11 +1072,11 @@ void Label::emit(sljit_compiler* compiler)
     sljit_label* label = sljit_emit_label(compiler);
 
     if (info() & Label::kHasJumpList) {
-        for (auto it : m_jumpList->jumpList) {
-            sljit_set_label(it, label);
+        for (auto it : m_branches) {
+            sljit_set_label(it.jump, label);
         }
 
-        delete m_jumpList;
+        m_branches.clear();
         setInfo(info() ^ Label::kHasJumpList);
     }
 
@@ -1386,16 +1382,6 @@ void JITCompiler::clear()
 
     while (item != nullptr) {
         InstructionListItem* next = item->next();
-
-        if (item->isLabel()) {
-            Label* label = item->asLabel();
-
-            if (label->info() & Label::kHasJumpList) {
-                ASSERT(!(label->info() & Label::kHasLabelData));
-                delete label->m_jumpList;
-            }
-        }
-
         item->deleteObject();
         item = next;
     }
