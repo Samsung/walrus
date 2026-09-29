@@ -426,6 +426,21 @@ public:
 
     static const size_t kNoTryBlock = ~static_cast<size_t>(0);
 
+    union Ptr {
+        Ptr(Instruction* value)
+        {
+            instr = value;
+        }
+
+        Ptr(sljit_jump* value)
+        {
+            jump = value;
+        }
+
+        Instruction* instr;
+        sljit_jump* jump;
+    };
+
     explicit Label()
         : InstructionListItem(CodeLabel)
         , m_lastInstr(nullptr)
@@ -434,7 +449,7 @@ public:
     {
     }
 
-    const std::vector<Instruction*>& branches() { return m_branches; }
+    const std::vector<Ptr>& branches() { return m_branches; }
     size_t tryBlock() { return m_tryBlock; }
     size_t handlerOfTryBlock() { return m_handlerOfTryBlock; }
     Instruction* lastInstruction() { return m_lastInstr; }
@@ -470,7 +485,7 @@ public:
     void emit(sljit_compiler* compiler);
 
 private:
-    std::vector<Instruction*> m_branches;
+    std::vector<Ptr> m_branches;
     // Last instruction of the block. When kIsConditional is
     // set, it is the instruction before the last instruction.
     Instruction* m_lastInstr;
@@ -481,7 +496,6 @@ private:
     // Contexts used by different compiling stages.
     union {
         size_t m_dependencyStart;
-        LabelJumpList* m_jumpList;
         sljit_label* m_label;
     };
 };
