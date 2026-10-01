@@ -486,6 +486,9 @@ class BinaryReaderDelegate {
   virtual Result OnDylinkExport(nonstd::string_view name, uint32_t flags) = 0;
   virtual Result OnDylinkNeededCount(Index count) = 0;
   virtual Result OnDylinkNeeded(nonstd::string_view so_name) = 0;
+  virtual Result OnDylinkRuntimePathCount(Index count) = 0;
+  virtual Result OnDylinkRuntimePath(nonstd::string_view path) = 0;
+  virtual Result OnDylinkTargetArch(nonstd::string_view arch) = 0;
   virtual Result EndDylinkSection() = 0;
 
   /* target_features section */
@@ -540,6 +543,7 @@ class BinaryReaderDelegate {
                                uint32_t flags,
                                Index count) = 0;
   virtual Result OnComdatEntry(ComdatType kind, Index index) = 0;
+  virtual Result OnTargetArch(nonstd::string_view arch) = 0;
   virtual Result EndLinkingSection() = 0;
 
   /* Tag section */

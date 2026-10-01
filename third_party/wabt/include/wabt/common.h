@@ -314,6 +314,7 @@ enum class LinkingEntryType {
   InitFunctions = 6,
   ComdatInfo = 7,
   SymbolTable = 8,
+  TargetArch = 9,
 };
 
 enum class DylinkEntryType {
@@ -321,6 +322,8 @@ enum class DylinkEntryType {
   Needed = 2,
   ExportInfo = 3,
   ImportInfo = 4,
+  RuntimePath = 5,
+  TargetArch = 6,
 };
 
 enum class SymbolType {

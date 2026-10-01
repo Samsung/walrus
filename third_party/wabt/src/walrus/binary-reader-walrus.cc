@@ -1365,6 +1365,18 @@ public:
         abort();
         return Result::Ok;
     }
+    Result OnDylinkRuntimePathCount(Index count) {
+        abort();
+        return Result::Ok;
+    }
+    Result OnDylinkRuntimePath(nonstd::string_view path) {
+        abort();
+        return Result::Ok;
+    }
+    Result OnDylinkTargetArch(nonstd::string_view arch) {
+        abort();
+        return Result::Ok;
+    }
     Result OnDylinkImportCount(Index count) override {
         abort();
         return Result::Ok;
@@ -1470,6 +1482,10 @@ public:
         return Result::Ok;
     }
     Result OnComdatEntry(ComdatType kind, Index index) override {
+        abort();
+        return Result::Ok;
+    }
+    Result OnTargetArch(nonstd::string_view arch) {
         abort();
         return Result::Ok;
     }
