@@ -267,6 +267,7 @@ public:
     // These two are only used by memory load/store instructions
     static const uint16_t kMultiMemory = 1 << 9;
     static const uint16_t kMemory64 = 1 << 10;
+    static const uint16_t kIsInvertedCast = 1 << 11;
 
     ByteCode::Opcode opcode() { return m_opcode; }
 
@@ -878,6 +879,8 @@ private:
     void append(InstructionListItem* item);
 
     // Backend operations.
+    static bool isHintedAsTaken(Instruction* branch);
+    static void invertBranch(Instruction* branch, Instruction* jump);
     Label* getNextBlock(Instruction* lastInstr, Label** defaultBlock);
     void emitBasicBlock(Instruction* from, Label* nextBlock);
     void emitProlog();
@@ -889,6 +892,7 @@ private:
 
     InstructionListItem* m_first;
     InstructionListItem* m_last;
+    std::vector<Label*> m_preferredBlocks;
 
     sljit_compiler* m_compiler;
     CompileContext m_context;

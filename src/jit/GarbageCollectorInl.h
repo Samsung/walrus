@@ -123,6 +123,9 @@ static void emitGCCastGeneric(sljit_compiler* compiler, Instruction* instr)
         srcInfo = jumpIfCastGeneric->srcInfo();
         label = instr->asExtended()->value().targetLabel;
         isTestOrCastFail = (srcInfo & JumpIfCastGeneric::IsCastFail) != 0;
+        if (instr->info() & Instruction::kIsInvertedCast) {
+            isTestOrCastFail = !isTestOrCastFail;
+        }
         break;
     }
     default:
@@ -447,6 +450,9 @@ static void emitGCCastDefined(sljit_compiler* compiler, Instruction* instr)
         srcInfo = jumpIfCastDefined->srcInfo();
         label = instr->asExtended()->value().targetLabel;
         isTestOrCastFail = (srcInfo & JumpIfCastGeneric::IsCastFail) != 0;
+        if (instr->info() & Instruction::kIsInvertedCast) {
+            isTestOrCastFail = !isTestOrCastFail;
+        }
         break;
     }
     default:
