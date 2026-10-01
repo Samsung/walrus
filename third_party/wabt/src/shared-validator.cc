@@ -324,13 +324,13 @@ Result SharedValidator::CheckSupertypes(const Location& loc,
   }
 
   if (supertypes->sub_type_count == 1) {
-    entry.first_sub_type = supertypes->sub_types[0];
-
     if (supertypes->sub_types[0] >= current_index) {
       type_validation_result_ = Result::Error;
       PrintError(loc, "invalid sub type %" PRIindex, supertypes->sub_types[0]);
       return Result::Error;
     }
+
+    entry.first_sub_type = supertypes->sub_types[0];
 
     if (type_fields_.type_entries[entry.first_sub_type].is_final_sub_type) {
       type_validation_result_ = Result::Error;

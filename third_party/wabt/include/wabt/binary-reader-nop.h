@@ -580,6 +580,13 @@ class BinaryReaderNop : public BinaryReaderDelegate {
   Result OnDylinkExport(nonstd::string_view name, uint32_t flags) override {
     return Result::Ok;
   }
+  Result OnDylinkRuntimePathCount(Index count) override { return Result::Ok; }
+  Result OnDylinkRuntimePath(nonstd::string_view path) override {
+    return Result::Ok;
+  }
+  Result OnDylinkTargetArch(nonstd::string_view arch) override {
+    return Result::Ok;
+  }
   Result EndDylinkSection() override { return Result::Ok; }
 
   /* target_features section */
@@ -657,6 +664,7 @@ class BinaryReaderNop : public BinaryReaderDelegate {
   Result OnComdatEntry(ComdatType kind, Index index) override {
     return Result::Ok;
   }
+  Result OnTargetArch(nonstd::string_view arch) override { return Result::Ok; }
   Result EndLinkingSection() override { return Result::Ok; }
 };
 

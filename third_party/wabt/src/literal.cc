@@ -78,6 +78,11 @@ inline int Clz(uint64_t mask) {
 #define strtod_l _strtod_l
 static _locale_t c_locale = _create_locale(LC_ALL, "C");
 #else
+#if defined(__OpenBSD__)
+// OpenBSD's libc has no strtof_l/strtod_l
+#define strtof_l(s, endptr, locale) ((void)(locale), strtof(s, endptr))
+#define strtod_l(s, endptr, locale) ((void)(locale), strtod(s, endptr))
+#endif
 static locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
 #endif
 
@@ -92,7 +97,14 @@ struct FloatTraitsBase<float> {
   using Uint = uint32_t;
   static constexpr int kBits = sizeof(Uint) * 8;
   static constexpr int kSigBits = 23;
+#ifdef _AIX
+  // AIX defines HUGE_VAL and HUGE_VALF as reinterpret_cast expressions, which
+  // can't be constexpr.
+  static constexpr float kHugeVal = std::numeric_limits<float>::infinity();
+#else
   static constexpr float kHugeVal = HUGE_VALF;
+#endif
+
   static constexpr int kMaxHexBufferSize = WABT_MAX_FLOAT_HEX;
 
   static float Strto(const char* s, char** endptr) {
@@ -105,7 +117,13 @@ struct FloatTraitsBase<double> {
   using Uint = uint64_t;
   static constexpr int kBits = sizeof(Uint) * 8;
   static constexpr int kSigBits = 52;
-  static constexpr float kHugeVal = HUGE_VAL;
+#ifdef _AIX
+  // AIX defines HUGE_VAL and HUGE_VALF as reinterpret_cast expressions, which
+  // can't be constexpr.
+  static constexpr double kHugeVal = std::numeric_limits<double>::infinity();
+#else
+  static constexpr double kHugeVal = HUGE_VAL;
+#endif
   static constexpr int kMaxHexBufferSize = WABT_MAX_DOUBLE_HEX;
 
   static double Strto(const char* s, char** endptr) {

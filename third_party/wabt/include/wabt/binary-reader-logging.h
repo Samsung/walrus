@@ -391,6 +391,9 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
                         nonstd::string_view name,
                         uint32_t flags) override;
   Result OnDylinkExport(nonstd::string_view name, uint32_t flags) override;
+  Result OnDylinkRuntimePathCount(Index count) override;
+  Result OnDylinkRuntimePath(nonstd::string_view path) override;
+  Result OnDylinkTargetArch(nonstd::string_view arch) override;
   Result EndDylinkSection() override;
 
   Result BeginGenericCustomSection(Offset size) override;
@@ -441,6 +444,7 @@ class BinaryReaderLogging : public BinaryReaderDelegate {
                        uint32_t flags,
                        Index count) override;
   Result OnComdatEntry(ComdatType kind, Index index) override;
+  Result OnTargetArch(nonstd::string_view arch) override;
   Result EndLinkingSection() override;
 
   Result BeginTagSection(Offset size) override;

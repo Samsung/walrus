@@ -613,6 +613,18 @@ Result BinaryReaderLogging::OnDylinkImport(nonstd::string_view module,
   return reader_->OnDylinkImport(module, name, flags);
 }
 
+Result BinaryReaderLogging::OnDylinkRuntimePath(nonstd::string_view path) {
+  LOGF("OnDylinkRuntimePath(path: " PRIstringview ")\n",
+       WABT_PRINTF_STRING_VIEW_ARG(path));
+  return reader_->OnDylinkRuntimePath(path);
+}
+
+Result BinaryReaderLogging::OnDylinkTargetArch(nonstd::string_view arch) {
+  LOGF("OnDylinkTargetArch(arch: " PRIstringview ")\n",
+       WABT_PRINTF_STRING_VIEW_ARG(arch));
+  return reader_->OnDylinkTargetArch(arch);
+}
+
 Result BinaryReaderLogging::OnRelocCount(Index count, Index section_index) {
   LOGF("OnRelocCount(count: %" PRIindex ", section: %" PRIindex ")\n", count,
        section_index);
@@ -723,6 +735,11 @@ Result BinaryReaderLogging::OnComdatEntry(ComdatType kind, Index index) {
   LOGF("OnComdatEntry(kind: %d, index: %" PRIindex ")\n",
        static_cast<int>(kind), index);
   return reader_->OnComdatEntry(kind, index);
+}
+
+Result BinaryReaderLogging::OnTargetArch(nonstd::string_view arch) {
+  LOGF("OnTargetArch(" PRIstringview ")\n", WABT_PRINTF_STRING_VIEW_ARG(arch));
+  return reader_->OnTargetArch(arch);
 }
 
 Result BinaryReaderLogging::BeginCodeMetadataSection(nonstd::string_view name,
@@ -1010,6 +1027,7 @@ DEFINE_BEGIN(BeginDylinkSection)
 DEFINE_INDEX(OnDylinkNeededCount)
 DEFINE_INDEX(OnDylinkExportCount)
 DEFINE_INDEX(OnDylinkImportCount)
+DEFINE_INDEX(OnDylinkRuntimePathCount)
 DEFINE_END(EndDylinkSection)
 
 DEFINE_BEGIN(BeginTargetFeaturesSection)

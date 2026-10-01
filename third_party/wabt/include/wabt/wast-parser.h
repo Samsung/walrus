@@ -117,6 +117,9 @@ class WastParser {
   Result ErrorIfLpar(const std::vector<std::string>& expected,
                      const char* example = nullptr);
 
+  void AddScriptErrors(const Errors& errors, const Location& loc,
+                       const char* desc);
+
   // Returns the next token without consuming it.
   Token GetToken();
 
@@ -184,6 +187,7 @@ class WastParser {
   // Check the maximum allowed declarations.
   Result CheckIndexRange(Location& loc, size_t size, const char* decl);
 
+  void ParseAnnotations(Token& token);
   Result ParseVarText(Token& token, std::string* out_text);
   Result ParseBindVarOpt(std::string* name);
   Result ParseVar(Var* out_var);
