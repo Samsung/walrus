@@ -1377,6 +1377,7 @@ void JITCompiler::clear()
     m_last = nullptr;
     m_branchTableSize = 0;
     m_stackTmpSize = 0;
+    m_preferredBlocks.clear();
     m_context.earlyReturnLabel = nullptr;
     m_context.branchTableOffset = 0;
 #if (defined SLJIT_CONFIG_X86 && SLJIT_CONFIG_X86)
@@ -1402,21 +1403,85 @@ void JITCompiler::clear()
     m_context.trapJumps.clear();
 }
 
+bool JITCompiler::isHintedAsTaken(Instruction* branch)
+{
+    return reinterpret_cast<ByteCodeOffsetValue*>(branch->byteCode())->branchHint() == ByteCodeOffsetValue::BranchHint::Taken;
+}
+
+void JITCompiler::invertBranch(Instruction* branch, Instruction* jump)
+{
+    Label* branchTarget = branch->asExtended()->value().targetLabel;
+    Label* jumpTarget = jump->asExtended()->value().targetLabel;
+
+    switch (branch->opcode()) {
+    case ByteCode::JumpIfTrueOpcode:
+        branch->m_opcode = ByteCode::JumpIfFalseOpcode;
+        break;
+    case ByteCode::JumpIfFalseOpcode:
+        branch->m_opcode = ByteCode::JumpIfTrueOpcode;
+        break;
+    case ByteCode::JumpIfNullOpcode:
+        branch->m_opcode = ByteCode::JumpIfNonNullOpcode;
+        break;
+    case ByteCode::JumpIfNonNullOpcode:
+        branch->m_opcode = ByteCode::JumpIfNullOpcode;
+        break;
+    case ByteCode::JumpIfCastGenericOpcode:
+    case ByteCode::JumpIfCastDefinedOpcode:
+        ASSERT(!(branch->info() & Instruction::kIsInvertedCast));
+        branch->addInfo(Instruction::kIsInvertedCast);
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    }
+
+    branch->asExtended()->value().targetLabel = jumpTarget;
+    jump->asExtended()->value().targetLabel = branchTarget;
+}
+
 Label* JITCompiler::getNextBlock(Instruction* lastInstr, Label** defaultBlock)
 {
     if (!(JITFlags() & JITFlagValue::disableBasicBlockOpt)
         && lastInstr != nullptr && lastInstr->group() == Instruction::DirectBranch) {
+        Label* other = nullptr;
+
         if (lastInstr->opcode() != ByteCode::JumpOpcode) {
-            // TODO: Check branch hinting.
-            lastInstr = lastInstr->next()->asInstruction();
+            Instruction* jump = lastInstr->next()->asInstruction();
+
+            if (isHintedAsTaken(lastInstr)) {
+                Label* target = lastInstr->asExtended()->value().targetLabel->finalTarget();
+
+                if (target != jump->asExtended()->value().targetLabel->finalTarget()
+                    && !(target->info() & Label::kIsCompiled)) {
+                    invertBranch(lastInstr, jump);
+                }
+            }
+
+            other = lastInstr->asExtended()->value().targetLabel->finalTarget();
+            lastInstr = jump;
         }
 
         ASSERT(lastInstr->opcode() == ByteCode::JumpOpcode);
 
         Label* target = lastInstr->asExtended()->value().targetLabel->finalTarget();
         if (!(target->info() & Label::kIsCompiled)) {
+            if (other != nullptr && other != target && !(other->info() & Label::kIsCompiled)) {
+                m_preferredBlocks.push_back(other);
+            }
+
             target->addInfo(Label::kIsCompiled);
             return target;
+        }
+    }
+
+    while (!m_preferredBlocks.empty()) {
+        Label* preferred = m_preferredBlocks.back();
+        m_preferredBlocks.pop_back();
+
+        if (!(preferred->info() & Label::kIsCompiled)) {
+            preferred->addInfo(Label::kIsCompiled);
+            return preferred;
         }
     }
 
