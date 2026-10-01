@@ -1500,9 +1500,16 @@ protected:
 
 class ByteCodeOffsetValue : public ByteCode {
 public:
+    enum class BranchHint : uint8_t {
+        None,
+        NotTaken,
+        Taken,
+    };
+
     ByteCodeOffsetValue(Opcode opcode, ByteCodeStackOffset stackOffset, uint32_t value)
         : ByteCode(opcode)
         , m_stackOffset(stackOffset)
+        , m_branchHint(BranchHint::None)
         , m_value(value)
     {
     }
@@ -1510,9 +1517,21 @@ public:
     ByteCodeStackOffset stackOffset() const { return m_stackOffset; }
     uint32_t uint32Value() const { return m_value; }
     int32_t int32Value() const { return static_cast<int32_t>(m_value); }
+    BranchHint branchHint() const { return m_branchHint; }
+    void setBranchHint(BranchHint hint) { m_branchHint = hint; }
+
+#if !defined(NDEBUG)
+    void dumpBranchHint()
+    {
+        if (m_branchHint != BranchHint::None) {
+            printf(" hint: %s", m_branchHint == BranchHint::Taken ? "taken" : "not taken");
+        }
+    }
+#endif
 
 protected:
     ByteCodeStackOffset m_stackOffset;
+    BranchHint m_branchHint;
     uint32_t m_value;
 };
 
@@ -2312,6 +2331,7 @@ public:
         printf("jump_if_true ");
         DUMP_BYTECODE_OFFSET(stackOffset);
         printf("dst: %" PRId32, (int32_t)pos + offset());
+        dumpBranchHint();
     }
 #endif
 };
@@ -2336,6 +2356,7 @@ public:
         printf("jump_if_false ");
         DUMP_BYTECODE_OFFSET(stackOffset);
         printf("dst: %" PRId32, (int32_t)pos + offset());
+        dumpBranchHint();
     }
 #endif
 };

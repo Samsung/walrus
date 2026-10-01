@@ -678,6 +678,31 @@ private:
     size_t m_lastI32EqzPos;
     bool m_useJIT;
 
+    enum class ConditionHint : uint8_t {
+        None,
+        LikelyFalse,
+        LikelyTrue,
+    };
+    ConditionHint m_pendingConditionHint = ConditionHint::None;
+
+    ConditionHint takeConditionHint()
+    {
+        ConditionHint hint = m_pendingConditionHint;
+        m_pendingConditionHint = ConditionHint::None;
+        return hint;
+    }
+
+    void applyConditionHint(size_t position, ConditionHint hint, bool jumpTakenWhenConditionIsTrue)
+    {
+        if (LIKELY(hint == ConditionHint::None)) {
+            return;
+        }
+        bool taken = (hint == ConditionHint::LikelyTrue) == jumpTakenWhenConditionIsTrue;
+        peekByteCode<Walrus::ByteCodeOffsetValue>(position)
+            ->setBranchHint(taken ? Walrus::ByteCodeOffsetValue::BranchHint::Taken
+                                  : Walrus::ByteCodeOffsetValue::BranchHint::NotTaken);
+    }
+
     Walrus::FunctionType* getFunctionType(Index index)
     {
         return m_result.m_compositeTypes[index]->asFunction();
@@ -1539,6 +1564,11 @@ public:
     {
     }
 
+    virtual void OnBranchHint(bool likely) override
+    {
+        m_pendingConditionHint = likely ? ConditionHint::LikelyTrue : ConditionHint::LikelyFalse;
+    }
+
     uint16_t computeFunctionParameterOrResultOffsetCount(const Walrus::TypeVector& types)
     {
         uint16_t result = 0;
@@ -1898,6 +1928,7 @@ public:
 
     virtual void OnIfExpr(Type sigType) override
     {
+        ConditionHint conditionHint = takeConditionHint();
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         auto stackPos = popVMStack();
 
@@ -1917,6 +1948,8 @@ public:
         } else {
             pushByteCode(Walrus::JumpIfFalse(stackPos), WASMOpcode::IfOpcode);
         }
+
+        applyConditionHint(b.m_position, conditionHint, false);
         m_preprocessData.seenBranch();
     }
 
@@ -2240,7 +2273,7 @@ public:
     }
 
     template <typename JumpType, typename JumpTypeInverted, WASMOpcode opcode>
-    size_t GenerateConditionalBranch(Index depth, size_t stackPos)
+    size_t GenerateConditionalBranch(Index depth, size_t stackPos, ConditionHint conditionHint = ConditionHint::None)
     {
         if (m_blockInfo.size() == depth) {
             // this case acts like return
@@ -2251,6 +2284,7 @@ public:
             }
             generateEndCode();
             peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
+            applyConditionHint(pos, conditionHint, false);
             return pos;
         }
 
@@ -2268,6 +2302,7 @@ public:
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
             peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
+            applyConditionHint(pos, conditionHint, false);
             return pos;
         }
 
@@ -2290,6 +2325,7 @@ public:
             }
             pushByteCode(Walrus::Jump(offset), WASMOpcode::BrIfOpcode);
             peekByteCode<JumpTypeInverted>(pos)->setOffset(m_currentByteCode.size() - pos);
+            applyConditionHint(pos, conditionHint, false);
             return pos;
         }
 
@@ -2301,11 +2337,13 @@ public:
 
         size_t pos = m_currentByteCode.size();
         pushByteCode(JumpType(stackPos, offset), opcode);
+        applyConditionHint(pos, conditionHint, true);
         return pos;
     }
 
     virtual void OnBrIfExpr(Index depth) override
     {
+        ConditionHint conditionHint = takeConditionHint();
         m_preprocessData.seenBranch(depth + 1);
         ASSERT(peekVMStackValueType() == Walrus::Value::Type::I32);
         size_t stackPos = popVMStack();
@@ -2315,30 +2353,32 @@ public:
             stackPos = peekByteCode<Walrus::UnaryOperation>(m_lastI32EqzPos)->srcOffset();
             resizeByteCode(m_lastI32EqzPos);
             m_lastI32EqzPos = s_noI32Eqz;
-            GenerateConditionalBranch<Walrus::JumpIfFalse, Walrus::JumpIfTrue, WASMOpcode::BrIfOpcode>(depth, stackPos);
+            GenerateConditionalBranch<Walrus::JumpIfFalse, Walrus::JumpIfTrue, WASMOpcode::BrIfOpcode>(depth, stackPos, conditionHint);
         } else {
-            GenerateConditionalBranch<Walrus::JumpIfTrue, Walrus::JumpIfFalse, WASMOpcode::BrIfOpcode>(depth, stackPos);
+            GenerateConditionalBranch<Walrus::JumpIfTrue, Walrus::JumpIfFalse, WASMOpcode::BrIfOpcode>(depth, stackPos, conditionHint);
         }
     }
 
     virtual void OnBrOnNonNullExpr(Index depth) override
     {
+        ConditionHint conditionHint = takeConditionHint();
         m_preprocessData.seenBranch(depth + 1);
         ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
         VMStackInfo& info = peekVMStackInfo();
         info.toNonNullableRef();
-        GenerateConditionalBranch<Walrus::JumpIfNonNull, Walrus::JumpIfNull, WASMOpcode::BrIfOpcode>(depth, info.position());
+        GenerateConditionalBranch<Walrus::JumpIfNonNull, Walrus::JumpIfNull, WASMOpcode::BrIfOpcode>(depth, info.position(), conditionHint);
         popVMStack();
     }
 
     virtual void OnBrOnNullExpr(Index depth) override
     {
+        ConditionHint conditionHint = takeConditionHint();
         m_preprocessData.seenBranch(depth + 1);
         ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
         // Temporarily remove the top element of the stack for the sake of variable copying.
         VMStackInfo info = m_vmStack.back();
         m_vmStack.pop_back();
-        GenerateConditionalBranch<Walrus::JumpIfNull, Walrus::JumpIfNonNull, WASMOpcode::BrIfOpcode>(depth, info.position());
+        GenerateConditionalBranch<Walrus::JumpIfNull, Walrus::JumpIfNonNull, WASMOpcode::BrIfOpcode>(depth, info.position(), conditionHint);
         info.toNonNullableRef();
         m_vmStack.push_back(info);
     }
@@ -3150,6 +3190,7 @@ public:
 
     virtual void OnBrOnCastExpr(Opcode opcode, Index depth, Type type) override
     {
+        ConditionHint conditionHint = takeConditionHint();
         Walrus::Type targetType = toRefValueKind(type, &m_result);
 
         m_preprocessData.seenBranch(depth + 1);
@@ -3164,11 +3205,11 @@ public:
         }
 
         if (type.IsReferenceWithIndex()) {
-            size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastDefined, JumpIfCastFailDefined, WASMOpcode::BrOnCastOpcode>(depth, info.position());
+            size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastDefined, JumpIfCastFailDefined, WASMOpcode::BrOnCastOpcode>(depth, info.position(), conditionHint);
             const Walrus::CompositeType** typeInfo = m_result.m_compositeTypes[type.GetReferenceIndex()]->subTypeList();
             peekByteCode<Walrus::JumpIfCastDefined>(pos)->init(typeInfo, srcInfo);
         } else {
-            size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastGeneric, JumpIfCastFailGeneric, WASMOpcode::BrOnCastOpcode>(depth, info.position());
+            size_t pos = GenerateConditionalBranch<Walrus::JumpIfCastGeneric, JumpIfCastFailGeneric, WASMOpcode::BrOnCastOpcode>(depth, info.position(), conditionHint);
             peekByteCode<Walrus::JumpIfCastGeneric>(pos)->init(targetType, srcInfo);
         }
 
