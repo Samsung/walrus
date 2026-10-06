@@ -36,10 +36,12 @@ class Object {
 
 public:
     enum Kind : uint8_t {
-        // WebAssembly types
-        // Note: value of 0 must not be used for fast JIT type casting, see emitGCCastGeneric
-        StructKind = 1,
-        ArrayKind,
+        // WebAssembly types (type casting optimizations: see emitGCCastGeneric)
+        // Value 0 must not be used, equals to nullptr
+        // Value 1 must not be used, equals to Value::RefI31 | 0
+        StructKind = 2,
+        // Value 3 must not be used, equals to Value::RefI31 | (1 << 1) on 32 bit CPUs
+        ArrayKind = 4,
         FunctionKind,
         ExceptionKind,
         // Host types
@@ -166,6 +168,12 @@ public:
     {
         ASSERT(isTag());
         return reinterpret_cast<Tag*>(this);
+    }
+
+    static bool isStructOrArray(Kind kind)
+    {
+        ASSERT(static_cast<uint8_t>(kind) >= static_cast<uint8_t>(ArrayKind) || kind == StructKind);
+        return static_cast<uint8_t>(kind) <= static_cast<uint8_t>(ArrayKind);
     }
 
 private:

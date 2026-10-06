@@ -219,7 +219,7 @@ static void emitGCCastGeneric(sljit_compiler* compiler, Instruction* instr)
     MOVE_TO_REG(compiler, SLJIT_MOV, srcReg, args[0].arg, args[0].argw);
     sljit_sw kind = static_cast<sljit_sw>((genericType == Value::StructRef) ? Object::StructKind : Object::ArrayKind);
 
-    COMPILE_ASSERT(Object::StructKind == 1 && Object::ArrayKind == 2, "Invalid GC kind constants");
+    COMPILE_ASSERT(Object::StructKind == 2 && Object::ArrayKind == 4, "Invalid GC kind constants");
 
     if ((srcInfo & (JumpIfCastGeneric::IsSrcNullable | JumpIfCastGeneric::IsSrcTagged)) == 0) {
         sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_TMP_DEST_REG, 0, SLJIT_MEM1(srcReg), JITFieldAccessor::objectTypeInfo());
