@@ -57,6 +57,22 @@ Legacy `WALRUS_MODE=debug/release` supplies the default build type when
 supplies defaults for the independent output options; explicit new options take
 precedence. Walrus does not overwrite the parent's `BUILD_SHARED_LIBS` or `ENABLE_SHELL`.
 
+Build flags, definitions, include paths and PIC settings are applied to individual
+targets. Embedding Walrus does not change parent or unrelated target settings.
+WABT options use the `WABT_` prefix (for example `WABT_USE_ASAN` and
+`WABT_WERROR`), and WASI uses `UVWASI_ASAN`. Legacy unprefixed options are
+read as defaults without creating unprefixed cache entries.
+
+To check build-setting isolation, configure and build the standalone fixture:
+
+```console
+$ cmake -Htest/cmake/isolation -Bout/cmake-isolation -GNinja
+$ cmake --build out/cmake-isolation --target walrus-isolation
+```
+
+The same fixture supports `-DWABT_USE_ASAN=ON -DUVWASI_ASAN=ON` to check
+that sanitizer settings stay on their owning targets.
+
 ## Perf
 
 You'll need [Perf](https://perf.wiki.kernel.org/index.php/Main_Page).

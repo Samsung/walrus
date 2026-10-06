@@ -10,6 +10,21 @@ env:
   RUNNER: tools/run-tests.py
 
 jobs:
+  check-cmake-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install Packages
+        run: sudo apt-get update && sudo apt-get install -y ninja-build pkg-config libuv1-dev
+      - name: Check parent and target isolation
+        run: |
+          cmake -Htest/cmake/isolation -Bout/cmake-isolation -GNinja
+          cmake --build out/cmake-isolation --target walrus-isolation
+          cmake -Htest/cmake/isolation -Bout/cmake-isolation-asan -GNinja -DWABT_USE_ASAN=ON -DUVWASI_ASAN=ON
+          cmake --build out/cmake-isolation-asan --target walrus-isolation
+
   check-tidy:
     runs-on: ubuntu-latest
     steps:

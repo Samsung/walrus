@@ -16,80 +16,94 @@
 
 cmake_minimum_required(VERSION 2.8.12...4.0)
 project(WABT C CXX)
-set(PROJECT_VERSION 1.0.30)
-include(GNUInstallDirs)
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if (CMAKE_VERSION VERSION_LESS 3.1 AND NOT MSVC)
-  add_compile_options(-std=c++11)
-endif ()
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# Check if wabt is being used directly or via add_subdirectory, FetchContent, etc
+set(WABT_VERSION_STRING 1.0.30)
 set(WABT_MASTER_PROJECT OFF)
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
   set(WABT_MASTER_PROJECT ON)
-endif()
+endif ()
 
-# By default use the project version as the version string
-set(WABT_VERSION_STRING "${PROJECT_VERSION}")
+# Read legacy inputs without adding unprefixed options to the shared cache.
+function(wabt_option NAME LEGACY HELP DEFAULT)
+  if (DEFINED ${NAME})
+    set(${NAME} "${${NAME}}" CACHE BOOL "${HELP}")
+  elseif (DEFINED ${LEGACY})
+    set(${NAME} "${${LEGACY}}" CACHE BOOL "${HELP}")
+  endif ()
+  option(${NAME} "${HELP}" ${DEFAULT})
+endfunction()
+wabt_option(WABT_USE_ASAN USE_ASAN "Use address sanitizer" OFF)
+wabt_option(WABT_USE_MSAN USE_MSAN "Use memory sanitizer" OFF)
+wabt_option(WABT_USE_LSAN USE_LSAN "Use leak sanitizer" OFF)
+wabt_option(WABT_USE_UBSAN USE_UBSAN "Use undefined behavior sanitizer" OFF)
+wabt_option(WABT_WERROR WERROR "Build WABT with warnings as errors" OFF)
+wabt_option(WABT_WITH_EXCEPTIONS WITH_EXCEPTIONS "Enable C++ exceptions in WABT" OFF)
 
-option(USE_ASAN "Use address sanitizer" OFF)
-option(USE_MSAN "Use memory sanitizer" OFF)
-option(USE_LSAN "Use leak sanitizer" OFF)
-option(USE_UBSAN "Use undefined behavior sanitizer" OFF)
-option(WERROR "Build with warnings as errors" OFF)
-# WASI support is still a work in progress.
-# Only a handful of syscalls are supported at this point.
-option(WITH_WASI "Build WASI support via uvwasi" OFF)
-
+set(WABT_COMPILE_OPTIONS)
+set(WABT_COMPILE_DEFINITIONS ${WABT_DEFINITIONS})
+set(WABT_CXX_ONLY_OPTIONS)
 if (MSVC)
-  set(COMPILER_IS_CLANG 0)
-  set(COMPILER_IS_GNU 0)
-  set(COMPILER_IS_MSVC 1)
+  set(WABT_COMPILER_IS_CLANG 0)
+  set(WABT_COMPILER_IS_GNU 0)
+  set(WABT_COMPILER_IS_MSVC 1)
 elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
-  set(COMPILER_IS_CLANG 1)
-  set(COMPILER_IS_GNU 0)
-  set(COMPILER_IS_MSVC 0)
+  set(WABT_COMPILER_IS_CLANG 1)
+  set(WABT_COMPILER_IS_GNU 0)
+  set(WABT_COMPILER_IS_MSVC 0)
 elseif (CMAKE_C_COMPILER_ID STREQUAL "GNU")
-  set(COMPILER_IS_CLANG 0)
-  set(COMPILER_IS_GNU 1)
-  set(COMPILER_IS_MSVC 0)
+  set(WABT_COMPILER_IS_CLANG 0)
+  set(WABT_COMPILER_IS_GNU 1)
+  set(WABT_COMPILER_IS_MSVC 0)
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-  set(COMPILER_IS_CLANG 1)
-  set(COMPILER_IS_GNU 0)
-  set(COMPILER_IS_MSVC 0)
+  set(WABT_COMPILER_IS_CLANG 1)
+  set(WABT_COMPILER_IS_GNU 0)
+  set(WABT_COMPILER_IS_MSVC 0)
 else ()
-  set(COMPILER_IS_CLANG 0)
-  set(COMPILER_IS_GNU 0)
-  set(COMPILER_IS_MSVC 0)
+  set(WABT_COMPILER_IS_CLANG 0)
+  set(WABT_COMPILER_IS_GNU 0)
+  set(WABT_COMPILER_IS_MSVC 0)
 endif ()
 
-include(CheckIncludeFile)
-include(CheckSymbolExists)
+# Prefix cached probe results. Generic names needed by CheckTypeSize and
+# config.h are confined to this function, so other projects cannot reuse them.
+function(wabt_configure_header)
+  if (WABT_ARCH STREQUAL "x86" AND (WABT_COMPILER_IS_GNU OR WABT_COMPILER_IS_CLANG))
+    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -m32")
+  endif ()
+  include(CheckIncludeFile)
+  include(CheckSymbolExists)
+  check_include_file("alloca.h" WABT_HAVE_ALLOCA_H)
+  check_include_file("unistd.h" WABT_HAVE_UNISTD_H)
+  check_symbol_exists(snprintf "stdio.h" WABT_HAVE_SNPRINTF)
+  check_symbol_exists(strcasecmp "strings.h" WABT_HAVE_STRCASECMP)
+  if (WIN32)
+    check_symbol_exists(ENABLE_VIRTUAL_TERMINAL_PROCESSING "windows.h" WABT_HAVE_WIN32_VT100)
+  endif ()
+  check_include_file("sys/types.h" WABT_HAVE_SYS_TYPES_H)
+  check_include_file("stdint.h" WABT_HAVE_STDINT_H)
+  check_include_file("stddef.h" WABT_HAVE_STDDEF_H)
+  set(HAVE_SYS_TYPES_H ${WABT_HAVE_SYS_TYPES_H})
+  set(HAVE_STDINT_H ${WABT_HAVE_STDINT_H})
+  set(HAVE_STDDEF_H ${WABT_HAVE_STDDEF_H})
+  include(CheckTypeSize)
+  check_type_size(ssize_t WABT_SSIZE_T)
+  check_type_size(size_t WABT_SIZEOF_SIZE_T)
+  foreach(NAME ALLOCA_H UNISTD_H SNPRINTF STRCASECMP WIN32_VT100)
+    set(HAVE_${NAME} "${WABT_HAVE_${NAME}}")
+  endforeach()
+  set(HAVE_SSIZE_T ${HAVE_WABT_SSIZE_T})
+  set(SIZEOF_SIZE_T ${WABT_SIZEOF_SIZE_T})
+  foreach(NAME CLANG GNU MSVC)
+    set(COMPILER_IS_${NAME} ${WABT_COMPILER_IS_${NAME}})
+  endforeach()
+  set(WITH_EXCEPTIONS ${WABT_WITH_EXCEPTIONS})
+  configure_file(${WABT_SOURCE_DIR}/src/config.h.in
+                 ${WABT_BINARY_DIR}/include/wabt/config.h @ONLY)
+endfunction()
+wabt_configure_header()
 
-check_include_file("alloca.h" HAVE_ALLOCA_H)
-check_include_file("unistd.h" HAVE_UNISTD_H)
-check_symbol_exists(snprintf "stdio.h" HAVE_SNPRINTF)
-check_symbol_exists(strcasecmp "strings.h" HAVE_STRCASECMP)
-
-if (WIN32)
-  check_symbol_exists(ENABLE_VIRTUAL_TERMINAL_PROCESSING "windows.h" HAVE_WIN32_VT100)
-endif ()
-
-include(CheckTypeSize)
-check_type_size(ssize_t SSIZE_T)
-check_type_size(size_t SIZEOF_SIZE_T)
-
-configure_file(src/config.h.in include/wabt/config.h @ONLY)
-
-include_directories(${WABT_SOURCE_DIR} ${WABT_BINARY_DIR})
-
-if (COMPILER_IS_MSVC)
-  if (WERROR)
-    add_definitions(-WX)
+if (WABT_COMPILER_IS_MSVC)
+  if (WABT_WERROR)
+    list(APPEND WABT_COMPILE_OPTIONS -WX)
   endif ()
 
   # disable warning C4018: signed/unsigned mismatch
@@ -97,86 +111,73 @@ if (COMPILER_IS_MSVC)
   #   seems to not like float compare w/ HUGE_VALF; bug?
   # disable warnings C4267 and C4244: conversion/truncation from larger to smaller type.
   # disable warning C4800: implicit conversion from larger int to bool
-  add_definitions(-W3 -wd4018 -wd4056 -wd4756 -wd4267 -wd4244 -wd4800 -D_CRT_SECURE_NO_WARNINGS -D_SCL_SECURE_NO_WARNINGS)
+  list(APPEND WABT_COMPILE_OPTIONS -W3 -wd4018 -wd4056 -wd4267 -wd4244 -wd4800)
+  list(APPEND WABT_COMPILE_DEFINITIONS _CRT_SECURE_NO_WARNINGS _SCL_SECURE_NO_WARNINGS)
 
   # multi-core build.
-  add_definitions("/MP")
+  list(APPEND WABT_COMPILE_OPTIONS /MP)
 
 else ()
-  if (WERROR)
-    add_definitions(-Werror)
+  if (WABT_WERROR)
+    list(APPEND WABT_COMPILE_OPTIONS -Werror)
   endif ()
 
   # disable -Wunused-parameter: this is really common when implementing
   #   interfaces, etc.
   # disable -Wpointer-arith: this is a GCC extension, and doesn't work in MSVC.
-  add_definitions(
+  list(APPEND WABT_COMPILE_OPTIONS
     -Wall -Wextra -Wno-unused-parameter -Wpointer-arith -Wuninitialized
   )
 
-  set(CMAKE_CXX_EXTENSIONS OFF)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wold-style-cast")
+  list(APPEND WABT_CXX_ONLY_OPTIONS -Wold-style-cast)
 
-  if (NOT WITH_EXCEPTIONS)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions")
+  if (NOT WABT_WITH_EXCEPTIONS)
+    list(APPEND WABT_CXX_ONLY_OPTIONS -fno-exceptions)
   endif ()
 
   # Need to define __STDC_*_MACROS because C99 specifies that C++ shouldn't
   # define format (e.g. PRIu64) or limit (e.g. UINT32_MAX) macros without the
   # definition, and some libcs (e.g. glibc2.17 and earlier) follow that.
-  add_definitions(-D__STDC_LIMIT_MACROS=1 -D__STDC_FORMAT_MACROS=1)
+  list(APPEND WABT_COMPILE_DEFINITIONS __STDC_LIMIT_MACROS=1 __STDC_FORMAT_MACROS=1)
 
   if (MINGW OR CYGWIN)
     # On MINGW, _POSIX_C_SOURCE is needed to ensure we use mingw printf
     # instead of the VC runtime one.
-    add_definitions(-D_POSIX_C_SOURCE=200809L)
+    list(APPEND WABT_COMPILE_DEFINITIONS _POSIX_C_SOURCE=200809L)
   endif()
 
-  if (COMPILER_IS_GNU)
+  if (WABT_COMPILER_IS_GNU)
     # disable -Wclobbered: it seems to be guessing incorrectly about a local
     # variable being clobbered by longjmp.
-    add_definitions(-Wno-clobbered)
+    list(APPEND WABT_COMPILE_OPTIONS -Wno-clobbered)
   endif ()
 endif ()
 
-set(USE_SANITIZER FALSE)
-
-function(sanitizer NAME FLAGS)
+set(WABT_SANITIZER_OPTIONS)
+macro(wabt_sanitizer NAME)
   if (${NAME})
-    if (USE_SANITIZER)
-      message(FATAL_ERROR "Only one sanitizer allowed")
+    if (WABT_SANITIZER_OPTIONS)
+      message(FATAL_ERROR "Only one WABT sanitizer is allowed")
     endif ()
-    set(USE_SANITIZER TRUE PARENT_SCOPE)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${FLAGS}" PARENT_SCOPE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAGS}" PARENT_SCOPE)
+    list(APPEND WABT_SANITIZER_OPTIONS ${ARGN})
   endif ()
-endfunction()
-sanitizer(USE_ASAN "-fsanitize=address")
-sanitizer(USE_MSAN "-fsanitize=memory")
-sanitizer(USE_LSAN "-fsanitize=leak")
-
-if (USE_UBSAN)
-  # -fno-sanitize-recover was deprecated, see if we are compiling with a newer
-  # clang that requires -fno-sanitize-recover=all.
-  set(UBSAN_BLACKLIST ${WABT_SOURCE_DIR}/ubsan.blacklist)
+endmacro()
+wabt_sanitizer(WABT_USE_ASAN -fsanitize=address)
+wabt_sanitizer(WABT_USE_MSAN -fsanitize=memory)
+wabt_sanitizer(WABT_USE_LSAN -fsanitize=leak)
+if (WABT_USE_UBSAN)
   include(CheckCXXCompilerFlag)
-  check_cxx_compiler_flag("-fsanitize=undefined -fno-sanitize-recover -Wall -Werror" HAS_UBSAN_RECOVER_BARE)
-  if (HAS_UBSAN_RECOVER_BARE)
-    sanitizer(USE_UBSAN "-fsanitize=undefined -fno-sanitize-recover -fsanitize-blacklist=${UBSAN_BLACKLIST}")
-  endif ()
-  check_cxx_compiler_flag("-fsanitize=undefined -fno-sanitize-recover=all -Wall -Werror" HAS_UBSAN_RECOVER_ALL)
-  # If we already setup UBSAN recover bare, setting it up again here will be an error.
-  if (NOT USE_SANITIZER AND HAS_UBSAN_RECOVER_ALL)
-    sanitizer(USE_UBSAN "-fsanitize=undefined -fno-sanitize-recover=all -fsanitize-blacklist=${UBSAN_BLACKLIST}")
-  endif ()
-  if (NOT USE_SANITIZER)
-    message(FATAL_ERROR "UBSAN is not supported")
+  check_cxx_compiler_flag("-fsanitize=undefined -fno-sanitize-recover=all" WABT_HAS_UBSAN_RECOVER_ALL)
+  if (WABT_HAS_UBSAN_RECOVER_ALL)
+    wabt_sanitizer(WABT_USE_UBSAN -fsanitize=undefined -fno-sanitize-recover=all)
+  else ()
+    check_cxx_compiler_flag("-fsanitize=undefined -fno-sanitize-recover" WABT_HAS_UBSAN_RECOVER_BARE)
+    if (NOT WABT_HAS_UBSAN_RECOVER_BARE)
+      message(FATAL_ERROR "UBSAN is not supported")
+    endif ()
+    wabt_sanitizer(WABT_USE_UBSAN -fsanitize=undefined -fno-sanitize-recover)
   endif ()
 endif ()
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${WABT_SOURCE_DIR}/cmake)
-
-add_custom_target(everything)
 
 set(WABT_LIBRARY_SRC
   src/binary-reader-logging.cc
@@ -212,7 +213,7 @@ set(WABT_LIBRARY_SRC
   src/wast-parser.cc
 )
 
-if (COMPILER_IS_MSVC)
+if (WABT_COMPILER_IS_MSVC)
   set(WABT_CXX_FLAGS_INTERNAL ${WABT_CXX_FLAGS_INTERNAL} /fp:strict /Oy-)
 else ()
   if (WABT_ARCH STREQUAL "x86")
@@ -221,10 +222,35 @@ else ()
   endif ()
 endif()
 
-add_compile_options(${WABT_CXX_FLAGS_INTERNAL})
-add_compile_options(${WABT_CXX_FLAGS})
-
-
 add_library(wabt STATIC ${WABT_LIBRARY_SRC})
-target_include_directories(wabt PUBLIC ${PROJECT_SOURCE_DIR}/include "$<BUILD_INTERFACE:${WABT_BINARY_DIR}/include>")
-TARGET_COMPILE_DEFINITIONS (wabt PRIVATE ${WABT_DEFINITIONS})
+set_target_properties(wabt PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+  CXX_STANDARD 11 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+if (CMAKE_VERSION VERSION_LESS 3.1 AND NOT WABT_COMPILER_IS_MSVC)
+  list(APPEND WABT_CXX_ONLY_OPTIONS -std=c++11)
+endif ()
+if (CMAKE_VERSION VERSION_LESS 3.3)
+  # COMPILE_LANGUAGE expressions were added in 3.3. Older CMake needs
+  # C++-only options on this target's C++ source files instead.
+  string(REPLACE ";" " " WABT_CXX_SOURCE_FLAGS "${WABT_CXX_ONLY_OPTIONS}")
+  foreach(SOURCE ${WABT_LIBRARY_SRC})
+    if (SOURCE MATCHES "\\.cc$")
+      set_source_files_properties(${SOURCE} PROPERTIES COMPILE_FLAGS "${WABT_CXX_SOURCE_FLAGS}")
+    endif ()
+  endforeach()
+else ()
+  foreach(FLAG ${WABT_CXX_ONLY_OPTIONS})
+    target_compile_options(wabt PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${FLAG}>")
+  endforeach()
+endif ()
+target_compile_options(wabt PRIVATE ${WABT_COMPILE_OPTIONS}
+  ${WABT_CXX_FLAGS_INTERNAL} ${WABT_CXX_FLAGS} ${WABT_SANITIZER_OPTIONS})
+target_compile_definitions(wabt PRIVATE ${WABT_COMPILE_DEFINITIONS})
+target_include_directories(wabt PRIVATE ${WABT_SOURCE_DIR} ${WABT_BINARY_DIR}
+  PUBLIC ${WABT_SOURCE_DIR}/include "$<BUILD_INTERFACE:${WABT_BINARY_DIR}/include>")
+# Static-library users need the sanitizer runtime when linking, but unrelated
+# targets must not inherit sanitizer compile flags.
+target_link_libraries(wabt PRIVATE ${WABT_SANITIZER_OPTIONS})
+if (WABT_MASTER_PROJECT)
+  add_custom_target(everything DEPENDS wabt)
+endif ()
