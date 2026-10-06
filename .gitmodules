@@ -5,6 +5,7 @@
 [submodule "third_party/GCutil"]
 	path = third_party/GCutil
 	url = https://github.com/Samsung/gcutil.git
+	branch = bdwgc_8_3_pre_260715
 	ignore = untracked
 [submodule "third_party/wasm-c-api"]
 	path = third_party/wasm-c-api
