@@ -1,10 +1,5 @@
-cmake_minimum_required(VERSION 3.14)
-project (
-    uvwasi
-    DESCRIPTION "WASI syscall API built atop libuv"
-    VERSION 0.0.21
-    LANGUAGES C
-)
+cmake_minimum_required(VERSION 2.8.12...4.0)
+project(uvwasi C)
 
 set(UVWASI_DIR ${PROJECT_SOURCE_DIR}/uvwasi)
 
@@ -19,8 +14,6 @@ cmake_dependent_option(UVWASI_BUILD_TESTS
   "Build the unit tests when uvwasi is the root project" ON
   "CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR" OFF)
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/out)
-
 
 if(CMAKE_C_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
   list(APPEND uvwasi_cflags -fvisibility=hidden --std=gnu89)
@@ -30,7 +23,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
   if (UVWASI_BUILD_X86)
     # set x86 build flag
     add_compile_options( -m32 )
-    add_link_options( -m32 )
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -m32")
   endif()
 endif()
 
@@ -42,34 +35,34 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND uvwasi_defines _GNU_SOURCE _POSIX_C_SOURCE=200112)
 endif()
 
-if (WALRUS_MODE STREQUAL "debug")
-    list(APPEND uvwasi_cflags -O0 -g)
+if (CMAKE_C_COMPILER_ID MATCHES "AppleClang|Clang|GNU")
+    list(APPEND uvwasi_cflags "$<$<CONFIG:Debug>:-O0>" "$<$<CONFIG:Debug>:-g>")
 
     if (UVWASI_DEBUG_LOG)
         list(APPEND uvwasi_defines UVWASI_DEBUG_LOG)
     endif ()
 endif ()
 
-#find_package(LIBUV QUIET)
-#if(LIBUV_FOUND)
-#  include_directories(${LIBUV_INCLUDE_DIR})
-#else()
+# Old CMake can use a system libuv; newer CMake can fetch the pinned version.
+find_package(PkgConfig QUIET)
+if (PKG_CONFIG_FOUND)
+  pkg_check_modules(LIBUV QUIET libuv>=1.34)
+endif ()
+if (LIBUV_FOUND)
+  link_directories(${LIBUV_LIBRARY_DIRS})
+  list(APPEND uvwasi_cflags ${LIBUV_CFLAGS_OTHER})
+else ()
+  if (CMAKE_VERSION VERSION_LESS 3.14)
+    message(FATAL_ERROR "WASI on CMake older than 3.14 requires system libuv (pkg-config libuv), or WALRUS_WASI=OFF")
+  endif ()
   include(FetchContent)
-  ## https://libuv.org
-  FetchContent_Declare(
-          libuv
-          GIT_REPOSITORY https://github.com/libuv/libuv.git
-          GIT_TAG ${LIBUV_VERSION})
-
-  FetchContent_GetProperties(libuv)
+  FetchContent_Declare(libuv
+    GIT_REPOSITORY https://github.com/libuv/libuv.git
+    GIT_TAG ${LIBUV_VERSION})
   FetchContent_MakeAvailable(libuv)
-  if(NOT libuv_POPULATED)
-      include_directories("${libuv_SOURCE_DIR}/include")
-      add_subdirectory(${libuv_SOURCE_DIR} ${libuv_BINARY_DIR} EXCLUDE_FROM_ALL)
-  endif()
-  set(LIBUV_INCLUDE_DIR ${libuv_SOURCE_DIR}/include)
+  set(LIBUV_INCLUDE_DIRS ${libuv_SOURCE_DIR}/include)
   set(LIBUV_LIBRARIES uv_a)
-#endif()
+endif ()
 
 ## uvwasi source code files.
 set(uvwasi_sources
@@ -95,7 +88,7 @@ endif()
 add_library(uvwasi_a STATIC ${uvwasi_sources})
 target_compile_definitions(uvwasi_a PRIVATE ${uvwasi_defines})
 target_compile_options(uvwasi_a PRIVATE ${uvwasi_cflags})
-target_include_directories(uvwasi_a PUBLIC ${UVWASI_DIR}/include ${LIBUV_INCLUDE_DIR})
+target_include_directories(uvwasi_a PUBLIC ${UVWASI_DIR}/include ${LIBUV_INCLUDE_DIRS})
 target_link_libraries(uvwasi_a PRIVATE ${LIBUV_LIBRARIES})
 
 message(STATUS "summary of uvwasi build options:
@@ -107,7 +100,7 @@ message(STATUS "summary of uvwasi build options:
       CFLAGS:        ${CMAKE_C_FLAGS_${_build_type}} ${CMAKE_C_FLAGS}
 
     LibUV libraries: ${LIBUV_LIBRARIES}
-    LibUV includes:  ${LIBUV_INCLUDE_DIR}
+    LibUV includes:  ${LIBUV_INCLUDE_DIRS}
     Debug logging:   ${UVWASI_DEBUG_LOG}
     Code coverage:   ${CODE_COVERAGE}
     ASAN:            ${ASAN}

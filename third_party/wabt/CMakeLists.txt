@@ -14,12 +14,16 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.5.0)
-project(WABT LANGUAGES C CXX VERSION 1.0.30)
+cmake_minimum_required(VERSION 2.8.12...4.0)
+project(WABT C CXX)
+set(PROJECT_VERSION 1.0.30)
 include(GNUInstallDirs)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+if (CMAKE_VERSION VERSION_LESS 3.1 AND NOT MSVC)
+  add_compile_options(-std=c++11)
+endif ()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -220,9 +224,6 @@ endif()
 add_compile_options(${WABT_CXX_FLAGS_INTERNAL})
 add_compile_options(${WABT_CXX_FLAGS})
 
-set(WABT_CXXFLAGS_FROM_ENV $ENV{CXXFLAGS})
-separate_arguments(WABT_CXXFLAGS_FROM_ENV)
-add_compile_options(${WABT_CXXFLAGS_FROM_ENV})
 
 add_library(wabt STATIC ${WABT_LIBRARY_SRC})
 target_include_directories(wabt PUBLIC ${PROJECT_SOURCE_DIR}/include "$<BUILD_INTERFACE:${WABT_BINARY_DIR}/include>")

@@ -22,16 +22,40 @@ This will fetch the testsuite and gtest repos, which are needed for some tests.
 
 You'll need [CMake](https://cmake.org). You can then run CMake, the normal way:
 
-> Note: Due to the need for supporting old targets only supporting cmake 2.8, the defined cmake version is 2.8, however due to many environments shipping newer cmake versions which do not support cmake versions below 3.5, you may need to override the minimum version using `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`
+The build supports CMake 2.8.12 through 4.x without a policy-version override.
+WASI uses a system libuv (with pkg-config); when none is available, downloading
+libuv requires CMake 3.14 or newer. WASI-NN requires CMake 3.14 or newer.
 
 ```console
-$ cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -H. -Bout/release/x64 -DWALRUS_ARCH=x64 -DWALRUS_HOST=linux -DWALRUS_MODE=release -DWALRUS_OUTPUT=shell -GNinja
-$ ninja -Cout/release/x64
-$ ./out/release/x64/walrus test.wasm // run walrus executable
+$ cmake -H. -Bout/release/x64 -DCMAKE_BUILD_TYPE=Release -DWALRUS_ENABLE_SHELL=ON -GNinja
+$ cmake --build out/release/x64
+$ ./out/release/x64/walrus test.wasm
 ```
 
-This will produce build files using CMake's default build generator. Read the
-CMake documentation for more information.
+Use standard CMake inputs for the build configuration (`CMAKE_BUILD_TYPE` or
+`cmake --build ... --config Debug` with a multi-config generator), target system
+(`CMAKE_SYSTEM_NAME`, `CMAKE_SYSTEM_PROCESSOR`, or `CMAKE_TOOLCHAIN_FILE`) and
+compiler flags (`CMAKE_C_FLAGS`, `CMAKE_CXX_FLAGS`, and `CMAKE_*_LINKER_FLAGS`).
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `WALRUS_BUILD_SHARED_LIBS` | `BUILD_SHARED_LIBS`, otherwise `OFF` | Build a shared rather than static Walrus library |
+| `WALRUS_BUILD_GC_SHARED_LIBS` | `OFF` | Build GCutil as a shared library |
+| `WALRUS_ENABLE_SHELL` | `ENABLE_SHELL`, otherwise `ON` | Build the `walrus` executable alongside the library |
+| `WALRUS_BUILD_API_TESTS` | `OFF` | Build wasm-c-api examples |
+| `WALRUS_WASI` | `ON` | Enable WASI |
+| `WALRUS_WASI_NN` | `OFF` | Enable WASI neural networks |
+| `WALRUS_GC` | `ON` | Enable WebAssembly GC |
+| `WALRUS_JIT` | `ON` | Enable JIT compilation |
+| `WALRUS_ASAN` | `OFF` | Enable AddressSanitizer |
+| `WALRUS_SMALL_CONFIG` | `OFF` | Optimize for binary size |
+| `WALRUS_DEBUG_INFO` | `OFF` | Add debug information independently of build type |
+
+`WALRUS_HOST` and `WALRUS_ARCH` remain available as explicit overrides.
+Legacy `WALRUS_MODE=debug/release` supplies the default build type when
+`CMAKE_BUILD_TYPE` is unset. Legacy `WALRUS_OUTPUT=shell/static_lib/shared_lib/api_test`
+supplies defaults for the independent output options; explicit new options take
+precedence. Walrus does not overwrite the parent's `BUILD_SHARED_LIBS` or `ENABLE_SHELL`.
 
 ## Perf
 
