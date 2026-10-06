@@ -7,8 +7,8 @@
 #######################################################
 SET (WALRUS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 SET (WALRUS_THIRD_PARTY_ROOT ${WALRUS_ROOT}/third_party)
-SET (SLJIT_ROOT ${WALRUS_THIRD_PARTY_ROOT}/sljit)
-SET (GCUTIL_ROOT ${WALRUS_THIRD_PARTY_ROOT}/GCutil)
+SET (WALRUS_SLJIT_ROOT ${WALRUS_THIRD_PARTY_ROOT}/sljit)
+SET (WALRUS_GCUTIL_ROOT ${WALRUS_THIRD_PARTY_ROOT}/GCutil)
 
 #######################################################
 # FLAGS FOR TARGET
@@ -27,8 +27,8 @@ SET (WALRUS_DEFINITIONS
 # CMake already consumes CXXFLAGS and LDFLAGS when initializing its cache.
 # Keep only the legacy explicit flag lists here to avoid applying environment
 # flags twice or overriding configuration-specific optimization flags.
-SET (CXXFLAGS_FROM_ENV ${WALRUS_CXXFLAGS_FROM_EXTERNAL})
-SET (LDFLAGS_FROM_ENV ${WALRUS_LDFLAGS_FROM_EXTERNAL})
+SET (WALRUS_EXTERNAL_CXXFLAGS ${WALRUS_CXXFLAGS_FROM_EXTERNAL})
+SET (WALRUS_EXTERNAL_LDFLAGS ${WALRUS_LDFLAGS_FROM_EXTERNAL})
 
 #######################################################
 # FLAGS FOR ADDITIONAL FUNCTION
@@ -48,8 +48,8 @@ SET (WALRUS_DEFINITIONS_TEST -DWALRUS_ENABLE_TEST)
 #######################################################
 # FLAGS FOR MEMORY PROFILING
 #######################################################
-SET (PROFILER_FLAGS)
+SET (WALRUS_PROFILER_FLAGS)
 
 IF (WALRUS_VALGRIND)
-    SET (PROFILER_FLAGS ${PROFILER_FLAGS} -DWALRUS_VALGRIND)
+    SET (WALRUS_PROFILER_FLAGS ${WALRUS_PROFILER_FLAGS} -DWALRUS_VALGRIND)
 ENDIF()

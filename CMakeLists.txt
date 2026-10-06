@@ -4,7 +4,9 @@ CMAKE_MINIMUM_REQUIRED (VERSION 2.8.12...4.0 FATAL_ERROR)
 PROJECT (WALRUS)
 
 # CONFIGURATION
-SET (CMAKE_EXPORT_COMPILE_COMMANDS ON)
+IF (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND NOT DEFINED CMAKE_EXPORT_COMPILE_COMMANDS)
+    SET (CMAKE_EXPORT_COMPILE_COMMANDS ON)
+ENDIF()
 
 # Honor standard CMake configuration variables. Legacy inputs remain aliases.
 IF (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
@@ -19,8 +21,13 @@ IF (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     ELSE()
         SET (_walrus_build_type Release)
     ENDIF()
-    SET (CMAKE_BUILD_TYPE "${_walrus_build_type}" CACHE STRING "Build configuration" FORCE)
-    SET_PROPERTY (CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+    IF (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+        SET (CMAKE_BUILD_TYPE "${_walrus_build_type}" CACHE STRING "Build configuration" FORCE)
+        SET_PROPERTY (CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+    ELSE()
+        # A subproject must not change its parent's configuration cache.
+        SET (CMAKE_BUILD_TYPE "${_walrus_build_type}")
+    ENDIF()
 ENDIF()
 STRING (TOLOWER "${CMAKE_BUILD_TYPE}" _walrus_build_type_lower)
 IF (_walrus_build_type_lower STREQUAL "debug")
@@ -148,9 +155,6 @@ IF(WALRUS_WASI_NN)
 ENDIF()
 
 SET (WALRUS_TARGET walrus)
-
-INCLUDE (ProcessorCount)
-PROCESSORCOUNT (NPROCS)
 
 # INCLUDE CMAKE FILES
 INCLUDE (${CMAKE_CURRENT_SOURCE_DIR}/build/config.cmake)
