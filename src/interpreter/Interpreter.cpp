@@ -3295,7 +3295,7 @@ NEVER_INLINE bool Interpreter::testRefGeneric(void* refPtr, Value::Type type)
     case Value::ArrayRef:
         return kind == Object::ArrayKind;
     default:
-        return kind == Object::StructKind || kind == Object::ArrayKind;
+        return Object::isStructOrArray(kind);
     }
 }
 

@@ -267,7 +267,7 @@ struct wasm_ref_t {
         ASSERT(!!o);
 
 #ifdef ENABLE_GC
-        if (o->kind() == Object::StructKind || o->kind() == Object::ArrayKind) {
+        if (Object::isStructOrArray(o->kind())) {
             const_cast<GCBase*>(reinterpret_cast<const GCBase*>(o))->addRef();
         }
 #endif
@@ -276,7 +276,7 @@ struct wasm_ref_t {
     virtual ~wasm_ref_t()
     {
 #ifdef ENABLE_GC
-        if (obj != nullptr && (obj->kind() == Object::StructKind || obj->kind() == Object::ArrayKind)) {
+        if (obj != nullptr && Object::isStructOrArray(obj->kind())) {
             const_cast<GCBase*>(reinterpret_cast<const GCBase*>(obj))->releaseRef();
         }
 #endif
