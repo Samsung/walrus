@@ -20,6 +20,9 @@
 #include "runtime/Global.h"
 #include "runtime/Tag.h"
 #include "runtime/Trap.h"
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif
 #include "parser/WASMParser.h"
 #include "parser/WASMComponentParser.h"
 
@@ -195,6 +198,17 @@ static Trap::TrapResult executeModule(Store* store, Module* module,
                     store,
                     ft,
                     [](ExecutionState& state, Value* argv, Value* result, void* data) {
+                    },
+                    nullptr));
+            } else if (import->fieldName() == "walrus_gc") {
+                auto ft = store->getDefinedFunctionType(Store::NONE);
+                importValues.push_back(ImportedFunction::createImportedFunction(
+                    store,
+                    ft,
+                    [](ExecutionState& state, Value* argv, Value* result, void* data) {
+#ifdef ENABLE_GC
+                        GC_gcollect_and_unmap();
+#endif
                     },
                     nullptr));
             } else if (import->fieldName() == "print_i32") {

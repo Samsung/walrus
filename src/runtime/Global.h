@@ -24,14 +24,10 @@ namespace Walrus {
 
 class Global : public Extern {
     friend class JITFieldAccessor;
+    friend class Store;
 
 public:
-    static Global* createGlobal(Store* store, const Value& value, const MutableType& type)
-    {
-        Global* glob = new Global(value, type);
-        store->appendExtern(glob);
-        return glob;
-    }
+    static Global* createGlobal(Store* store, const Value& value, const MutableType& type);
 
     Value& value()
     {
@@ -61,6 +57,10 @@ public:
 
 private:
     Global(const Value& value, const MutableType& type);
+
+#ifdef ENABLE_GC
+    void operator delete(void* ptr);
+#endif
 
     Value m_value;
     MutableType m_type;

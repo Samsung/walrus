@@ -17,6 +17,10 @@
 
 #include "Global.h"
 
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif
+
 namespace Walrus {
 
 DEFINE_GLOBAL_TYPE_INFO(globalTypeInfo, GlobalKind);
@@ -27,5 +31,24 @@ Global::Global(const Value& value, const MutableType& type)
     , m_type(type)
 {
 }
+
+Global* Global::createGlobal(Store* store, const Value& value, const MutableType& type)
+{
+#ifdef ENABLE_GC
+    void* mem = Value::isRefType(type.type()) ? GC_MALLOC_UNCOLLECTABLE(sizeof(Global)) : GC_MALLOC_ATOMIC_UNCOLLECTABLE(sizeof(Global));
+    Global* glob = new (mem) Global(value, type);
+#else
+    Global* glob = new Global(value, type);
+#endif
+    store->appendExtern(glob);
+    return glob;
+}
+
+#ifdef ENABLE_GC
+void Global::operator delete(void* ptr)
+{
+    GC_FREE(ptr);
+}
+#endif
 
 } // namespace Walrus
