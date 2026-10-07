@@ -27,10 +27,6 @@
 #include "runtime/Tag.h"
 #include "interpreter/ByteCode.h"
 
-#ifdef ENABLE_GC
-#include "GCUtil.h"
-#endif /* ENABLE_GC */
-
 namespace Walrus {
 
 class Instance;
@@ -43,142 +39,51 @@ private:
     friend class ByteCodeTable;
     friend class DefinedFunction;
 
-    class StackFrame {
-        MAKE_STACK_ALLOCATED();
-
-    public:
-        StackFrame(uint8_t* bp, size_t capacity)
-            : m_bp(bp)
-            , m_capacity(capacity)
-            , m_owned(nullptr)
-        {
-        }
-
-        ~StackFrame()
-        {
-            if (m_owned != nullptr) {
-                deallocateBuffer(m_owned);
-            }
-        }
-
-        uint8_t* bp() const { return m_bp; }
-        size_t capacity() const { return m_capacity; }
-
-        static uint8_t* allocateBuffer(size_t size)
-        {
-#ifdef ENABLE_GC
-            return reinterpret_cast<uint8_t*>(GC_MALLOC_UNCOLLECTABLE(size));
-#else
-            return reinterpret_cast<uint8_t*>(malloc(size));
-#endif
-        }
-
-        void replaceBuffer(uint8_t* buffer, size_t capacity)
-        {
-            if (m_owned != nullptr) {
-                deallocateBuffer(m_owned);
-            }
-            m_owned = buffer;
-            m_bp = buffer;
-            m_capacity = capacity;
-        }
-
-    private:
-        static void deallocateBuffer(uint8_t* buffer)
-        {
-#ifdef ENABLE_GC
-            GC_FREE(buffer);
-#else
-            free(buffer);
-#endif
-        }
-
-        uint8_t* m_bp;
-        size_t m_capacity;
-        uint8_t* m_owned;
-    };
-
     ALWAYS_INLINE static void callInterpreter(ExecutionState& state, DefinedFunction* function, uint8_t* bp, ByteCodeStackOffset* offsets,
                                               uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
     {
-        ExecutionState newState(state, function);
-        CHECK_STACK_LIMIT(newState);
+        CHECK_STACK_LIMIT(state);
 
         auto moduleFunction = function->moduleFunction();
-        ALLOCA(uint8_t, functionStackBase, moduleFunction->requiredStackSize());
+        size_t requiredStackSize = moduleFunction->requiredStackSize();
+        uint8_t* functionStackBase;
+        uint8_t* owned;
+
+        if (requiredStackSize < 2048) {
+            functionStackBase = reinterpret_cast<uint8_t*>(alloca(requiredStackSize));
+            owned = nullptr;
+        } else {
+            functionStackBase = ExecutionState::allocateBuffer(requiredStackSize);
+            owned = functionStackBase;
+        }
 
         for (size_t i = 0; i < parameterOffsetCount; i++) {
             ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
         }
 
-        size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
-        StackFrame frame(functionStackBase, moduleFunction->requiredStackSize());
+        ExecutionState newState(state, function, functionStackBase, requiredStackSize, owned);
         ByteCodeStackOffset* resultOffsets;
 
 #if defined(WALRUS_ENABLE_JIT)
         if (moduleFunction->jitFunction() != nullptr) {
             const JITFunction* jitFunc = moduleFunction->jitFunction();
             ExecutionContext context(jitFunc->instanceConstData(), newState, function->instance());
-            context.frameCapacity = frame.capacity();
-            resultOffsets = jitFunc->call(context, frame.bp());
-
-            if (UNLIKELY(context.ownedFrame != nullptr)) {
-                frame.replaceBuffer(context.ownedFrame, context.frameCapacity);
-            }
+            resultOffsets = jitFunc->call(context, newState.bp());
         } else
 #endif
         {
-            while (true) {
-                try {
-                    resultOffsets = interpret(newState, programCounter, frame, function->instance());
-                    break;
-                } catch (Exception* e) {
-                    if (UNLIKELY(!newState.m_currentFunction.hasValue())) {
-                        throw e;
-                    }
-                    function = newState.m_currentFunction.value()->asDefinedFunction();
-                    moduleFunction = function->moduleFunction();
-                    if (e->isUserException() && newState.m_programCounter != 0) {
-                        programCounter = newState.m_programCounter;
-                        bool isCatchSucessful = false;
-                        Tag* tag = e->tag().value();
-                        size_t offset = programCounter - reinterpret_cast<size_t>(moduleFunction->byteCode());
-                        for (const auto& item : moduleFunction->catchInfo()) {
-                            if (item.m_tryStart <= offset && offset < item.m_tryEnd) {
-                                if (item.m_tagIndex == std::numeric_limits<uint32_t>::max() || function->instance()->tag(item.m_tagIndex) == tag) {
-                                    programCounter = item.m_catchStartPosition + reinterpret_cast<size_t>(moduleFunction->byteCode());
-                                    uint8_t* sp = frame.bp() + item.m_stackSizeToBe;
-                                    size_t paramStackSize = tag->functionType()->paramStackSize();
-                                    if (item.m_tagIndex != std::numeric_limits<uint32_t>::max() && tag->functionType()->paramStackSize()) {
-                                        memcpy(sp, e->userExceptionData().data(), paramStackSize);
-                                    }
-                                    if (item.m_pushExnRef) {
-                                        *reinterpret_cast<GCException**>(sp + paramStackSize) = GCException::exceptionNew(e);
-                                    }
-                                    e->releaseRef();
-                                    isCatchSucessful = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if (isCatchSucessful) {
-                            continue;
-                        }
-                    }
-                    throw e;
-                }
-            }
+            size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
+            resultOffsets = interpret(newState, programCounter, function->instance());
         }
 
         offsets += parameterOffsetCount;
         for (size_t i = 0; i < resultOffsetCount; i++) {
-            *((size_t*)(bp + offsets[i])) = *((size_t*)(frame.bp() + resultOffsets[i]));
+            *((size_t*)(bp + offsets[i])) = *((size_t*)(newState.bp() + resultOffsets[i]));
         }
     }
 
     static ByteCodeStackOffset* interpret(ExecutionState& state,
                                           size_t programCounter,
-                                          StackFrame& frame,
                                           Instance* instance);
 
     static void callOperation(ExecutionState& state,
@@ -199,7 +104,6 @@ private:
 
     static bool tailCallOperation(ExecutionState& state,
                                   size_t& programCounter,
-                                  StackFrame& frame,
                                   Instance*& instance,
                                   Function* target,
                                   ByteCodeStackOffset* offsets,

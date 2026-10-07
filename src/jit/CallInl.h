@@ -162,9 +162,10 @@ static sljit_sw resolvePendingTailCall(
     ByteCodeStackOffset* offsets,
     uint16_t parameterOffsetCount,
     uint16_t resultOffsetCount,
-    uint8_t* bp,
     ExecutionContext* context)
 {
+    uint8_t* bp = context->state.bp();
+
     if (LIKELY(target->kind() == Function::DefinedFunctionKind)) {
         DefinedFunction* definedTarget = target->asDefinedFunction();
         ModuleFunction* targetModuleFunction = definedTarget->moduleFunction();
@@ -175,32 +176,19 @@ static sljit_sw resolvePendingTailCall(
                    && targetJitFunction->instanceConstData() == context->currentInstanceConstData)) {
             size_t requiredStackSize = targetModuleFunction->requiredStackSize();
             // Allocate more stack and hang to pointer
-            if (UNLIKELY(requiredStackSize > context->frameCapacity)) {
-#ifdef ENABLE_GC
-                uint8_t* newFrame = reinterpret_cast<uint8_t*>(GC_MALLOC_UNCOLLECTABLE(requiredStackSize));
-#else
-                uint8_t* newFrame = reinterpret_cast<uint8_t*>(malloc(requiredStackSize));
-#endif
+            if (UNLIKELY(requiredStackSize > context->state.capacity())) {
+                uint8_t* newBuffer = ExecutionState::allocateBuffer(requiredStackSize);
                 for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
-                    reinterpret_cast<size_t*>(newFrame)[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
+                    reinterpret_cast<size_t*>(newBuffer)[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
                 }
-
-                if (context->ownedFrame != nullptr) {
-#ifdef ENABLE_GC
-                    GC_FREE(context->ownedFrame);
-#else
-                    free(context->ownedFrame);
-#endif
-                }
-                context->ownedFrame = newFrame;
-                context->frameCapacity = requiredStackSize;
-                bp = newFrame;
+                context->state.replaceBuffer(newBuffer, requiredStackSize);
+                context->frameStart = newBuffer;
             } else {
                 shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
+                context->frameStart = bp;
             }
 
             // The caller jumps directly to the target entry.
-            context->frameStart = bp;
             context->instance = definedTarget->instance();
             context->tailCallEntry = targetJitFunction->exportEntry();
             return ExecutionContext::TailCallJump;
@@ -225,7 +213,7 @@ static sljit_sw tailCallFunction(
     ExecutionContext* context)
 {
     Function* target = context->instance->function(code->index());
-    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), bp, context);
+    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), context);
 }
 
 static sljit_sw tailCallFunctionIndirect(
@@ -254,7 +242,7 @@ static sljit_sw tailCallFunctionIndirect(
         return ExecutionContext::IndirectCallTypeMismatchError;
     }
 
-    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), bp, context);
+    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), context);
 }
 
 static sljit_sw tailCallFunctionIndirectM64(
@@ -283,7 +271,7 @@ static sljit_sw tailCallFunctionIndirectM64(
         return ExecutionContext::IndirectCallTypeMismatchError;
     }
 
-    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), bp, context);
+    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), context);
 }
 
 static sljit_sw tailCallFunctionRef(
@@ -303,7 +291,7 @@ static sljit_sw tailCallFunctionRef(
         return ExecutionContext::CallRefTypeMismatchError;
     }
 
-    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), bp, context);
+    return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), context);
 }
 
 static void emitCall(sljit_compiler* compiler, Instruction* instr)
@@ -457,16 +445,15 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
     if (isTailCall) {
-        sljit_jump* tailCallJump = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::TailCallJump);
+        sljit_jump* tailCallJump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::TailCallJump);
 
         if (context->earlyReturnLabel != nullptr) {
-            sljit_set_label(sljit_emit_jump(compiler, SLJIT_JUMP), context->earlyReturnLabel);
+            sljit_set_label(tailCallJump, context->earlyReturnLabel);
         } else {
-            context->earlyReturns.push_back(sljit_emit_jump(compiler, SLJIT_JUMP));
+            context->earlyReturns.push_back(tailCallJump);
         }
 
         // Jump to the entry of the resolved target
-        sljit_set_label(tailCallJump, sljit_emit_label(compiler));
         sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
         sljit_emit_op1(compiler, SLJIT_MOV_P, kFrameReg, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(frameStart));
         sljit_emit_op1(compiler, SLJIT_MOV_P, kInstanceReg, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(instance));
