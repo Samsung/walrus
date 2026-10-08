@@ -347,6 +347,7 @@ class ComponentHandle {
 public:
     enum Kind {
         ResourceRepKind,
+        ResourceRefKind,
 #ifdef ENABLE_WASI
         ResourceWasiInputStreamKind,
         ResourceWasiOutputStreamKind,
@@ -354,6 +355,8 @@ public:
         ResourceWasiTerminalKind,
         ResourceWasiFileKind,
         ResourceWasiDirectoryKind,
+        ResourceWasiNetworkKind,
+        ResourceWasiSocketKind,
 #endif /* ENABLE_WASI */
 #ifdef ENABLE_WASI_NN
         ResourceWasiNNTensor,
@@ -382,6 +385,30 @@ protected:
     }
 
 private:
+    Kind m_kind;
+};
+
+class ComponentHandleRef : public ComponentHandle {
+public:
+    ComponentHandleRef(ComponentHandle* ptr, Kind kind)
+        : ComponentHandle(Kind::ResourceRefKind)
+        , m_ptr(ptr)
+        , m_kind(kind)
+    {
+    }
+
+    ~ComponentHandleRef()
+    {
+        m_ptr = nullptr;
+    }
+
+    ComponentHandle* ptr()
+    {
+        return m_ptr;
+    }
+
+private:
+    ComponentHandle* m_ptr;
     Kind m_kind;
 };
 
