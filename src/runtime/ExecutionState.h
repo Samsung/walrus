@@ -72,7 +72,7 @@ public:
         }
     }
 
-    Optional<Function*> currentFunction() const
+    Function* currentFunction() const
     {
         return m_currentFunction;
     }
@@ -112,6 +112,11 @@ public:
         m_capacity = capacity;
     }
 
+    void replaceCurrentFunction(Function* function)
+    {
+        m_currentFunction = function;
+    }
+
 private:
     friend class ByteCodeTable;
     ExecutionState()
@@ -139,8 +144,8 @@ private:
 #endif
     }
 
-    Optional<ExecutionState*> m_parent;
-    Optional<Function*> m_currentFunction;
+    ExecutionState* m_parent;
+    Function* m_currentFunction;
     size_t m_stackLimit;
     // Stack frame related data
     uint8_t* m_bp;

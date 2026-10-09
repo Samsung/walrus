@@ -1647,13 +1647,8 @@ NextInstruction:
         ReturnCall* code = (ReturnCall*)programCounter;
         Function* target = instance->function(code->index());
 
-        if (tailCallOperation(state, programCounter, instance, target, code->stackOffsets(),
-                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
-            bp = state.bp();
-            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
-            NEXT_INSTRUCTION();
-        }
-        return code->stackOffsets() + code->parameterOffsetsSize();
+        return tailCallOperation(state, target, code->stackOffsets(),
+                                 code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
     DEFINE_OPCODE(ReturnCallIndirect)
@@ -1674,13 +1669,8 @@ NextInstruction:
             Trap::throwException("indirect call type mismatch");
         }
 
-        if (tailCallOperation(state, programCounter, instance, target, code->stackOffsets(),
-                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
-            bp = state.bp();
-            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
-            NEXT_INSTRUCTION();
-        }
-        return code->stackOffsets() + code->parameterOffsetsSize();
+        return tailCallOperation(state, target, code->stackOffsets(),
+                                 code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
     DEFINE_OPCODE(ReturnCallIndirectM64)
@@ -1701,13 +1691,8 @@ NextInstruction:
             Trap::throwException("indirect call type mismatch");
         }
 
-        if (tailCallOperation(state, programCounter, instance, target, code->stackOffsets(),
-                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
-            bp = state.bp();
-            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
-            NEXT_INSTRUCTION();
-        }
-        return code->stackOffsets() + code->parameterOffsetsSize();
+        return tailCallOperation(state, target, code->stackOffsets(),
+                                 code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
     DEFINE_OPCODE(ReturnCallRef)
@@ -1723,13 +1708,8 @@ NextInstruction:
             Trap::throwException("call by reference type mismatch");
         }
 
-        if (tailCallOperation(state, programCounter, instance, target, code->stackOffsets(),
-                              code->parameterOffsetsSize(), code->resultOffsetsSize())) {
-            bp = state.bp();
-            memories = reinterpret_cast<Memory**>(reinterpret_cast<uintptr_t>(instance) + Instance::alignedSize());
-            NEXT_INSTRUCTION();
-        }
-        return code->stackOffsets() + code->parameterOffsetsSize();
+        return tailCallOperation(state, target, code->stackOffsets(),
+                                 code->parameterOffsetsSize(), code->resultOffsetsSize());
     }
 
     DEFINE_OPCODE(Select)
@@ -3148,10 +3128,10 @@ NextInstruction:
 
     TRY_CATCH
     {
-        if (UNLIKELY(!state.m_currentFunction.hasValue())) {
+        if (UNLIKELY(state.m_currentFunction == nullptr)) {
             throw e;
         }
-        DefinedFunction* function = state.m_currentFunction.value()->asDefinedFunction();
+        DefinedFunction* function = state.m_currentFunction->asDefinedFunction();
         ModuleFunction* moduleFunction = function->moduleFunction();
         if (e->isUserException()) {
             bool isCatchSucessful = false;
@@ -3267,10 +3247,8 @@ NEVER_INLINE void Interpreter::callRefOperation(
                                                    + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 
-NEVER_INLINE bool Interpreter::tailCallOperation(
+NEVER_INLINE ByteCodeStackOffset* Interpreter::tailCallOperation(
     ExecutionState& state,
-    size_t& programCounter,
-    Instance*& instance,
     Function* target,
     ByteCodeStackOffset* offsets,
     uint16_t parameterOffsetCount,
@@ -3280,35 +3258,30 @@ NEVER_INLINE bool Interpreter::tailCallOperation(
     if (LIKELY(target->kind() == Function::DefinedFunctionKind)) {
         DefinedFunction* definedTarget = target->asDefinedFunction();
         ModuleFunction* targetModuleFunction = definedTarget->moduleFunction();
-#if defined(WALRUS_ENABLE_JIT)
-        if (LIKELY(targetModuleFunction->jitFunction() == nullptr))
-#endif
-        {
-            size_t requiredStackSize = targetModuleFunction->requiredStackSize();
-            if (UNLIKELY(requiredStackSize > state.capacity())) {
-                uint8_t* newBuffer = ExecutionState::allocateBuffer(requiredStackSize);
-                for (size_t i = 0; i < parameterOffsetCount; i++) {
-                    ((size_t*)newBuffer)[i] = *((size_t*)(bp + offsets[i]));
-                }
-                state.replaceBuffer(newBuffer, requiredStackSize);
-            } else {
-                ALLOCA(size_t, paramBuffer, parameterOffsetCount * sizeof(size_t));
-                for (size_t i = 0; i < parameterOffsetCount; i++) {
-                    paramBuffer[i] = *((size_t*)(bp + offsets[i]));
-                }
-                VectorCopier<size_t>::copy((size_t*)bp, paramBuffer, parameterOffsetCount);
-            }
+        size_t requiredStackSize = targetModuleFunction->requiredStackSize();
 
-            state.m_currentFunction = definedTarget;
-            instance = definedTarget->instance();
-            programCounter = reinterpret_cast<size_t>(targetModuleFunction->byteCode());
-            return true;
+        if (UNLIKELY(requiredStackSize > state.capacity())) {
+            uint8_t* newBuffer = ExecutionState::allocateBuffer(requiredStackSize);
+            for (size_t i = 0; i < parameterOffsetCount; i++) {
+                ((size_t*)newBuffer)[i] = *((size_t*)(bp + offsets[i]));
+            }
+            state.replaceBuffer(newBuffer, requiredStackSize);
+        } else {
+            ALLOCA(size_t, paramBuffer, parameterOffsetCount * sizeof(size_t));
+            for (size_t i = 0; i < parameterOffsetCount; i++) {
+                paramBuffer[i] = *((size_t*)(bp + offsets[i]));
+            }
+            VectorCopier<size_t>::copy((size_t*)bp, paramBuffer, parameterOffsetCount);
         }
+
+        state.replaceCurrentFunction(definedTarget);
+        return nullptr;
     }
 
-    state.m_currentFunction = nullptr;
+    // Native functions.
+    state.replaceCurrentFunction(nullptr);
     target->interpreterCall(state, bp, offsets, parameterOffsetCount, resultOffsetCount);
-    return false;
+    return offsets + parameterOffsetCount;
 }
 
 NEVER_INLINE bool Interpreter::testRefGeneric(void* refPtr, Value::Type type)

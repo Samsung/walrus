@@ -169,32 +169,28 @@ static sljit_sw resolvePendingTailCall(
     if (LIKELY(target->kind() == Function::DefinedFunctionKind)) {
         DefinedFunction* definedTarget = target->asDefinedFunction();
         ModuleFunction* targetModuleFunction = definedTarget->moduleFunction();
-        JITFunction* targetJitFunction = targetModuleFunction->jitFunction();
+        size_t requiredStackSize = targetModuleFunction->requiredStackSize();
 
-        // It is really TCO capable function?
-        if (LIKELY(targetJitFunction != nullptr && targetJitFunction->isCompiled()
-                   && targetJitFunction->instanceConstData() == context->currentInstanceConstData)) {
-            size_t requiredStackSize = targetModuleFunction->requiredStackSize();
-            // Allocate more stack and hang to pointer
-            if (UNLIKELY(requiredStackSize > context->state.capacity())) {
-                uint8_t* newBuffer = ExecutionState::allocateBuffer(requiredStackSize);
-                for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
-                    reinterpret_cast<size_t*>(newBuffer)[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
-                }
-                context->state.replaceBuffer(newBuffer, requiredStackSize);
-                context->frameStart = newBuffer;
-            } else {
-                shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
-                context->frameStart = bp;
+        // Allocate more stack and hang to pointer
+        if (UNLIKELY(requiredStackSize > context->state.capacity())) {
+            uint8_t* newBuffer = ExecutionState::allocateBuffer(requiredStackSize);
+            for (sljit_uw i = 0; i < parameterOffsetCount; i++) {
+                reinterpret_cast<size_t*>(newBuffer)[i] = *reinterpret_cast<size_t*>(bp + offsets[i]);
             }
-
-            // The caller jumps directly to the target entry.
-            context->instance = definedTarget->instance();
-            context->tailCallEntry = targetJitFunction->exportEntry();
-            return ExecutionContext::TailCallJump;
+            context->state.replaceBuffer(newBuffer, requiredStackSize);
+            context->frameStart = newBuffer;
+        } else {
+            shuffleTailCallSelfArguments(bp, offsets, parameterOffsetCount);
+            context->frameStart = bp;
         }
+
+        // The caller jumps directly to the target entry.
+        context->state.replaceCurrentFunction(definedTarget);
+        return 0;
     }
 
+    // Native functions.
+    context->state.replaceCurrentFunction(nullptr);
     sljit_sw result = reinterpret_cast<sljit_sw>(offsets + parameterOffsetCount);
     // Cannot resolved with TCO
     try {
@@ -227,19 +223,19 @@ static sljit_sw tailCallFunctionIndirect(
     uint32_t idx = *reinterpret_cast<uint32_t*>(bp + code->calleeOffset());
     if (idx >= table->size()) {
         context->error = ExecutionContext::UndefinedElementError;
-        return ExecutionContext::UndefinedElementError;
+        return ExecutionContext::CapturedException;
     }
 
     auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
     if (UNLIKELY(Value::isNull(target))) {
         context->error = ExecutionContext::UninitializedElementError;
-        return ExecutionContext::UninitializedElementError;
+        return ExecutionContext::CapturedException;
     }
 
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
         context->error = ExecutionContext::IndirectCallTypeMismatchError;
-        return ExecutionContext::IndirectCallTypeMismatchError;
+        return ExecutionContext::CapturedException;
     }
 
     return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), context);
@@ -256,19 +252,19 @@ static sljit_sw tailCallFunctionIndirectM64(
     uint64_t idx = *reinterpret_cast<uint64_t*>(bp + code->calleeOffset());
     if (idx >= table->size()) {
         context->error = ExecutionContext::UndefinedElementError;
-        return ExecutionContext::UndefinedElementError;
+        return ExecutionContext::CapturedException;
     }
 
     auto target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
     if (UNLIKELY(Value::isNull(target))) {
         context->error = ExecutionContext::UninitializedElementError;
-        return ExecutionContext::UninitializedElementError;
+        return ExecutionContext::CapturedException;
     }
 
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
         context->error = ExecutionContext::IndirectCallTypeMismatchError;
-        return ExecutionContext::IndirectCallTypeMismatchError;
+        return ExecutionContext::CapturedException;
     }
 
     return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), context);
@@ -282,13 +278,13 @@ static sljit_sw tailCallFunctionRef(
     auto target = *reinterpret_cast<Function**>(bp + code->calleeOffset());
     if (UNLIKELY(Value::isNull(target))) {
         context->error = ExecutionContext::NullFunctionReferenceError;
-        return ExecutionContext::NullFunctionReferenceError;
+        return ExecutionContext::CapturedException;
     }
 
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
         context->error = ExecutionContext::CallRefTypeMismatchError;
-        return ExecutionContext::CallRefTypeMismatchError;
+        return ExecutionContext::CapturedException;
     }
 
     return resolvePendingTailCall(target, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize(), context);
@@ -445,20 +441,18 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, W, W, W), SLJIT_IMM, addr);
 
     if (isTailCall) {
-        sljit_jump* tailCallJump = sljit_emit_cmp(compiler, SLJIT_NOT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::TailCallJump);
+        COMPILE_ASSERT(static_cast<uint32_t>(ExecutionContext::CapturedException) == 1, "Captured exception must be invalid pointer");
+        // Errors can be traps (e.g. null function references), or errors thrown by the tail call.
+        // None of these are captured by the current function, so all of them are handled by the caller.
+        context->appendTrapJump(ExecutionContext::ReturnToLabel,
+                                sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_R0, 0, SLJIT_IMM, ExecutionContext::CapturedException));
 
+        sljit_jump* endJump = sljit_emit_jump(compiler, SLJIT_JUMP);
         if (context->earlyReturnLabel != nullptr) {
-            sljit_set_label(tailCallJump, context->earlyReturnLabel);
+            sljit_set_label(endJump, context->earlyReturnLabel);
         } else {
-            context->earlyReturns.push_back(tailCallJump);
+            context->earlyReturns.push_back(endJump);
         }
-
-        // Jump to the entry of the resolved target
-        sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
-        sljit_emit_op1(compiler, SLJIT_MOV_P, kFrameReg, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(frameStart));
-        sljit_emit_op1(compiler, SLJIT_MOV_P, kInstanceReg, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(instance));
-        sljit_emit_op1(compiler, SLJIT_MOV_P, SLJIT_R2, 0, SLJIT_MEM1(SLJIT_R0), OffsetOfContextField(tailCallEntry));
-        sljit_emit_icall(compiler, SLJIT_CALL_REG_ARG | SLJIT_CALL_RETURN, SLJIT_ARGS1(P, P), SLJIT_R2, 0);
         return;
     }
 
