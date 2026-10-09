@@ -53,52 +53,13 @@ DefinedFunction::DefinedFunction(Instance* instance,
 
 void DefinedFunction::call(ExecutionState& state, Value* argv, Value* result)
 {
-    const FunctionType* ft = functionType();
-    size_t valueBufferSize = std::max(ft->paramStackSize(), ft->resultStackSize());
-    ALLOCA(uint8_t, valueBuffer, valueBufferSize);
-    uint16_t parameterOffsetSize = ft->paramStackSize() / sizeof(size_t);
-    uint16_t resultOffsetSize = ft->resultStackSize() / sizeof(size_t);
-    ALLOCA(uint16_t, offsetBuffer, (parameterOffsetSize + resultOffsetSize) * sizeof(uint16_t));
-    const TypeVector::Types& paramTypeInfo = ft->param().types();
-    const TypeVector::Types& resultTypeInfo = ft->result().types();
-
-    size_t argc = paramTypeInfo.size();
-    uint8_t* paramBuffer = valueBuffer;
-    size_t offsetIndex = 0;
-    for (size_t i = 0; i < argc; i++) {
-        ASSERT(Value::isRefType(paramTypeInfo[i]) ? argv[i].isRef() : argv[i].type() == paramTypeInfo[i]);
-        argv[i].writeToMemory(paramBuffer);
-        size_t stackAllocatedSize = valueStackAllocatedSize(paramTypeInfo[i]);
-        for (size_t j = 0; j < stackAllocatedSize; j += sizeof(size_t)) {
-            offsetBuffer[offsetIndex++] = reinterpret_cast<size_t>(paramBuffer) - reinterpret_cast<size_t>(valueBuffer) + j;
-        }
-        paramBuffer += stackAllocatedSize;
-    }
-    ASSERT(offsetIndex == parameterOffsetSize);
-
-    size_t resultOffset = 0;
-    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
-        size_t stackAllocatedSize = valueStackAllocatedSize(resultTypeInfo[i]);
-        for (size_t j = 0; j < stackAllocatedSize; j += sizeof(size_t)) {
-            offsetBuffer[offsetIndex++] = resultOffset + j;
-        }
-        resultOffset += stackAllocatedSize;
-    }
-    ASSERT(offsetIndex == parameterOffsetSize + resultOffsetSize);
-    interpreterCall(state, valueBuffer, offsetBuffer, parameterOffsetSize, resultOffsetSize);
-
-    size_t resultOffsetIndex = 0;
-    for (size_t i = 0; i < resultTypeInfo.size(); i++) {
-        result[i] = Value(resultTypeInfo[i], valueBuffer + offsetBuffer[resultOffsetIndex + parameterOffsetSize]);
-        size_t stackAllocatedSize = valueStackAllocatedSize(resultTypeInfo[i]);
-        resultOffsetIndex += stackAllocatedSize / sizeof(size_t);
-    }
+    Interpreter::callInterpreter<Interpreter::ParamsAndResults>(state, this, argv, result, 0, 0);
 }
 
 void DefinedFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
                                       uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
 {
-    Interpreter::callInterpreter(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
+    Interpreter::callInterpreter<Interpreter::BpAndOffsets>(state, this, bp, offsets, parameterOffsetCount, resultOffsetCount);
 }
 
 void NativeFunction::interpreterCall(ExecutionState& state, uint8_t* bp, ByteCodeStackOffset* offsets,
