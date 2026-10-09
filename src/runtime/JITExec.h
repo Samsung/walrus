@@ -59,7 +59,6 @@ struct ExecutionContext {
         GenericTrap, // Error code received in SLJIT_R0.
         ReturnToLabel, // Used for returning with an exception.
         ErrorCodesEnd,
-        TailCallJump,
     };
 
     ExecutionContext(InstanceConstData* currentInstanceConstData, ExecutionState& state, Instance* instance)
