@@ -39,8 +39,14 @@ private:
     friend class ByteCodeTable;
     friend class DefinedFunction;
 
-    ALWAYS_INLINE static void callInterpreter(ExecutionState& state, DefinedFunction* function, uint8_t* bp, ByteCodeStackOffset* offsets,
-                                              uint16_t parameterOffsetCount, uint16_t resultOffsetCount)
+    enum CallMode {
+        BpAndOffsets,
+        ParamsAndResults,
+    };
+
+    template <CallMode mode>
+    ALWAYS_INLINE static void callInterpreter(ExecutionState& state, DefinedFunction* function, void* arg1, void* arg2,
+                                              uint16_t count1, uint16_t count2)
     {
         CHECK_STACK_LIMIT(state);
 
@@ -57,28 +63,66 @@ private:
             owned = functionStackBase;
         }
 
-        for (size_t i = 0; i < parameterOffsetCount; i++) {
-            ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
+        if (mode == BpAndOffsets) {
+            uint8_t* bp = reinterpret_cast<uint8_t*>(arg1);
+            ByteCodeStackOffset* offsets = reinterpret_cast<ByteCodeStackOffset*>(arg2);
+            for (size_t i = 0; i < count1; i++) {
+                ((size_t*)functionStackBase)[i] = *((size_t*)(bp + offsets[i]));
+            }
+        } else {
+            uint8_t* dst = functionStackBase;
+            Value* params = reinterpret_cast<Value*>(arg1);
+            const TypeVector::Types& paramTypeInfo = function->functionType()->param().types();
+            size_t size = paramTypeInfo.size();
+
+            for (size_t i = 0; i < size; i++) {
+                params[i].writeToMemory(dst);
+                dst += valueStackAllocatedSize(paramTypeInfo[i]);
+            }
         }
 
         ExecutionState newState(state, function, functionStackBase, requiredStackSize, owned);
         ByteCodeStackOffset* resultOffsets;
 
+        while (true) {
 #if defined(WALRUS_ENABLE_JIT)
-        if (moduleFunction->jitFunction() != nullptr) {
-            const JITFunction* jitFunc = moduleFunction->jitFunction();
-            ExecutionContext context(jitFunc->instanceConstData(), newState, function->instance());
-            resultOffsets = jitFunc->call(context, newState.bp());
-        } else
+            if (moduleFunction->jitFunction() != nullptr) {
+                const JITFunction* jitFunc = moduleFunction->jitFunction();
+                ExecutionContext context(jitFunc->instanceConstData(), newState, function->instance());
+                resultOffsets = jitFunc->call(context, newState.bp());
+            } else
 #endif
-        {
-            size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
-            resultOffsets = interpret(newState, programCounter, function->instance());
-        }
+            {
+                size_t programCounter = reinterpret_cast<size_t>(moduleFunction->byteCode());
+                resultOffsets = interpret(newState, programCounter, function->instance());
+            }
 
-        offsets += parameterOffsetCount;
-        for (size_t i = 0; i < resultOffsetCount; i++) {
-            *((size_t*)(bp + offsets[i])) = *((size_t*)(newState.bp() + resultOffsets[i]));
+            if (LIKELY(resultOffsets != nullptr)) {
+                uint8_t* src = newState.bp();
+                if (mode == BpAndOffsets) {
+                    uint8_t* bp = reinterpret_cast<uint8_t*>(arg1);
+                    ByteCodeStackOffset* offsets = reinterpret_cast<ByteCodeStackOffset*>(arg2) + count1;
+                    for (size_t i = 0; i < count2; i++) {
+                        *((size_t*)(bp + offsets[i])) = *((size_t*)(src + resultOffsets[i]));
+                    }
+                } else {
+                    Value* results = reinterpret_cast<Value*>(arg2);
+                    const TypeVector::Types& resultTypeInfo = function->functionType()->result().types();
+                    size_t size = resultTypeInfo.size();
+                    size_t resultOffsetIndex = 0;
+
+                    for (size_t i = 0; i < size; i++) {
+                        Value::Type type = resultTypeInfo[i];
+                        results[i] = Value(type, src + resultOffsets[resultOffsetIndex]);
+                        resultOffsetIndex += valueStackAllocatedSize(type) / sizeof(size_t);
+                    }
+                }
+                break;
+            }
+
+            // Support return call.
+            function = newState.currentFunction()->asDefinedFunction();
+            moduleFunction = function->moduleFunction();
         }
     }
 
@@ -102,13 +146,11 @@ private:
                                  uint8_t* bp,
                                  Instance* instance);
 
-    static bool tailCallOperation(ExecutionState& state,
-                                  size_t& programCounter,
-                                  Instance*& instance,
-                                  Function* target,
-                                  ByteCodeStackOffset* offsets,
-                                  uint16_t parameterOffsetCount,
-                                  uint16_t resultOffsetCount);
+    static ByteCodeStackOffset* tailCallOperation(ExecutionState& state,
+                                                  Function* target,
+                                                  ByteCodeStackOffset* offsets,
+                                                  uint16_t parameterOffsetCount,
+                                                  uint16_t resultOffsetCount);
 
     static bool testRefGeneric(void* refPtr, Value::Type type);
     static bool testRefDefined(void* refPtr, const CompositeType** typeInfo);
