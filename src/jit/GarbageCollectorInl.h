@@ -672,7 +672,7 @@ static void emitGCDataCopy(sljit_compiler* compiler, Operand* operand, sljit_s32
     }
 
     sljit_emit_op2(compiler, SLJIT_ADD, SLJIT_TMP_DEST_REG, 0, baseReg, 0, SLJIT_IMM, offset);
-    sljit_emit_op1(compiler, SLJIT_MOV32, SLJIT_TMP_OPT_REG, 0, arg.arg, arg.argw);
+    sljit_emit_op1(compiler, op, SLJIT_TMP_OPT_REG, 0, arg.arg, arg.argw);
     sljit_emit_op1(compiler, op, SLJIT_MEM1(SLJIT_TMP_DEST_REG), 0, SLJIT_TMP_OPT_REG, 0);
 #endif /* SLJIT_CONFIG_X86_32 */
 }
