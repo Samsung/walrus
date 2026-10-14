@@ -59,7 +59,10 @@ struct SimpleFuncType {
 };
 
 ValueTypes ToInterp(Index count, Type *types) {
-    return ValueTypes(&types[0], &types[count]);
+    if (count == 0) {
+        return ValueTypes();
+    }
+    return ValueTypes(types, types + count);
 }
 
 SegmentKind ToSegmentMode(uint8_t flags) {
