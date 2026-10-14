@@ -152,6 +152,11 @@ IF (WALRUS_ENABLE_SHELL)
 ENDIF()
 
 IF (WALRUS_BUILD_API_TESTS)
+    ENABLE_TESTING()
+    ADD_EXECUTABLE (wasm-c-api-function-references ${WALRUS_ROOT}/test/api/function_references.c)
+    TARGET_LINK_LIBRARIES (wasm-c-api-function-references ${WALRUS_TARGET})
+    ADD_TEST (NAME wasm-c-api-function-references COMMAND wasm-c-api-function-references)
+
     function(WALRUS_C_API_EXAMPLE NAME)
         set(EXENAME wasm-c-api-${NAME})
         add_executable(${EXENAME} ${WALRUS_THIRD_PARTY_ROOT}/wasm-c-api/example/${NAME}.c)

@@ -509,6 +509,17 @@ static void FromWalrusValueTypes(const TypeVector& types, wasm_valtype_vec_t* ou
     }
 }
 
+// wasm_ref_as_func() is a plain cast, so function references must carry
+// the function type stored in wasm_func_t.
+static own wasm_ref_t* NewWasmRef(const Object* obj)
+{
+    if (obj->isFunction()) {
+        Function* func = const_cast<Object*>(obj)->asFunction();
+        return new wasm_func_t(func, new wasm_functype_t(func->functionType()));
+    }
+    return new wasm_ref_t(obj);
+}
+
 static wasm_val_t FromWalrusValue(const Value& val)
 {
     wasm_val_t result;
@@ -530,8 +541,9 @@ static wasm_val_t FromWalrusValue(const Value& val)
         result.of.f64 = val.asF64();
         break;
     case Value::Type::FuncRef:
+    case Value::Type::NullFuncRef:
         result.kind = WASM_FUNCREF;
-        result.of.ref = new wasm_ref_t(val.asFunction());
+        result.of.ref = val.asFunction() ? NewWasmRef(val.asFunction()) : nullptr;
         break;
     case Value::Type::ExternRef:
         result.kind = WASM_ANYREF;
@@ -568,8 +580,6 @@ static Value ToWalrusValue(const wasm_val_t& val)
 static void FromWalrusValues(wasm_val_t* results, const Value* values, const uint32_t num)
 {
     for (uint32_t i = 0; i < num; i++) {
-        // values have numbers only
-        ASSERT((values[i].type() != Value::Type::FuncRef) && (values[i].type() != Value::Type::ExternRef));
         results[i] = FromWalrusValue(values[i]);
     }
 }
@@ -766,7 +776,7 @@ void wasm_val_copy(own wasm_val_t* out, const wasm_val_t* src)
     if (wasm_valkind_is_ref(src->kind)) {
         out->kind = src->kind;
         // FIXME
-        out->of.ref = src->of.ref ? new wasm_ref_t(src->of.ref->get()) : nullptr;
+        out->of.ref = src->of.ref ? NewWasmRef(src->of.ref->get()) : nullptr;
     } else {
         *out = *src;
     }
@@ -1107,7 +1117,7 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
     }
 
     // FIXME
-    return new wasm_ref_t(val.asObject());
+    return NewWasmRef(val.asObject());
 }
 
 bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* ref)
