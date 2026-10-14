@@ -162,12 +162,27 @@ ByteCodeTable::ByteCodeTable()
 template <typename T>
 ALWAYS_INLINE void writeValue(uint8_t* bp, ByteCodeStackOffset offset, const T& v)
 {
+#if defined(CPU_ARM32)
+    // Stack slots may be only 4-byte aligned. Use unaligned accesses for
+    // 8-byte and larger values, including SIMD values.
+    if (sizeof(T) >= 8) {
+        memcpy(bp + offset, &v, sizeof(T));
+        return;
+    }
+#endif
     *reinterpret_cast<T*>(bp + offset) = v;
 }
 
 template <typename T>
 ALWAYS_INLINE T readValue(uint8_t* bp, ByteCodeStackOffset offset)
 {
+#if defined(CPU_ARM32)
+    if (sizeof(T) >= 8) {
+        T v;
+        memcpy(&v, bp + offset, sizeof(T));
+        return v;
+    }
+#endif
     return *reinterpret_cast<T*>(bp + offset);
 }
 
@@ -528,13 +543,13 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                                                            \
     }
 
-#define MOVE_OPERATION(name, type)                                                                           \
-    DEFINE_OPCODE(name)                                                                                      \
-    {                                                                                                        \
-        name* code = (name*)programCounter;                                                                  \
-        *reinterpret_cast<type*>(bp + code->dstOffset()) = *reinterpret_cast<type*>(bp + code->srcOffset()); \
-        ADD_PROGRAM_COUNTER(name);                                                                           \
-        NEXT_INSTRUCTION();                                                                                  \
+#define MOVE_OPERATION(name, type)                                                       \
+    DEFINE_OPCODE(name)                                                                  \
+    {                                                                                    \
+        name* code = (name*)programCounter;                                              \
+        writeValue<type>(bp, code->dstOffset(), readValue<type>(bp, code->srcOffset())); \
+        ADD_PROGRAM_COUNTER(name);                                                       \
+        NEXT_INSTRUCTION();                                                              \
     }
 
 #define SIMD_BINARY_OPERATION(name, op, paramType, resultType)     \
@@ -1400,7 +1415,7 @@ NextInstruction:
     DEFINE_OPCODE(Const64)
     {
         Const64* code = (Const64*)programCounter;
-        *reinterpret_cast<uint64_t*>(bp + code->dstOffset()) = code->value();
+        writeValue<uint64_t>(bp, code->dstOffset(), code->value());
         ADD_PROGRAM_COUNTER(Const64);
         NEXT_INSTRUCTION();
     }

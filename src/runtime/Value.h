@@ -240,10 +240,18 @@ public:
             m_f32 = *reinterpret_cast<const float*>(memory);
             break;
         case F64:
+#if defined(CPU_ARM32)
+            memcpy(&m_f64, memory, sizeof(m_f64));
+#else
             m_f64 = *reinterpret_cast<const double*>(memory);
+#endif
             break;
         case I64:
+#if defined(CPU_ARM32)
+            memcpy(&m_i64, memory, sizeof(m_i64));
+#else
             m_i64 = *reinterpret_cast<const int64_t*>(memory);
+#endif
             break;
         case V128:
             m_v128 = *reinterpret_cast<const Vec128*>(memory);
@@ -359,11 +367,19 @@ public:
             break;
         }
         case F64: {
+#if defined(CPU_ARM32)
+            memcpy(ptr, &m_f64, sizeof(m_f64));
+#else
             *reinterpret_cast<double*>(ptr) = m_f64;
+#endif
             break;
         }
         case I64: {
+#if defined(CPU_ARM32)
+            memcpy(ptr, &m_i64, sizeof(m_i64));
+#else
             *reinterpret_cast<int64_t*>(ptr) = m_i64;
+#endif
             break;
         }
         case V128: {
@@ -384,7 +400,11 @@ public:
         if (siz == 4) {
             *reinterpret_cast<int32_t*>(ptr) = m_i32;
         } else if (siz == 8) {
+#if defined(CPU_ARM32)
+            memcpy(ptr, &m_i64, sizeof(m_i64));
+#else
             *reinterpret_cast<int64_t*>(ptr) = m_i64;
+#endif
         } else {
             ASSERT(siz == 16);
             memcpy(ptr, m_v128.m_data, 16);

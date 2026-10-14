@@ -1719,26 +1719,45 @@ public:
     Const64(ByteCodeStackOffset dstOffset, uint64_t value)
         : ByteCode(Opcode::Const64Opcode)
         , m_dstOffset(dstOffset)
+#if !defined(CPU_ARM32)
         , m_value(value)
+#endif
     {
+#if defined(CPU_ARM32)
+        memcpy(m_value, &value, sizeof(value));
+#endif
     }
 
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
-    uint64_t value() const { return m_value; }
+    uint64_t value() const
+    {
+#if defined(CPU_ARM32)
+        uint64_t result;
+        memcpy(&result, m_value, sizeof(result));
+        return result;
+#else
+        return m_value;
+#endif
+    }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
     {
         printf("const64 ");
         DUMP_BYTECODE_OFFSET(dstOffset);
-        printf("value: %" PRIu64, m_value);
+        printf("value: %" PRIu64, value());
     }
 #endif
 
 protected:
     ByteCodeStackOffset m_dstOffset;
+#if defined(CPU_ARM32)
+    // Bytecode instructions are only pointer-aligned, which is 4 bytes here.
+    uint32_t m_value[2];
+#else
     uint64_t m_value;
+#endif
 };
 
 class Const128 : public ByteCode {
