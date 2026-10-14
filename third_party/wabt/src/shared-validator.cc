@@ -23,7 +23,10 @@
 namespace wabt {
 
 TypeVector SharedValidator::ToTypeVector(Index count, const Type* types) {
-  return TypeVector(&types[0], &types[count]);
+  if (count == 0) {
+    return TypeVector();
+  }
+  return TypeVector(types, types + count);
 }
 
 SharedValidator::SharedValidator(Errors* errors,
@@ -99,7 +102,8 @@ Result SharedValidator::OnStructType(const Location& loc,
                                      TypeMut* fields,
                                      SupertypesInfo* supertypes) {
   type_fields_.PushStruct(
-      StructType{TypeMutVector(&fields[0], &fields[field_count])});
+      StructType{field_count == 0 ? TypeMutVector()
+                                  : TypeMutVector(fields, fields + field_count)});
 
   Result result = Result::Ok;
   Index rec_end = GetRecGroupEnd();
