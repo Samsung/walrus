@@ -1325,14 +1325,14 @@ void JITCompiler::generateCode()
 
         for (size_t i = 0; i < m_functionList.size(); i++) {
             size_t size = module()->numberOfFunctions();
-            int functionIndex = 0;
-
-            for (size_t i = 0; i < size; i++) {
-                if (module()->function(i)->jitFunction() == m_functionList[i].jitFunc) {
-                    functionIndex = static_cast<int>(i);
+            size_t functionIndex = std::numeric_limits<size_t>::max();
+            for (size_t j = 0; j < size; j++) {
+                if (module()->function(j)->jitFunction() == m_functionList[i].jitFunc) {
+                    functionIndex = j;
                     break;
                 }
             }
+            ASSERT(functionIndex != std::numeric_limits<size_t>::max());
 
             std::string name = "function" + std::to_string(functionIndex);
             for (auto exp : module()->exports()) {
