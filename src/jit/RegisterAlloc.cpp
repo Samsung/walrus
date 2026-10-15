@@ -51,7 +51,11 @@ class RegisterSet {
 public:
     RegisterSet(uint32_t numberOfScratchRegs, uint32_t numberOfSavedRegs, bool isInteger);
 
-    void reserve(uint8_t reg) { m_registers[reg].rangeEnd = kReservedReg; }
+    void reserve(uint8_t reg)
+    {
+        ASSERT(reg < m_registers.size());
+        m_registers[reg].rangeEnd = kReservedReg;
+    }
 
     void updateVariable(uint8_t reg, VariableList::Variable* variable)
     {
@@ -418,6 +422,7 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
         }
 
         size_t maxRangeEnd;
+        bool spillsSecondSingle = false;
 
         if (freeReg != VariableList::kUnusedReg && maxRangeEndSingle1 >= maxRangeEndPair) {
             i = maxRangeIndexSingle1;
@@ -426,10 +431,7 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
             i = maxRangeIndexSingle1;
             maxRangeEnd = maxRangeEndSingle2;
             freeReg = maxRangeIndexSingle2;
-
-            VariableList::Variable* prevVariable = m_registers[freeReg].variable;
-            prevVariable->reg1 = VariableList::kUnusedReg;
-            prevVariable->reg2 = VariableList::kUnusedReg;
+            spillsSecondSingle = true;
         } else {
             i = maxRangeIndexPair;
             maxRangeEnd = maxRangeEndPair;
@@ -442,7 +444,13 @@ uint8_t RegisterSet::allocateRegisterPair(VariableList::Variable* variable, uint
             return VariableList::kUnusedReg;
         }
 
-        // Move variable into memory.
+        // Move variables into memory, only once the allocation is certain.
+        if (spillsSecondSingle) {
+            VariableList::Variable* prevVariable = m_registers[freeReg].variable;
+            prevVariable->reg1 = VariableList::kUnusedReg;
+            prevVariable->reg2 = VariableList::kUnusedReg;
+        }
+
         VariableList::Variable* prevVariable = m_registers[i].variable;
         ASSERT(prevVariable != nullptr);
 
@@ -811,9 +819,13 @@ void JITCompiler::allocateRegisters()
                 }
             }
 
-            if (type & Instruction::FloatOperandMarker) {
+            // The variable type decides the register set: f32/f64 constants
+            // use the integer Const32/Const64 descriptors.
+            uint8_t resultType = resultVariable->info & Instruction::TypeMask;
+
+            if (resultType & Instruction::FloatOperandMarker) {
                 if (resultVariable->reg1 != VariableList::kUnusedReg) {
-                    VECTOR_SELECT(type == Instruction::V128Operand,
+                    VECTOR_SELECT(resultType == Instruction::V128Operand,
                                   regs.vectorReserve(resultVariable->reg1),
                                   regs.floatReserve(resultVariable->reg1))
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
@@ -885,6 +897,13 @@ void JITCompiler::allocateRegisters()
         }
 
         uint32_t reuseTmpIndex = tmpIndex;
+
+        // Allocating the result may have moved a source into memory.
+        for (uint32_t i = 0; i < 3; i++) {
+            if (reusableRegs[i] != nullptr && reusableRegs[i]->reg1 == VariableList::kUnusedReg) {
+                reusableRegs[i] = nullptr;
+            }
+        }
 
         for (const uint8_t* nextType = list; *nextType != 0; nextType++) {
             int reuseIdx = reuseTemporary(*nextType, reusableRegs);
