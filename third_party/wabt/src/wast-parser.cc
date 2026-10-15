@@ -1114,7 +1114,7 @@ Result WastParser::ParseValueType(Var* out_type, bool is_field) {
   Token token = Consume();
   Type type = token.type();
 
-  if ((!is_field || !type.IsPackedType()) && !IsTypeEnabled(type, options_)) {
+  if ((!is_field && type.IsPackedType()) || !IsTypeEnabled(type, options_)) {
     Error(token.loc, "value type not allowed: %s", type.GetName().c_str());
     return Result::Error;
   }

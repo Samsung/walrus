@@ -554,7 +554,8 @@ class SharedComponentValidator {
   void CoreModuleAddTagExport(nonstd::string_view name);
 
   // Can be nullptr on error.
-  const CoreFuncType* GetLoweredFunctionType(uint32_t func_index,
+  const CoreFuncType* GetLoweredFunctionType(uint32_t index,
+                                             bool is_func,
                                              bool is_ptr64,
                                              uint32_t* out_info);
 

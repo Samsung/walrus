@@ -101,9 +101,12 @@ Result SharedValidator::OnStructType(const Location& loc,
                                      Index field_count,
                                      TypeMut* fields,
                                      SupertypesInfo* supertypes) {
-  type_fields_.PushStruct(
-      StructType{field_count == 0 ? TypeMutVector()
-                                  : TypeMutVector(fields, fields + field_count)});
+  if (field_count > 0) {
+    type_fields_.PushStruct(
+        StructType{TypeMutVector(fields, fields + field_count)});
+  } else {
+    type_fields_.PushStruct(StructType());
+  }
 
   Result result = Result::Ok;
   Index rec_end = GetRecGroupEnd();
@@ -2647,8 +2650,11 @@ Result SharedComponentValidator::OnCanonLift(
   result |= CheckCanonOptions(option_count, options, &info);
   if (result == Result::Ok) {
     uint32_t lower_info = 0;
-    GetLoweredFunctionType(type_index.index, (info & HasMemory64Option) != 0,
-                           &lower_info);
+    if (GetLoweredFunctionType(type_index.index, false,
+                               (info & HasMemory64Option) != 0,
+                               &lower_info) == nullptr) {
+      result |= PrintError(type_index.loc, "invalid function type.");
+    }
     if ((lower_info & RequireMemory) != 0 &&
         (info & (HasMemory32Option | HasMemory64Option)) == 0) {
       result |= PrintError(type_index.loc, "memory option must be present.");
@@ -2670,8 +2676,11 @@ Result SharedComponentValidator::OnCanonLower(
   result |= CheckCanonOptions(option_count, options, &info);
   if (result == Result::Ok) {
     uint32_t lower_info = 0;
-    GetLoweredFunctionType(func_index.index, (info & HasMemory64Option) != 0,
-                           &lower_info);
+    if (GetLoweredFunctionType(func_index.index, true,
+                               (info & HasMemory64Option) != 0,
+                               &lower_info) == nullptr) {
+      result |= PrintError(func_index.loc, "invalid function.");
+    }
     if ((lower_info & RequireMemory) != 0 &&
         (info & (HasMemory32Option | HasMemory64Option)) == 0) {
       result |= PrintError(func_index.loc, "memory option must be present.");
@@ -2836,7 +2845,8 @@ void SharedComponentValidator::CoreModuleAddTagExport(nonstd::string_view name) 
 }
 
 const SharedComponentValidator::CoreFuncType*
-SharedComponentValidator::GetLoweredFunctionType(uint32_t func_index,
+SharedComponentValidator::GetLoweredFunctionType(uint32_t index,
+                                                 bool is_func,
                                                  bool is_ptr64,
                                                  uint32_t* out_info) {
   *out_info = 0;
@@ -2844,13 +2854,24 @@ SharedComponentValidator::GetLoweredFunctionType(uint32_t func_index,
     return nullptr;
   }
 
-  Component* component = reinterpret_cast<Component*>(current_);
+  TypeFunc* func;
 
-  if (func_index >= component->funcs.size()) {
-    return nullptr;
+  if (is_func) {
+    Component* component = reinterpret_cast<Component*>(current_);
+
+    if (index >= component->funcs.size()) {
+      return nullptr;
+    }
+
+    func = component->funcs[index]->AsTypeFunc();
+  } else {
+    if (index >= current_->types.size() ||
+        !current_->types[index]->IsTypeFunc()) {
+      return nullptr;
+    }
+
+    func = current_->types[index]->AsTypeFunc();
   }
-
-  TypeFunc* func = component->funcs[func_index]->AsTypeFunc();
 
   if ((func->ltype_status & TypeFunc::LoweredTypeError) != 0) {
     return nullptr;
