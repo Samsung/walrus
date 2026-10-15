@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # claude-code-action: monthly
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 14
+    allow:
+      - dependency-name: "anthropics/claude-code-action"
+
+  # All other actions: quarterly, grouped into a single PR
+  - package-ecosystem: "github-actions"
+    directory: "/.github/workflows"
+    schedule:
+      interval: "quarterly"
+    cooldown:
+      default-days: 14
+    ignore:
+      - dependency-name: "anthropics/claude-code-action"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
