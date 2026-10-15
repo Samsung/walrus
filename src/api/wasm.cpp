@@ -440,7 +440,8 @@ struct wasm_trap_t : wasm_ref_t {
     wasm_trap_t(own const Trap* t, const std::string& msg)
         : wasm_ref_t(t)
     {
-        wasm_byte_vec_new(&message, msg.length(), msg.data());
+        // wasm_message_t is null terminated (wasm.h); callers print it as a C string.
+        wasm_byte_vec_new(&message, msg.length() + 1, msg.c_str());
     }
 
     virtual ~wasm_trap_t()
@@ -819,7 +820,14 @@ void wasm_trap_trigger(const char* message, size_t length)
 // Modules
 own wasm_module_t* wasm_module_new(wasm_store_t* store, const wasm_byte_vec_t* binary)
 {
-    auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size);
+#if defined(WALRUS_ENABLE_JIT)
+    // Embedders reach wasm only through this API, so without a flag here the
+    // JIT is built but never used.
+    const uint32_t jitFlags = JITFlagValue::useJIT;
+#else
+    const uint32_t jitFlags = 0;
+#endif
+    auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size, jitFlags);
     if (!parseResult.first.hasValue()) {
         return nullptr;
     }
@@ -1036,17 +1044,7 @@ own wasm_trap_t* wasm_func_call(
 
     if (trapResult.exception) {
         // FIXME
-        own wasm_message_t msg;
-        if (trapResult.exception->message().length()) {
-            std::string& exceptionMsg = trapResult.exception->message();
-            wasm_byte_vec_new(&msg, exceptionMsg.length(), exceptionMsg.data());
-        } else {
-            wasm_byte_vec_new_empty(&msg);
-        }
-
-        wasm_trap_t* trap = new wasm_trap_t(new Trap(), &msg);
-        wasm_byte_vec_delete(&msg);
-        return trap;
+        return new wasm_trap_t(new Trap(), trapResult.exception->message());
     }
 
     FromWalrusValues(results->data, walrusResults.data(), resultNum);
