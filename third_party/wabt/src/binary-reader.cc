@@ -168,56 +168,49 @@ class BinaryReader {
   Result ReadAddress(Address* out_value, Index memory, const char* desc);
   Result ReadFunctionBody(Offset end_offset);
   // ReadInstructions reads until end_offset or the nesting depth reaches zero.
-  [[nodiscard]] Result ReadInstructions(Offset end_offset, const char* context);
-  [[nodiscard]] Result ReadNameSection(Offset section_size);
-  [[nodiscard]] Result ReadRelocSection(Offset section_size);
-  [[nodiscard]] Result ReadDylinkSection(Offset section_size);
-  [[nodiscard]] Result ReadGenericCustomSection(nonstd::string_view name,
-                                                Offset section_size);
-  [[nodiscard]] Result ReadDylink0Section(Offset section_size);
-  [[nodiscard]] Result ReadTargetFeaturesSections(Offset section_size);
-  [[nodiscard]] Result ReadLinkingSection(Offset section_size);
-  [[nodiscard]] Result ReadCodeMetadataSection(nonstd::string_view name,
-                                               Offset section_size);
-  [[nodiscard]] Result ReadCustomSection(Index section_index,
-                                         Offset section_size);
-  [[nodiscard]] Result ReadTypeSection(Offset section_size);
-  [[nodiscard]] Result ReadImport(Index i,
-                                  nonstd::string_view module_name,
-                                  nonstd::string_view field_name,
-                                  ExternalKind kind);
-  [[nodiscard]] Result ReadImportSection(Offset section_size);
-  [[nodiscard]] Result ReadFunctionSection(Offset section_size);
-  [[nodiscard]] Result ReadTableSection(Offset section_size);
-  [[nodiscard]] Result ReadMemorySection(Offset section_size);
-  [[nodiscard]] Result ReadGlobalSection(Offset section_size);
-  [[nodiscard]] Result ReadExportSection(Offset section_size);
-  [[nodiscard]] Result ReadStartSection(Offset section_size);
-  [[nodiscard]] Result ReadElemSection(Offset section_size);
-  [[nodiscard]] Result ReadCodeSection(Offset section_size);
-  [[nodiscard]] Result ReadDataSection(Offset section_size);
-  [[nodiscard]] Result ReadDataCountSection(Offset section_size);
-  [[nodiscard]] Result ReadTagSection(Offset section_size);
-  [[nodiscard]] Result ReadSections(const ReadSectionsOptions& options);
-  [[nodiscard]] Result ReadComponentIndex(ComponentIndexLoc* out_index,
-                                          const char* desc);
-  [[nodiscard]] Result ReadComponentString(ComponentStringLoc* out_string,
-                                           const char* desc);
-  [[nodiscard]] Result ReadComponentCoreSort(ComponentSort* out_sort);
-  [[nodiscard]] Result ReadComponentSort(ComponentSort* out_sort);
-  [[nodiscard]] Result ReadComponentCoreInstance();
-  [[nodiscard]] Result ReadComponentInstance();
-  [[nodiscard]] Result ReadComponentInlineInstance();
-  [[nodiscard]] Result ReadComponentAlias();
-  [[nodiscard]] Result ReadComponentValType(ComponentTypeLoc* out_type);
-  [[nodiscard]] Result ReadComponentValTypeOpt(ComponentTypeLoc* out_type);
-  [[nodiscard]] Result ReadComponentType();
-  [[nodiscard]] Result ReadComponentCanonOptions(
+  Result ReadInstructions(Offset end_offset, const char* context);
+  Result ReadNameSection(Offset section_size);
+  Result ReadRelocSection(Offset section_size);
+  Result ReadDylinkSection(Offset section_size);
+  Result ReadGenericCustomSection(nonstd::string_view name, Offset section_size);
+  Result ReadDylink0Section(Offset section_size);
+  Result ReadTargetFeaturesSections(Offset section_size);
+  Result ReadLinkingSection(Offset section_size);
+  Result ReadCodeMetadataSection(nonstd::string_view name, Offset section_size);
+  Result ReadCustomSection(Index section_index, Offset section_size);
+  Result ReadTypeSection(Offset section_size);
+  Result ReadImport(nonstd::string_view module_name,
+                    nonstd::string_view field_name,
+                    ExternalKind kind);
+  Result ReadImportSection(Offset section_size);
+  Result ReadFunctionSection(Offset section_size);
+  Result ReadTableSection(Offset section_size);
+  Result ReadMemorySection(Offset section_size);
+  Result ReadGlobalSection(Offset section_size);
+  Result ReadExportSection(Offset section_size);
+  Result ReadStartSection(Offset section_size);
+  Result ReadElemSection(Offset section_size);
+  Result ReadCodeSection(Offset section_size);
+  Result ReadDataSection(Offset section_size);
+  Result ReadDataCountSection(Offset section_size);
+  Result ReadTagSection(Offset section_size);
+  Result ReadSections(const ReadSectionsOptions& options);
+  Result ReadComponentIndex(ComponentIndexLoc* out_index, const char* desc);
+  Result ReadComponentString(ComponentStringLoc* out_string, const char* desc);
+  Result ReadComponentCoreSort(ComponentSort* out_sort);
+  Result ReadComponentSort(ComponentSort* out_sort);
+  Result ReadComponentCoreInstance();
+  Result ReadComponentInstance();
+  Result ReadComponentInlineInstance();
+  Result ReadComponentAlias();
+  Result ReadComponentValType(ComponentTypeLoc* out_type);
+  Result ReadComponentValTypeOpt(ComponentTypeLoc* out_type);
+  Result ReadComponentType();
+  Result ReadComponentCanonOptions(
       std::vector<ComponentCanonOption>* out_options);
-  [[nodiscard]] Result ReadComponentCanon();
-  [[nodiscard]] Result ReadComponentExternal(bool is_import,
-                                             bool is_component_export);
-  [[nodiscard]] Result ReadComponent();
+  Result ReadComponentCanon();
+  Result ReadComponentExternal(bool is_import, bool is_component_export);
+  Result ReadComponent();
 
   Result ReportUnexpectedOpcode(Opcode opcode, const char* message = nullptr);
 
@@ -2939,10 +2932,15 @@ Result BinaryReader::ReadTypeSection(Offset section_size) {
     uint32_t recursive_count = 1;
 
     if (options_.features.gc_enabled()) {
+      ERROR_UNLESS(type_index < kInvalidIndex, "too many types are defined");
+
       CHECK_RESULT(ReadType(&form, "type form or gc info"));
 
       if (form == Type::Rec) {
         CHECK_RESULT(ReadU32Leb128(&recursive_count, "recursive count"));
+
+        ERROR_UNLESS(type_index <= kInvalidIndex - recursive_count,
+                     "too many types are defined");
 
         CALLBACK(OnRecursiveGroup, type_index, recursive_count);
 
@@ -3071,10 +3069,13 @@ Result BinaryReader::ReadTypeSection(Offset section_size) {
   return Result::Ok;
 }
 
-Result BinaryReader::ReadImport(Index i,
-                                nonstd::string_view module_name,
+Result BinaryReader::ReadImport(nonstd::string_view module_name,
                                 nonstd::string_view field_name,
                                 ExternalKind kind) {
+  // Each import increments exactly one of the per-kind counters below, so
+  // their sum is the index of this import within the import section.
+  Index i = num_func_imports_ + num_table_imports_ + num_memory_imports_ +
+            num_global_imports_ + num_tag_imports_;
   CALLBACK(OnImport, i, kind, module_name, field_name);
   switch (kind) {
     case ExternalKind::Func: {
@@ -3134,11 +3135,13 @@ Result BinaryReader::ReadImport(Index i,
 
 Result BinaryReader::ReadImportSection(Offset section_size) {
   CALLBACK(BeginImportSection, section_size);
-  Index num_imports;
-  CHECK_RESULT(ReadCount(&num_imports, "import count"));
-  CALLBACK(OnImportCount, num_imports);
-  Index i = 0;
-  while (i < num_imports) {
+  // Note: With compact imports a single entry in the import section can
+  // contain more than one import, so the number of entries is not necessarily
+  // the same as the number of imports.
+  Index num_entries;
+  CHECK_RESULT(ReadCount(&num_entries, "import count"));
+  CALLBACK(OnImportCount, num_entries);
+  for (Index entry = 0; entry < num_entries; ++entry) {
     nonstd::string_view module_name;
     CHECK_RESULT(ReadStr(&module_name, "import module name"));
     nonstd::string_view field_name;
@@ -3158,7 +3161,7 @@ Result BinaryReader::ReadImportSection(Offset section_size) {
         CHECK_RESULT(ReadCount(&num_compact_imports, "compact import count"));
         for (Index j = 0; j < num_compact_imports; ++j) {
           CHECK_RESULT(ReadStr(&field_name, "compact import field name"));
-          CHECK_RESULT(ReadImport(i++, module_name, field_name, kind));
+          CHECK_RESULT(ReadImport(module_name, field_name, kind));
         }
       } else {
         CHECK_RESULT(ReadCount(&num_compact_imports, "compact import count"));
@@ -3166,7 +3169,7 @@ Result BinaryReader::ReadImportSection(Offset section_size) {
           CHECK_RESULT(ReadStr(&field_name, "compact import field name"));
           CHECK_RESULT(
               ReadExternalKind(&kind, "compact import kind", "import"));
-          CHECK_RESULT(ReadImport(i++, module_name, field_name, kind));
+          CHECK_RESULT(ReadImport(module_name, field_name, kind));
         }
       }
     } else {
@@ -3175,7 +3178,7 @@ Result BinaryReader::ReadImportSection(Offset section_size) {
       // byte so we can read it with ReadExternalKind
       state_.offset--;
       CHECK_RESULT(ReadExternalKind(&kind, "import kind", "import"));
-      CHECK_RESULT(ReadImport(i++, module_name, field_name, kind));
+      CHECK_RESULT(ReadImport(module_name, field_name, kind));
     }
   }
 
