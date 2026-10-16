@@ -681,9 +681,9 @@ void WASI::path_unlink_file(ExecutionState& state, Value* argv, Value* result, I
 
 void WASI::poll_oneoff(ExecutionState& state, Value* argv, Value* result, Instance* instance)
 {
-    uvwasi_subscription_t* in = reinterpret_cast<uvwasi_subscription_t*>(get_memory_pointer(instance, argv[0], sizeof(uvwasi_subscription_t)));
-    uvwasi_event_t* out = reinterpret_cast<uvwasi_event_t*>(get_memory_pointer(instance, argv[1], sizeof(uvwasi_event_t)));
     uint32_t nsubscriptions = argv[2].asI32();
+    uvwasi_subscription_t* in = reinterpret_cast<uvwasi_subscription_t*>(get_memory_pointer(instance, argv[0], nsubscriptions * sizeof(uvwasi_subscription_t)));
+    uvwasi_event_t* out = reinterpret_cast<uvwasi_event_t*>(get_memory_pointer(instance, argv[1], nsubscriptions * sizeof(uvwasi_event_t)));
     uint32_t* nevents = reinterpret_cast<uint32_t*>(get_memory_pointer(instance, argv[3], sizeof(uint32_t)));
 
     result[0] = Value(uvwasi_poll_oneoff(WASI::g_uvwasi, in, out, nsubscriptions, nevents));
