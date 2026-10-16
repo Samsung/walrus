@@ -184,7 +184,7 @@ jobs:
       - name: Claude review
         id: claude
         if: steps.prepare.outputs.skip == 'false'
-        uses: anthropics/claude-code-action@97c53473391bff1901034d4b454b5bac7ab7a029 # v1.0.239
+        uses: anthropics/claude-code-action@ed670b4cf9de2a5a570d130d2f6197b9e543cd64 # v1.0.240
         with:
           # Workload Identity Federation identifiers (not secrets) from repository variables.
           # Do NOT also set anthropic_api_key: a static key would take precedence over federation.
