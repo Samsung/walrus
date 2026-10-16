@@ -22,6 +22,7 @@
 #include "runtime/Value.h"
 #include <mutex>
 #include <condition_variable>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -144,7 +145,7 @@ public:
     // A reference mutation invalidates the snapshot. Dropping only an API
     // root can reuse it. Never rebuild while wasm or a bulk API call runs.
     void requestCollection(bool referencesChanged = true);
-    static void addAPIReference(const Object* object);
+    static std::shared_ptr<bool> addAPIReference(const Object* object);
     static void removeAPIReference(const Object* object);
 
 #ifdef WALRUS_API_TESTS
@@ -249,6 +250,8 @@ private:
     size_t m_graphTraceCount = 0;
 #endif
     bool m_apiCollection = false;
+    // API wrappers can be finalized after their store has been destroyed.
+    std::shared_ptr<bool> m_apiLifetime = std::make_shared<bool>(true);
     bool m_collectionPending = false;
 
     FunctionType* createDefinedFunctionType(DefinedFunctionType type);
