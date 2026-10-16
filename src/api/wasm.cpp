@@ -271,7 +271,7 @@ struct wasm_ref_t {
         : obj(o)
     {
         ASSERT(!!o);
-        Store::addAPIReference(o);
+        storeLifetime = Store::addAPIReference(o);
 
 #ifdef ENABLE_GC
         if (!(reinterpret_cast<uintptr_t>(o) & 1) && Object::isStructOrArray(o->kind())) {
@@ -287,6 +287,10 @@ struct wasm_ref_t {
 
     virtual ~wasm_ref_t()
     {
+        // Store destruction already freed this object. Only the wrapper remains.
+        if (storeLifetime && !*storeLifetime) {
+            return;
+        }
 #ifdef ENABLE_GC
         if (obj != nullptr && !(reinterpret_cast<uintptr_t>(obj) & 1) && Object::isStructOrArray(obj->kind())) {
             const_cast<GCBase*>(reinterpret_cast<const GCBase*>(obj))->releaseRef();
@@ -302,6 +306,7 @@ struct wasm_ref_t {
     }
 
     const Object* obj;
+    std::shared_ptr<bool> storeLifetime;
 };
 
 struct wasm_extern_t : wasm_ref_t {
