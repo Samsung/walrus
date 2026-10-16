@@ -185,6 +185,11 @@ IF (WALRUS_BUILD_API_TESTS)
     ADD_EXECUTABLE (wasm-c-api-trap-messages ${WALRUS_ROOT}/test/api/trap_messages.c)
     TARGET_LINK_LIBRARIES (wasm-c-api-trap-messages ${WALRUS_TARGET})
     ADD_TEST (NAME wasm-c-api-trap-messages COMMAND wasm-c-api-trap-messages)
+
+    ADD_EXECUTABLE (wasm-c-api-wasm3 ${WALRUS_ROOT}/test/api/wasm3.c)
+    TARGET_LINK_LIBRARIES (wasm-c-api-wasm3 ${WALRUS_TARGET})
+    ADD_TEST (NAME wasm-c-api-wasm3 COMMAND wasm-c-api-wasm3)
+
     function(WALRUS_C_API_EXAMPLE NAME)
         set(EXENAME wasm-c-api-${NAME})
         add_executable(${EXENAME} ${WALRUS_THIRD_PARTY_ROOT}/wasm-c-api/example/${NAME}.c)
