@@ -33,6 +33,8 @@ public:
         return tag;
     }
 
+    ~Tag();
+
     const FunctionType* functionType() const
     {
         return m_functionType;

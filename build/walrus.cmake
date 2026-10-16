@@ -46,6 +46,11 @@ IF (WALRUS_JITPERF)
     SET (WALRUS_CXXFLAGS ${WALRUS_CXXFLAGS} -DWALRUS_JITPERF)
 ENDIF()
 
+# Test instrumentation is compiled out of ordinary product builds.
+IF (WALRUS_BUILD_API_TESTS)
+    LIST (APPEND WALRUS_DEFINITIONS WALRUS_API_TESTS)
+ENDIF()
+
 # SOURCE FILES
 FILE (GLOB_RECURSE WALRUS_SRC ${WALRUS_ROOT}/src/*.cpp)
 LIST (REMOVE_ITEM WALRUS_SRC ${WALRUS_ROOT}/src/shell/Shell.cpp)
@@ -153,6 +158,12 @@ ENDIF()
 
 IF (WALRUS_BUILD_API_TESTS)
     ENABLE_TESTING()
+    ADD_EXECUTABLE (wasm-c-api-store-collection ${WALRUS_ROOT}/test/api/store_collection.c)
+    TARGET_LINK_LIBRARIES (wasm-c-api-store-collection ${WALRUS_TARGET})
+    IF (WALRUS_GC)
+        TARGET_COMPILE_DEFINITIONS (wasm-c-api-store-collection PRIVATE WALRUS_GC_TESTS)
+    ENDIF()
+    ADD_TEST (NAME wasm-c-api-store-collection COMMAND wasm-c-api-store-collection)
     ADD_EXECUTABLE (wasm-c-api-function-references ${WALRUS_ROOT}/test/api/function_references.c)
     TARGET_LINK_LIBRARIES (wasm-c-api-function-references ${WALRUS_TARGET})
     ADD_TEST (NAME wasm-c-api-function-references COMMAND wasm-c-api-function-references)

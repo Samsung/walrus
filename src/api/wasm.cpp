@@ -32,6 +32,11 @@
 #include "runtime/Trap.h"
 #include "runtime/TypeStore.h"
 #include "parser/WASMParser.h"
+#include <memory>
+#ifdef WALRUS_API_TESTS
+#include "wabt/common.h"
+#include "wabt/walrus/binary-reader-walrus.h"
+#endif
 
 using namespace Walrus;
 
@@ -115,6 +120,7 @@ struct wasm_store_t {
     wasm_store_t(Store* s)
         : store(s)
     {
+        store->enableAPICollection();
     }
 
     ~wasm_store_t()
@@ -265,21 +271,28 @@ struct wasm_ref_t {
         : obj(o)
     {
         ASSERT(!!o);
+        Store::addAPIReference(o);
 
 #ifdef ENABLE_GC
-        if (Object::isStructOrArray(o->kind())) {
+        if (!(reinterpret_cast<uintptr_t>(o) & 1) && Object::isStructOrArray(o->kind())) {
             const_cast<GCBase*>(reinterpret_cast<const GCBase*>(o))->addRef();
         }
 #endif
     }
 
+    wasm_ref_t(const wasm_ref_t& other)
+        : wasm_ref_t(other.obj)
+    {
+    }
+
     virtual ~wasm_ref_t()
     {
 #ifdef ENABLE_GC
-        if (obj != nullptr && Object::isStructOrArray(obj->kind())) {
+        if (obj != nullptr && !(reinterpret_cast<uintptr_t>(obj) & 1) && Object::isStructOrArray(obj->kind())) {
             const_cast<GCBase*>(reinterpret_cast<const GCBase*>(obj))->releaseRef();
         }
 #endif
+        Store::removeAPIReference(obj);
     }
 
     const Object* get() const
@@ -433,20 +446,30 @@ struct wasm_instance_t : wasm_ref_t {
 struct wasm_trap_t : wasm_ref_t {
     wasm_trap_t(own const Trap* t, const wasm_message_t* msg)
         : wasm_ref_t(t)
+        , trap(t)
     {
         wasm_byte_vec_copy(&message, msg);
     }
 
     wasm_trap_t(own const Trap* t, const std::string& msg)
         : wasm_ref_t(t)
+        , trap(t)
     {
         // wasm_message_t is null terminated (wasm.h); callers print it as a C string.
         wasm_byte_vec_new(&message, msg.length() + 1, msg.c_str());
     }
 
+    wasm_trap_t(const wasm_trap_t& other)
+        : wasm_ref_t(other)
+        , trap(other.trap)
+    {
+        wasm_byte_vec_copy(&message, &other.message);
+    }
+
     virtual ~wasm_trap_t()
     {
-        delete obj;
+        wasm_byte_vec_delete(&message);
+        // The shared trap can be freed before the base destructor runs.
         obj = nullptr;
     }
 
@@ -456,6 +479,7 @@ struct wasm_trap_t : wasm_ref_t {
         return static_cast<const Trap*>(obj);
     }
 
+    std::shared_ptr<const Trap> trap;
     wasm_message_t message;
 };
 
@@ -547,8 +571,9 @@ static wasm_val_t FromWalrusValue(const Value& val)
         result.of.ref = val.asFunction() ? NewWasmRef(val.asFunction()) : nullptr;
         break;
     case Value::Type::ExternRef:
+    case Value::Type::NullExternRef:
         result.kind = WASM_ANYREF;
-        result.of.ref = new wasm_ref_t(val.asObject());
+        result.of.ref = val.isNull() ? nullptr : new wasm_ref_t(val.asObject());
         break;
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -569,9 +594,9 @@ static Value ToWalrusValue(const wasm_val_t& val)
     case WASM_F64:
         return Value(val.of.f64);
     case WASM_ANYREF:
-        return Value(Value::NullExternRef, const_cast<Object*>(val.of.ref->get()));
+        return Value(Value::NullExternRef, val.of.ref ? const_cast<Object*>(val.of.ref->get()) : nullptr);
     case WASM_FUNCREF:
-        return Value(static_cast<Function*>(const_cast<Object*>(val.of.ref->get())));
+        return Value(val.of.ref ? static_cast<Function*>(const_cast<Object*>(val.of.ref->get())) : nullptr);
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return Value();
@@ -836,6 +861,8 @@ own wasm_module_t* wasm_module_new(wasm_store_t* store, const wasm_byte_vec_t* b
 
 bool wasm_module_validate(wasm_store_t* store, const wasm_byte_vec_t* binary)
 {
+    Store::CollectionScope scope;
+    store->get()->requestCollection();
     auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size);
     if (!parseResult.first.hasValue()) {
         return false;
@@ -939,14 +966,15 @@ static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
 own wasm_func_t* wasm_func_new(
     wasm_store_t* store, const wasm_functype_t* ft, wasm_func_callback_t callback)
 {
+    auto functionType = std::shared_ptr<FunctionType>(ToWalrusFunctionType(ft));
     ImportedFunction* func = ImportedFunction::createImportedFunction(
         store->get(),
-        ToWalrusFunctionType(ft),
+        functionType.get(),
         [=](ExecutionState& state, Value* argv, Value* result, void* d) {
             auto argc = state.currentFunction()->functionType()->param().size();
             wasm_val_vec_t params, results;
             wasm_val_vec_new_uninitialized(&params, argc);
-            wasm_val_vec_new_uninitialized(&results, reinterpret_cast<size_t>(d));
+            wasm_val_vec_new_uninitialized(&results, functionType->result().size());
             FromWalrusValues(params.data, argv, argc);
 
             auto trap = callback(&params, &results);
@@ -963,7 +991,7 @@ own wasm_func_t* wasm_func_new(
             ToWalrusValues(result, results.data, results.size);
             wasm_val_vec_delete(&results);
         },
-        reinterpret_cast<void*>(ft->results.size));
+        nullptr);
 
     return new wasm_func_t(func, ft->clone());
 }
@@ -973,14 +1001,15 @@ own wasm_func_t* wasm_func_new_with_env(
     void* env, void (*finalizer)(void*))
 {
     // TODO: finalizer
+    auto functionType = std::shared_ptr<FunctionType>(ToWalrusFunctionType(ft));
     ImportedFunction* func = ImportedFunction::createImportedFunction(
         store->get(),
-        ToWalrusFunctionType(ft),
+        functionType.get(),
         [=](ExecutionState& state, Value* argv, Value* result, void* d) {
             auto argc = state.currentFunction()->functionType()->param().size();
             wasm_val_vec_t params, results;
             wasm_val_vec_new_uninitialized(&params, argc);
-            wasm_val_vec_new_uninitialized(&results, reinterpret_cast<size_t>(d));
+            wasm_val_vec_new_uninitialized(&results, functionType->result().size());
             FromWalrusValues(params.data, argv, argc);
 
             auto trap = callback(env, &params, &results);
@@ -997,7 +1026,7 @@ own wasm_func_t* wasm_func_new_with_env(
             ToWalrusValues(result, results.data, results.size);
             wasm_val_vec_delete(&results);
         },
-        reinterpret_cast<void*>(ft->results.size));
+        env);
 
     return new wasm_func_t(func, ft->clone());
 }
@@ -1020,6 +1049,9 @@ size_t wasm_func_result_arity(const wasm_func_t* func)
 own wasm_trap_t* wasm_func_call(
     const wasm_func_t* func, const wasm_val_vec_t* args, wasm_val_vec_t* results)
 {
+    Store::CollectionScope scope;
+    // Wasm may remove the last internal reference without deleting an API wrapper.
+    func->get()->ownerStore()->requestCollection();
     size_t paramNum = wasm_func_param_arity(func);
     size_t resultNum = wasm_func_result_arity(func);
 
@@ -1073,6 +1105,7 @@ void wasm_global_get(const wasm_global_t* glob, own wasm_val_t* out)
 void wasm_global_set(wasm_global_t* glob, const wasm_val_t* val)
 {
     glob->get()->setValue(ToWalrusValue(*val));
+    glob->get()->ownerStore()->requestCollection();
 }
 
 // Table Instances
@@ -1129,6 +1162,7 @@ bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* re
     } else {
         table->get()->uncheckedSetElement(index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
     }
+    table->get()->ownerStore()->requestCollection();
     return true;
 }
 
@@ -1148,6 +1182,7 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
     } else {
         table->get()->grow(delta + table->get()->size(), init ? const_cast<Object*>(init->get()) : reinterpret_cast<void*>(Value::NullBits));
     }
+    table->get()->ownerStore()->requestCollection();
     return true;
 }
 
@@ -1240,6 +1275,10 @@ own wasm_instance_t* wasm_instance_new(
     wasm_store_t* store, const wasm_module_t* module, const wasm_extern_vec_t* imports,
     own wasm_trap_t** outTrap)
 {
+    Store::CollectionScope scope;
+    // Includes failed instantiation and start functions; the return wrapper is
+    // constructed before scope destruction permits collection.
+    store->get()->requestCollection();
     struct RunData {
         Module* module;
         ExternVector importValues;
@@ -1324,6 +1363,72 @@ uint32_t wasm_instance_func_index(const wasm_instance_t* ins, const wasm_func_t*
     return wasm_limits_max_default;
 }
 
+void* wasm_instance_get_host_info(const wasm_instance_t* ins)
+{
+    return ins->get()->hostInfo();
+}
+
+void wasm_instance_set_host_info(wasm_instance_t* ins, void* info)
+{
+    const_cast<Instance*>(ins->get())->setHostInfo(info);
+}
+
+void* wasm_func_get_host_info(const wasm_func_t* f)
+{
+    Function* function = f->get();
+    if (function->kind() == Function::DefinedFunctionKind) {
+        return function->asDefinedFunction()->instance()->hostInfo();
+    }
+    if (function->kind() == Function::ImportedFunctionKind) {
+        return static_cast<ImportedFunction*>(function)->data();
+    }
+    return nullptr;
+}
+
+#ifdef WALRUS_API_TESTS
+// Exercise GC reachability without changing the product API's feature set.
+extern "C" WASM_API_EXTERN wasm_module_t* wasm_test_module_new_gc(wasm_store_t* store, const wasm_byte_vec_t* binary)
+{
+#ifdef WALRUS_ENABLE_JIT
+    const uint32_t jitFlags = JITFlagValue::useJIT;
+#else
+    const uint32_t jitFlags = 0;
+#endif
+    auto parsed = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size, jitFlags, wabt::FeatureFlagValue::enableWebAssembly3);
+    return parsed.first.hasValue() ? new wasm_module_t(parsed.first.unwrap()) : nullptr;
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_object_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestObjectCount();
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_collection_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestCollectionCount();
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_graph_build_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestGraphBuildCount();
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_table_slot_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestTableSlotCount();
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_graph_trace_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestGraphTraceCount();
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_graph_edge_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestGraphEdgeCount();
+}
+#endif
+
 // Vector Types
 #define WASM_IMPL_OWN(name)                           \
     void wasm_##name##_delete(own wasm_##name##_t* t) \
@@ -1392,6 +1497,7 @@ void wasm_val_vec_copy(own wasm_val_vec_t* out, const wasm_val_vec_t* vec)
 
 void wasm_val_vec_delete(own wasm_val_vec_t* vec)
 {
+    Store::CollectionScope batch;
     for (size_t i = 0; i < vec->size; ++i) {
         wasm_val_delete(&vec->data[i]);
     }
@@ -1419,6 +1525,7 @@ void wasm_val_vec_delete(own wasm_val_vec_t* vec)
     }                                                                              \
     void wasm_##name##_vec_delete(wasm_##name##_vec_t* vec)                        \
     {                                                                              \
+        Store::CollectionScope batch;                                              \
         for (size_t i = 0; i < vec->size; ++i) {                                   \
             delete vec->data[i];                                                   \
         }                                                                          \
@@ -1427,6 +1534,7 @@ void wasm_val_vec_delete(own wasm_val_vec_t* vec)
     }                                                                              \
     void wasm_##name##_vec_delete_with_size(wasm_##name##_vec_t* vec, size_t size) \
     {                                                                              \
+        Store::CollectionScope batch;                                              \
         for (size_t i = 0; i < size; ++i) {                                        \
             delete vec->data[i];                                                   \
         }                                                                          \

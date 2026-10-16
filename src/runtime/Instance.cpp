@@ -47,6 +47,9 @@ ElementSegment::ElementSegment(size_t size)
 #else
     m_elements = reinterpret_cast<void**>(malloc(size * sizeof(void*)));
 #endif
+    // A failed initializer can leave this segment only partly populated, while
+    // functions published through imports may still keep its instance reachable.
+    memset(m_elements, 0, size * sizeof(void*));
 }
 
 void ElementSegment::drop()
@@ -80,6 +83,8 @@ Instance* Instance::newInstance(Module* module)
         + module->numberOfElemSegments() * sizeof(ElementSegment);
 
     void* result = malloc(alignedSize() + totalSize);
+    // Failed instantiation can leave unfilled slots visible to the collector.
+    memset(reinterpret_cast<uint8_t*>(result) + alignedSize(), 0, totalSize);
 
     // Placement new.
     new (result) Instance(module);
@@ -96,7 +101,7 @@ void Instance::freeInstance(Instance* instance)
 }
 
 Instance::Instance(Module* module)
-    : Object(GET_GLOBAL_TYPE_INFO(instanceTypeInfo))
+    : StoreObject(GET_GLOBAL_TYPE_INFO(instanceTypeInfo))
     , m_module(module)
     , m_memories(nullptr)
     , m_globals(nullptr)

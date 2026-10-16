@@ -22,6 +22,8 @@
 #include "runtime/Value.h"
 #include <mutex>
 #include <condition_variable>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace Walrus {
 
@@ -32,6 +34,8 @@ class Instance;
 class Component;
 class ComponentInstance;
 class Extern;
+class Object;
+class StoreObject;
 class FunctionType;
 
 #ifdef ENABLE_WASI
@@ -127,6 +131,41 @@ public:
 
     ~Store();
 
+    // Only C API stores use automatic collection. Internal C++ clients retain
+    // store-lifetime ownership. Scopes cover wasm execution and bulk deletion.
+    class CollectionScope {
+    public:
+        CollectionScope();
+        ~CollectionScope();
+        CollectionScope(const CollectionScope&) = delete;
+        CollectionScope& operator=(const CollectionScope&) = delete;
+    };
+    void enableAPICollection();
+    // A reference mutation invalidates the snapshot. Dropping only an API
+    // root can reuse it. Never rebuild while wasm or a bulk API call runs.
+    void requestCollection(bool referencesChanged = true);
+    static void addAPIReference(const Object* object);
+    static void removeAPIReference(const Object* object);
+
+#ifdef WALRUS_API_TESTS
+    size_t apiTestObjectCount() const
+    {
+        return m_modules.size() + m_instances.size() + m_externs.size();
+    }
+    size_t apiTestCollectionCount() const { return m_collectionCount; }
+    size_t apiTestGraphBuildCount() const { return m_graphBuildCount; }
+    size_t apiTestTableSlotCount() const { return m_tableSlotCount; }
+    size_t apiTestGraphTraceCount() const { return m_graphTraceCount; }
+    size_t apiTestGraphEdgeCount() const
+    {
+        size_t count = m_gcRootTargets.size();
+        for (const auto& entry : m_referenceGraph) {
+            count += entry.second.targets.size();
+        }
+        return count;
+    }
+#endif
+
     static void finalize();
     static FunctionType* getDefaultFunctionType(Value::Type type);
 
@@ -138,15 +177,9 @@ public:
         return createDefinedFunctionType(type);
     }
 
-    void appendModule(Module* module)
-    {
-        m_modules.push_back(module);
-    }
+    void appendModule(Module* module);
 
-    void appendInstance(Instance* instance)
-    {
-        m_instances.push_back(instance);
-    }
+    void appendInstance(Instance* instance);
 
     void appendComponent(Component* component)
     {
@@ -158,10 +191,7 @@ public:
         m_componentInstances.push_back(instance);
     }
 
-    void appendExtern(Extern* ext)
-    {
-        m_externs.push_back(ext);
-    }
+    void appendExtern(Extern* ext);
 
     Instance* getLastInstance()
     {
@@ -195,6 +225,32 @@ public:
 #endif
 
 private:
+    static void collectPending();
+    void collectUnreferenced();
+    void rebuildReferenceGraph(std::vector<StoreObject*>& dead);
+    void traceReferences(Object* object, std::vector<StoreObject*>& targets);
+    void collectCycles(std::vector<StoreObject*>& dead);
+    void eraseGraphObject(StoreObject* object);
+    void freeObjects(std::vector<StoreObject*>& dead);
+
+    struct ReferenceNode {
+        // One edge per distinct target; incoming counts source objects, not slots.
+        std::vector<StoreObject*> targets;
+        size_t incoming = 0;
+    };
+    std::unordered_map<StoreObject*, ReferenceNode> m_referenceGraph;
+    std::vector<StoreObject*> m_gcRootTargets;
+    std::unordered_set<StoreObject*> m_collectionCandidates;
+    bool m_referenceGraphDirty = true;
+#ifdef WALRUS_API_TESTS
+    size_t m_collectionCount = 0;
+    size_t m_graphBuildCount = 0;
+    size_t m_tableSlotCount = 0;
+    size_t m_graphTraceCount = 0;
+#endif
+    bool m_apiCollection = false;
+    bool m_collectionPending = false;
+
     FunctionType* createDefinedFunctionType(DefinedFunctionType type);
 
     Engine* m_engine;

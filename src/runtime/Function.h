@@ -144,6 +144,8 @@ public:
         return ImportedFunctionKind;
     }
 
+    void* data() const { return m_data; }
+
     virtual void call(ExecutionState& state, Value* argv, Value* result) override;
 
 protected:

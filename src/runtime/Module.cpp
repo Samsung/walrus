@@ -45,7 +45,7 @@ ModuleFunction::ModuleFunction(FunctionType* functionType)
 }
 
 Module::Module(Store* store, WASMParsingResult& result)
-    : Object(GET_GLOBAL_TYPE_INFO(moduleTypeInfo))
+    : StoreObject(GET_GLOBAL_TYPE_INFO(moduleTypeInfo))
     , m_store(store)
     , m_seenStartAttribute(result.m_seenStartAttribute)
     , m_version(result.m_version)
