@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdarg>
 
+#include "wabt/walrus/binary-reader-walrus-shared.h"
 #include "wabt/base-types.h"
 #include "wabt/type.h"
 #include "wabt/leb128.h"
@@ -396,10 +397,6 @@ public:
 
 protected:
     std::string m_walrusParseError;
-};
-
-enum FeatureFlagValue : uint32_t {
-    enableWebAssembly3 = 1 << 0,
 };
 
 std::string ReadWasmBinary(const std::string& filename, const uint8_t *data, size_t size, WASMBinaryReaderDelegate* delegate, const uint32_t featureFlags);
