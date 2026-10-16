@@ -33,6 +33,7 @@
 #include "runtime/Trap.h"
 #include "runtime/TypeStore.h"
 #include "parser/WASMParser.h"
+#include "wabt/walrus/binary-reader-walrus-shared.h"
 #include <memory>
 #ifdef WALRUS_API_TESTS
 #include "wabt/common.h"
@@ -304,13 +305,16 @@ struct wasm_ref_t {
         : obj(o)
     {
         ASSERT(!!o);
-        storeLifetime = Store::addAPIReference(o);
+        // Ignore i31 values
+        if (!(reinterpret_cast<uintptr_t>(o) & 1)) {
+            storeLifetime = Store::addAPIReference(o);
 
 #ifdef ENABLE_GC
-        if (!(reinterpret_cast<uintptr_t>(o) & 1) && Object::isStructOrArray(o->kind())) {
-            const_cast<GCBase*>(reinterpret_cast<const GCBase*>(o))->addRef();
-        }
+            if (Object::isStructOrArray(o->kind())) {
+                const_cast<GCBase*>(reinterpret_cast<const GCBase*>(o))->addRef();
+            }
 #endif
+        }
     }
 
     wasm_ref_t(const wasm_ref_t& other)
@@ -320,22 +324,35 @@ struct wasm_ref_t {
 
     virtual ~wasm_ref_t()
     {
-        // Store destruction already freed this object. Only the wrapper remains.
-        if (storeLifetime && !*storeLifetime) {
-            return;
-        }
+        // Ignore i31 values
+        if (!isI31()) {
+            // Store destruction already freed this object. Only the wrapper remains.
+            if (storeLifetime && !*storeLifetime) {
+                return;
+            }
 #ifdef ENABLE_GC
-        if (obj != nullptr && !(reinterpret_cast<uintptr_t>(obj) & 1) && Object::isStructOrArray(obj->kind())) {
-            const_cast<GCBase*>(reinterpret_cast<const GCBase*>(obj))->releaseRef();
-        }
+            if (Object::isStructOrArray(obj->kind())) {
+                const_cast<GCBase*>(reinterpret_cast<const GCBase*>(obj))->releaseRef();
+            }
 #endif
-        Store::removeAPIReference(obj);
+            Store::removeAPIReference(obj);
+        }
+    }
+
+    bool isI31() const
+    {
+        return isI31(obj);
     }
 
     const Object* get() const
     {
-        ASSERT(obj);
+        ASSERT(obj && !isI31());
         return obj;
+    }
+
+    static bool isI31(const Object* o)
+    {
+        return (reinterpret_cast<uintptr_t>(o) & 1) != 0;
     }
 
     const Object* obj;
@@ -526,31 +543,20 @@ struct wasm_instance_t : wasm_ref_t {
 struct wasm_trap_t : wasm_ref_t {
     wasm_trap_t(own const Trap* t, const wasm_message_t* msg)
         : wasm_ref_t(t)
-        , trap(t)
     {
         wasm_byte_vec_copy(&message, msg);
     }
 
     wasm_trap_t(own const Trap* t, const std::string& msg)
         : wasm_ref_t(t)
-        , trap(t)
     {
         // wasm_message_t is null terminated (wasm.h); callers print it as a C string.
         wasm_byte_vec_new(&message, msg.length() + 1, msg.c_str());
     }
 
-    wasm_trap_t(const wasm_trap_t& other)
-        : wasm_ref_t(other)
-        , trap(other.trap)
-    {
-        wasm_byte_vec_copy(&message, &other.message);
-    }
-
     virtual ~wasm_trap_t()
     {
         wasm_byte_vec_delete(&message);
-        // The shared trap can be freed before the base destructor runs.
-        obj = nullptr;
     }
 
     const Trap* get() const
@@ -559,7 +565,6 @@ struct wasm_trap_t : wasm_ref_t {
         return static_cast<const Trap*>(obj);
     }
 
-    std::shared_ptr<const Trap> trap;
     wasm_message_t message;
 };
 
@@ -577,12 +582,17 @@ static wasm_valkind_t FromWalrusValueType(const Value::Type& type)
         return WASM_F64;
     case Value::Type::V128:
         return WASM_V128;
+    case Value::Type::FuncRef:
     case Value::Type::NullFuncRef:
         return WASM_FUNCREF;
-    case Value::Type::NullExternRef:
+    case Value::Type::ExnRef:
+    case Value::Type::NullExnRef:
+        RELEASE_ASSERT_NOT_REACHED();
         return WASM_ANYREF;
     default:
-        RELEASE_ASSERT_NOT_REACHED();
+        // In Walrus, every reference is compatible with
+        // nullexternref except func and exception references.
+        ASSERT(Value::isRefType(type));
         return WASM_ANYREF;
     }
 }
@@ -622,7 +632,7 @@ static void FromWalrusValueTypes(const TypeVector& types, wasm_valtype_vec_t* ou
 // the function type stored in wasm_func_t.
 static own wasm_ref_t* NewWasmRef(const Object* obj)
 {
-    if (obj->isFunction()) {
+    if (!wasm_ref_t::isI31(obj) && obj->isFunction()) {
         Function* func = const_cast<Object*>(obj)->asFunction();
         return new wasm_func_t(func, new wasm_functype_t(func->functionType()));
     }
@@ -665,13 +675,14 @@ static wasm_val_t FromWalrusValue(const Value& val)
         result.kind = WASM_FUNCREF;
         result.of.ref = val.asFunction() ? NewWasmRef(val.asFunction()) : nullptr;
         break;
-    case Value::Type::ExternRef:
-    case Value::Type::NullExternRef:
-        result.kind = WASM_ANYREF;
-        result.of.ref = val.isNull() ? nullptr : NewWasmRef(val.asObject());
+    case Value::Type::ExnRef:
+    case Value::Type::NullExnRef:
+        RELEASE_ASSERT_NOT_REACHED();
         break;
     default:
-        RELEASE_ASSERT_NOT_REACHED();
+        ASSERT(Value::isRefType(val.type()));
+        result.kind = WASM_ANYREF;
+        result.of.ref = val.asReference() != nullptr ? NewWasmRef(reinterpret_cast<Object*>(val.asReference())) : nullptr;
         break;
     }
     return result;
@@ -947,7 +958,8 @@ own wasm_module_t* wasm_module_new(wasm_store_t* store, const wasm_byte_vec_t* b
 #else
     const uint32_t jitFlags = 0;
 #endif
-    auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size, jitFlags);
+    auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size,
+                                               jitFlags, wabt::FeatureFlagValue::enableWebAssembly3);
     if (!parseResult.first.hasValue()) {
         return nullptr;
     }
@@ -958,11 +970,9 @@ bool wasm_module_validate(wasm_store_t* store, const wasm_byte_vec_t* binary)
 {
     Store::CollectionScope scope;
     store->get()->requestCollection();
-    auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size);
-    if (!parseResult.first.hasValue()) {
-        return false;
-    }
-    return true;
+    auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size,
+                                               wabt::FeatureFlagValue::enableWebAssembly3);
+    return parseResult.first.hasValue();
 }
 
 void wasm_module_imports(const wasm_module_t* module, own wasm_importtype_vec_t* out)
