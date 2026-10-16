@@ -29,6 +29,8 @@ class Global : public Extern {
 public:
     static Global* createGlobal(Store* store, const Value& value, const MutableType& type);
 
+    ~Global();
+
     Value& value()
     {
         return m_value;

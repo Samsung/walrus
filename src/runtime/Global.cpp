@@ -30,6 +30,16 @@ Global::Global(const Value& value, const MutableType& type)
     , m_value(value)
     , m_type(type)
 {
+    if (m_type.ref()) {
+        TypeStore::AddRef(m_type.ref());
+    }
+}
+
+Global::~Global()
+{
+    if (m_type.ref()) {
+        TypeStore::ReleaseRef(m_type.ref()->subTypeList());
+    }
 }
 
 Global* Global::createGlobal(Store* store, const Value& value, const MutableType& type)

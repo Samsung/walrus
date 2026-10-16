@@ -25,6 +25,12 @@ Tag::Tag(const FunctionType* functionType)
     : Extern(GET_GLOBAL_TYPE_INFO(tagTypeInfo))
     , m_functionType(functionType)
 {
+    TypeStore::AddRef(functionType);
+}
+
+Tag::~Tag()
+{
+    TypeStore::ReleaseRef(m_functionType->subTypeList());
 }
 
 } // namespace Walrus

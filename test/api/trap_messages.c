@@ -39,7 +39,13 @@ static void check_message(wasm_trap_t* trap)
     check(memchr(message.data, '\0', message.size) == message.data + message.size - 1,
           "trap message includes its terminating null byte");
     wasm_byte_vec_delete(&message);
+    wasm_trap_t* copy = wasm_trap_copy(trap);
+    check(wasm_trap_same(trap, copy), "trap copies share identity");
     wasm_trap_delete(trap);
+    wasm_trap_message(copy, &message);
+    check(message.size > 1 && message.data[message.size - 1] == '\0', "copied trap owns message");
+    wasm_byte_vec_delete(&message);
+    wasm_trap_delete(copy);
 }
 
 int main(void)

@@ -351,7 +351,7 @@ private:
     Vector<ModuleFunction*> m_exprFunctions;
 };
 
-class Module : public Object {
+class Module : public StoreObject {
     friend class wabt::WASMBinaryReader;
     friend class wabt::WASMComponentBinaryReader;
     friend class JITCompiler;

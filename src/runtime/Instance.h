@@ -89,7 +89,7 @@ private:
     size_t m_size;
 };
 
-class Instance : public Object {
+class Instance : public StoreObject {
     friend class Module;
     friend class Interpreter;
     friend class JITFieldAccessor;
@@ -155,6 +155,9 @@ public:
 
     const Function* const* functions() { return m_functions; }
 
+    void* hostInfo() const { return m_hostInfo; }
+    void setHostInfo(void* info) { m_hostInfo = info; }
+
 private:
     Instance(Module* module);
     ~Instance();
@@ -170,6 +173,7 @@ private:
     Tag** m_tags;
     DataSegment* m_dataSegments;
     ElementSegment* m_elementSegments;
+    void* m_hostInfo = nullptr;
 };
 } // namespace Walrus
 

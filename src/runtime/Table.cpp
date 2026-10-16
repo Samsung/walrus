@@ -45,6 +45,9 @@ Table::Table(Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, v
     , m_size(initialSize)
     , m_maximumSize(maximumSize)
 {
+    if (m_type.ref()) {
+        TypeStore::AddRef(m_type.ref());
+    }
     if (initialSize == 0) {
         m_elements = nullptr;
         return;
@@ -65,6 +68,9 @@ Table::Table(Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, v
 
 Table::~Table()
 {
+    if (m_type.ref()) {
+        TypeStore::ReleaseRef(m_type.ref()->subTypeList());
+    }
 #ifdef ENABLE_GC
     GC_FREE(m_elements);
 #else

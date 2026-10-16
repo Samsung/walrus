@@ -21,6 +21,7 @@
 
 namespace Walrus {
 
+class Store;
 class Module;
 class Instance;
 class Function;
@@ -184,8 +185,28 @@ private:
     const CompositeType** m_typeInfo;
 };
 
+// Store-owned objects are rooted by C API wrappers and traced at API safe points.
+class StoreObject : public Object {
+public:
+    Store* ownerStore() const { return m_ownerStore; }
+    void setOwnerStore(Store* store) { m_ownerStore = store; }
+    mutable size_t m_apiRefCount = 0;
+    bool m_marked = false;
+    // Position in the owning Store vector, for constant-time removal.
+    size_t m_storeIndex = 0;
+
+protected:
+    StoreObject(const CompositeType** typeInfo)
+        : Object(typeInfo)
+    {
+    }
+
+private:
+    Store* m_ownerStore = nullptr;
+};
+
 // Extern objects could be shared with other Module
-class Extern : public Object {
+class Extern : public StoreObject {
 public:
 #ifndef NDEBUG
     // count the total number of created Extern objects
@@ -202,7 +223,7 @@ public:
 
 protected:
     Extern(const CompositeType** typeInfo)
-        : Object(typeInfo)
+        : StoreObject(typeInfo)
     {
 #ifndef NDEBUG
         g_externCount++;
