@@ -86,6 +86,8 @@ Store::Store(Engine* engine)
 
 Store::~Store()
 {
+    // Invalidate wrappers before freeing objects or invoking GC finalizers.
+    *m_apiLifetime = false;
     if (m_apiCollection) {
         auto it = std::find(s_apiStores.begin(), s_apiStores.end(), this);
         ASSERT(it != s_apiStores.end());
@@ -234,10 +236,11 @@ static bool isGCReference(const Object* object)
             || object->kind() == Object::ExceptionKind);
 }
 
-void Store::addAPIReference(const Object* object)
+std::shared_ptr<bool> Store::addAPIReference(const Object* object)
 {
     if (StoreObject* owned = apiStoreObject(object)) {
         ++owned->m_apiRefCount;
+        return owned->ownerStore()->m_apiLifetime;
     } else if (isGCReference(object)) {
         auto& reference = s_apiGCReferences[object];
 #ifdef ENABLE_GC
@@ -255,6 +258,7 @@ void Store::addAPIReference(const Object* object)
         }
         ++reference.count;
     }
+    return nullptr;
 }
 
 void Store::removeAPIReference(const Object* object)

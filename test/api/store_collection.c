@@ -503,6 +503,31 @@ static void benchmark(wasm_store_t* store)
     wasm_globaltype_delete(gt);
 }
 
+static void delete_after_store(wasm_engine_t* engine)
+{
+    wasm_store_t* store = wasm_store_new(engine);
+    wasm_module_t* module = compile(store, module_bytes, sizeof(module_bytes));
+    wasm_extern_vec_t imports = WASM_EMPTY_VEC;
+    wasm_trap_t* trap = NULL;
+    wasm_instance_t* instance = wasm_instance_new(store, module, &imports, &trap);
+    check(instance && !trap, "instantiate before store deletion");
+    wasm_extern_vec_t exports;
+    wasm_instance_exports(instance, &exports);
+    wasm_func_t* function = wasm_func_copy(wasm_extern_as_func(exports.data[1]));
+    wasm_limits_t limits = { 1, 1 };
+    wasm_memorytype_t* type = wasm_memorytype_new(&limits);
+    wasm_memory_t* memory = wasm_memory_new(store, type);
+    wasm_memorytype_delete(type);
+
+    /* Embedders may finalize wrappers after destroying the store. */
+    wasm_store_delete(store);
+    wasm_func_delete(function);
+    wasm_extern_vec_delete(&exports);
+    wasm_memory_delete(memory);
+    wasm_instance_delete(instance);
+    wasm_module_delete(module);
+}
+
 int main(int argc, char** argv)
 {
     wasm_engine_t* engine = wasm_engine_new();
@@ -525,6 +550,7 @@ int main(int argc, char** argv)
     }
     check(wasm_test_store_object_count(store) == 0, "empty store");
     wasm_store_delete(store);
+    delete_after_store(engine);
     wasm_engine_delete(engine);
     puts("store collection: PASS");
     return 0;
