@@ -78,6 +78,8 @@ uint32_t Instruction::resultCount()
 uint32_t Instruction::valueTypeToOperandType(Value::Type type)
 {
     switch (type) {
+    case Value::I8:
+    case Value::I16:
     case Value::I32:
         return Instruction::Int32Operand;
     case Value::I64:
