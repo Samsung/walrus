@@ -141,7 +141,7 @@ jobs:
     steps:
       # Default/base branch only (no `ref:`). Never check out the PR head here.
       - name: Checkout base branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 1
           persist-credentials: false
@@ -237,8 +237,12 @@ jobs:
             your earlier comments.
 
             How to report:
-            You cannot post to GitHub yourself. Return your review as structured output;
-            a later step posts it.
+            You cannot post to GitHub yourself. A later step posts your review.
+            You MUST deliver the review by calling the StructuredOutput tool exactly once,
+            as your final action. A plain text reply is discarded and the whole review fails,
+            so never end your turn with text instead of the StructuredOutput call. Even when
+            there is nothing to report, call it with an empty `comments` array and a short
+            `summary`.
             - comments: one entry per concrete, line-specific problem.
               path: the file path as it appears in pr.diff (e.g. src/runtime/Module.cpp).
               line: the line number in the NEW version of the file, on a line that is
@@ -247,8 +251,8 @@ jobs:
               body: the comment in GitHub Markdown.
             - summary: one GitHub Markdown comment listing the findings by severity. If there
               are no significant issues, say so in one or two sentences.
-            - Your number of turns is limited: return the structured output before running
-              out, rather than exploring further.
+            - Your number of turns is limited: call StructuredOutput before running out,
+              rather than exploring further.
             - Write everything in English.
 
           claude_args: |
