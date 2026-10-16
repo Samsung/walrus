@@ -13,7 +13,7 @@ jobs:
   check-cmake-isolation:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -28,7 +28,7 @@ jobs:
   check-tidy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -47,7 +47,7 @@ jobs:
         switch: [--jit, --jit-no-reg-alloc, ""]
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -84,7 +84,7 @@ jobs:
         mode: [debug, release]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -137,7 +137,7 @@ jobs:
           - ""
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -179,7 +179,7 @@ jobs:
           - ""
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -199,7 +199,7 @@ jobs:
   build-on-x64-with-perf:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -225,7 +225,7 @@ jobs:
           - ""
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -298,7 +298,7 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install compiler
@@ -350,7 +350,7 @@ jobs:
         run: |
           git config --global core.autocrlf input
           git config --global core.eol lf
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - uses: lukka/get-cmake@latest
@@ -359,7 +359,7 @@ jobs:
       - uses: GuillaumeFalourd/setup-windows10-sdk-action@v2
         with:
           sdk-version: 26100
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: Download and Install Visual C++ Redistributable
@@ -405,7 +405,7 @@ jobs:
         arch: [x64, x86]
         switch: [--jit, --jit-no-reg-alloc, ""]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -431,7 +431,7 @@ jobs:
           - x86
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -460,7 +460,7 @@ jobs:
           - x86
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -486,7 +486,7 @@ jobs:
       matrix:
         mode: [debug, release]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
@@ -514,7 +514,7 @@ jobs:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
       - name: Install Packages
