@@ -24,6 +24,7 @@ import re
 import fnmatch
 import platform
 import tarfile
+import asyncio
 
 from argparse import ArgumentParser
 from difflib import unified_diff
@@ -62,6 +63,59 @@ class runner(object):
         if self.default:
             DEFAULT_RUNNERS.append(self.suite)
         return fn
+
+
+def _run_network_tests(engine, files, is_fail, mapdir="./", args=None):
+    fails = 0
+    if (jit or jit_no_reg_alloc) and ('udp_receive' in JIT_EXCLUDE_FILES or
+                                      'udp_send' in JIT_EXCLUDE_FILES):
+        return 2
+    subprocess_args = qemu + [engine, "--mapdirs", mapdir, "/var"]
+    if jit or jit_no_reg_alloc:
+        subprocess_args.append("--jit")
+    if jit_no_reg_alloc:
+        subprocess_args.append("--jit-no-reg-alloc")
+    if web_assembly3:
+        subprocess_args.append("--enable-web-assembly3")
+
+    try:
+
+        async def network(receive_args, send_args):
+            receive = await asyncio.create_subprocess_exec(
+                *receive_args, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT)
+            while True:
+                line = await receive.stdout.readline()
+                if "listening on 127.0.0.1:12345" in line.decode():
+                    break
+
+            send = await asyncio.create_subprocess_exec(
+                *send_args, stdout=PIPE, stderr=PIPE)
+            await send.wait()
+            await receive.wait()
+            return (receive.returncode, send.returncode)
+
+        returncodes = asyncio.run(
+            network(subprocess_args + [files[1]],
+                    subprocess_args + [files[0]]))
+        if returncodes[0] == returncodes[1] and returncodes[0] == 0:
+            returncode = 0
+        else:
+            returncode = 1
+    except CalledProcessError as e:
+        returncode = e.returncode
+
+    if is_fail and returncode or not is_fail and not returncode:
+        print('%sOK: %s%s' % (COLOR_GREEN, files[1], COLOR_RESET))
+        print('%sOK: %s%s' % (COLOR_GREEN, files[0], COLOR_RESET))
+    else:
+        print('%sFAIL(%d): %s%s' %
+              (COLOR_RED, returncode, files[0], COLOR_RESET))
+        print('%sFAIL(%d): %s%s' %
+              (COLOR_RED, returncode, files[1], COLOR_RESET))
+        fails += 2
+
+    return fails
 
 
 def _run_wast_tests(engine, files, is_fail, mapdir="./", args=None):
@@ -178,6 +232,8 @@ def run_wasi_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi', 'preview2')
     wasi_clang_path = "wasm32-wasip2-clang++"
     system = ""
+    can_compile_sources = True
+    xpass_result = 0
 
     if os.system(wasi_clang_path + " --version >/dev/null") == 0:
         print("wasm32-wasip2-clang++ was found on the system")
@@ -189,41 +245,62 @@ def run_wasi_tests(engine):
         elif sys.platform == 'darwin':
             system = 'macos'
         else:
-            print("Could not identify system: ",
-                  sys.platform + ". Exiting now.")
-            return
+            print("Could not identify system: " + sys.platform)
+            can_compile_sources = False
 
-    folder_name = "wasi-sdk-32.0-" + platform.machine() + "-" + system
-    if system != "" and not os.path.exists(folder_name):
-        print("downloading wasi-sdk for compilation...")
-        url = (
-            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-32/"
-            + folder_name + ".tar.gz")
-        try:
-            urlretrieve(url, join(PROJECT_SOURCE_DIR, folder_name + ".tar.gz"))
-        except:
-            print("Error happened while downloading the wasi-sdk")
-            return
+    arch = platform.machine().lower()
+    if arch not in ['arm64', 'riscv64', 'x86_64', 'amd64']:
+        print("Wasi compiler incompatible with cpu architecture.")
+        can_compile_sources = False
+    if arch == 'amd64':
+        arch = 'x86_64'
+    
+    if(can_compile_sources):
+        folder_name = "wasi-sdk-32.0-" + arch + "-" + system
+        if system != "" and not os.path.exists(folder_name):
+            print("downloading wasi-sdk for compilation...")
+            url = (
+                "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-32/"
+                + folder_name + ".tar.gz")
+            try:
+                urlretrieve(url, join(PROJECT_SOURCE_DIR, folder_name + ".tar.gz"))
+            except:
+                print("Error happened while downloading the wasi-sdk")
+                return
 
-        with tarfile.open(folder_name + ".tar.gz") as file:
-            file.extractall("./")
-        wasi_clang_path = folder_name + "/bin/wasm32-wasip2-clang++"
+            with tarfile.open(folder_name + ".tar.gz") as file:
+                file.extractall("./")
+            wasi_clang_path = folder_name + "/bin/wasm32-wasip2-clang++"
+        else:
+            print("using wasm32-wasip2-clang++ found in current directory")
+            wasi_clang_path = folder_name + "/bin/wasm32-wasip2-clang++"
+
+        cpp_sources = os.listdir(join(TEST_DIR, 'sources'))
+        flags = "-fno-exceptions"
+        print("compiling test sources...")
+        if not os.path.exists(join(TEST_DIR, "wasm")):
+            os.mkdir(join(TEST_DIR, "wasm"))
+        for source in cpp_sources:
+            os.system(wasi_clang_path + "  " + join(TEST_DIR, 'sources', source) +
+                      " " + flags + "  " + " -o " +
+                      join(TEST_DIR, "wasm", source + ".wasm"))
+
+        print('Running wasi tests:')
+        xpass = glob(join(TEST_DIR, "wasm", '*.wasm')) + glob(
+            join(TEST_DIR, '*.wast'))
+
+        network_test = [x for x in xpass if ('udp' in x)]
+        xpass_result += _run_network_tests(
+            engine, network_test, False, mapdir="./test/wasi/preview2", args=[
+                "/var/temp.txt", "Hello", "World!",
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit"
+            ])
     else:
-        print("using wasm32-wasip2-clang++ found in current directory")
+        xpass = glob(join(TEST_DIR, "wasm", '*.wasm')) + glob(
+            join(TEST_DIR, '*.wast'))
+        print("Could not compile test sources, running existing wasm tests only.")
 
-    cpp_sources = os.listdir(join(TEST_DIR, 'sources'))
-    flags = "-fno-exceptions"
-    print("compiling test sources...")
-    if not os.path.exists(join(TEST_DIR, "wasm")):
-        os.mkdir(join(TEST_DIR, "wasm"))
-    for source in cpp_sources:
-        os.system(wasi_clang_path + "  " + join(TEST_DIR, 'sources', source) +
-                  " " + flags + "  " + " -o " +
-                  join(TEST_DIR, "wasm", source + ".wasm"))
-
-    print('Running wasi tests:')
-    xpass = glob(join(TEST_DIR, "wasm", '*.wasm')) + glob(
-        join(TEST_DIR, '*.wast'))
+    xpass = [x for x in xpass if not ('udp' in x)]
     xpass_result = _run_wast_tests(
         engine, xpass, False, mapdir="./test/wasi/preview2", args=[
             "/var/temp.txt", "Hello", "World!",
@@ -240,7 +317,7 @@ def run_wasi_tests(engine):
         file.truncate(0)
 
     if fail_total > 0:
-        raise Exception("basic wasi tests failed")
+        raise Exception("wasi preview2 tests failed")
 
 
 @runner('jit', default=True)

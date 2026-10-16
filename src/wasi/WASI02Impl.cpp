@@ -25,7 +25,35 @@
 #include "wasi/WasiNN.h"
 #endif
 
+#define UDP_STREAM_RECEIVE_MSG_SIZE 18
+
 namespace Walrus {
+
+void uvAllocNetworkBuffer(uv_handle_t* handle, size_t suggested, uv_buf_t* buf)
+{
+    ComponentResourceWasiSocket* self = reinterpret_cast<ComponentResourceWasiSocket*>(handle->data);
+    self->messages().push_back(ComponentResourceWasiSocket::NetworkMessage(suggested));
+    buf->base = self->messages().back().m_messageBuffer.data();
+    buf->len = suggested;
+}
+
+void uvOnNetworkRead(uv_udp_t* req, ssize_t nread, const uv_buf_t* buf, const struct sockaddr* addr, unsigned flags)
+{
+    ComponentResourceWasiSocket* self = reinterpret_cast<ComponentResourceWasiSocket*>(req->data);
+    if (buf == nullptr || nread <= 0) {
+        return;
+    }
+
+    RELEASE_ASSERT(nread <= 65535);
+    std::memcpy(self->messages().back().m_messageBuffer.data(), buf->base, nread);
+    self->messages().back().m_nread = nread;
+}
+
+void uvOnNetworkSend(uv_udp_send_t* req, int status)
+{
+    ComponentResourceWasiSocket* self = reinterpret_cast<ComponentResourceWasiSocket*>(req->data);
+    self->setSendStatus(status);
+}
 
 static void throwNoMemory(ExecutionState& state)
 {
@@ -49,6 +77,22 @@ static inline ComponentResourceWasiDirectory* asDirectory(ComponentHandle* handl
 {
     ASSERT(handle->kind() == ComponentHandle::ResourceWasiDirectoryKind);
     return reinterpret_cast<ComponentResourceWasiDirectory*>(handle);
+}
+
+static inline ComponentResourceWasiSocket* asSocket(ComponentHandle* handle)
+{
+    if (handle->kind() == ComponentHandle::ResourceWasiSocketKind) {
+        return reinterpret_cast<ComponentResourceWasiSocket*>(handle);
+    }
+
+    ComponentHandleRef* handleRef = reinterpret_cast<ComponentHandleRef*>(handle);
+    return reinterpret_cast<ComponentResourceWasiSocket*>((handleRef)->ptr());
+}
+
+static inline ComponentResourceWasiNetwork* asNetwork(ComponentHandle* handle)
+{
+    ASSERT(handle->kind() == ComponentHandle::ResourceWasiNetworkKind);
+    return reinterpret_cast<ComponentResourceWasiNetwork*>(handle);
 }
 
 static uvwasi_errno_t resolvePathByComponents(ComponentResourceWasiDirectory* directory, const std::string& guestPath, uvwasi_lookupflags_t pathFlags, std::string& resolvedPath)
@@ -894,6 +938,245 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         }
         break;
     }
+    case LiftedWasiFunction::socketsUdpCreateSocket02: {
+        IpAddressFamily family = static_cast<IpAddressFamily>(argv[0].asI32());
+        uint32_t offset = argv[1].asI32();
+
+        if ((family != IpAddressFamily::ipV4) && (family != IpAddressFamily::ipV6)) {
+            options->memory()->store(state, offset, 0, resultError);
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::invalidArgument);
+        }
+
+        ComponentResource* resource = new ComponentResourceWasiSocket(instance->type()->getType(2)->asTypeResource());
+        int res = options->instance()->appendHandle(state, resource);
+        options->memory()->store(state, offset, 0, resultOk);
+        options->memory()->store(state, offset, 4, res);
+
+        break;
+    }
+    case Walrus::LiftedWasiFunction::socketsInstanceNetwork02: {
+        ComponentResource* resource = new ComponentResourceWasiNetwork(instance->type()->getType(0)->asTypeResource(),
+                                                                       IpAddressFamily::ipV4);
+        result[0] = Value(static_cast<int32_t>(options->instance()->appendHandle(state, resource)));
+
+        break;
+    }
+    case Walrus::LiftedWasiFunction::socketsUdpStartBind02: {
+        uint32_t selfIdx = argv[0].asI32();
+        uint32_t networkIdx = argv[1].asI32();
+        uint32_t ipAddressFamily = argv[2].asI32();
+        uint32_t offset = argv[14].asI32();
+
+        ComponentHandle* selfHandle = options->instance()->getHandle(state, selfIdx);
+        if (selfHandle->kind() != ComponentHandle::ResourceWasiSocketKind) {
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::invalidArgument);
+            options->memory()->buffer()[offset] = resultError;
+        }
+        ComponentResourceWasiSocket* self = asSocket(selfHandle);
+
+        ComponentHandle* networkHandle = options->instance()->getHandle(state, networkIdx);
+        if (networkHandle->kind() != ComponentHandle::ResourceWasiNetworkKind) {
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::invalidArgument);
+            options->memory()->buffer()[offset] = resultError;
+        }
+        self->setNetwork(asNetwork(networkHandle));
+
+        std::string ip = "";
+        uint16_t port = 0;
+        int bindResult = 0;
+        uv_loop_t* loop = uv_default_loop();
+        uv_udp_init(loop, self->getUvUdp());
+        IpAddressFamily family = static_cast<IpAddressFamily>(ipAddressFamily);
+        if (family == IpAddressFamily::ipV4) {
+            ip = std::string(std::to_string(argv[4].asI32()) + "." + std::to_string(argv[5].asI32()) + "." + std::to_string(argv[6].asI32()) + "." + std::to_string(argv[7].asI32()));
+            port = argv[3].asI32();
+
+            struct sockaddr_in addr;
+            uv_ip4_addr(ip.c_str(), port, &addr);
+            bindResult = uv_udp_bind(self->getUvUdp(), reinterpret_cast<struct sockaddr*>(&addr), 0);
+
+            self->network()->ipv4()[0] = argv[4].asI32();
+            self->network()->ipv4()[1] = argv[5].asI32();
+            self->network()->ipv4()[2] = argv[6].asI32();
+            self->network()->ipv4()[3] = argv[7].asI32();
+        } else {
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::notSupported);
+            options->memory()->buffer()[offset] = resultError;
+        }
+
+        if (bindResult < 0) {
+            options->memory()->buffer()[offset] = resultError;
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::addressNotBindable);
+            self->setBinded(false);
+            break;
+        }
+
+        uv_run(loop, UV_RUN_ONCE);
+        self->setBinded(true);
+        self->network()->setPort(port);
+
+        options->memory()->buffer()[offset] = resultOk;
+        break;
+    }
+    case LiftedWasiFunction::socketsUdpFinishBind02: {
+        uint32_t selfIdx = argv[0].asI32();
+        uint32_t offset = argv[1].asI32();
+
+        ComponentHandle* selfHandle = options->instance()->getHandle(state, selfIdx);
+        if (selfHandle->kind() != ComponentHandle::ResourceWasiSocketKind) {
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::invalidArgument);
+            options->memory()->buffer()[offset] = resultError;
+        }
+        ComponentResourceWasiSocket* self = asSocket(selfHandle);
+
+        if (!self->binded()) {
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::addressNotBindable);
+            options->memory()->buffer()[offset] = resultError;
+            break;
+        }
+
+        options->memory()->buffer()[offset] = resultOk;
+        break;
+    }
+    case LiftedWasiFunction::socketsUdpStream02: {
+        int32_t selfIdx = argv[0].asI32();
+        std::string ipV4 = std::string(std::to_string(argv[1].asI32()) + "." + std::to_string(argv[2].asI32()) + "." + std::to_string(argv[3].asI32()) + "." + std::to_string(argv[4].asI32()));
+        uint32_t offset = argv[14].asI32();
+
+        ComponentHandle* selfHandle = options->instance()->getHandle(state, selfIdx);
+        ComponentResource* resource = asSocket(selfHandle);
+
+        ComponentHandleRef* incomingDatagram = new ComponentHandleRef(resource, resource->kind());
+        ComponentHandleRef* outgointDatagram = new ComponentHandleRef(resource, resource->kind());
+
+        options->memory()->buffer()[offset] = resultOk;
+        options->memory()->store(state, offset, 4, options->instance()->appendHandle(state, incomingDatagram));
+        options->memory()->store(state, offset, 8, options->instance()->appendHandle(state, outgointDatagram));
+
+        break;
+    }
+    case LiftedWasiFunction::socketsIncomingDatagramStreamReceive02: {
+        uint32_t selfIdx = argv[0].asI32();
+        uint32_t max = argv[1].asI64();
+        uint32_t offset = argv[2].asI32();
+
+        if (max == 0) {
+            options->memory()->buffer()[offset] = resultOk;
+            options->memory()->store(state, offset, 4, 0);
+            options->memory()->store(state, offset, 8, 0);
+        }
+
+        ComponentHandle* selfHandle = options->instance()->getHandle(state, selfIdx);
+        if (selfHandle->kind() != ComponentHandle::ResourceWasiSocketKind) {
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::invalidArgument);
+            options->memory()->buffer()[offset] = resultError;
+        }
+        ComponentResourceWasiSocket* self = asSocket(selfHandle);
+        std::vector<ComponentResourceWasiSocket::NetworkMessage>& messages = self->messages();
+
+        uint32_t listLen = 0;
+        do {
+            uv_loop_t* loop = uv_default_loop();
+            self->getUvUdp()->data = self;
+            uv_udp_recv_start(self->getUvUdp(), uvAllocNetworkBuffer, uvOnNetworkRead);
+            uv_run(loop, UV_RUN_ONCE);
+        } while (messages.back().m_nread != 0);
+        messages.pop_back();
+
+        uint32_t start = options->memoryMalloc32(state, 4, self->messages().size() * UDP_STREAM_RECEIVE_MSG_SIZE);
+        options->memory()->store(state, offset, 0, resultOk);
+        options->memory()->store(state, offset, 4, start);
+        options->memory()->store(state, offset, 8, self->messages().size());
+
+
+        for (uint32_t i = 0; i < messages.size() && i < max; i++) {
+            uint32_t messageStart = options->memoryMalloc32(state, 1, messages[i].m_nread);
+            std::memcpy(options->memory()->buffer() + messageStart, messages[i].m_messageBuffer.data(), messages[i].m_nread);
+
+            options->memory()->store(state, start, 0, messageStart);
+            options->memory()->store(state, start, 4, messages[i].m_nread);
+            options->memory()->store(state, start, 8, self->network()->ipAddressFamily());
+            options->memory()->store(state, start, 9, 1);
+            options->memory()->store(state, start, 10, 0);
+            options->memory()->store(state, start, 11, 0);
+            options->memory()->store(state, start, 12, self->network()->port());
+            options->memory()->store(state, start, 14, self->network()->ipv4()[0]);
+            options->memory()->store(state, start, 15, self->network()->ipv4()[1]);
+            options->memory()->store(state, start, 16, self->network()->ipv4()[2]);
+            options->memory()->store(state, start, 17, self->network()->ipv4()[3]);
+            start += UDP_STREAM_RECEIVE_MSG_SIZE;
+        }
+
+        break;
+    }
+    case Walrus::LiftedWasiFunction::socketsOutgoingDatagramStreamCheckSend02: {
+        uint32_t selfIdx = argv[0].asI32();
+        uint32_t offset = argv[1].asI32();
+
+        ComponentHandle* handle = options->instance()->getHandle(state, selfIdx);
+        ComponentResourceWasiSocket* self = asSocket(handle);
+        self->setCheckSend(true);
+
+        options->memory()->store(state, offset, 0, resultOk);
+        options->memory()->store(state, offset, 8, (uint64_t)1);
+        break;
+    }
+    case Walrus::LiftedWasiFunction::socketsOutgoingDatagramStreamSend02: {
+        uint32_t selfIdx = argv[0].asI32();
+        uint32_t datagramsOffset = argv[1].asI32();
+        uint32_t offset = argv[2].asI32();
+
+        ComponentHandle* handle = options->instance()->getHandle(state, selfIdx);
+        ComponentResourceWasiSocket* self = asSocket(handle);
+
+        if (!self->checkSendCalled()) {
+            options->memory()->store(state, offset, 0, resultError);
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::invalidState);
+            break;
+        }
+
+        uint32_t listStart = 0;
+        uint32_t listLen = 0;
+        options->memory()->load(state, datagramsOffset, &listStart);
+        options->memory()->load(state, datagramsOffset + 4, &listLen);
+
+        if (listLen < 1) {
+            options->memory()->store(state, offset, 0, resultOk);
+            options->memory()->store(state, offset, 4, 0);
+            break;
+        }
+
+        char* bufferPtr = reinterpret_cast<char*>(options->memory()->buffer() + listStart);
+        uv_buf_t buffer = uv_buf_init(bufferPtr, std::strlen(bufferPtr));
+
+        uv_udp_send_t req;
+        req.data = self;
+        uv_udp_init(uv_default_loop(), self->getUvUdp());
+        if (self->network()->ipAddressFamily() == IpAddressFamily::ipV4) {
+            if (self->binded()) {
+                struct sockaddr_in addr;
+                uv_ip4_addr("127.0.0.1", 12345, &addr);
+                uv_udp_send(&req, self->getUvUdp(), &buffer, listLen, reinterpret_cast<struct sockaddr*>(&addr), uvOnNetworkSend);
+            } else {
+                struct sockaddr_in addr;
+                uint8_t* ipArray = self->network()->ipv4();
+                std::string ip = std::string(std::to_string(ipArray[0]) + "." + std::to_string(ipArray[1]) + "." + std::to_string(ipArray[2]) + "." + std::to_string(ipArray[3]));
+                uv_ip4_addr(ip.c_str(), self->network()->port(), &addr);
+                uv_udp_send(&req, self->getUvUdp(), &buffer, listLen, reinterpret_cast<struct sockaddr*>(&addr), uvOnNetworkSend);
+            }
+        }
+        uv_run(uv_default_loop(), UV_RUN_ONCE);
+
+        if (self->sendStatus() < 0 || self->sendStatus() == INT32_MAX) {
+            options->memory()->store(state, offset, 0, resultError);
+            options->memory()->store(state, offset, 4, NetworkErrorCodes::unknown);
+            break;
+        }
+
+        options->memory()->store(state, offset, 0, resultOk);
+        options->memory()->store(state, offset, 8, (uint64_t)1);
+        break;
+    }
 #if ENABLE_WASI_NN
     case LiftedWasiFunction::neuralNetworkGraphInitExectionContext02: {
         WasiNN::InitExecutionContext(state, argv, result, instance, options);
@@ -942,6 +1225,9 @@ bool dropWasiResource(ExecutionState& state, ComponentHandle* handle)
     case ComponentHandle::ResourceWasiTerminalKind:
     case ComponentHandle::ResourceWasiFileKind:
     case ComponentHandle::ResourceWasiDirectoryKind:
+    case ComponentHandle::ResourceWasiNetworkKind:
+    case ComponentHandle::ResourceWasiSocketKind:
+    case ComponentHandle::ResourceRefKind:
         break;
 #if ENABLE_WASI_NN
     case Walrus::ComponentHandle::ResourceWasiNNGraph:
@@ -958,4 +1244,5 @@ bool dropWasiResource(ExecutionState& state, ComponentHandle* handle)
 
 } // namespace Walrus
 
+#undef UDP_STREAM_RECEIVE_MSG_SIZE
 #endif
