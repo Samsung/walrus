@@ -25,6 +25,7 @@ import fnmatch
 import platform
 import tarfile
 import socket
+import asyncio
 
 from argparse import ArgumentParser
 from difflib import unified_diff
@@ -63,6 +64,66 @@ class runner(object):
         if self.default:
             DEFAULT_RUNNERS.append(self.suite)
         return fn
+
+
+def _run_network_tests(engine, files, is_fail, mapdir="./", args=None):
+    fails = 0
+    if (jit or jit_no_reg_alloc) and ('udp_receive' in JIT_EXCLUDE_FILES or
+                                      'udp_send' in JIT_EXCLUDE_FILES):
+        return 2
+    subprocess_args = qemu + [engine, "--mapdirs", mapdir, "/var"]
+    if jit or jit_no_reg_alloc:
+        subprocess_args.append("--jit")
+    if jit_no_reg_alloc:
+        subprocess_args.append("--jit-no-reg-alloc")
+    if web_assembly3:
+        subprocess_args.append("--enable-web-assembly3")
+
+    try:
+
+        async def network(receive_args, send_args):
+            readline_limit = 0
+            receive = await asyncio.create_subprocess_exec(
+                *receive_args, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT)
+            while True:
+                if readline_limit >= 10000:
+                    return (1, 1)
+                line = await receive.stdout.readline()
+                if "listening on 127.0.0.1:12345" in line.decode():
+                    break
+                readline_limit += 1
+
+            send = await asyncio.create_subprocess_exec(
+                *send_args, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT)
+            await send.wait()
+            await receive.wait()
+            return (receive.returncode, send.returncode)
+
+        receive_file = [x for x in files if ("receive" in x)]
+        send_file = [x for x in files if ("send" in x)]
+        returncodes = asyncio.run(
+            network(subprocess_args + receive_file,
+                    subprocess_args + send_file))
+        if returncodes[0] == returncodes[1] and returncodes[0] == 0:
+            returncode = 0
+        else:
+            returncode = 1
+    except CalledProcessError as e:
+        returncode = e.returncode
+
+    if is_fail and returncode or not is_fail and not returncode:
+        print('%sOK: %s%s' % (COLOR_GREEN, files[1], COLOR_RESET))
+        print('%sOK: %s%s' % (COLOR_GREEN, files[0], COLOR_RESET))
+    else:
+        print('%sFAIL(%d): %s%s' %
+              (COLOR_RED, returncode, files[0], COLOR_RESET))
+        print('%sFAIL(%d): %s%s' %
+              (COLOR_RED, returncode, files[1], COLOR_RESET))
+        fails += 2
+
+    return fails
 
 
 def _run_wast_tests(engine, files, is_fail, mapdir="./", args=None):
@@ -244,11 +305,24 @@ def run_wasi_tests(engine):
     print('Running wasi preview2 tests:')
     xpass = glob(join(TEST_DIR, "wasm", '*.wasm')) + glob(
         join(TEST_DIR, '*.wast'))
+
     xpass_result = _run_wast_tests(
-        engine, xpass, False, mapdir="./test/wasi/preview2", args=[
+        engine, [x for x in xpass if not ('udp' in x)], False,
+        mapdir="./test/wasi/preview2", args=[
             "/var/temp.txt", "Hello", "World!",
             "Lorem ipsum dolor sit amet, consectetur adipiscing elit"
         ])
+
+    network_tests = [x for x in xpass if ('udp' in x)]
+    if network_tests:
+        xpass_result += _run_network_tests(
+            engine, network_tests, False, mapdir="./test/wasi/preview2", args=[
+                "/var/temp.txt", "Hello", "World!",
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit"
+            ])
+    else:
+        xpass = [x for x in xpass if not ('udp' in x)]
+
     tests_total = len(xpass)
     fail_total = xpass_result
     print('TOTAL: %d' % (tests_total))
