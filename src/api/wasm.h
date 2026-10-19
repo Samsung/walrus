@@ -249,6 +249,15 @@ WASM_API_EXTERN own wasm_memorytype_t* wasm_memorytype_new(const wasm_limits_t*)
 WASM_API_EXTERN const wasm_limits_t* wasm_memorytype_limits(const wasm_memorytype_t*);
 
 
+// Tag Types
+
+WASM_DECLARE_TYPE(tagtype)
+
+WASM_API_EXTERN own wasm_tagtype_t* wasm_tagtype_new(own wasm_functype_t*);
+
+WASM_API_EXTERN const wasm_functype_t* wasm_tagtype_type(const wasm_tagtype_t*);
+
+
 // Extern Types
 
 WASM_DECLARE_TYPE(externtype)
@@ -259,6 +268,7 @@ enum wasm_externkind_enum {
   WASM_EXTERN_GLOBAL,
   WASM_EXTERN_TABLE,
   WASM_EXTERN_MEMORY,
+  WASM_EXTERN_TAG,
 };
 
 WASM_API_EXTERN wasm_externkind_t wasm_externtype_kind(const wasm_externtype_t*);
@@ -267,21 +277,25 @@ WASM_API_EXTERN wasm_externtype_t* wasm_functype_as_externtype(wasm_functype_t*)
 WASM_API_EXTERN wasm_externtype_t* wasm_globaltype_as_externtype(wasm_globaltype_t*);
 WASM_API_EXTERN wasm_externtype_t* wasm_tabletype_as_externtype(wasm_tabletype_t*);
 WASM_API_EXTERN wasm_externtype_t* wasm_memorytype_as_externtype(wasm_memorytype_t*);
+WASM_API_EXTERN wasm_externtype_t* wasm_tagtype_as_externtype(wasm_tagtype_t*);
 
 WASM_API_EXTERN wasm_functype_t* wasm_externtype_as_functype(wasm_externtype_t*);
 WASM_API_EXTERN wasm_globaltype_t* wasm_externtype_as_globaltype(wasm_externtype_t*);
 WASM_API_EXTERN wasm_tabletype_t* wasm_externtype_as_tabletype(wasm_externtype_t*);
 WASM_API_EXTERN wasm_memorytype_t* wasm_externtype_as_memorytype(wasm_externtype_t*);
+WASM_API_EXTERN wasm_tagtype_t* wasm_externtype_as_tagtype(wasm_externtype_t*);
 
 WASM_API_EXTERN const wasm_externtype_t* wasm_functype_as_externtype_const(const wasm_functype_t*);
 WASM_API_EXTERN const wasm_externtype_t* wasm_globaltype_as_externtype_const(const wasm_globaltype_t*);
 WASM_API_EXTERN const wasm_externtype_t* wasm_tabletype_as_externtype_const(const wasm_tabletype_t*);
 WASM_API_EXTERN const wasm_externtype_t* wasm_memorytype_as_externtype_const(const wasm_memorytype_t*);
+WASM_API_EXTERN const wasm_externtype_t* wasm_tagtype_as_externtype_const(const wasm_tagtype_t*);
 
 WASM_API_EXTERN const wasm_functype_t* wasm_externtype_as_functype_const(const wasm_externtype_t*);
 WASM_API_EXTERN const wasm_globaltype_t* wasm_externtype_as_globaltype_const(const wasm_externtype_t*);
 WASM_API_EXTERN const wasm_tabletype_t* wasm_externtype_as_tabletype_const(const wasm_externtype_t*);
 WASM_API_EXTERN const wasm_memorytype_t* wasm_externtype_as_memorytype_const(const wasm_externtype_t*);
+WASM_API_EXTERN const wasm_tagtype_t* wasm_externtype_as_tagtype_const(const wasm_externtype_t*);
 
 
 // Import Types
@@ -487,6 +501,14 @@ WASM_API_EXTERN wasm_memory_pages_t wasm_memory_max_size(const wasm_memory_t*);
 WASM_API_EXTERN bool wasm_memory_grow(wasm_memory_t*, wasm_memory_pages_t delta);
 
 
+// Tag Instances
+
+WASM_DECLARE_REF(tag)
+
+WASM_API_EXTERN own wasm_tag_t* wasm_tag_new(wasm_store_t*, const wasm_tagtype_t*);
+WASM_API_EXTERN own wasm_tagtype_t* wasm_tag_type(const wasm_tag_t*);
+
+
 // Externals
 
 WASM_DECLARE_REF(extern)
@@ -499,21 +521,25 @@ WASM_API_EXTERN wasm_extern_t* wasm_func_as_extern(wasm_func_t*);
 WASM_API_EXTERN wasm_extern_t* wasm_global_as_extern(wasm_global_t*);
 WASM_API_EXTERN wasm_extern_t* wasm_table_as_extern(wasm_table_t*);
 WASM_API_EXTERN wasm_extern_t* wasm_memory_as_extern(wasm_memory_t*);
+WASM_API_EXTERN wasm_extern_t* wasm_tag_as_extern(wasm_tag_t*);
 
 WASM_API_EXTERN wasm_func_t* wasm_extern_as_func(wasm_extern_t*);
 WASM_API_EXTERN wasm_global_t* wasm_extern_as_global(wasm_extern_t*);
 WASM_API_EXTERN wasm_table_t* wasm_extern_as_table(wasm_extern_t*);
 WASM_API_EXTERN wasm_memory_t* wasm_extern_as_memory(wasm_extern_t*);
+WASM_API_EXTERN wasm_tag_t* wasm_extern_as_tag(wasm_extern_t*);
 
 WASM_API_EXTERN const wasm_extern_t* wasm_func_as_extern_const(const wasm_func_t*);
 WASM_API_EXTERN const wasm_extern_t* wasm_global_as_extern_const(const wasm_global_t*);
 WASM_API_EXTERN const wasm_extern_t* wasm_table_as_extern_const(const wasm_table_t*);
 WASM_API_EXTERN const wasm_extern_t* wasm_memory_as_extern_const(const wasm_memory_t*);
+WASM_API_EXTERN const wasm_extern_t* wasm_tag_as_extern_const(const wasm_tag_t*);
 
 WASM_API_EXTERN const wasm_func_t* wasm_extern_as_func_const(const wasm_extern_t*);
 WASM_API_EXTERN const wasm_global_t* wasm_extern_as_global_const(const wasm_extern_t*);
 WASM_API_EXTERN const wasm_table_t* wasm_extern_as_table_const(const wasm_extern_t*);
 WASM_API_EXTERN const wasm_memory_t* wasm_extern_as_memory_const(const wasm_extern_t*);
+WASM_API_EXTERN const wasm_tag_t* wasm_extern_as_tag_const(const wasm_extern_t*);
 
 
 // Module Instances
