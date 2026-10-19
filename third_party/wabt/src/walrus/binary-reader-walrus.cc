@@ -729,10 +729,8 @@ public:
         return Result::Ok;
     }
     Result OnDelegateExpr(Index depth) override {
-        CHECK_RESULT(m_validator.OnDelegate(GetLocation(), Var(depth, GetLocation())));
-        EXECUTE_VALIDATOR(PopLabel());
-        abort();
-        return Result::Ok;
+        // Legacy exception operations are not implemented by Walrus.
+        return Result::Error;
     }
     Result OnDropExpr() override {
         CHECK_RESULT(m_validator.OnDrop(GetLocation()));
@@ -957,11 +955,8 @@ public:
         return Result::Ok;
     }
     Result OnRethrowExpr(Index depth) override {
-        Index catch_depth;
-        CHECK_RESULT(m_validator.OnRethrow(GetLocation(), Var(depth, GetLocation())));
-        CHECK_RESULT(m_validator.GetCatchCount(depth, &catch_depth));
-        abort();
-        return Result::Ok;
+        // Legacy exception operations are not implemented by Walrus.
+        return Result::Error;
     }
     Result OnReturnCallExpr(Index func_index) override {
         CHECK_RESULT(m_validator.OnReturnCall(GetLocation(), Var(func_index, GetLocation())));
@@ -1059,9 +1054,8 @@ public:
     }
     Result OnQuaternaryExpr(Opcode opcode) override {
         CHECK_RESULT(m_validator.OnQuaternary(GetLocation(), opcode));
-        SHOULD_GENERATE_BYTECODE;
-        m_externalDelegate->OnQuaternaryExpr(opcode);
-        return Result::Ok;
+        // Wide add/sub have no Walrus bytecode implementation yet.
+        return Result::Error;
     }
     Result OnUnreachableExpr() override {
         CHECK_RESULT(m_validator.OnUnreachable(GetLocation()));
@@ -1697,6 +1691,7 @@ std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, siz
     const bool kStopOnFirstError = true;
     const bool kFailOnCustomSectionError = false;
     ReadBinaryOptions options(getFeatures(featureFlags), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
+    options.read_linking_metadata = false;
     BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename, featureFlags);
     Result result = ReadBinary(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);
 
@@ -2216,6 +2211,7 @@ std::string ReadWasmComponentBinary(const uint8_t *data, size_t size, WASMCompon
     const bool kStopOnFirstError = true;
     const bool kFailOnCustomSectionError = false;
     ReadBinaryOptions options(getFeatures(delegate->featureFlags()), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
+    options.read_linking_metadata = false;
     ComponentBinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate);
     Result result = ReadBinaryComponent(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);
 
