@@ -91,6 +91,8 @@ public:
     {
     }
 
+    ~TypeStore();
+
     static void ConnectTypes(Vector<CompositeType*>& types, size_t index)
     {
         types[index - 1]->m_nextType = types[index];
@@ -133,7 +135,7 @@ private:
 #endif
 
     static const CompositeType** updateRefs(CompositeType* type, const Vector<CompositeType*>& types, const CompositeType** nextSubType);
-    void destroyRecursiveType(RecursiveType* recType);
+    static void destroyRecursiveType(RecursiveType* recType);
 
     void releaseRecursiveType(RecursiveType* recType)
     {

@@ -309,6 +309,25 @@ struct wasm_ref_t {
     std::shared_ptr<bool> storeLifetime;
 };
 
+// Foreign values have identity and Store ownership, but no host payload.
+DEFINE_GLOBAL_TYPE_INFO(foreignTypeInfo, ForeignKind);
+class Foreign : public Extern {
+public:
+    Foreign(Store* store)
+        : Extern(GET_GLOBAL_TYPE_INFO(foreignTypeInfo))
+    {
+        store->appendExtern(this);
+    }
+};
+
+struct wasm_foreign_t : wasm_ref_t {
+    wasm_foreign_t(const Object* object)
+        : wasm_ref_t(object)
+    {
+        ASSERT(object->kind() == Object::ForeignKind);
+    }
+};
+
 struct wasm_extern_t : wasm_ref_t {
     wasm_extern_t(const Extern* ext, own const wasm_externtype_t* type)
         : wasm_ref_t(ext)
@@ -547,6 +566,9 @@ static own wasm_ref_t* NewWasmRef(const Object* obj)
         Function* func = const_cast<Object*>(obj)->asFunction();
         return new wasm_func_t(func, new wasm_functype_t(func->functionType()));
     }
+    if (obj->kind() == Object::ForeignKind) {
+        return new wasm_foreign_t(obj);
+    }
     return new wasm_ref_t(obj);
 }
 
@@ -578,7 +600,7 @@ static wasm_val_t FromWalrusValue(const Value& val)
     case Value::Type::ExternRef:
     case Value::Type::NullExternRef:
         result.kind = WASM_ANYREF;
-        result.of.ref = val.isNull() ? nullptr : new wasm_ref_t(val.asObject());
+        result.of.ref = val.isNull() ? nullptr : NewWasmRef(val.asObject());
         break;
     default:
         RELEASE_ASSERT_NOT_REACHED();
@@ -618,8 +640,6 @@ static void FromWalrusValues(wasm_val_t* results, const Value* values, const uin
 static void ToWalrusValues(Value* results, const wasm_val_t* values, const uint32_t num)
 {
     for (uint32_t i = 0; i < num; i++) {
-        // values have numbers only
-        ASSERT((values[i].kind != WASM_ANYREF) && (values[i].kind != WASM_FUNCREF));
         results[i] = ToWalrusValue(values[i]);
     }
 }
@@ -1608,10 +1628,49 @@ WASM_IMPL_TYPE_CLONE(externtype);
         return static_cast<const wasm_##name##_t*>(ref);                     \
     }
 
-WASM_IMPL_REF_BASE(ref);
+WASM_IMPL_OWN(ref);
+
+own wasm_ref_t* wasm_ref_copy(const wasm_ref_t* ref)
+{
+    return NewWasmRef(ref->get());
+}
+
+bool wasm_ref_same(const wasm_ref_t* ref, const wasm_ref_t* other)
+{
+    return ref->get() == other->get();
+}
 
 WASM_IMPL_REF(extern);
-//WASM_IMPL_REF(foreign);
+WASM_IMPL_REF_BASE(foreign);
+
+wasm_ref_t* wasm_foreign_as_ref(wasm_foreign_t* foreign)
+{
+    return foreign;
+}
+
+const wasm_ref_t* wasm_foreign_as_ref_const(const wasm_foreign_t* foreign)
+{
+    return foreign;
+}
+
+wasm_foreign_t* wasm_ref_as_foreign(wasm_ref_t* ref)
+{
+    return ref && !(reinterpret_cast<uintptr_t>(ref->get()) & 1)
+            && ref->get()->kind() == Object::ForeignKind
+        ? static_cast<wasm_foreign_t*>(ref)
+        : nullptr;
+}
+
+const wasm_foreign_t* wasm_ref_as_foreign_const(const wasm_ref_t* ref)
+{
+    return wasm_ref_as_foreign(const_cast<wasm_ref_t*>(ref));
+}
+
+own wasm_foreign_t* wasm_foreign_new(wasm_store_t* store)
+{
+    return new wasm_foreign_t(new Foreign(store->get()));
+}
+
 WASM_IMPL_REF(func);
 WASM_IMPL_REF(global);
 WASM_IMPL_REF(instance);

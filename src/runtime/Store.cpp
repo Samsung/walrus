@@ -223,6 +223,7 @@ static StoreObject* apiStoreObject(const Object* object)
     case Object::TableKind:
     case Object::MemoryKind:
     case Object::TagKind:
+    case Object::ForeignKind:
         return static_cast<StoreObject*>(const_cast<Object*>(object));
     default:
         return nullptr;
