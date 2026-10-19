@@ -1968,12 +1968,6 @@ public:
 
     void keepBlockResultsIfNeeds(BlockInfo& blockInfo)
     {
-        auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
-        keepBlockResultsIfNeeds(blockInfo, dropSize);
-    }
-
-    void keepBlockResultsIfNeeds(BlockInfo& blockInfo, const std::pair<size_t, size_t>& dropSize)
-    {
         if (blockInfo.shouldRestoreVMStackAtEnd()) {
             if (!blockInfo.byteCodeGenerationStopped()) {
                 if (blockInfo.returnValueIsIndex()) {
@@ -2064,35 +2058,31 @@ public:
         size_t dropValueSize = 0;
         size_t parameterSize = 0;
         if (depth < m_blockInfo.size()) {
-            auto iter = m_blockInfo.rbegin() + depth;
-            if (iter->m_vmStack.size() < m_vmStack.size()) {
-                size_t start = iter->m_vmStack.size();
-                for (size_t i = start; i < m_vmStack.size(); i++) {
-                    dropValueSize += m_vmStack[i].stackAllocatedSize();
-                }
-
-                if (iter->m_blockType == BlockInfo::Loop) {
-                    if (iter->returnValueIsIndex()) {
-                        auto ft = getFunctionType(iter->m_returnValueIndex);
-                        dropValueSize += ft->paramStackSize();
-                        parameterSize += ft->paramStackSize();
-                    }
-                } else {
-                    if (iter->returnValueIsIndex()) {
-                        auto ft = getFunctionType(iter->m_returnValueIndex);
-                        const auto& result = ft->result().types();
-                        for (size_t i = 0; i < result.size(); i++) {
-                            parameterSize += Walrus::valueStackAllocatedSize(result[i]);
-                        }
-                    } else if (iter->m_returnValueType != Walrus::Value::Void) {
-                        parameterSize += Walrus::valueStackAllocatedSize(iter->m_returnValueType);
-                    }
-                }
+            const auto& block = *(m_blockInfo.rbegin() + depth);
+            size_t base = block.m_vmStack.size();
+            if (block.returnValueIsIndex()) {
+                auto ft = getFunctionType(block.m_returnValueIndex);
+                base -= ft->param().size();
+                parameterSize = block.m_blockType == BlockInfo::Loop
+                    ? ft->paramStackSize()
+                    : ft->resultStackSize();
+            } else if (block.m_blockType != BlockInfo::Loop && block.m_returnValueType != Walrus::Value::Void) {
+                parameterSize = Walrus::valueStackAllocatedSize(block.m_returnValueType);
             }
+            // Parameters belong to the block, not to its enclosing stack.
+            // The body may have consumed them or replaced them with other types.
+            ASSERT(base <= m_vmStack.size());
+            for (size_t i = base; i < m_vmStack.size(); ++i) {
+                dropValueSize += m_vmStack[i].stackAllocatedSize();
+            }
+            ASSERT(dropValueSize >= parameterSize);
         } else if (m_blockInfo.size()) {
-            auto iter = m_blockInfo.begin();
-            size_t start = iter->m_vmStack.size();
-            for (size_t i = start; i < m_vmStack.size(); i++) {
+            const auto& block = m_blockInfo.front();
+            size_t base = block.m_vmStack.size();
+            if (block.returnValueIsIndex()) {
+                base -= getFunctionType(block.m_returnValueIndex)->param().size();
+            }
+            for (size_t i = base; i < m_vmStack.size(); ++i) {
                 dropValueSize += m_vmStack[i].stackAllocatedSize();
             }
         }
@@ -2134,45 +2124,23 @@ public:
 
     void generateMoveValuesCodeRegardToDrop(std::pair<size_t, size_t> dropSize)
     {
-        ASSERT(dropSize.second);
-        int64_t remainSize = dropSize.second;
-        auto srcIter = m_vmStack.rbegin();
-        while (true) {
-            remainSize -= srcIter->stackAllocatedSize();
-            if (!remainSize) {
-                break;
-            }
-            if (remainSize < 0) {
-                // stack mismatch! we don't need to generate code
-                return;
-            }
-            srcIter++;
+        ASSERT(dropSize.second && dropSize.first >= dropSize.second);
+        size_t first = m_vmStack.size();
+        size_t remaining = dropSize.second;
+        while (remaining) {
+            ASSERT(first > 0);
+            const auto& value = m_vmStack[--first];
+            ASSERT(remaining >= value.stackAllocatedSize());
+            remaining -= value.stackAllocatedSize();
         }
 
-        remainSize = dropSize.first;
-        auto dstIter = m_vmStack.rbegin();
-        while (true) {
-            remainSize -= dstIter->stackAllocatedSize();
-            if (!remainSize) {
-                break;
-            }
-            if (remainSize < 0) {
-                // stack mismatch! we don't need to generate code
-                return;
-            }
-            dstIter++;
-        }
-
-        // reverse order copy to protect newer values
-        remainSize = dropSize.second;
-        while (true) {
-            generateMoveCodeIfNeeds(srcIter->position(), dstIter->nonOptimizedPosition(), srcIter->valueType());
-            remainSize -= srcIter->stackAllocatedSize();
-            if (!remainSize) {
-                break;
-            }
-            srcIter--;
-            dstIter--;
+        // Destination slots are laid out by the label's values, not by the
+        // types of discarded values currently occupying those slots.
+        size_t destination = m_functionStackSizeSoFar - dropSize.first;
+        for (size_t i = first; i < m_vmStack.size(); ++i) {
+            const auto& value = m_vmStack[i];
+            generateMoveCodeIfNeeds(value.position(), destination, value.valueType());
+            destination += value.stackAllocatedSize();
         }
     }
 
@@ -2378,9 +2346,11 @@ public:
         // Temporarily remove the top element of the stack for the sake of variable copying.
         VMStackInfo info = m_vmStack.back();
         m_vmStack.pop_back();
+        m_functionStackSizeSoFar -= info.stackAllocatedSize();
         GenerateConditionalBranch<Walrus::JumpIfNull, Walrus::JumpIfNonNull, WASMOpcode::BrIfOpcode>(depth, info.position(), conditionHint);
         info.toNonNullableRef();
         m_vmStack.push_back(info);
+        m_functionStackSizeSoFar += info.stackAllocatedSize();
     }
 
     void emitBrTableCase(size_t brTableCode, Index depth, size_t jumpOffset)
@@ -2503,6 +2473,13 @@ public:
         auto& blockInfo = m_blockInfo.back();
         keepBlockResultsIfNeeds(blockInfo);
         restoreVMStackBy(blockInfo);
+        // A handler starts at the try's base, with only its exception payload.
+        if (blockInfo.returnValueIsIndex()) {
+            size_t count = getFunctionType(blockInfo.m_returnValueIndex)->param().size();
+            while (count--) {
+                popVMStack();
+            }
+        }
 
         size_t tryEnd = m_currentByteCode.size();
         if (m_catchInfo.size() && m_catchInfo.back().m_tryCatchBlockDepth == m_blockInfo.size()) {
@@ -3544,7 +3521,6 @@ public:
                 setShouldContinueToGenerateByteCode(true);
             }
 
-            auto dropSize = dropStackValuesBeforeBrIfNeeds(0);
             auto blockInfo = m_blockInfo.back();
             m_blockInfo.pop_back();
             m_preprocessData.onBlockEnd();
@@ -3564,9 +3540,9 @@ public:
                         iter++;
                         continue;
                     }
-                    size_t stackSizeToBe = m_initialFunctionStackSize;
-                    for (size_t i = 0; i < blockInfo.m_vmStack.size(); i++) {
-                        stackSizeToBe += m_vmStack[i].stackAllocatedSize();
+                    size_t stackSizeToBe = blockInfo.m_functionStackSizeSoFar;
+                    if (blockInfo.returnValueIsIndex()) {
+                        stackSizeToBe -= getFunctionType(blockInfo.m_returnValueIndex)->paramStackSize();
                     }
                     m_currentFunction->m_catchInfo.push_back({ iter->m_tryStart, iter->m_tryEnd, iter->m_catchStart, stackSizeToBe, iter->m_tagIndex, iter->m_pushExnRef });
                     iter = m_catchInfo.erase(iter);
@@ -3578,7 +3554,7 @@ public:
                 return;
             }
 
-            keepBlockResultsIfNeeds(blockInfo, dropSize);
+            keepBlockResultsIfNeeds(blockInfo);
 
             if (blockInfo.shouldRestoreVMStackAtEnd()) {
                 restoreVMStackBy(blockInfo);
