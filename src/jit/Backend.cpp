@@ -1870,7 +1870,12 @@ void JITCompiler::emitEpilog()
     FunctionList& func = m_functionList.back();
 
     ASSERT(m_context.branchTableOffset == reinterpret_cast<sljit_uw>(func.jitFunc->m_constData) + func.branchTableSize * sizeof(sljit_sw));
-    ASSERT(m_context.currentTryBlock == InstanceConstData::globalTryBlock);
+    // Scheduling may leave a protected block last in machine-code order.
+    // Close its address range before emitting unprotected epilog code.
+    if (m_context.currentTryBlock != InstanceConstData::globalTryBlock) {
+        m_context.trapBlocks.push_back(TrapBlock(sljit_emit_label(m_compiler), m_context.currentTryBlock));
+        m_context.currentTryBlock = InstanceConstData::globalTryBlock;
+    }
 
     if (!m_context.earlyReturns.empty()) {
         emitReturn(m_compiler, &m_context);

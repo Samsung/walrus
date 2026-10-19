@@ -139,7 +139,8 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_
         }
 
         if ((options & CheckNaturalAlignment) && (offset & (size - 1)) != 0) {
-            context->appendTrapJump(ExecutionContext::UnalignedAtomicError, sljit_emit_jump(compiler, SLJIT_NOT_ZERO));
+            context->appendTrapJump(ExecutionContext::UnalignedAtomicError, sljit_emit_jump(compiler, SLJIT_JUMP));
+            memArg.arg = 0;
             return;
         }
 
