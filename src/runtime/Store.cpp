@@ -162,6 +162,7 @@ void Store::appendExtern(Extern* ext)
 {
     ext->setOwnerStore(this);
     ext->m_storeIndex = m_externs.size();
+    ext->m_refCount = 0;
     m_externs.push_back(ext);
     m_referenceGraphDirty = true;
 }
@@ -219,8 +220,6 @@ static StoreObject* apiStoreObject(const Object* object)
     case Object::ModuleKind:
     case Object::InstanceKind:
     case Object::FunctionKind:
-    case Object::GlobalKind:
-    case Object::TableKind:
     case Object::MemoryKind:
     case Object::TagKind:
     case Object::ForeignKind:
@@ -240,7 +239,7 @@ static bool isGCReference(const Object* object)
 std::shared_ptr<bool> Store::addAPIReference(const Object* object)
 {
     if (StoreObject* owned = apiStoreObject(object)) {
-        ++owned->m_apiRefCount;
+        ++owned->m_refCount;
         return owned->ownerStore()->m_apiLifetime;
     } else if (isGCReference(object)) {
         auto& reference = s_apiGCReferences[object];
@@ -265,8 +264,8 @@ std::shared_ptr<bool> Store::addAPIReference(const Object* object)
 void Store::removeAPIReference(const Object* object)
 {
     if (StoreObject* owned = apiStoreObject(object)) {
-        ASSERT(owned->m_apiRefCount);
-        if (--owned->m_apiRefCount == 0) {
+        ASSERT(owned->m_refCount);
+        if (--owned->m_refCount == 0) {
             Store* store = owned->ownerStore();
             if (store->m_apiCollection) {
                 store->m_collectionCandidates.insert(owned);
@@ -457,17 +456,17 @@ void Store::rebuildReferenceGraph(std::vector<StoreObject*>& dead)
         }
     };
     for (Module* module : m_modules) {
-        if (module->m_apiRefCount) {
+        if (module->m_refCount) {
             mark(module);
         }
     }
     for (Instance* instance : m_instances) {
-        if (instance->m_apiRefCount) {
+        if (instance->m_refCount) {
             mark(instance);
         }
     }
     for (Extern* ext : m_externs) {
-        if (ext->m_apiRefCount) {
+        if (ext->m_refCount) {
             mark(ext);
         }
     }
@@ -542,7 +541,7 @@ void Store::collectCycles(std::vector<StoreObject*>& dead)
         }
     };
     for (const auto& entry : m_referenceGraph) {
-        if (entry.first->m_apiRefCount) {
+        if (entry.first->m_refCount) {
             mark(entry.first);
         }
     }
@@ -628,7 +627,7 @@ void Store::collectUnreferenced()
             StoreObject* object = work.back();
             work.pop_back();
             auto it = m_referenceGraph.find(object);
-            if (it == m_referenceGraph.end() || object->m_apiRefCount) {
+            if (it == m_referenceGraph.end() || object->m_refCount) {
                 continue;
             }
             if (it->second.incoming) {
@@ -641,7 +640,7 @@ void Store::collectUnreferenced()
                 auto targetIt = m_referenceGraph.find(target);
                 ASSERT(targetIt != m_referenceGraph.end() && targetIt->second.incoming);
                 --targetIt->second.incoming;
-                if (!target->m_apiRefCount) {
+                if (!target->m_refCount) {
                     if (!targetIt->second.incoming) {
                         work.push_back(target);
                     } else {

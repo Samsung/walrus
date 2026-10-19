@@ -50,7 +50,6 @@ Global* Global::createGlobal(Store* store, const Value& value, const MutableType
 #else
     Global* glob = new Global(value, type);
 #endif
-    store->appendExtern(glob);
     return glob;
 }
 

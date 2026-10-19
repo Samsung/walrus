@@ -125,6 +125,20 @@ Instance::~Instance()
     for (size_t i = 0; i < size; i++) {
         m_elementSegments[i].drop();
     }
+
+    size = m_module->numberOfTableTypes();
+    for (size_t i = 0; i < size; i++) {
+        if (m_tables[i] != nullptr) {
+            m_tables[i]->releaseRef();
+        }
+    }
+
+    size = m_module->numberOfGlobalTypes();
+    for (size_t i = 0; i < size; i++) {
+        if (m_globals[i] != nullptr) {
+            m_globals[i]->releaseRef();
+        }
+    }
 }
 
 Optional<ExportType*> Instance::resolveExportType(std::string& name)

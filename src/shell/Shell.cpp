@@ -188,6 +188,12 @@ static Trap::TrapResult executeModule(Store* store, Module* module,
         )
     */
     bool hasWasiImport = false;
+    Global* i32Value = nullptr;
+    Global* i64Value = nullptr;
+    Global* f32Value = nullptr;
+    Global* f64Value = nullptr;
+    Table* tableValue = nullptr;
+    Table* table64Value = nullptr;
 
     for (size_t i = 0; i < importTypes.size(); i++) {
         auto import = importTypes[i];
@@ -268,17 +274,35 @@ static Trap::TrapResult executeModule(Store* store, Module* module,
                     },
                     nullptr));
             } else if (import->fieldName() == "global_i32") {
-                importValues.push_back(Global::createGlobal(store, Value(int32_t(666)), MutableType(Value::I32, false)));
+                if (i32Value == nullptr) {
+                    i32Value = Global::createGlobal(store, Value(int32_t(666)), MutableType(Value::I32, false));
+                }
+                importValues.push_back(i32Value);
             } else if (import->fieldName() == "global_i64") {
-                importValues.push_back(Global::createGlobal(store, Value(int64_t(666)), MutableType(Value::I64, false)));
+                if (i64Value == nullptr) {
+                    i64Value = Global::createGlobal(store, Value(int64_t(666)), MutableType(Value::I64, false));
+                }
+                importValues.push_back(i64Value);
             } else if (import->fieldName() == "global_f32") {
-                importValues.push_back(Global::createGlobal(store, Value((float)666.6), MutableType(Value::F32, false)));
+                if (f32Value == nullptr) {
+                    f32Value = Global::createGlobal(store, Value((float)666.6), MutableType(Value::F32, false));
+                }
+                importValues.push_back(f32Value);
             } else if (import->fieldName() == "global_f64") {
-                importValues.push_back(Global::createGlobal(store, Value((double)666.6), MutableType(Value::F64, false)));
+                if (f64Value == nullptr) {
+                    f64Value = Global::createGlobal(store, Value((double)666.6), MutableType(Value::F64, false));
+                }
+                importValues.push_back(f64Value);
             } else if (import->fieldName() == "table") {
-                importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20, false));
+                if (tableValue == nullptr) {
+                    tableValue = Table::createTable(store, Value::Type::NullFuncRef, 10, 20, false);
+                }
+                importValues.push_back(tableValue);
             } else if (import->fieldName() == "table64") {
-                importValues.push_back(Table::createTable(store, Value::Type::NullFuncRef, 10, 20, true));
+                if (table64Value == nullptr) {
+                    table64Value = Table::createTable(store, Value::Type::NullFuncRef, 10, 20, true);
+                }
+                importValues.push_back(table64Value);
             } else if (import->fieldName() == "memory") {
                 importValues.push_back(Memory::createMemory(store, 1 * Memory::s_memoryPageSize, 2 * Memory::s_memoryPageSize, false, false));
             } else {
@@ -345,7 +369,7 @@ static Trap::TrapResult executeModule(Store* store, Module* module,
         bool hasWasiImport;
     } data = { module, importValues, hasWasiImport };
     Walrus::Trap trap;
-    return trap.run([](ExecutionState& state, void* d) {
+    Trap::TrapResult result = trap.run([](ExecutionState& state, void* d) {
         RunData* data = reinterpret_cast<RunData*>(d);
         Instance* instance = data->module->instantiate(state, data->importValues);
 
@@ -377,7 +401,27 @@ static Trap::TrapResult executeModule(Store* store, Module* module,
         }
 #endif
     },
-                    &data);
+                                       &data);
+
+    if (i32Value != nullptr) {
+        i32Value->releaseRef();
+    }
+    if (i64Value != nullptr) {
+        i64Value->releaseRef();
+    }
+    if (f32Value != nullptr) {
+        f32Value->releaseRef();
+    }
+    if (f64Value != nullptr) {
+        f64Value->releaseRef();
+    }
+    if (tableValue != nullptr) {
+        tableValue->releaseRef();
+    }
+    if (table64Value != nullptr) {
+        table64Value->releaseRef();
+    }
+    return result;
 }
 
 static Trap::TrapResult executeWASM(Store* store, const std::string& filename, const std::vector<uint8_t>& src,

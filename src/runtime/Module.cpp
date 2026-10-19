@@ -193,7 +193,9 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Trap::throwException("incompatible global import type");
             }
 
-            instance->m_globals[globIndex++] = imports[i]->asGlobal();
+            Global* global = imports[i]->asGlobal();
+            instance->m_globals[globIndex++] = global;
+            global->addRef();
             break;
         }
         case ImportType::Table: {
@@ -205,7 +207,9 @@ Instance* Module::instantiate(ExecutionState& state, const ExternVector& imports
                 Trap::throwException("incompatible table import type");
             }
 
-            instance->m_tables[tableIndex++] = imports[i]->asTable();
+            Table* table = imports[i]->asTable();
+            instance->m_tables[tableIndex++] = table;
+            table->addRef();
             break;
         }
         case ImportType::Memory: {

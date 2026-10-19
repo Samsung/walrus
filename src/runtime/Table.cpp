@@ -32,10 +32,7 @@ DEFINE_GLOBAL_TYPE_INFO(tableTypeInfo, TableKind);
 
 Table* Table::createTable(Store* store, Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, void* init)
 {
-    Table* tbl = new Table(type, initialSize, maximumSize, is64, init ? init : reinterpret_cast<void*>(Value::NullBits));
-    store->appendExtern(tbl);
-
-    return tbl;
+    return new Table(type, initialSize, maximumSize, is64, init ? init : reinterpret_cast<void*>(Value::NullBits));
 }
 
 Table::Table(Type type, uint64_t initialSize, uint64_t maximumSize, bool is64, void* init)

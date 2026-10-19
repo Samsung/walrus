@@ -31,6 +31,7 @@ class Memory;
 class Trap;
 class Tag;
 class CompositeType;
+class StoreObject;
 
 class Object {
     friend class JITFieldAccessor;
@@ -74,12 +75,12 @@ public:
         return static_cast<Kind>(reinterpret_cast<uintptr_t>(m_typeInfo[-1]));
     }
 
-    const CompositeType** typeInfo()
+    const CompositeType** typeInfo() const
     {
         return m_typeInfo;
     }
 
-    const CompositeType* objectTypeInfo()
+    const CompositeType* objectTypeInfo() const
     {
         return m_typeInfo[reinterpret_cast<size_t>(m_typeInfo[0])];
     }
@@ -122,6 +123,11 @@ public:
     bool isTag() const
     {
         return kind() == TagKind;
+    }
+
+    bool isStoreObject() const
+    {
+        return kind() == GlobalKind || kind() == TableKind;
     }
 
     Module* asModule()
@@ -172,6 +178,12 @@ public:
         return reinterpret_cast<Tag*>(this);
     }
 
+    StoreObject* asStoreObject()
+    {
+        ASSERT(isStoreObject());
+        return reinterpret_cast<StoreObject*>(this);
+    }
+
     static bool isStructOrArray(Kind kind)
     {
         ASSERT(static_cast<uint8_t>(kind) >= static_cast<uint8_t>(ArrayKind) || kind == StructKind);
@@ -188,13 +200,31 @@ private:
 
 // Store-owned objects are rooted by C API wrappers and traced at API safe points.
 class StoreObject : public Object {
+    friend class Store;
+
 public:
+    static constexpr size_t NoIndex = ~static_cast<size_t>(0);
+
+    void addRef()
+    {
+        ASSERT(m_storeIndex == NoIndex);
+        m_refCount++;
+    }
+
+    void releaseRef()
+    {
+        ASSERT(m_storeIndex == NoIndex);
+        if (--m_refCount == 0) {
+            delete this;
+        }
+    }
+
     Store* ownerStore() const { return m_ownerStore; }
     void setOwnerStore(Store* store) { m_ownerStore = store; }
-    mutable size_t m_apiRefCount = 0;
+
     bool m_marked = false;
     // Position in the owning Store vector, for constant-time removal.
-    size_t m_storeIndex = 0;
+    size_t m_storeIndex = NoIndex;
 
 protected:
     StoreObject(const CompositeType** typeInfo)
@@ -203,6 +233,7 @@ protected:
     }
 
 private:
+    size_t m_refCount = 1;
     Store* m_ownerStore = nullptr;
 };
 

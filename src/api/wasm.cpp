@@ -31,6 +31,7 @@
 #include "runtime/Tag.h"
 #include "runtime/Instance.h"
 #include "runtime/Trap.h"
+#include "runtime/Type.h"
 #include "runtime/TypeStore.h"
 #include "parser/WASMParser.h"
 #include "wabt/walrus/binary-reader-walrus-shared.h"
@@ -145,12 +146,12 @@ struct wasm_valtype_t {
     {
     }
 
-    wasm_valtype_t(Value::Type t)
+    wasm_valtype_t(Type t)
         : type(t)
     {
     }
 
-    Value::Type type;
+    Type type;
 };
 
 struct wasm_externtype_t {
@@ -306,7 +307,7 @@ struct wasm_ref_t {
     {
         ASSERT(!!o);
         // Ignore i31 values
-        if (!(reinterpret_cast<uintptr_t>(o) & 1)) {
+        if (!(reinterpret_cast<uintptr_t>(o) & 1) && !o->isStoreObject()) {
             storeLifetime = Store::addAPIReference(o);
 
 #ifdef ENABLE_GC
@@ -320,12 +321,20 @@ struct wasm_ref_t {
     wasm_ref_t(const wasm_ref_t& other)
         : wasm_ref_t(other.obj)
     {
+        if (obj->isStoreObject()) {
+            const_cast<Object*>(obj)->asStoreObject()->addRef();
+        }
     }
 
     virtual ~wasm_ref_t()
     {
         // Ignore i31 values
         if (obj && !isI31()) {
+            if (obj->isStoreObject()) {
+                const_cast<Object*>(obj)->asStoreObject()->releaseRef();
+                return;
+            }
+
             // Store destruction already freed this object. Only the wrapper remains.
             if (storeLifetime && !*storeLifetime) {
                 return;
@@ -439,6 +448,7 @@ struct wasm_global_t : wasm_extern_t {
     wasm_global_t(const wasm_global_t& other)
         : wasm_extern_t(other.get(), other.type()->clone())
     {
+        get()->addRef();
     }
 
     wasm_global_t(Global* glob, own const wasm_globaltype_t* gt)
@@ -462,6 +472,7 @@ struct wasm_table_t : wasm_extern_t {
     wasm_table_t(const wasm_table_t& other)
         : wasm_extern_t(other.get(), other.type()->clone())
     {
+        get()->addRef();
     }
 
     wasm_table_t(Table* table, own const wasm_tabletype_t* tt)
@@ -629,6 +640,71 @@ static Value::Type ToWalrusValueType(const wasm_valkind_t& kind)
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return Value::Type::Void;
+    }
+}
+
+static bool CheckWalrusRefType(const Type& type, const wasm_ref_t* ref)
+{
+    if (ref == nullptr) {
+        return type != Value::NullExnRef && Value::isNullableRefType(type);
+    }
+
+    if (!ref->isI31()) {
+        const Object* obj = ref->obj;
+
+        if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
+            return type.ref()->isSubTypeOf(obj->objectTypeInfo());
+        }
+
+        Object::Kind kind = obj->kind();
+
+        if (kind == Object::FunctionKind) {
+            return type == Value::NullFuncRef || type == Value::FuncRef;
+        }
+
+        if (kind != Object::StructKind && kind != Object::ArrayKind) {
+            // WebAssembly resources are rejected.
+            return false;
+        }
+    }
+
+    if (type == Value::ExternRef || type == Value::NullExternRef
+        || type == Value::AnyRef || type == Value::NullAnyRef
+        || type == Value::EqRef || type == Value::NullEqRef) {
+        return true;
+    }
+
+    if (ref->isI31()) {
+        return type == Value::I31Ref || type == Value::NullI31Ref;
+    }
+
+    if (ref->obj->kind() == Object::StructKind) {
+        return type == Value::StructRef || type == Value::NullStructRef;
+    }
+
+    ASSERT(ref->obj->kind() == Object::ArrayKind);
+    return type == Value::ArrayRef || type == Value::NullArrayRef;
+}
+
+static bool CheckWalrusType(const Type& type, const wasm_val_t* val)
+{
+    switch (val->kind) {
+    case WASM_I32:
+        return type == Value::I32;
+    case WASM_I64:
+        return type == Value::I64;
+    case WASM_F32:
+        return type == Value::F32;
+    case WASM_F64:
+        return type == Value::F64;
+    case WASM_V128:
+        return type == Value::V128;
+    case WASM_FUNCREF:
+    case WASM_ANYREF:
+        return CheckWalrusRefType(type, val->of.ref);
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        return false;
     }
 }
 
@@ -1231,8 +1307,9 @@ void wasm_global_get(const wasm_global_t* glob, own wasm_val_t* out)
 
 void wasm_global_set(wasm_global_t* glob, const wasm_val_t* val)
 {
-    glob->get()->setValue(ToWalrusValue(*val));
-    glob->get()->ownerStore()->requestCollection();
+    if (CheckWalrusType(glob->get()->type(), val)) {
+        glob->get()->setValue(ToWalrusValue(*val));
+    }
 }
 
 // Table Instances
@@ -1280,7 +1357,7 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
 
 bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* ref)
 {
-    if (UNLIKELY(index >= table->get()->size())) {
+    if (UNLIKELY(index >= table->get()->size() || !CheckWalrusRefType(table->get()->type(), ref))) {
         return false;
     }
 
@@ -1289,7 +1366,6 @@ bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* re
     } else {
         table->get()->uncheckedSetElement(index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
     }
-    table->get()->ownerStore()->requestCollection();
     return true;
 }
 
@@ -1309,7 +1385,6 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
     } else {
         table->get()->grow(delta + table->get()->size(), init ? const_cast<Object*>(init->get()) : reinterpret_cast<void*>(Value::NullBits));
     }
-    table->get()->ownerStore()->requestCollection();
     return true;
 }
 
@@ -1499,6 +1574,7 @@ void wasm_instance_exports(const wasm_instance_t* ins, own wasm_extern_vec_t* ou
         }
         case ExportType::Table: {
             Table* table = instance->table(itemIndex);
+            table->addRef();
             out->data[i] = new wasm_table_t(table, new wasm_tabletype_t(instance->module()->tableType(itemIndex)));
             break;
         }
@@ -1509,6 +1585,7 @@ void wasm_instance_exports(const wasm_instance_t* ins, own wasm_extern_vec_t* ou
         }
         case ExportType::Global: {
             Global* glob = instance->global(itemIndex);
+            glob->addRef();
             out->data[i] = new wasm_global_t(glob, new wasm_globaltype_t(instance->module()->globalType(itemIndex)));
             break;
         }
