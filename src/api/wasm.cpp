@@ -28,6 +28,7 @@
 #include "runtime/Table.h"
 #include "runtime/Memory.h"
 #include "runtime/Global.h"
+#include "runtime/Tag.h"
 #include "runtime/Instance.h"
 #include "runtime/Trap.h"
 #include "runtime/TypeStore.h"
@@ -266,6 +267,38 @@ struct wasm_memorytype_t : wasm_externtype_t {
     wasm_limits_t limits;
 };
 
+struct wasm_tagtype_t : wasm_externtype_t {
+    wasm_tagtype_t(const wasm_functype_t* type)
+        : wasm_externtype_t(WASM_EXTERN_TAG)
+        , functype(type->clone())
+    {
+    }
+
+    wasm_tagtype_t(const TagType* type)
+        : wasm_externtype_t(WASM_EXTERN_TAG)
+        , functype(new wasm_functype_t(type->functionType()))
+    {
+    }
+
+    wasm_tagtype_t(const FunctionType* type)
+        : wasm_externtype_t(WASM_EXTERN_TAG)
+        , functype(new wasm_functype_t(type))
+    {
+    }
+
+    virtual ~wasm_tagtype_t()
+    {
+        delete functype;
+    }
+
+    own wasm_tagtype_t* clone() const
+    {
+        return new wasm_tagtype_t(functype);
+    }
+
+    wasm_functype_t* functype;
+};
+
 struct wasm_ref_t {
     wasm_ref_t(const Object* o)
         : obj(o)
@@ -454,6 +487,29 @@ struct wasm_memory_t : wasm_extern_t {
     }
 };
 
+struct wasm_tag_t : wasm_extern_t {
+    wasm_tag_t(const wasm_tag_t& other)
+        : wasm_extern_t(other.get(), other.type()->clone())
+    {
+    }
+
+    wasm_tag_t(Tag* tag, own const wasm_tagtype_t* tt)
+        : wasm_extern_t(tag, tt)
+    {
+    }
+
+    Tag* get() const
+    {
+        ASSERT(obj && obj->isTag());
+        return const_cast<Tag*>(static_cast<const Tag*>(obj));
+    }
+
+    const wasm_tagtype_t* type() const
+    {
+        return static_cast<const wasm_tagtype_t*>(objectType);
+    }
+};
+
 struct wasm_instance_t : wasm_ref_t {
     wasm_instance_t(own const Instance* ins)
         : wasm_ref_t(ins)
@@ -519,6 +575,8 @@ static wasm_valkind_t FromWalrusValueType(const Value::Type& type)
         return WASM_F32;
     case Value::Type::F64:
         return WASM_F64;
+    case Value::Type::V128:
+        return WASM_V128;
     case Value::Type::NullFuncRef:
         return WASM_FUNCREF;
     case Value::Type::NullExternRef:
@@ -540,6 +598,8 @@ static Value::Type ToWalrusValueType(const wasm_valkind_t& kind)
         return Value::Type::F32;
     case WASM_F64:
         return Value::Type::F64;
+    case WASM_V128:
+        return Value::Type::V128;
     case WASM_FUNCREF:
         return Value::Type::NullFuncRef;
     case WASM_ANYREF:
@@ -569,6 +629,10 @@ static own wasm_ref_t* NewWasmRef(const Object* obj)
     if (obj->kind() == Object::ForeignKind) {
         return new wasm_foreign_t(obj);
     }
+    if (obj->isTag()) {
+        Tag* tag = const_cast<Object*>(obj)->asTag();
+        return new wasm_tag_t(tag, new wasm_tagtype_t(tag->functionType()));
+    }
     return new wasm_ref_t(obj);
 }
 
@@ -591,6 +655,10 @@ static wasm_val_t FromWalrusValue(const Value& val)
     case Value::Type::F64:
         result.kind = WASM_F64;
         result.of.f64 = val.asF64();
+        break;
+    case Value::Type::V128:
+        result.kind = WASM_V128;
+        result.of.i64 = 0; // NOT USED
         break;
     case Value::Type::FuncRef:
     case Value::Type::NullFuncRef:
@@ -620,6 +688,8 @@ static Value ToWalrusValue(const wasm_val_t& val)
         return Value(val.of.f32);
     case WASM_F64:
         return Value(val.of.f64);
+    case WASM_V128:
+        return Value(Value::V128); // dummy value for V128
     case WASM_ANYREF:
         return Value(Value::NullExternRef, val.of.ref ? const_cast<Object*>(val.of.ref->get()) : nullptr);
     case WASM_FUNCREF:
@@ -917,6 +987,9 @@ void wasm_module_imports(const wasm_module_t* module, own wasm_importtype_vec_t*
         case ImportType::Memory:
             type = new wasm_memorytype_t(importType->memoryType());
             break;
+        case ImportType::Tag:
+            type = new wasm_tagtype_t(importType->tagType());
+            break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
             break;
@@ -948,6 +1021,9 @@ void wasm_module_exports(const wasm_module_t* module, own wasm_exporttype_vec_t*
         case ExportType::Memory:
             type = new wasm_memorytype_t(mod->memoryType(itemIndex));
             break;
+        case ExportType::Tag:
+            type = new wasm_tagtype_t(mod->tagType(itemIndex));
+            break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
             break;
@@ -971,9 +1047,10 @@ own wasm_module_t* wasm_module_deserialize(wasm_store_t*, const wasm_byte_vec_t*
 }
 
 // Function Instances
-static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft)
+static FunctionType* ToWalrusFunctionType(const wasm_functype_t* ft, bool canonicalize = false)
 {
-    FunctionType* functionType = new FunctionType(ft->params.size, 0, ft->results.size, 0);
+    FunctionType* functionType = new FunctionType(ft->params.size, 0, ft->results.size, 0, true,
+                                                  canonicalize ? reinterpret_cast<const CompositeType**>(TypeStore::NoIndex) : nullptr);
     TypeVector* params = functionType->initParam();
     TypeVector* results = functionType->initResult();
 
@@ -1214,14 +1291,24 @@ bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta, wasm_ref_t* i
 // Memory Instances
 own wasm_memory_t* wasm_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
-    Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, false, false);
-    return new wasm_memory_t(mem, mt->clone());
+    try {
+        Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, false, false);
+        return new wasm_memory_t(mem, mt->clone());
+    } catch (Exception* e) {
+        e->releaseRef();
+        return nullptr;
+    }
 }
 
 own wasm_memory_t* wasm_shared_memory_new(wasm_store_t* store, const wasm_memorytype_t* mt)
 {
-    Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, true, false);
-    return new wasm_memory_t(mem, mt->clone());
+    try {
+        Memory* mem = Memory::createMemory(store->get(), mt->limits.min * MEMORY_PAGE_SIZE, mt->limits.max * MEMORY_PAGE_SIZE, true, false);
+        return new wasm_memory_t(mem, mt->clone());
+    } catch (Exception* e) {
+        e->releaseRef();
+        return nullptr;
+    }
 }
 
 own wasm_memorytype_t* wasm_memory_type(const wasm_memory_t* mem)
@@ -1259,6 +1346,38 @@ bool wasm_memory_grow(wasm_memory_t* mem, wasm_memory_pages_t delta)
     return mem->get()->grow(delta * MEMORY_PAGE_SIZE);
 }
 
+// Tag Types
+own wasm_tagtype_t* wasm_tagtype_new(own wasm_functype_t* type)
+{
+    wasm_tagtype_t* result = new wasm_tagtype_t(type);
+    wasm_functype_delete(type);
+    return result;
+}
+
+const wasm_functype_t* wasm_tagtype_type(const wasm_tagtype_t* tt)
+{
+    return tt->functype;
+}
+
+// Tag Instances
+own wasm_tag_t* wasm_tag_new(wasm_store_t* store, const wasm_tagtype_t* tt)
+{
+    Store::CollectionScope scope;
+    store->get()->requestCollection();
+
+    Vector<CompositeType*> types;
+    types.push_back(ToWalrusFunctionType(tt->functype, true));
+    store->get()->getTypeStore().updateTypes(types);
+    Tag* tag = Tag::createTag(store->get(), types[0]->asFunction());
+    store->get()->getTypeStore().releaseTypes(types);
+    return new wasm_tag_t(tag, tt->clone());
+}
+
+own wasm_tagtype_t* wasm_tag_type(const wasm_tag_t* tag)
+{
+    return tag->type()->clone();
+}
+
 // Externals
 
 wasm_externkind_t wasm_extern_kind(const wasm_extern_t* ext)
@@ -1272,6 +1391,8 @@ wasm_externkind_t wasm_extern_kind(const wasm_extern_t* ext)
         return WASM_EXTERN_TABLE;
     case Object::MemoryKind:
         return WASM_EXTERN_MEMORY;
+    case Object::TagKind:
+        return WASM_EXTERN_TAG;
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return WASM_EXTERN_MEMORY;
@@ -1289,6 +1410,8 @@ own wasm_externtype_t* wasm_extern_type(const wasm_extern_t* ext)
         return static_cast<const wasm_table_t*>(ext)->type()->clone();
     case Object::MemoryKind:
         return static_cast<const wasm_memory_t*>(ext)->type()->clone();
+    case Object::TagKind:
+        return static_cast<const wasm_tag_t*>(ext)->type()->clone();
     default:
         RELEASE_ASSERT_NOT_REACHED();
         return nullptr;
@@ -1324,7 +1447,9 @@ own wasm_instance_t* wasm_instance_new(
 
     if (trapResult.exception) {
         // FIXME
-        *outTrap = new wasm_trap_t(new Trap(), trapResult.exception->message());
+        if (outTrap) {
+            *outTrap = new wasm_trap_t(new Trap(), trapResult.exception->message());
+        }
         return nullptr;
     }
 
@@ -1360,6 +1485,11 @@ void wasm_instance_exports(const wasm_instance_t* ins, own wasm_extern_vec_t* ou
         case ExportType::Global: {
             Global* glob = instance->global(itemIndex);
             out->data[i] = new wasm_global_t(glob, new wasm_globaltype_t(instance->module()->globalType(itemIndex)));
+            break;
+        }
+        case ExportType::Tag: {
+            Tag* tag = instance->tag(itemIndex);
+            out->data[i] = new wasm_tag_t(tag, new wasm_tagtype_t(instance->module()->tagType(itemIndex)));
             break;
         }
         default: {
@@ -1594,6 +1724,7 @@ WASM_IMPL_TYPE_CLONE(functype);
 WASM_IMPL_TYPE_CLONE(globaltype);
 WASM_IMPL_TYPE_CLONE(tabletype);
 WASM_IMPL_TYPE_CLONE(memorytype);
+WASM_IMPL_TYPE_CLONE(tagtype);
 WASM_IMPL_TYPE_CLONE(externtype);
 
 #define WASM_IMPL_REF_BASE(name)                                        \
@@ -1678,6 +1809,7 @@ WASM_IMPL_REF(memory);
 WASM_IMPL_REF(table);
 WASM_IMPL_REF(trap);
 WASM_IMPL_REF(module); // FIXME
+WASM_IMPL_REF(tag);
 
 #define WASM_IMPL_SHARABLE_REF(name)                                           \
     WASM_IMPL_REF(name)                                                        \
@@ -1733,6 +1865,12 @@ WASM_IMPL_EXTERN(table);
 WASM_IMPL_EXTERN(func);
 WASM_IMPL_EXTERN(global);
 WASM_IMPL_EXTERN(memory);
+WASM_IMPL_EXTERN(tag);
+
+const wasm_tag_t* wasm_extern_as_tag_const(const wasm_extern_t* ext)
+{
+    return static_cast<const wasm_tag_t*>(ext);
+}
 
 } // extern "C"
 
