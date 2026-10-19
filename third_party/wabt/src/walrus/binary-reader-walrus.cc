@@ -1345,53 +1345,41 @@ public:
         return Result::Ok;
     }
 
-    /* Dylink section */
+    /* Dylink section. These meta hints are currently ignored by walrus. */
     Result BeginDylinkSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkInfo(uint32_t mem_size, uint32_t mem_align, uint32_t table_size, uint32_t table_align) override {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkNeededCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkNeeded(nonstd::string_view so_name) override {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkRuntimePathCount(Index count) {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkRuntimePath(nonstd::string_view path) {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkTargetArch(nonstd::string_view arch) {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkImportCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkExportCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkImport(nonstd::string_view module, nonstd::string_view name, uint32_t flags) override {
-        abort();
         return Result::Ok;
     }
     Result OnDylinkExport(nonstd::string_view name, uint32_t flags) override {
-        abort();
         return Result::Ok;
     }
     Result EndDylinkSection() override {
-        abort();
         return Result::Ok;
     }
 
@@ -1691,7 +1679,6 @@ std::string ReadWasmBinary(const std::string &filename, const uint8_t *data, siz
     const bool kStopOnFirstError = true;
     const bool kFailOnCustomSectionError = false;
     ReadBinaryOptions options(getFeatures(featureFlags), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
-    options.read_linking_metadata = false;
     BinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate, filename, featureFlags);
     Result result = ReadBinary(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);
 
@@ -2211,7 +2198,6 @@ std::string ReadWasmComponentBinary(const uint8_t *data, size_t size, WASMCompon
     const bool kStopOnFirstError = true;
     const bool kFailOnCustomSectionError = false;
     ReadBinaryOptions options(getFeatures(delegate->featureFlags()), nullptr, kReadDebugNames, kStopOnFirstError, kFailOnCustomSectionError);
-    options.read_linking_metadata = false;
     ComponentBinaryReaderDelegateWalrus binaryReaderDelegateWalrus(delegate);
     Result result = ReadBinaryComponent(ByteSpan(data, size), &binaryReaderDelegateWalrus, options);
 
