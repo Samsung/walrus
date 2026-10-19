@@ -264,6 +264,10 @@ static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* contex
 
 static void throwRef(GCException* exception, ExecutionContext* context)
 {
+    if (UNLIKELY(Value::isNull(exception))) {
+        context->error = ExecutionContext::NullStructReferenceError;
+        return;
+    }
     context->error = ExecutionContext::CapturedException;
     exception->exception()->addRef();
     context->capturedException = exception->exception();
