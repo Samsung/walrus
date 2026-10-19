@@ -24,6 +24,7 @@ import re
 import fnmatch
 import platform
 import tarfile
+import socket
 
 from argparse import ArgumentParser
 from difflib import unified_diff
@@ -150,7 +151,7 @@ def run_core_tests(engine):
 def run_wasi_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi', 'preview1')
 
-    print('Running wasi tests:')
+    print('Running wasi preview1 tests:')
     xpass = glob(join(TEST_DIR, '*.wast'))
     xpass_result = _run_wast_tests(
         engine, xpass, False,
@@ -176,11 +177,14 @@ def run_wasi_tests(engine):
 @runner('wasip2', default=True)
 def run_wasi_tests(engine):
     TEST_DIR = join(PROJECT_SOURCE_DIR, 'test', 'wasi', 'preview2')
+    can_compile_sources = True
+    download_compiler = True
     wasi_clang_path = "wasm32-wasip2-clang++"
     system = ""
 
     if os.system(wasi_clang_path + " --version >/dev/null") == 0:
         print("wasm32-wasip2-clang++ was found on the system")
+        download_compiler = False
     else:
         if sys.platform == 'linux':
             system = 'linux'
@@ -189,39 +193,55 @@ def run_wasi_tests(engine):
         elif sys.platform == 'darwin':
             system = 'macos'
         else:
-            print("Could not identify system: ",
-                  sys.platform + ". Exiting now.")
-            return
+            print("Could not identify system: " + sys.platform)
+            can_compile_sources = False
 
-    folder_name = "wasi-sdk-32.0-" + platform.machine() + "-" + system
-    if system != "" and not os.path.exists(folder_name):
-        print("downloading wasi-sdk for compilation...")
-        url = (
-            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-32/"
-            + folder_name + ".tar.gz")
-        try:
-            urlretrieve(url, join(PROJECT_SOURCE_DIR, folder_name + ".tar.gz"))
-        except:
-            print("Error happened while downloading the wasi-sdk")
-            return
+        arch = platform.machine().lower()
+        if arch not in ['arm64', 'riscv64', 'x86_64', 'amd64']:
+            print("Wasi compiler incompatible with cpu architecture.")
+            can_compile_sources = False
+        if arch == 'amd64':
+            arch = 'x86_64'
 
-        with tarfile.open(folder_name + ".tar.gz") as file:
-            file.extractall("./")
-        wasi_clang_path = folder_name + "/bin/wasm32-wasip2-clang++"
+    if can_compile_sources:
+        successfull_download = True
+        if download_compiler:
+            folder_name = "wasi-sdk-32.0-" + arch + "-" + system
+            if system != "" and not os.path.exists(folder_name):
+                print("downloading wasi-sdk for compilation...")
+                url = (
+                    "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-32/"
+                    + folder_name + ".tar.gz")
+                try:
+                    socket.setdefaulttimeout(10)
+                    urlretrieve(
+                        url, join(PROJECT_SOURCE_DIR, folder_name + ".tar.gz"))
+                    with tarfile.open(folder_name + ".tar.gz") as file:
+                        file.extractall("./")
+                    wasi_clang_path = folder_name + "/bin/wasm32-wasip2-clang++"
+                except:
+                    print("Error happened while downloading the wasi-sdk")
+                    successfull_download = False
+            else:
+                wasi_clang_path = join(folder_name, "bin", wasi_clang_path)
+                print("using wasm32-wasip2-clang++ found in current directory")
+
+        if successfull_download or can_compile_sources:
+            cpp_sources = os.listdir(join(TEST_DIR, 'sources'))
+            print("compiling test sources...")
+            if not os.path.exists(join(TEST_DIR, "wasm")):
+                os.mkdir(join(TEST_DIR, "wasm"))
+            for source in cpp_sources:
+                proc = Popen([
+                    wasi_clang_path,
+                    join(TEST_DIR, 'sources', source), "-fno-exceptions", "-o",
+                    join(TEST_DIR, "wasm", source + ".wasm")
+                ])
+                proc.wait()
     else:
-        print("using wasm32-wasip2-clang++ found in current directory")
+        print("Could not compile test sources, running existing tests only.")
 
-    cpp_sources = os.listdir(join(TEST_DIR, 'sources'))
-    flags = "-fno-exceptions"
-    print("compiling test sources...")
-    if not os.path.exists(join(TEST_DIR, "wasm")):
-        os.mkdir(join(TEST_DIR, "wasm"))
-    for source in cpp_sources:
-        os.system(wasi_clang_path + "  " + join(TEST_DIR, 'sources', source) +
-                  " " + flags + "  " + " -o " +
-                  join(TEST_DIR, "wasm", source + ".wasm"))
-
-    print('Running wasi tests:')
+    print('Running wasi preview2 tests:')
     xpass = glob(join(TEST_DIR, "wasm", '*.wasm')) + glob(
         join(TEST_DIR, '*.wast'))
     xpass_result = _run_wast_tests(
@@ -240,7 +260,7 @@ def run_wasi_tests(engine):
         file.truncate(0)
 
     if fail_total > 0:
-        raise Exception("basic wasi tests failed")
+        raise Exception("wasi preveiw2 tests failed")
 
 
 @runner('jit', default=True)
