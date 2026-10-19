@@ -33,8 +33,6 @@ namespace wabt {
 class Stream;
 
 struct ReadBinaryOptions {
-  // Runtime consumers can ignore object-file and dynamic-linker metadata.
-  bool read_linking_metadata = true;
   ReadBinaryOptions() = default;
   ReadBinaryOptions(const Features& features,
                     Stream* log_stream,
