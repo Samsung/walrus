@@ -64,8 +64,14 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isSh
 #endif
         m_reservedSizeInByte = std::min(std::max(initialReservedSize, initialSizeInByte), m_maximumSizeInByte);
         m_buffer = reinterpret_cast<uint8_t*>(mmap(NULL, m_reservedSizeInByte, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
-        RELEASE_ASSERT(MAP_FAILED != m_buffer);
-        mprotect(m_buffer, initialSizeInByte, (PROT_READ | PROT_WRITE));
+        if (UNLIKELY(m_buffer == MAP_FAILED)) {
+            Trap::throwException("memory allocation failed");
+        }
+        if (UNLIKELY(mprotect(m_buffer, initialSizeInByte, (PROT_READ | PROT_WRITE)) != 0)) {
+            munmap(m_buffer, m_reservedSizeInByte);
+            m_buffer = nullptr;
+            Trap::throwException("memory allocation failed");
+        }
     } else {
         m_reservedSizeInByte = 0;
         m_buffer = nullptr;
@@ -73,7 +79,9 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isSh
 #else
     m_buffer = reinterpret_cast<uint8_t*>(calloc(1, initialSizeInByte));
     m_reservedSizeInByte = initialSizeInByte;
-    RELEASE_ASSERT(m_buffer);
+    if (UNLIKELY(m_buffer == nullptr)) {
+        Trap::throwException("memory allocation failed");
+    }
 #endif
 }
 
@@ -95,7 +103,9 @@ bool Memory::grow(uint64_t growSizeInByte)
     if (newSizeInByte > m_sizeInByte && newSizeInByte <= m_maximumSizeInByte) {
 #if defined(WALRUS_USE_MMAP)
         if (newSizeInByte <= m_reservedSizeInByte) {
-            mprotect(m_buffer + m_sizeInByte, growSizeInByte, (PROT_READ | PROT_WRITE));
+            if (UNLIKELY(mprotect(m_buffer + m_sizeInByte, growSizeInByte, (PROT_READ | PROT_WRITE)) != 0)) {
+                return false;
+            }
             m_sizeInByte = newSizeInByte;
         } else {
             auto newReservedSizeInByte = std::min(newSizeInByte * 2, m_maximumSizeInByte);
@@ -103,7 +113,10 @@ bool Memory::grow(uint64_t growSizeInByte)
             if (MAP_FAILED == newBuffer) {
                 return false;
             }
-            mprotect(newBuffer, newSizeInByte, (PROT_READ | PROT_WRITE));
+            if (UNLIKELY(mprotect(newBuffer, newSizeInByte, (PROT_READ | PROT_WRITE)) != 0)) {
+                munmap(newBuffer, newReservedSizeInByte);
+                return false;
+            }
 
             // Slower copy than memcpy, but reduces the memory peak increase.
             uint64_t* bufferEnd = reinterpret_cast<uint64_t*>(m_buffer + m_sizeInByte);
