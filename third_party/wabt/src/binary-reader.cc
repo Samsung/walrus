@@ -1736,6 +1736,7 @@ Result BinaryReader::ReadInstructions(Offset end_offset, const char* context) {
         }
 
         CALLBACK(OnTryTableExpr, sig_type, catches_);
+        CALLBACK(OnOpcodeBlockSig, sig_type);
         break;
       }
 
@@ -2896,6 +2897,12 @@ Result BinaryReader::ReadCustomSection(Index section_index,
   if (options_.read_debug_names && section_name == WABT_BINARY_SECTION_NAME) {
     CHECK_RESULT(ReadNameSection(section_size));
     did_read_names_section_ = true;
+  } else if (!options_.read_linking_metadata &&
+             (section_name == WABT_BINARY_SECTION_DYLINK0 ||
+              section_name == WABT_BINARY_SECTION_DYLINK ||
+              section_name == WABT_BINARY_SECTION_LINKING ||
+              section_name.starts_with(WABT_BINARY_SECTION_RELOC))) {
+    state_.offset = read_end_;
   } else if (section_name == WABT_BINARY_SECTION_DYLINK0) {
     CHECK_RESULT(ReadDylink0Section(section_size));
   } else if (section_name == WABT_BINARY_SECTION_DYLINK) {
