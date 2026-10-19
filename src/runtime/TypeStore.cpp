@@ -379,12 +379,25 @@ void TypeStore::updateTypes(Vector<CompositeType*>& types)
     }
 }
 
+TypeStore::~TypeStore()
+{
+    // Conservative GC can finalize objects after their Store is gone.
+    // Their type references remain valid, but no longer belong to this cache.
+    RecursiveType* current = m_first;
+    while (current != nullptr) {
+        current->m_typeStore = nullptr;
+        current = current->m_next;
+    }
+}
+
 void TypeStore::destroyRecursiveType(RecursiveType* recType)
 {
     ASSERT(recType->m_refCount == 0);
 
     if (recType->m_prev == nullptr) {
-        m_first = recType->m_next;
+        if (recType->m_typeStore != nullptr) {
+            recType->m_typeStore->m_first = recType->m_next;
+        }
     } else {
         recType->m_prev->m_next = recType->m_next;
     }
@@ -431,7 +444,7 @@ void TypeStore::ReleaseRef(const CompositeType** typeInfo)
     ASSERT(index > 0);
     RecursiveType* recType = typeInfo[index]->getRecursiveType();
     if (--recType->m_refCount == 0) {
-        recType->m_typeStore->destroyRecursiveType(recType);
+        destroyRecursiveType(recType);
     }
 }
 

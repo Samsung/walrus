@@ -58,6 +58,7 @@ public:
         ComponentInstanceKind,
         // Used by the test system
         ExternalValueKind,
+        ForeignKind,
         Invalid,
     };
 
