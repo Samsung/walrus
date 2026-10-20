@@ -485,6 +485,7 @@ jobs:
       fail-fast: false
       matrix:
         mode: [debug, release]
+        asan: ['OFF', 'ON']
     steps:
       - uses: actions/checkout@v4
         with:
@@ -497,7 +498,11 @@ jobs:
         env:
           BUILD_OPTIONS: -DCMAKE_BUILD_TYPE=${{ matrix.mode }} -DWALRUS_ARCH=x64 -DWALRUS_ENABLE_SHELL=OFF -DWALRUS_BUILD_API_TESTS=ON -GNinja
         run: |
-          cmake -H. -Bout/api_test $BUILD_OPTIONS
+          if [ "${{ matrix.asan }}" = 'ON' ]; then
+            cmake -H. -Bout/api_test $BUILD_OPTIONS -DWALRUS_ASAN=ON -DCMAKE_C_FLAGS=-fsanitize=address -DCMAKE_CXX_FLAGS=-fsanitize=address -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address
+          else
+            cmake -H. -Bout/api_test $BUILD_OPTIONS
+          fi
           ninja -Cout/api_test
           cp third_party/wasm-c-api/example/*.wasm out/api_test/.
       - name: Run Tests
