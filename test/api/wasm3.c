@@ -53,6 +53,7 @@ int main(void)
 
     wasm_byte_vec_t binary;
     wasm_byte_vec_new(&binary, sizeof(module_bytes), (const char*)module_bytes);
+    check(wasm_module_validate(store, &binary), "validate Wasm3 features");
     wasm_module_t* module = wasm_module_new(store, &binary);
     check(module != NULL, "module creation");
     wasm_byte_vec_delete(&binary);
@@ -75,10 +76,19 @@ int main(void)
     wasm_val_delete(&result1);
 
     wasm_val_t result2 = WASM_INIT_VAL;
-    wasm_val_vec_t results2 = { 2, &result2 };
+    wasm_val_vec_t results2 = { 1, &result2 };
     trap = wasm_func_call(wasm_extern_as_func(exports.data[1]), &args, &results2);
     check(trap == NULL, "call");
+    check(result2.kind == WASM_ANYREF && result2.of.ref != NULL, "i31 result wrapper");
+    wasm_val_t copied = WASM_INIT_VAL;
+    wasm_val_copy(&copied, &result2);
+    check(wasm_ref_same(result2.of.ref, copied.of.ref), "copied i31 identity");
+    check(wasm_ref_as_foreign(result2.of.ref) == NULL, "i31 is not a foreign object");
     wasm_val_delete(&result2);
+    wasm_ref_t* second_copy = wasm_ref_copy(copied.of.ref);
+    check(wasm_ref_same(second_copy, copied.of.ref), "copy survives original deletion");
+    wasm_val_delete(&copied);
+    wasm_ref_delete(second_copy);
 
     wasm_val_delete(&param);
     wasm_extern_vec_delete(&exports);
