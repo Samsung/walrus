@@ -325,7 +325,7 @@ struct wasm_ref_t {
     virtual ~wasm_ref_t()
     {
         // Ignore i31 values
-        if (!isI31()) {
+        if (obj && !isI31()) {
             // Store destruction already freed this object. Only the wrapper remains.
             if (storeLifetime && !*storeLifetime) {
                 return;
@@ -543,20 +543,31 @@ struct wasm_instance_t : wasm_ref_t {
 struct wasm_trap_t : wasm_ref_t {
     wasm_trap_t(own const Trap* t, const wasm_message_t* msg)
         : wasm_ref_t(t)
+        , trap(t)
     {
         wasm_byte_vec_copy(&message, msg);
     }
 
     wasm_trap_t(own const Trap* t, const std::string& msg)
         : wasm_ref_t(t)
+        , trap(t)
     {
         // wasm_message_t is null terminated (wasm.h); callers print it as a C string.
         wasm_byte_vec_new(&message, msg.length() + 1, msg.c_str());
     }
 
+    wasm_trap_t(const wasm_trap_t& other)
+        : wasm_ref_t(other)
+        , trap(other.trap)
+    {
+        wasm_byte_vec_copy(&message, &other.message);
+    }
+
     virtual ~wasm_trap_t()
     {
         wasm_byte_vec_delete(&message);
+        // Trap is not Store-owned and may die before the base destructor.
+        obj = nullptr;
     }
 
     const Trap* get() const
@@ -565,6 +576,7 @@ struct wasm_trap_t : wasm_ref_t {
         return static_cast<const Trap*>(obj);
     }
 
+    std::shared_ptr<const Trap> trap;
     wasm_message_t message;
 };
 

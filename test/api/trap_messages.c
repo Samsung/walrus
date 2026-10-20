@@ -45,7 +45,13 @@ static void check_message(wasm_trap_t* trap)
     wasm_trap_message(copy, &message);
     check(message.size > 1 && message.data[message.size - 1] == '\0', "copied trap owns message");
     wasm_byte_vec_delete(&message);
+    wasm_trap_t* second_copy = wasm_trap_copy(copy);
+    check(wasm_trap_same(copy, second_copy), "copy of copy shares trap identity");
     wasm_trap_delete(copy);
+    wasm_trap_message(second_copy, &message);
+    check(message.size > 1 && message.data[message.size - 1] == '\0', "second copy owns message");
+    wasm_byte_vec_delete(&message);
+    wasm_trap_delete(second_copy);
 }
 
 static int callback_mode;
@@ -149,7 +155,13 @@ int main(void)
         }
         wasm_module_delete(module);
     }
+    const char text[] = "host-created trap";
+    wasm_message_t message;
+    wasm_byte_vec_new(&message, sizeof(text), text);
+    wasm_trap_t* host_trap = wasm_trap_new(store, &message);
+    wasm_byte_vec_delete(&message);
     wasm_store_delete(store);
+    check_message(host_trap);
     wasm_engine_delete(engine);
     return 0;
 }
