@@ -1289,19 +1289,15 @@ public:
 
     /* Reloc section */
     Result BeginRelocSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnRelocCount(Index count, Index section_code) override {
-        abort();
         return Result::Ok;
     }
     Result OnReloc(RelocType type, Offset offset, Index index, uint32_t addend) override {
-        abort();
         return Result::Ok;
     }
     Result EndRelocSection() override {
-        abort();
         return Result::Ok;
     }
 
@@ -1409,74 +1405,57 @@ public:
         return Result::Ok;
     }
 
-    /* Linking section */
+    /* Linker hints have no runtime behavior; WABT validates their encoding. */
     Result BeginLinkingSection(Offset size) override {
-        abort();
         return Result::Ok;
     }
     Result OnSymbolCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnDataSymbol(Index index, uint32_t flags, nonstd::string_view name, Index segment, uint32_t offset, uint32_t size) override {
-        abort();
         return Result::Ok;
     }
     Result OnFunctionSymbol(Index index, uint32_t flags, nonstd::string_view name, Index func_index) override {
-        abort();
         return Result::Ok;
     }
     Result OnGlobalSymbol(Index index, uint32_t flags, nonstd::string_view name, Index global_index) override {
-        abort();
         return Result::Ok;
     }
     Result OnSectionSymbol(Index index, uint32_t flags, Index section_index) override {
-        abort();
         return Result::Ok;
     }
     Result OnTagSymbol(Index index, uint32_t flags, nonstd::string_view name, Index tag_index) override {
-        abort();
         return Result::Ok;
     }
     Result OnTableSymbol(Index index, uint32_t flags, nonstd::string_view name, Index table_index) override {
-        abort();
         return Result::Ok;
     }
     Result OnSegmentInfoCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnSegmentInfo(Index index, nonstd::string_view name, Address alignment, uint32_t flags) override {
-        abort();
         return Result::Ok;
     }
     Result OnInitFunctionCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnInitFunction(uint32_t priority, Index function_index) override {
-        abort();
         return Result::Ok;
     }
     Result OnComdatCount(Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnComdatBegin(nonstd::string_view name, uint32_t flags, Index count) override {
-        abort();
         return Result::Ok;
     }
     Result OnComdatEntry(ComdatType kind, Index index) override {
-        abort();
         return Result::Ok;
     }
     Result OnTargetArch(nonstd::string_view arch) {
-        abort();
         return Result::Ok;
     }
     Result EndLinkingSection() override
     {
-        abort();
         return Result::Ok;
     }
     Result EndLocalDecls() override
