@@ -346,7 +346,7 @@ struct wasm_ref_t {
 
     const Object* get() const
     {
-        ASSERT(obj && !isI31());
+        ASSERT(obj);
         return obj;
     }
 
@@ -644,7 +644,10 @@ static void FromWalrusValueTypes(const TypeVector& types, wasm_valtype_vec_t* ou
 // the function type stored in wasm_func_t.
 static own wasm_ref_t* NewWasmRef(const Object* obj)
 {
-    if (!wasm_ref_t::isI31(obj) && obj->isFunction()) {
+    if (wasm_ref_t::isI31(obj)) {
+        return new wasm_ref_t(obj);
+    }
+    if (obj->isFunction()) {
         Function* func = const_cast<Object*>(obj)->asFunction();
         return new wasm_func_t(func, new wasm_functype_t(func->functionType()));
     }
@@ -983,7 +986,7 @@ bool wasm_module_validate(wasm_store_t* store, const wasm_byte_vec_t* binary)
     Store::CollectionScope scope;
     store->get()->requestCollection();
     auto parseResult = WASMParser::parseBinary(store->get(), std::string(), reinterpret_cast<uint8_t*>(binary->data), binary->size,
-                                               wabt::FeatureFlagValue::enableWebAssembly3);
+                                               0, wabt::FeatureFlagValue::enableWebAssembly3);
     return parseResult.first.hasValue();
 }
 
