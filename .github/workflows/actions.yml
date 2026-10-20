@@ -509,6 +509,7 @@ jobs:
           ./wasm-c-api-memory
           ./wasm-c-api-multi
           ./wasm-c-api-table
+          ctest --output-on-failure
 
   coverity-scan:
     if: ${{ github.repository == 'Samsung/walrus' && github.event_name == 'push' }}
