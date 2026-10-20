@@ -2,16 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "wasm.h"
-
-/* Available only in WALRUS_BUILD_API_TESTS builds. */
-extern size_t wasm_test_store_object_count(const wasm_store_t*);
-extern size_t wasm_test_store_collection_count(const wasm_store_t*);
-extern size_t wasm_test_store_graph_build_count(const wasm_store_t*);
-extern size_t wasm_test_store_table_slot_count(const wasm_store_t*);
-extern size_t wasm_test_store_graph_trace_count(const wasm_store_t*);
-extern size_t wasm_test_store_graph_edge_count(const wasm_store_t*);
-extern wasm_module_t* wasm_test_module_new_gc(wasm_store_t*, const wasm_byte_vec_t*);
+#include "test_helpers.h"
 
 static const unsigned char module_bytes[] = {
     0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x0a, 0x02, 0x60,

@@ -1,9 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "wasm.h"
+#include "test_helpers.h"
 #include "wat.h"
-
-extern size_t wasm_test_store_object_count(const wasm_store_t*);
 
 static void check(int ok, const char* message)
 {

@@ -1084,24 +1084,24 @@ own wasm_func_t* wasm_func_new(
         functionType.get(),
         [=](ExecutionState& state, Value* argv, Value* result, void* d) {
             auto argc = state.currentFunction()->functionType()->param().size();
-            wasm_val_vec_t params, results;
-            wasm_val_vec_new_uninitialized(&params, argc);
-            wasm_val_vec_new_uninitialized(&results, functionType->result().size());
+            // A callback may throw after populating only some results. Keep
+            // every slot safe to destroy and release both vectors on unwind.
+            wasm_val_vec_t params = { argc, new wasm_val_t[argc]() };
+            std::unique_ptr<wasm_val_vec_t, decltype(&wasm_val_vec_delete)> paramsOwner(&params, wasm_val_vec_delete);
+            auto resultCount = functionType->result().size();
+            wasm_val_vec_t results = { resultCount, new wasm_val_t[resultCount]() };
+            std::unique_ptr<wasm_val_vec_t, decltype(&wasm_val_vec_delete)> resultsOwner(&results, wasm_val_vec_delete);
             FromWalrusValues(params.data, argv, argc);
 
             auto trap = callback(&params, &results);
-            wasm_val_vec_delete(&params);
 
             if (trap) {
                 // TODO
                 wasm_trap_delete(trap);
                 RELEASE_ASSERT_NOT_REACHED();
-                // Can't use wasm_val_vec_delete since it wasn't populated.
-                delete[] results.data;
             }
 
             ToWalrusValues(result, results.data, results.size);
-            wasm_val_vec_delete(&results);
         },
         nullptr);
 
@@ -1119,24 +1119,24 @@ own wasm_func_t* wasm_func_new_with_env(
         functionType.get(),
         [=](ExecutionState& state, Value* argv, Value* result, void* d) {
             auto argc = state.currentFunction()->functionType()->param().size();
-            wasm_val_vec_t params, results;
-            wasm_val_vec_new_uninitialized(&params, argc);
-            wasm_val_vec_new_uninitialized(&results, functionType->result().size());
+            // A callback may throw after populating only some results. Keep
+            // every slot safe to destroy and release both vectors on unwind.
+            wasm_val_vec_t params = { argc, new wasm_val_t[argc]() };
+            std::unique_ptr<wasm_val_vec_t, decltype(&wasm_val_vec_delete)> paramsOwner(&params, wasm_val_vec_delete);
+            auto resultCount = functionType->result().size();
+            wasm_val_vec_t results = { resultCount, new wasm_val_t[resultCount]() };
+            std::unique_ptr<wasm_val_vec_t, decltype(&wasm_val_vec_delete)> resultsOwner(&results, wasm_val_vec_delete);
             FromWalrusValues(params.data, argv, argc);
 
             auto trap = callback(env, &params, &results);
-            wasm_val_vec_delete(&params);
 
             if (trap) {
                 // TODO
                 wasm_trap_delete(trap);
                 RELEASE_ASSERT_NOT_REACHED();
-                // Can't use wasm_val_vec_delete since it wasn't populated.
-                delete[] results.data;
             }
 
             ToWalrusValues(result, results.data, results.size);
-            wasm_val_vec_delete(&results);
         },
         env);
 
