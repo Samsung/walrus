@@ -189,6 +189,12 @@ IF (WALRUS_BUILD_API_TESTS)
     TARGET_LINK_LIBRARIES (wasm-c-api-trap-messages ${WALRUS_TARGET})
     ADD_TEST (NAME wasm-c-api-trap-messages COMMAND wasm-c-api-trap-messages)
 
+    IF (NOT WIN32)
+        ADD_EXECUTABLE (wasm-c-api-stack-limit ${WALRUS_ROOT}/test/api/stack_limit.c)
+        TARGET_LINK_LIBRARIES (wasm-c-api-stack-limit ${WALRUS_TARGET} pthread)
+        ADD_TEST (NAME wasm-c-api-stack-limit COMMAND wasm-c-api-stack-limit)
+    ENDIF()
+
     ADD_EXECUTABLE (wasm-c-api-wasm3 ${WALRUS_ROOT}/test/api/wasm3.c)
     TARGET_LINK_LIBRARIES (wasm-c-api-wasm3 ${WALRUS_TARGET})
     ADD_TEST (NAME wasm-c-api-wasm3 COMMAND wasm-c-api-wasm3)

@@ -141,12 +141,31 @@ private:
     {
         m_stackLimit = (size_t)currentStackPointer();
 
+        // Keep the limit at least STACK_LIMIT_FROM_END inside the current
+        // thread's stack so that the check fires on small-stacked threads.
 #ifdef STACK_GROWS_DOWN
-        m_stackLimit = m_stackLimit - STACK_LIMIT_FROM_BASE;
+        m_stackLimit = std::max(m_stackLimit - STACK_LIMIT_FROM_BASE, threadStackBound());
 #else
-        m_stackLimit = m_stackLimit + STACK_LIMIT_FROM_BASE;
+        m_stackLimit = std::min(m_stackLimit + STACK_LIMIT_FROM_BASE, threadStackBound());
 #endif
     }
+
+    // The address STACK_LIMIT_FROM_END inside the end of the current thread's
+    // stack, resolved once per thread. An unknown stack yields a bound that
+    // never clamps, which keeps the entry-relative limit.
+    static size_t threadStackBound()
+    {
+        if (UNLIKELY(!s_threadStackBound.resolved)) {
+            resolveThreadStackBound();
+        }
+        return s_threadStackBound.value;
+    }
+    static void resolveThreadStackBound();
+    struct ThreadStackBound {
+        bool resolved;
+        size_t value;
+    };
+    static MAY_THREAD_LOCAL ThreadStackBound s_threadStackBound;
 
     static void deallocateBuffer(uint8_t* buffer)
     {
