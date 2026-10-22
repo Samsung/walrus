@@ -402,6 +402,10 @@ if (f.type == Type::B) { puts("failed in msvc."); }
 #define STACK_LIMIT_FROM_BASE (1024 * 1024 * 7) // 7MB
 #endif
 
+#ifndef STACK_LIMIT_FROM_END
+#define STACK_LIMIT_FROM_END (1024 * 1024) // 1MB
+#endif
+
 #include "util/Optional.h"
 namespace Walrus {
 typedef uint16_t ByteCodeStackOffset;
