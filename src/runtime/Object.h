@@ -19,6 +19,8 @@
 
 #include "util/Vector.h"
 
+#include <atomic>
+
 namespace Walrus {
 
 class Store;
@@ -211,7 +213,7 @@ class Extern : public StoreObject {
 public:
 #ifndef NDEBUG
     // count the total number of created Extern objects
-    static size_t g_externCount;
+    static std::atomic<size_t> g_externCount;
 #endif
 
     virtual ~Extern()
