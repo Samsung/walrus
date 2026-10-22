@@ -41,8 +41,9 @@
 namespace Walrus {
 
 #ifndef NDEBUG
-size_t Extern::g_externCount;
-size_t Exception::g_exceptionCount;
+std::atomic<size_t> Extern::g_externCount{ 0 };
+std::atomic<size_t> Exception::g_exceptionCount{ 0 };
+static std::atomic<size_t> s_liveStoreCount{ 0 };
 #endif
 
 static const FunctionType g_defaultFunctionTypes[] = {
@@ -85,6 +86,9 @@ Store::Store(Engine* engine)
 #endif
 {
     memset(m_definedFuncTypes, 0, sizeof(m_definedFuncTypes));
+#ifndef NDEBUG
+    s_liveStoreCount++;
+#endif
 #ifdef ENABLE_GC
     GC_INIT();
 #endif /* ENABLE_GC */
@@ -141,9 +145,12 @@ Store::~Store()
 #endif /* ENABLE_GC */
 
 #ifndef NDEBUG
-    // Check if all Extern objects and excetions have been deallocated.
-    ASSERT(Extern::g_externCount == 0);
-    ASSERT(Exception::g_exceptionCount == 0);
+    // Extern objects and exceptions may belong to other live stores, so
+    // check that all of them have been deallocated when the last store goes.
+    if (--s_liveStoreCount == 0) {
+        ASSERT(Extern::g_externCount == 0);
+        ASSERT(Exception::g_exceptionCount == 0);
+    }
 #endif
 }
 

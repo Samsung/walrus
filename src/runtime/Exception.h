@@ -20,6 +20,8 @@
 #include "runtime/ExecutionState.h"
 #include "util/Vector.h"
 
+#include <atomic>
+
 namespace Walrus {
 
 class Tag;
@@ -28,7 +30,7 @@ class Exception {
 public:
 #ifndef NDEBUG
     // count the total number of created Extern objects
-    static size_t g_exceptionCount;
+    static std::atomic<size_t> g_exceptionCount;
 #endif
 
     static Exception* create(const std::string& m)
