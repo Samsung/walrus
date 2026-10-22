@@ -30,9 +30,13 @@ class Function;
 
 class ExecutionState {
 public:
+    friend class Store;
     friend class Exception;
     friend class Trap;
     friend class Interpreter;
+
+    ExecutionState(const ExecutionState&) = delete;
+    ExecutionState& operator=(const ExecutionState&) = delete;
 
     ExecutionState(ExecutionState& parent)
         : m_parent(&parent)
@@ -63,11 +67,17 @@ public:
         , m_owned(owned)
     {
         ASSERT(owned == nullptr || owned == bp);
+        if (m_owned != nullptr) {
+            m_previousOwnedFrame = s_ownedFrames;
+            s_ownedFrames = this;
+        }
     }
 
     ~ExecutionState()
     {
         if (m_owned != nullptr) {
+            ASSERT(s_ownedFrames == this);
+            s_ownedFrames = m_previousOwnedFrame;
             deallocateBuffer(m_owned);
         }
     }
@@ -106,6 +116,9 @@ public:
         ASSERT(capacity > m_capacity);
         if (m_owned != nullptr) {
             deallocateBuffer(m_owned);
+        } else {
+            m_previousOwnedFrame = s_ownedFrames;
+            s_ownedFrames = this;
         }
         m_owned = buffer;
         m_bp = m_owned;
@@ -145,6 +158,9 @@ private:
     }
 
     ExecutionState* m_parent;
+    // This chain also crosses roots created by reentrant Trap::run calls.
+    static thread_local ExecutionState* s_ownedFrames;
+    ExecutionState* m_previousOwnedFrame = nullptr;
     Function* m_currentFunction;
     size_t m_stackLimit;
     // Stack frame related data

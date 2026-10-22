@@ -14,6 +14,8 @@ size_t wasm_test_store_collection_count(const wasm_store_t* store);
 size_t wasm_test_store_graph_build_count(const wasm_store_t* store);
 size_t wasm_test_store_table_slot_count(const wasm_store_t* store);
 size_t wasm_test_store_graph_trace_count(const wasm_store_t* store);
+size_t wasm_test_store_stack_scan_count(const wasm_store_t* store);
+size_t wasm_test_store_owned_frame_scan_count(const wasm_store_t* store);
 size_t wasm_test_store_graph_edge_count(const wasm_store_t* store);
 wasm_module_t* wasm_test_module_new_gc(wasm_store_t* store, const wasm_byte_vec_t* binary);
 

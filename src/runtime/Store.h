@@ -133,7 +133,7 @@ public:
     ~Store();
 
     // Only C API stores use automatic collection. Internal C++ clients retain
-    // store-lifetime ownership. Scopes cover wasm execution and bulk deletion.
+    // store-lifetime ownership. Bulk mutations must finish before collection.
     class CollectionScope {
     public:
         CollectionScope();
@@ -141,9 +141,35 @@ public:
         CollectionScope(const CollectionScope&) = delete;
         CollectionScope& operator=(const CollectionScope&) = delete;
     };
+    // Native registers, stack and owned frame buffers supply conservative roots.
+    // Without GC support, execution still defers collection until it returns.
+    class ExecutionScope {
+    public:
+        ExecutionScope();
+        ~ExecutionScope();
+        ExecutionScope(const ExecutionScope&) = delete;
+        ExecutionScope& operator=(const ExecutionScope&) = delete;
+
+        void setValueRoots(const Value* arguments, size_t argumentCount, const Value* results, size_t resultCount)
+        {
+            m_arguments = arguments;
+            m_argumentCount = argumentCount;
+            m_results = results;
+            m_resultCount = resultCount;
+        }
+
+    private:
+        friend class Store;
+        ExecutionScope* m_previous;
+        const Value* m_arguments = nullptr;
+        const Value* m_results = nullptr;
+        size_t m_argumentCount = 0;
+        size_t m_resultCount = 0;
+    };
+
     void enableAPICollection();
     // A reference mutation invalidates the snapshot. Dropping only an API
-    // root can reuse it. Never rebuild while wasm or a bulk API call runs.
+    // root can reuse it outside Wasm execution and bulk API mutations.
     void requestCollection(bool referencesChanged = true);
     static std::shared_ptr<bool> addAPIReference(const Object* object);
     static void removeAPIReference(const Object* object);
@@ -157,6 +183,8 @@ public:
     size_t apiTestGraphBuildCount() const { return m_graphBuildCount; }
     size_t apiTestTableSlotCount() const { return m_tableSlotCount; }
     size_t apiTestGraphTraceCount() const { return m_graphTraceCount; }
+    size_t apiTestStackScanCount() const { return m_stackScanCount; }
+    size_t apiTestOwnedFrameScanCount() const { return m_ownedFrameScanCount; }
     size_t apiTestGraphEdgeCount() const
     {
         size_t count = m_gcRootTargets.size();
@@ -230,6 +258,9 @@ private:
     void collectUnreferenced();
     void rebuildReferenceGraph(std::vector<StoreObject*>& dead);
     void traceReferences(Object* object, std::vector<StoreObject*>& targets);
+#ifdef ENABLE_GC
+    void traceStackReferences(std::vector<StoreObject*>& targets);
+#endif
     void collectCycles(std::vector<StoreObject*>& dead);
     void eraseGraphObject(StoreObject* object);
     void freeObjects(std::vector<StoreObject*>& dead);
@@ -248,6 +279,8 @@ private:
     size_t m_graphBuildCount = 0;
     size_t m_tableSlotCount = 0;
     size_t m_graphTraceCount = 0;
+    size_t m_stackScanCount = 0;
+    size_t m_ownedFrameScanCount = 0;
 #endif
     bool m_apiCollection = false;
     // API wrappers can be finalized after their store has been destroyed.

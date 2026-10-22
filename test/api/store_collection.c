@@ -145,8 +145,13 @@ static wasm_trap_t* delete_during_call(void* env, const wasm_val_vec_t* args, wa
     wasm_val_vec_t empty = WASM_EMPTY_VEC;
     check(!wasm_func_call(nested, &empty, &empty), "nested callback");
     wasm_func_delete(nested);
-    check(wasm_test_store_collection_count(data->store) == own_before, "defer self deletion");
-    check(wasm_test_store_collection_count(data->other) == other_before, "defer other store deletion");
+#ifdef WALRUS_GC_TESTS
+    check(wasm_test_store_collection_count(data->store) > own_before, "collect with active callback rooted by stack");
+    check(wasm_test_store_collection_count(data->other) > other_before, "collect other store during callback");
+#else
+    check(wasm_test_store_collection_count(data->store) == own_before, "defer self deletion without stack scanner");
+    check(wasm_test_store_collection_count(data->other) == other_before, "defer other store deletion without stack scanner");
+#endif
     return NULL;
 }
 
