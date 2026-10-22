@@ -186,6 +186,7 @@ enum wasm_valkind_enum {
   WASM_V128,
   WASM_ANYREF = 128,
   WASM_FUNCREF,
+  WASM_EXNREF,
 };
 
 WASM_API_EXTERN own wasm_valtype_t* wasm_valtype_new(wasm_valkind_t);

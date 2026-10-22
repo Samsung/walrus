@@ -46,10 +46,66 @@ static void check(int condition, const char* message)
     }
 }
 
+static void check_exception_references(wasm_store_t* store)
+{
+    /* Export an exnref identity function, table, mutable global, and tag. */
+    static const unsigned char bytes[] = {
+        0, 97, 115, 109, 1, 0, 0, 0, 1, 10, 2, 96, 1, 105, 1, 105,
+        96, 1, 105, 0, 3, 2, 1, 0, 4, 5, 1, 105, 1, 1, 2, 13,
+        3, 1, 0, 1, 6, 6, 1, 105, 1, 208, 105, 11, 7, 17, 4, 1,
+        102, 0, 0, 1, 116, 1, 0, 1, 103, 3, 0, 1, 120, 4, 0, 10,
+        6, 1, 4, 0, 32, 0, 11,
+    };
+    wasm_byte_vec_t binary;
+    wasm_byte_vec_new(&binary, sizeof(bytes), (const char*)bytes);
+    check(wasm_module_validate(store, &binary), "validate exception references");
+    wasm_module_t* module = wasm_module_new(store, &binary);
+    check(module != NULL, "exception reference module");
+    wasm_byte_vec_delete(&binary);
+    wasm_exporttype_vec_t types;
+    wasm_module_exports(module, &types);
+    check(types.size == 4, "exception reference export types");
+    const wasm_functype_t* function = wasm_externtype_as_functype_const(wasm_exporttype_type(types.data[0]));
+    check(wasm_valtype_kind(wasm_functype_params(function)->data[0]) == WASM_EXNREF,
+          "exception parameter kind");
+    check(wasm_valtype_kind(wasm_functype_results(function)->data[0]) == WASM_EXNREF,
+          "exception result kind");
+    wasm_exporttype_vec_delete(&types);
+    wasm_extern_vec_t imports = WASM_EMPTY_VEC;
+    wasm_trap_t* trap = NULL;
+    wasm_instance_t* instance = wasm_instance_new(store, module, &imports, &trap);
+    check(instance != NULL && trap == NULL, "exception reference instantiation");
+    wasm_extern_vec_t exports;
+    wasm_instance_exports(instance, &exports);
+    wasm_val_t argument = WASM_INIT_VAL;
+    argument.kind = WASM_EXNREF;
+    wasm_val_t result = WASM_INIT_VAL;
+    wasm_val_vec_t args = { 1, &argument };
+    wasm_val_vec_t results = { 1, &result };
+    trap = wasm_func_call(wasm_extern_as_func(exports.data[0]), &args, &results);
+    check(trap == NULL && result.kind == WASM_EXNREF && result.of.ref == NULL,
+          "exception reference identity call");
+    wasm_val_t copy = WASM_INIT_VAL;
+    wasm_val_copy(&copy, &result);
+    check(copy.kind == WASM_EXNREF && copy.of.ref == NULL, "copy null exception reference");
+    wasm_val_delete(&copy);
+    wasm_val_delete(&result);
+    wasm_global_t* global = wasm_extern_as_global(exports.data[2]);
+    wasm_global_set(global, &argument);
+    wasm_global_get(global, &result);
+    check(result.kind == WASM_EXNREF && result.of.ref == NULL, "exception reference global");
+    wasm_val_delete(&result);
+    wasm_val_delete(&argument);
+    wasm_extern_vec_delete(&exports);
+    wasm_instance_delete(instance);
+    wasm_module_delete(module);
+}
+
 int main(void)
 {
     wasm_engine_t* engine = wasm_engine_new();
     wasm_store_t* store = wasm_store_new(engine);
+    check_exception_references(store);
 
     wasm_byte_vec_t binary;
     wasm_byte_vec_new(&binary, sizeof(module_bytes), (const char*)module_bytes);

@@ -599,8 +599,9 @@ static wasm_valkind_t FromWalrusValueType(const Value::Type& type)
         return WASM_FUNCREF;
     case Value::Type::ExnRef:
     case Value::Type::NullExnRef:
-        RELEASE_ASSERT_NOT_REACHED();
-        return WASM_ANYREF;
+    case Value::Type::NoExnRef:
+    case Value::Type::NullNoExnRef:
+        return WASM_EXNREF;
     default:
         // In Walrus, every reference is compatible with
         // nullexternref except func and exception references.
@@ -624,6 +625,8 @@ static Value::Type ToWalrusValueType(const wasm_valkind_t& kind)
         return Value::Type::V128;
     case WASM_FUNCREF:
         return Value::Type::NullFuncRef;
+    case WASM_EXNREF:
+        return Value::Type::NullExnRef;
     case WASM_ANYREF:
         return Value::Type::NullExternRef;
     default:
@@ -692,7 +695,10 @@ static wasm_val_t FromWalrusValue(const Value& val)
         break;
     case Value::Type::ExnRef:
     case Value::Type::NullExnRef:
-        RELEASE_ASSERT_NOT_REACHED();
+    case Value::Type::NoExnRef:
+    case Value::Type::NullNoExnRef:
+        result.kind = WASM_EXNREF;
+        result.of.ref = val.isNull() ? nullptr : NewWasmRef(static_cast<Object*>(val.asReference()));
         break;
     default:
         ASSERT(Value::isRefType(val.type()));
@@ -718,6 +724,8 @@ static Value ToWalrusValue(const wasm_val_t& val)
         return Value(Value::V128); // dummy value for V128
     case WASM_ANYREF:
         return Value(Value::NullExternRef, val.of.ref ? const_cast<Object*>(val.of.ref->get()) : nullptr);
+    case WASM_EXNREF:
+        return Value(Value::NullExnRef, val.of.ref ? const_cast<Object*>(val.of.ref->get()) : nullptr);
     case WASM_FUNCREF:
         return Value(val.of.ref ? static_cast<Function*>(const_cast<Object*>(val.of.ref->get())) : nullptr);
     default:
