@@ -3277,7 +3277,7 @@ public:
         ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
         Walrus::ArrayNewFixed* code = peekByteCode<Walrus::ArrayNewFixed>(pos);
         for (size_t i = 0; i < count; i++) {
-            ASSERT(peekVMStackValueType() == toDebugType(typeInfo->field().stackType()));
+            ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(typeInfo->field().stackType()));
             code->dataOffsets()[count - i - 1] = popVMStack();
         }
 
@@ -3425,7 +3425,7 @@ public:
         ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
         Walrus::StructNew* code = peekByteCode<Walrus::StructNew>(pos);
         for (size_t i = 0; i < fields.size(); i++) {
-            ASSERT(peekVMStackValueType() == toDebugType(fields.types()[fields.size() - i - 1].stackType()));
+            ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(fields.types()[fields.size() - i - 1].stackType()));
             code->dataOffsets()[fields.size() - i - 1] = popVMStack();
         }
 

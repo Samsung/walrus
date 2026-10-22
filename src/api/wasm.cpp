@@ -1176,15 +1176,14 @@ size_t wasm_func_result_arity(const wasm_func_t* func)
 own wasm_trap_t* wasm_func_call(
     const wasm_func_t* func, const wasm_val_vec_t* args, wasm_val_vec_t* results)
 {
-    Store::CollectionScope scope;
-    // Wasm may remove the last internal reference without deleting an API wrapper.
-    func->get()->ownerStore()->requestCollection();
+    Store::ExecutionScope scope;
     size_t paramNum = wasm_func_param_arity(func);
     size_t resultNum = wasm_func_result_arity(func);
 
     ValueVector walrusArgs, walrusResults;
     walrusArgs.resize(paramNum);
     walrusResults.resize(resultNum);
+    scope.setValueRoots(walrusArgs.data(), paramNum, walrusResults.data(), resultNum);
 
     ToWalrusValues(walrusArgs.data(), args->data, paramNum);
 
@@ -1448,10 +1447,7 @@ own wasm_instance_t* wasm_instance_new(
     wasm_store_t* store, const wasm_module_t* module, const wasm_extern_vec_t* imports,
     own wasm_trap_t** outTrap)
 {
-    Store::CollectionScope scope;
-    // Includes failed instantiation and start functions; the return wrapper is
-    // constructed before scope destruction permits collection.
-    store->get()->requestCollection();
+    Store::ExecutionScope scope;
     struct RunData {
         Module* module;
         ExternVector importValues;
@@ -1601,6 +1597,16 @@ extern "C" WASM_API_EXTERN size_t wasm_test_store_table_slot_count(const wasm_st
 extern "C" WASM_API_EXTERN size_t wasm_test_store_graph_trace_count(const wasm_store_t* store)
 {
     return store->get()->apiTestGraphTraceCount();
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_stack_scan_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestStackScanCount();
+}
+
+extern "C" WASM_API_EXTERN size_t wasm_test_store_owned_frame_scan_count(const wasm_store_t* store)
+{
+    return store->get()->apiTestOwnedFrameScanCount();
 }
 
 extern "C" WASM_API_EXTERN size_t wasm_test_store_graph_edge_count(const wasm_store_t* store)

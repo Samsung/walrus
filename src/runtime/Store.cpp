@@ -21,6 +21,7 @@
 #include "runtime/Component.h"
 #include "runtime/ComponentInstance.h"
 #include "runtime/Exception.h"
+#include "runtime/ExecutionState.h"
 #include "runtime/ObjectType.h"
 #include "runtime/Function.h"
 #include "runtime/Table.h"
@@ -64,6 +65,11 @@ static NEVER_INLINE void clearStack()
 static thread_local std::vector<Store*> s_apiStores;
 static thread_local size_t s_collectionDepth;
 static thread_local bool s_collecting;
+static thread_local Store::ExecutionScope* s_executionScope;
+static thread_local bool s_canScanStack;
+#ifdef ENABLE_GC
+static thread_local GC_stack_base s_stackBase;
+#endif
 struct APIGCReference {
     size_t count = 0;
 #ifdef ENABLE_GC
@@ -179,9 +185,49 @@ Store::CollectionScope::~CollectionScope()
     }
 }
 
+Store::ExecutionScope::ExecutionScope()
+    : m_previous(s_executionScope)
+{
+    s_executionScope = this;
+    if (!s_canScanStack) {
+        ++s_collectionDepth;
+    }
+    // Wasm can mutate any reachable GC object without going through the API.
+    // Collect when a callback requests it or the outer call returns.
+    for (Store* store : s_apiStores) {
+        store->m_referenceGraphDirty = true;
+        store->m_collectionPending = true;
+    }
+}
+
+Store::ExecutionScope::~ExecutionScope()
+{
+    ASSERT(s_executionScope == this);
+    s_executionScope = m_previous;
+    if (!s_canScanStack) {
+        ASSERT(s_collectionDepth);
+        --s_collectionDepth;
+    }
+    if (!m_previous) {
+        // Drop conservative roots, including stale stack words, after execution.
+        // Returned API handles already exist at this point.
+        for (Store* store : s_apiStores) {
+            store->m_referenceGraphDirty = true;
+            store->m_collectionPending = true;
+        }
+        collectPending();
+    }
+}
+
 void Store::enableAPICollection()
 {
     ASSERT(!m_apiCollection);
+#ifdef ENABLE_GC
+    if (s_apiStores.empty()) {
+        // Unsupported stack layouts fall back to deferring collection.
+        s_canScanStack = GC_get_stack_base(&s_stackBase) == GC_SUCCESS;
+    }
+#endif
     m_apiCollection = true;
     s_apiStores.push_back(this);
 }
@@ -433,6 +479,100 @@ void Store::traceReferences(Object* source, std::vector<StoreObject*>& targets)
     }
 }
 
+#ifdef ENABLE_GC
+namespace {
+struct ConservativeRoots {
+    std::unordered_set<StoreObject*> objects;
+    std::unordered_set<StoreObject*> roots;
+    std::unordered_set<void*> visited;
+    std::vector<void*> pending;
+
+    void visit(uintptr_t bits)
+    {
+        if (!bits || (bits & 1)) {
+            return;
+        }
+        void* pointer = reinterpret_cast<void*>(bits);
+        auto it = objects.find(static_cast<StoreObject*>(pointer));
+        if (it != objects.end()) {
+            roots.insert(*it);
+            return;
+        }
+        // Never interpret arbitrary stack words as Object headers. Follow only
+        // allocations validated by BDWGC, including interior pointers.
+        if (GC_is_heap_ptr(pointer)) {
+            void* base = GC_base(pointer);
+            if (base && visited.insert(base).second) {
+                pending.push_back(base);
+            }
+        }
+    }
+
+    ATTRIBUTE_NO_SANITIZE_ADDRESS void scan(const void* start, size_t size)
+    {
+        const uint8_t* bytes = static_cast<const uint8_t*>(start);
+        // Wasm slots can be 4-byte aligned even on a 64-bit host. memcpy avoids
+        // unaligned pointer loads on ARM. Reading stack redzones is intentional.
+        for (size_t offset = 0; offset + sizeof(uintptr_t) <= size; offset += sizeof(uint32_t)) {
+            uintptr_t bits;
+            memcpy(&bits, bytes + offset, sizeof(bits));
+            visit(bits);
+        }
+    }
+
+    static void GC_CALLBACK scanNative(void** bottom, void** top, void* data, unsigned)
+    {
+        static_cast<ConservativeRoots*>(data)->scan(bottom, reinterpret_cast<uintptr_t>(top) - reinterpret_cast<uintptr_t>(bottom));
+    }
+
+    void traceHeap()
+    {
+        while (!pending.empty()) {
+            void* base = pending.back();
+            pending.pop_back();
+            // Follow GC structs/arrays reachable only from a frame, without
+            // guessing the dynamic type of arbitrary GC allocations.
+            scan(base, GC_size(base));
+        }
+    }
+};
+} // namespace
+
+void Store::traceStackReferences(std::vector<StoreObject*>& targets)
+{
+#ifdef WALRUS_API_TESTS
+    ++m_stackScanCount;
+#endif
+    ConservativeRoots roots;
+    for (Module* module : m_modules) {
+        roots.objects.insert(module);
+    }
+    for (Instance* instance : m_instances) {
+        roots.objects.insert(instance);
+    }
+    for (Extern* ext : m_externs) {
+        roots.objects.insert(ext);
+    }
+    GC_custom_push_regs_and_stack(ConservativeRoots::scanNative, &roots, &s_stackBase, nullptr);
+    // C API bridge vectors use the C++ allocator rather than the GC heap.
+    // Keep their values rooted while wrappers are transferred or finalized.
+    for (ExecutionScope* scope = s_executionScope; scope; scope = scope->m_previous) {
+        roots.scan(scope->m_arguments, scope->m_argumentCount * sizeof(Value));
+        roots.scan(scope->m_results, scope->m_resultCount * sizeof(Value));
+    }
+    // Large interpreter frames are not native stack ranges. This list includes
+    // suspended frames across nested C API calls and tail-call buffer growth.
+    for (ExecutionState* frame = ExecutionState::s_ownedFrames; frame; frame = frame->m_previousOwnedFrame) {
+#ifdef WALRUS_API_TESTS
+        ++m_ownedFrameScanCount;
+#endif
+        roots.scan(frame->m_owned, frame->m_capacity);
+    }
+    roots.traceHeap();
+    targets.assign(roots.roots.begin(), roots.roots.end());
+}
+#endif
+
 void Store::rebuildReferenceGraph(std::vector<StoreObject*>& dead)
 {
 #ifdef WALRUS_API_TESTS
@@ -483,6 +623,19 @@ void Store::rebuildReferenceGraph(std::vector<StoreObject*>& dead)
             }
         }
     }
+#ifdef ENABLE_GC
+    if (s_executionScope && s_canScanStack) {
+        std::vector<StoreObject*> targets;
+        traceStackReferences(targets);
+        for (StoreObject* target : targets) {
+            if (roots.insert(target).second) {
+                mark(target);
+                m_gcRootTargets.push_back(target);
+                ++m_referenceGraph.find(target)->second.incoming;
+            }
+        }
+    }
+#endif
     while (!stack.empty()) {
         StoreObject* object = stack.back();
         stack.pop_back();
@@ -617,9 +770,10 @@ void Store::collectUnreferenced()
     ++m_collectionCount;
 #endif
     std::vector<StoreObject*> dead;
-    if (m_referenceGraphDirty) {
+    if (m_referenceGraphDirty || s_executionScope) {
         // Wasm can mutate tables, globals and GC fields directly, including
-        // through JIT stores. Rebuild at the outer safe point before using counts.
+        // through JIT stores. Refresh stack roots and edges at every collection
+        // while execution is suspended in a host callback.
         rebuildReferenceGraph(dead);
     } else {
         std::vector<StoreObject*> work(m_collectionCandidates.begin(), m_collectionCandidates.end());

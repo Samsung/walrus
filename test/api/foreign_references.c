@@ -46,6 +46,18 @@ int main(void)
     wasm_tabletype_t* tt = wasm_tabletype_new(wasm_valtype_new(WASM_ANYREF), &limits);
     wasm_table_t* table = wasm_table_new(store, tt, ref);
     wasm_tabletype_delete(tt);
+
+    // The upstream hostref example also stores foreign references through setters.
+    wasm_val_t nullref = WASM_INIT_VAL;
+    wasm_global_set(global, &nullref);
+    check(wasm_table_set(table, 0, NULL), "clear before foreign setters");
+    wasm_global_set(global, &value);
+    check(wasm_table_set(table, 0, ref), "set foreign Table reference");
+    wasm_val_t set_value = WASM_INIT_VAL;
+    wasm_global_get(global, &set_value);
+    check(set_value.of.ref && wasm_ref_same(set_value.of.ref, ref), "set foreign Global reference");
+    wasm_val_delete(&set_value);
+
     check(wasm_ref_as_foreign(wasm_global_as_ref(global)) == NULL, "reject non-foreign");
     wasm_foreign_delete(foreign);
     wasm_ref_delete(ref);
