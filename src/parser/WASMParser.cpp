@@ -396,22 +396,22 @@ private:
                     if (iter->position() != iter->nonOptimizedPosition()) {
                         binaryReader.generateMoveCodeIfNeeds(iter->position(), iter->nonOptimizedPosition(), iter->valueType());
                         iter->setPosition(iter->nonOptimizedPosition());
-                        if (binaryReader.m_preprocessData.m_inPreprocess && iter->hasValidLocalIndex()) {
-                            size_t pos = *binaryReader.m_readerOffsetPointer;
-                            auto localVariableIter = binaryReader.m_preprocessData
-                                                         .m_localVariableInfo[iter->localIndex()]
-                                                         .m_usageInfo.rbegin();
-                            while (true) {
-                                ASSERT(localVariableIter != binaryReader.m_preprocessData.m_localVariableInfo[iter->localIndex()].m_usageInfo.rend());
-                                if (localVariableIter->m_endPosition == std::numeric_limits<size_t>::max()) {
-                                    localVariableIter->m_endPosition = *binaryReader.m_readerOffsetPointer;
-                                    break;
-                                }
-                                localVariableIter++;
-                            }
-                        }
-                        iter->clearLocalIndex();
                     }
+
+                    if (binaryReader.m_preprocessData.m_inPreprocess && iter->hasValidLocalIndex()) {
+                        auto localVariableIter = binaryReader.m_preprocessData
+                                                     .m_localVariableInfo[iter->localIndex()]
+                                                     .m_usageInfo.rbegin();
+                        while (true) {
+                            ASSERT(localVariableIter != binaryReader.m_preprocessData.m_localVariableInfo[iter->localIndex()].m_usageInfo.rend());
+                            if (localVariableIter->m_endPosition == std::numeric_limits<size_t>::max()) {
+                                localVariableIter->m_endPosition = *binaryReader.m_readerOffsetPointer;
+                                break;
+                            }
+                            localVariableIter++;
+                        }
+                    }
+                    iter->clearLocalIndex();
                     iter++;
                 }
             }
@@ -749,18 +749,15 @@ private:
         m_functionStackSizeSoFar -= Walrus::valueStackAllocatedSize(info.valueType());
         m_vmStack.pop_back();
 
-        if (m_preprocessData.m_inPreprocess) {
-            if (info.hasValidLocalIndex()) {
-                size_t pos = *m_readerOffsetPointer;
-                auto iter = m_preprocessData.m_localVariableInfo[info.localIndex()].m_usageInfo.rbegin();
-                while (true) {
-                    ASSERT(iter != m_preprocessData.m_localVariableInfo[info.localIndex()].m_usageInfo.rend());
-                    if (iter->m_endPosition == std::numeric_limits<size_t>::max()) {
-                        iter->m_endPosition = *m_readerOffsetPointer;
-                        break;
-                    }
-                    iter++;
+        if (m_preprocessData.m_inPreprocess && info.hasValidLocalIndex()) {
+            auto iter = m_preprocessData.m_localVariableInfo[info.localIndex()].m_usageInfo.rbegin();
+            while (true) {
+                ASSERT(iter != m_preprocessData.m_localVariableInfo[info.localIndex()].m_usageInfo.rend());
+                if (iter->m_endPosition == std::numeric_limits<size_t>::max()) {
+                    iter->m_endPosition = *m_readerOffsetPointer;
+                    break;
                 }
+                iter++;
             }
         }
 
@@ -900,7 +897,7 @@ private:
         return std::make_pair(Walrus::Optional<uint32_t>(), 0);
     }
 
-    std::pair<Walrus::Optional<uint32_t>, size_t> readAheadLocalGetIfExists() // return localIndex and code length if exists
+    std::pair<Walrus::Optional<uint32_t>, size_t> readAheadLocalSetIfExists() // return localIndex and code length if exists
     {
         Walrus::Optional<uint8_t> mayLoadGetCode = lookaheadUnsigned8();
         if (mayLoadGetCode.hasValue() && mayLoadGetCode.value() == 0x21) {
@@ -1779,7 +1776,7 @@ public:
         if (!m_preprocessData.m_inPreprocess && !m_localInfo.empty()) {
             // if there is local.set code ahead,
             // we can use local variable position as expr target position
-            auto localSetInfo = readAheadLocalGetIfExists();
+            auto localSetInfo = readAheadLocalSetIfExists();
             if (localSetInfo.first) {
                 auto pos = m_localInfo[localSetInfo.first.value()].m_position;
                 // skip local.set opcode
