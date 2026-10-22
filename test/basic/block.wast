@@ -30,6 +30,17 @@
          i32.const 99
          local.set 1)
        local.get 1)
+
+  (func (export "block3") (param i32) (result i32)
+    local.get 0
+    i32.const 7
+    local.set 0
+    local.get 0
+    (block (type 0)
+      i32.const 1
+      i32.add)
+    drop
+  )
 )
 
 (assert_return (invoke "block1" (i32.const 0)) (i32.const 0))
