@@ -2479,23 +2479,18 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
 #undef OP_XCHG
 #undef OP_CMPXCHG
 
-static sljit_s32 atomicWaitCallback(ExecutionContext* context, uint8_t* address, int64_t* args, sljit_s32 size)
+template <typename T>
+static sljit_s32 atomicWaitCallback(ExecutionContext* context, uint8_t* address, int64_t* args, sljit_sw memIndex)
 {
     Instance* instance = context->instance;
+    Memory* memory = instance->memory(memIndex);
 
-    if (!instance->memory(0)->isShared()) {
+    if (!memory->isShared()) {
         return ExecutionContext::ExpectedSharedMemError;
     }
 
     uint32_t result = 0;
-    int64_t expect = args[0];
-    int64_t timeout = args[1];
-
-    if (size == 8) {
-        instance->memory(0)->atomicWait(context->state, instance->module()->store(), address, expect, timeout, &result);
-    } else {
-        instance->memory(0)->atomicWait(context->state, instance->module()->store(), address, (int32_t)expect, timeout, &result);
-    }
+    memory->atomicWait(context->state, instance->module()->store(), address, static_cast<T>(args[0]), args[1], &result);
 
     args[0] = result;
     return ExecutionContext::NoError;
@@ -2601,9 +2596,10 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R1, 0, SLJIT_EXTRACT_REG(addr.memArg.arg), 0);
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
     sljit_get_local_base(compiler, SLJIT_R2, 0, stackTmpStart);
-    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, SLJIT_IMM, size);
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, SLJIT_IMM, memIndex);
 
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, W, W, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicWaitCallback));
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, W, W, W), SLJIT_IMM,
+                     size == 8 ? GET_FUNC_ADDR(sljit_sw, atomicWaitCallback<int64_t>) : GET_FUNC_ADDR(sljit_sw, atomicWaitCallback<int32_t>));
 
     memoryShared = sljit_emit_cmp(compiler, SLJIT_EQUAL, SLJIT_IMM, ExecutionContext::NoError, SLJIT_R0, 0);
     context->appendTrapJump(ExecutionContext::ExpectedSharedMemError, sljit_emit_jump(compiler, SLJIT_JUMP));
@@ -2612,10 +2608,10 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_MEM1(SLJIT_SP), stackTmpStart + WORD_LOW_OFFSET);
 }
 
-static sljit_s32 atomicNotifyCallback(Instance* instance, uint8_t* address, int32_t count)
+static sljit_s32 atomicNotifyCallback(Instance* instance, uint8_t* address, int32_t count, sljit_sw memIndex)
 {
     uint32_t result = 0;
-    instance->memory(0)->atomicNotify(instance->module()->store(), address, count, &result);
+    instance->memory(memIndex)->atomicNotify(instance->module()->store(), address, count, &result);
     return result;
 }
 
@@ -2636,7 +2632,7 @@ static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
     } else {
         options |= MemAddress::Memory64;
 
-        if (instr->opcode() == ByteCode::MemoryAtomicNotifyMemIdxOpcode) {
+        if (instr->opcode() == ByteCode::MemoryAtomicNotifyMemIdxM64Opcode) {
             MemoryAtomicNotifyMemIdxM64* atomicNotifyMemIdxM64Operation = reinterpret_cast<MemoryAtomicNotifyMemIdxM64*>(instr->byteCode());
             offset = atomicNotifyMemIdxM64Operation->offset();
             memIndex = atomicNotifyMemIdxM64Operation->memIndex();
@@ -2671,7 +2667,8 @@ static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
     }
 
     sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, kInstanceReg, 0);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS3(W, P, W, 32), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicNotifyCallback));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R3, 0, SLJIT_IMM, memIndex);
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS4(W, P, W, 32, W), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, atomicNotifyCallback));
 
     MOVE_FROM_REG(compiler, SLJIT_MOV, dst.arg, dst.argw, SLJIT_R0);
 }
