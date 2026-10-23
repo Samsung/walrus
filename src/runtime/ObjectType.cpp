@@ -36,7 +36,9 @@ bool FunctionType::equals(const FunctionType* other, bool isSubType) const
         if (isSubType) {
             return other->isSubTypeOf(this);
         }
-        return getRecursiveType() == other->getRecursiveType();
+        // Canonical types were compared above. Sharing a recursive group does
+        // not make different types within that group equal.
+        return false;
     }
 
     if (getRecursiveType() != nullptr && !getRecursiveType()->isSingleType()) {

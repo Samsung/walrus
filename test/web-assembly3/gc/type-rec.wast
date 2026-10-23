@@ -124,6 +124,64 @@
 (assert_trap (invoke "run") "indirect call type mismatch")
 
 
+;; Dynamic matching distinguishes positions within the same recursive group,
+;; even when two positions have identical function signatures.
+
+(module
+  (rec
+    (type $expected (func (result i32)))
+    (type $wrong-result (func (result i64)))
+    (type $wrong-param (func (param funcref) (result i32)))
+    (type $same-signature (func (result i32)))
+  )
+  (rec
+    (type $equivalent (func (result i32)))
+    (type (func (result i64)))
+    (type (func (param funcref) (result i32)))
+    (type (func (result i32)))
+  )
+  (func $f (type $expected) (i32.const 42))
+  (func $g (type $wrong-result) (i64.const 4294967297))
+  (func $h (type $wrong-param) (unreachable))
+  (func $i (type $same-signature) (i32.const 43))
+  (table $t32 funcref (elem $f $g $h $i))
+  (table $t64 i64 4 funcref)
+  (elem (table $t64) (i64.const 0) func $f $g $h $i)
+
+  (func (export "call32") (param i32) (result i32)
+    (call_indirect $t32 (type $expected) (local.get 0)))
+  (func (export "call64") (param i64) (result i32)
+    (call_indirect $t64 (type $expected) (local.get 0)))
+  (func (export "tail32") (param i32) (result i32)
+    (return_call_indirect $t32 (type $expected) (local.get 0)))
+  (func (export "tail64") (param i64) (result i32)
+    (return_call_indirect $t64 (type $expected) (local.get 0)))
+  (func (export "equivalent32") (result i32)
+    (call_indirect $t32 (type $equivalent) (i32.const 0)))
+  (func (export "equivalent64") (result i32)
+    (call_indirect $t64 (type $equivalent) (i64.const 0)))
+)
+
+(assert_return (invoke "call32" (i32.const 0)) (i32.const 42))
+(assert_trap (invoke "call32" (i32.const 1)) "indirect call type mismatch")
+(assert_trap (invoke "call32" (i32.const 2)) "indirect call type mismatch")
+(assert_trap (invoke "call32" (i32.const 3)) "indirect call type mismatch")
+(assert_return (invoke "call64" (i64.const 0)) (i32.const 42))
+(assert_trap (invoke "call64" (i64.const 1)) "indirect call type mismatch")
+(assert_trap (invoke "call64" (i64.const 2)) "indirect call type mismatch")
+(assert_trap (invoke "call64" (i64.const 3)) "indirect call type mismatch")
+(assert_return (invoke "tail32" (i32.const 0)) (i32.const 42))
+(assert_trap (invoke "tail32" (i32.const 1)) "indirect call type mismatch")
+(assert_trap (invoke "tail32" (i32.const 2)) "indirect call type mismatch")
+(assert_trap (invoke "tail32" (i32.const 3)) "indirect call type mismatch")
+(assert_return (invoke "tail64" (i64.const 0)) (i32.const 42))
+(assert_trap (invoke "tail64" (i64.const 1)) "indirect call type mismatch")
+(assert_trap (invoke "tail64" (i64.const 2)) "indirect call type mismatch")
+(assert_trap (invoke "tail64" (i64.const 3)) "indirect call type mismatch")
+(assert_return (invoke "equivalent32") (i32.const 42))
+(assert_return (invoke "equivalent64") (i32.const 42))
+
+
 ;; Implicit function types never pick up non-singleton recursive types
 
 (module
