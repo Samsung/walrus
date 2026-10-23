@@ -103,3 +103,69 @@
   local.set 0
 )
 )
+
+;; A constant merged at the first loop must remain live through the next loop.
+(module
+  (func $step)
+  (func (export "merged-constant") (param $count i32) (param $call i32) (result i32)
+    (local $value i32) (local $counter i32) (local $result i32)
+    i32.const 16376
+    local.set $value
+    i32.const 4 drop
+    i32.const 5 drop
+    i32.const 6 drop
+    i32.const 7 drop
+    i32.const 8 drop
+    loop
+      local.get $value
+      local.set $counter
+      i32.const 255
+      local.set $value
+      i32.const 0
+      br_if 0
+    end
+    local.get $count
+    local.set $counter
+    loop
+      local.get $value
+      i32.const 1
+      i32.add
+      local.set $result
+      local.get $call
+      if
+        call $step
+      end
+      local.get $counter
+      i32.const 1
+      i32.sub
+      local.tee $counter
+      br_if 0
+    end
+    local.get $result)
+)
+
+(assert_return (invoke "merged-constant" (i32.const 2) (i32.const 0)) (i32.const 256))
+(assert_return (invoke "merged-constant" (i32.const 50) (i32.const 0)) (i32.const 256))
+(assert_return (invoke "merged-constant" (i32.const 2) (i32.const 1)) (i32.const 256))
+(assert_return (invoke "merged-constant" (i32.const 50) (i32.const 1)) (i32.const 256))
+
+;; Keep the merged constant live without callback constraints as well.
+(module
+  (export "run" (func 0))
+  (func (result i32)
+    (local i32 i32 i32)
+    i32.const 16376 local.set 0
+    i32.const 4 drop  i32.const 5 drop  i32.const 6 drop  i32.const 7 drop  i32.const 8 drop
+    loop
+      local.get 0 local.set 1
+      i32.const 255 local.set 0
+      i32.const 0 br_if 0
+    end
+    i32.const 2 local.set 1
+    loop
+      local.get 0 i32.const 1 i32.add local.set 2
+      local.get 1 i32.const 1 i32.sub local.tee 1 br_if 0
+    end
+    local.get 2))
+
+(assert_return (invoke "run") (i32.const 256))
