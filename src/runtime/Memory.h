@@ -298,7 +298,11 @@ public:
     void atomicWait(ExecutionState& state, Store* store, uint8_t* absoluteAddress, const T& expect, int64_t timeOut, uint32_t* out) const
     {
         T read;
-        atomicLoad(state, absoluteAddress - m_buffer, 0, &read);
+        if (is64()) {
+            atomicLoadM64(state, absoluteAddress - m_buffer, 0, &read);
+        } else {
+            atomicLoad(state, absoluteAddress - m_buffer, 0, &read);
+        }
         if (read != expect) {
             // "not-equal", the loaded value did not match the expected value
             *out = 1;
