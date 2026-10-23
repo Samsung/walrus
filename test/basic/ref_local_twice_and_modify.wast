@@ -213,3 +213,60 @@
 (assert_return (invoke "read" (i32.const 4)) (i32.const 1))
 (assert_return (invoke "read" (i32.const 8)) (i32.const 2))
 
+;; A copied local becomes a block parameter, independent of its local usage.
+(module
+  (func (export "block-param") (param i32) (result i32)
+    local.get 0
+    i32.const 7
+    local.set 0
+    local.get 0
+    block (param i32) (result i32)
+      i32.const 1
+      i32.add
+    end
+    i32.add)
+
+  (func (export "loop-param") (param i32) (result i32)
+    local.get 0
+    i32.const 7
+    local.set 0
+    local.get 0
+    loop (param i32) (result i32)
+      i32.const 1
+      i32.add
+    end
+    i32.add)
+
+  (func (export "if-param") (param i32 i32) (result i32)
+    local.get 0
+    i32.const 7
+    local.set 0
+    local.get 0
+    local.get 1
+    if (param i32) (result i32)
+      i32.const 1
+      i32.add
+    else
+      i32.const 2
+      i32.add
+    end
+    i32.add)
+
+  (func (export "block-params") (param i32) (result i32)
+    local.get 0
+    i32.const 7
+    local.set 0
+    local.get 0
+    local.get 0
+    block (param i32 i32) (result i32)
+      i32.add
+    end
+    i32.add)
+)
+
+(assert_return (invoke "block-param" (i32.const 5)) (i32.const 13))
+(assert_return (invoke "loop-param" (i32.const 5)) (i32.const 13))
+(assert_return (invoke "if-param" (i32.const 5) (i32.const 1)) (i32.const 13))
+(assert_return (invoke "if-param" (i32.const 5) (i32.const 0)) (i32.const 14))
+(assert_return (invoke "block-params" (i32.const 5)) (i32.const 19))
+
