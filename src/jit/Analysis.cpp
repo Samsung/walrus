@@ -900,7 +900,7 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         for (auto index : needed) {
             SlotData& data = slotData[index];
 
-            if (data.state != SlotData::kVariable) {
+            if (data.state == SlotData::kUnknown) {
                 continue;
             }
 
@@ -951,9 +951,11 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     candidate = VARIABLE_GET_REF(it);
                 }
 
-                head = (head == DependencyGenContext::kNoRef)
-                    ? m_variableList->getMergeHead(candidate)
-                    : mergeVariables(m_variableList, head, candidate);
+                if (data.state == SlotData::kVariable) {
+                    head = (head == DependencyGenContext::kNoRef)
+                        ? m_variableList->getMergeHead(candidate)
+                        : mergeVariables(m_variableList, head, candidate);
+                }
             }
 
             if (head == DependencyGenContext::kNoRef) {
@@ -979,10 +981,15 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             VariableList::Variable& variable = m_variableList->variables[head];
 
             if (variable.info & VariableList::kIsImmediate) {
+                if (data.state == SlotData::kConstant) {
+                    continue;
+                }
                 variable.info -= VariableList::kIsImmediate;
                 variable.u.rangeStart = variable.rangeEnd;
             }
 
+            // A constant source can be merged into a variable at another label.
+            // Its uses still need the full live range and callback constraints.
             variable.info |= (constraints | dependencyCtx.options[index]) & VariableList::kConstraints;
 
             if (variable.u.rangeStart > rangeStart) {
