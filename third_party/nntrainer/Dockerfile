@@ -12,6 +12,7 @@ RUN apt-get install --yes protobuf-compiler libprotobuf-dev
 RUN git clone --recurse-submodules --shallow-submodules https://github.com/nntrainer/nntrainer.git
 
 WORKDIR /src/nntrainer
+RUN git checkout 5ad6032a7dd36c97c1450370d052c3f46b680d98
 RUN meson build
 RUN ninja -C build
 RUN cp -r /src /data
