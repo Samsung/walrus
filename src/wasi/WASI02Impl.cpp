@@ -692,11 +692,14 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         bool baseHasMutate = (dir->flags() & DescriptorFlags::flagMutateDirectory);
         bool flagHasMutate = (descFlags & DescriptorFlags::flagMutateDirectory);
         bool flagHasWrite = (descFlags & DescriptorFlags::flagWrite);
-        bool flagHasCreate = (((openFlags & OpenFlags::openTruncate) == OpenFlags::openTruncate) || ((openFlags & OpenFlags::openCreate) == OpenFlags::openCreate));
+        bool needsMutate = ((openFlags & OpenFlags::openCreate) == OpenFlags::openCreate)
+            || ((openFlags & OpenFlags::openTruncate) == OpenFlags::openTruncate)
+            || ((openFlags & OpenFlags::openExclusive) == OpenFlags::openExclusive);
 
-        if ((flagHasMutate && !baseHasMutate) || (flagHasWrite && !baseHasMutate) || (flagHasMutate && !baseHasMutate)) {
+        if (!baseHasMutate && (flagHasMutate || flagHasWrite || needsMutate)) {
             options->memory()->store(state, resultOffset, 4, FilesystemError::readOnly);
             options->memory()->buffer()[resultOffset] = resultError;
+            break;
         }
 
         std::string guestPath;
