@@ -104,10 +104,11 @@ IF (WALRUS_WASI)
         FETCHCONTENT_DECLARE(
                 nntrainer
                 GIT_REPOSITORY https://github.com/nntrainer/nntrainer.git
-                GIT_TAG main
+                GIT_TAG 5ad6032a7dd36c97c1450370d052c3f46b680d98
         )
         FETCHCONTENT_MAKEAVAILABLE(nntrainer)
 
+        LIST (APPEND WALRUS_INCDIRS ${nntrainer_SOURCE_DIR}/api/ ${nntrainer_SOURCE_DIR}/api/ccapi/include/)
         SET (WALRUS_DEFINITIONS ${WALRUS_DEFINITIONS} -DWASINN_NNTRAINER=1)
     ENDIF()
 ENDIF()
@@ -151,7 +152,6 @@ IF (WALRUS_ENABLE_SHELL)
     TARGET_COMPILE_DEFINITIONS (walrus_shell PRIVATE ${WALRUS_DEFINITIONS})
     TARGET_COMPILE_OPTIONS (walrus_shell PRIVATE ${WALRUS_CONFIG_CXXFLAGS} ${WALRUS_CXXFLAGS} ${WALRUS_CXXFLAGS_SHELL} ${WALRUS_EXTERNAL_CXXFLAGS} ${WALRUS_PROFILER_FLAGS})
     IF (WALRUS_WASI_NN AND WASI_NN_BACKEND STREQUAL "nntrainer")
-        TARGET_INCLUDE_DIRECTORIES (walrus_shell PRIVATE ${nntrainer_SOURCE_DIR}/api/ ${nntrainer_SOURCE_DIR}/api/ccapi/include/)
         TARGET_LINK_LIBRARIES (walrus_shell PRIVATE ${WALRUS_THIRD_PARTY_ROOT}/nntrainer/libnntrainer.so ${WALRUS_THIRD_PARTY_ROOT}/nntrainer/libccapi-nntrainer.so)
     ENDIF()
 ENDIF()
