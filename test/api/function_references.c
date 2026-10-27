@@ -51,6 +51,10 @@ static void check_reference_type_validation(wasm_store_t* store)
         0, 97, 115, 109, 1, 0, 0, 0, 1, 8, 1, 96, 1, 99, 115, 1, 99, 112,
         3, 2, 1, 0, 7, 6, 1, 2, 119, 50, 0, 0, 10, 6, 1, 4, 0, 32, 0, 11,
     };
+    static const unsigned char non_nullable_bytes[] = {
+        0, 97, 115, 109, 1, 0, 0, 0, 1, 8, 1, 96, 1, 100, 115, 1, 99, 112,
+        3, 2, 1, 0, 7, 6, 1, 2, 119, 50, 0, 0, 10, 6, 1, 4, 0, 32, 0, 11,
+    };
     wasm_byte_vec_t binary;
     wasm_byte_vec_new(&binary, sizeof(bytes), (const char*)bytes);
     wasm_module_t* module = wasm_module_new(store, &binary);
@@ -94,9 +98,42 @@ static void check_reference_type_validation(wasm_store_t* store)
           "preserve null function reference result");
     wasm_val_delete(&result);
 
+    wasm_byte_vec_new(&binary, sizeof(non_nullable_bytes),
+                      (const char*)non_nullable_bytes);
+    wasm_module_t* non_nullable_module = wasm_module_new(store, &binary);
+    check(non_nullable_module != NULL, "non-nullable bottom reference module");
+    wasm_byte_vec_delete(&binary);
+    wasm_instance_t* non_nullable_instance =
+        wasm_instance_new(store, non_nullable_module, &imports, NULL);
+    check(non_nullable_instance != NULL, "non-nullable bottom reference instance");
+    wasm_extern_vec_t non_nullable_exports;
+    wasm_instance_exports(non_nullable_instance, &non_nullable_exports);
+    result = (wasm_val_t)WASM_INIT_VAL;
+    trap = wasm_func_call(wasm_extern_as_func(non_nullable_exports.data[0]),
+                          &args, &results);
+    check(trap != NULL, "reject null non-nullable bottom reference");
+    wasm_trap_delete(trap);
+    wasm_val_delete(&result);
+    wasm_extern_vec_delete(&non_nullable_exports);
+    wasm_instance_delete(non_nullable_instance);
+    wasm_module_delete(non_nullable_module);
+
     wasm_val_t inconsistent = WASM_INIT_VAL;
     inconsistent.kind = WASM_FUNCREF;
     inconsistent.of.ref = wasm_foreign_as_ref(wasm_foreign_copy(foreign));
+    wasm_val_vec_t inconsistent_args = { 1, &inconsistent };
+    result = (wasm_val_t)WASM_INIT_VAL;
+    trap = wasm_func_call(function, &inconsistent_args, &results);
+    check(trap != NULL, "reject mistagged function reference argument");
+    wasm_trap_delete(trap);
+    wasm_val_delete(&result);
+
+    wasm_globaltype_t* global_type = wasm_globaltype_new(
+        wasm_valtype_new(WASM_FUNCREF), WASM_CONST);
+    wasm_global_t* global = wasm_global_new(store, global_type, &inconsistent);
+    check(global == NULL, "reject mistagged function reference global");
+    wasm_globaltype_delete(global_type);
+
     check(wasm_ref_as_func(inconsistent.of.ref) == NULL, "reject foreign function cast");
     wasm_val_t copied = WASM_INIT_VAL;
     wasm_val_copy(&copied, &inconsistent);
