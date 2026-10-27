@@ -580,6 +580,84 @@ struct wasm_trap_t : wasm_ref_t {
     wasm_message_t message;
 };
 
+static bool CheckWalrusRefType(const Type& type, const wasm_ref_t* ref)
+{
+    if (ref == nullptr) {
+        return Value::isNullableRefType(type);
+    }
+
+    if (!ref->isI31()) {
+        const Object* obj = ref->obj;
+
+        if (type == Value::DefinedRef || type == Value::NullDefinedRef) {
+            return type.ref()->isSubTypeOf(obj->objectTypeInfo());
+        }
+
+        Object::Kind kind = obj->kind();
+
+        if (kind == Object::FunctionKind) {
+            return type == Value::NullFuncRef || type == Value::FuncRef;
+        }
+
+        if (kind == Object::ExceptionKind) {
+            return type == Value::NullExnRef || type == Value::ExnRef;
+        }
+    }
+
+    if (type == Value::ExternRef || type == Value::NullExternRef
+        || type == Value::AnyRef || type == Value::NullAnyRef
+        || type == Value::EqRef || type == Value::NullEqRef) {
+        return true;
+    }
+
+    if (ref->isI31()) {
+        return type == Value::I31Ref || type == Value::NullI31Ref;
+    }
+
+    switch (ref->obj->kind()) {
+    case Object::StructKind:
+        return type == Value::StructRef || type == Value::NullStructRef;
+    case Object::ArrayKind:
+        return type == Value::ArrayRef || type == Value::NullArrayRef;
+    default:
+        return false;
+    }
+}
+
+static bool CheckWalrusType(const Type& type, const wasm_val_t* val)
+{
+    switch (val->kind) {
+    case WASM_I32:
+        return type == Value::I32;
+    case WASM_I64:
+        return type == Value::I64;
+    case WASM_F32:
+        return type == Value::F32;
+    case WASM_F64:
+        return type == Value::F64;
+    case WASM_V128:
+        return type == Value::V128;
+    case WASM_FUNCREF:
+        if (val->of.ref != nullptr && val->of.ref->obj->kind() != Object::FunctionKind) {
+            return false;
+        }
+        return CheckWalrusRefType(type, val->of.ref);
+    case WASM_ANYREF:
+        if (val->of.ref != nullptr && (val->of.ref->obj->kind() == Object::FunctionKind || val->of.ref->obj->kind() == Object::ExceptionKind)) {
+            return false;
+        }
+        return CheckWalrusRefType(type, val->of.ref);
+    case WASM_EXNREF:
+        if (val->of.ref != nullptr && val->of.ref->obj->kind() != Object::ExceptionKind) {
+            return false;
+        }
+        return CheckWalrusRefType(type, val->of.ref);
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        return false;
+    }
+}
+
 // Common Internal Methods
 static wasm_valkind_t FromWalrusValueType(const Value::Type& type)
 {
@@ -1238,8 +1316,10 @@ void wasm_global_get(const wasm_global_t* glob, own wasm_val_t* out)
 
 void wasm_global_set(wasm_global_t* glob, const wasm_val_t* val)
 {
-    glob->get()->setValue(ToWalrusValue(*val));
-    glob->get()->ownerStore()->requestCollection();
+    if (CheckWalrusType(glob->get()->type(), val)) {
+        glob->get()->setValue(ToWalrusValue(*val));
+        glob->get()->ownerStore()->requestCollection();
+    }
 }
 
 // Table Instances
@@ -1287,7 +1367,7 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
 
 bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* ref)
 {
-    if (UNLIKELY(index >= table->get()->size())) {
+    if (UNLIKELY(index >= table->get()->size() || !CheckWalrusRefType(table->get()->type(), ref))) {
         return false;
     }
 
