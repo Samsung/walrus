@@ -1617,8 +1617,8 @@ public:
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
         pushByteCode(Walrus::Call(index, parameterCount, resultCount), WASMOpcode::CallOpcode);
 
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
         auto code = peekByteCode<Walrus::Call>(callPos);
 
         generateCallExpr(code, parameterCount, resultCount, functionType);
@@ -1638,8 +1638,8 @@ public:
             pushByteCode(Walrus::CallIndirectM64(popVMStack(), tableIndex, functionType, parameterCount, resultCount), WASMOpcode::CallIndirectOpcode);
         }
 
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
 
         auto code = peekByteCode<Walrus::CallIndirect>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
@@ -1653,8 +1653,8 @@ public:
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
         pushByteCode(Walrus::CallRef(popVMStack(), functionType, parameterCount, resultCount), WASMOpcode::CallRefOpcode);
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
 
         auto code = peekByteCode<Walrus::CallRef>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
@@ -1669,8 +1669,8 @@ public:
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
         pushByteCode(Walrus::ReturnCall(index, parameterCount, resultCount, functionType), WASMOpcode::ReturnCallOpcode);
 
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
         auto code = peekByteCode<Walrus::ReturnCall>(callPos);
 
         generateCallExpr(code, parameterCount, resultCount, functionType);
@@ -1691,8 +1691,8 @@ public:
         } else {
             pushByteCode(Walrus::ReturnCallIndirectM64(popVMStack(), tableIndex, functionType, parameterCount, resultCount), WASMOpcode::ReturnCallIndirectOpcode);
         }
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
 
         auto code = peekByteCode<Walrus::ReturnCallIndirect>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
@@ -1707,8 +1707,8 @@ public:
         auto parameterCount = computeFunctionParameterOrResultOffsetCount(functionType->param());
         auto resultCount = computeFunctionParameterOrResultOffsetCount(functionType->result());
         pushByteCode(Walrus::ReturnCallRef(popVMStack(), functionType, parameterCount, resultCount), WASMOpcode::ReturnCallRefOpcode);
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * (parameterCount + resultCount)));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
 
         auto code = peekByteCode<Walrus::ReturnCallRef>(callPos);
         generateCallExpr(code, parameterCount, resultCount, functionType);
@@ -2153,8 +2153,8 @@ public:
         pushByteCode(Walrus::End(offsetCount), WASMOpcode::EndOpcode);
 
         auto& result = m_currentFunctionType->result().types();
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * offsetCount));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * offsetCount));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
         Walrus::End* end = peekByteCode<Walrus::End>(pos);
         size_t offsetIndex = 0;
         for (size_t i = 0; i < result.size(); i++) {
@@ -2402,8 +2402,8 @@ public:
         pushByteCode(Walrus::BrTable(stackPos, numTargets), WASMOpcode::BrTableOpcode);
 
         if (numTargets) {
-            expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(int32_t) * numTargets));
-            ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+            expandByteCode(Walrus::ByteCode::alignedSize(sizeof(int32_t) * numTargets));
+            ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
 
             for (Index i = 0; i < numTargets; i++) {
                 emitBrTableCase(brTableCode, targetDepths[i], sizeof(Walrus::BrTable) + i * sizeof(int32_t));
@@ -2444,8 +2444,8 @@ public:
         if (tagIndex != std::numeric_limits<Index>::max()) {
             auto functionType = m_result.m_tagTypes[tagIndex]->functionType();
             auto& param = functionType->param().types();
-            expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * param.size()));
-            ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+            expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * param.size()));
+            ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
             Walrus::Throw* code = peekByteCode<Walrus::Throw>(pos);
             for (size_t i = 0; i < param.size(); i++) {
                 ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(param[functionType->param().size() - i - 1]));
@@ -3271,8 +3271,8 @@ public:
 
         pushByteCode(Walrus::ArrayNewFixed(typeInfo, count), WASMOpcode::ArrayNewFixedOpcode);
 
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * count));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * count));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
         Walrus::ArrayNewFixed* code = peekByteCode<Walrus::ArrayNewFixed>(pos);
         for (size_t i = 0; i < count; i++) {
             ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(typeInfo->field().stackType()));
@@ -3419,8 +3419,8 @@ public:
         pushByteCode(Walrus::StructNew(typeInfo), WASMOpcode::StructNewOpcode);
 
         const Walrus::MutableTypeVector& fields = typeInfo->fields();
-        expandByteCode(Walrus::ByteCode::pointerAlignedSize(sizeof(Walrus::ByteCodeStackOffset) * fields.size()));
-        ASSERT(m_currentByteCode.size() % sizeof(void*) == 0);
+        expandByteCode(Walrus::ByteCode::alignedSize(sizeof(Walrus::ByteCodeStackOffset) * fields.size()));
+        ASSERT(m_currentByteCode.size() % alignof(Walrus::ByteCode) == 0);
         Walrus::StructNew* code = peekByteCode<Walrus::StructNew>(pos);
         for (size_t i = 0; i < fields.size(); i++) {
             ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(fields.types()[fields.size() - i - 1].stackType()));
