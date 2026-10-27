@@ -1448,6 +1448,7 @@ public:
         setResumeGenerateByteCodeAfterNBlockEnd(0);
 
         m_currentByteCode.clear();
+        m_lastI32EqzPos = s_noI32Eqz;
         m_currentFunction->m_catchInfo.clear();
         m_blockInfo.clear();
         m_catchInfo.clear();
