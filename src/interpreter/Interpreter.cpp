@@ -33,11 +33,6 @@
 #include "runtime/Tag.h"
 #include "util/MathOperation.h"
 
-#if defined(WALRUS_ENABLE_COMPUTED_GOTO) && !defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
-extern char FillByteCodeOpcodeTableAsmLbl[];
-const void* FillByteCodeOpcodeAddress[] = { &FillByteCodeOpcodeTableAsmLbl[0] };
-#endif
-
 namespace Walrus {
 
 ByteCodeTable g_byteCodeTable;
@@ -147,10 +142,10 @@ struct SIMDType<double> {
 static void initAddressToOpcodeTable()
 {
 #define REGISTER_TABLE(name, ...) \
-    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
+    g_byteCodeTable.m_offsetToOpcodeTable[g_byteCodeTable.m_offsetTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
     FOR_EACH_BYTECODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
-    RELEASE_ASSERT(g_byteCodeTable.m_addressToOpcodeTable.size() == ByteCode::OpcodeKindEnd);
+    RELEASE_ASSERT(g_byteCodeTable.m_offsetToOpcodeTable.size() == ByteCode::OpcodeKindEnd);
 }
 #endif
 
@@ -160,11 +155,6 @@ ByteCodeTable::ByteCodeTable()
     // Dummy bytecode execution to initialize the ByteCodeTable.
     ExecutionState dummyState;
     ByteCode b;
-#if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
-    b.m_opcodeInAddress = nullptr;
-#else
-    b.m_opcodeInAddress = const_cast<void*>(FillByteCodeOpcodeAddress[0]);
-#endif
     size_t pc = reinterpret_cast<size_t>(&b);
     Interpreter::interpret(dummyState, pc, nullptr);
     initAddressToOpcodeTable();
@@ -1379,12 +1369,6 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
     TRY;
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-#if defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
-    if (UNLIKELY((((ByteCode*)programCounter)->m_opcodeInAddress) == NULL)) {
-        goto FillOpcodeTableOpcodeLbl;
-    }
-#endif
-
 #define DEFINE_OPCODE(codeName) \
     codeName##OpcodeLbl : __asm__ volatile("" ::"i"(ByteCode::Opcode::codeName##Opcode));
 #define DEFINE_DEFAULT
@@ -1392,7 +1376,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
 
 NextInstruction:
     /* Execute first instruction. */
-    goto*(((ByteCode*)programCounter)->m_opcodeInAddress);
+    goto*(reinterpret_cast<char*>(&&FillOpcodeTableOpcodeLbl) + ((ByteCode*)programCounter)->m_opcodeInOffset);
 #else
 
 #define DEFINE_OPCODE(codeName) case ByteCode::Opcode::codeName##Opcode:
@@ -2776,7 +2760,7 @@ NextInstruction:
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
-        programCounter += ByteCode::pointerAlignedSize(sizeof(ArrayNewFixed) + sizeof(ByteCodeStackOffset) * code->offsetsSize());
+        programCounter += ByteCode::alignedSize(sizeof(ArrayNewFixed) + sizeof(ByteCodeStackOffset) * code->offsetsSize());
         NEXT_INSTRUCTION();
     }
 
@@ -3018,7 +3002,7 @@ NextInstruction:
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
-        programCounter += ByteCode::pointerAlignedSize(sizeof(StructNew) + sizeof(ByteCodeStackOffset) * code->offsetsSize());
+        programCounter += ByteCode::alignedSize(sizeof(StructNew) + sizeof(ByteCodeStackOffset) * code->offsetsSize());
         NEXT_INSTRUCTION();
     }
 
@@ -3130,12 +3114,10 @@ NextInstruction:
 #if defined(COMPILER_GCC) && __GNUC__ >= 9
         __attribute__((cold));
 #endif
-#if !defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
-        asm volatile("FillByteCodeOpcodeTableAsmLbl:");
-#endif
+        RELEASE_ASSERT(g_byteCodeTable.m_offsetToOpcodeTable.empty());
 
 #define REGISTER_TABLE(name, ...) \
-    g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
+    g_byteCodeTable.m_offsetTable[ByteCode::name##Opcode] = static_cast<int32_t>(reinterpret_cast<char*>(&&name##OpcodeLbl) - reinterpret_cast<char*>(&&FillOpcodeTableOpcodeLbl));
         FOR_EACH_BYTECODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
         return nullptr;
@@ -3195,8 +3177,8 @@ NEVER_INLINE void Interpreter::callOperation(
     Function* target = instance->function(code->index());
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
-    programCounter += ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
-                                                   + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+    programCounter += ByteCode::alignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                                            + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 
 NEVER_INLINE void Interpreter::callIndirectOperation(
@@ -3237,8 +3219,8 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
-    programCounter += ByteCode::pointerAlignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
-                                                   + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+    programCounter += ByteCode::alignedSize(sizeof(CallIndirect) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                                            + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 
 NEVER_INLINE void Interpreter::callRefOperation(
@@ -3260,8 +3242,8 @@ NEVER_INLINE void Interpreter::callRefOperation(
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
 
-    programCounter += ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
-                                                   + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
+    programCounter += ByteCode::alignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * code->parameterOffsetsSize()
+                                            + sizeof(ByteCodeStackOffset) * code->resultOffsetsSize());
 }
 
 NEVER_INLINE ByteCodeStackOffset* Interpreter::tailCallOperation(
