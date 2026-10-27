@@ -44,7 +44,7 @@ void Trap::throwException(const std::string& message)
     throw Exception::create(message);
 }
 
-void Trap::throwException(Tag* tag, Vector<uint8_t>&& userExceptionData)
+void Trap::throwException(Tag* tag, ExceptionData&& userExceptionData)
 {
     throw Exception::create(tag, std::move(userExceptionData));
 }

@@ -3069,7 +3069,7 @@ NextInstruction:
     {
         Throw* code = (Throw*)programCounter;
         Tag* tag = instance->tag(code->tagIndex());
-        Vector<uint8_t> userExceptionData;
+        ExceptionData userExceptionData;
         size_t sz = tag->functionType()->paramStackSize();
         userExceptionData.resizeWithUninitializedValues(sz);
 
@@ -3159,8 +3159,8 @@ NextInstruction:
                     if (item.m_tagIndex == std::numeric_limits<uint32_t>::max() || function->instance()->tag(item.m_tagIndex) == tag) {
                         programCounter = byteCode + item.m_catchStartPosition;
                         uint8_t* sp = bp + item.m_stackSizeToBe;
-                        size_t paramStackSize = tag->functionType()->paramStackSize();
-                        if (item.m_tagIndex != std::numeric_limits<uint32_t>::max() && tag->functionType()->paramStackSize()) {
+                        size_t paramStackSize = item.m_tagIndex != std::numeric_limits<uint32_t>::max() ? tag->functionType()->paramStackSize() : 0;
+                        if (paramStackSize) {
                             memcpy(sp, e->userExceptionData().data(), paramStackSize);
                         }
                         if (item.m_pushExnRef) {
