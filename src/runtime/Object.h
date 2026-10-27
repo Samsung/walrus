@@ -76,12 +76,12 @@ public:
         return static_cast<Kind>(reinterpret_cast<uintptr_t>(m_typeInfo[-1]));
     }
 
-    const CompositeType** typeInfo()
+    const CompositeType** typeInfo() const
     {
         return m_typeInfo;
     }
 
-    const CompositeType* objectTypeInfo()
+    const CompositeType* objectTypeInfo() const
     {
         return m_typeInfo[reinterpret_cast<size_t>(m_typeInfo[0])];
     }
