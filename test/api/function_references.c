@@ -35,6 +35,98 @@ static void check(int condition, const char* message)
     }
 }
 
+static wasm_foreign_t* callback_foreign;
+
+static wasm_trap_t* return_foreign(const wasm_val_vec_t* args, wasm_val_vec_t* results)
+{
+    (void)args;
+    results->data[0].kind = WASM_ANYREF;
+    results->data[0].of.ref = wasm_foreign_as_ref(wasm_foreign_copy(callback_foreign));
+    return NULL;
+}
+
+static void check_reference_type_validation(wasm_store_t* store)
+{
+    static const unsigned char bytes[] = {
+        0, 97, 115, 109, 1, 0, 0, 0, 1, 8, 1, 96, 1, 99, 115, 1, 99, 112,
+        3, 2, 1, 0, 7, 6, 1, 2, 119, 50, 0, 0, 10, 6, 1, 4, 0, 32, 0, 11,
+    };
+    wasm_byte_vec_t binary;
+    wasm_byte_vec_new(&binary, sizeof(bytes), (const char*)bytes);
+    wasm_module_t* module = wasm_module_new(store, &binary);
+    check(module != NULL, "bottom reference module");
+    wasm_byte_vec_delete(&binary);
+
+    wasm_exporttype_vec_t export_types;
+    wasm_module_exports(module, &export_types);
+    const wasm_functype_t* function_type =
+        wasm_externtype_as_functype_const(wasm_exporttype_type(export_types.data[0]));
+    check(wasm_valtype_kind(wasm_functype_params(function_type)->data[0]) == WASM_FUNCREF,
+          "bottom function reference parameter kind");
+    wasm_exporttype_vec_delete(&export_types);
+
+    wasm_extern_vec_t imports = WASM_EMPTY_VEC;
+    wasm_instance_t* instance = wasm_instance_new(store, module, &imports, NULL);
+    check(instance != NULL, "bottom reference instance");
+    wasm_extern_vec_t exports;
+    wasm_instance_exports(instance, &exports);
+    wasm_func_t* function = wasm_extern_as_func(exports.data[0]);
+
+    wasm_foreign_t* foreign = wasm_foreign_new(store);
+    wasm_val_t argument = WASM_INIT_VAL;
+    argument.kind = WASM_ANYREF;
+    argument.of.ref = wasm_foreign_as_ref(wasm_foreign_copy(foreign));
+    wasm_val_t result = WASM_INIT_VAL;
+    wasm_val_vec_t args = { 1, &argument };
+    wasm_val_vec_t results = { 1, &result };
+    wasm_trap_t* trap = wasm_func_call(function, &args, &results);
+    check(trap != NULL, "reject incompatible function reference argument");
+    wasm_trap_delete(trap);
+    wasm_val_delete(&argument);
+    wasm_val_delete(&result);
+
+    argument.kind = WASM_FUNCREF;
+    argument.of.ref = NULL;
+    result = (wasm_val_t)WASM_INIT_VAL;
+    trap = wasm_func_call(function, &args, &results);
+    check(trap == NULL, "accept null bottom function reference");
+    check(result.kind == WASM_FUNCREF && result.of.ref == NULL,
+          "preserve null function reference result");
+    wasm_val_delete(&result);
+
+    wasm_val_t inconsistent = WASM_INIT_VAL;
+    inconsistent.kind = WASM_FUNCREF;
+    inconsistent.of.ref = wasm_foreign_as_ref(wasm_foreign_copy(foreign));
+    check(wasm_ref_as_func(inconsistent.of.ref) == NULL, "reject foreign function cast");
+    wasm_val_t copied = WASM_INIT_VAL;
+    wasm_val_copy(&copied, &inconsistent);
+    check(copied.kind == WASM_ANYREF, "canonicalize copied foreign reference kind");
+    wasm_val_delete(&inconsistent);
+    wasm_val_delete(&copied);
+
+    callback_foreign = foreign;
+    wasm_valtype_vec_t no_params = WASM_EMPTY_VEC;
+    wasm_valtype_vec_t function_results;
+    wasm_valtype_vec_new_uninitialized(&function_results, 1);
+    function_results.data[0] = wasm_valtype_new(WASM_FUNCREF);
+    wasm_functype_t* host_type = wasm_functype_new(&no_params, &function_results);
+    wasm_func_t* host = wasm_func_new(store, host_type, return_foreign);
+    wasm_functype_delete(host_type);
+    wasm_val_vec_t no_args = WASM_EMPTY_VEC;
+    result = (wasm_val_t)WASM_INIT_VAL;
+    trap = wasm_func_call(host, &no_args, &results);
+    check(trap != NULL, "reject incompatible callback result");
+    wasm_trap_delete(trap);
+    wasm_val_delete(&result);
+    wasm_func_delete(host);
+    callback_foreign = NULL;
+    wasm_foreign_delete(foreign);
+
+    wasm_extern_vec_delete(&exports);
+    wasm_instance_delete(instance);
+    wasm_module_delete(module);
+}
+
 static void check_function(wasm_ref_t* ref)
 {
     check(ref != NULL, "non-null function reference");
@@ -61,6 +153,7 @@ int main(void)
 {
     wasm_engine_t* engine = wasm_engine_new();
     wasm_store_t* store = wasm_store_new(engine);
+    check_reference_type_validation(store);
     wasm_byte_vec_t binary;
     wasm_byte_vec_new(&binary, sizeof(module_bytes), (const char*)module_bytes);
     wasm_module_t* module = wasm_module_new(store, &binary);
