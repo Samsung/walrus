@@ -26,6 +26,34 @@ namespace Walrus {
 
 class Tag;
 
+// The payload of a thrown exception may hold references. It must live where the
+// collector scans it, for as long as the exception does.
+void* allocateExceptionData(size_t size);
+void deallocateExceptionData(void* ptr);
+
+template <typename T>
+class ExceptionDataAllocator {
+public:
+    typedef T value_type;
+    typedef T* pointer;
+    typedef const T* const_pointer;
+    typedef T& reference;
+    typedef const T& const_reference;
+    typedef size_t size_type;
+    typedef ptrdiff_t difference_type;
+    template <class U>
+    struct rebind {
+        typedef ExceptionDataAllocator<U> other;
+    };
+    ExceptionDataAllocator() {}
+    template <class U>
+    ExceptionDataAllocator(const ExceptionDataAllocator<U>&) {}
+    T* allocate(size_t n) { return static_cast<T*>(allocateExceptionData(n * sizeof(T))); }
+    void deallocate(T* p, size_t) { deallocateExceptionData(p); }
+};
+
+typedef Vector<uint8_t, ExceptionDataAllocator<uint8_t>> ExceptionData;
+
 class Exception {
 public:
 #ifndef NDEBUG
@@ -38,7 +66,7 @@ public:
         return new Exception(m);
     }
 
-    static Exception* create(Tag* tag, Vector<uint8_t>&& userExceptionData)
+    static Exception* create(Tag* tag, ExceptionData&& userExceptionData)
     {
         return new Exception(tag, std::move(userExceptionData));
     }
@@ -78,7 +106,7 @@ public:
         return m_tag;
     }
 
-    const Vector<uint8_t>& userExceptionData() const
+    const ExceptionData& userExceptionData() const
     {
         return m_userExceptionData;
     }
@@ -94,7 +122,7 @@ private:
 #endif
     }
 
-    Exception(Tag* tag, Vector<uint8_t>&& userExceptionData)
+    Exception(Tag* tag, ExceptionData&& userExceptionData)
         : m_refCount(1)
         , m_tag(tag)
     {
@@ -107,7 +135,7 @@ private:
     size_t m_refCount;
     std::string m_message;
     Optional<Tag*> m_tag;
-    Vector<uint8_t> m_userExceptionData;
+    ExceptionData m_userExceptionData;
 };
 
 } // namespace Walrus

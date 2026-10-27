@@ -73,7 +73,7 @@ public:
 
     TrapResult run(void (*runner)(ExecutionState&, void*), void* data);
     static void throwException(const std::string& message);
-    static void throwException(Tag* tag, Vector<uint8_t>&& userExceptionData);
+    static void throwException(Tag* tag, ExceptionData&& userExceptionData);
     static void throwException(Exception* e);
 };
 

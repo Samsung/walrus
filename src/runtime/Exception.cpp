@@ -16,7 +16,28 @@
 #include "Walrus.h"
 
 #include "Exception.h"
+#ifdef ENABLE_GC
+#include "GCUtil.h"
+#endif
 
 namespace Walrus {
+
+void* allocateExceptionData(size_t size)
+{
+#ifdef ENABLE_GC
+    return GC_MALLOC_UNCOLLECTABLE(size);
+#else
+    return malloc(size);
+#endif
+}
+
+void deallocateExceptionData(void* ptr)
+{
+#ifdef ENABLE_GC
+    GC_FREE(ptr);
+#else
+    free(ptr);
+#endif
+}
 
 } // namespace Walrus
