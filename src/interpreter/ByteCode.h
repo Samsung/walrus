@@ -1425,6 +1425,33 @@ class FunctionType;
     FOR_EACH_BYTECODE_ATOMIC_OTHER(F)               \
     FOR_EACH_BYTECODE_ATOMIC_OTHER_M64(F)
 
+template <typename T>
+class UnalignedValue {
+public:
+    UnalignedValue() = default;
+    UnalignedValue(T value)
+    {
+        memcpy(m_storage, &value, sizeof(T));
+    }
+
+    UnalignedValue& operator=(T value)
+    {
+        memcpy(m_storage, &value, sizeof(T));
+        return *this;
+    }
+
+    operator T() const
+    {
+        T value;
+        memcpy(&value, m_storage, sizeof(T));
+        return value;
+    }
+
+private:
+    COMPILE_ASSERT(sizeof(T) % sizeof(uint32_t) == 0, "");
+    uint32_t m_storage[sizeof(T) / sizeof(uint32_t)];
+};
+
 class ByteCode {
 public:
     // clang-format off
@@ -1436,9 +1463,9 @@ public:
     };
     // clang-format on
 
-    static size_t pointerAlignedSize(const size_t originalSize)
+    static size_t alignedSize(const size_t originalSize)
     {
-        return (originalSize + (sizeof(void*) - 1)) & ~(sizeof(void*) - 1);
+        return (originalSize + (alignof(ByteCode) - 1)) & ~(alignof(ByteCode) - 1);
     }
 
     Opcode opcode() const;
@@ -1451,7 +1478,7 @@ protected:
 
     ByteCode()
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-        : m_opcodeInAddress(nullptr)
+        : m_opcodeInOffset(0)
 #else
         : m_opcode(Opcode::OpcodeKindEnd)
 #endif
@@ -1460,7 +1487,7 @@ protected:
 
     union {
         Opcode m_opcode;
-        void* m_opcodeInAddress;
+        int32_t m_opcodeInOffset;
     };
 };
 
@@ -1564,7 +1591,7 @@ protected:
         signedValueType intValue() const { return static_cast<signedValueType>(m_value); }                            \
                                                                                                                       \
     protected:                                                                                                        \
-        valueType m_value;                                                                                            \
+        UnalignedValue<valueType> m_value;                                                                            \
     };
 
 BYTE_CODE_OFFSET_2_VALUE(ByteCodeOffset2Value, uint32_t, int32_t);
@@ -1586,7 +1613,7 @@ BYTE_CODE_OFFSET_2_VALUE(ByteCodeOffset2Value64, uint64_t, int64_t);
         signedValueType intValue() const { return static_cast<signedValueType>(m_value); }                                                                \
                                                                                                                                                           \
     protected:                                                                                                                                            \
-        valueType m_value;                                                                                                                                \
+        UnalignedValue<valueType> m_value;                                                                                                                \
         uint16_t m_memIndex;                                                                                                                              \
         uint16_t m_alignment;                                                                                                                             \
     };
@@ -1646,7 +1673,7 @@ protected:
         valueType offset() const { return m_value; }                                                                                                                             \
                                                                                                                                                                                  \
     protected:                                                                                                                                                                   \
-        valueType m_value;                                                                                                                                                       \
+        UnalignedValue<valueType> m_value;                                                                                                                                       \
     };
 
 BYTE_CODE_OFFSET_4_VALUE(ByteCodeOffset4Value, uint32_t);
@@ -1669,7 +1696,7 @@ BYTE_CODE_OFFSET_4_VALUE(ByteCodeOffset4Value64, uint64_t);
     protected:                                                                                                                                                                                                       \
         uint16_t m_memIndex;                                                                                                                                                                                         \
         uint16_t m_alignment;                                                                                                                                                                                        \
-        valueType m_value;                                                                                                                                                                                           \
+        UnalignedValue<valueType> m_value;                                                                                                                                                                           \
     };
 
 BYTE_CODE_OFFSET_4_VALUE_MEM_IDX(ByteCodeOffset4ValueMemIdx, uint32_t);
@@ -1679,8 +1706,8 @@ class ByteCodeTable {
 public:
     ByteCodeTable();
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-    void* m_addressTable[ByteCode::OpcodeKindEnd];
-    std::unordered_map<void*, int> m_addressToOpcodeTable;
+    int32_t m_offsetTable[ByteCode::OpcodeKindEnd];
+    std::unordered_map<int32_t, int> m_offsetToOpcodeTable;
 #endif
 };
 
@@ -1719,27 +1746,13 @@ public:
     Const64(ByteCodeStackOffset dstOffset, uint64_t value)
         : ByteCode(Opcode::Const64Opcode)
         , m_dstOffset(dstOffset)
-#if !defined(CPU_ARM32)
         , m_value(value)
-#endif
     {
-#if defined(CPU_ARM32)
-        memcpy(m_value, &value, sizeof(value));
-#endif
     }
 
     ByteCodeStackOffset dstOffset() const { return m_dstOffset; }
     void setDstOffset(ByteCodeStackOffset o) { m_dstOffset = o; }
-    uint64_t value() const
-    {
-#if defined(CPU_ARM32)
-        uint64_t result;
-        memcpy(&result, m_value, sizeof(result));
-        return result;
-#else
-        return m_value;
-#endif
-    }
+    uint64_t value() const { return m_value; }
 
 #if !defined(NDEBUG)
     void dump(size_t pos)
@@ -1752,12 +1765,7 @@ public:
 
 protected:
     ByteCodeStackOffset m_dstOffset;
-#if defined(CPU_ARM32)
-    // Bytecode instructions are only pointer-aligned, which is 4 bytes here.
-    uint32_t m_value[2];
-#else
-    uint64_t m_value;
-#endif
+    UnalignedValue<uint64_t> m_value;
 };
 
 class Const128 : public ByteCode {
@@ -2058,7 +2066,7 @@ public:
 protected:
     ByteCodeStackOffset m_calleeOffset;
     uint32_t m_tableIndex;
-    FunctionType* m_functionType;
+    UnalignedValue<FunctionType*> m_functionType;
     uint16_t m_parameterOffsetsSize;
     uint16_t m_resultOffsetsSize;
 };
@@ -2145,7 +2153,7 @@ public:
 
 protected:
     ByteCodeStackOffset m_calleeOffset;
-    FunctionType* m_functionType;
+    UnalignedValue<FunctionType*> m_functionType;
     uint16_t m_parameterOffsetsSize;
     uint16_t m_resultOffsetsSize;
 };
@@ -2256,7 +2264,7 @@ public:
 
 protected:
     ByteCodeStackOffset m_calleeOffset;
-    FunctionType* m_functionType;
+    UnalignedValue<FunctionType*> m_functionType;
     uint16_t m_parameterOffsetsSize;
     uint16_t m_resultOffsetsSize;
 };
@@ -2513,7 +2521,7 @@ public:
 #endif
 
 private:
-    const CompositeType** m_typeInfo;
+    UnalignedValue<const CompositeType**> m_typeInfo;
     uint8_t m_srcInfo;
 };
 
@@ -2945,7 +2953,7 @@ protected:
             void dump(size_t pos){});                                                                                                                    \
                                                                                                                                                          \
     protected:                                                                                                                                           \
-        valueType m_offset;                                                                                                                              \
+        UnalignedValue<valueType> m_offset;                                                                                                              \
     };
 
 DEFINE_SIMD_MEMORY_LOAD(SIMDMemoryLoad, uint32_t);
@@ -2969,7 +2977,7 @@ DEFINE_SIMD_MEMORY_LOAD(SIMDMemoryLoadM64, uint64_t);
             void dump(size_t pos){});                                                                                                                                                           \
                                                                                                                                                                                                 \
     protected:                                                                                                                                                                                  \
-        valueType m_offset;                                                                                                                                                                     \
+        UnalignedValue<valueType> m_offset;                                                                                                                                                     \
         uint16_t m_memIndex;                                                                                                                                                                    \
         uint16_t m_alignment;                                                                                                                                                                   \
     };
@@ -3285,7 +3293,7 @@ protected:
             void dump(size_t pos){});                                                                                             \
                                                                                                                                   \
     protected:                                                                                                                    \
-        valueType m_offset;                                                                                                       \
+        UnalignedValue<valueType> m_offset;                                                                                       \
     };
 
 DEFINE_SIMD_MEMORY_STORE(SIMDMemoryStore, uint32_t);
@@ -3309,7 +3317,7 @@ DEFINE_SIMD_MEMORY_STORE(SIMDMemoryStoreM64, uint64_t);
             void dump(size_t pos){});                                                                                                                                    \
                                                                                                                                                                          \
     protected:                                                                                                                                                           \
-        valueType m_offset;                                                                                                                                              \
+        UnalignedValue<valueType> m_offset;                                                                                                                              \
         uint16_t m_memIndex;                                                                                                                                             \
         uint16_t m_alignment;                                                                                                                                            \
     };
@@ -3647,7 +3655,7 @@ protected:
             void dump(size_t pos){});                                                                                           \
                                                                                                                                 \
     protected:                                                                                                                  \
-        valueType m_offset;                                                                                                     \
+        UnalignedValue<valueType> m_offset;                                                                                     \
     };
 
 DEFINE_ATOMIC_RMW(AtomicRmw, uint32_t);
@@ -3670,7 +3678,7 @@ DEFINE_ATOMIC_RMW(AtomicRmwM64, uint64_t);
             void dump(size_t pos){});                                                                                                                                  \
                                                                                                                                                                        \
     protected:                                                                                                                                                         \
-        valueType m_offset;                                                                                                                                            \
+        UnalignedValue<valueType> m_offset;                                                                                                                            \
         uint16_t m_memIndex;                                                                                                                                           \
         uint16_t m_alignment;                                                                                                                                          \
     };
@@ -3797,7 +3805,7 @@ protected:
             });                                                                                                                                                                                          \
                                                                                                                                                                                                          \
     protected:                                                                                                                                                                                           \
-        valueType m_offset;                                                                                                                                                                              \
+        UnalignedValue<valueType> m_offset;                                                                                                                                                              \
     };
 
 DEFINE_MEMORY_ATOMIC_NOTIFY(MemoryAtomicNotify, MemoryAtomicNotifyOpcode, uint32_t, PRIu32);
@@ -3823,7 +3831,7 @@ DEFINE_MEMORY_ATOMIC_NOTIFY(MemoryAtomicNotifyM64, MemoryAtomicNotifyM64Opcode, 
             });                                                                                                                                                  \
                                                                                                                                                                  \
     protected:                                                                                                                                                   \
-        valueType m_offset;                                                                                                                                      \
+        UnalignedValue<valueType> m_offset;                                                                                                                      \
         uint16_t m_memIndex;                                                                                                                                     \
         uint16_t m_alignment;                                                                                                                                    \
     };
@@ -4541,7 +4549,7 @@ public:
 #endif
 
 private:
-    const CompositeType** m_typeInfo;
+    UnalignedValue<const CompositeType**> m_typeInfo;
     ByteCodeStackOffset m_srcOffset;
     uint8_t m_srcInfo;
 };
@@ -4606,7 +4614,7 @@ public:
 #endif
 
 private:
-    const CompositeType** m_typeInfo;
+    UnalignedValue<const CompositeType**> m_typeInfo;
     ByteCodeStackOffset m_srcOffset;
     ByteCodeStackOffset m_dstOffset;
     uint8_t m_srcInfo;
@@ -4678,7 +4686,7 @@ public:
 #endif
 
 private:
-    const ArrayType* m_typeInfo;
+    UnalignedValue<const ArrayType*> m_typeInfo;
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
     ByteCodeStackOffset m_dstOffset;
@@ -4708,7 +4716,7 @@ public:
 #endif
 
 private:
-    const ArrayType* m_typeInfo;
+    UnalignedValue<const ArrayType*> m_typeInfo;
     ByteCodeStackOffset m_srcOffset;
     ByteCodeStackOffset m_dstOffset;
 };
@@ -4753,7 +4761,7 @@ public:
 #endif
 
 private:
-    const ArrayType* m_typeInfo;
+    UnalignedValue<const ArrayType*> m_typeInfo;
     uint32_t m_length;
     ByteCodeStackOffset m_dstOffset;
 };
@@ -4790,7 +4798,7 @@ public:
 #endif
 
 private:
-    const ArrayType* m_typeInfo;
+    UnalignedValue<const ArrayType*> m_typeInfo;
     uint32_t m_index;
     ByteCodeStackOffset m_src0Offset;
     ByteCodeStackOffset m_src1Offset;
@@ -5094,7 +5102,7 @@ public:
 
     uint32_t offsetsSize() const
     {
-        return m_typeInfo->fields().size();
+        return typeInfo()->fields().size();
     }
 
 #if !defined(NDEBUG)
@@ -5112,7 +5120,7 @@ public:
 #endif
 
 private:
-    const StructType* m_typeInfo;
+    UnalignedValue<const StructType*> m_typeInfo;
     ByteCodeStackOffset m_dstOffset;
 };
 
@@ -5137,7 +5145,7 @@ public:
 #endif
 
 private:
-    const StructType* m_typeInfo;
+    UnalignedValue<const StructType*> m_typeInfo;
     ByteCodeStackOffset m_dstOffset;
 };
 
