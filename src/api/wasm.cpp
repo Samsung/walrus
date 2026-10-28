@@ -638,17 +638,18 @@ static bool CheckWalrusType(const Type& type, const wasm_val_t* val)
     case WASM_V128:
         return type == Value::V128;
     case WASM_FUNCREF:
-        if (val->of.ref != nullptr && val->of.ref->obj->kind() != Object::FunctionKind) {
+        if (val->of.ref != nullptr && (val->of.ref->isI31() || val->of.ref->obj->kind() != Object::FunctionKind)) {
             return false;
         }
         return CheckWalrusRefType(type, val->of.ref);
     case WASM_ANYREF:
-        if (val->of.ref != nullptr && (val->of.ref->obj->kind() == Object::FunctionKind || val->of.ref->obj->kind() == Object::ExceptionKind)) {
+        if (val->of.ref != nullptr && !val->of.ref->isI31()
+            && (val->of.ref->obj->kind() == Object::FunctionKind || val->of.ref->obj->kind() == Object::ExceptionKind)) {
             return false;
         }
         return CheckWalrusRefType(type, val->of.ref);
     case WASM_EXNREF:
-        if (val->of.ref != nullptr && val->of.ref->obj->kind() != Object::ExceptionKind) {
+        if (val->of.ref != nullptr && (val->of.ref->isI31() || val->of.ref->obj->kind() != Object::ExceptionKind)) {
             return false;
         }
         return CheckWalrusRefType(type, val->of.ref);
@@ -656,6 +657,22 @@ static bool CheckWalrusType(const Type& type, const wasm_val_t* val)
         RELEASE_ASSERT_NOT_REACHED();
         return false;
     }
+}
+
+static Type GetWalrusType(const TypeVector& types, size_t index, Value::Type type)
+{
+    if (type != Value::DefinedRef && type != Value::NullDefinedRef) {
+        return Type(type);
+    }
+
+    size_t refIndex = 0;
+    for (size_t i = 0; i < index; ++i) {
+        if (types.types()[i] == Value::DefinedRef || types.types()[i] == Value::NullDefinedRef) {
+            ++refIndex;
+        }
+    }
+    ASSERT(refIndex < types.refs().size());
+    return Type(type, types.refs()[refIndex]);
 }
 
 // Common Internal Methods
@@ -674,6 +691,8 @@ static wasm_valkind_t FromWalrusValueType(const Value::Type& type)
         return WASM_V128;
     case Value::Type::FuncRef:
     case Value::Type::NullFuncRef:
+    case Value::Type::NoFuncRef:
+    case Value::Type::NullNoFuncRef:
         return WASM_FUNCREF;
     case Value::Type::ExnRef:
     case Value::Type::NullExnRef:
@@ -770,6 +789,13 @@ static wasm_val_t FromWalrusValue(const Value& val)
     case Value::Type::NullFuncRef:
         result.kind = WASM_FUNCREF;
         result.of.ref = val.asFunction() ? NewWasmRef(val.asFunction()) : nullptr;
+        break;
+    case Value::Type::NoFuncRef:
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    case Value::Type::NullNoFuncRef:
+        result.kind = WASM_FUNCREF;
+        result.of.ref = nullptr;
         break;
     case Value::Type::ExnRef:
     case Value::Type::NullExnRef:
@@ -1006,13 +1032,13 @@ void wasm_val_delete(own wasm_val_t* val)
 
 void wasm_val_copy(own wasm_val_t* out, const wasm_val_t* src)
 {
-    if (wasm_valkind_is_ref(src->kind)) {
-        out->kind = src->kind;
-        // FIXME
-        out->of.ref = src->of.ref ? NewWasmRef(src->of.ref->get()) : nullptr;
-    } else {
+    if (!wasm_valkind_is_ref(src->kind)) {
         *out = *src;
+        return;
     }
+
+    out->kind = src->kind;
+    out->of.ref = src->of.ref != nullptr ? NewWasmRef(src->of.ref->get()) : nullptr;
 }
 
 // References
@@ -1197,9 +1223,16 @@ own wasm_func_t* wasm_func_new(
             auto trap = callback(&params, &results);
 
             if (trap) {
-                // TODO
+                std::string msg(trap->message.data, trap->message.size);
                 wasm_trap_delete(trap);
-                RELEASE_ASSERT_NOT_REACHED();
+                Trap::throwException(msg);
+            }
+
+            for (size_t i = 0; i < resultCount; ++i) {
+                Value::Type type = functionType->result().types()[i];
+                if (!CheckWalrusType(GetWalrusType(functionType->result(), i, type), &results.data[i])) {
+                    Trap::throwException("incompatible callback result");
+                }
             }
 
             ToWalrusValues(result, results.data, results.size);
@@ -1232,9 +1265,16 @@ own wasm_func_t* wasm_func_new_with_env(
             auto trap = callback(env, &params, &results);
 
             if (trap) {
-                // TODO
+                std::string msg(trap->message.data, trap->message.size);
                 wasm_trap_delete(trap);
-                RELEASE_ASSERT_NOT_REACHED();
+                Trap::throwException(msg);
+            }
+
+            for (size_t i = 0; i < resultCount; ++i) {
+                Value::Type type = functionType->result().types()[i];
+                if (!CheckWalrusType(GetWalrusType(functionType->result(), i, type), &results.data[i])) {
+                    Trap::throwException("incompatible callback result");
+                }
             }
 
             ToWalrusValues(result, results.data, results.size);
@@ -1265,6 +1305,14 @@ own wasm_trap_t* wasm_func_call(
     Store::ExecutionScope scope;
     size_t paramNum = wasm_func_param_arity(func);
     size_t resultNum = wasm_func_result_arity(func);
+
+    const auto& params = func->get()->functionType()->param();
+    for (size_t i = 0; i < paramNum; ++i) {
+        Value::Type type = params.types()[i];
+        if (!CheckWalrusType(GetWalrusType(params, i, type), &args->data[i])) {
+            return new wasm_trap_t(new Trap(), "incompatible function argument");
+        }
+    }
 
     ValueVector walrusArgs, walrusResults;
     walrusArgs.resize(paramNum);
@@ -1299,6 +1347,9 @@ own wasm_trap_t* wasm_func_call(
 own wasm_global_t* wasm_global_new(
     wasm_store_t* store, const wasm_globaltype_t* gt, const wasm_val_t* val)
 {
+    if (!CheckWalrusType(Type(gt->valtype.type), val)) {
+        return nullptr;
+    }
     Value value = ToWalrusValue(*val);
     Global* glob = Global::createGlobal(store->get(), value, MutableType(value.type(), gt->mut));
     return new wasm_global_t(glob, gt->clone());
@@ -1921,7 +1972,30 @@ own wasm_foreign_t* wasm_foreign_new(wasm_store_t* store)
     return new wasm_foreign_t(new Foreign(store->get()));
 }
 
-WASM_IMPL_REF(func);
+WASM_IMPL_REF_BASE(func);
+
+wasm_ref_t* wasm_func_as_ref(wasm_func_t* subclass)
+{
+    return subclass;
+}
+
+const wasm_ref_t* wasm_func_as_ref_const(const wasm_func_t* subclass)
+{
+    return subclass;
+}
+
+wasm_func_t* wasm_ref_as_func(wasm_ref_t* ref)
+{
+    return ref && !(reinterpret_cast<uintptr_t>(ref->get()) & 1)
+            && ref->get()->isFunction()
+        ? static_cast<wasm_func_t*>(ref)
+        : nullptr;
+}
+
+const wasm_func_t* wasm_ref_as_func_const(const wasm_ref_t* ref)
+{
+    return wasm_ref_as_func(const_cast<wasm_ref_t*>(ref));
+}
 WASM_IMPL_REF(global);
 WASM_IMPL_REF(instance);
 WASM_IMPL_REF(memory);
