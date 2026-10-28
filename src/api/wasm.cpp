@@ -1032,23 +1032,13 @@ void wasm_val_delete(own wasm_val_t* val)
 
 void wasm_val_copy(own wasm_val_t* out, const wasm_val_t* src)
 {
-    if (wasm_valkind_is_ref(src->kind)) {
-        out->of.ref = src->of.ref ? NewWasmRef(src->of.ref->get()) : nullptr;
-        if (out->of.ref && !wasm_ref_t::isI31(out->of.ref->get())) {
-            const Object* obj = out->of.ref->get();
-            if (obj->isFunction()) {
-                out->kind = WASM_FUNCREF;
-            } else if (obj->kind() == Object::ForeignKind || src->kind == WASM_FUNCREF) {
-                out->kind = WASM_ANYREF;
-            } else {
-                out->kind = src->kind;
-            }
-        } else {
-            out->kind = src->kind;
-        }
-    } else {
+    if (!wasm_valkind_is_ref(src->kind)) {
         *out = *src;
+        return;
     }
+
+    out->kind = src->kind;
+    out->of.ref = src->of.ref != nullptr ? NewWasmRef(src->of.ref->get()) : nullptr;
 }
 
 // References

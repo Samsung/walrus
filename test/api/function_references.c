@@ -137,7 +137,7 @@ static void check_reference_type_validation(wasm_store_t* store)
     check(wasm_ref_as_func(inconsistent.of.ref) == NULL, "reject foreign function cast");
     wasm_val_t copied = WASM_INIT_VAL;
     wasm_val_copy(&copied, &inconsistent);
-    check(copied.kind == WASM_ANYREF, "canonicalize copied foreign reference kind");
+    check(copied.kind == inconsistent.kind, "preserve copied reference kind");
     wasm_val_delete(&inconsistent);
     wasm_val_delete(&copied);
 
