@@ -246,9 +246,8 @@ static void emitCatches(sljit_compiler* compiler, CompileContext* context, size_
 static void throwWithArgs(Throw* throwTag, uint8_t* bp, ExecutionContext* context)
 {
     Tag* tag = context->instance->tag(throwTag->tagIndex());
-    ExceptionData userExceptionData;
     size_t sz = tag->functionType()->paramStackSize();
-    userExceptionData.resizeWithUninitializedValues(sz);
+    ExceptionData userExceptionData(sz);
 
     uint8_t* ptr = userExceptionData.data();
     auto& param = tag->functionType()->param().types();

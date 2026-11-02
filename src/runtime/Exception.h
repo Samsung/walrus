@@ -28,31 +28,27 @@ class Tag;
 
 // The payload of a thrown exception may hold references. It must live where the
 // collector scans it, for as long as the exception does.
-void* allocateExceptionData(size_t size);
-void deallocateExceptionData(void* ptr);
-
-template <typename T>
-class ExceptionDataAllocator {
+class ExceptionData {
 public:
-    typedef T value_type;
-    typedef T* pointer;
-    typedef const T* const_pointer;
-    typedef T& reference;
-    typedef const T& const_reference;
-    typedef size_t size_type;
-    typedef ptrdiff_t difference_type;
-    template <class U>
-    struct rebind {
-        typedef ExceptionDataAllocator<U> other;
-    };
-    ExceptionDataAllocator() {}
-    template <class U>
-    ExceptionDataAllocator(const ExceptionDataAllocator<U>&) {}
-    T* allocate(size_t n) { return static_cast<T*>(allocateExceptionData(n * sizeof(T))); }
-    void deallocate(T* p, size_t) { deallocateExceptionData(p); }
-};
+    ExceptionData()
+        : m_data(nullptr)
+    {
+    }
 
-typedef Vector<uint8_t, ExceptionDataAllocator<uint8_t>> ExceptionData;
+    ExceptionData(ExceptionData&& other)
+        : m_data(other.m_data)
+    {
+        other.m_data = nullptr;
+    }
+
+    ExceptionData(size_t size);
+    ~ExceptionData();
+
+    uint8_t* data() const { return m_data; }
+
+private:
+    uint8_t* m_data;
+};
 
 class Exception {
 public:
@@ -125,11 +121,11 @@ private:
     Exception(Tag* tag, ExceptionData&& userExceptionData)
         : m_refCount(1)
         , m_tag(tag)
+        , m_userExceptionData(std::move(userExceptionData))
     {
 #ifndef NDEBUG
         g_exceptionCount++;
 #endif
-        m_userExceptionData = std::move(userExceptionData);
     }
 
     size_t m_refCount;

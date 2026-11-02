@@ -3070,9 +3070,8 @@ NextInstruction:
     {
         Throw* code = (Throw*)programCounter;
         Tag* tag = instance->tag(code->tagIndex());
-        ExceptionData userExceptionData;
         size_t sz = tag->functionType()->paramStackSize();
-        userExceptionData.resizeWithUninitializedValues(sz);
+        ExceptionData userExceptionData(sz);
 
         uint8_t* ptr = userExceptionData.data();
         auto& param = tag->functionType()->param().types();
