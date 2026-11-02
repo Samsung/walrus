@@ -143,6 +143,17 @@ struct SIMDType<double> {
     using Type = F64x2;
 };
 
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+static void initAddressToOpcodeTable()
+{
+#define REGISTER_TABLE(name, ...) \
+    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
+    FOR_EACH_BYTECODE(REGISTER_TABLE)
+#undef REGISTER_TABLE
+    RELEASE_ASSERT(g_byteCodeTable.m_addressToOpcodeTable.size() == ByteCode::OpcodeKindEnd);
+}
+#endif
+
 ByteCodeTable::ByteCodeTable()
 {
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
@@ -156,6 +167,7 @@ ByteCodeTable::ByteCodeTable()
 #endif
     size_t pc = reinterpret_cast<size_t>(&b);
     Interpreter::interpret(dummyState, pc, nullptr);
+    initAddressToOpcodeTable();
 #endif
 }
 
@@ -485,17 +497,6 @@ inline static void simdSplatOperation(ExecutionState& state, UnaryOperation* cod
     std::fill(std::begin(result.v), std::end(result.v), val);
     writeValue<ResultType>(bp, code->dstOffset(), result);
 }
-
-#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-static void initAddressToOpcodeTable()
-{
-#define REGISTER_TABLE(name, ...) \
-    g_byteCodeTable.m_addressToOpcodeTable[g_byteCodeTable.m_addressTable[ByteCode::name##Opcode]] = ByteCode::name##Opcode;
-    FOR_EACH_BYTECODE(REGISTER_TABLE)
-#undef REGISTER_TABLE
-    RELEASE_ASSERT(g_byteCodeTable.m_addressToOpcodeTable.size() == ByteCode::OpcodeKindEnd);
-}
-#endif
 
 ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
                                             size_t programCounter,
@@ -3135,7 +3136,6 @@ NextInstruction:
     g_byteCodeTable.m_addressTable[ByteCode::name##Opcode] = &&name##OpcodeLbl;
         FOR_EACH_BYTECODE(REGISTER_TABLE)
 #undef REGISTER_TABLE
-        initAddressToOpcodeTable();
         return nullptr;
     }
 #endif
