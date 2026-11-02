@@ -3729,6 +3729,10 @@ static void compileFunction(JITCompiler* compiler)
         compiler->allocateRegistersSimple();
     } else {
         compiler->allocateRegisters();
+
+        if (!(compiler->JITFlags() & JITFlagValue::disablePreload)) {
+            compiler->preloadVariables();
+        }
     }
 
     compiler->buildBasicBlocks();

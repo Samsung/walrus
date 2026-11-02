@@ -250,8 +250,7 @@ public:
         Offset = 2,
     };
 
-    static const uint32_t TemporaryTypeShift = 4;
-    static const uint32_t TemporaryTypeMask = 0xf;
+    static const Operand kAbsoluteOperand = (Operand)1 << ((sizeof(Operand) * 8) - 1);
 
     // Various info bits. Depends on type.
     static const uint16_t kIsExtended = 1 << 0;
@@ -861,6 +860,7 @@ public:
     void buildVariables(uint32_t requiredStackSize);
     void allocateRegistersSimple();
     void allocateRegisters();
+    void preloadVariables();
     void freeVariables();
 
     void compileFunction(JITFunction* jitFunc, bool isExternal);

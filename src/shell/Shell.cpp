@@ -1317,6 +1317,9 @@ static void parseArguments(int argc, const char* argv[], ParseOptions& options)
                 } else if (strcmp(argv[i], "--jit-no-reg-alloc") == 0) {
                     s_JITFlags |= JITFlagValue::disableRegAlloc;
                     continue;
+                } else if (strcmp(argv[i], "--jit-no-preload") == 0) {
+                    s_JITFlags |= JITFlagValue::disablePreload;
+                    continue;
                 } else if (strcmp(argv[i], "--jit-no-basic-block-opt") == 0) {
                     s_JITFlags |= JITFlagValue::disableBasicBlockOpt;
                     continue;

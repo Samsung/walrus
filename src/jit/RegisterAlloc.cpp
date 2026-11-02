@@ -1194,6 +1194,12 @@ void JITCompiler::freeVariables()
             *operand = dst.value;
         } else {
             while (operand < end) {
+                if (*operand & Instruction::kAbsoluteOperand) {
+                    ASSERT(VARIABLE_TYPE(*operand) == Instruction::Register);
+                    *operand++ ^= Instruction::kAbsoluteOperand;
+                    continue;
+                }
+
                 VariableList::Variable& variable = m_variableList->variables[*operand];
 
                 ASSERT((variable.info & Instruction::TypeMask) > 0);
