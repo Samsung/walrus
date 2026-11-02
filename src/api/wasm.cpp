@@ -674,6 +674,8 @@ static wasm_valkind_t FromWalrusValueType(const Value::Type& type)
         return WASM_V128;
     case Value::Type::FuncRef:
     case Value::Type::NullFuncRef:
+    case Value::Type::NoFuncRef:
+    case Value::Type::NullNoFuncRef:
         return WASM_FUNCREF;
     case Value::Type::ExnRef:
     case Value::Type::NullExnRef:
@@ -717,7 +719,7 @@ static void FromWalrusValueTypes(const TypeVector& types, wasm_valtype_vec_t* ou
 {
     wasm_valtype_vec_new_uninitialized(out, types.size());
     for (size_t i = 0; i < types.size(); i++) {
-        out->data[i] = wasm_valtype_new(FromWalrusValueType(types.types()[i]));
+        out->data[i] = new wasm_valtype_t(types.types()[i]);
     }
 }
 
@@ -770,6 +772,11 @@ static wasm_val_t FromWalrusValue(const Value& val)
     case Value::Type::NullFuncRef:
         result.kind = WASM_FUNCREF;
         result.of.ref = val.asFunction() ? NewWasmRef(val.asFunction()) : nullptr;
+        break;
+    case Value::Type::NoFuncRef:
+    case Value::Type::NullNoFuncRef:
+        result.kind = WASM_FUNCREF;
+        result.of.ref = nullptr;
         break;
     case Value::Type::ExnRef:
     case Value::Type::NullExnRef:
@@ -917,6 +924,53 @@ own wasm_valtype_t* wasm_valtype_new(wasm_valkind_t kind)
 wasm_valkind_t wasm_valtype_kind(const wasm_valtype_t* type)
 {
     return FromWalrusValueType(type->type);
+}
+
+wasm_heapkind_t wasm_valtype_heapkind(const wasm_valtype_t* type)
+{
+    switch (type->type) {
+    case Value::Type::FuncRef:
+    case Value::Type::NullFuncRef:
+        return WASM_HEAP_FUNC;
+    case Value::Type::ExternRef:
+    case Value::Type::NullExternRef:
+        return WASM_HEAP_EXTERN;
+    case Value::Type::AnyRef:
+    case Value::Type::NullAnyRef:
+        return WASM_HEAP_ANY;
+    case Value::Type::EqRef:
+    case Value::Type::NullEqRef:
+        return WASM_HEAP_EQ;
+    case Value::Type::I31Ref:
+    case Value::Type::NullI31Ref:
+        return WASM_HEAP_I31;
+    case Value::Type::StructRef:
+    case Value::Type::NullStructRef:
+        return WASM_HEAP_STRUCT;
+    case Value::Type::ArrayRef:
+    case Value::Type::NullArrayRef:
+        return WASM_HEAP_ARRAY;
+    case Value::Type::NoAnyRef:
+    case Value::Type::NullNoAnyRef:
+        return WASM_HEAP_NONE;
+    case Value::Type::NoExternRef:
+    case Value::Type::NullNoExternRef:
+        return WASM_HEAP_NOEXTERN;
+    case Value::Type::NoFuncRef:
+    case Value::Type::NullNoFuncRef:
+        return WASM_HEAP_NOFUNC;
+    case Value::Type::ExnRef:
+    case Value::Type::NullExnRef:
+        return WASM_HEAP_EXN;
+    case Value::Type::NoExnRef:
+    case Value::Type::NullNoExnRef:
+        return WASM_HEAP_NOEXN;
+    case Value::Type::DefinedRef:
+    case Value::Type::NullDefinedRef:
+        return WASM_HEAP_DEFINED;
+    default:
+        return WASM_HEAP_UNKNOWN;
+    }
 }
 
 // Function Types
@@ -1353,7 +1407,7 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
 
     wasm_ref_t* ref = static_cast<wasm_ref_t*>(table->get()->uncheckedGetElement(index));
     if (UNLIKELY((size_t)ref & OTHER_EXTERN_REF_TAG)) {
-        return ref;
+        return NewWasmRef(reinterpret_cast<Object*>(ref));
     }
 
     Value val(Value::NullExternRef, ref);
@@ -1888,6 +1942,28 @@ own wasm_ref_t* wasm_ref_copy(const wasm_ref_t* ref)
 bool wasm_ref_same(const wasm_ref_t* ref, const wasm_ref_t* other)
 {
     return ref->get() == other->get();
+}
+
+bool wasm_ref_is_i31(const wasm_ref_t* ref)
+{
+    return ref && ref->isI31();
+}
+
+uint32_t wasm_ref_i31_get_u(const wasm_ref_t* ref)
+{
+    ASSERT(ref && ref->isI31());
+    return static_cast<uint32_t>(Value::getI31UValue(const_cast<Object*>(ref->get())));
+}
+
+int32_t wasm_ref_i31_get_s(const wasm_ref_t* ref)
+{
+    ASSERT(ref && ref->isI31());
+    return Value::getI31SValue(const_cast<Object*>(ref->get()));
+}
+
+own wasm_ref_t* wasm_ref_i31_new(wasm_store_t*, uint32_t value)
+{
+    return NewWasmRef(reinterpret_cast<const Object*>(Value::toI31Value(static_cast<int32_t>(value))));
 }
 
 WASM_IMPL_REF(extern);

@@ -193,6 +193,27 @@ WASM_API_EXTERN own wasm_valtype_t* wasm_valtype_new(wasm_valkind_t);
 
 WASM_API_EXTERN wasm_valkind_t wasm_valtype_kind(const wasm_valtype_t*);
 
+// Wasm GC Heap Type extension
+typedef uint8_t wasm_heapkind_t;
+enum wasm_heapkind_enum {
+  WASM_HEAP_FUNC,
+  WASM_HEAP_EXTERN,
+  WASM_HEAP_ANY,
+  WASM_HEAP_EQ,
+  WASM_HEAP_I31,
+  WASM_HEAP_STRUCT,
+  WASM_HEAP_ARRAY,
+  WASM_HEAP_NONE,
+  WASM_HEAP_NOEXTERN,
+  WASM_HEAP_NOFUNC,
+  WASM_HEAP_EXN,
+  WASM_HEAP_NOEXN,
+  WASM_HEAP_DEFINED,
+  WASM_HEAP_UNKNOWN = 255
+};
+
+WASM_API_EXTERN wasm_heapkind_t wasm_valtype_heapkind(const wasm_valtype_t*);
+
 static inline bool wasm_valkind_is_num(wasm_valkind_t k) {
   return k < WASM_ANYREF;
 }
@@ -376,6 +397,11 @@ WASM_DECLARE_VEC(val, )
 
 
 WASM_DECLARE_REF_BASE(ref)
+
+WASM_API_EXTERN bool wasm_ref_is_i31(const wasm_ref_t*);
+WASM_API_EXTERN uint32_t wasm_ref_i31_get_u(const wasm_ref_t*);
+WASM_API_EXTERN int32_t wasm_ref_i31_get_s(const wasm_ref_t*);
+WASM_API_EXTERN own wasm_ref_t* wasm_ref_i31_new(struct wasm_store_t*, uint32_t);
 
 
 // Frames

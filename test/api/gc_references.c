@@ -219,6 +219,105 @@ static void nested_gc_root(wasm_store_t* store, wasm_func_t** funcs, int kind, i
     check(wasm_test_store_object_count(store) == baseline, "dropping GC roots releases external object despite array cycle");
 }
 
+static void test_i31_and_heap_types(wasm_store_t* store)
+{
+    // 1. i31 ref operations
+    wasm_ref_t* i31_ref = wasm_ref_i31_new(store, 42);
+    check(i31_ref != NULL, "wasm_ref_i31_new returns non-null");
+    check(wasm_ref_is_i31(i31_ref), "wasm_ref_is_i31 true for i31 ref");
+    check(wasm_ref_i31_get_u(i31_ref) == 42, "wasm_ref_i31_get_u matches");
+    check(wasm_ref_i31_get_s(i31_ref) == 42, "wasm_ref_i31_get_s matches positive");
+
+    wasm_ref_t* neg_i31 = wasm_ref_i31_new(store, (uint32_t)-123);
+    check(wasm_ref_is_i31(neg_i31), "wasm_ref_is_i31 true for negative i31");
+    check(wasm_ref_i31_get_s(neg_i31) == -123, "wasm_ref_i31_get_s preserves sign");
+    wasm_ref_delete(neg_i31);
+
+    // 2. Table get / set with i31ref
+    wasm_limits_t limits = { 2, 2 };
+    wasm_tabletype_t* tt = wasm_tabletype_new(wasm_valtype_new(WASM_ANYREF), &limits);
+    wasm_table_t* table = wasm_table_new(store, tt, NULL);
+    wasm_tabletype_delete(tt);
+    check(wasm_table_set(table, 0, i31_ref), "wasm_table_set with i31 ref");
+
+    wasm_ref_t* got = wasm_table_get(table, 0);
+    check(got != NULL, "wasm_table_get returns non-null for i31");
+    check(wasm_ref_is_i31(got), "wasm_table_get returns valid wasm_ref_t with is_i31 true");
+    check(wasm_ref_i31_get_u(got) == 42, "wasm_table_get value matches");
+    wasm_ref_delete(got);
+    wasm_ref_delete(i31_ref);
+    wasm_table_delete(table);
+
+    // 3. Wasm GC heap types and nofunc preservation
+    wasm_byte_vec_t bytes;
+    wasm_test_wat(&bytes, "heap_types");
+    wasm_module_t* module = wasm_test_module_new_gc(store, &bytes);
+    wasm_byte_vec_delete(&bytes);
+    check(module != NULL, "compile heap_types module");
+
+    wasm_extern_vec_t imports = WASM_EMPTY_VEC;
+    wasm_trap_t* trap = NULL;
+    wasm_instance_t* instance = wasm_instance_new(store, module, &imports, &trap);
+    check(instance != NULL && trap == NULL, "instantiate heap_types module");
+    wasm_module_delete(module);
+
+    wasm_extern_vec_t exports;
+    wasm_instance_exports(instance, &exports);
+    check(exports.size == 2, "heap_types exports count");
+
+    wasm_func_t* check_func = wasm_extern_as_func(exports.data[0]);
+    check(check_func != NULL, "export is function");
+    wasm_functype_t* ft = wasm_func_type(check_func);
+    const wasm_valtype_vec_t* params = wasm_functype_params(ft);
+    const wasm_valtype_vec_t* results = wasm_functype_results(ft);
+
+    check(params->size == 6, "params count");
+    // (ref nofunc) -> WASM_FUNCREF, WASM_HEAP_NOFUNC
+    check(wasm_valtype_kind(params->data[0]) == WASM_FUNCREF, "nofunc valtype is FUNCREF");
+    check(wasm_valtype_heapkind(params->data[0]) == WASM_HEAP_NOFUNC, "nofunc heap kind");
+
+    // (ref i31) -> WASM_ANYREF, WASM_HEAP_I31
+    check(wasm_valtype_kind(params->data[1]) == WASM_ANYREF, "i31 valtype is ANYREF");
+    check(wasm_valtype_heapkind(params->data[1]) == WASM_HEAP_I31, "i31 heap kind");
+
+    // (ref eq) -> WASM_ANYREF, WASM_HEAP_EQ
+    check(wasm_valtype_kind(params->data[2]) == WASM_ANYREF, "eq valtype is ANYREF");
+    check(wasm_valtype_heapkind(params->data[2]) == WASM_HEAP_EQ, "eq heap kind");
+
+    // (ref struct) -> WASM_ANYREF, WASM_HEAP_STRUCT
+    check(wasm_valtype_kind(params->data[3]) == WASM_ANYREF, "struct valtype is ANYREF");
+    check(wasm_valtype_heapkind(params->data[3]) == WASM_HEAP_STRUCT, "struct heap kind");
+
+    // (ref array) -> WASM_ANYREF, WASM_HEAP_ARRAY
+    check(wasm_valtype_kind(params->data[4]) == WASM_ANYREF, "array valtype is ANYREF");
+    check(wasm_valtype_heapkind(params->data[4]) == WASM_HEAP_ARRAY, "array heap kind");
+
+    // (ref any) -> WASM_ANYREF, WASM_HEAP_ANY
+    check(wasm_valtype_kind(params->data[5]) == WASM_ANYREF, "any valtype is ANYREF");
+    check(wasm_valtype_heapkind(params->data[5]) == WASM_HEAP_ANY, "any heap kind");
+
+    check(results->size == 1, "results count");
+    // (ref null nofunc) -> WASM_FUNCREF, WASM_HEAP_NOFUNC
+    check(wasm_valtype_kind(results->data[0]) == WASM_FUNCREF, "null nofunc valtype is FUNCREF");
+    check(wasm_valtype_heapkind(results->data[0]) == WASM_HEAP_NOFUNC, "null nofunc heap kind");
+
+    wasm_functype_delete(ft);
+
+    // 4. Runtime call returning ref.null nofunc
+    wasm_func_t* null_nofunc_func = wasm_extern_as_func(exports.data[1]);
+    check(null_nofunc_func != NULL, "export 1 is function");
+    wasm_val_vec_t empty_args = WASM_EMPTY_VEC;
+    wasm_val_t ret_val = WASM_INIT_VAL;
+    wasm_val_vec_t ret_vec = { 1, &ret_val };
+    check(!wasm_func_call(null_nofunc_func, &empty_args, &ret_vec), "call return_null_nofunc");
+    check(ret_val.kind == WASM_FUNCREF, "return_null_nofunc yields WASM_FUNCREF");
+    check(ret_val.of.ref == NULL, "return_null_nofunc yields NULL ref");
+    wasm_val_delete(&ret_val);
+
+    wasm_extern_vec_delete(&exports);
+    wasm_instance_delete(instance);
+}
+
 int main(void)
 {
     wasm_engine_t* engine = wasm_engine_new();
@@ -271,6 +370,7 @@ int main(void)
         global_struct(store, funcs, &data, kind, TAKE_LARGE);
     }
     wasm_extern_vec_delete(&exports);
+    test_i31_and_heap_types(store);
     check(wasm_test_store_object_count(store) == 0, "all GC reference test objects reclaimed");
     wasm_store_delete(store);
     wasm_engine_delete(engine);
