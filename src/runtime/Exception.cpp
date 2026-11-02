@@ -22,22 +22,24 @@
 
 namespace Walrus {
 
-void* allocateExceptionData(size_t size)
+ExceptionData::ExceptionData(size_t size)
 {
 #ifdef ENABLE_GC
-    return GC_MALLOC_UNCOLLECTABLE(size);
+    m_data = reinterpret_cast<uint8_t*>(GC_MALLOC_UNCOLLECTABLE(size));
 #else
-    return malloc(size);
+    m_data = reinterpret_cast<uint8_t*>(malloc(size));
 #endif
 }
 
-void deallocateExceptionData(void* ptr)
+ExceptionData::~ExceptionData()
 {
+    if (m_data != nullptr) {
 #ifdef ENABLE_GC
-    GC_FREE(ptr);
+        GC_FREE(m_data);
 #else
-    free(ptr);
+        free(m_data);
 #endif
+    }
 }
 
 } // namespace Walrus
