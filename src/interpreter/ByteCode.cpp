@@ -26,11 +26,16 @@ static const uint8_t g_byteCodeSize[ByteCode::OpcodeKindEnd] = {
     FOR_EACH_BYTECODE(DECLARE_BYTECODE_SIZE)
 #undef DECLARE_BYTECODE_SIZE
 };
+
+#define CHECK_BYTECODE_ALIGNMENT(name, ...) \
+    COMPILE_ASSERT(alignof(name) == alignof(ByteCode), "");
+FOR_EACH_BYTECODE(CHECK_BYTECODE_ALIGNMENT)
+#undef CHECK_BYTECODE_ALIGNMENT
 // clang-format on
 
 ByteCode::ByteCode(ByteCode::Opcode opcode)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-    : m_opcodeInAddress(g_byteCodeTable.m_addressTable[opcode])
+    : m_opcodeInOffset(g_byteCodeTable.m_offsetTable[opcode])
 #else
     : m_opcode(opcode)
 #endif
@@ -40,7 +45,7 @@ ByteCode::ByteCode(ByteCode::Opcode opcode)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 ByteCode::Opcode ByteCode::opcode() const
 {
-    return static_cast<Opcode>(g_byteCodeTable.m_addressToOpcodeTable[m_opcodeInAddress]);
+    return static_cast<Opcode>(g_byteCodeTable.m_offsetToOpcodeTable[m_opcodeInOffset]);
 }
 #else
 ByteCode::Opcode ByteCode::opcode() const
@@ -54,51 +59,51 @@ size_t ByteCode::getSize() const
     switch (this->opcode()) {
     case BrTableOpcode: {
         const BrTable* brTable = reinterpret_cast<const BrTable*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(BrTable) + sizeof(int32_t) * brTable->tableSize());
+        return ByteCode::alignedSize(sizeof(BrTable) + sizeof(int32_t) * brTable->tableSize());
     }
     case CallOpcode: {
         const Call* call = reinterpret_cast<const Call*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * call->parameterOffsetsSize()
-                                            + sizeof(ByteCodeStackOffset) * call->resultOffsetsSize());
+        return ByteCode::alignedSize(sizeof(Call) + sizeof(ByteCodeStackOffset) * call->parameterOffsetsSize()
+                                     + sizeof(ByteCodeStackOffset) * call->resultOffsetsSize());
     }
     case ReturnCallOpcode: {
         const ReturnCall* returnCall = reinterpret_cast<const ReturnCall*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(ReturnCall) + sizeof(ByteCodeStackOffset) * returnCall->parameterOffsetsSize()
-                                            + sizeof(ByteCodeStackOffset) * returnCall->resultOffsetsSize());
+        return ByteCode::alignedSize(sizeof(ReturnCall) + sizeof(ByteCodeStackOffset) * returnCall->parameterOffsetsSize()
+                                     + sizeof(ByteCodeStackOffset) * returnCall->resultOffsetsSize());
     }
     case CallIndirectOpcode:
     case CallIndirectM64Opcode:
     case ReturnCallIndirectOpcode:
     case ReturnCallIndirectM64Opcode: {
         const CallTable* callTable = reinterpret_cast<const CallTable*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(CallTable) + sizeof(ByteCodeStackOffset) * callTable->parameterOffsetsSize()
-                                            + sizeof(ByteCodeStackOffset) * callTable->resultOffsetsSize());
+        return ByteCode::alignedSize(sizeof(CallTable) + sizeof(ByteCodeStackOffset) * callTable->parameterOffsetsSize()
+                                     + sizeof(ByteCodeStackOffset) * callTable->resultOffsetsSize());
     }
     case CallRefOpcode: {
         const CallRef* callRef = reinterpret_cast<const CallRef*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * callRef->parameterOffsetsSize()
-                                            + sizeof(ByteCodeStackOffset) * callRef->resultOffsetsSize());
+        return ByteCode::alignedSize(sizeof(CallRef) + sizeof(ByteCodeStackOffset) * callRef->parameterOffsetsSize()
+                                     + sizeof(ByteCodeStackOffset) * callRef->resultOffsetsSize());
     }
     case ReturnCallRefOpcode: {
         const ReturnCallRef* returnCallRef = reinterpret_cast<const ReturnCallRef*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(ReturnCallRef) + sizeof(ByteCodeStackOffset) * returnCallRef->parameterOffsetsSize()
-                                            + sizeof(ByteCodeStackOffset) * returnCallRef->resultOffsetsSize());
+        return ByteCode::alignedSize(sizeof(ReturnCallRef) + sizeof(ByteCodeStackOffset) * returnCallRef->parameterOffsetsSize()
+                                     + sizeof(ByteCodeStackOffset) * returnCallRef->resultOffsetsSize());
     }
     case EndOpcode: {
         const End* end = reinterpret_cast<const End*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(End) + sizeof(ByteCodeStackOffset) * end->offsetsSize());
+        return ByteCode::alignedSize(sizeof(End) + sizeof(ByteCodeStackOffset) * end->offsetsSize());
     }
     case ThrowOpcode: {
         const Throw* throwCode = reinterpret_cast<const Throw*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(Throw) + sizeof(ByteCodeStackOffset) * throwCode->offsetsSize());
+        return ByteCode::alignedSize(sizeof(Throw) + sizeof(ByteCodeStackOffset) * throwCode->offsetsSize());
     }
     case ArrayNewFixedOpcode: {
         const ArrayNewFixed* arrayNewFixedCode = reinterpret_cast<const ArrayNewFixed*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(ArrayNewFixed) + sizeof(ByteCodeStackOffset) * arrayNewFixedCode->offsetsSize());
+        return ByteCode::alignedSize(sizeof(ArrayNewFixed) + sizeof(ByteCodeStackOffset) * arrayNewFixedCode->offsetsSize());
     }
     case StructNewOpcode: {
         const StructNew* structNewCode = reinterpret_cast<const StructNew*>(this);
-        return ByteCode::pointerAlignedSize(sizeof(StructNew) + sizeof(ByteCodeStackOffset) * structNewCode->offsetsSize());
+        return ByteCode::alignedSize(sizeof(StructNew) + sizeof(ByteCodeStackOffset) * structNewCode->offsetsSize());
     }
     default: {
         return g_byteCodeSize[this->opcode()];
