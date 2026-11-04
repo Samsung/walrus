@@ -318,6 +318,52 @@ static void test_i31_and_heap_types(wasm_store_t* store)
     wasm_instance_delete(instance);
 }
 
+static void test_i31_tables(wasm_store_t* store)
+{
+    wasm_byte_vec_t bytes;
+    wasm_test_wat(&bytes, "i31_tables");
+    wasm_module_t* module = wasm_test_module_new_gc(store, &bytes);
+    wasm_byte_vec_delete(&bytes);
+    check(module != NULL, "compile table32/table64 i31 module");
+    wasm_extern_vec_t imports = WASM_EMPTY_VEC;
+    wasm_trap_t* trap = NULL;
+    wasm_instance_t* instance = wasm_instance_new(store, module, &imports, &trap);
+    check(instance != NULL && trap == NULL, "instantiate table32/table64 i31 module");
+    wasm_module_delete(module);
+    wasm_extern_vec_t exports;
+    wasm_instance_exports(instance, &exports);
+    check(exports.size == 4, "i31 table fixture exports count");
+
+    const int32_t values[] = { 0, 256, -1, 1073741823, -1073741824 };
+    for (size_t width = 0; width < 2; ++width) {
+        wasm_table_t* table = wasm_extern_as_table(exports.data[width]);
+        wasm_func_t* grow = wasm_extern_as_func(exports.data[width + 2]);
+        check(table != NULL && grow != NULL, "i31 table and grow function exports");
+        check(wasm_table_get(table, 0) == NULL, "initial i31 table element is null");
+        call(grow, NULL, 0, 0);
+        check(wasm_table_size(table) == 2, "Wasm table.grow adds an i31 element");
+        wasm_ref_t* got = wasm_table_get(table, 1);
+        check(got != NULL && wasm_ref_is_i31(got), "grown i31 element has an owning ref");
+        check(wasm_ref_i31_get_s(got) == 256, "grown i31 element retains its value");
+        wasm_ref_delete(got);
+        for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
+            wasm_ref_t* value = wasm_ref_i31_new(store, (uint32_t)values[i]);
+            check(wasm_table_set(table, 1, value), "set signed i31 table element");
+            wasm_ref_delete(value);
+            got = wasm_table_get(table, 1);
+            check(got != NULL && wasm_ref_is_i31(got), "get signed i31 table element");
+            check(wasm_ref_i31_get_s(got) == values[i], "table preserves signed i31 value");
+            wasm_ref_delete(got);
+        }
+        check(wasm_table_get(table, 2) == NULL, "out-of-bounds table get returns null");
+        check(!wasm_table_set(table, 2, NULL), "out-of-bounds table set fails");
+        check(wasm_table_set(table, 1, NULL), "clear i31 table element");
+        check(wasm_table_get(table, 1) == NULL, "cleared i31 table element is null");
+    }
+    wasm_extern_vec_delete(&exports);
+    wasm_instance_delete(instance);
+}
+
 int main(void)
 {
     wasm_engine_t* engine = wasm_engine_new();
@@ -371,6 +417,7 @@ int main(void)
     }
     wasm_extern_vec_delete(&exports);
     test_i31_and_heap_types(store);
+    test_i31_tables(store);
     check(wasm_test_store_object_count(store) == 0, "all GC reference test objects reclaimed");
     wasm_store_delete(store);
     wasm_engine_delete(engine);

@@ -1405,7 +1405,10 @@ own wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t inde
         return nullptr;
     }
 
-    wasm_ref_t* ref = static_cast<wasm_ref_t*>(table->get()->uncheckedGetElement(index));
+    Table* target = table->get();
+    wasm_ref_t* ref = static_cast<wasm_ref_t*>(target->is64()
+            ? target->uncheckedGetElementM64(index)
+            : target->uncheckedGetElement(index));
     if (UNLIKELY((size_t)ref & OTHER_EXTERN_REF_TAG)) {
         return NewWasmRef(reinterpret_cast<Object*>(ref));
     }
@@ -1425,10 +1428,17 @@ bool wasm_table_set(wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* re
         return false;
     }
 
+    void* value;
     if (UNLIKELY((size_t)ref & OTHER_EXTERN_REF_TAG)) {
-        table->get()->uncheckedSetElement(index, reinterpret_cast<Object*>(ref));
+        value = reinterpret_cast<Object*>(ref);
     } else {
-        table->get()->uncheckedSetElement(index, ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits));
+        value = ref ? const_cast<Object*>(ref->get()) : reinterpret_cast<void*>(Value::NullBits);
+    }
+    Table* target = table->get();
+    if (target->is64()) {
+        target->uncheckedSetElementM64(index, value);
+    } else {
+        target->uncheckedSetElement(index, value);
     }
     table->get()->ownerStore()->requestCollection();
     return true;
