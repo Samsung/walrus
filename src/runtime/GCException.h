@@ -18,6 +18,7 @@
 #define __WalrusGCException__
 
 #include "runtime/GCBase.h"
+#include "runtime/Exception.h"
 
 namespace Walrus {
 
@@ -32,6 +33,13 @@ public:
     Exception* exception()
     {
         return m_exception;
+    }
+
+    void releaseRef()
+    {
+        ASSERT(this == m_exception->m_exceptionRef);
+        m_exception->m_exceptionRef = nullptr;
+        m_exception->releaseRef();
     }
 
 private:
