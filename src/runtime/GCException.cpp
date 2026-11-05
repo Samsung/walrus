@@ -30,15 +30,17 @@ DEFINE_GLOBAL_TYPE_INFO(exceptionTypeInfo, ExceptionKind);
 #ifdef ENABLE_GC
 static void GC_CALLBACK exceptionFinalizer(void* ptr, void* /* ignored ptr */)
 {
-    reinterpret_cast<GCException*>(ptr)->exception()->releaseRef();
+    reinterpret_cast<GCException*>(ptr)->releaseRef();
 }
 #endif // ENABLE_GC
 
 GCException* GCException::exceptionNew(Exception* e)
 {
 #ifdef ENABLE_GC
-    // TODO: The object is currently stored on the stack, which is good enough for testing,
-    // but several GC related improvements needs to be added to the code later.
+    if (e->m_exceptionRef != nullptr) {
+        return e->m_exceptionRef;
+    }
+
     GCException* result = reinterpret_cast<GCException*>(GC_MALLOC(sizeof(GCException)));
     if (UNLIKELY(result == nullptr)) {
         return result;
@@ -47,6 +49,7 @@ GCException* GCException::exceptionNew(Exception* e)
     new (result) GCException(e);
 
     GC_REGISTER_FINALIZER_NO_ORDER(result, exceptionFinalizer, nullptr, nullptr, nullptr);
+    e->m_exceptionRef = result;
     return result;
 #else // !ENABLE_GC
     return nullptr;

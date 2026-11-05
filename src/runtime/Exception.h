@@ -25,6 +25,9 @@
 namespace Walrus {
 
 class Tag;
+#ifdef ENABLE_GC
+class GCException;
+#endif /* ENABLE_GC */
 
 // The payload of a thrown exception may hold references. It must live where the
 // collector scans it, for as long as the exception does.
@@ -109,9 +112,16 @@ public:
 
 private:
     friend class Interpreter;
+#ifdef ENABLE_GC
+    friend class GCException;
+#endif /* ENABLE_GC */
+
     Exception(const std::string& message)
         : m_refCount(1)
         , m_message(message)
+#ifdef ENABLE_GC
+        , m_exceptionRef(nullptr)
+#endif /* ENABLE_GC */
     {
 #ifndef NDEBUG
         g_exceptionCount++;
@@ -122,6 +132,9 @@ private:
         : m_refCount(1)
         , m_tag(tag)
         , m_userExceptionData(std::move(userExceptionData))
+#ifdef ENABLE_GC
+        , m_exceptionRef(nullptr)
+#endif /* ENABLE_GC */
     {
 #ifndef NDEBUG
         g_exceptionCount++;
@@ -132,6 +145,9 @@ private:
     std::string m_message;
     Optional<Tag*> m_tag;
     ExceptionData m_userExceptionData;
+#ifdef ENABLE_GC
+    GCException* m_exceptionRef;
+#endif /* ENABLE_GC */
 };
 
 } // namespace Walrus
