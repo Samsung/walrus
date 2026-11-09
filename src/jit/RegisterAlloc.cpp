@@ -701,7 +701,6 @@ void JITCompiler::allocateRegisters()
 
         regs.freeUnusedRegisters(instrId + ((instr->info() & Instruction::kFreeUnusedEarly) ? 1 : 0));
         operand = instr->operands();
-        instr->setRequiredRegsDescriptor(0);
 
         if (*list == 0) {
             // No register assignment required.
@@ -1051,8 +1050,6 @@ void JITCompiler::allocateRegistersSimple()
 #if (defined SLJIT_SEPARATE_VECTOR_REGISTERS && SLJIT_SEPARATE_VECTOR_REGISTERS)
         uint32_t nextVectorIndex = FIRST_VECTOR_REG;
 #endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
-
-        instr->setRequiredRegsDescriptor(0);
 
         if (*list == 0) {
             // No register assignment required.
