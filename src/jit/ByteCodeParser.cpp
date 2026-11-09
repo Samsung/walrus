@@ -3825,6 +3825,7 @@ const uint8_t* VariableList::getOperandDescriptor(Instruction* instr)
     VariableList::Variable& variable = variables[*instr->getParam(operandIdx)];
 
     if (variable.info & Instruction::FloatOperandMarker) {
+        instr->setRequiredRegsDescriptor(requiredInit);
         return Instruction::getOperandDescriptorByOffset(requiredInit);
     }
 

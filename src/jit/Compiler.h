@@ -269,7 +269,7 @@ public:
     static const uint16_t kMemory64 = 1 << 10;
     static const uint16_t kIsInvertedCast = 1 << 11;
 
-    ByteCode::Opcode opcode() { return m_opcode; }
+    ByteCode::Opcode opcode() { return static_cast<ByteCode::Opcode>(m_opcode); }
 
     ByteCode* byteCode() { return m_byteCode; }
 
@@ -305,7 +305,8 @@ public:
 
     void setRequiredRegsDescriptor(uint32_t requiredRegsDescriptor)
     {
-        u.m_requiredRegsDescriptor = requiredRegsDescriptor;
+        ASSERT(requiredRegsDescriptor <= static_cast<uint16_t>(~0));
+        m_requiredRegsDescriptor = static_cast<uint16_t>(requiredRegsDescriptor);
     }
 
     uint8_t requiredReg(size_t n)
@@ -322,7 +323,7 @@ public:
 
     inline const uint8_t* getOperandDescriptor()
     {
-        return m_operandDescriptors + u.m_requiredRegsDescriptor;
+        return m_operandDescriptors + m_requiredRegsDescriptor;
     }
 
     static inline const uint8_t* getOperandDescriptorByOffset(uint32_t offset)
@@ -336,10 +337,12 @@ protected:
     explicit Instruction(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount)
         : InstructionListItem(group)
         , m_byteCode(byteCode)
-        , m_opcode(opcode)
+        , m_opcode(static_cast<uint16_t>(opcode))
+        , m_requiredRegsDescriptor(0)
         , m_paramCount(paramCount)
     {
-        u.m_requiredRegsDescriptor = 0;
+        ASSERT(opcode <= static_cast<uint16_t>(~0));
+        u.m_requiredRegsReset = 0;
     }
 
     static Instruction* create(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, size_t slots, bool isExtended);
@@ -348,10 +351,11 @@ private:
     static const uint8_t m_operandDescriptors[];
 
     ByteCode* m_byteCode;
-    ByteCode::Opcode m_opcode;
+    uint16_t m_opcode;
+    uint16_t m_requiredRegsDescriptor;
     uint32_t m_paramCount;
     union {
-        uint32_t m_requiredRegsDescriptor;
+        uint32_t m_requiredRegsReset;
         uint8_t m_requiredRegs[4];
     } u;
 };

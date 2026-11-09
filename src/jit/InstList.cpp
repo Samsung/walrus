@@ -584,26 +584,94 @@ void JITCompiler::dump()
                 operand++;
             }
 
-            bool firstTmp = true;
-            for (size_t i = 0; i < 4; ++i) {
-                uint8_t reg = instr->requiredReg(i);
+            const uint8_t* list = instr->getOperandDescriptor();
+            if (*list != 0) {
+                bool firstTmp = true;
+                uint32_t tmpIndex = 0;
+                uint32_t paramCount = instr->paramCount();
+                uint32_t resultCount = instr->resultCount();
+                Operand* operand = instr->operands();
 
-                if (reg == 0) {
-                    continue;
+                for (uint32_t i = 0; i < paramCount; i++) {
+                    if ((*list & Instruction::TypeMask & Instruction::FloatOperandMarker)
+                        && !(*list & Instruction::TmpNotAllowed)) {
+                        VariableList::Variable& variable = m_variableList->variables[*operand];
+
+                        if (instr->requiredReg(tmpIndex) != 0) {
+                            if (firstTmp) {
+                                printf("  Temporary(");
+                                firstTmp = false;
+                            } else {
+                                printf(",");
+                            }
+
+                            char type = (*list & Instruction::TypeMask) == Instruction::V128Operand ? 'v' : 'f';
+                            printf("%d:%c%d", static_cast<int>(tmpIndex), type, instr->requiredReg(tmpIndex) - 1);
+                        }
+                        tmpIndex++;
+                    }
+
+                    operand++;
+                    list++;
                 }
 
-                if (firstTmp) {
-                    printf("  Temporary(");
-                    firstTmp = false;
-                } else {
-                    printf(",");
+                for (; *list != 0; list++) {
+                    if (resultCount > 0) {
+                        --resultCount;
+
+                        if (!(*list & Instruction::TmpRequired)) {
+                            continue;
+                        }
+
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+                        if ((*list & Instruction::TypeMask) == Instruction::Int64Operand) {
+                            if (firstTmp) {
+                                printf("  Temporary(");
+                                firstTmp = false;
+                            } else {
+                                printf(",");
+                            }
+
+                            ASSERT(instr->requiredReg(tmpIndex) != 0);
+                            printf("%d:r%d", static_cast<int>(tmpIndex), instr->requiredReg(tmpIndex) - 1);
+                            tmpIndex++;
+                        }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+                    }
+
+                    ASSERT(instr->requiredReg(tmpIndex) != 0);
+                    if (firstTmp) {
+                        printf("  Temporary(");
+                        firstTmp = false;
+                    } else {
+                        printf(",");
+                    }
+
+                    if (*list & Instruction::FloatOperandMarker) {
+                        char type = (*list & Instruction::TypeMask) == Instruction::V128Operand ? 'v' : 'f';
+                        printf("%d:%c%d", static_cast<int>(tmpIndex), type, instr->requiredReg(tmpIndex) - 1);
+                    } else {
+                        printf("%d:r%d", static_cast<int>(tmpIndex), instr->requiredReg(tmpIndex) - 1);
+                    }
+                    tmpIndex++;
                 }
 
-                printf("%d:r%d", static_cast<int>(i), static_cast<int>(reg - 1));
-            }
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+                // 64 bit shifts / rotates requires special handling.
+                if ((instr->info() & (Instruction::kIsShift | Instruction::kIs32Bit)) == Instruction::kIsShift) {
+                    ASSERT(operand == instr->operands() + 2 && !firstTmp);
 
-            if (!firstTmp) {
-                printf(")\n");
+                    for (uint32_t i = 2; i < 3; i++) {
+                        if (instr->requiredReg(i) != 0) {
+                            printf("%d:r%d", static_cast<int>(tmpIndex), instr->requiredReg(i));
+                        }
+                    }
+                }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+
+                if (!firstTmp) {
+                    printf(")\n");
+                }
             }
         } else {
             printf("%s%d%s: Label", labelText, static_cast<int>(item->id()), defaultText);
