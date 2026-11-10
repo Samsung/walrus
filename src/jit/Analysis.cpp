@@ -73,52 +73,40 @@ struct DependencyGenContext {
             return m_inline[0] == 0 ? 0 : (m_inline[1] == 0 ? 1 : 2);
         }
 
-        class const_iterator {
-        public:
-            const_iterator(const VariableRef* current)
-                : m_isSpilled(false)
-                , m_current(current)
-            {
-            }
-
-            const_iterator(std::set<VariableRef>::const_iterator current)
-                : m_isSpilled(true)
-                , m_current(nullptr)
-                , m_spilledCurrent(current)
-            {
-            }
-
-            VariableRef operator*() const { return m_isSpilled ? *m_spilledCurrent : *m_current; }
-
-            const_iterator& operator++()
-            {
-                if (m_isSpilled) {
-                    ++m_spilledCurrent;
-                } else {
-                    ++m_current;
-                }
-                return *this;
-            }
-
-            bool operator!=(const const_iterator& other) const
-            {
-                return m_isSpilled ? m_spilledCurrent != other.m_spilledCurrent : m_current != other.m_current;
-            }
-
-        private:
-            bool m_isSpilled;
-            const VariableRef* m_current;
-            std::set<VariableRef>::const_iterator m_spilledCurrent;
-        };
-
-        const_iterator begin() const
+        template <typename Func>
+        void forEach(Func func) const
         {
-            return isSpilled() ? const_iterator(spilled()->begin()) : const_iterator(m_inline);
+            if (isSpilled()) {
+                for (VariableRef ref : *spilled()) {
+                    if (!func(ref)) {
+                        return;
+                    }
+                }
+                return;
+            }
+
+            for (size_t i = 0; i < 2 && m_inline[i] != 0; i++) {
+                if (!func(m_inline[i])) {
+                    return;
+                }
+            }
         }
 
-        const_iterator end() const
+        template <typename Func>
+        void forEachLabel(Func func) const
         {
-            return isSpilled() ? const_iterator(spilled()->end()) : const_iterator(m_inline + size());
+            forEach([&func](VariableRef ref) -> bool {
+                if (VARIABLE_TYPE(ref) == Label) {
+                    func(reinterpret_cast<InstructionListItem*>(ref)->asLabel());
+                }
+                return true;
+            });
+        }
+
+        VariableRef single() const
+        {
+            ASSERT(size() == 1 && !isSpilled());
+            return m_inline[0];
         }
 
         void clear()
@@ -798,18 +786,14 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         pending.pop_back();
         needed.push_back(index);
 
-        for (auto it : dependencyCtx.dependencies[index]) {
-            if (VARIABLE_TYPE(it) != DependencyGenContext::Label) {
-                continue;
-            }
-
-            size_t source = VARIABLE_GET_LABEL(it)->m_dependencyStart + slot;
+        dependencyCtx.dependencies[index].forEachLabel([&](Label* label) {
+            size_t source = label->m_dependencyStart + slot;
 
             if (!(dependencyCtx.options[source] & DependencyGenContext::kOptNeeded)) {
                 dependencyCtx.options[source] |= DependencyGenContext::kOptNeeded;
                 pending.push_back(source);
             }
-        }
+        });
     }
 
     std::sort(needed.begin(), needed.end());
@@ -830,28 +814,28 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             uint8_t state = SlotData::kUnknown;
             VariableRef value = DependencyGenContext::kNoRef;
 
-            for (auto it : dependencyCtx.dependencies[index]) {
+            dependencyCtx.dependencies[index].forEach([&](VariableRef ref) -> bool {
                 VariableRef candidate;
 
-                if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
-                    SlotData& source = slotData[VARIABLE_GET_LABEL(it)->m_dependencyStart + slot];
+                if (VARIABLE_TYPE(ref) == DependencyGenContext::Label) {
+                    SlotData& source = slotData[VARIABLE_GET_LABEL(ref)->m_dependencyStart + slot];
 
                     if (source.state == SlotData::kUnknown) {
-                        continue;
+                        return true;
                     }
 
                     if (source.state == SlotData::kVariable) {
                         state = SlotData::kVariable;
-                        break;
+                        return false;
                     }
 
                     candidate = source.value;
                 } else {
-                    candidate = VARIABLE_GET_REF(it);
+                    candidate = VARIABLE_GET_REF(ref);
 
                     if (!(m_variableList->variables[candidate].info & VariableList::kIsImmediate)) {
                         state = SlotData::kVariable;
-                        break;
+                        return false;
                     }
                 }
 
@@ -860,9 +844,10 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     value = candidate;
                 } else if (!sameImmediateValue(m_variableList, value, candidate)) {
                     state = SlotData::kVariable;
-                    break;
+                    return false;
                 }
-            }
+                return true;
+            });
 
             if (state != data.state) {
                 data.state = state;
@@ -878,19 +863,15 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
 
             size_t slot = index % requiredStackSize;
 
-            for (auto it : dependencyCtx.dependencies[index]) {
-                if (VARIABLE_TYPE(it) != DependencyGenContext::Label) {
-                    continue;
-                }
-
-                SlotData& source = slotData[VARIABLE_GET_LABEL(it)->m_dependencyStart + slot];
+            dependencyCtx.dependencies[index].forEachLabel([&](Label* label) {
+                SlotData& source = slotData[label->m_dependencyStart + slot];
 
                 if (source.state != SlotData::kVariable) {
                     source.state = SlotData::kVariable;
                     source.value = DependencyGenContext::kNoRef;
                     changed = true;
                 }
-            }
+            });
         }
     } while (changed);
 
@@ -914,11 +895,11 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 head = m_variableList->getMergeHead(head);
             }
 
-            for (auto it : dependencyCtx.dependencies[index]) {
+            dependencyCtx.dependencies[index].forEach([&](VariableRef ref) -> bool {
                 VariableRef candidate;
 
-                if (VARIABLE_TYPE(it) == DependencyGenContext::Label) {
-                    Label* label = VARIABLE_GET_LABEL(it);
+                if (VARIABLE_TYPE(ref) == DependencyGenContext::Label) {
+                    Label* label = VARIABLE_GET_LABEL(ref);
                     size_t sourceIndex = label->m_dependencyStart + slot;
                     SlotData& source = slotData[sourceIndex];
                     size_t sourceEnd = dependencyCtx.maxDistance[label->m_dependencyStart / requiredStackSize];
@@ -945,10 +926,10 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                     candidate = source.value;
 
                     if (candidate == DependencyGenContext::kNoRef) {
-                        continue;
+                        return true;
                     }
                 } else {
-                    candidate = VARIABLE_GET_REF(it);
+                    candidate = VARIABLE_GET_REF(ref);
                 }
 
                 if (data.state == SlotData::kVariable) {
@@ -956,7 +937,8 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                         ? m_variableList->getMergeHead(candidate)
                         : mergeVariables(m_variableList, head, candidate);
                 }
-            }
+                return true;
+            });
 
             if (head == DependencyGenContext::kNoRef) {
                 continue;
@@ -1038,9 +1020,9 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
                 size_t offset = lastDependencyStart + VARIABLE_GET_REF(ref);
                 DependencyGenContext::DependencyList& list = dependencyCtx.dependencies[offset];
 
-                ASSERT((dependencyCtx.options[offset] & DependencyGenContext::kOptDependencyComputed) && list.size() == 1);
+                ASSERT(dependencyCtx.options[offset] & DependencyGenContext::kOptDependencyComputed);
 
-                ref = *list.begin();
+                ref = list.single();
 
                 ASSERT(VARIABLE_TYPE(ref) == DependencyGenContext::Variable);
 
