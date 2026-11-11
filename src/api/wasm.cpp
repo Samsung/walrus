@@ -659,20 +659,14 @@ static bool CheckWalrusType(const Type& type, const wasm_val_t* val)
     }
 }
 
-static Type GetWalrusType(const TypeVector& types, size_t index, Value::Type type)
+static Type GetNextWalrusType(const TypeVector& types, Value::Type type, size_t& refIndex)
 {
     if (type != Value::DefinedRef && type != Value::NullDefinedRef) {
         return Type(type);
     }
 
-    size_t refIndex = 0;
-    for (size_t i = 0; i < index; ++i) {
-        if (types.types()[i] == Value::DefinedRef || types.types()[i] == Value::NullDefinedRef) {
-            ++refIndex;
-        }
-    }
     ASSERT(refIndex < types.refs().size());
-    return Type(type, types.refs()[refIndex]);
+    return Type(type, types.refs()[refIndex++]);
 }
 
 // Common Internal Methods
@@ -1275,9 +1269,10 @@ own wasm_func_t* wasm_func_new(
                 Trap::throwException(msg);
             }
 
+            size_t refIndex = 0;
             for (size_t i = 0; i < resultCount; ++i) {
                 Value::Type type = functionType->result().types()[i];
-                if (!CheckWalrusType(GetWalrusType(functionType->result(), i, type), &results.data[i])) {
+                if (!CheckWalrusType(GetNextWalrusType(functionType->result(), type, refIndex), &results.data[i])) {
                     Trap::throwException("incompatible callback result");
                 }
             }
@@ -1317,9 +1312,10 @@ own wasm_func_t* wasm_func_new_with_env(
                 Trap::throwException(msg);
             }
 
+            size_t refIndex = 0;
             for (size_t i = 0; i < resultCount; ++i) {
                 Value::Type type = functionType->result().types()[i];
-                if (!CheckWalrusType(GetWalrusType(functionType->result(), i, type), &results.data[i])) {
+                if (!CheckWalrusType(GetNextWalrusType(functionType->result(), type, refIndex), &results.data[i])) {
                     Trap::throwException("incompatible callback result");
                 }
             }
@@ -1354,9 +1350,10 @@ own wasm_trap_t* wasm_func_call(
     size_t resultNum = wasm_func_result_arity(func);
 
     const auto& params = func->get()->functionType()->param();
+    size_t refIndex = 0;
     for (size_t i = 0; i < paramNum; ++i) {
         Value::Type type = params.types()[i];
-        if (!CheckWalrusType(GetWalrusType(params, i, type), &args->data[i])) {
+        if (!CheckWalrusType(GetNextWalrusType(params, type, refIndex), &args->data[i])) {
             return new wasm_trap_t(new Trap(), "incompatible function argument");
         }
     }
