@@ -198,6 +198,29 @@ ALWAYS_INLINE T readValue(uint8_t* bp, ByteCodeStackOffset offset)
     return *reinterpret_cast<T*>(bp + offset);
 }
 
+template <typename T>
+ALWAYS_INLINE ByteCodeStackOffset laneOffset(ByteCodeStackOffset offset, uint8_t idx)
+{
+    constexpr uint8_t lanes = sizeof(Vec128) / sizeof(T);
+#if defined(WALRUS_BIG_ENDIAN)
+    idx = (~idx) & (lanes - 1);
+#endif
+    ASSERT(idx < lanes);
+    return offset + idx * sizeof(T);
+}
+
+template <typename T>
+ALWAYS_INLINE T readLaneValue(uint8_t* bp, ByteCodeStackOffset offset, uint8_t idx)
+{
+    return readValue<T>(bp, laneOffset<T>(offset, idx));
+}
+
+template <typename T>
+ALWAYS_INLINE void writeLaneValue(uint8_t* bp, ByteCodeStackOffset offset, uint8_t idx, const T& v)
+{
+    writeValue<T>(bp, laneOffset<T>(offset, idx), v);
+}
+
 // SIMD helper function
 
 template <typename T>
@@ -973,140 +996,120 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         NEXT_INSTRUCTION();                                                           \
     }
 
-#define SIMD_MEMORY_LOAD_LANE_OPERATION(opcodeName, opType)            \
-    DEFINE_OPCODE(opcodeName)                                          \
-    {                                                                  \
-        using Type = typename SIMDType<opType>::Type;                  \
-        SIMDMemoryLoad* code = (SIMDMemoryLoad*)programCounter;        \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset()); \
-        Type result = readValue<Type>(bp, code->src1Offset());         \
-        opType value;                                                  \
-        memories[0]->load(state, offset, code->offset(), &value);      \
-        result[code->index()] = value;                                 \
-        writeValue<Type>(bp, code->dstOffset(), result);               \
-        ADD_PROGRAM_COUNTER(SIMDMemoryLoad);                           \
-        NEXT_INSTRUCTION();                                            \
+#define SIMD_MEMORY_LOAD_LANE_OPERATION(opcodeName, opType)                                   \
+    DEFINE_OPCODE(opcodeName)                                                                 \
+    {                                                                                         \
+        SIMDMemoryLoad* code = (SIMDMemoryLoad*)programCounter;                               \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                        \
+        opType value;                                                                         \
+        memories[0]->load(state, offset, code->offset(), &value);                             \
+        writeValue<Vec128>(bp, code->dstOffset(), readValue<Vec128>(bp, code->src1Offset())); \
+        writeLaneValue<opType>(bp, code->dstOffset(), code->index(), value);                  \
+        ADD_PROGRAM_COUNTER(SIMDMemoryLoad);                                                  \
+        NEXT_INSTRUCTION();                                                                   \
     }
 
-#define SIMD_MEMORY_LOAD_LANE_M64_OPERATION(opcodeName, opType)        \
-    DEFINE_OPCODE(opcodeName)                                          \
-    {                                                                  \
-        using Type = typename SIMDType<opType>::Type;                  \
-        SIMDMemoryLoadM64* code = (SIMDMemoryLoadM64*)programCounter;  \
-        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset()); \
-        Type result = readValue<Type>(bp, code->src1Offset());         \
-        opType value;                                                  \
-        memories[0]->loadM64(state, offset, code->offset(), &value);   \
-        result[code->index()] = value;                                 \
-        writeValue<Type>(bp, code->dstOffset(), result);               \
-        ADD_PROGRAM_COUNTER(SIMDMemoryLoadM64);                        \
-        NEXT_INSTRUCTION();                                            \
+#define SIMD_MEMORY_LOAD_LANE_M64_OPERATION(opcodeName, opType)                               \
+    DEFINE_OPCODE(opcodeName)                                                                 \
+    {                                                                                         \
+        SIMDMemoryLoadM64* code = (SIMDMemoryLoadM64*)programCounter;                         \
+        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset());                        \
+        opType value;                                                                         \
+        memories[0]->loadM64(state, offset, code->offset(), &value);                          \
+        writeValue<Vec128>(bp, code->dstOffset(), readValue<Vec128>(bp, code->src1Offset())); \
+        writeLaneValue<opType>(bp, code->dstOffset(), code->index(), value);                  \
+        ADD_PROGRAM_COUNTER(SIMDMemoryLoadM64);                                               \
+        NEXT_INSTRUCTION();                                                                   \
     }
 
-#define SIMD_MEMORY_LOAD_LANE_MEMIDX_OPERATION(opcodeName, opType)               \
-    DEFINE_OPCODE(opcodeName)                                                    \
-    {                                                                            \
-        using Type = typename SIMDType<opType>::Type;                            \
-        SIMDMemoryLoadMemIdx* code = (SIMDMemoryLoadMemIdx*)programCounter;      \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());           \
-        Type result = readValue<Type>(bp, code->src1Offset());                   \
-        opType value;                                                            \
-        memories[code->memIndex()]->load(state, offset, code->offset(), &value); \
-        result[code->index()] = value;                                           \
-        writeValue<Type>(bp, code->dstOffset(), result);                         \
-        ADD_PROGRAM_COUNTER(SIMDMemoryLoadMemIdx);                               \
-        NEXT_INSTRUCTION();                                                      \
+#define SIMD_MEMORY_LOAD_LANE_MEMIDX_OPERATION(opcodeName, opType)                            \
+    DEFINE_OPCODE(opcodeName)                                                                 \
+    {                                                                                         \
+        SIMDMemoryLoadMemIdx* code = (SIMDMemoryLoadMemIdx*)programCounter;                   \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());                        \
+        opType value;                                                                         \
+        memories[code->memIndex()]->load(state, offset, code->offset(), &value);              \
+        writeValue<Vec128>(bp, code->dstOffset(), readValue<Vec128>(bp, code->src1Offset())); \
+        writeLaneValue<opType>(bp, code->dstOffset(), code->index(), value);                  \
+        ADD_PROGRAM_COUNTER(SIMDMemoryLoadMemIdx);                                            \
+        NEXT_INSTRUCTION();                                                                   \
     }
 
-#define SIMD_MEMORY_LOAD_LANE_MEMIDX_M64_OPERATION(opcodeName, opType)              \
-    DEFINE_OPCODE(opcodeName)                                                       \
-    {                                                                               \
-        using Type = typename SIMDType<opType>::Type;                               \
-        SIMDMemoryLoadMemIdxM64* code = (SIMDMemoryLoadMemIdxM64*)programCounter;   \
-        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset());              \
-        Type result = readValue<Type>(bp, code->src1Offset());                      \
-        opType value;                                                               \
-        memories[code->memIndex()]->loadM64(state, offset, code->offset(), &value); \
-        result[code->index()] = value;                                              \
-        writeValue<Type>(bp, code->dstOffset(), result);                            \
-        ADD_PROGRAM_COUNTER(SIMDMemoryLoadMemIdxM64);                               \
-        NEXT_INSTRUCTION();                                                         \
+#define SIMD_MEMORY_LOAD_LANE_MEMIDX_M64_OPERATION(opcodeName, opType)                        \
+    DEFINE_OPCODE(opcodeName)                                                                 \
+    {                                                                                         \
+        SIMDMemoryLoadMemIdxM64* code = (SIMDMemoryLoadMemIdxM64*)programCounter;             \
+        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset());                        \
+        opType value;                                                                         \
+        memories[code->memIndex()]->loadM64(state, offset, code->offset(), &value);           \
+        writeValue<Vec128>(bp, code->dstOffset(), readValue<Vec128>(bp, code->src1Offset())); \
+        writeLaneValue<opType>(bp, code->dstOffset(), code->index(), value);                  \
+        ADD_PROGRAM_COUNTER(SIMDMemoryLoadMemIdxM64);                                         \
+        NEXT_INSTRUCTION();                                                                   \
     }
 
-#define SIMD_MEMORY_STORE_LANE_OPERATION(opcodeName, opType)           \
-    DEFINE_OPCODE(opcodeName)                                          \
-    {                                                                  \
-        using Type = typename SIMDType<opType>::Type;                  \
-        SIMDMemoryStore* code = (SIMDMemoryStore*)programCounter;      \
-        Type result = readValue<Type>(bp, code->src1Offset());         \
-        opType value = result[code->index()];                          \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset()); \
-        memories[0]->store(state, offset, code->offset(), value);      \
-        ADD_PROGRAM_COUNTER(SIMDMemoryStore);                          \
-        NEXT_INSTRUCTION();                                            \
+#define SIMD_MEMORY_STORE_LANE_OPERATION(opcodeName, opType)                         \
+    DEFINE_OPCODE(opcodeName)                                                        \
+    {                                                                                \
+        SIMDMemoryStore* code = (SIMDMemoryStore*)programCounter;                    \
+        opType value = readLaneValue<opType>(bp, code->src1Offset(), code->index()); \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());               \
+        memories[0]->store(state, offset, code->offset(), value);                    \
+        ADD_PROGRAM_COUNTER(SIMDMemoryStore);                                        \
+        NEXT_INSTRUCTION();                                                          \
     }
 
-#define SIMD_MEMORY_STORE_LANE_M64_OPERATION(opcodeName, opType)        \
-    DEFINE_OPCODE(opcodeName)                                           \
-    {                                                                   \
-        using Type = typename SIMDType<opType>::Type;                   \
-        SIMDMemoryStoreM64* code = (SIMDMemoryStoreM64*)programCounter; \
-        Type result = readValue<Type>(bp, code->src1Offset());          \
-        opType value = result[code->index()];                           \
-        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset());  \
-        memories[0]->storeM64(state, offset, code->offset(), value);    \
-        ADD_PROGRAM_COUNTER(SIMDMemoryStoreM64);                        \
-        NEXT_INSTRUCTION();                                             \
+#define SIMD_MEMORY_STORE_LANE_M64_OPERATION(opcodeName, opType)                     \
+    DEFINE_OPCODE(opcodeName)                                                        \
+    {                                                                                \
+        SIMDMemoryStoreM64* code = (SIMDMemoryStoreM64*)programCounter;              \
+        opType value = readLaneValue<opType>(bp, code->src1Offset(), code->index()); \
+        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset());               \
+        memories[0]->storeM64(state, offset, code->offset(), value);                 \
+        ADD_PROGRAM_COUNTER(SIMDMemoryStoreM64);                                     \
+        NEXT_INSTRUCTION();                                                          \
     }
 
-#define SIMD_MEMORY_STORE_LANE_MEMIDX_OPERATION(opcodeName, opType)              \
-    DEFINE_OPCODE(opcodeName)                                                    \
-    {                                                                            \
-        using Type = typename SIMDType<opType>::Type;                            \
-        SIMDMemoryStoreMemIdx* code = (SIMDMemoryStoreMemIdx*)programCounter;    \
-        Type result = readValue<Type>(bp, code->src1Offset());                   \
-        opType value = result[code->index()];                                    \
-        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());           \
-        memories[code->memIndex()]->store(state, offset, code->offset(), value); \
-        ADD_PROGRAM_COUNTER(SIMDMemoryStoreMemIdx);                              \
-        NEXT_INSTRUCTION();                                                      \
+#define SIMD_MEMORY_STORE_LANE_MEMIDX_OPERATION(opcodeName, opType)                  \
+    DEFINE_OPCODE(opcodeName)                                                        \
+    {                                                                                \
+        SIMDMemoryStoreMemIdx* code = (SIMDMemoryStoreMemIdx*)programCounter;        \
+        opType value = readLaneValue<opType>(bp, code->src1Offset(), code->index()); \
+        uint32_t offset = readValue<uint32_t>(bp, code->src0Offset());               \
+        memories[code->memIndex()]->store(state, offset, code->offset(), value);     \
+        ADD_PROGRAM_COUNTER(SIMDMemoryStoreMemIdx);                                  \
+        NEXT_INSTRUCTION();                                                          \
     }
 
-#define SIMD_MEMORY_STORE_LANE_MEMIDX_M64_OPERATION(opcodeName, opType)             \
-    DEFINE_OPCODE(opcodeName)                                                       \
-    {                                                                               \
-        using Type = typename SIMDType<opType>::Type;                               \
-        SIMDMemoryStoreMemIdxM64* code = (SIMDMemoryStoreMemIdxM64*)programCounter; \
-        Type result = readValue<Type>(bp, code->src1Offset());                      \
-        opType value = result[code->index()];                                       \
-        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset());              \
-        memories[code->memIndex()]->storeM64(state, offset, code->offset(), value); \
-        ADD_PROGRAM_COUNTER(SIMDMemoryStoreMemIdxM64);                              \
-        NEXT_INSTRUCTION();                                                         \
+#define SIMD_MEMORY_STORE_LANE_MEMIDX_M64_OPERATION(opcodeName, opType)              \
+    DEFINE_OPCODE(opcodeName)                                                        \
+    {                                                                                \
+        SIMDMemoryStoreMemIdxM64* code = (SIMDMemoryStoreMemIdxM64*)programCounter;  \
+        opType value = readLaneValue<opType>(bp, code->src1Offset(), code->index()); \
+        uint64_t offset = readValue<uint64_t>(bp, code->src0Offset());               \
+        memories[code->memIndex()]->storeM64(state, offset, code->offset(), value);  \
+        ADD_PROGRAM_COUNTER(SIMDMemoryStoreMemIdxM64);                               \
+        NEXT_INSTRUCTION();                                                          \
     }
 
-#define SIMD_EXTRACT_LANE_OPERATION(opcodeName, readType, writeType)         \
-    DEFINE_OPCODE(opcodeName)                                                \
-    {                                                                        \
-        using Type = typename SIMDType<readType>::Type;                      \
-        opcodeName* code = (opcodeName*)programCounter;                      \
-        Type result = readValue<Type>(bp, code->srcOffset());                \
-        writeValue<writeType>(bp, code->dstOffset(), result[code->index()]); \
-        ADD_PROGRAM_COUNTER(opcodeName);                                     \
-        NEXT_INSTRUCTION();                                                  \
+#define SIMD_EXTRACT_LANE_OPERATION(opcodeName, readType, writeType)                                                 \
+    DEFINE_OPCODE(opcodeName)                                                                                        \
+    {                                                                                                                \
+        opcodeName* code = (opcodeName*)programCounter;                                                              \
+        writeValue<writeType>(bp, code->dstOffset(), readLaneValue<readType>(bp, code->srcOffset(), code->index())); \
+        ADD_PROGRAM_COUNTER(opcodeName);                                                                             \
+        NEXT_INSTRUCTION();                                                                                          \
     }
 
-#define SIMD_REPLACE_LANE_OPERATION(opcodeName, readType, writeType)          \
-    DEFINE_OPCODE(opcodeName)                                                 \
-    {                                                                         \
-        using ResultType = typename SIMDType<writeType>::Type;                \
-        opcodeName* code = (opcodeName*)programCounter;                       \
-        auto val = readValue<readType>(bp, code->srcOffsets()[1]);            \
-        ResultType result = readValue<ResultType>(bp, code->srcOffsets()[0]); \
-        result[code->index()] = val;                                          \
-        writeValue<ResultType>(bp, code->dstOffset(), result);                \
-        ADD_PROGRAM_COUNTER(opcodeName);                                      \
-        NEXT_INSTRUCTION();                                                   \
+#define SIMD_REPLACE_LANE_OPERATION(opcodeName, readType, writeType)                             \
+    DEFINE_OPCODE(opcodeName)                                                                    \
+    {                                                                                            \
+        opcodeName* code = (opcodeName*)programCounter;                                          \
+        writeType val = readValue<readType>(bp, code->srcOffsets()[1]);                          \
+        writeValue<Vec128>(bp, code->dstOffset(), readValue<Vec128>(bp, code->srcOffsets()[0])); \
+        writeLaneValue<writeType>(bp, code->dstOffset(), code->index(), val);                    \
+        ADD_PROGRAM_COUNTER(opcodeName);                                                         \
+        NEXT_INSTRUCTION();                                                                      \
     }
 
 #define ATOMIC_MEMORY_LOAD_OPERATION(opcodeName, readType, writeType)   \
