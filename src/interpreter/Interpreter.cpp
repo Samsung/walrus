@@ -171,6 +171,25 @@ ByteCodeTable::ByteCodeTable()
 #endif
 }
 
+static void throwIntegerDivideByZero();
+static void throwIntegerOverflow();
+static void throwInvalidConversionToInteger();
+static void throwUndefinedElement();
+static void throwIndirectCallTypeMismatch();
+static void throwNullFunctionReference();
+static void throwCallByReferenceTypeMismatch();
+static void throwNullReference();
+static void throwCastFailure();
+static void throwNullI31Reference();
+static void throwMemoryAllocationFailed();
+static void throwOutOfBoundsMemoryAccess();
+static void throwOutOfBoundsTableAccess();
+static void throwNullArrayReference();
+static void throwOutOfBoundsArrayAccess();
+static void throwNullStructureReference();
+static void throwUnreachableExecuted();
+static void throwUninitializedElement(uint64_t idx);
+
 template <typename T>
 ALWAYS_INLINE void writeValue(uint8_t* bp, ByteCodeStackOffset offset, const T& v)
 {
@@ -276,10 +295,10 @@ template <typename T>
 T intDiv(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException("integer divide by zero");
+        throwIntegerDivideByZero();
     }
     if (UNLIKELY(!isNormalDivRem(lhs, rhs))) {
-        Trap::throwException("integer overflow");
+        throwIntegerOverflow();
     }
     return lhs / rhs;
 }
@@ -288,7 +307,7 @@ template <typename T>
 T intRem(ExecutionState& state, T lhs, T rhs)
 {
     if (UNLIKELY(rhs == 0)) {
-        Trap::throwException("integer divide by zero");
+        throwIntegerDivideByZero();
     }
     if (LIKELY(isNormalDivRem(lhs, rhs))) {
         return lhs % rhs;
@@ -303,11 +322,11 @@ R doConvert(ExecutionState& state, T val)
     if (std::is_integral<R>::value && std::is_floating_point<T>::value) {
         // Don't use std::isnan here because T may be a non-floating-point type.
         if (UNLIKELY(isNaN(val))) {
-            Trap::throwException("invalid conversion to integer");
+            throwInvalidConversionToInteger();
         }
     }
     if (UNLIKELY(!canConvert<R>(val))) {
-        Trap::throwException("integer overflow");
+        throwIntegerOverflow();
     }
     return convert<R>(val);
 }
@@ -1677,15 +1696,15 @@ NextInstruction:
 
         uint32_t idx = readValue<uint32_t>(bp, code->calleeOffset());
         if (UNLIKELY(idx >= table->size())) {
-            Trap::throwException("undefined element");
+            throwUndefinedElement();
         }
         auto target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException("uninitialized element " + std::to_string(idx));
+            throwUninitializedElement(idx);
         }
         const FunctionType* ft = target->functionType();
         if (UNLIKELY(!ft->equals(code->functionType()))) {
-            Trap::throwException("indirect call type mismatch");
+            throwIndirectCallTypeMismatch();
         }
 
         return tailCallOperation(state, target, code->stackOffsets(),
@@ -1699,15 +1718,15 @@ NextInstruction:
 
         uint64_t idx = readValue<uint64_t>(bp, code->calleeOffset());
         if (UNLIKELY(idx >= table->size())) {
-            Trap::throwException("undefined element");
+            throwUndefinedElement();
         }
         auto target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException("uninitialized element " + std::to_string(idx));
+            throwUninitializedElement(idx);
         }
         const FunctionType* ft = target->functionType();
         if (UNLIKELY(!ft->equals(code->functionType()))) {
-            Trap::throwException("indirect call type mismatch");
+            throwIndirectCallTypeMismatch();
         }
 
         return tailCallOperation(state, target, code->stackOffsets(),
@@ -1720,11 +1739,11 @@ NextInstruction:
 
         auto target = readValue<Function*>(bp, code->calleeOffset());
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException("null function reference");
+            throwNullFunctionReference();
         }
         const FunctionType* ft = target->functionType();
         if (UNLIKELY(!ft->equals(code->functionType()))) {
-            Trap::throwException("call by reference type mismatch");
+            throwCallByReferenceTypeMismatch();
         }
 
         return tailCallOperation(state, target, code->stackOffsets(),
@@ -2622,7 +2641,7 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->stackOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null reference");
+            throwNullReference();
         }
 
         ADD_PROGRAM_COUNTER(RefAsNonNull);
@@ -2636,10 +2655,10 @@ NextInstruction:
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
             if (!(code->srcInfo() & JumpIfCastGeneric::IsNullable)) {
-                Trap::throwException("cast failure");
+                throwCastFailure();
             }
         } else if (!testRefGeneric(ptr, code->typeInfo())) {
-            Trap::throwException("cast failure");
+            throwCastFailure();
         }
 
         ADD_PROGRAM_COUNTER(RefCastGeneric);
@@ -2653,10 +2672,10 @@ NextInstruction:
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
             if (!(code->srcInfo() & JumpIfCastGeneric::IsNullable)) {
-                Trap::throwException("cast failure");
+                throwCastFailure();
             }
         } else if (!testRefDefined(ptr, code->typeInfo())) {
-            Trap::throwException("cast failure");
+            throwCastFailure();
         }
 
         ADD_PROGRAM_COUNTER(RefCastDefined);
@@ -2714,7 +2733,7 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null i31 reference");
+            throwNullI31Reference();
         }
         writeValue<int32_t>(bp, code->dstOffset(), Value::getI31SValue(ptr));
 
@@ -2728,7 +2747,7 @@ NextInstruction:
 
         void* ptr = readValue<void*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null i31 reference");
+            throwNullI31Reference();
         }
         writeValue<int32_t>(bp, code->dstOffset(), Value::getI31UValue(ptr));
 
@@ -2743,7 +2762,7 @@ NextInstruction:
         uint32_t length = readValue<uint32_t>(bp, code->src1Offset());
         GCArray* result = GCArray::arrayNew(length, code->typeInfo(), bp + code->src0Offset());
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException("memory allocation failed");
+            throwMemoryAllocationFailed();
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2758,7 +2777,7 @@ NextInstruction:
         uint32_t length = readValue<uint32_t>(bp, code->srcOffset());
         GCArray* result = GCArray::arrayNewDefault(length, code->typeInfo());
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException("memory allocation failed");
+            throwMemoryAllocationFailed();
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2772,7 +2791,7 @@ NextInstruction:
 
         GCArray* result = GCArray::arrayNewFixed(code->length(), code->typeInfo(), code->dataOffsets(), bp);
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException("memory allocation failed");
+            throwMemoryAllocationFailed();
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2789,9 +2808,9 @@ NextInstruction:
         GCArray* result = GCArray::arrayNewData(offset, size, code->typeInfo(), instance->dataSegment(code->index()));
         if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
-                Trap::throwException("memory allocation failed");
+                throwMemoryAllocationFailed();
             }
-            Trap::throwException("out of bounds memory access");
+            throwOutOfBoundsMemoryAccess();
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2808,9 +2827,9 @@ NextInstruction:
         GCArray* result = GCArray::arrayNewElem(offset, size, code->typeInfo(), instance->elementSegment(code->index()));
         if (UNLIKELY(reinterpret_cast<uintptr_t>(result) <= GCArray::OutOfBoundsMaxAccess)) {
             if (UNLIKELY(result == nullptr)) {
-                Trap::throwException("memory allocation failed");
+                throwMemoryAllocationFailed();
             }
-            Trap::throwException("out of bounds table access");
+            throwOutOfBoundsTableAccess();
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -2824,7 +2843,7 @@ NextInstruction:
 
         GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(array))) {
-            Trap::throwException("null array reference");
+            throwNullArrayReference();
         }
         uint32_t log2Size = GCArray::getLog2Size(code->type());
         uint32_t offset = readValue<uint32_t>(bp, code->src1Offset());
@@ -2832,7 +2851,7 @@ NextInstruction:
         void* value_p = bp + code->src2Offset();
 
         if (array->length() < offset || (array->length() - offset) < fillSize) {
-            Trap::throwException("out of bounds array access");
+            throwOutOfBoundsArrayAccess();
         }
 
         if (!(array->length() == offset || fillSize == 0)) {
@@ -2865,7 +2884,7 @@ NextInstruction:
         GCArray* dstArray = readValue<GCArray*>(bp, code->src0Offset());
         GCArray* srcArray = readValue<GCArray*>(bp, code->src2Offset());
         if (UNLIKELY(Value::isNull(dstArray) || Value::isNull(srcArray))) {
-            Trap::throwException("null array reference");
+            throwNullArrayReference();
         }
         uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
         uint32_t src_offset = readValue<uint32_t>(bp, code->src3Offset());
@@ -2873,7 +2892,7 @@ NextInstruction:
 
         if (dstArray->length() < dst_offset || (dstArray->length() - dst_offset) < size
             || srcArray->length() < src_offset || (srcArray->length() - src_offset) < size) {
-            Trap::throwException("out of bounds array access");
+            throwOutOfBoundsArrayAccess();
         }
 
         const uint8_t log2Size = code->log2Size();
@@ -2893,7 +2912,7 @@ NextInstruction:
 
         GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(array))) {
-            Trap::throwException("null array reference");
+            throwNullArrayReference();
         }
 
         uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
@@ -2905,11 +2924,11 @@ NextInstruction:
         size_t dataSize = data->sizeInByte();
 
         if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
-            Trap::throwException("out of bounds array access");
+            throwOutOfBoundsArrayAccess();
         }
 
         if (dataSize < src_offset || ((dataSize - src_offset) >> log2Size) < size) {
-            Trap::throwException("out of bounds memory access");
+            throwOutOfBoundsMemoryAccess();
         }
 
         uintptr_t mask = (static_cast<uintptr_t>(1) << log2Size) - 1;
@@ -2926,7 +2945,7 @@ NextInstruction:
 
         GCArray* array = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(array))) {
-            Trap::throwException("null array reference");
+            throwNullArrayReference();
         }
 
         uint32_t dst_offset = readValue<uint32_t>(bp, code->src1Offset());
@@ -2937,11 +2956,11 @@ NextInstruction:
         size_t elemSize = elements->size();
 
         if (arraySize < dst_offset || (arraySize - dst_offset) < size) {
-            Trap::throwException("out of bounds array access");
+            throwOutOfBoundsArrayAccess();
         }
 
         if (elemSize < src_offset || (elemSize - src_offset) < size) {
-            Trap::throwException("out of bounds table access");
+            throwOutOfBoundsTableAccess();
         }
 
         uintptr_t mask = static_cast<uintptr_t>(sizeof(void*)) - 1;
@@ -2958,12 +2977,12 @@ NextInstruction:
 
         GCArray* ptr = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null array reference");
+            throwNullArrayReference();
         }
 
         uint32_t pos = readValue<uint32_t>(bp, code->src1Offset());
         if (UNLIKELY(pos >= ptr->length())) {
-            Trap::throwException("out of bounds array access");
+            throwOutOfBoundsArrayAccess();
         }
 
         GCArray::get(bp + code->dstOffset(), reinterpret_cast<uint8_t*>(ptr),
@@ -2979,12 +2998,12 @@ NextInstruction:
 
         GCArray* ptr = readValue<GCArray*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null array reference");
+            throwNullArrayReference();
         }
 
         uint32_t pos = readValue<uint32_t>(bp, code->src1Offset());
         if (UNLIKELY(pos >= ptr->length())) {
-            Trap::throwException("out of bounds array access");
+            throwOutOfBoundsArrayAccess();
         }
 
         GCArray::set(reinterpret_cast<uint8_t*>(ptr), bp + code->src2Offset(),
@@ -3000,7 +3019,7 @@ NextInstruction:
 
         GCArray* ptr = readValue<GCArray*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null array reference");
+            throwNullArrayReference();
         }
 
         writeValue<uint32_t>(bp, code->dstOffset(), ptr->length());
@@ -3014,7 +3033,7 @@ NextInstruction:
 
         GCStruct* result = GCStruct::structNew(code->typeInfo(), code->dataOffsets(), bp);
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException("memory allocation failed");
+            throwMemoryAllocationFailed();
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -3028,7 +3047,7 @@ NextInstruction:
 
         GCStruct* result = GCStruct::structNewDefault(code->typeInfo());
         if (UNLIKELY(result == nullptr)) {
-            Trap::throwException("memory allocation failed");
+            throwMemoryAllocationFailed();
         }
         writeValue<void*>(bp, code->dstOffset(), result);
 
@@ -3042,7 +3061,7 @@ NextInstruction:
 
         GCStruct* ptr = readValue<GCStruct*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null structure reference");
+            throwNullStructureReference();
         }
 
         GCStruct::get(bp + code->dstOffset(),
@@ -3059,7 +3078,7 @@ NextInstruction:
 
         GCStruct* ptr = readValue<GCStruct*>(bp, code->src0Offset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null structure reference");
+            throwNullStructureReference();
         }
 
         GCStruct::set(reinterpret_cast<uint8_t*>(ptr) + code->memberOffset(),
@@ -3096,7 +3115,7 @@ NextInstruction:
 
         GCException* ptr = readValue<GCException*>(bp, code->srcOffset());
         if (UNLIKELY(Value::isNull(ptr))) {
-            Trap::throwException("null structure reference");
+            throwNullStructureReference();
         }
 
         ptr->throwException();
@@ -3106,7 +3125,7 @@ NextInstruction:
 
     DEFINE_OPCODE(Unreachable)
     {
-        Trap::throwException("unreachable executed");
+        throwUnreachableExecuted();
         ASSERT_NOT_REACHED();
         NEXT_INSTRUCTION();
     }
@@ -3213,26 +3232,26 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     if (!is64) {
         uint32_t idx = readValue<uint32_t>(bp, code->calleeOffset());
         if (idx >= table->size()) {
-            Trap::throwException("undefined element");
+            throwUndefinedElement();
         }
         target = reinterpret_cast<Function*>(table->uncheckedGetElement(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException("uninitialized element " + std::to_string(idx));
+            throwUninitializedElement(idx);
         }
     } else {
         uint64_t idx = readValue<uint64_t>(bp, code->calleeOffset());
         if (idx >= table->size()) {
-            Trap::throwException("undefined element");
+            throwUndefinedElement();
         }
         target = reinterpret_cast<Function*>(table->uncheckedGetElementM64(idx));
         if (UNLIKELY(Value::isNull(target))) {
-            Trap::throwException("uninitialized element " + std::to_string(idx));
+            throwUninitializedElement(idx);
         }
     }
 
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
-        Trap::throwException("indirect call type mismatch");
+        throwIndirectCallTypeMismatch();
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
@@ -3251,11 +3270,11 @@ NEVER_INLINE void Interpreter::callRefOperation(
 
     auto target = readValue<Function*>(bp, code->calleeOffset());
     if (UNLIKELY(Value::isNull(target))) {
-        Trap::throwException("null function reference");
+        throwNullFunctionReference();
     }
     const FunctionType* ft = target->functionType();
     if (!ft->equals(code->functionType())) {
-        Trap::throwException("call by reference type mismatch");
+        throwCallByReferenceTypeMismatch();
     }
 
     target->interpreterCall(state, bp, code->stackOffsets(), code->parameterOffsetsSize(), code->resultOffsetsSize());
@@ -3344,6 +3363,96 @@ NEVER_INLINE bool Interpreter::testRefDefined(void* refPtr, const CompositeType*
 
     return reinterpret_cast<uintptr_t>(actualTypeInfo[0]) >= subTypeCount
         && actualTypeInfo[subTypeCount] == typeInfo[subTypeCount];
+}
+
+NEVER_INLINE static void throwIntegerDivideByZero()
+{
+    Trap::throwException("integer divide by zero");
+}
+
+NEVER_INLINE static void throwIntegerOverflow()
+{
+    Trap::throwException("integer overflow");
+}
+
+NEVER_INLINE static void throwInvalidConversionToInteger()
+{
+    Trap::throwException("invalid conversion to integer");
+}
+
+NEVER_INLINE static void throwUndefinedElement()
+{
+    Trap::throwException("undefined element");
+}
+
+NEVER_INLINE static void throwIndirectCallTypeMismatch()
+{
+    Trap::throwException("indirect call type mismatch");
+}
+
+NEVER_INLINE static void throwNullFunctionReference()
+{
+    Trap::throwException("null function reference");
+}
+
+NEVER_INLINE static void throwCallByReferenceTypeMismatch()
+{
+    Trap::throwException("call by reference type mismatch");
+}
+
+NEVER_INLINE static void throwNullReference()
+{
+    Trap::throwException("null reference");
+}
+
+NEVER_INLINE static void throwCastFailure()
+{
+    Trap::throwException("cast failure");
+}
+
+NEVER_INLINE static void throwNullI31Reference()
+{
+    Trap::throwException("null i31 reference");
+}
+
+NEVER_INLINE static void throwMemoryAllocationFailed()
+{
+    Trap::throwException("memory allocation failed");
+}
+
+NEVER_INLINE static void throwOutOfBoundsMemoryAccess()
+{
+    Trap::throwException("out of bounds memory access");
+}
+
+NEVER_INLINE static void throwOutOfBoundsTableAccess()
+{
+    Trap::throwException("out of bounds table access");
+}
+
+NEVER_INLINE static void throwNullArrayReference()
+{
+    Trap::throwException("null array reference");
+}
+
+NEVER_INLINE static void throwOutOfBoundsArrayAccess()
+{
+    Trap::throwException("out of bounds array access");
+}
+
+NEVER_INLINE static void throwNullStructureReference()
+{
+    Trap::throwException("null structure reference");
+}
+
+NEVER_INLINE static void throwUnreachableExecuted()
+{
+    Trap::throwException("unreachable executed");
+}
+
+NEVER_INLINE static void throwUninitializedElement(uint64_t idx)
+{
+    Trap::throwException("uninitialized element " + std::to_string(idx));
 }
 
 } // namespace Walrus
