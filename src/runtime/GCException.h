@@ -35,12 +35,14 @@ public:
         return m_exception;
     }
 
+#ifdef ENABLE_GC
     void releaseRef()
     {
         ASSERT(this == m_exception->m_exceptionRef);
         m_exception->m_exceptionRef = nullptr;
         m_exception->releaseRef();
     }
+#endif /* ENABLE_GC */
 
 private:
     GCException(Exception* e);
