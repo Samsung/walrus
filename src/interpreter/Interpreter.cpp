@@ -1684,7 +1684,7 @@ NextInstruction:
             Trap::throwException("uninitialized element " + std::to_string(idx));
         }
         const FunctionType* ft = target->functionType();
-        if (UNLIKELY(!ft->equals(code->functionType()))) {
+        if (UNLIKELY(!ft->equals(code->functionType(), true))) {
             Trap::throwException("indirect call type mismatch");
         }
 
@@ -1706,7 +1706,7 @@ NextInstruction:
             Trap::throwException("uninitialized element " + std::to_string(idx));
         }
         const FunctionType* ft = target->functionType();
-        if (UNLIKELY(!ft->equals(code->functionType()))) {
+        if (UNLIKELY(!ft->equals(code->functionType(), true))) {
             Trap::throwException("indirect call type mismatch");
         }
 
@@ -1723,7 +1723,7 @@ NextInstruction:
             Trap::throwException("null function reference");
         }
         const FunctionType* ft = target->functionType();
-        if (UNLIKELY(!ft->equals(code->functionType()))) {
+        if (UNLIKELY(!ft->equals(code->functionType(), true))) {
             Trap::throwException("call by reference type mismatch");
         }
 
@@ -3231,7 +3231,7 @@ NEVER_INLINE void Interpreter::callIndirectOperation(
     }
 
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         Trap::throwException("indirect call type mismatch");
     }
 
@@ -3254,7 +3254,7 @@ NEVER_INLINE void Interpreter::callRefOperation(
         Trap::throwException("null function reference");
     }
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         Trap::throwException("call by reference type mismatch");
     }
 

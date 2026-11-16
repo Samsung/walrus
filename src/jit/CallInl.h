@@ -56,7 +56,7 @@ static sljit_sw callFunctionIndirect(
     }
 
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         context->error = ExecutionContext::IndirectCallTypeMismatchError;
         return ExecutionContext::IndirectCallTypeMismatchError;
     }
@@ -94,7 +94,7 @@ static sljit_sw callFunctionIndirectM64(
     }
 
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         context->error = ExecutionContext::IndirectCallTypeMismatchError;
         return ExecutionContext::IndirectCallTypeMismatchError;
     }
@@ -125,7 +125,7 @@ static sljit_sw callFunctionRef(
     }
 
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         context->error = ExecutionContext::CallRefTypeMismatchError;
         return ExecutionContext::CallRefTypeMismatchError;
     }
@@ -233,7 +233,7 @@ static sljit_sw tailCallFunctionIndirect(
     }
 
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         context->error = ExecutionContext::IndirectCallTypeMismatchError;
         return ExecutionContext::CapturedException;
     }
@@ -262,7 +262,7 @@ static sljit_sw tailCallFunctionIndirectM64(
     }
 
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         context->error = ExecutionContext::IndirectCallTypeMismatchError;
         return ExecutionContext::CapturedException;
     }
@@ -282,7 +282,7 @@ static sljit_sw tailCallFunctionRef(
     }
 
     const FunctionType* ft = target->functionType();
-    if (!ft->equals(code->functionType())) {
+    if (!ft->equals(code->functionType(), true)) {
         context->error = ExecutionContext::CallRefTypeMismatchError;
         return ExecutionContext::CapturedException;
     }
