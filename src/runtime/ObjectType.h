@@ -303,6 +303,7 @@ public:
         , m_function(nullptr)
     {
     }
+    ~TableType();
 
     Type type() const { return m_type; }
     uint64_t initialSize() const { return m_initialSize; }

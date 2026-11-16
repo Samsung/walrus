@@ -45,6 +45,7 @@ static const struct Case cases[] = {
     { "issue_1711_0", 1, 0 },
     { "issue_1712_0", 1, 0 },
     { "issue_1727_0", 1, 0 },
+    { "table_initializer_0", 1, 0 },
 };
 
 int main(void)
