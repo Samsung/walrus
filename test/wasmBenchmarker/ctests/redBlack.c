@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define RBSIZE 1669
+#define RBSIZE 1600
 
 #define RED 0
 #define BLACK 1
