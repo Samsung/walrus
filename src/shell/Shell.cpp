@@ -817,7 +817,7 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         }
     },
                                &data);
-    if (expectedResult.size()) {
+    if (!expectedException && !expectUserException) {
         if (trapResult.exception != nullptr) {
             printf("Error: %s\n", trapResult.exception->message().c_str());
             RELEASE_ASSERT_NOT_REACHED();
