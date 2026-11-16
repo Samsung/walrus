@@ -839,7 +839,7 @@ static void executeInvokeAction(wabt::InvokeAction* action, Walrus::Function* fn
         printConstVector(action->args);
         printf("), expect exception: %s (line: %d) : OK\n", expectedException, action->loc.line);
     } else if (expectUserException) {
-        if (trapResult.exception->tag() == nullptr) {
+        if (trapResult.exception == nullptr || trapResult.exception->tag() == nullptr) {
             printf("Missing user exception: %s\n", action->name.data());
             RELEASE_ASSERT_NOT_REACHED();
         }
