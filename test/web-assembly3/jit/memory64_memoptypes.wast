@@ -520,8 +520,8 @@
 
 ;; atomic core
 (assert_return (invoke "atomic.notify" (i64.const 0x10)))
-(assert_return (invoke "memory.atomic.wait32" (i64.const 0x10)))
-(assert_return (invoke "memory.atomic.wait64" (i64.const 0x10)))
+(assert_trap (invoke "memory.atomic.wait32" (i64.const 0x10)) "expected shared memory")
+(assert_trap (invoke "memory.atomic.wait64" (i64.const 0x10)) "expected shared memory")
 
 (assert_trap (invoke "atomic.notify" (i64.const 0x100000000)) "out of bounds memory access")
 (assert_trap (invoke "memory.atomic.wait32" (i64.const 0x100000000)) "out of bounds memory access")
@@ -1273,8 +1273,8 @@
 
 ;; atomic core
 (assert_return (invoke "atomic.notify" (i64.const 0x10)))
-(assert_return (invoke "memory.atomic.wait32" (i64.const 0x10)))
-(assert_return (invoke "memory.atomic.wait64" (i64.const 0x10)))
+(assert_trap (invoke "memory.atomic.wait32" (i64.const 0x10)) "expected shared memory")
+(assert_trap (invoke "memory.atomic.wait64" (i64.const 0x10)) "expected shared memory")
 
 (assert_trap (invoke "atomic.notify" (i64.const 0x100000000)) "out of bounds memory access")
 (assert_trap (invoke "memory.atomic.wait32" (i64.const 0x100000000)) "out of bounds memory access")
