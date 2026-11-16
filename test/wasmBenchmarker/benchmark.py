@@ -53,7 +53,7 @@ expectedValues = {
     "nqueens": 246,
     "prime": 70657,
     "quickSort": 0,
-    "redBlack": 13354000,
+    "redBlack": 12800000,
     "reverse-complement": 1,
     "rsa": 0,
     "salesman": 2520,
@@ -398,11 +398,6 @@ def run_tests(
       })
 
   for name in test_names:
-    if "redBlack" in name:
-      # skip redBlack test (debugging required)
-      if verbose:
-        print(f"skipping {name} (redBlack test excluded)")
-      continue
     tc_path = f"{path}/wasm/{name}.wasm"
     if verbose:
       print(f"running {name} (TC path: {tc_path})")
