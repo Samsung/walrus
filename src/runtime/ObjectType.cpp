@@ -143,4 +143,11 @@ GlobalType::~GlobalType()
     }
 }
 
+TableType::~TableType()
+{
+    if (m_function) {
+        delete m_function;
+    }
+}
+
 } // namespace Walrus
