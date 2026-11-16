@@ -81,6 +81,10 @@ static void emitGCUnary(sljit_compiler* compiler, Instruction* instr)
             sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_TMP_DEST_REG, 0, args[0].arg, args[0].argw);
             dstReg = SLJIT_TMP_DEST_REG;
         }
+        if (reinterpret_cast<ArrayLen*>(instr->byteCode())->isNullable()) {
+            CompileContext::get(compiler)->appendTrapJump(ExecutionContext::NullArrayReferenceError,
+                                                          sljit_emit_cmp(compiler, SLJIT_EQUAL, dstReg, 0, SLJIT_IMM, 0));
+        }
         sljit_emit_op1(compiler, SLJIT_MOV, args[1].arg, args[1].argw, SLJIT_MEM1(dstReg), JITFieldAccessor::arrayLength());
         break;
     }
