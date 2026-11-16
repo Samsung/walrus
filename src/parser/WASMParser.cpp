@@ -2586,7 +2586,7 @@ public:
     {
         ASSERT((m_result.m_memoryTypes[memIdx]->is64() ? Walrus::Value::I64 : Walrus::Value::I32) == peekVMStackValueType());
         auto src = popVMStack();
-        auto dst = computeExprResultPosition(Walrus::Value::Type::I32);
+        auto dst = computeExprResultPosition(m_result.m_memoryTypes[memIdx]->is64() ? Walrus::Value::Type::I64 : Walrus::Value::Type::I32);
 
         if (!m_result.m_memoryTypes[memIdx]->is64()) {
             pushByteCode(Walrus::MemoryGrow(memIdx, src, dst), WASMOpcode::MemoryGrowOpcode);
