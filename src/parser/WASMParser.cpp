@@ -2422,6 +2422,10 @@ public:
         auto stackPos = popVMStack();
 
         auto type = peekVMStackValueType();
+        if (resultCount == 1) {
+            // When the result type is present, it is used regardless of the operand types.
+            type = toValueKind(resultTypes[0], &m_result);
+        }
         auto src1 = popVMStack();
         auto src0 = popVMStack();
         auto dst = computeExprResultPosition(type);
@@ -3115,10 +3119,12 @@ public:
     virtual void OnRefCastExpr(Type type) override
     {
         Walrus::Type targetType = toRefValueKind(type, &m_result);
+        // computeSrcInfo changes targetType to the type of the runtime check.
+        Walrus::Value::Type resultType = targetType;
         uint8_t srcInfo = computeSrcInfo(targetType);
 
         VMStackInfo& info = peekVMStackInfo();
-        info.refCast(targetType);
+        info.refCast(resultType);
 
         if (type.IsReferenceWithIndex()) {
             const Walrus::CompositeType** typeInfo = m_result.m_compositeTypes[type.GetReferenceIndex()]->subTypeList();
@@ -3167,6 +3173,7 @@ public:
     {
         ConditionHint conditionHint = takeConditionHint();
         Walrus::Type targetType = toRefValueKind(type, &m_result);
+        Walrus::Value::Type resultType = targetType;
 
         m_preprocessData.seenBranch(depth + 1);
         ASSERT(Walrus::Value::isRefType(peekVMStackValueType()));
@@ -3189,7 +3196,7 @@ public:
         }
 
         if (opcode == Opcode::BrOnCastFail) {
-            info.refCast(targetType);
+            info.refCast(resultType);
         }
     }
 
@@ -3216,7 +3223,13 @@ public:
         }
         case Opcode::AnyConvertExtern:
         case Opcode::ExternConvertAny: {
-            Walrus::Value::Type type = (opcode == Opcode::AnyConvertExtern) ? Walrus::Value::Type::AnyRef : Walrus::Value::Type::ExternRef;
+            bool isNullable = Walrus::Value::isNullableRefType(peekVMStackValueType());
+            Walrus::Value::Type type;
+            if (opcode == Opcode::AnyConvertExtern) {
+                type = isNullable ? Walrus::Value::Type::NullAnyRef : Walrus::Value::Type::AnyRef;
+            } else {
+                type = isNullable ? Walrus::Value::Type::NullExternRef : Walrus::Value::Type::ExternRef;
+            }
             auto src = popVMStack();
             auto dst = computeExprResultPosition(type);
             generateMoveCodeIfNeeds(src, dst, type);
