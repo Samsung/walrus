@@ -603,6 +603,22 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
     bool sameRefType = false;
     Value::Type vType = Value::toNonNullableRefType(v.type());
 
+    if (vType == Walrus::Value::DefinedRef && !Value::isNull(v.asReference())) {
+        switch (reinterpret_cast<Object*>(v.asReference())->kind()) {
+        case Object::StructKind:
+            vType = Walrus::Value::StructRef;
+            break;
+        case Object::ArrayKind:
+            vType = Walrus::Value::ArrayRef;
+            break;
+        case Object::FunctionKind:
+            vType = Walrus::Value::FuncRef;
+            break;
+        default:
+            break;
+        }
+    }
+
     if (vType == Walrus::Value::DefinedRef || c.type() == wabt::Type::NullRef) {
         // No precise type information.
         sameRefType = c.type().IsRef();
