@@ -400,7 +400,7 @@ static void simdEmitI64Abs(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn)
 {
     if (sljit_has_cpu_feature(SLJIT_HAS_AVX)) {
         simdEmitSSEOp(compiler, SimdOp::pxor, SLJIT_TMP_DEST_FREG, SLJIT_TMP_DEST_FREG);
-        simdEmitSSEOp(compiler, SimdOp::psubq, SLJIT_TMP_DEST_FREG, rd);
+        simdEmitSSEOp(compiler, SimdOp::psubq, SLJIT_TMP_DEST_FREG, rn);
         simdEmitVexOp(compiler, SimdOp::blendvpd, rd, rn, SLJIT_TMP_DEST_FREG);
 
         // Append a /is4 argument.
@@ -409,7 +409,7 @@ static void simdEmitI64Abs(sljit_compiler* compiler, sljit_s32 rd, sljit_s32 rn)
         return;
     }
 
-    simdEmitSSEOp(compiler, SimdOp::movshdup, SLJIT_TMP_DEST_FREG, rd);
+    simdEmitSSEOp(compiler, SimdOp::movshdup, SLJIT_TMP_DEST_FREG, rn);
 
     if (rd != rn) {
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_REG_128 | SLJIT_SIMD_ELEM_128, rd, rn, 0);
