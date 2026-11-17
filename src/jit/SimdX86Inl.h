@@ -1618,7 +1618,7 @@ static void emitBinarySIMD(sljit_compiler* compiler, Instruction* instr)
         simdEmitOp(compiler, SimdOp::psubsb, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I8X16SubSatUOpcode:
-        simdEmitOp(compiler, SimdOp::psubusw, dst, args[0].arg, args[1].arg);
+        simdEmitOp(compiler, SimdOp::psubusb, dst, args[0].arg, args[1].arg);
         break;
     case ByteCode::I8X16EqOpcode:
         simdEmitOp(compiler, SimdOp::pcmpeqb, dst, args[0].arg, args[1].arg);
