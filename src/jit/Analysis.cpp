@@ -685,7 +685,15 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             ASSERT(list != 0);
 
             VariableRef ref = VARIABLE_SET(m_variableList->variables.size(), DependencyGenContext::Variable);
-            uint32_t typeInfo = list[instr->paramCount()] & Instruction::TypeMask;
+            uint32_t typeInfo;
+
+            if (*list == 0) {
+                // These have no operand descriptor, and their result is a reference.
+                ASSERT(instr->opcode() == ByteCode::StructNewOpcode || instr->opcode() == ByteCode::ArrayNewFixedOpcode);
+                typeInfo = Instruction::valueTypeToOperandType(Value::DefinedRef);
+            } else {
+                typeInfo = list[instr->paramCount()] & Instruction::TypeMask;
+            }
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
             if (typeInfo == Instruction::Int64LowOperand) {
