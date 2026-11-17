@@ -1,0 +1,31 @@
+;; The vectors live across a call, so they are kept in saved
+;; registers where the target has them (ARM32).
+
+(module
+  (memory 1)
+  (data (i32.const 0) "\11\22\33\44\55\66\77\88")
+  (func $nop)
+  (func (export "load64_splat") (result v128)
+    (v128.load64_splat (i32.const 0))
+    (call $nop))
+  (func (export "load64_zero") (result v128)
+    (v128.load64_zero (i32.const 0))
+    (call $nop))
+  (func (export "store64_lane0") (param v128) (result i64)
+    (local.get 0)
+    (call $nop)
+    (local.set 0)
+    (v128.store64_lane 0 (i32.const 16) (local.get 0))
+    (i64.load (i32.const 16)))
+  (func (export "store64_lane1") (param v128) (result i64)
+    (local.get 0)
+    (call $nop)
+    (local.set 0)
+    (v128.store64_lane 1 (i32.const 24) (local.get 0))
+    (i64.load (i32.const 24)))
+)
+
+(assert_return (invoke "load64_splat") (v128.const i64x2 0x8877665544332211 0x8877665544332211))
+(assert_return (invoke "load64_zero") (v128.const i64x2 0x8877665544332211 0))
+(assert_return (invoke "store64_lane0" (v128.const i64x2 5 6)) (i64.const 5))
+(assert_return (invoke "store64_lane1" (v128.const i64x2 5 6)) (i64.const 6))
