@@ -917,6 +917,10 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     JITArg initValue;
     simdOperandToArg(compiler, operands + 1, initValue, simdType, dstReg);
 
+    if (initValue.arg != dstReg) {
+        sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | simdType, dstReg, initValue.arg, 0);
+    }
+
     MemAddress addr(options, instr->requiredReg(1), instr->requiredReg(2), 0);
     addr.check(compiler, operands, offset, size, memIndex);
 
