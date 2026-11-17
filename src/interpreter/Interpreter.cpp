@@ -435,7 +435,7 @@ inline static void simdAllTrueOperation(ExecutionState& state, UnaryOperation* c
 {
     using Type = typename SIMDType<T>::Type;
     auto val = readValue<Type>(bp, code->srcOffset());
-    uint32_t result = (std::count_if(std::begin(val.v), std::end(val.v), [](uint8_t x) { return x != 0; }) >= Count);
+    uint32_t result = (std::count_if(std::begin(val.v), std::end(val.v), [](T x) { return x != 0; }) >= Count);
     writeValue<uint32_t>(bp, code->dstOffset(), result);
 }
 
