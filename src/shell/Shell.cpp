@@ -631,6 +631,22 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                            || vType == Walrus::Value::EqRef || vType == Walrus::Value::I31Ref
                            || vType == Walrus::Value::StructRef || vType == Walrus::Value::ArrayRef);
             break;
+        case wabt::Type::EqRef: {
+            if (Value::isNull(v.asReference())) {
+                return c.ref_bits() == wabt::Const::kRefNullBits;
+            }
+
+            if (c.ref_bits() == wabt::Const::kRefNullBits) {
+                return false;
+            }
+
+            if (Value::isI31Value(v.asReference())) {
+                return true;
+            }
+
+            Object* object = reinterpret_cast<Object*>(v.asReference());
+            return object->kind() == Object::StructKind || object->kind() == Object::ArrayKind;
+        }
         case wabt::Type::I31Ref:
             sameRefType = Value::isNull(v.asReference()) || Value::isI31Value(v.asReference());
             break;
