@@ -656,7 +656,7 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
                 return c.ref_bits() == wabt::Const::kRefNullBits;
             }
 
-            if (Value::isI31Value(v.asReference())) {
+            if (c.ref_bits() == wabt::Const::kRefNullBits || Value::isI31Value(v.asReference())) {
                 return false;
             }
 
@@ -679,6 +679,21 @@ static bool equals(Walrus::Value& v, wabt::Const& c)
     if (Value::isNull(v.asReference())) {
         // check RefNull
         return c.ref_bits() == wabt::Const::kRefNullBits;
+    }
+
+    if (c.ref_bits() == wabt::Const::kRefNullBits) {
+        return false;
+    }
+
+    if (c.type() == wabt::Type::AnyRef && c.ref_bits() != wabt::Const::kRefAnyValueBits) {
+        // check RefHost
+        if (Value::isI31Value(v.asReference())) {
+            return false;
+        }
+
+        Object* object = reinterpret_cast<Object*>(v.asReference());
+        return object->kind() == Object::ExternalValueKind
+            && (reinterpret_cast<ExternalValue*>(v.asReference())->value() == c.ref_bits());
     }
 
     if (c.ref_bits() == wabt::Const::kRefAnyValueBits || (c.type() != wabt::Type::ExternRef && c.type() != wabt::Type::NullExternRef)) {
