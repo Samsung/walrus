@@ -857,6 +857,7 @@ static void emitBrTable(sljit_compiler* compiler, BrTableInstruction* instr)
     }
 
     sljit_emit_ijump(compiler, SLJIT_JUMP, SLJIT_MEM1(tmp), static_cast<sljit_sw>(context->branchTableOffset));
+    context->emitSlowCases(compiler);
 
     sljit_uw* target = reinterpret_cast<sljit_uw*>(context->branchTableOffset);
 
