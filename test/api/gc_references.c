@@ -318,10 +318,55 @@ static void test_i31_and_heap_types(wasm_store_t* store)
     wasm_instance_delete(instance);
 }
 
+static void imported_nullable_composite_global(wasm_store_t* store)
+{
+    wasm_byte_vec_t bytes;
+    wasm_test_wat(&bytes, "global_composite");
+    wasm_module_t* module = wasm_test_module_new_gc(store, &bytes);
+    wasm_byte_vec_delete(&bytes);
+    check(module != NULL, "compile nullable composite global fixture");
+
+    wasm_importtype_vec_t import_types;
+    wasm_module_imports(module, &import_types);
+    check(import_types.size == 1, "one composite global import");
+    const wasm_globaltype_t* declared = wasm_externtype_as_globaltype_const(wasm_importtype_type(import_types.data[0]));
+    check(declared != NULL, "composite global import type");
+    wasm_globaltype_t* copied = wasm_globaltype_copy(declared);
+    wasm_val_t null_value = WASM_INIT_VAL;
+    null_value.kind = WASM_ANYREF;
+    null_value.of.ref = NULL;
+    wasm_global_t* global = wasm_global_new(store, copied, &null_value);
+    check(global != NULL, "create nullable composite global");
+    wasm_globaltype_delete(copied);
+    wasm_importtype_vec_delete(&import_types);
+
+    wasm_extern_t* imported = wasm_global_as_extern(global);
+    wasm_extern_vec_t imports = { 1, &imported };
+    wasm_trap_t* trap = NULL;
+    wasm_instance_t* instance = wasm_instance_new(store, module, &imports, &trap);
+    check(instance != NULL && trap == NULL, "instantiate nullable composite global");
+
+    wasm_extern_vec_t exports;
+    wasm_instance_exports(instance, &exports);
+    check(exports.size == 1, "nullable composite global fixture export");
+    wasm_val_vec_t empty = WASM_EMPTY_VEC;
+    wasm_val_t result = WASM_INIT_VAL;
+    wasm_val_vec_t results = { 1, &result };
+    trap = wasm_func_call(wasm_extern_as_func(exports.data[0]), &empty, &results);
+    check(trap == NULL && result.kind == WASM_I32 && result.of.i32 == 1,
+          "nullable composite global retains its declared type");
+    wasm_val_delete(&result);
+    wasm_extern_vec_delete(&exports);
+    wasm_instance_delete(instance);
+    wasm_global_delete(global);
+    wasm_module_delete(module);
+}
+
 int main(void)
 {
     wasm_engine_t* engine = wasm_engine_new();
     wasm_store_t* store = wasm_store_new(engine);
+    imported_nullable_composite_global(store);
     struct callback_data data = { store, NULL, 0 };
     wasm_functype_t* type = wasm_functype_new_0_0();
     wasm_func_t* callback = wasm_func_new_with_env(store, type, collect_during_call, &data, NULL);

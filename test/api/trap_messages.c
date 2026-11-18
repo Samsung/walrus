@@ -55,6 +55,49 @@ static void check_message(wasm_trap_t* trap)
 }
 
 static int callback_mode;
+static wasm_store_t* callback_store;
+
+static wasm_trap_t* returned_trap(const wasm_val_vec_t* args, wasm_val_vec_t* results)
+{
+    (void)args;
+    (void)results;
+    const char text[] = "error";
+    wasm_message_t message;
+    wasm_byte_vec_new(&message, sizeof(text), text);
+    wasm_trap_t* trap = wasm_trap_new(callback_store, &message);
+    wasm_byte_vec_delete(&message);
+    return trap;
+}
+
+static wasm_trap_t* returned_trap_with_env(void* env, const wasm_val_vec_t* args, wasm_val_vec_t* results)
+{
+    check(env == callback_store, "returned trap callback environment");
+    return returned_trap(args, results);
+}
+
+static void check_callback_message_round_trip(wasm_store_t* store)
+{
+    callback_store = store;
+    wasm_functype_t* type = wasm_functype_new_0_0();
+    wasm_func_t* functions[] = {
+        wasm_func_new(store, type, returned_trap),
+        wasm_func_new_with_env(store, type, returned_trap_with_env, store, NULL)
+    };
+    wasm_functype_delete(type);
+    for (size_t i = 0; i < 2; ++i) {
+        wasm_val_vec_t empty = WASM_EMPTY_VEC;
+        wasm_trap_t* trap = wasm_func_call(functions[i], &empty, &empty);
+        check(trap != NULL, "returned callback trap");
+        wasm_message_t message;
+        wasm_trap_message(trap, &message);
+        check(message.size == sizeof("error"), "callback message has one terminating null byte");
+        check(memcmp(message.data, "error", sizeof("error")) == 0, "callback message bytes");
+        wasm_byte_vec_delete(&message);
+        wasm_trap_delete(trap);
+        wasm_func_delete(functions[i]);
+    }
+    callback_store = NULL;
+}
 
 static wasm_trap_t* host_callback(const wasm_val_vec_t* args, wasm_val_vec_t* results)
 {
@@ -127,6 +170,7 @@ int main(void)
     wasm_engine_t* engine = wasm_engine_new();
     wasm_store_t* store = wasm_store_new(engine);
     check_callback_cleanup(store);
+    check_callback_message_round_trip(store);
     wasm_extern_vec_t imports = WASM_EMPTY_VEC;
     const unsigned char* bytes[] = { call_bytes, start_bytes };
     const size_t sizes[] = { sizeof(call_bytes), sizeof(start_bytes) };

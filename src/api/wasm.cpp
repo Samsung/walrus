@@ -203,6 +203,7 @@ struct wasm_globaltype_t : wasm_externtype_t {
     wasm_globaltype_t(const wasm_valtype_t& type, const wasm_mutability_t& m)
         : wasm_externtype_t(WASM_EXTERN_GLOBAL)
         , valtype(type)
+        , declaredType(type.type, nullptr)
         , mut(m)
     {
     }
@@ -210,16 +211,26 @@ struct wasm_globaltype_t : wasm_externtype_t {
     wasm_globaltype_t(const GlobalType* type)
         : wasm_externtype_t(WASM_EXTERN_GLOBAL)
         , valtype(type->type())
+        , declaredType(type->type())
         , mut(type->isMutable() ? WASM_VAR : WASM_CONST)
+    {
+    }
+
+    wasm_globaltype_t(const wasm_globaltype_t& other)
+        : wasm_externtype_t(WASM_EXTERN_GLOBAL)
+        , valtype(other.valtype)
+        , declaredType(other.declaredType)
+        , mut(other.mut)
     {
     }
 
     own wasm_globaltype_t* clone() const
     {
-        return new wasm_globaltype_t(valtype, mut);
+        return new wasm_globaltype_t(*this);
     }
 
     wasm_valtype_t valtype;
+    Type declaredType;
     wasm_mutability_t mut;
 };
 
@@ -1264,7 +1275,14 @@ own wasm_func_t* wasm_func_new(
             auto trap = callback(&params, &results);
 
             if (trap) {
-                std::string msg(trap->message.data, trap->message.size);
+                size_t messageSize = trap->message.size;
+                if (messageSize && trap->message.data[messageSize - 1] == '\0') {
+                    --messageSize;
+                }
+                std::string msg;
+                if (messageSize) {
+                    msg.assign(trap->message.data, messageSize);
+                }
                 wasm_trap_delete(trap);
                 Trap::throwException(msg);
             }
@@ -1307,7 +1325,14 @@ own wasm_func_t* wasm_func_new_with_env(
             auto trap = callback(env, &params, &results);
 
             if (trap) {
-                std::string msg(trap->message.data, trap->message.size);
+                size_t messageSize = trap->message.size;
+                if (messageSize && trap->message.data[messageSize - 1] == '\0') {
+                    --messageSize;
+                }
+                std::string msg;
+                if (messageSize) {
+                    msg.assign(trap->message.data, messageSize);
+                }
                 wasm_trap_delete(trap);
                 Trap::throwException(msg);
             }
@@ -1391,11 +1416,12 @@ own wasm_trap_t* wasm_func_call(
 own wasm_global_t* wasm_global_new(
     wasm_store_t* store, const wasm_globaltype_t* gt, const wasm_val_t* val)
 {
-    if (!CheckWalrusType(Type(gt->valtype.type), val)) {
+    if (!CheckWalrusType(gt->declaredType, val)) {
         return nullptr;
     }
     Value value = ToWalrusValue(*val);
-    Global* glob = Global::createGlobal(store->get(), value, MutableType(value.type(), gt->mut));
+    Global* glob = Global::createGlobal(store->get(), value,
+                                       MutableType(gt->declaredType.type(), gt->declaredType.ref(), gt->mut));
     return new wasm_global_t(glob, gt->clone());
 }
 
