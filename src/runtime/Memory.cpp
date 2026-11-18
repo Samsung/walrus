@@ -170,9 +170,17 @@ bool Memory::grow(uint64_t growSizeInByte)
 #endif
 
         TargetBuffer* targetBuffer = m_targetBuffers;
+        size_t sizeInByteM1 = sizeInByte() > 0 ? sizeInByte() - 1 : 0;
+        size_t sizeInByteM3 = sizeInByte() > 0 ? sizeInByte() - 3 : 0;
+        size_t sizeInByteM7 = sizeInByte() > 0 ? sizeInByte() - 7 : 0;
+        size_t sizeInByteM15 = sizeInByte() > 0 ? sizeInByte() - 15 : 0;
 
         while (targetBuffer != nullptr) {
             targetBuffer->sizeInByte = sizeInByte();
+            targetBuffer->sizeInByteM1 = sizeInByteM1;
+            targetBuffer->sizeInByteM3 = sizeInByteM3;
+            targetBuffer->sizeInByteM7 = sizeInByteM7;
+            targetBuffer->sizeInByteM15 = sizeInByteM15;
             targetBuffer->buffer = buffer();
             targetBuffer = targetBuffer->next;
         }
@@ -312,6 +320,10 @@ void Memory::TargetBuffer::enque(Memory* memory)
     next = memory->m_targetBuffers;
     buffer = memory->buffer();
     sizeInByte = memory->sizeInByte();
+    sizeInByteM1 = sizeInByte > 0 ? sizeInByte - 1 : 0;
+    sizeInByteM3 = sizeInByte > 0 ? sizeInByte - 3 : 0;
+    sizeInByteM7 = sizeInByte > 0 ? sizeInByte - 7 : 0;
+    sizeInByteM15 = sizeInByte > 0 ? sizeInByte - 15 : 0;
 
     memory->m_targetBuffers = this;
 }

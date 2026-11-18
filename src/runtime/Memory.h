@@ -55,6 +55,10 @@ public:
         TargetBuffer* next;
         uint8_t* buffer;
         size_t sizeInByte;
+        size_t sizeInByteM1;
+        size_t sizeInByteM3;
+        size_t sizeInByteM7;
+        size_t sizeInByteM15;
     };
 
     static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte,

@@ -405,6 +405,7 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
         m_first = instr;
     } else {
         instr->m_next = prev->m_next;
+        instr->m_id = prev->m_id;
         prev->m_next = instr;
     }
 
@@ -434,6 +435,21 @@ const char* JITCompiler::m_byteCodeNames[] = {
 #undef DECLARE_BYTECODE
 };
 
+static void printRegister(uint32_t reg1, const char* prefix, uint32_t savedStart, uint32_t savedEnd)
+{
+#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
+    if (SLJIT_IS_REG_PAIR(reg1)) {
+        uint32_t reg2 = reg1 >> 8;
+        reg1 &= 0xff;
+
+        printf(" (%s%c%d,%s%c%d)", prefix, reg1 >= savedStart ? 'S' : 'R', reg1 >= savedStart ? savedEnd - reg1 : reg1 - SLJIT_R0,
+               prefix, reg2 >= savedStart ? 'S' : 'R', reg2 >= savedStart ? savedEnd - reg2 : reg2 - SLJIT_R0);
+        return;
+    }
+#endif /* SLJIT_32BIT_ARCHITECTURE */
+    printf(" (%s%c%d)", prefix, reg1 >= savedStart ? 'S' : 'R', reg1 >= savedStart ? savedEnd - reg1 : reg1 - SLJIT_R0);
+}
+
 void JITCompiler::dump()
 {
     bool enableColors = (JITFlags() & JITFlagValue::JITVerboseColor);
@@ -450,7 +466,11 @@ void JITCompiler::dump()
     for (InstructionListItem* item = first(); item != nullptr; item = item->next()) {
         if (item->isInstruction()) {
             Instruction* instr = item->asInstruction();
-            printf("%d: %s%s%s", static_cast<int>(instr->id()), instrText, byteCodeNames[instr->opcode()], defaultText);
+            if (instr->group() == Instruction::StackInit) {
+                printf("%d: %sStackInit%s(%s)", static_cast<int>(instr->id()), instrText, defaultText, byteCodeNames[instr->opcode()]);
+            } else {
+                printf("%d: %s%s%s", static_cast<int>(instr->id()), instrText, byteCodeNames[instr->opcode()], defaultText);
+            }
 
             if (enableColors) {
                 printf(" (%p)", item);
@@ -548,23 +568,8 @@ void JITCompiler::dump()
                             }
 #endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
                         }
-                        uint32_t reg1 = static_cast<uint32_t>(VARIABLE_GET_REF(variable.value));
-
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-                        if (SLJIT_IS_REG_PAIR(reg1)) {
-                            uint32_t reg2 = reg1 >> 8;
-                            reg1 &= 0xff;
-
-                            printf(" (%s%c%d,%s%c%d) [%d-%d]", prefix, reg1 >= savedStart ? 'S' : 'R', reg1 >= savedStart ? savedEnd - reg1 : reg1 - SLJIT_R0,
-                                   prefix, reg2 >= savedStart ? 'S' : 'R', reg2 >= savedStart ? savedEnd - reg2 : reg2 - SLJIT_R0,
-                                   static_cast<int>(variable.u.rangeStart), static_cast<int>(variable.rangeEnd));
-                        } else {
-#endif /* SLJIT_32BIT_ARCHITECTURE */
-                            printf(" (%s%c%d) [%d-%d]", prefix, reg1 >= savedStart ? 'S' : 'R', reg1 >= savedStart ? savedEnd - reg1 : reg1 - SLJIT_R0,
-                                   static_cast<int>(variable.u.rangeStart), static_cast<int>(variable.rangeEnd));
-#if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
-                        }
-#endif /* SLJIT_32BIT_ARCHITECTURE */
+                        printRegister(static_cast<uint32_t>(VARIABLE_GET_REF(variable.value)), prefix, savedStart, savedEnd);
+                        printf(" [%d-%d]", static_cast<int>(variable.u.rangeStart), static_cast<int>(variable.rangeEnd));
                     } else if (enableColors) {
                         printf(" (I:%p)", VARIABLE_GET_IMM(variable.value));
                     } else {
@@ -661,7 +666,7 @@ void JITCompiler::dump()
                 if ((instr->info() & (Instruction::kIsShift | Instruction::kIs32Bit)) == Instruction::kIsShift) {
                     ASSERT(operand == instr->operands() + 2 && !firstTmp);
 
-                    for (uint32_t i = 2; i < 3; i++) {
+                    for (uint32_t i = 2; i < 4; i++) {
                         if (instr->requiredReg(i) != 0) {
                             printf("%d:r%d", static_cast<int>(tmpIndex), instr->requiredReg(i));
                         }
