@@ -407,7 +407,8 @@ static ByteCodeStackOffset* emitStoreOntoStack(sljit_compiler* compiler, Operand
 #if (defined SLJIT_CONFIG_ARM_32 && SLJIT_CONFIG_ARM_32)
 constexpr uint8_t getHighRegister(sljit_s32 reg)
 {
-    return reg + 1;
+    // Same as SLJIT_QUAD_OTHER_HALF: saved registers are numbered downwards.
+    return reg + (((reg & 0x1) << 1) - 1);
 }
 #endif /* SLJIT_CONFIG_ARM_32 */
 
