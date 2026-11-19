@@ -177,7 +177,9 @@ jobs:
           - --jit
           - --jit-no-reg-alloc
           - ""
-    runs-on: ubuntu-latest
+    # The x64 Debug interpreter reaches Walrus's stack limit in recursion tests
+    # on Ubuntu 26.04. Keep this configuration on Ubuntu 24.04.
+    runs-on: ${{ matrix.arch == 'x64' && matrix.switch == '' && 'ubuntu-24.04' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -297,6 +299,8 @@ jobs:
             walrus: riscv64
 
     runs-on: ubuntu-latest
+    env:
+      QEMU_VERSION: "9.2.4"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -310,9 +314,9 @@ jobs:
           tar -xvf ${{ matrix.arch.toolchain.name }} -C toolchain --strip-components=1
       - name: Install qemu
         run: |
-          wget https://download.qemu.org/qemu-9.0.2.tar.xz
-          tar -xvf qemu-9.0.2.tar.xz
-          cd qemu-9.0.2
+          wget "https://download.qemu.org/qemu-${QEMU_VERSION}.tar.xz"
+          tar -xf "qemu-${QEMU_VERSION}.tar.xz"
+          cd "qemu-${QEMU_VERSION}"
           ./configure --target-list="${{ matrix.arch.qemu.target }}"
           make -j4
       - name: ${{ matrix.compile.name }} in ${{ matrix.arch.name }}
@@ -338,7 +342,7 @@ jobs:
           rm ./test/web-assembly3/core/call_ref.wast
       - name: Test in ${{matrix.arch.name}}
         run: |
-          $RUNNER ${{ matrix.switch }} --engine="./out/walrus" --qemu="./qemu-9.0.2/build/${{ matrix.arch.qemu.name }}" ${{ matrix.compile.tests }}
+          $RUNNER ${{ matrix.switch }} --engine="./out/walrus" --qemu="./qemu-${QEMU_VERSION}/build/${{ matrix.arch.qemu.name }}" ${{ matrix.compile.tests }}
 
   test-on-windows-x86-x64:
     runs-on: windows-2022
