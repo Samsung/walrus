@@ -114,6 +114,23 @@ jobs:
           #FIXME try-catch is unstable in macos build
           $RUNNER --engine="$GITHUB_WORKSPACE/out/mac/walrus"
 
+  build-no-gc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y ninja-build clang cmake
+      - name: Configure
+        run: |
+          cmake -Bout -DCMAKE_C_FLAGS=-O0 -DCMAKE_CXX_FLAGS=-O0 -DWALRUS_GC=NO -GNinja
+      - name: Build
+        run: |
+          ninja -C out
+
   build-by-clang:
     strategy:
       fail-fast: false
