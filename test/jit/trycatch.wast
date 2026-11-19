@@ -1,5 +1,6 @@
 (module
   (tag $except0 (param i32 i64 f32 f64))
+  (global $answer i32 (i32.const 42))
 
   (func $throw1 (param i64 f64)
      local.get 0
@@ -74,9 +75,23 @@
 
     i32.const 7
   )
+
+  ;; With no instruction before the try, the JIT instruction list starts
+  ;; with a single-jump label instead of an instruction.
+  (func (export "try4") (result i32)
+    (try
+      (do)
+      (catch_all
+        unreachable
+      )
+    )
+
+    global.get $answer
+  )
 )
 
 (assert_return (invoke "try1" (i64.const 1234567) (f64.const 123456.5))
     (i32.const 1234567) (i64.const 1234577) (f32.const 123456.5) (f64.const 123446.5))
 (assert_return (invoke "try2") (i32.const 1234) (i64.const 4321) (f32.const 6789.5) (f64.const -9876.75))
 (assert_return (invoke "try3") (i32.const 7))
+(assert_return (invoke "try4") (i32.const 42))

@@ -1116,6 +1116,15 @@ JITCompiler::JITCompiler(Module* module, uint32_t JITFlags)
     }
 }
 
+// The entry code falls through to the first label. A label with
+// a single jump emits no code, so its target must come next.
+static void preferFallThroughTarget(std::vector<Label*>& preferredBlocks, Label* label)
+{
+    if (label != nullptr && (label->info() & Label::kIsSingleJump)) {
+        preferredBlocks.push_back(label->finalTarget());
+    }
+}
+
 void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
 {
     ASSERT(m_first != nullptr && m_last != nullptr);
@@ -1175,12 +1184,15 @@ void JITCompiler::compileFunction(JITFunction* jitFunc, bool isExternal)
         if (lastInstr != nullptr && lastInstr->group() == Instruction::DirectBranch) {
             ASSERT(lastInstr->opcode() != ByteCode::JumpOpcode);
             instr = lastInstr;
+        } else if (instr->asInstruction()->group() != Instruction::DirectBranch) {
+            preferFallThroughTarget(m_preferredBlocks, defaultBlock);
         }
 
         currentBlock = getNextBlock(instr->asInstruction(), &defaultBlock);
         emitBasicBlock(m_first->asInstruction(), currentBlock);
     } else {
         defaultBlock = m_first->asLabel();
+        preferFallThroughTarget(m_preferredBlocks, defaultBlock);
         currentBlock = getNextBlock(nullptr, &defaultBlock);
     }
 
