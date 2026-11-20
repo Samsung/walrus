@@ -1452,6 +1452,14 @@ private:
     uint32_t m_storage[sizeof(T) / sizeof(uint32_t)];
 };
 
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+#if defined(WALRUS_64)
+typedef int32_t OpcodeHandler;
+#else
+typedef void* OpcodeHandler;
+#endif
+#endif
+
 class ByteCode {
 public:
     // clang-format off
@@ -1478,7 +1486,7 @@ protected:
 
     ByteCode()
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-        : m_opcodeInOffset(0)
+        : m_opcodeHandler(0)
 #else
         : m_opcode(Opcode::OpcodeKindEnd)
 #endif
@@ -1487,7 +1495,9 @@ protected:
 
     union {
         Opcode m_opcode;
-        int32_t m_opcodeInOffset;
+#if defined(WALRUS_ENABLE_COMPUTED_GOTO)
+        OpcodeHandler m_opcodeHandler;
+#endif
     };
 };
 
@@ -1706,8 +1716,8 @@ class ByteCodeTable {
 public:
     ByteCodeTable();
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-    int32_t m_offsetTable[ByteCode::OpcodeKindEnd];
-    std::unordered_map<int32_t, int> m_offsetToOpcodeTable;
+    OpcodeHandler m_handlerTable[ByteCode::OpcodeKindEnd];
+    std::unordered_map<OpcodeHandler, int> m_handlerToOpcodeTable;
 #endif
 };
 
