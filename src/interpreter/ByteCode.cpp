@@ -35,7 +35,7 @@ FOR_EACH_BYTECODE(CHECK_BYTECODE_ALIGNMENT)
 
 ByteCode::ByteCode(ByteCode::Opcode opcode)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
-    : m_opcodeInOffset(g_byteCodeTable.m_offsetTable[opcode])
+    : m_opcodeHandler(g_byteCodeTable.m_handlerTable[opcode])
 #else
     : m_opcode(opcode)
 #endif
@@ -45,7 +45,7 @@ ByteCode::ByteCode(ByteCode::Opcode opcode)
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO)
 ByteCode::Opcode ByteCode::opcode() const
 {
-    return static_cast<Opcode>(g_byteCodeTable.m_offsetToOpcodeTable[m_opcodeInOffset]);
+    return static_cast<Opcode>(g_byteCodeTable.m_handlerToOpcodeTable[m_opcodeHandler]);
 }
 #else
 ByteCode::Opcode ByteCode::opcode() const
