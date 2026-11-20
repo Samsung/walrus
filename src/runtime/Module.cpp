@@ -569,9 +569,21 @@ void ModuleFunction::dumpByteCode(Walrus::Vector<uint8_t, std::allocator<uint8_t
     printf("bytecode size: %zu bytes\n", byteCode.size());
     printf("\n");
 
+    std::vector<size_t> blockStarts(1, 0);
+    forEachBasicBlockStart(byteCode.data(), byteCode.size(), m_catchInfo, [&](size_t position) {
+        blockStarts.push_back(position);
+    });
+    std::sort(blockStarts.begin(), blockStarts.end());
+    blockStarts.erase(std::unique(blockStarts.begin(), blockStarts.end()), blockStarts.end());
+
     size_t idx = 0;
+    size_t blockIndex = 0;
     while (idx < byteCode.size()) {
         ByteCode* code = reinterpret_cast<ByteCode*>(&byteCode[idx]);
+        if (blockIndex < blockStarts.size() && blockStarts[blockIndex] == idx) {
+            printf("bb%zu:\n", blockIndex);
+            blockIndex++;
+        }
         printf("%6zu ", idx);
 
         switch (code->opcode()) {
