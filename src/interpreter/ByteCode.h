@@ -5484,6 +5484,111 @@ public:
 #endif
 };
 
+template <typename F>
+void forEachJumpTarget(const ByteCode* byteCode, size_t position, F f)
+{
+    switch (byteCode->opcode()) {
+    case ByteCode::JumpOpcode:
+        f(position + reinterpret_cast<const Jump*>(byteCode)->offset());
+        break;
+    case ByteCode::JumpIfTrueOpcode:
+    case ByteCode::JumpIfFalseOpcode:
+    case ByteCode::JumpIfNullOpcode:
+    case ByteCode::JumpIfNonNullOpcode:
+    case ByteCode::JumpIfCastGenericOpcode:
+    case ByteCode::JumpIfCastDefinedOpcode:
+        f(position + reinterpret_cast<const ByteCodeOffsetValue*>(byteCode)->int32Value());
+        break;
+    case ByteCode::BrTableOpcode: {
+        const BrTable* brTable = reinterpret_cast<const BrTable*>(byteCode);
+        f(position + brTable->defaultOffset());
+
+        int32_t* jumpOffsets = brTable->jumpOffsets();
+        int32_t* jumpOffsetsEnd = jumpOffsets + brTable->tableSize();
+
+        while (jumpOffsets < jumpOffsetsEnd) {
+            f(position + *jumpOffsets);
+            jumpOffsets++;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+template <typename F>
+void forEachBlockStart(const uint8_t* code, size_t size, const Vector<ModuleFunction::CatchInfo, std::allocator<ModuleFunction::CatchInfo>>& catchInfo, F f)
+{
+    size_t position = 0;
+
+    while (position < size) {
+        const ByteCode* byteCode = reinterpret_cast<const ByteCode*>(code + position);
+        forEachJumpTarget(byteCode, position, f);
+        position += byteCode->getSize();
+    }
+
+    for (const auto& item : catchInfo) {
+        f(item.m_tryStart);
+        f(item.m_catchStartPosition);
+    }
+}
+
+inline bool isConditionalJump(ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+    case ByteCode::JumpIfTrueOpcode:
+    case ByteCode::JumpIfFalseOpcode:
+    case ByteCode::JumpIfNullOpcode:
+    case ByteCode::JumpIfNonNullOpcode:
+    case ByteCode::JumpIfCastGenericOpcode:
+    case ByteCode::JumpIfCastDefinedOpcode:
+        return true;
+    default:
+        return false;
+    }
+}
+
+inline bool isBasicBlockTerminator(ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+    case ByteCode::JumpOpcode:
+    case ByteCode::BrTableOpcode:
+    case ByteCode::EndOpcode:
+    case ByteCode::UnreachableOpcode:
+    case ByteCode::ThrowOpcode:
+    case ByteCode::ThrowRefOpcode:
+    case ByteCode::ReturnCallOpcode:
+    case ByteCode::ReturnCallIndirectOpcode:
+    case ByteCode::ReturnCallIndirectM64Opcode:
+    case ByteCode::ReturnCallRefOpcode:
+        return true;
+    default:
+        return isConditionalJump(opcode);
+    }
+}
+
+template <typename F>
+void forEachBasicBlockStart(const uint8_t* code, size_t size, const Vector<ModuleFunction::CatchInfo, std::allocator<ModuleFunction::CatchInfo>>& catchInfo, F f)
+{
+    forEachBlockStart(code, size, catchInfo, f);
+
+    size_t position = 0;
+
+    while (position < size) {
+        const ByteCode* byteCode = reinterpret_cast<const ByteCode*>(code + position);
+        ByteCode::Opcode opcode = byteCode->opcode();
+        size_t next = position + byteCode->getSize();
+
+        if (next < size && isBasicBlockTerminator(opcode)
+            && !(isConditionalJump(opcode) && reinterpret_cast<const ByteCode*>(code + next)->opcode() == ByteCode::JumpOpcode)) {
+            f(next);
+        }
+
+        position = next;
+    }
+}
+
 } // namespace Walrus
 
 #endif // __WalrusByteCode__
