@@ -140,6 +140,36 @@ static inline long int maxFileOffset(uint64_t offset)
     return offset > max ? static_cast<long int>(max) : static_cast<long int>(offset);
 }
 
+static FileType fileTypeFromMode(uint64_t mode)
+{
+    switch (mode & S_IFMT) {
+    case S_IFREG:
+        return FileType::RegularFile;
+    case S_IFDIR:
+        return FileType::Directory;
+    case S_IFCHR:
+        return FileType::CharacterDevice;
+#ifdef S_IFLNK
+    case S_IFLNK:
+        return FileType::SymbolicLink;
+#endif
+#ifdef S_IFIFO
+    case S_IFIFO:
+        return FileType::Fifo;
+#endif
+#ifdef S_IFBLK
+    case S_IFBLK:
+        return FileType::BlockDevice;
+#endif
+#ifdef S_IFSOCK
+    case S_IFSOCK:
+        return FileType::Socket;
+#endif
+    default:
+        return FileType::Unknown;
+    }
+}
+
 void WasiRefCountedFile::destroyFile()
 {
     ASSERT(m_refCount == 0);
@@ -511,7 +541,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
         }
 
         options->memory()->store(state, resultOffset, resultOk);
-        options->memory()->store(state, resultOffset, 4, result);
+        options->memory()->store(state, resultOffset, 1, static_cast<uint8_t>(result));
         break;
     }
     case LiftedWasiFunction::fileSystemDescriptorStat02: {
@@ -532,7 +562,7 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
 
         ComponentResourceWasiFile* file = asFile(handle);
 
-        options->memoryCheckRange32(state, 8, offset, 96);
+        options->memoryCheckRange32(state, 8, offset, 104);
 
         uv_fs_t req;
         int r = uv_fs_stat(nullptr, &req, path.c_str(), nullptr);
@@ -544,45 +574,22 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             break;
         }
 
-        FileType ft = FileType::Unknown;
-        switch (req.statbuf.st_mode) {
-        case UV_DIRENT_FILE:
-            ft = FileType::RegularFile;
-            break;
-        case UV_DIRENT_SOCKET:
-            ft = FileType::Socket;
-            break;
-        case UV_DIRENT_LINK:
-            ft = FileType::SymbolicLink;
-            break;
-        case UV_DIRENT_BLOCK:
-            ft = FileType::BlockDevice;
-            break;
-        case UV_DIRENT_DIR:
-            ft = FileType::Directory;
-            break;
-        case UV_DIRENT_CHAR:
-            ft = FileType::CharacterDevice;
-            break;
-        case UV_DIRENT_FIFO:
-            ft = FileType::Fifo;
-            break;
-        }
+        FileType ft = fileTypeFromMode(req.statbuf.st_mode);
 
         uint8_t* buffer = options->memory()->buffer() + offset;
         buffer[0] = resultOk;
         buffer[8] = ft;
         *reinterpret_cast<uint64_t*>(buffer + 16) = req.statbuf.st_nlink;
         *reinterpret_cast<uint64_t*>(buffer + 24) = req.statbuf.st_size;
-        // Optional(dateTime) is 24 bytes long.
-        options->memory()->store(state, offset, 36, req.statbuf.st_atim.tv_sec);
-        options->memory()->store(state, offset, 44, (int32_t)req.statbuf.st_atim.tv_nsec);
+        // Optional(dateTime) is 24 bytes long, and its dateTime payload starts at 8.
+        options->memory()->store(state, offset, 40, static_cast<uint64_t>(req.statbuf.st_atim.tv_sec));
+        options->memory()->store(state, offset, 48, static_cast<uint32_t>(req.statbuf.st_atim.tv_nsec));
         buffer[32] = optionalSome;
-        options->memory()->store(state, offset, 60, req.statbuf.st_mtim.tv_sec);
-        options->memory()->store(state, offset, 68, (int32_t)req.statbuf.st_mtim.tv_nsec);
+        options->memory()->store(state, offset, 64, static_cast<uint64_t>(req.statbuf.st_mtim.tv_sec));
+        options->memory()->store(state, offset, 72, static_cast<uint32_t>(req.statbuf.st_mtim.tv_nsec));
         buffer[56] = optionalSome;
-        options->memory()->store(state, offset, 84, req.statbuf.st_ctim.tv_sec);
-        options->memory()->store(state, offset, 92, (int32_t)req.statbuf.st_ctim.tv_nsec);
+        options->memory()->store(state, offset, 88, static_cast<uint64_t>(req.statbuf.st_ctim.tv_sec));
+        options->memory()->store(state, offset, 96, static_cast<uint32_t>(req.statbuf.st_ctim.tv_nsec));
         buffer[80] = optionalSome;
         break;
     }
@@ -630,45 +637,22 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             break;
         }
 
-        FileType fp = FileType::Unknown;
-        switch (req.statbuf.st_mode) {
-        case UV_DIRENT_FILE:
-            fp = FileType::RegularFile;
-            break;
-        case UV_DIRENT_SOCKET:
-            fp = FileType::Socket;
-            break;
-        case UV_DIRENT_LINK:
-            fp = FileType::SymbolicLink;
-            break;
-        case UV_DIRENT_BLOCK:
-            fp = FileType::BlockDevice;
-            break;
-        case UV_DIRENT_DIR:
-            fp = FileType::Directory;
-            break;
-        case UV_DIRENT_CHAR:
-            fp = FileType::CharacterDevice;
-            break;
-        case UV_DIRENT_FIFO:
-            fp = FileType::Fifo;
-            break;
-        }
+        FileType fp = fileTypeFromMode(req.statbuf.st_mode);
 
         uint8_t* buffer = options->memory()->buffer() + offset;
         buffer[0] = resultOk;
         buffer[8] = fp;
         *reinterpret_cast<uint64_t*>(buffer + 16) = req.statbuf.st_nlink;
         *reinterpret_cast<uint64_t*>(buffer + 24) = req.statbuf.st_size;
-        // Optional(dateTime) is 24 bytes long.
-        options->memory()->store(state, offset, 36, req.statbuf.st_atim.tv_sec);
-        options->memory()->store(state, offset, 44, (int32_t)req.statbuf.st_atim.tv_nsec);
+        // Optional(dateTime) is 24 bytes long, and its dateTime payload starts at 8.
+        options->memory()->store(state, offset, 40, static_cast<uint64_t>(req.statbuf.st_atim.tv_sec));
+        options->memory()->store(state, offset, 48, static_cast<uint32_t>(req.statbuf.st_atim.tv_nsec));
         buffer[32] = optionalSome;
-        options->memory()->store(state, offset, 60, req.statbuf.st_mtim.tv_sec);
-        options->memory()->store(state, offset, 68, (int32_t)req.statbuf.st_mtim.tv_nsec);
+        options->memory()->store(state, offset, 64, static_cast<uint64_t>(req.statbuf.st_mtim.tv_sec));
+        options->memory()->store(state, offset, 72, static_cast<uint32_t>(req.statbuf.st_mtim.tv_nsec));
         buffer[56] = optionalSome;
-        options->memory()->store(state, offset, 84, req.statbuf.st_ctim.tv_sec);
-        options->memory()->store(state, offset, 92, (int32_t)req.statbuf.st_ctim.tv_nsec);
+        options->memory()->store(state, offset, 88, static_cast<uint64_t>(req.statbuf.st_ctim.tv_sec));
+        options->memory()->store(state, offset, 96, static_cast<uint32_t>(req.statbuf.st_ctim.tv_nsec));
         buffer[80] = optionalSome;
         break;
     }
@@ -882,32 +866,9 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             break;
         }
 
-        FileType ft = FileType::Unknown;
-        switch (req.statbuf.st_mode) {
-        case UV_DIRENT_FILE:
-            ft = FileType::RegularFile;
-            break;
-        case UV_DIRENT_SOCKET:
-            ft = FileType::Socket;
-            break;
-        case UV_DIRENT_LINK:
-            ft = FileType::SymbolicLink;
-            break;
-        case UV_DIRENT_BLOCK:
-            ft = FileType::BlockDevice;
-            break;
-        case UV_DIRENT_DIR:
-            ft = FileType::Directory;
-            break;
-        case UV_DIRENT_CHAR:
-            ft = FileType::CharacterDevice;
-            break;
-        case UV_DIRENT_FIFO:
-            ft = FileType::Fifo;
-            break;
-        }
+        FileType ft = fileTypeFromMode(req.statbuf.st_mode);
 
-        options->memory()->store(state, offset, 1, ft);
+        options->memory()->store(state, offset, 1, static_cast<uint8_t>(ft));
         options->memory()->buffer()[offset] = resultOk;
         break;
     }
