@@ -716,7 +716,7 @@ uint32_t ComponentInstance::appendHandle(ExecutionState& state, ComponentHandle*
 
     if (m_freeResourceHandle != LastHandle) {
         uint32_t result = static_cast<uint32_t>(m_freeResourceHandle);
-        ASSERT((reinterpret_cast<uintptr_t>(m_handles[result]) & UnusedSlotMask) != 0);
+        ASSERT((m_handles[result] & UnusedSlotMask) != 0);
         m_freeResourceHandle = m_handles[result];
         if (m_freeResourceHandle != LastHandle) {
             m_freeResourceHandle >>= UnusedSlotShift;
