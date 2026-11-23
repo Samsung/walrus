@@ -530,14 +530,8 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
             Label* label = item->asLabel();
 
             if (fallThrough != nullptr) {
-                ExtendedInstruction* jump = ExtendedInstruction::create(nullptr, Instruction::DirectBranch, ByteCode::JumpOpcode, 0, 0);
-
-                jump->m_id = label->id();
-                jump->value().targetLabel = label;
-                label->m_branches.push_back(jump);
-
-                jump->m_next = item;
-                fallThrough->m_next = jump;
+                ASSERT(fallThrough->next() == label);
+                insertJumpAtBlockEnd(fallThrough);
             }
 
             if (fallThrough != nullptr || item == m_first) {

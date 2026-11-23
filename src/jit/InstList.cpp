@@ -365,6 +365,21 @@ void JITCompiler::buildBasicBlocks()
     }
 }
 
+void JITCompiler::insertJumpAtBlockEnd(InstructionListItem* prev)
+{
+    ASSERT(prev != nullptr && !prev->isLabel() && prev->next() != nullptr && prev->next()->isLabel());
+
+    Label* label = prev->next()->asLabel();
+    ExtendedInstruction* jump = ExtendedInstruction::create(nullptr, Instruction::DirectBranch, ByteCode::JumpOpcode, 0, 0);
+
+    jump->m_id = label->id();
+    jump->value().targetLabel = label;
+    label->m_branches.push_back(jump);
+
+    jump->m_next = label;
+    prev->m_next = jump;
+}
+
 InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref)
 {
     uint32_t type = variable.info & Instruction::TypeMask;
@@ -404,6 +419,7 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
         instr->m_next = m_first;
         m_first = instr;
     } else {
+        ASSERT(!prev->isLabel() || !(prev->info() & Label::kIsSingleJump));
         instr->m_next = prev->m_next;
         instr->m_id = prev->m_id;
         prev->m_next = instr;
@@ -415,6 +431,7 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
 void JITCompiler::insertStackInitList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize)
 {
     size_t end = variableListStart + variableListSize;
+    bool inserted = false;
 
     for (size_t i = variableListStart; i < end; i++) {
         VariableRef ref = m_variableList->getMergeHead(i);
@@ -423,7 +440,12 @@ void JITCompiler::insertStackInitList(InstructionListItem* prev, size_t variable
 
         if (variable.reg1 != VariableList::kUnusedReg) {
             prev = insertStackInit(prev, variable, i);
+            inserted = true;
         }
+    }
+
+    if (inserted && prev->next() != nullptr && prev->next()->isLabel()) {
+        insertJumpAtBlockEnd(prev);
     }
 }
 
