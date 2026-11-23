@@ -404,6 +404,10 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           sdk: "10.0.26100.0"
+      - name: Build ${{ matrix.arch }} Debug shared library without GC
+        run: |
+          cmake -Bout/debug -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DWALRUS_ARCH=${{ matrix.arch }} -DCMAKE_BUILD_TYPE=Debug -DWALRUS_BUILD_SHARED_LIBS=ON -DWALRUS_ENABLE_SHELL=OFF -DWALRUS_GC=OFF -DWALRUS_WASI=OFF
+          cmake --build out/debug --target walrus
       - name: Build ${{ matrix.arch }} Release
         run: |
           CMake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_SYSTEM_VERSION:STRING="10.0" -DCMAKE_SYSTEM_PROCESSOR=${{ matrix.arch }} -Bout/ -G Ninja -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCMAKE_BUILD_TYPE=release
