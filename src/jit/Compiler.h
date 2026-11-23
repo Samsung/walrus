@@ -832,6 +832,7 @@ public:
     ExtendedInstruction* appendExtended(ByteCode* byteCode, Instruction::Group group, ByteCode::Opcode opcode, uint32_t paramCount, uint32_t resultCount);
     Instruction* appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset);
     BrTableInstruction* appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset);
+    static void insertJumpAtBlockEnd(InstructionListItem* prev);
     InstructionListItem* insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref);
     void insertStackInitList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize);
 
