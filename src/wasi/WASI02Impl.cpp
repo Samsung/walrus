@@ -1146,8 +1146,12 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             break;
         }
 
+        // Only the first datagram's data is sent; it is a NUL terminated
+        // string which must lie entirely inside the linear memory.
+        options->memoryCheckRange32(state, 1, listStart, 1);
+        size_t maxLength = options->memory()->sizeInByte() - listStart;
         char* bufferPtr = reinterpret_cast<char*>(options->memory()->buffer() + listStart);
-        uv_buf_t buffer = uv_buf_init(bufferPtr, std::strlen(bufferPtr));
+        uv_buf_t buffer = uv_buf_init(bufferPtr, strnlen(bufferPtr, maxLength));
 
         uv_udp_send_t req;
         req.data = self;
@@ -1156,13 +1160,13 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             if (self->binded()) {
                 struct sockaddr_in addr;
                 uv_ip4_addr("127.0.0.1", 12345, &addr);
-                uv_udp_send(&req, self->getUvUdp(), &buffer, listLen, reinterpret_cast<struct sockaddr*>(&addr), uvOnNetworkSend);
+                uv_udp_send(&req, self->getUvUdp(), &buffer, 1, reinterpret_cast<struct sockaddr*>(&addr), uvOnNetworkSend);
             } else {
                 struct sockaddr_in addr;
                 uint8_t* ipArray = self->network()->ipv4();
                 std::string ip = std::string(std::to_string(ipArray[0]) + "." + std::to_string(ipArray[1]) + "." + std::to_string(ipArray[2]) + "." + std::to_string(ipArray[3]));
                 uv_ip4_addr(ip.c_str(), self->network()->port(), &addr);
-                uv_udp_send(&req, self->getUvUdp(), &buffer, listLen, reinterpret_cast<struct sockaddr*>(&addr), uvOnNetworkSend);
+                uv_udp_send(&req, self->getUvUdp(), &buffer, 1, reinterpret_cast<struct sockaddr*>(&addr), uvOnNetworkSend);
             }
         }
         uv_run(uv_default_loop(), UV_RUN_ONCE);
