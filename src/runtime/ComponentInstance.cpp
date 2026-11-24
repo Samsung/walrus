@@ -792,9 +792,12 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
 
         const TypeComparisonItem curr = std::move(elems.back());
         elems.pop_back();
-        if (cache.find(curr.provided) == cache.end()) {
-            cache.insert(curr.provided);
-        } else {
+        if (curr.provided == nullptr) {
+            componentName = curr.name;
+            return false;
+        }
+
+        if (!cache.insert(curr.provided).second) {
             continue;
         }
 
@@ -855,7 +858,7 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
         }
         case ComponentRefCounted::ResourceAsyncKind:
         case ComponentRefCounted::ResourceKind: {
-            if (!currExpected->isTypeResource()) {
+            if (!curr.provided->isTypeResource()) {
                 componentName = curr.name;
                 return false;
             }
@@ -928,8 +931,13 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
                 return false;
             }
 
-            std::vector<ComponentTypeRef> expectedItems = currExpected->asTypeTuple()->items();
-            std::vector<ComponentTypeRef> providedItems = curr.provided->asTypeTuple()->items();
+            const std::vector<ComponentTypeRef>& expectedItems = currExpected->asTypeTuple()->items();
+            const std::vector<ComponentTypeRef>& providedItems = curr.provided->asTypeTuple()->items();
+            if (expectedItems.size() != providedItems.size()) {
+                componentName = curr.name;
+                return false;
+            }
+
             for (uint64_t i = 0; i < expectedItems.size(); i++) {
                 if (expectedItems[i].type() != providedItems[i].type()) {
                     componentName = curr.name;
@@ -956,13 +964,18 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
         }
         case ComponentRefCounted::RecordKind:
         case ComponentRefCounted::VariantKind: {
-            if (!curr.provided->isTypeItems()) {
+            if (curr.provided->kind() != currExpected->kind()) {
                 componentName = curr.name;
                 return false;
             }
 
             ComponentTypeItems* expectedItems = currExpected->asTypeItems();
             ComponentTypeItems* providedItems = curr.provided->asTypeItems();
+            if (expectedItems->items().size() != providedItems->items().size()) {
+                componentName = curr.name;
+                return false;
+            }
+
             for (uint64_t i = 0; i < expectedItems->items().size(); i++) {
                 if (expectedItems->items()[i].name != providedItems->items()[i].name) {
                     componentName = curr.name;
@@ -988,6 +1001,10 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
             }
             ComponentTypeFunc* expectedFunc = currExpected->asTypeFunc();
             ComponentTypeFunc* providedFunc = curr.provided->asTypeFunc();
+            if (expectedFunc->params().size() != providedFunc->params().size()) {
+                componentName = curr.name;
+                return false;
+            }
 
             for (uint64_t i = 0; i < expectedFunc->params().size(); i++) {
                 if (expectedFunc->params()[i].name != providedFunc->params()[i].name) {
@@ -1028,13 +1045,17 @@ bool ComponentInstance::compareTypes(ComponentRefCounted* expected, ComponentRef
         }
         case ComponentRefCounted::EnumKind:
         case ComponentRefCounted::FlagsKind: {
-            if (!curr.provided->isTypeLabels()) {
+            if (curr.provided->kind() != currExpected->kind()) {
                 componentName = curr.name;
                 return false;
             }
 
-            std::vector<std::string> providedStrings = currExpected->asTypeLabels()->labels();
-            std::vector<std::string> foundStrings = curr.provided->asTypeLabels()->labels();
+            const std::vector<std::string>& providedStrings = currExpected->asTypeLabels()->labels();
+            const std::vector<std::string>& foundStrings = curr.provided->asTypeLabels()->labels();
+            if (providedStrings.size() != foundStrings.size()) {
+                componentName = curr.name;
+                return false;
+            }
 
             for (uint64_t i = 0; i < providedStrings.size(); i++) {
                 if (providedStrings[i] != foundStrings[i]) {
