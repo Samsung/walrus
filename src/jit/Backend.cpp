@@ -1010,7 +1010,7 @@ static void emitRefAsNonNull(sljit_compiler* compiler, Instruction* instr)
     context->appendTrapJump(ExecutionContext::NullReferenceError, sljit_emit_cmp(compiler, SLJIT_EQUAL, srcArg.arg, srcArg.argw, SLJIT_IMM, 0));
 }
 
-static void emitStackInit(sljit_compiler* compiler, Instruction* instr)
+static void emitStackOp(sljit_compiler* compiler, Instruction* instr)
 {
     uint32_t type;
 
@@ -1673,8 +1673,8 @@ void JITCompiler::emitBasicBlock(Instruction* from, Label* nextBlock)
             break;
         }
 #endif /* HAS_SIMD */
-        case Instruction::StackInit: {
-            emitStackInit(m_compiler, item->asInstruction());
+        case Instruction::StackOp: {
+            emitStackOp(m_compiler, item->asInstruction());
             break;
         }
         case Instruction::GCUnary: {

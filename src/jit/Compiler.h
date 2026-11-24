@@ -111,8 +111,8 @@ public:
         ShiftSIMD,
         // Ternary SIMD opcodes (e.g. V128BitSelect)
         TernarySIMD,
-        // Special type for initializing values from the stack
-        StackInit,
+        // JIT specific opcode for stack mainpulation
+        StackOp,
         // Garbage Collector unary operations
         GCUnary,
         // Garbage Collector generic type casting operations
@@ -260,14 +260,19 @@ public:
     static const uint16_t kDestroysR0R1 = 1 << 3;
     static const uint16_t kHasFloatOperand = 1 << 4;
     static const uint16_t kIsShift = 1 << 5;
-    static const uint16_t kIsMergeCompare = 1 << 6;
-    static const uint16_t kFreeUnusedEarly = 1 << 7;
-    static const uint16_t kKeepInstruction = 1 << 8;
-    static const uint16_t kEarlyReturn = kKeepInstruction;
-    // These two are only used by memory load/store instructions
+    static const uint16_t kIsMemory = 1 << 6;
+    static const uint16_t kIsMergeCompare = 1 << 7;
+    static const uint16_t kFreeUnusedEarly = 1 << 8;
+    // Start of shared flags.
+    // Immedaite specific flags:
+    static const uint16_t kKeepInstruction = 1 << 9;
+    // Memory specific flags:
     static const uint16_t kMultiMemory = 1 << 9;
     static const uint16_t kMemory64 = 1 << 10;
-    static const uint16_t kIsInvertedCast = 1 << 11;
+    // End opcode specific flags:
+    static const uint16_t kEarlyReturn = 1 << 9;
+    // Type cast specific flags:
+    static const uint16_t kIsInvertedCast = 1 << 9;
 
     ByteCode::Opcode opcode() { return static_cast<ByteCode::Opcode>(m_opcode); }
 
@@ -293,7 +298,7 @@ public:
 
     ExtendedInstruction* asExtended()
     {
-        ASSERT(group() == Instruction::DirectBranch || group() == Instruction::StackInit);
+        ASSERT(group() == Instruction::DirectBranch || group() == Instruction::StackOp);
         return reinterpret_cast<ExtendedInstruction*>(this);
     }
 
@@ -365,7 +370,7 @@ union InstructionValue {
     Label* targetLabel;
     // For calls.
     uint32_t resultCount;
-    // For StackInit group.
+    // For StackOp group.
     VariableRef offset;
     // For BrTable instruction.
     size_t targetLabelCount;
@@ -384,7 +389,7 @@ public:
 protected:
     static ExtendedInstruction* create(ByteCode* byteCode, Group group, ByteCode::Opcode opcode, uint32_t paramCount, size_t slots)
     {
-        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackInit);
+        ASSERT(group == Instruction::DirectBranch || group == Instruction::Call || group == Instruction::StackOp);
 
         return reinterpret_cast<ExtendedInstruction*>(Instruction::create(byteCode, group, opcode, paramCount, slots, true));
     }
@@ -833,8 +838,8 @@ public:
     Instruction* appendBranch(ByteCode* byteCode, ByteCode::Opcode opcode, Label* label, uint32_t offset);
     BrTableInstruction* appendBrTable(ByteCode* byteCode, uint32_t numTargets, uint32_t offset);
     static void insertJumpAtBlockEnd(InstructionListItem* prev);
-    InstructionListItem* insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref);
-    void insertStackInitList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize);
+    InstructionListItem* insertStackOp(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref);
+    void insertStackLoadList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize);
 
     void appendLabel(Label* label)
     {

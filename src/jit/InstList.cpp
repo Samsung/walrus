@@ -380,7 +380,7 @@ void JITCompiler::insertJumpAtBlockEnd(InstructionListItem* prev)
     prev->m_next = jump;
 }
 
-InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref)
+InstructionListItem* JITCompiler::insertStackOp(InstructionListItem* prev, VariableList::Variable& variable, VariableRef ref)
 {
     uint32_t type = variable.info & Instruction::TypeMask;
     ByteCode::Opcode opcode;
@@ -406,7 +406,7 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
 
     ASSERT(!(variable.info & (VariableList::kIsMerged | VariableList::kIsImmediate)));
 
-    ExtendedInstruction* instr = ExtendedInstruction::create(nullptr, Instruction::StackInit, opcode, 0, 1);
+    ExtendedInstruction* instr = ExtendedInstruction::create(nullptr, Instruction::StackOp, opcode, 0, 1);
     instr->m_resultCount = 1;
     instr->value().offset = variable.value;
     *instr->operands() = ref;
@@ -428,10 +428,13 @@ InstructionListItem* JITCompiler::insertStackInit(InstructionListItem* prev, Var
     return instr;
 }
 
-void JITCompiler::insertStackInitList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize)
+void JITCompiler::insertStackLoadList(InstructionListItem* prev, size_t variableListStart, size_t variableListSize)
 {
     size_t end = variableListStart + variableListSize;
     bool inserted = false;
+
+    // The loaded values must be consumed.
+    ASSERT(prev == nullptr ? m_first != nullptr : prev->next() != nullptr);
 
     for (size_t i = variableListStart; i < end; i++) {
         VariableRef ref = m_variableList->getMergeHead(i);
@@ -439,12 +442,12 @@ void JITCompiler::insertStackInitList(InstructionListItem* prev, size_t variable
         VariableList::Variable& variable = m_variableList->variables[ref];
 
         if (variable.reg1 != VariableList::kUnusedReg) {
-            prev = insertStackInit(prev, variable, i);
+            prev = insertStackOp(prev, variable, i);
             inserted = true;
         }
     }
 
-    if (inserted && prev->next() != nullptr && prev->next()->isLabel()) {
+    if (inserted && prev->next()->isLabel()) {
         insertJumpAtBlockEnd(prev);
     }
 }
@@ -488,8 +491,8 @@ void JITCompiler::dump()
     for (InstructionListItem* item = first(); item != nullptr; item = item->next()) {
         if (item->isInstruction()) {
             Instruction* instr = item->asInstruction();
-            if (instr->group() == Instruction::StackInit) {
-                printf("%d: %sStackInit%s(%s)", static_cast<int>(instr->id()), instrText, defaultText, byteCodeNames[instr->opcode()]);
+            if (instr->group() == Instruction::StackOp) {
+                printf("%d: %sStackOp%s(%s)", static_cast<int>(instr->id()), instrText, defaultText, byteCodeNames[instr->opcode()]);
             } else {
                 printf("%d: %s%s%s", static_cast<int>(instr->id()), instrText, byteCodeNames[instr->opcode()], defaultText);
             }
@@ -521,7 +524,7 @@ void JITCompiler::dump()
                 }
                 break;
             }
-            case Instruction::StackInit: {
+            case Instruction::StackOp: {
                 printf("  Offset:%d\n", static_cast<int>(VARIABLE_GET_OFFSET(instr->asExtended()->value().offset)));
                 break;
             }
