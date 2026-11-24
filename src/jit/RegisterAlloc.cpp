@@ -978,10 +978,10 @@ void JITCompiler::allocateRegisters()
 #endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
 
     // Insert stack inits before the offsets are destroyed.
-    insertStackInitList(nullptr, 0, variableListParamCount);
+    insertStackLoadList(nullptr, 0, variableListParamCount);
 
     for (auto it : m_variableList->catchUpdates) {
-        insertStackInitList(it.handler, it.variableListStart, it.variableListSize);
+        insertStackLoadList(it.handler, it.variableListStart, it.variableListSize);
     }
 
     size_t size = m_variableList->variables.size();

@@ -437,6 +437,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #ifdef HAS_SIMD
     sljit_s32 simdType = 0;
 #endif /* HAS_SIMD */
+    ASSERT(instr->info() & Instruction::kIsMemory);
 
     switch (instr->opcode()) {
     case ByteCode::Load32Opcode:
@@ -858,6 +859,7 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
     sljit_u32 options = 0;
     sljit_u16 memIndex = 0;
     sljit_s32 laneIndex = 0;
+    ASSERT(instr->info() & Instruction::kIsMemory);
 
     switch (instr->opcode()) {
     case ByteCode::V128Load8LaneMemIdxOpcode:
@@ -967,6 +969,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 simdType = 0;
     sljit_s32 laneIndex = 0;
 #endif /* HAS_SIMD */
+    ASSERT(instr->info() & Instruction::kIsMemory);
 
     switch (instr->opcode()) {
     default:
@@ -1327,7 +1330,6 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
     sljit_emit_op1(compiler, opcode, addr.memArg.arg, addr.memArg.argw, addr.loadArg.arg, addr.loadArg.argw);
 }
 
-
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
 static void atomicRmwAdd64(uint64_t* shared_p, uint64_t* value, uint64_t* result)
 {
@@ -1377,7 +1379,6 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
     uint32_t size = 8;
     uint64_t offset;
     sljit_u16 memIndex = 0;
-
     Operand* operands = instr->operands();
 
     if (!(instr->info() & Instruction::kMemory64)) {
@@ -1587,6 +1588,7 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     sljit_u16 memIndex = 0;
     sljit_s32 operation;
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
+    ASSERT(instr->info() & Instruction::kIsMemory);
 
     switch (instr->opcode()) {
     case ByteCode::I64AtomicRmwCmpxchgMemIdxOpcode:
@@ -2517,9 +2519,9 @@ static void emitAtomicWait(sljit_compiler* compiler, Instruction* instr)
     sljit_s32 size = 0;
     uint64_t offset = 0;
     sljit_u16 memIndex = 0;
-
     CompileContext* context = CompileContext::get(compiler);
     sljit_sw stackTmpStart = context->stackTmpStart;
+    ASSERT(instr->info() & Instruction::kIsMemory);
 
     switch (instr->opcode()) {
     case ByteCode::MemoryAtomicWait64MemIdxOpcode:
@@ -2635,6 +2637,7 @@ static void emitAtomicNotify(sljit_compiler* compiler, Instruction* instr)
     uint32_t options = MemAddress::CheckNaturalAlignment | MemAddress::AbsoluteAddress;
     uint64_t offset = 0;
     sljit_u16 memIndex = 0;
+    ASSERT(instr->info() & Instruction::kIsMemory);
 
     if (!(instr->info() & Instruction::kMemory64)) {
         if (instr->opcode() == ByteCode::MemoryAtomicNotifyMemIdxOpcode) {
