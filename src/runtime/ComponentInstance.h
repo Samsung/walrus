@@ -407,6 +407,11 @@ public:
         return m_ptr;
     }
 
+    Kind refKind() const
+    {
+        return m_kind;
+    }
+
 private:
     ComponentHandle* m_ptr;
     Kind m_kind;

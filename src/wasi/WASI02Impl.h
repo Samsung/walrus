@@ -515,6 +515,7 @@ public:
         , m_binded(false)
         , m_checkSendCalled(false)
         , m_sendStatus(INT32_MAX)
+        , m_network(nullptr)
     {
     }
 
