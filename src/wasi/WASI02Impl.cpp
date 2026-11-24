@@ -161,6 +161,11 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
     ComponentInstance* instance = function->instance();
 
     switch (function->type()) {
+    case LiftedWasiFunction::cliExit02: {
+        // The status is result<_, _>, which is lowered to a single i32 (0 = ok, 1 = err).
+        exit(argv[0].asI32() == 0 ? EXIT_SUCCESS : EXIT_FAILURE);
+        break;
+    }
     case LiftedWasiFunction::ioPollableBlock02: {
         uint32_t index = argv[0].asI32();
         ComponentHandle* handle = options->instance()->getHandle(state, index);
