@@ -3570,7 +3570,7 @@ public:
             if (blockInfo.shouldRestoreVMStackAtEnd()) {
                 restoreVMStackBy(blockInfo);
                 if (blockInfo.returnValueIsIndex()) {
-                    auto ft = getFunctionType(blockInfo.m_returnValueType);
+                    auto ft = getFunctionType(blockInfo.m_returnValueIndex);
                     const auto& param = ft->param().types();
                     for (size_t i = 0; i < param.size(); i++) {
                         ASSERT(toDebugType(peekVMStackValueType()) == toDebugType(param[param.size() - i - 1]));
