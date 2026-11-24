@@ -393,7 +393,7 @@ static Trap::TrapResult executeWASM(Store* store, const std::string& filename, c
     return executeModule(store, parseResult.first.value(), registeredInstanceMap);
 }
 
-static Trap::TrapResult executeWASMComponent(Store* store, const std::string& filename, const std::vector<uint8_t>& src)
+static Trap::TrapResult executeWASMComponent(Store* store, const std::string& filename, const std::vector<uint8_t>& src, bool* runFailed = nullptr)
 {
     std::pair<Optional<Component*>, std::string> parseResult = WASMComponentParser::parseBinary(store, filename, src.data(), src.size(), s_JITFlags, s_FeatureFlags);
     if (!parseResult.second.empty()) {
@@ -405,7 +405,8 @@ static Trap::TrapResult executeWASMComponent(Store* store, const std::string& fi
     struct RunData {
         Component* component;
         Store* store;
-    } data = { parseResult.first.value(), store };
+        bool* runFailed;
+    } data = { parseResult.first.value(), store, runFailed };
 
     Walrus::Trap trap;
     return trap.run([](ExecutionState& state, void* d) {
@@ -435,6 +436,10 @@ static Trap::TrapResult executeWASMComponent(Store* store, const std::string& fi
             Value resultValue[1];
             Store::ComponentContext context(data->store, run->options()->instance());
             run->function()->call(state, nullptr, resultValue);
+            // wasi:cli/run returns result<_, _>, which is lowered to a single i32 (0 = ok, 1 = err).
+            if (data->runFailed != nullptr && resultValue[0].type() == Value::I32 && resultValue[0].asI32() != 0) {
+                *data->runFailed = true;
+            }
         } else {
             printf("Note: Cannot execute component, missing run()\n");
         }
@@ -1513,10 +1518,15 @@ int main(int argc, const char* argv[])
                 if (!options.exportToRun.empty()) {
                     runExports(store, filePath, buf, options.exportToRun);
                 } else if (wabt::ReadBinaryIsComponent(buf.data(), buf.size())) {
-                    auto trapResult = executeWASMComponent(store, filePath, buf);
+                    bool runFailed = false;
+                    auto trapResult = executeWASMComponent(store, filePath, buf, &runFailed);
                     if (trapResult.exception) {
                         fprintf(stderr, "Uncaught Exception: %s\n", trapResult.exception->message().data());
                         result = -1;
+                        break;
+                    }
+                    if (runFailed) {
+                        result = 1;
                         break;
                     }
                 } else {
