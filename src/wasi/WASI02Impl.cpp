@@ -599,6 +599,8 @@ void callWasiFunction(ExecutionState& state, Value* argv, Value* result, LiftedW
             ComponentInstance::throwInvalidHandle(state, descriptorIndex);
         }
 
+        options->memoryCheckRange32(state, 8, offset, 96);
+
         std::string guestPath;
         CanonOptions::UtfData utfData;
         options->validateString(state, pathStart, pathSize, &utfData);
