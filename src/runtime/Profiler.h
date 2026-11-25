@@ -26,6 +26,8 @@
 
 namespace Walrus {
 
+class Memory;
+
 struct ProfileCounter {
     uint32_t m_count;
     uint32_t m_length;
@@ -49,9 +51,22 @@ struct ProfileSnapshotEntry {
     uint32_t m_count;
 };
 
+struct ProfilePageEntry {
+    uint64_t m_page;
+    uint32_t m_memory;
+    uint32_t m_reads;
+    uint32_t m_writes;
+};
+
+struct ProfileMemoryLayout {
+    uint32_t m_memory;
+    uint64_t m_pageCount;
+};
+
 struct ProfileSnapshot {
     uint64_t m_instructions;
     size_t m_entryEnd;
+    size_t m_pageEntryEnd;
 };
 
 struct ProfileExitSite {
@@ -83,6 +98,7 @@ public:
     }
 
     intptr_t* budgetAddress() { return &m_budget; }
+    uint32_t pageShift() const { return m_pageShift; }
     uintptr_t* pendingExitAddress() { return &m_pendingExit; }
     static void snapshotFromJIT();
 
@@ -93,6 +109,8 @@ public:
                     Vector<ModuleFunction::CatchInfo, std::allocator<ModuleFunction::CatchInfo>>& catchInfo);
     void finishModule();
     void discardModule();
+    uint32_t addMemory(Memory* memory);
+    void retireMemory(Memory* memory);
     void recordExit(ModuleFunction* function, size_t position, bool isUserException);
     void finish();
 
@@ -103,12 +121,15 @@ private:
     NEVER_INLINE void snapshot();
     void commitKeyframe();
     uint32_t slotOf(const ProfileCounter* counter) const;
+    void collectPages(Memory* memory);
 
     static Profiler* s_instance;
 
     intptr_t m_budget;
     intptr_t m_interval;
     uint32_t m_keyframeInterval;
+    uint32_t m_pageShift;
+    uint32_t m_memoryCount;
     uint32_t m_blockCount;
     uint64_t m_snapshotCount;
     uint64_t m_keyframeCount;
@@ -119,6 +140,9 @@ private:
     std::vector<uint32_t> m_pendingLengths;
     std::vector<ProfileSnapshot> m_snapshots;
     std::vector<ProfileSnapshotEntry> m_snapshotEntries;
+    std::vector<Memory*> m_memories;
+    std::vector<ProfilePageEntry> m_pageEntries;
+    std::vector<ProfileMemoryLayout> m_memoryLayouts;
     std::vector<ProfileExit> m_exits;
     std::vector<ProfileExitSite> m_exitSites;
     FILE* m_output;

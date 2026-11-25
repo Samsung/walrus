@@ -1309,6 +1309,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         V old;                                                                                   \
         if (expectValue > std::numeric_limits<V>::max()) {                                       \
             memories[0]->atomicLoad(state, offset, code->offset(), &old);                        \
+            memories[0]->countAccess(offset + code->offset(), Memory::WriteAccess);              \
         } else {                                                                                 \
             V expect = static_cast<V>(expectValue);                                              \
             memories[0]->atomicRmwCmpxchg(state, offset, code->offset(), expect, replace, &old); \
@@ -1328,6 +1329,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         V old;                                                                                      \
         if (expectValue > std::numeric_limits<V>::max()) {                                          \
             memories[0]->atomicLoadM64(state, offset, code->offset(), &old);                        \
+            memories[0]->countAccess(offset + code->offset(), Memory::WriteAccess);                 \
         } else {                                                                                    \
             V expect = static_cast<V>(expectValue);                                                 \
             memories[0]->atomicRmwCmpxchgM64(state, offset, code->offset(), expect, replace, &old); \
@@ -1347,6 +1349,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         V old;                                                                                                  \
         if (expectValue > std::numeric_limits<V>::max()) {                                                      \
             memories[code->memIndex()]->atomicLoad(state, offset, code->offset(), &old);                        \
+            memories[code->memIndex()]->countAccess(offset + code->offset(), Memory::WriteAccess);              \
         } else {                                                                                                \
             V expect = static_cast<V>(expectValue);                                                             \
             memories[code->memIndex()]->atomicRmwCmpxchg(state, offset, code->offset(), expect, replace, &old); \
@@ -1366,6 +1369,7 @@ ByteCodeStackOffset* Interpreter::interpret(ExecutionState& state,
         V old;                                                                                                     \
         if (expectValue > std::numeric_limits<V>::max()) {                                                         \
             memories[code->memIndex()]->atomicLoadM64(state, offset, code->offset(), &old);                        \
+            memories[code->memIndex()]->countAccess(offset + code->offset(), Memory::WriteAccess);                 \
         } else {                                                                                                   \
             V expect = static_cast<V>(expectValue);                                                                \
             memories[code->memIndex()]->atomicRmwCmpxchgM64(state, offset, code->offset(), expect, replace, &old); \

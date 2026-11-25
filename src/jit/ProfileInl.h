@@ -49,6 +49,44 @@ static void emitProfileBlock(sljit_compiler* compiler, Instruction* instr)
     sljit_set_label(skip, sljit_emit_label(compiler));
 }
 
+static bool emitProfilePage(sljit_compiler* compiler, sljit_s32 reg, sljit_sw targetBufferOffset, sljit_s32 addressReg, sljit_uw address, uint32_t access)
+{
+    if (access == 0) {
+        return false;
+    }
+
+    sljit_s32 shift = static_cast<sljit_s32>(Profiler::instance().pageShift());
+    const sljit_sw tables[] = {
+        targetBufferOffset + static_cast<sljit_sw>(offsetof(Memory::TargetBuffer, readCounters)),
+        targetBufferOffset + static_cast<sljit_sw>(offsetof(Memory::TargetBuffer, writeCounters)),
+    };
+
+    for (uint32_t i = 0; i < 2; i++) {
+        if (!(access & (Memory::ReadAccess << i))) {
+            continue;
+        }
+
+        sljit_emit_op1(compiler, SLJIT_MOV_P, reg, 0, SLJIT_MEM1(kInstanceReg), tables[i]);
+
+        if (addressReg == 0) {
+            sljit_sw offset = static_cast<sljit_sw>((address >> shift) * sizeof(uint32_t));
+            sljit_emit_op2(compiler, SLJIT_ADD32, SLJIT_MEM1(reg), offset, SLJIT_MEM1(reg), offset, SLJIT_IMM, 1);
+            continue;
+        }
+
+#if defined(SLJIT_TMP_OPT_REG) && ((defined SLJIT_CONFIG_X86_64 && SLJIT_CONFIG_X86_64) || (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64))
+        sljit_emit_op2(compiler, SLJIT_LSHR, SLJIT_TMP_OPT_REG, 0, addressReg, 0, SLJIT_IMM, shift);
+        sljit_emit_op2(compiler, SLJIT_ADD32, SLJIT_MEM2(reg, SLJIT_TMP_OPT_REG), 2, SLJIT_MEM2(reg, SLJIT_TMP_OPT_REG), 2, SLJIT_IMM, 1);
+#else
+        sljit_emit_op2(compiler, SLJIT_LSHR, SLJIT_TMP_DEST_REG, 0, addressReg, 0, SLJIT_IMM, shift);
+        sljit_emit_op2(compiler, SLJIT_SHL, SLJIT_TMP_DEST_REG, 0, SLJIT_TMP_DEST_REG, 0, SLJIT_IMM, 2);
+        sljit_emit_op2(compiler, SLJIT_ADD, reg, 0, reg, 0, SLJIT_TMP_DEST_REG, 0);
+        sljit_emit_op2(compiler, SLJIT_ADD32, SLJIT_MEM1(reg), 0, SLJIT_MEM1(reg), 0, SLJIT_IMM, 1);
+#endif
+    }
+    return true;
+}
+
 static void emitProfileScratchTransfer(sljit_compiler* compiler, sljit_sw base, bool load)
 {
     sljit_sw offset = base + sizeof(sljit_sw);

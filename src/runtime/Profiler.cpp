@@ -18,6 +18,7 @@
 
 #include "Walrus.h"
 #include "runtime/Profiler.h"
+#include "runtime/Memory.h"
 #include "interpreter/ByteCode.h"
 
 #include <algorithm>
@@ -30,6 +31,8 @@
 namespace Walrus {
 
 Profiler* Profiler::s_instance = nullptr;
+
+constexpr uint32_t kProfileSegmentShift = 10;
 
 static uint64_t environmentValue(const char* name, uint64_t defaultValue)
 {
@@ -89,6 +92,8 @@ Profiler::Profiler()
     : m_budget(0)
     , m_interval(0)
     , m_keyframeInterval(environmentValue("WALRUS_PROFILE_KEYFRAME", 16))
+    , m_pageShift(environmentValue("WALRUS_PROFILE_PAGE_SHIFT", 12))
+    , m_memoryCount(0)
     , m_blockCount(0)
     , m_snapshotCount(0)
     , m_keyframeCount(0)
@@ -105,6 +110,11 @@ Profiler::Profiler()
 
     m_budget = m_interval = static_cast<intptr_t>(interval);
 
+    if (m_pageShift > 24) {
+        fprintf(stderr, "walrus profiler: WALRUS_PROFILE_PAGE_SHIFT must be in [1, 24]\n");
+        abort();
+    }
+
     const char* path = getenv("WALRUS_PROFILE");
     if (path == nullptr || *path == '\0') {
         path = "walrus.profile";
@@ -113,9 +123,11 @@ Profiler::Profiler()
     m_output = fopen(path, "w");
     RELEASE_ASSERT(m_output != nullptr);
 
-    fprintf(m_output, "walrus-profile 3\n");
+    fprintf(m_output, "walrus-profile 5\n");
     fprintf(m_output, "interval %" PRIdPTR "\n", m_interval);
     fprintf(m_output, "keyframe-interval %" PRIu32 "\n", m_keyframeInterval);
+    fprintf(m_output, "page-shift %" PRIu32 "\n", m_pageShift);
+    fprintf(m_output, "segment-shift %" PRIu32 "\n", kProfileSegmentShift);
 }
 
 void Profiler::instrument(ModuleFunction* function, uint32_t functionIndex, Vector<uint8_t, std::allocator<uint8_t>>& byteCode,
@@ -226,6 +238,41 @@ void Profiler::discardModule()
     m_pendingLengths.clear();
 }
 
+uint32_t Profiler::addMemory(Memory* memory)
+{
+    m_memories.push_back(memory);
+    return m_memoryCount++;
+}
+
+void Profiler::retireMemory(Memory* memory)
+{
+    auto it = std::find(m_memories.begin(), m_memories.end(), memory);
+    ASSERT(it != m_memories.end());
+    m_memories.erase(it);
+
+    if (m_output == nullptr) {
+        return;
+    }
+
+    collectPages(memory);
+    m_memoryLayouts.push_back({ memory->profileId(), memory->profilePageCount() });
+}
+
+void Profiler::collectPages(Memory* memory)
+{
+    uint32_t* reads = memory->readCounters();
+    uint32_t* writes = memory->writeCounters();
+    uint64_t pageCount = memory->profilePageCount();
+
+    for (uint64_t page = 0; page < pageCount; page++) {
+        if ((reads[page] | writes[page]) != 0) {
+            m_pageEntries.push_back({ page, memory->profileId(), reads[page], writes[page] });
+            reads[page] = 0;
+            writes[page] = 0;
+        }
+    }
+}
+
 uint32_t Profiler::slotOf(const ProfileCounter* counter) const
 {
     for (const ProfileModuleInfo& module : m_modules) {
@@ -306,7 +353,16 @@ void Profiler::snapshot()
             }
         }
     }
-    m_snapshots.push_back({ static_cast<uint64_t>(instructions), m_snapshotEntries.size() });
+
+    size_t pageStart = m_snapshots.empty() ? 0 : m_snapshots.back().m_pageEntryEnd;
+    for (Memory* memory : m_memories) {
+        collectPages(memory);
+    }
+    std::sort(m_pageEntries.begin() + pageStart, m_pageEntries.end(), [](const ProfilePageEntry& a, const ProfilePageEntry& b) {
+        return a.m_memory != b.m_memory ? a.m_memory < b.m_memory : a.m_page < b.m_page;
+    });
+
+    m_snapshots.push_back({ static_cast<uint64_t>(instructions), m_snapshotEntries.size(), m_pageEntries.size() });
 
     if (++m_snapshotCount % m_keyframeInterval == 0) {
         commitKeyframe();
@@ -319,10 +375,30 @@ void Profiler::commitKeyframe()
     fprintf(m_output, "keyframe %" PRIu64 " %" PRIu64 " %" PRIu64 "\n", m_keyframeCount++, id, m_snapshotCount - 1);
 
     size_t entry = 0;
+    size_t pageEntry = 0;
     for (const ProfileSnapshot& snapshot : m_snapshots) {
-        fprintf(m_output, "snapshot %" PRIu64 " %" PRIu64 " %zu\n", id++, snapshot.m_instructions, snapshot.m_entryEnd - entry);
+        fprintf(m_output, "snapshot %" PRIu64 " %" PRIu64 " %zu %zu\n", id++, snapshot.m_instructions,
+                snapshot.m_entryEnd - entry, snapshot.m_pageEntryEnd - pageEntry);
         for (; entry < snapshot.m_entryEnd; entry++) {
             fprintf(m_output, "%" PRIu32 " %" PRIu32 "\n", m_snapshotEntries[entry].m_slot, m_snapshotEntries[entry].m_count);
+        }
+
+        while (pageEntry < snapshot.m_pageEntryEnd) {
+            const ProfilePageEntry& first = m_pageEntries[pageEntry];
+            uint64_t segment = first.m_page >> kProfileSegmentShift;
+            size_t end = pageEntry;
+
+            while (end < snapshot.m_pageEntryEnd && m_pageEntries[end].m_memory == first.m_memory
+                   && (m_pageEntries[end].m_page >> kProfileSegmentShift) == segment) {
+                end++;
+            }
+
+            fprintf(m_output, "memory %" PRIu32 " %" PRIu64 " %zu\n", first.m_memory, segment, end - pageEntry);
+            for (; pageEntry < end; pageEntry++) {
+                const ProfilePageEntry& page = m_pageEntries[pageEntry];
+                fprintf(m_output, "%" PRIu64 " %" PRIu32 " %" PRIu32 "\n", page.m_page & ((static_cast<uint64_t>(1) << kProfileSegmentShift) - 1),
+                        page.m_reads, page.m_writes);
+            }
         }
     }
 
@@ -333,6 +409,7 @@ void Profiler::commitKeyframe()
 
     m_snapshots.clear();
     m_snapshotEntries.clear();
+    m_pageEntries.clear();
     m_exits.clear();
     fflush(m_output);
 }
@@ -348,7 +425,14 @@ void Profiler::finish()
         commitKeyframe();
     }
 
-    fprintf(m_output, "layout %zu %" PRIu32 "\n", m_functions.size(), m_blockCount);
+    for (Memory* memory : m_memories) {
+        m_memoryLayouts.push_back({ memory->profileId(), memory->profilePageCount() });
+    }
+    std::sort(m_memoryLayouts.begin(), m_memoryLayouts.end(), [](const ProfileMemoryLayout& a, const ProfileMemoryLayout& b) {
+        return a.m_memory < b.m_memory;
+    });
+
+    fprintf(m_output, "layout %zu %" PRIu32 " %zu\n", m_functions.size(), m_blockCount, m_memoryLayouts.size());
     for (const ProfileFunctionInfo& function : m_functions) {
         fprintf(m_output, "function %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", function.m_functionIndex, function.m_firstSlot, function.m_blockCount);
     }
@@ -356,6 +440,9 @@ void Profiler::finish()
         for (uint32_t i = 0; i < module.m_blockCount; i++) {
             fprintf(m_output, "block %" PRIu32 " %" PRIu32 "\n", module.m_firstSlot + i, module.m_counters[i].m_length);
         }
+    }
+    for (const ProfileMemoryLayout& memory : m_memoryLayouts) {
+        fprintf(m_output, "memory %" PRIu32 " %" PRIu64 "\n", memory.m_memory, memory.m_pageCount);
     }
     fprintf(m_output, "end\n");
     fclose(m_output);

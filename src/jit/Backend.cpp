@@ -454,6 +454,11 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
 
 #include "FloatConvInl.h"
 #include "CallInl.h"
+
+#if defined(WALRUS_PROFILER)
+#include "ProfileInl.h"
+#endif
+
 #include "MemoryInl.h"
 #include "MemoryUtilInl.h"
 #include "TableInl.h"
@@ -473,10 +478,6 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
 #ifdef HAS_SIMD
 #include "SimdInl.h"
 #endif /* HAS_SIMD */
-
-#if defined(WALRUS_PROFILER)
-#include "ProfileInl.h"
-#endif
 
 void CompileContext::appendThrowJump(sljit_jump* jump)
 {

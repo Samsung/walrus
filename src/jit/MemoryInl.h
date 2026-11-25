@@ -32,6 +32,9 @@ struct MemAddress {
         AbsoluteAddress = 1 << 6,
         NoOffset = 1 << 7,
         Memory64 = 1 << 8,
+        ReadAccess = Memory::ReadAccess << 9,
+        WriteAccess = Memory::WriteAccess << 9,
+        ReadWriteAccess = Memory::ReadWriteAccess << 9,
     };
 
     MemAddress(uint32_t options, uint8_t baseReg, uint8_t offsetReg, uint8_t sourceReg)
@@ -169,6 +172,9 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_
 
         if (offset + size <= initialMemorySize) {
             ASSERT(baseReg != 0);
+#if defined(WALRUS_PROFILER)
+            emitProfilePage(compiler, baseReg, targetBufferOffset, 0, offset, (options >> 9) & Memory::ReadWriteAccess);
+#endif
             sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kInstanceReg),
                            targetBufferOffset + offsetof(Memory::TargetBuffer, buffer));
             memArg.arg = SLJIT_MEM1(baseReg);
@@ -195,6 +201,12 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_
 
         sljit_jump* cmp = sljit_emit_cmp(compiler, SLJIT_GREATER_EQUAL, offsetReg, 0, SLJIT_TMP_DEST_REG, 0);
         context->appendTrapJump(ExecutionContext::OutOfBoundsMemAccessError, cmp);
+
+#if defined(WALRUS_PROFILER)
+        if (emitProfilePage(compiler, baseReg, targetBufferOffset, 0, offset, (options >> 9) & Memory::ReadWriteAccess)) {
+            sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kInstanceReg), targetBufferOffset + offsetof(Memory::TargetBuffer, buffer));
+        }
+#endif
 
         memArg.arg = SLJIT_MEM2(baseReg, offsetReg);
         memArg.argw = 0;
@@ -256,6 +268,12 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_
             context->appendTrapJump(ExecutionContext::UnalignedAtomicError, sljit_emit_jump(compiler, SLJIT_NOT_ZERO));
         }
 
+#if defined(WALRUS_PROFILER)
+        if (emitProfilePage(compiler, baseReg, targetBufferOffset, offsetReg, 0, (options >> 9) & Memory::ReadWriteAccess)) {
+            sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kInstanceReg), targetBufferOffset + offsetof(Memory::TargetBuffer, buffer));
+        }
+#endif
+
         if (options & NO_OFFSET_OR_ABSOLUTE) {
             sljit_emit_op2(compiler, SLJIT_ADD, baseReg, 0, baseReg, 0, offsetReg, 0);
             memArg.arg = SLJIT_MEM1(baseReg);
@@ -270,6 +288,12 @@ void MemAddress::check(sljit_compiler* compiler, Operand* offsetOperand, uint64_
         sljit_emit_op2u(compiler, SLJIT_AND | SLJIT_SET_Z, offsetReg, 0, SLJIT_IMM, size - 1);
         context->appendTrapJump(ExecutionContext::UnalignedAtomicError, sljit_emit_jump(compiler, SLJIT_NOT_ZERO));
     }
+
+#if defined(WALRUS_PROFILER)
+    if (emitProfilePage(compiler, baseReg, targetBufferOffset, offsetReg, 0, (options >> 9) & Memory::ReadWriteAccess)) {
+        sljit_emit_op1(compiler, SLJIT_MOV_P, baseReg, 0, SLJIT_MEM1(kInstanceReg), targetBufferOffset + offsetof(Memory::TargetBuffer, buffer));
+    }
+#endif
 
     memArg.arg = SLJIT_MEM2(baseReg, offsetReg);
     memArg.argw = 0;
@@ -379,7 +403,7 @@ static void emitAtomicLoadStore64(sljit_compiler* compiler, Instruction* instr)
         }
     }
 
-    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
+    MemAddress addr(options | (isLoad ? MemAddress::ReadAccess : MemAddress::WriteAccess), instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, size, memIndex);
 
     if (addr.memArg.arg == 0) {
@@ -734,7 +758,7 @@ static void emitLoad(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
 
     Operand* operands = instr->operands();
-    MemAddress addr(options, instr->requiredReg(start + 0), instr->requiredReg(start + 1), 0);
+    MemAddress addr(options | MemAddress::ReadAccess, instr->requiredReg(start + 0), instr->requiredReg(start + 1), 0);
 
     addr.check(compiler, operands, offset, size, memIndex);
 
@@ -932,7 +956,7 @@ static void emitLoadLaneSIMD(sljit_compiler* compiler, Instruction* instr)
         sljit_emit_simd_mov(compiler, SLJIT_SIMD_LOAD | simdType, dstReg, initValue.arg, 0);
     }
 
-    MemAddress addr(options, instr->requiredReg(1), instr->requiredReg(2), 0);
+    MemAddress addr(options | MemAddress::ReadAccess, instr->requiredReg(1), instr->requiredReg(2), 0);
     addr.check(compiler, operands, offset, size, memIndex);
 
     if (addr.memArg.arg == 0) {
@@ -1186,7 +1210,7 @@ static void emitStore(sljit_compiler* compiler, Instruction* instr)
 #endif /* HAS_SIMD */
 
     Operand* operands = instr->operands();
-    MemAddress addr(options, instr->requiredReg(start), instr->requiredReg(start + 1), instr->requiredReg(start == 0 ? 2 : 0));
+    MemAddress addr(options | MemAddress::WriteAccess, instr->requiredReg(start), instr->requiredReg(start + 1), instr->requiredReg(start == 0 ? 2 : 0));
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     JITArgPair valueArgPair;
 #endif /* SLJIT_32BIT_ARCHITECTURE */
@@ -1400,7 +1424,7 @@ static void emitAtomicRmw64(sljit_compiler* compiler, Instruction* instr)
         }
     }
 
-    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), 0);
+    MemAddress addr(options | MemAddress::ReadWriteAccess, instr->requiredReg(0), instr->requiredReg(1), 0);
     addr.check(compiler, operands, offset, size, memIndex);
 
     if (addr.memArg.arg == 0) {
@@ -1519,7 +1543,7 @@ static void emitAtomicRmwCmpxchg64(sljit_compiler* compiler, Instruction* instr)
         }
     }
 
-    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+    MemAddress addr(options | MemAddress::ReadWriteAccess, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
     addr.check(compiler, operands, offset, size, memIndex);
 
     if (addr.memArg.arg == 0) {
@@ -2067,7 +2091,7 @@ static void emitAtomic(sljit_compiler* compiler, Instruction* instr)
     }
 
     Operand* operands = instr->operands();
-    MemAddress addr(options, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
+    MemAddress addr(options | MemAddress::ReadWriteAccess, instr->requiredReg(0), instr->requiredReg(1), instr->requiredReg(2));
 
 #if (defined SLJIT_32BIT_ARCHITECTURE && SLJIT_32BIT_ARCHITECTURE)
     JITArgPair valueArgPair;
