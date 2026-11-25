@@ -31,6 +31,7 @@
 #include "runtime/Module.h"
 #include "runtime/Trap.h"
 #include "runtime/Tag.h"
+#include "runtime/Profiler.h"
 #include "util/MathOperation.h"
 
 #if defined(WALRUS_ENABLE_COMPUTED_GOTO) && !defined(WALRUS_64) && !defined(WALRUS_COMPUTED_GOTO_INTERPRETER_INIT_WITH_NULL)
@@ -3125,6 +3126,16 @@ NextInstruction:
     }
 #endif /* !NDEBUG */
 
+#if defined(WALRUS_PROFILER)
+    DEFINE_OPCODE(ProfileBlock)
+    {
+        ProfileBlock* code = (ProfileBlock*)programCounter;
+        Profiler::instance().countBlock(code->counter());
+        ADD_PROGRAM_COUNTER(ProfileBlock);
+        NEXT_INSTRUCTION();
+    }
+#endif
+
     DEFINE_OPCODE(End)
     {
         End* code = (End*)programCounter;
@@ -3157,6 +3168,9 @@ NextInstruction:
         }
         DefinedFunction* function = state.m_currentFunction->asDefinedFunction();
         ModuleFunction* moduleFunction = function->moduleFunction();
+#if defined(WALRUS_PROFILER)
+        Profiler::instance().recordExit(moduleFunction, programCounter - reinterpret_cast<size_t>(moduleFunction->byteCode()), e->isUserException());
+#endif
         if (e->isUserException()) {
             bool isCatchSucessful = false;
             Tag* tag = e->tag().value();

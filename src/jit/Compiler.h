@@ -539,6 +539,9 @@ struct TryBlock {
     sljit_label* returnToLabel;
     std::vector<CatchBlock> catchBlocks;
     std::vector<sljit_jump*> throwJumps;
+#if defined(WALRUS_PROFILER)
+    std::vector<Instruction*> throwInstrs;
+#endif
 };
 
 class JITCompiler;
@@ -566,11 +569,20 @@ struct TrapBlock {
 };
 
 struct TrapJump {
+#if defined(WALRUS_PROFILER)
+    TrapJump(uint32_t jumpType, sljit_jump* jump, Instruction* instr)
+        : jumpType(jumpType)
+        , jump(jump)
+        , instr(instr)
+    {
+    }
+#else
     TrapJump(uint32_t jumpType, sljit_jump* jump)
         : jumpType(jumpType)
         , jump(jump)
     {
     }
+#endif
 
     bool operator<(const TrapJump& other) const
     {
@@ -579,6 +591,9 @@ struct TrapJump {
 
     uint32_t jumpType;
     sljit_jump* jump;
+#if defined(WALRUS_PROFILER)
+    Instruction* instr;
+#endif
 };
 
 struct MemoryInitArguments {
@@ -623,8 +638,18 @@ struct CompileContext {
 
     static CompileContext* get(sljit_compiler* compiler);
 
+#if defined(WALRUS_PROFILER)
+    void add(SlowCase* slowCase)
+    {
+        slowCases.push_back(slowCase);
+        profileSlowCaseInstrs.push_back(profileInstr);
+    }
+    void appendTrapJump(uint32_t jumpType, sljit_jump* jump) { trapJumps.push_back(TrapJump(jumpType, jump, profileInstr)); }
+#else
     void add(SlowCase* slowCase) { slowCases.push_back(slowCase); }
     void appendTrapJump(uint32_t jumpType, sljit_jump* jump) { trapJumps.push_back(TrapJump(jumpType, jump)); }
+#endif
+    void appendThrowJump(sljit_jump* jump);
     void emitSlowCases(sljit_compiler* compiler);
 
     JITCompiler* compiler;
@@ -650,6 +675,11 @@ struct CompileContext {
     std::vector<SlowCase*> slowCases;
     std::vector<sljit_jump*> earlyReturns;
     std::vector<TrapJump> trapJumps;
+#if defined(WALRUS_PROFILER)
+    Instruction* profileInstr;
+    std::vector<Instruction*> profileSlowCaseInstrs;
+    std::vector<sljit_jump*> profileSnapshotCalls;
+#endif
 };
 
 struct VariableList {

@@ -29,6 +29,7 @@
 #include "runtime/Memory.h"
 #include "runtime/Table.h"
 #include "runtime/Tag.h"
+#include "runtime/Profiler.h"
 #include "jit/Compiler.h"
 #ifdef WALRUS_JITPERF
 #include "jit/PerfDump.h"
@@ -259,6 +260,9 @@ CompileContext::CompileContext(Module* module, JITCompiler* compiler)
     , currentTryBlock(InstanceConstData::globalTryBlock)
     , trapBlocksStart(0)
     , module(module)
+#if defined(WALRUS_PROFILER)
+    , profileInstr(nullptr)
+#endif
 {
     // Compiler is not initialized yet.
     size_t offset = Instance::alignedSize();
@@ -470,15 +474,34 @@ static void simdOperandToArg(sljit_compiler* compiler, Operand* operand, JITArg&
 #include "SimdInl.h"
 #endif /* HAS_SIMD */
 
+#if defined(WALRUS_PROFILER)
+#include "ProfileInl.h"
+#endif
+
+void CompileContext::appendThrowJump(sljit_jump* jump)
+{
+    TryBlock& tryBlock = compiler->tryBlocks()[currentTryBlock];
+    tryBlock.throwJumps.push_back(jump);
+#if defined(WALRUS_PROFILER)
+    tryBlock.throwInstrs.push_back(profileInstr);
+#endif
+}
+
 void CompileContext::emitSlowCases(sljit_compiler* compiler)
 {
-    for (auto it : slowCases) {
-        SlowCase* slowCase = it;
+    for (size_t i = 0; i < slowCases.size(); i++) {
+        SlowCase* slowCase = slowCases[i];
 
+#if defined(WALRUS_PROFILER)
+        profileInstr = profileSlowCaseInstrs[i];
+#endif
         slowCase->emit(compiler);
         delete slowCase;
     }
     slowCases.clear();
+#if defined(WALRUS_PROFILER)
+    profileSlowCaseInstrs.clear();
+#endif
 }
 
 void SlowCase::emit(sljit_compiler* compiler)
@@ -1527,6 +1550,10 @@ void JITCompiler::emitBasicBlock(Instruction* from, Label* nextBlock)
         }
 #endif /* WALRUS_JITPERF && !NDEBUG */
 
+#if defined(WALRUS_PROFILER)
+        m_context.profileInstr = item->asInstruction();
+#endif
+
         switch (item->group()) {
         case Instruction::Immediate: {
             emitImmediate(m_compiler, item->asInstruction());
@@ -1804,6 +1831,12 @@ void JITCompiler::emitBasicBlock(Instruction* from, Label* nextBlock)
                 break;
             }
 #endif /* !NDEBUG */
+#if defined(WALRUS_PROFILER)
+            case ByteCode::ProfileBlockOpcode: {
+                emitProfileBlock(m_compiler, item->asInstruction());
+                break;
+            }
+#endif
             case ByteCode::EndOpcode: {
                 emitEnd(m_compiler, item->asInstruction());
                 break;
@@ -1845,7 +1878,11 @@ void JITCompiler::emitProlog()
 #else /* !SLJIT_SEPARATE_VECTOR_REGISTERS */
     sljit_s32 saveds = (m_savedIntegerRegCount + 2) | SLJIT_ENTER_FLOAT(m_savedFloatRegCount) | SLJIT_ENTER_VECTOR(m_savedFloatRegCount);
 #endif /* SLJIT_SEPARATE_VECTOR_REGISTERS */
-    sljit_emit_enter(m_compiler, options, SLJIT_ARGS1(P, P_R), scratches, saveds, m_context.stackTmpStart + m_stackTmpSize);
+    sljit_sw localSize = m_context.stackTmpStart + m_stackTmpSize;
+#if defined(WALRUS_PROFILER)
+    localSize += kProfileSaveSize;
+#endif
+    sljit_emit_enter(m_compiler, options, SLJIT_ARGS1(P, P_R), scratches, saveds, localSize);
 
     sljit_emit_op1(m_compiler, SLJIT_MOV, SLJIT_MEM1(SLJIT_SP), kContextOffset, SLJIT_R0, 0);
 
@@ -1886,6 +1923,10 @@ void JITCompiler::emitEpilog()
     }
 
     m_context.emitSlowCases(m_compiler);
+#if defined(WALRUS_PROFILER)
+    emitProfileSnapshotStub(m_compiler, m_context.stackTmpStart + m_stackTmpSize);
+    emitProfileExitStubs(m_compiler, m_tryBlockStart);
+#endif
     emitCatches(m_compiler, &m_context, m_tryBlockStart);
 
     std::vector<TrapJump>& trapJumps = m_context.trapJumps;

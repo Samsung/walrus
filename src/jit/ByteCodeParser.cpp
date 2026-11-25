@@ -2098,6 +2098,12 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
 #endif /* !NDEBUG */
+#if defined(WALRUS_PROFILER)
+        case ByteCode::ProfileBlockOpcode: {
+            compiler->append(byteCode, group, opcode, 0, 0);
+            break;
+        }
+#endif
         case ByteCode::JumpOpcode: {
             Jump* jump = reinterpret_cast<Jump*>(byteCode);
             compiler->appendBranch(jump, opcode, labels[COMPUTE_OFFSET(idx, jump->offset())], 0);

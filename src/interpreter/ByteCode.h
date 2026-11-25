@@ -29,6 +29,9 @@
 namespace Walrus {
 
 class FunctionType;
+#if defined(WALRUS_PROFILER)
+struct ProfileCounter;
+#endif
 
 #if defined(NDEBUG)
 #define F_NOP(F)
@@ -38,8 +41,15 @@ class FunctionType;
 #define IF_DEBUG_ENABLED(x) x
 #endif /* NDEBUG */
 
+#if defined(WALRUS_PROFILER)
+#define F_PROFILE(F) F(ProfileBlock)
+#else
+#define F_PROFILE(F)
+#endif
+
 #define FOR_EACH_BYTECODE_OP(F) \
     F_NOP(F)                    \
+    F_PROFILE(F)                \
     F(Unreachable)              \
     F(Throw)                    \
     F(ThrowRef)                 \
@@ -1554,6 +1564,7 @@ public:
     ByteCodeStackOffset stackOffset() const { return m_stackOffset; }
     uint32_t uint32Value() const { return m_value; }
     int32_t int32Value() const { return static_cast<int32_t>(m_value); }
+    void setInt32Value(int32_t value) { m_value = static_cast<uint32_t>(value); }
     BranchHint branchHint() const { return m_branchHint; }
     void setBranchHint(BranchHint hint) { m_branchHint = hint; }
 
@@ -2587,6 +2598,7 @@ public:
 
     ByteCodeStackOffset condOffset() const { return m_condOffset; }
     int32_t defaultOffset() const { return m_defaultOffset; }
+    void setDefaultOffset(int32_t offset) { m_defaultOffset = offset; }
     static inline size_t offsetOfDefault() { return offsetof(BrTable, m_defaultOffset); }
 
     uint32_t tableSize() const { return m_tableSize; }
@@ -5433,6 +5445,30 @@ public:
 protected:
 };
 #endif /* !NDEBUG*/
+
+#if defined(WALRUS_PROFILER)
+class ProfileBlock : public ByteCode {
+public:
+    ProfileBlock(ProfileCounter* counter)
+        : ByteCode(Opcode::ProfileBlockOpcode)
+        , m_counter(counter)
+    {
+    }
+
+    ProfileCounter* counter() const { return m_counter; }
+    void setCounter(ProfileCounter* counter) { m_counter = counter; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("profile_block counter: %p", counter());
+    }
+#endif
+
+protected:
+    UnalignedValue<ProfileCounter*> m_counter;
+};
+#endif
 
 class Unreachable : public ByteCode {
 public:

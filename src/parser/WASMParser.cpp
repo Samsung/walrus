@@ -21,6 +21,7 @@
 #include "runtime/Module.h"
 #include "runtime/Store.h"
 #include "runtime/TypeStore.h"
+#include "runtime/Profiler.h"
 
 #include "wabt/binary-reader.h"
 #include "wabt/walrus/binary-reader-walrus.h"
@@ -3628,6 +3629,11 @@ public:
         if (getenv("DUMP_BYTECODE") && strlen(getenv("DUMP_BYTECODE"))) {
             m_currentFunction->dumpByteCode(m_currentByteCode);
         }
+#endif
+#if defined(WALRUS_PROFILER)
+        Walrus::Profiler::instance().instrument(m_currentFunction, index, m_currentByteCode, m_currentFunction->m_catchInfo);
+#endif
+#if !defined(NDEBUG)
         if (m_shouldContinueToGenerateByteCode) {
             for (size_t i = 0; i < m_currentFunctionType->result().size() && m_vmStack.size(); i++) {
                 ASSERT(toDebugType(popVMStackInfo().valueType()) == toDebugType(m_currentFunctionType->result().types()[m_currentFunctionType->result().size() - i - 1]));
@@ -4113,6 +4119,14 @@ std::pair<Optional<Module*>, std::string> WASMParser::parseBinary(Store* store, 
     wabt::WASMBinaryReader delegate(store->getTypeStore(), JITFlags & JITFlagValue::useJIT);
 
     std::string error = ReadWasmBinary(filename, data, len, &delegate, featureFlags);
+
+#if defined(WALRUS_PROFILER)
+    if (delegate.WalrusParseError().length() || error.length()) {
+        Profiler::instance().discardModule();
+    } else {
+        Profiler::instance().finishModule();
+    }
+#endif
 
     if (delegate.WalrusParseError().length()) {
         if (delegate.parsingResult().m_typesAddedToStore) {

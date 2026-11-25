@@ -22,7 +22,9 @@
 
 #if defined(NDEBUG)
 #define NOP_CHECK false
-#else /* !NDEBUG */
+#elif defined(WALRUS_PROFILER)
+#define NOP_CHECK (instr->opcode() == ByteCode::NopOpcode || instr->opcode() == ByteCode::ProfileBlockOpcode)
+#else /* !NDEBUG && !WALRUS_PROFILER */
 #define NOP_CHECK instr->opcode() == ByteCode::NopOpcode
 #endif /* NDEBUG */
 

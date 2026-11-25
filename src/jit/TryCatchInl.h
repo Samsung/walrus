@@ -131,8 +131,19 @@ void InstanceConstData::append(std::vector<TrapBlock>& trapBlocks, std::vector<W
     }
 }
 
+#if defined(WALRUS_PROFILER)
+static void recordProfileExit(ExecutionContext* context)
+{
+    bool isUserException = context->error == ExecutionContext::CapturedException && context->capturedException->isUserException();
+    Profiler::instance().recordPendingExit(isUserException);
+}
+#endif
+
 static sljit_uw SLJIT_FUNC getTrapHandler(ExecutionContext* context, sljit_uw returnAddr)
 {
+#if defined(WALRUS_PROFILER)
+    recordProfileExit(context);
+#endif
     return context->currentInstanceConstData->find(returnAddr);
 }
 
@@ -149,6 +160,9 @@ static sljit_sw findCatch(sljit_sw current, uint8_t* bp, ExecutionContext* conte
     std::vector<InstanceConstData::TryBlock>& tryBlocks = context->currentInstanceConstData->tryBlocks();
 
     ASSERT(context->error != ExecutionContext::NoError);
+#if defined(WALRUS_PROFILER)
+    recordProfileExit(context);
+#endif
 
     if (context->error != ExecutionContext::CapturedException || !context->capturedException->isUserException()) {
         return tryBlocks[current].returnToAddr;
@@ -293,8 +307,7 @@ static void emitThrow(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    std::vector<TryBlock>& tryBlocks = context->compiler->tryBlocks();
-    tryBlocks[context->currentTryBlock].throwJumps.push_back(jump);
+    context->appendThrowJump(jump);
 }
 
 static void emitThrowRef(sljit_compiler* compiler, Instruction* instr)
@@ -313,6 +326,5 @@ static void emitThrowRef(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    std::vector<TryBlock>& tryBlocks = context->compiler->tryBlocks();
-    tryBlocks[context->currentTryBlock].throwJumps.push_back(jump);
+    context->appendThrowJump(jump);
 }
