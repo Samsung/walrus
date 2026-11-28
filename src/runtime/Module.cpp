@@ -41,6 +41,9 @@ ModuleFunction::ModuleFunction(FunctionType* functionType)
 #if defined(WALRUS_ENABLE_JIT)
     , m_jitFunction(nullptr)
 #endif
+#if defined(WALRUS_PROFILER)
+    , m_profileEntry(nullptr)
+#endif
 {
 }
 

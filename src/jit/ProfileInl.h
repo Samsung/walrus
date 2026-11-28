@@ -137,7 +137,8 @@ static void emitProfileSnapshotStub(sljit_compiler* compiler, sljit_sw base)
 
     sljit_emit_op_dst(compiler, SLJIT_FAST_ENTER, SLJIT_MEM1(SLJIT_SP), base);
     emitProfileScratchTransfer(compiler, base, false);
-    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS0V(), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, Profiler::snapshotFromJIT));
+    sljit_emit_op1(compiler, SLJIT_MOV, SLJIT_R0, 0, SLJIT_MEM1(SLJIT_SP), kContextOffset);
+    sljit_emit_icall(compiler, SLJIT_CALL, SLJIT_ARGS1V(P), SLJIT_IMM, GET_FUNC_ADDR(sljit_sw, Profiler::snapshotFromJIT));
     emitProfileScratchTransfer(compiler, base, true);
     sljit_emit_op_src(compiler, SLJIT_FAST_RETURN, SLJIT_MEM1(SLJIT_SP), base);
 }

@@ -3134,7 +3134,7 @@ NextInstruction:
     DEFINE_OPCODE(ProfileBlock)
     {
         ProfileBlock* code = (ProfileBlock*)programCounter;
-        Profiler::instance().countBlock(code->counter());
+        Profiler::instance().countBlock(state, code->counter());
         ADD_PROGRAM_COUNTER(ProfileBlock);
         NEXT_INSTRUCTION();
     }

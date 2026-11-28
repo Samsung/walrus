@@ -27,6 +27,8 @@
 namespace Walrus {
 
 class Memory;
+class ExecutionState;
+struct ExecutionContext;
 
 struct ProfileCounter {
     uint32_t m_count;
@@ -67,6 +69,8 @@ struct ProfileSnapshot {
     uint64_t m_instructions;
     size_t m_entryEnd;
     size_t m_pageEntryEnd;
+    size_t m_keepDepth;
+    size_t m_stackEntryEnd;
 };
 
 struct ProfileExitSite {
@@ -88,19 +92,21 @@ public:
         return s_instance != nullptr ? *s_instance : create();
     }
 
-    ALWAYS_INLINE void countBlock(ProfileCounter* counter)
+    ALWAYS_INLINE void countBlock(ExecutionState& state, ProfileCounter* counter)
     {
         counter->m_count++;
         m_budget -= counter->m_length;
         if (UNLIKELY(m_budget <= 0)) {
-            snapshot();
+            snapshot(&state);
         }
     }
+
+    static uint64_t nextCallSequence() { return ++s_callSequence; }
 
     intptr_t* budgetAddress() { return &m_budget; }
     uint32_t pageShift() const { return m_pageShift; }
     uintptr_t* pendingExitAddress() { return &m_pendingExit; }
-    static void snapshotFromJIT();
+    static void snapshotFromJIT(ExecutionContext* context);
 
     uintptr_t addExitSite(const ProfileCounter* counter, uint32_t executed);
     void recordPendingExit(bool isUserException);
@@ -118,12 +124,14 @@ private:
     Profiler();
 
     static Profiler& create();
-    NEVER_INLINE void snapshot();
+    NEVER_INLINE void snapshot(ExecutionState* state);
     void commitKeyframe();
     uint32_t slotOf(const ProfileCounter* counter) const;
     void collectPages(Memory* memory);
+    size_t collectStack(ExecutionState* state);
 
     static Profiler* s_instance;
+    static uint64_t s_callSequence;
 
     intptr_t m_budget;
     intptr_t m_interval;
@@ -145,6 +153,10 @@ private:
     std::vector<ProfileMemoryLayout> m_memoryLayouts;
     std::vector<ProfileExit> m_exits;
     std::vector<ProfileExitSite> m_exitSites;
+    std::vector<uint64_t> m_stackSequences;
+    std::vector<uint64_t> m_currentSequences;
+    std::vector<uint32_t> m_currentSlots;
+    std::vector<uint32_t> m_stackEntries;
     FILE* m_output;
 };
 

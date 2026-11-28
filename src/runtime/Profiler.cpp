@@ -18,6 +18,9 @@
 
 #include "Walrus.h"
 #include "runtime/Profiler.h"
+#include "runtime/ExecutionState.h"
+#include "runtime/Function.h"
+#include "runtime/JITExec.h"
 #include "runtime/Memory.h"
 #include "interpreter/ByteCode.h"
 
@@ -31,6 +34,7 @@
 namespace Walrus {
 
 Profiler* Profiler::s_instance = nullptr;
+uint64_t Profiler::s_callSequence = 0;
 
 constexpr uint32_t kProfileSegmentShift = 10;
 
@@ -123,7 +127,7 @@ Profiler::Profiler()
     m_output = fopen(path, "w");
     RELEASE_ASSERT(m_output != nullptr);
 
-    fprintf(m_output, "walrus-profile 5\n");
+    fprintf(m_output, "walrus-profile 6\n");
     fprintf(m_output, "interval %" PRIdPTR "\n", m_interval);
     fprintf(m_output, "keyframe-interval %" PRIu32 "\n", m_keyframeInterval);
     fprintf(m_output, "page-shift %" PRIu32 "\n", m_pageShift);
@@ -214,6 +218,7 @@ void Profiler::finishModule()
     for (ModuleFunction* function : m_pendingFunctions) {
         ProfileCounter* counter = counters + (info->m_firstSlot - firstSlot);
         info->m_counters = counter;
+        function->setProfileEntry(counter);
 
         for (size_t position = 0; position < function->byteCodeSize();) {
             ByteCode* byteCode = function->getByteCode<ByteCode>(position);
@@ -330,12 +335,44 @@ void Profiler::recordPendingExit(bool isUserException)
     }
 }
 
-void Profiler::snapshotFromJIT()
+size_t Profiler::collectStack(ExecutionState* state)
 {
-    instance().snapshot();
+    m_currentSequences.clear();
+    m_currentSlots.clear();
+
+    for (; state != nullptr; state = state->parent()) {
+        Function* function = state->currentFunction();
+        if (function == nullptr || function->kind() != Function::DefinedFunctionKind) {
+            continue;
+        }
+
+        const ProfileCounter* entry = function->asDefinedFunction()->moduleFunction()->profileEntry();
+        if (entry != nullptr) {
+            m_currentSequences.push_back(state->profileSequence());
+            m_currentSlots.push_back(slotOf(entry));
+        }
+    }
+
+    std::reverse(m_currentSequences.begin(), m_currentSequences.end());
+    std::reverse(m_currentSlots.begin(), m_currentSlots.end());
+
+    size_t keepDepth = 0;
+    while (keepDepth < m_currentSequences.size() && keepDepth < m_stackSequences.size()
+           && m_currentSequences[keepDepth] == m_stackSequences[keepDepth]) {
+        keepDepth++;
+    }
+
+    m_stackEntries.insert(m_stackEntries.end(), m_currentSlots.begin() + keepDepth, m_currentSlots.end());
+    m_stackSequences.swap(m_currentSequences);
+    return keepDepth;
 }
 
-void Profiler::snapshot()
+void Profiler::snapshotFromJIT(ExecutionContext* context)
+{
+    instance().snapshot(&context->state);
+}
+
+void Profiler::snapshot(ExecutionState* state)
 {
     intptr_t instructions = m_interval - m_budget;
     m_budget = m_interval;
@@ -362,7 +399,9 @@ void Profiler::snapshot()
         return a.m_memory != b.m_memory ? a.m_memory < b.m_memory : a.m_page < b.m_page;
     });
 
-    m_snapshots.push_back({ static_cast<uint64_t>(instructions), m_snapshotEntries.size(), m_pageEntries.size() });
+    size_t keepDepth = collectStack(state);
+    m_snapshots.push_back({ static_cast<uint64_t>(instructions), m_snapshotEntries.size(), m_pageEntries.size(),
+                            keepDepth, m_stackEntries.size() });
 
     if (++m_snapshotCount % m_keyframeInterval == 0) {
         commitKeyframe();
@@ -376,6 +415,7 @@ void Profiler::commitKeyframe()
 
     size_t entry = 0;
     size_t pageEntry = 0;
+    size_t stackEntry = 0;
     for (const ProfileSnapshot& snapshot : m_snapshots) {
         fprintf(m_output, "snapshot %" PRIu64 " %" PRIu64 " %zu %zu\n", id++, snapshot.m_instructions,
                 snapshot.m_entryEnd - entry, snapshot.m_pageEntryEnd - pageEntry);
@@ -400,6 +440,11 @@ void Profiler::commitKeyframe()
                         page.m_reads, page.m_writes);
             }
         }
+
+        fprintf(m_output, "stack %zu %zu\n", snapshot.m_keepDepth, snapshot.m_stackEntryEnd - stackEntry);
+        for (; stackEntry < snapshot.m_stackEntryEnd; stackEntry++) {
+            fprintf(m_output, stackEntry + 1 < snapshot.m_stackEntryEnd ? "%" PRIu32 " " : "%" PRIu32 "\n", m_stackEntries[stackEntry]);
+        }
     }
 
     for (const ProfileExit& exit : m_exits) {
@@ -410,6 +455,7 @@ void Profiler::commitKeyframe()
     m_snapshots.clear();
     m_snapshotEntries.clear();
     m_pageEntries.clear();
+    m_stackEntries.clear();
     m_exits.clear();
     fflush(m_output);
 }
@@ -420,7 +466,7 @@ void Profiler::finish()
         return;
     }
 
-    snapshot();
+    snapshot(nullptr);
     if (!m_snapshots.empty()) {
         commitKeyframe();
     }

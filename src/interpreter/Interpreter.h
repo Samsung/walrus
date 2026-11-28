@@ -26,6 +26,9 @@
 #include "runtime/Store.h"
 #include "runtime/Tag.h"
 #include "interpreter/ByteCode.h"
+#if defined(WALRUS_PROFILER)
+#include "runtime/Profiler.h"
+#endif
 
 namespace Walrus {
 
@@ -83,6 +86,9 @@ private:
 
         ExecutionState newState(state, function, functionStackBase, requiredStackSize, owned);
         ByteCodeStackOffset* resultOffsets;
+#if defined(WALRUS_PROFILER)
+        newState.m_profileSequence = Profiler::nextCallSequence();
+#endif
 
         while (true) {
 #if defined(WALRUS_ENABLE_JIT)
@@ -123,6 +129,9 @@ private:
             // Support return call.
             function = newState.currentFunction()->asDefinedFunction();
             moduleFunction = function->moduleFunction();
+#if defined(WALRUS_PROFILER)
+            newState.m_profileSequence = Profiler::nextCallSequence();
+#endif
         }
     }
 
