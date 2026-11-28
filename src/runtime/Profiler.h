@@ -87,6 +87,13 @@ struct ProfileExit {
 
 class Profiler {
 public:
+    enum Feature : uint32_t {
+        MemoryFeature = 1 << 0,
+        ExitFeature = 1 << 1,
+        StackFeature = 1 << 2,
+        AllFeatures = MemoryFeature | ExitFeature | StackFeature,
+    };
+
     static Profiler& instance()
     {
         return s_instance != nullptr ? *s_instance : create();
@@ -103,6 +110,7 @@ public:
 
     static uint64_t nextCallSequence() { return ++s_callSequence; }
 
+    bool hasFeature(Feature feature) const { return (m_features & feature) != 0; }
     intptr_t* budgetAddress() { return &m_budget; }
     uint32_t pageShift() const { return m_pageShift; }
     uintptr_t* pendingExitAddress() { return &m_pendingExit; }
@@ -137,6 +145,7 @@ private:
     intptr_t m_interval;
     uint32_t m_keyframeInterval;
     uint32_t m_pageShift;
+    uint32_t m_features;
     uint32_t m_memoryCount;
     uint32_t m_blockCount;
     uint64_t m_snapshotCount;

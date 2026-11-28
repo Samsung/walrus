@@ -48,6 +48,45 @@ static uint64_t environmentValue(const char* name, uint64_t defaultValue)
     return result != 0 ? result : defaultValue;
 }
 
+static uint32_t environmentFeatures(const char* name)
+{
+    const char* value = getenv(name);
+    if (value == nullptr || *value == '\0') {
+        return Profiler::AllFeatures;
+    }
+
+    static const struct {
+        const char* m_name;
+        uint32_t m_feature;
+    } names[] = {
+        { "block", 0 },
+        { "memory", Profiler::MemoryFeature },
+        { "exit", Profiler::ExitFeature },
+        { "stack", Profiler::StackFeature },
+    };
+
+    uint32_t features = 0;
+    while (*value != '\0') {
+        size_t length = strcspn(value, ",");
+        size_t i = 0;
+        while (i < sizeof(names) / sizeof(names[0]) && (strlen(names[i].m_name) != length || strncmp(names[i].m_name, value, length) != 0)) {
+            i++;
+        }
+
+        if (i == sizeof(names) / sizeof(names[0])) {
+            fprintf(stderr, "walrus profiler: %s must be a comma separated list of block, memory, exit, stack\n", name);
+            abort();
+        }
+
+        features |= names[i].m_feature;
+        value += length;
+        if (*value == ',') {
+            value++;
+        }
+    }
+    return features;
+}
+
 template <typename F>
 static void forEachJumpOffset(ByteCode* byteCode, F f)
 {
@@ -97,6 +136,7 @@ Profiler::Profiler()
     , m_interval(0)
     , m_keyframeInterval(environmentValue("WALRUS_PROFILE_KEYFRAME", 16))
     , m_pageShift(environmentValue("WALRUS_PROFILE_PAGE_SHIFT", 12))
+    , m_features(environmentFeatures("WALRUS_PROFILE_FEATURES"))
     , m_memoryCount(0)
     , m_blockCount(0)
     , m_snapshotCount(0)
@@ -132,6 +172,8 @@ Profiler::Profiler()
     fprintf(m_output, "keyframe-interval %" PRIu32 "\n", m_keyframeInterval);
     fprintf(m_output, "page-shift %" PRIu32 "\n", m_pageShift);
     fprintf(m_output, "segment-shift %" PRIu32 "\n", kProfileSegmentShift);
+    fprintf(m_output, "features block%s%s%s\n", hasFeature(MemoryFeature) ? " memory" : "",
+            hasFeature(ExitFeature) ? " exit" : "", hasFeature(StackFeature) ? " stack" : "");
 }
 
 void Profiler::instrument(ModuleFunction* function, uint32_t functionIndex, Vector<uint8_t, std::allocator<uint8_t>>& byteCode,
@@ -267,7 +309,7 @@ void Profiler::collectPages(Memory* memory)
 {
     uint32_t* reads = memory->readCounters();
     uint32_t* writes = memory->writeCounters();
-    uint64_t pageCount = memory->profilePageCount();
+    uint64_t pageCount = reads != nullptr ? memory->profilePageCount() : 0;
 
     for (uint64_t page = 0; page < pageCount; page++) {
         if ((reads[page] | writes[page]) != 0) {
@@ -290,7 +332,7 @@ uint32_t Profiler::slotOf(const ProfileCounter* counter) const
 
 void Profiler::recordExit(ModuleFunction* function, size_t position, bool isUserException)
 {
-    if (m_output == nullptr) {
+    if (m_output == nullptr || !hasFeature(ExitFeature)) {
         return;
     }
 
@@ -399,7 +441,7 @@ void Profiler::snapshot(ExecutionState* state)
         return a.m_memory != b.m_memory ? a.m_memory < b.m_memory : a.m_page < b.m_page;
     });
 
-    size_t keepDepth = collectStack(state);
+    size_t keepDepth = hasFeature(StackFeature) ? collectStack(state) : 0;
     m_snapshots.push_back({ static_cast<uint64_t>(instructions), m_snapshotEntries.size(), m_pageEntries.size(),
                             keepDepth, m_stackEntries.size() });
 
@@ -439,6 +481,10 @@ void Profiler::commitKeyframe()
                 fprintf(m_output, "%" PRIu64 " %" PRIu32 " %" PRIu32 "\n", page.m_page & ((static_cast<uint64_t>(1) << kProfileSegmentShift) - 1),
                         page.m_reads, page.m_writes);
             }
+        }
+
+        if (!hasFeature(StackFeature)) {
+            continue;
         }
 
         fprintf(m_output, "stack %zu %zu\n", snapshot.m_keepDepth, snapshot.m_stackEntryEnd - stackEntry);

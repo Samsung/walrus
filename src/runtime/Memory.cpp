@@ -443,7 +443,7 @@ void Memory::resizePageCounters()
 {
     uint64_t required = profilePageCount();
 
-    if (required <= m_pageCapacity) {
+    if (!Profiler::instance().hasFeature(Profiler::MemoryFeature) || required <= m_pageCapacity) {
         return;
     }
 

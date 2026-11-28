@@ -51,7 +51,7 @@ static void emitProfileBlock(sljit_compiler* compiler, Instruction* instr)
 
 static bool emitProfilePage(sljit_compiler* compiler, sljit_s32 reg, sljit_sw targetBufferOffset, sljit_s32 addressReg, sljit_uw address, uint32_t access)
 {
-    if (access == 0) {
+    if (access == 0 || !Profiler::instance().hasFeature(Profiler::MemoryFeature)) {
         return false;
     }
 
@@ -158,7 +158,7 @@ public:
 
     uintptr_t find(Instruction* instr)
     {
-        if (instr == nullptr) {
+        if (instr == nullptr || !Profiler::instance().hasFeature(Profiler::ExitFeature)) {
             return 0;
         }
 

@@ -109,6 +109,10 @@ public:
     void countAccess(uint64_t address, AccessKind kind) const
     {
 #if defined(WALRUS_PROFILER)
+        if (m_readCounters == nullptr) {
+            return;
+        }
+
         uint64_t page = address >> m_pageShift;
 
         if (kind & ReadAccess) {
