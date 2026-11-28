@@ -434,26 +434,10 @@ void JITCompiler::buildVariables(uint32_t requiredStackSize)
         if (!item->isLabel()) {
             Instruction* instr = item->asInstruction();
 
-            if (instr->group() != Instruction::DirectBranch) {
-                variableCount += item->asInstruction()->resultCount();
-                continue;
-            }
-
-            ASSERT(item->asInstruction()->resultCount() == 0);
-            if (instr->opcode() == ByteCode::JumpOpcode) {
-                continue;
-            }
-
-            InstructionListItem* next = instr->next();
-            ASSERT(next != nullptr);
-            if (next->isLabel() || next->asInstruction()->opcode() == ByteCode::JumpOpcode) {
-                continue;
-            }
-
-            item = new Label();
-            item->m_id = ++nextId;
-            item->m_next = next;
-            instr->m_next = item;
+            ASSERT(instr->group() != Instruction::DirectBranch || instr->opcode() == ByteCode::JumpOpcode
+                   || (instr->next() != nullptr && (instr->next()->isLabel() || instr->next()->asInstruction()->opcode() == ByteCode::JumpOpcode)));
+            variableCount += instr->resultCount();
+            continue;
         }
 
         Label* label = item->asLabel();
