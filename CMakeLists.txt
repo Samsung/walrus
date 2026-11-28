@@ -66,6 +66,8 @@ IF (NOT DEFINED WALRUS_ARCH)
         SET(WALRUS_ARCH "aarch64")
     ELSEIF (_walrus_processor STREQUAL "riscv64")
         SET(WALRUS_ARCH "riscv64")
+    ELSEIF (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "riscv32")
+        SET(WALRUS_ARCH "riscv32")
     ENDIF()
 ENDIF()
 
