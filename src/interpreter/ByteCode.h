@@ -29,6 +29,9 @@
 namespace Walrus {
 
 class FunctionType;
+#if defined(WALRUS_PROFILER)
+struct ProfileCounter;
+#endif
 
 #if defined(NDEBUG)
 #define F_NOP(F)
@@ -38,8 +41,15 @@ class FunctionType;
 #define IF_DEBUG_ENABLED(x) x
 #endif /* NDEBUG */
 
+#if defined(WALRUS_PROFILER)
+#define F_PROFILE(F) F(ProfileBlock)
+#else
+#define F_PROFILE(F)
+#endif
+
 #define FOR_EACH_BYTECODE_OP(F) \
     F_NOP(F)                    \
+    F_PROFILE(F)                \
     F(Unreachable)              \
     F(Throw)                    \
     F(ThrowRef)                 \
@@ -1554,6 +1564,7 @@ public:
     ByteCodeStackOffset stackOffset() const { return m_stackOffset; }
     uint32_t uint32Value() const { return m_value; }
     int32_t int32Value() const { return static_cast<int32_t>(m_value); }
+    void setInt32Value(int32_t value) { m_value = static_cast<uint32_t>(value); }
     BranchHint branchHint() const { return m_branchHint; }
     void setBranchHint(BranchHint hint) { m_branchHint = hint; }
 
@@ -2587,6 +2598,7 @@ public:
 
     ByteCodeStackOffset condOffset() const { return m_condOffset; }
     int32_t defaultOffset() const { return m_defaultOffset; }
+    void setDefaultOffset(int32_t offset) { m_defaultOffset = offset; }
     static inline size_t offsetOfDefault() { return offsetof(BrTable, m_defaultOffset); }
 
     uint32_t tableSize() const { return m_tableSize; }
@@ -5434,6 +5446,30 @@ protected:
 };
 #endif /* !NDEBUG*/
 
+#if defined(WALRUS_PROFILER)
+class ProfileBlock : public ByteCode {
+public:
+    ProfileBlock(ProfileCounter* counter)
+        : ByteCode(Opcode::ProfileBlockOpcode)
+        , m_counter(counter)
+    {
+    }
+
+    ProfileCounter* counter() const { return m_counter; }
+    void setCounter(ProfileCounter* counter) { m_counter = counter; }
+
+#if !defined(NDEBUG)
+    void dump(size_t pos)
+    {
+        printf("profile_block counter: %p", counter());
+    }
+#endif
+
+protected:
+    UnalignedValue<ProfileCounter*> m_counter;
+};
+#endif
+
 class Unreachable : public ByteCode {
 public:
     Unreachable()
@@ -5501,6 +5537,100 @@ public:
     }
 #endif
 };
+
+template <typename F>
+void forEachJumpTarget(const ByteCode* byteCode, size_t position, F f)
+{
+    switch (byteCode->opcode()) {
+    case ByteCode::JumpOpcode:
+        f(position + reinterpret_cast<const Jump*>(byteCode)->offset());
+        break;
+    case ByteCode::JumpIfTrueOpcode:
+    case ByteCode::JumpIfFalseOpcode:
+    case ByteCode::JumpIfNullOpcode:
+    case ByteCode::JumpIfNonNullOpcode:
+    case ByteCode::JumpIfCastGenericOpcode:
+    case ByteCode::JumpIfCastDefinedOpcode:
+        f(position + reinterpret_cast<const ByteCodeOffsetValue*>(byteCode)->int32Value());
+        break;
+    case ByteCode::BrTableOpcode: {
+        const BrTable* brTable = reinterpret_cast<const BrTable*>(byteCode);
+        f(position + brTable->defaultOffset());
+
+        int32_t* jumpOffsets = brTable->jumpOffsets();
+        int32_t* jumpOffsetsEnd = jumpOffsets + brTable->tableSize();
+
+        while (jumpOffsets < jumpOffsetsEnd) {
+            f(position + *jumpOffsets);
+            jumpOffsets++;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+inline bool isConditionalJump(ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+    case ByteCode::JumpIfTrueOpcode:
+    case ByteCode::JumpIfFalseOpcode:
+    case ByteCode::JumpIfNullOpcode:
+    case ByteCode::JumpIfNonNullOpcode:
+    case ByteCode::JumpIfCastGenericOpcode:
+    case ByteCode::JumpIfCastDefinedOpcode:
+        return true;
+    default:
+        return false;
+    }
+}
+
+inline bool isBasicBlockTerminator(ByteCode::Opcode opcode)
+{
+    switch (opcode) {
+    case ByteCode::JumpOpcode:
+    case ByteCode::BrTableOpcode:
+    case ByteCode::EndOpcode:
+    case ByteCode::UnreachableOpcode:
+    case ByteCode::ThrowOpcode:
+    case ByteCode::ThrowRefOpcode:
+    case ByteCode::ReturnCallOpcode:
+    case ByteCode::ReturnCallIndirectOpcode:
+    case ByteCode::ReturnCallIndirectM64Opcode:
+    case ByteCode::ReturnCallRefOpcode:
+        return true;
+    default:
+        return isConditionalJump(opcode);
+    }
+}
+
+// Calls f for each block start. Positions may repeat and are not ordered.
+template <typename F>
+void forEachBasicBlockStart(const uint8_t* code, size_t size, const Vector<ModuleFunction::CatchInfo, std::allocator<ModuleFunction::CatchInfo>>& catchInfo, F f)
+{
+    for (const auto& item : catchInfo) {
+        f(item.m_tryStart);
+        f(item.m_catchStartPosition);
+    }
+
+    size_t position = 0;
+
+    while (position < size) {
+        const ByteCode* byteCode = reinterpret_cast<const ByteCode*>(code + position);
+        ByteCode::Opcode opcode = byteCode->opcode();
+        size_t next = position + byteCode->getSize();
+
+        forEachJumpTarget(byteCode, position, f);
+
+        if (next < size && isBasicBlockTerminator(opcode)
+            && !(isConditionalJump(opcode) && reinterpret_cast<const ByteCode*>(code + next)->opcode() == ByteCode::JumpOpcode)) {
+            f(next);
+        }
+
+        position = next;
+    }
+}
 
 } // namespace Walrus
 

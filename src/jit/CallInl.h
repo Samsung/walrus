@@ -475,6 +475,5 @@ static void emitCall(sljit_compiler* compiler, Instruction* instr)
         return;
     }
 
-    std::vector<TryBlock>& tryBlocks = context->compiler->tryBlocks();
-    tryBlocks[context->currentTryBlock].throwJumps.push_back(jump);
+    context->appendThrowJump(jump);
 }

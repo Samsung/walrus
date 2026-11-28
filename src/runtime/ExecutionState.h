@@ -87,6 +87,18 @@ public:
         return m_currentFunction;
     }
 
+#if defined(WALRUS_PROFILER)
+    ExecutionState* parent() const
+    {
+        return m_parent;
+    }
+
+    uint64_t profileSequence() const
+    {
+        return m_profileSequence;
+    }
+#endif
+
     uint8_t* bp() const
     {
         return m_bp;
@@ -186,6 +198,9 @@ private:
     uint8_t* m_bp;
     size_t m_capacity;
     uint8_t* m_owned;
+#if defined(WALRUS_PROFILER)
+    uint64_t m_profileSequence = 0;
+#endif
 };
 
 } // namespace Walrus

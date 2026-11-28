@@ -59,6 +59,16 @@ public:
         size_t sizeInByteM3;
         size_t sizeInByteM7;
         size_t sizeInByteM15;
+#if defined(WALRUS_PROFILER)
+        uint32_t* readCounters;
+        uint32_t* writeCounters;
+#endif
+    };
+
+    enum AccessKind : uint32_t {
+        ReadAccess = 1 << 0,
+        WriteAccess = 1 << 1,
+        ReadWriteAccess = ReadAccess | WriteAccess,
     };
 
     static Memory* createMemory(Store* store, uint64_t initialSizeInByte, uint64_t maximumSizeInByte,
@@ -96,6 +106,46 @@ public:
         return m_isShared;
     }
 
+    void countAccess(uint64_t address, AccessKind kind) const
+    {
+#if defined(WALRUS_PROFILER)
+        if (m_readCounters == nullptr) {
+            return;
+        }
+
+        uint64_t page = address >> m_pageShift;
+
+        if (kind & ReadAccess) {
+            m_readCounters[page]++;
+        }
+        if (kind & WriteAccess) {
+            m_writeCounters[page]++;
+        }
+#endif
+    }
+
+#if defined(WALRUS_PROFILER)
+    uint32_t* readCounters() const
+    {
+        return m_readCounters;
+    }
+
+    uint32_t* writeCounters() const
+    {
+        return m_writeCounters;
+    }
+
+    uint32_t profileId() const
+    {
+        return m_profileId;
+    }
+
+    uint64_t profilePageCount() const
+    {
+        return (m_sizeInByte + (static_cast<uint64_t>(1) << m_pageShift) - 1) >> m_pageShift;
+    }
+#endif
+
     bool is64() const
     {
         return m_is64;
@@ -107,6 +157,7 @@ public:
     void load(ExecutionState& state, uint32_t offset, uint32_t addend, T* out) const
     {
         checkAccess(state, offset, sizeof(T), addend);
+        countAccess(static_cast<uint64_t>(offset) + addend, ReadAccess);
 
         memcpyEndianAware(out, m_buffer, sizeof(T), m_sizeInByte, 0, offset + addend, sizeof(T));
     }
@@ -115,6 +166,7 @@ public:
     void loadM64(ExecutionState& state, uint64_t offset, uint64_t addend, T* out) const
     {
         checkAccessM64(state, offset, sizeof(T), addend);
+        countAccess(offset + addend, ReadAccess);
 
         memcpyEndianAware(out, m_buffer, sizeof(T), m_sizeInByte, 0, static_cast<size_t>(offset + addend), sizeof(T));
     }
@@ -123,6 +175,7 @@ public:
     void load(ExecutionState& state, uint32_t offset, T* out) const
     {
         checkAccess(state, offset, sizeof(T));
+        countAccess(offset, ReadAccess);
 #if defined(WALRUS_BIG_ENDIAN)
         *out = *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset]));
 #else
@@ -134,6 +187,7 @@ public:
     void loadM64(ExecutionState& state, uint64_t offset, T* out) const
     {
         checkAccessM64(state, offset, sizeof(T));
+        countAccess(offset, ReadAccess);
 #if defined(WALRUS_BIG_ENDIAN)
         *out = *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset]));
 #else
@@ -148,12 +202,14 @@ public:
     void load(ExecutionState& state, uint32_t offset, TYPE* out) const                                              \
     {                                                                                                               \
         checkAccess(state, offset, sizeof(TYPE));                                                                   \
+        countAccess(offset, ReadAccess);                                                                            \
         memcpyEndianAware(out, m_buffer, sizeof(TYPE), m_sizeInByte, 0, offset, sizeof(TYPE));                      \
     }                                                                                                               \
     template <typename T = TYPE>                                                                                    \
     void loadM64(ExecutionState& state, uint64_t offset, TYPE* out) const                                           \
     {                                                                                                               \
         checkAccessM64(state, offset, sizeof(TYPE));                                                                \
+        countAccess(offset, ReadAccess);                                                                            \
         memcpyEndianAware(out, m_buffer, sizeof(TYPE), m_sizeInByte, 0, static_cast<size_t>(offset), sizeof(TYPE)); \
     }
     defineUnalignedLoad(uint64_t);
@@ -167,6 +223,7 @@ public:
     void store(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
     {
         checkAccess(state, offset, sizeof(T), addend);
+        countAccess(static_cast<uint64_t>(offset) + addend, WriteAccess);
 
         memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(T), offset + addend, 0, sizeof(T));
     }
@@ -175,6 +232,7 @@ public:
     void storeM64(ExecutionState& state, uint64_t offset, uint64_t addend, const T& val) const
     {
         checkAccessM64(state, offset, sizeof(T), addend);
+        countAccess(offset + addend, WriteAccess);
 
         memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(T), static_cast<size_t>(offset + addend), 0, sizeof(T));
     }
@@ -183,6 +241,7 @@ public:
     void store(ExecutionState& state, uint32_t offset, const T& val) const
     {
         checkAccess(state, offset, sizeof(T));
+        countAccess(offset, WriteAccess);
 #if defined(WALRUS_BIG_ENDIAN)
         *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset])) = val;
 #else
@@ -194,6 +253,7 @@ public:
     void storeM64(ExecutionState& state, uint64_t offset, const T& val) const
     {
         checkAccessM64(state, offset, sizeof(T));
+        countAccess(offset, WriteAccess);
 #if defined(WALRUS_BIG_ENDIAN)
         *(reinterpret_cast<T*>(&m_buffer[m_sizeInByte - sizeof(T) - offset])) = val;
 #else
@@ -214,6 +274,7 @@ public:
     void atomicLoad(ExecutionState& state, uint32_t offset, uint32_t addend, T* out) const
     {
         checkAtomicAccess(state, offset, sizeof(T), addend);
+        countAccess(static_cast<uint64_t>(offset) + addend, ReadAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         *out = shared->load(std::memory_order_relaxed);
     }
@@ -222,6 +283,7 @@ public:
     void atomicLoadM64(ExecutionState& state, uint64_t offset, uint64_t addend, T* out) const
     {
         checkAtomicAccessM64(state, offset, sizeof(T), addend);
+        countAccess(offset + addend, ReadAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         *out = shared->load(std::memory_order_relaxed);
     }
@@ -230,6 +292,7 @@ public:
     void atomicStore(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val) const
     {
         checkAtomicAccess(state, offset, sizeof(T), addend);
+        countAccess(static_cast<uint64_t>(offset) + addend, WriteAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         shared->store(val);
     }
@@ -238,6 +301,7 @@ public:
     void atomicStoreM64(ExecutionState& state, uint64_t offset, uint64_t addend, const T& val) const
     {
         checkAtomicAccessM64(state, offset, sizeof(T), addend);
+        countAccess(offset + addend, WriteAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         shared->store(val);
     }
@@ -246,6 +310,7 @@ public:
     void atomicRmw(ExecutionState& state, uint32_t offset, uint32_t addend, const T& val, T* out, AtomicRmwOp operation) const
     {
         checkAtomicAccess(state, offset, sizeof(T), addend);
+        countAccess(static_cast<uint64_t>(offset) + addend, ReadWriteAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         doAtomicRmw(shared, val, out, operation);
     }
@@ -254,6 +319,7 @@ public:
     void atomicRmwM64(ExecutionState& state, uint64_t offset, uint64_t addend, const T& val, T* out, AtomicRmwOp operation) const
     {
         checkAtomicAccessM64(state, offset, sizeof(T), addend);
+        countAccess(offset + addend, ReadWriteAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         doAtomicRmw(shared, val, out, operation);
     }
@@ -262,6 +328,7 @@ public:
     void atomicRmwCmpxchg(ExecutionState& state, uint32_t offset, uint32_t addend, T expect, const T& replace, T* out) const
     {
         checkAtomicAccess(state, offset, sizeof(T), addend);
+        countAccess(static_cast<uint64_t>(offset) + addend, ReadWriteAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         shared->compare_exchange_weak(expect, replace);
         *out = expect;
@@ -271,6 +338,7 @@ public:
     void atomicRmwCmpxchgM64(ExecutionState& state, uint64_t offset, uint64_t addend, T expect, const T& replace, T* out) const
     {
         checkAtomicAccessM64(state, offset, sizeof(T), addend);
+        countAccess(offset + addend, ReadWriteAccess);
         std::atomic<T>* shared = reinterpret_cast<std::atomic<T>*>(m_buffer + (offset + addend));
         shared->compare_exchange_weak(expect, replace);
         *out = expect;
@@ -389,12 +457,14 @@ public:
     void store(ExecutionState& state, uint32_t offset, const TYPE& val) const                                        \
     {                                                                                                                \
         checkAccess(state, offset, sizeof(TYPE));                                                                    \
+        countAccess(offset, WriteAccess);                                                                            \
         memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(TYPE), offset, 0, sizeof(TYPE));                      \
     }                                                                                                                \
     template <typename T = TYPE>                                                                                     \
     void storeM64(ExecutionState& state, uint64_t offset, const TYPE& val) const                                     \
     {                                                                                                                \
         checkAccessM64(state, offset, sizeof(TYPE));                                                                 \
+        countAccess(offset, WriteAccess);                                                                            \
         memcpyEndianAware(m_buffer, &val, m_sizeInByte, sizeof(TYPE), static_cast<size_t>(offset), 0, sizeof(TYPE)); \
     }
     defineUnalignedStore(uint64_t);
@@ -435,6 +505,24 @@ private:
     Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isShared, bool is64);
 
     void throwRangeException(ExecutionState& state, uint32_t offset, uint32_t addend, uint32_t size) const;
+
+    void countRange(uint64_t start, uint64_t size, AccessKind kind) const
+    {
+#if defined(WALRUS_PROFILER)
+        if (size == 0) {
+            return;
+        }
+
+        uint64_t last = (start + size - 1) >> m_pageShift;
+        for (uint64_t page = start >> m_pageShift; page <= last; page++) {
+            countAccess(page << m_pageShift, kind);
+        }
+#endif
+    }
+
+#if defined(WALRUS_PROFILER)
+    void resizePageCounters();
+#endif
 
     inline void checkAccess(ExecutionState& state, uint32_t offset, uint32_t size, uint32_t addend = 0) const
     {
@@ -484,6 +572,13 @@ private:
     uint64_t m_maximumSizeInByte;
     uint8_t* m_buffer;
     TargetBuffer* m_targetBuffers;
+#if defined(WALRUS_PROFILER)
+    uint32_t* m_readCounters;
+    uint32_t* m_writeCounters;
+    uint64_t m_pageCapacity;
+    uint32_t m_pageShift;
+    uint32_t m_profileId;
+#endif
     bool m_isShared;
     bool m_is64;
 };

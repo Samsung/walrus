@@ -32,6 +32,9 @@ class Module;
 class Instance;
 class JITFunction;
 class JITModule;
+#if defined(WALRUS_PROFILER)
+struct ProfileCounter;
+#endif
 
 struct WASMParsingResult;
 
@@ -256,6 +259,11 @@ public:
     }
 #endif
 
+#if defined(WALRUS_PROFILER)
+    ProfileCounter* profileEntry() const { return m_profileEntry; }
+    void setProfileEntry(ProfileCounter* entry) { m_profileEntry = entry; }
+#endif
+
 private:
     bool m_hasTryCatch;
     uint16_t m_requiredStackSize;
@@ -269,6 +277,9 @@ private:
     Vector<CatchInfo, std::allocator<CatchInfo>> m_catchInfo;
 #if defined(WALRUS_ENABLE_JIT)
     JITFunction* m_jitFunction;
+#endif
+#if defined(WALRUS_PROFILER)
+    ProfileCounter* m_profileEntry;
 #endif
 };
 

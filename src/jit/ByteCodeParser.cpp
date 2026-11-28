@@ -618,51 +618,9 @@ static void compileFunction(JITCompiler* compiler)
     std::map<size_t, Label*> labels;
 
     // Construct labels first
-    while (idx < endIdx) {
-        ByteCode* byteCode = function->getByteCode<ByteCode>(idx);
-        ByteCode::Opcode opcode = byteCode->opcode();
-
-        switch (opcode) {
-        case ByteCode::JumpOpcode: {
-            Jump* jump = reinterpret_cast<Jump*>(byteCode);
-            labels[COMPUTE_OFFSET(idx, jump->offset())] = nullptr;
-            break;
-        }
-        case ByteCode::JumpIfTrueOpcode:
-        case ByteCode::JumpIfFalseOpcode:
-        case ByteCode::JumpIfNullOpcode:
-        case ByteCode::JumpIfNonNullOpcode:
-        case ByteCode::JumpIfCastGenericOpcode:
-        case ByteCode::JumpIfCastDefinedOpcode: {
-            ByteCodeOffsetValue* offsetValue = reinterpret_cast<ByteCodeOffsetValue*>(byteCode);
-            labels[COMPUTE_OFFSET(idx, offsetValue->int32Value())] = nullptr;
-            break;
-        }
-        case ByteCode::BrTableOpcode: {
-            BrTable* brTable = reinterpret_cast<BrTable*>(byteCode);
-            labels[COMPUTE_OFFSET(idx, brTable->defaultOffset())] = nullptr;
-
-            int32_t* jumpOffsets = brTable->jumpOffsets();
-            int32_t* jumpOffsetsEnd = jumpOffsets + brTable->tableSize();
-
-            while (jumpOffsets < jumpOffsetsEnd) {
-                labels[COMPUTE_OFFSET(idx, *jumpOffsets)] = nullptr;
-                jumpOffsets++;
-            }
-            break;
-        }
-        default: {
-            break;
-        }
-        }
-
-        idx += byteCode->getSize();
-    }
-
-    for (auto it : function->catchInfo()) {
-        labels[it.m_tryStart] = nullptr;
-        labels[it.m_catchStartPosition] = nullptr;
-    }
+    forEachBasicBlockStart(function->byteCode(), endIdx, function->catchInfo(), [&](size_t position) {
+        labels[position] = nullptr;
+    });
 
     std::map<size_t, Label*>::iterator it;
 
@@ -2144,6 +2102,12 @@ static void compileFunction(JITCompiler* compiler)
             break;
         }
 #endif /* !NDEBUG */
+#if defined(WALRUS_PROFILER)
+        case ByteCode::ProfileBlockOpcode: {
+            compiler->append(byteCode, group, opcode, 0, 0);
+            break;
+        }
+#endif
         case ByteCode::JumpOpcode: {
             Jump* jump = reinterpret_cast<Jump*>(byteCode);
             compiler->appendBranch(jump, opcode, labels[COMPUTE_OFFSET(idx, jump->offset())], 0);

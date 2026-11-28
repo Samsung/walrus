@@ -20,6 +20,7 @@
 #include "runtime/Trap.h"
 #include "runtime/Instance.h"
 #include "runtime/Module.h"
+#include "runtime/Profiler.h"
 
 #if defined(OS_POSIX)
 #define WALRUS_USE_MMAP
@@ -83,10 +84,33 @@ Memory::Memory(uint64_t initialSizeInByte, uint64_t maximumSizeInByte, bool isSh
         Trap::throwException("memory allocation failed");
     }
 #endif
+
+#if defined(WALRUS_PROFILER)
+    m_readCounters = nullptr;
+    m_writeCounters = nullptr;
+    m_pageCapacity = 0;
+    m_pageShift = Profiler::instance().pageShift();
+    resizePageCounters();
+    m_profileId = Profiler::instance().addMemory(this);
+#endif
 }
 
 Memory::~Memory()
 {
+#if defined(WALRUS_PROFILER)
+    Profiler::instance().retireMemory(this);
+#if defined(WALRUS_USE_MMAP)
+    if (m_readCounters != nullptr) {
+        munmap(m_readCounters, m_pageCapacity * sizeof(uint32_t));
+    }
+    if (m_writeCounters != nullptr) {
+        munmap(m_writeCounters, m_pageCapacity * sizeof(uint32_t));
+    }
+#else
+    free(m_readCounters);
+    free(m_writeCounters);
+#endif
+#endif
 #if defined(WALRUS_USE_MMAP)
     if (m_buffer) {
         munmap(m_buffer, m_reservedSizeInByte);
@@ -169,6 +193,10 @@ bool Memory::grow(uint64_t growSizeInByte)
         m_sizeInByte = newSizeInByte;
 #endif
 
+#if defined(WALRUS_PROFILER)
+        resizePageCounters();
+#endif
+
         TargetBuffer* targetBuffer = m_targetBuffers;
         size_t sizeInByteM1 = sizeInByte() > 0 ? sizeInByte() - 1 : 0;
         size_t sizeInByteM3 = sizeInByte() > 0 ? sizeInByte() - 3 : 0;
@@ -182,6 +210,10 @@ bool Memory::grow(uint64_t growSizeInByte)
             targetBuffer->sizeInByteM7 = sizeInByteM7;
             targetBuffer->sizeInByteM15 = sizeInByteM15;
             targetBuffer->buffer = buffer();
+#if defined(WALRUS_PROFILER)
+            targetBuffer->readCounters = m_readCounters;
+            targetBuffer->writeCounters = m_writeCounters;
+#endif
             targetBuffer = targetBuffer->next;
         }
         return true;
@@ -279,6 +311,7 @@ void Memory::fill(ExecutionState& state, uint64_t start, uint8_t value, uint64_t
 
 void Memory::initMemory(DataSegment* source, size_t dstStart, uint32_t srcStart, uint32_t srcSize)
 {
+    countRange(dstStart, srcSize, WriteAccess);
     auto data = source->data();
     std::copy(data + srcStart, data + srcStart + srcSize,
 #if defined(WALRUS_BIG_ENDIAN)
@@ -290,6 +323,8 @@ void Memory::initMemory(DataSegment* source, size_t dstStart, uint32_t srcStart,
 
 void Memory::copyMemory(Memory* dstMemory, size_t dstStart, size_t srcStart, size_t size)
 {
+    countRange(srcStart, size, ReadAccess);
+    dstMemory->countRange(dstStart, size, WriteAccess);
 #if defined(WALRUS_BIG_ENDIAN)
     auto srcBegin = m_buffer + m_sizeInByte + srcStart - size;
     auto dstBegin = dstMemory->m_buffer + dstMemory->m_sizeInByte + dstStart - size;
@@ -308,6 +343,7 @@ void Memory::copyMemory(Memory* dstMemory, size_t dstStart, size_t srcStart, siz
 
 void Memory::fillMemory(size_t start, uint8_t value, size_t size)
 {
+    countRange(start, size, WriteAccess);
 #if defined(WALRUS_BIG_ENDIAN)
     std::fill(m_buffer + m_sizeInByte - start - size, m_buffer + m_sizeInByte - start, value);
 #else
@@ -324,6 +360,11 @@ void Memory::TargetBuffer::enque(Memory* memory)
     sizeInByteM3 = sizeInByte > 0 ? sizeInByte - 3 : 0;
     sizeInByteM7 = sizeInByte > 0 ? sizeInByte - 7 : 0;
     sizeInByteM15 = sizeInByte > 0 ? sizeInByte - 15 : 0;
+
+#if defined(WALRUS_PROFILER)
+    readCounters = memory->m_readCounters;
+    writeCounters = memory->m_writeCounters;
+#endif
 
     memory->m_targetBuffers = this;
 }
@@ -369,6 +410,51 @@ void Memory::checkAtomicAccessM64(ExecutionState& state, uint64_t offset, uint64
         Trap::throwException("unaligned atomic");
     }
 }
+
+#if defined(WALRUS_PROFILER)
+static uint32_t* resizeCounterTable(uint32_t* table, uint64_t oldCapacity, uint64_t capacity)
+{
+#if defined(WALRUS_USE_MMAP)
+    uint32_t* counters = reinterpret_cast<uint32_t*>(mmap(NULL, capacity * sizeof(uint32_t), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    RELEASE_ASSERT(counters != MAP_FAILED);
+
+    if (table != nullptr) {
+        for (uint64_t i = 0; i < oldCapacity; i++) {
+            if (table[i] != 0) {
+                counters[i] = table[i];
+            }
+        }
+        munmap(table, oldCapacity * sizeof(uint32_t));
+    }
+    return counters;
+#else
+    uint32_t* counters = reinterpret_cast<uint32_t*>(calloc(capacity, sizeof(uint32_t)));
+    RELEASE_ASSERT(counters != nullptr);
+
+    if (table != nullptr) {
+        memcpy(counters, table, oldCapacity * sizeof(uint32_t));
+        free(table);
+    }
+    return counters;
+#endif
+}
+
+void Memory::resizePageCounters()
+{
+    uint64_t required = profilePageCount();
+
+    if (!Profiler::instance().hasFeature(Profiler::MemoryFeature) || required <= m_pageCapacity) {
+        return;
+    }
+
+    uint64_t limit = (m_maximumSizeInByte >> m_pageShift) + 1;
+    uint64_t capacity = std::max(required, std::min(m_pageCapacity * 2, limit));
+
+    m_readCounters = resizeCounterTable(m_readCounters, m_pageCapacity, capacity);
+    m_writeCounters = resizeCounterTable(m_writeCounters, m_pageCapacity, capacity);
+    m_pageCapacity = capacity;
+}
+#endif
 
 void Memory::throwUnsharedMemoryException(ExecutionState& state) const
 {
